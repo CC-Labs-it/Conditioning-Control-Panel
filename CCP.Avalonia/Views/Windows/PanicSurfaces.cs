@@ -81,6 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // (App.xaml.cs:1780 Mantra.Dispose), :1797 remote haptics, :2003 haptics PanicStop and :1822 Autonomy.CancelActivePulses
             // all precede StopEngine. WPF MainWindow.Leash.cs LeashOnPanicPress is the first thing a panic press does,
             // so the leash task parks before StopEngine and before its lock card closes.
+            new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
             new("engine", _ => MainShellWindow.StopEngine(),
                 After: ["ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task"]),
             new("flash", _ => Overlays.FlashOverlay.CloseAll(final: false)), // Includes standalone pops and mid-Shatter exits.

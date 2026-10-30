@@ -93,6 +93,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (!IsVisible && VisualRoot is not null)
             {
+                // WPF EventFx.cs:407-410: hidden completion is remembered without replay.
+                var hiddenEnrollment = AvApp.Programs?.ActiveEnrollment;
+                ResetRunPopsIfRunChanged(hiddenEnrollment);
+                if (hiddenEnrollment != null)
+                    NoteDayCompletion(hiddenEnrollment, AvApp.Programs?.TodayRecord, tabVisible: false);
                 _refreshPending = true;
                 return;
             }
@@ -221,7 +226,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BuildDayStrip(program, enrollment, accent, stale);
             BuildTodayPanel(svc, program, enrollment, accent, stale);
             ApplyIgnition(enrollment);
-            if (_dayJustCompleted) PlayDayCompleteMoment(svc.Today);
+            if (_dayJustCompleted)
+            {
+                PlayDayCompleteMoment(svc.Today);
+                Shell?.CelebrateProgramDayComplete(Find<Border>("TodayCompleteBanner"));
+            }
         }
 
         /// <summary>WPF UpdateProgramSessionRow :1451-1585, button and glyph states. Repainted on every

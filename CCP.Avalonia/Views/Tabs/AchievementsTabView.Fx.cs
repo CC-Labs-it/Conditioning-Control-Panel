@@ -130,8 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF CelebrateAchievementUnlock + RevealAchievementTile, when the grid is on screen: the locked blur
         /// dissolves off (Performance tier skips the raster), the tile settles back from 1.08, sparks burst on it.
-        /// ponytail: with the tab hidden WPF bursts on the Achievements nav anchor instead - that needs the shell's
-        /// event-burst layer (shell-event-fx); the unlock toast still announces it.</summary>
+        /// With the tab hidden MainShellWindow.EventFx.cs owns the Achievements nav burst.</summary>
         private void Celebrate(Tile t)
         {
             if (!IsEffectivelyVisible) return;

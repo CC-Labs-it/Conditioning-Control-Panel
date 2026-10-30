@@ -126,19 +126,22 @@ public sealed class ProgramIgnitionTests
     });
 
     [Fact]
-    public void DayChapterAndGraduationMomentsFireOncePerRun() => WithRun(lastDay: false, (_, tab, svc, program) =>
+    public void DayChapterAndGraduationMomentsFireOncePerRun() => WithRun(lastDay: false, (shell, tab, svc, program) =>
     {
         T F<T>(string n) where T : Control => tab.FindControl<T>(n)!;
         var enrollment = svc.ActiveEnrollment!;
 
         // Day complete: the day's real XP floats up (WPF PlayProgramDayCompleteMoment).
         Assert.Equal("", F<TextBlock>("TxtTodayXpFloat").Text ?? "");
+        Assert.Equal(0, ShellEventFxTests.Bursts(shell));
         svc.TodayRecord!.DayCompleted = true;
         tab.RefreshPrograms();
+        Assert.Equal(1, ShellEventFxTests.Bursts(shell));
         Assert.Equal(Loc.GetF("label_0_xp_3", ProgramHeat.DayXp(svc.Today!.Intensity, svc.Today.IsBoss)),
             F<TextBlock>("TxtTodayXpFloat").Text);
         F<TextBlock>("TxtTodayXpFloat").Text = "";
         tab.RefreshPrograms();
+        Assert.Equal(1, ShellEventFxTests.Bursts(shell));
         Assert.Equal("", F<TextBlock>("TxtTodayXpFloat").Text);   // once per day
 
         // Chapter seal: only a chapter closing after the run's baseline stamps.
@@ -223,6 +226,18 @@ public sealed class ProgramIgnitionTests
         tab.RefreshPrograms();
         Dispatcher.UIThread.RunJobs();
         Assert.DoesNotContain(tab.FindControl<ItemsControl>("ProgramDayStrip")!.Items.Cast<ProgramDayPip>(), pip => pip.Ignite);
+    });
+
+    [Fact]
+    public void HiddenDayCompletionDoesNotReplayItsBurstOnReturn() => WithRun(lastDay: false, (shell, tab, svc, _) =>
+    {
+        tab.IsVisible = false;
+        svc.TodayRecord!.DayCompleted = true;
+        tab.RefreshPrograms();
+        Assert.Equal(0, ShellEventFxTests.Bursts(shell));
+        tab.IsVisible = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, ShellEventFxTests.Bursts(shell));
     });
 
     /// <summary>40 beats of stepped time, time-bounded (P73); returns how many distinct values each loop showed:
