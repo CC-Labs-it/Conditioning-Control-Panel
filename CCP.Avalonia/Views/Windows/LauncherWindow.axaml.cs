@@ -138,8 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 // Lockdown can begin during the fade: keep the panel as the live surface.
                 if (MainShellWindow.LockdownActive) return;
-                panel.Hide();
-                panel.HideAvatarTube();
+                panel.HideForLauncher();
                 OpenFor(panel);
             });
             return true;
@@ -167,13 +166,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                panel.Hide();
-                panel.HideAvatarTube();
+                // Lockdown may have started during the panel's Opened work. Deliberate deviation:
+                // WPF hides the panel and shows the veiled launcher here; this head keeps the panel up.
+                if (MainShellWindow.LockdownActive)
+                {
+                    Platform.StartupLadder.Release();
+                    panel.ShowFromTray();
+                    return;
+                }
+                Platform.StartupLadder.Hold();
+                panel.HideForLauncher(quiet: true);
                 if (!(Boot.Surface == BootSurface.Game && Boot.GameId is { } id && LaunchGame(panel, id)))
                     OpenFor(panel);
             }
             catch (Exception ex)
             {
+                Platform.StartupLadder.Release();
                 Log.Error(ex, "[Launcher] boot routing failed; leaving the panel up");
                 try { panel.ShowFromTray(); } catch (Exception ex2) { Log.Debug(ex2, "[Launcher] ShowFromTray after failed boot routing"); }
             }
@@ -246,6 +254,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Hide();
                 panel.ShowFromLauncher();
+                Platform.StartupLadder.Release();
                 try { then?.Invoke(panel); }
                 catch (Exception ex) { Log.Debug(ex, "[Launcher] step after OpenPanel failed"); }
             });

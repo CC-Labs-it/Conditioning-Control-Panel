@@ -49,6 +49,7 @@ public sealed class LauncherWindowTests
             {
                 LauncherWindow.Instance?.Close();
                 LauncherWindow.Boot = BootDecision.PanelFirst;
+                ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
                 LockdownService.Current = null;
                 (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (oldIn, oldLab);
                 shell.Close();
@@ -56,6 +57,85 @@ public sealed class LauncherWindowTests
             }
         });
     }
+
+    [Fact]
+    public void HiddenBoot_ConcealsTheWholeWindowUntilRoutingCompletes() => Run(shell =>
+    {
+        shell.Hide();
+        LauncherWindow.Boot = new BootDecision(BootSurface.Launcher, null);
+        bool openedConcealed = false;
+        shell.Opened += (_, _) => openedConcealed = shell.Opacity == 0
+            && !shell.ShowActivated && !shell.ShowInTaskbar && shell.BuildingHiddenForBoot;
+        shell.PrepareLauncherBoot();
+        shell.Show();
+        Assert.True(openedConcealed);
+        Assert.False(shell.IsVisible);
+        Assert.False(shell.BuildingHiddenForBoot);
+        Assert.Equal(1, shell.Opacity);
+        Assert.True(shell.ShowInTaskbar);
+        LauncherWindow.Instance!.OpenPanel();
+        Assert.True(shell.IsVisible);
+        Assert.Equal(1, shell.Opacity);
+    }, pumpUntilIdle: false);
+
+    [Fact]
+    public void LauncherBoot_ParksPassiveOffersInInbox_AndPanelReleasesHold() => Run(shell =>
+    {
+        ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
+        LauncherWindow.Boot = new BootDecision(BootSurface.Launcher, null);
+        LauncherWindow.RouteBoot(shell);
+        bool opened = false;
+        ConditioningControlPanel.Avalonia.Platform.StartupLadder.PresentOrInbox(new()
+        {
+            Key = "launcher-hold-test", Open = () => opened = true,
+        });
+        Assert.False(opened);
+        Assert.Single(ConditioningControlPanel.Avalonia.Platform.StartupLadder.Inbox.Items);
+        LauncherWindow.Instance!.OpenPanel();
+        Assert.False(ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHolding);
+        ConditioningControlPanel.Avalonia.Platform.StartupLadder.PresentOrInbox(new()
+        {
+            Key = "panel-offer-test", Open = () => opened = true,
+        });
+        Assert.True(opened);
+    }, pumpUntilIdle: false);
+
+    [Fact]
+    public void LockdownStartingBeforeBootRouting_KeepsThePanelUp() => Run(shell =>
+    {
+        var ld = LockdownService.Current = new LockdownService();
+        try
+        {
+            ld.Activate(TimeSpan.FromMinutes(30));
+            ConditioningControlPanel.Avalonia.Platform.StartupLadder.Hold();
+            LauncherWindow.RouteBoot(shell);
+            Assert.True(shell.IsVisible);
+            Assert.Null(LauncherWindow.Instance);
+            Assert.False(ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHolding);
+        }
+        finally { ld.Deactivate(); }
+    }, pumpUntilIdle: false);
+
+    [Fact]
+    public void LauncherHide_BootIsQuiet_AndUserTuckNotifiesOnlyOnce() => Run(shell =>
+    {
+        int notices = 0;
+        var oldSink = ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink;
+        ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => notices++;
+        shell.TrayHostPresent = () => true;
+        try
+        {
+            shell.HideForLauncher(quiet: true);
+            Assert.Equal(0, notices);
+            shell.ShowFromTray();
+            LauncherWindow.BackToLauncher(shell);
+            Assert.Equal(1, notices);
+            LauncherWindow.Instance!.OpenPanel();
+            LauncherWindow.BackToLauncher(shell);
+            Assert.Equal(1, notices);
+        }
+        finally { ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = oldSink; }
+    }, pumpUntilIdle: false);
 
     private static string[] Tiles(LauncherWindow w) =>
         w.FindControl<UniformGrid>("GamesGrid")!.Children.Select(c => (string)c.Tag!).ToArray();
