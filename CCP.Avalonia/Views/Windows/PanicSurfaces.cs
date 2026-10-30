@@ -66,6 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF :2000: non-Escape panic closes the palette without consuming its Escape rung.
             new("settings-palette", _ => SettingsPaletteWindow.CloseIfOpen()),
             // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
+            new("perfect-week-bonus", _ => App.StopPerfectWeekBonus()), // WPF SkillTreeService.cs:535-563; close every new popup on panic.
             new("keyword-triggers", _ => Platform.KeywordTriggerHead.StopAudio()),   // the clip only; the switch stays armed
             new("haptics", _ => CoreHaptics.Service?.PanicStop()),
             new("remote-haptics", _ => RemoteCommands.StopHaptics()),   // decisions 2026-10-08
