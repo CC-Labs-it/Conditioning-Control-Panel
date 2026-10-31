@@ -107,6 +107,11 @@ export function wearMode(id, wears) {
   if (wears.includes(fam)) return 'wear';
   return fam === 'kart' ? 'garage' : null;
 }
+/** A card line for an owned row this host cannot wear: desk items are bought anywhere and worn on desktop. Fails closed:
+ * a host that sends no wears list (desktop) gets no line. */
+export function wearHint(id, wears) {
+  return Array.isArray(wears) && wearFamily(id) === 'desk' && !wears.includes('desk') ? 'shop_desk_on_desktop' : null;
+}
 /** Families the host wears in place (the counter stays open and the card says so); Rain and kart close the counter. */
 const IN_PLACE = ['desk', 'chess', 'profile'];
 
@@ -134,7 +139,8 @@ export function createShop({ request, newIdem, tab: startTab = null, wears = und
     if (!row) return null;
     const f = card.forced || faceOf(row, st.sp, st.tier);
     const wear = f.face === 'owned' ? wearMode(row.id, wears) : undefined;
-    return { itemId: row.id, priceSp: row.priceSp, ...f, ...(wear !== undefined ? { wear } : {}), noteKey: card.noteKey, pending: card.pending, retry: card.retry };
+    const hintKey = f.face === 'owned' ? wearHint(row.id, wears) : null;
+    return { itemId: row.id, priceSp: row.priceSp, ...f, ...(wear !== undefined ? { wear } : {}), ...(hintKey ? { hintKey } : {}), noteKey: card.noteKey, pending: card.pending, retry: card.retry };
   }
   const openCard = (itemId, noteKey = null) => {
     card = { itemId, idem: newIdem(), catalogVersion: st.catalogVersion, week: st.week, pending: false, retry: false, noteKey, forced: null };
