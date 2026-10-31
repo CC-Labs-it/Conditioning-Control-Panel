@@ -16,6 +16,14 @@ namespace CCP.Avalonia.Tests;
 public sealed class TabVisualReuseTests
 {
     [Fact]
+    public void AssemblyStartsWithProductionFonts() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.NotNull(Application.Current);
+        Assert.Equal("Inter", global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
+        Assert.NotNull(new global::Avalonia.Media.Typeface(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter).GlyphTypeface);
+    });
+
+    [Fact]
     public void SectionPillsAreReusedAndTierChangesInvalidateThem() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null) RenderProof.EnsureSetUp();
@@ -40,6 +48,7 @@ public sealed class TabVisualReuseTests
     {
         if (Application.Current is null) RenderProof.EnsureSetUp();
         var app = Application.Current!;
+        Assert.True(app.Resources.MergedDictionaries[1].TryGetResource("SectionInkBrush", null, out var themeBrush));
         ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.PaintSectionInk("play");
         Assert.True(app.TryFindResource("SectionInkBrush", out var before));
         ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.PaintSectionInk("settings");
@@ -47,6 +56,7 @@ public sealed class TabVisualReuseTests
         Assert.Same(before, after);
         Assert.True(app.TryFindResource("SectionInk", out var color));
         Assert.Equal((global::Avalonia.Media.Color)color!, Assert.IsType<global::Avalonia.Media.SolidColorBrush>(after).Color);
+        Assert.Equal(global::Avalonia.Media.Color.Parse("#FFCBB9FC"), Assert.IsType<global::Avalonia.Media.SolidColorBrush>(themeBrush).Color);
     });
 
     [Fact]

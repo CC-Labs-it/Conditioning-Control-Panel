@@ -75,40 +75,16 @@ Blink performs zero folder-card builds on unchanged repeat show (guarded with a
 nonempty folder, not just an empty-library case). There are no new deferrals,
 WPF changes, reduced-quality effects or benchmark endpoint/threshold changes.
 
-Historical commands and tails (7a78d535 measurement tree; run at repository root; SDK installed locally because dotnet
-was absent; Xvfb/system package installation unavailable in this unprivileged runtime):
-
-```sh
-CCP_TRACE_TAB_SWITCH=1 CCP_TRACE_TAB_SWITCH_FILE=/tmp/ccp-before-detailed.txt \
- /tmp/ccp-dotnet/dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
- --filter FullyQualifiedName~TabSwitchWorkTests
-# baseline with tracing/probe only: Passed: 1; Total time: 33.2334 Seconds
-
-/tmp/ccp-dotnet/dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
- --filter 'FullyQualifiedName~TabSwitchWorkTests|FullyQualifiedName~TabSwitchReuseTests|FullyQualifiedName~TabVisualReuseTests|FullyQualifiedName~ProgramsBrowseTests|FullyQualifiedName~BlinkTrainerTabLiveTests|FullyQualifiedName~SectionTabStripShellTests'
-# Test Run Successful. Total tests: 17; Passed: 17; Total time: 44.2476 Seconds
-
-CCP_TRACE_TAB_SWITCH=1 CCP_TRACE_TAB_SWITCH_FILE=/tmp/ccp-after-isolated.txt \
- /tmp/ccp-dotnet/dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
- --no-build --filter FullyQualifiedName~TabSwitchWorkTests
-# Test Run Successful. Total tests: 1; Passed: 1; Total time: 32.7702 Seconds
-
-git diff --check
-# exit 0, no output
-```
+Historical probe command (7a78d535 measurement tree):
+`CCP_TRACE_TAB_SWITCH=1 CCP_TRACE_TAB_SWITCH_FILE=/tmp/ccp-after-isolated.txt dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --no-build --filter FullyQualifiedName~TabSwitchWorkTests`.
+Baseline: 1 passed, 33.2334 seconds; after: 1 passed, 32.7702 seconds. Historical focused suite: 17 passed, 44.2476 seconds; `git diff --check`: exit 0.
 
 Windows numbers come from the PR's **perf-bench-windows** CI artifact. They were
 not measured here. Both median and p95 must satisfy WPF x 1.10 + 20 ms under
 `docs/avalonia-perf.html`; local headless stage costs are not a substitute.
 
-Prior review follow-up (P2, trace-output failure): both console and file sinks are now
-best-effort; a failed sink is disabled so later Mark/Dispose calls cannot abort
-startup, navigation or refresh. A different healthy file sink remains usable.
-WPF reference: `MainWindow.TabNavigation.cs:213` has no diagnostic-file dependency.
-`TabTraceFailureTests` fail-proof on reviewed commit: 2 failed / 2 cases,
-DirectoryNotFoundException; command: `dotnet test Tests/CCP.Avalonia.Tests -c Release
---filter FullyQualifiedName~TabTraceFailureTests` (exit 1). Fixed focused suite: 19 passed / 19, exit 0, 22.7113 seconds. Core guards pass; all ten language
-JSON files parse and are byte-identical to the reviewed commit; no UI keys added.
+Prior trace-output review: console/file sinks are best-effort and disabled after failure.
+`TabTraceFailureTests` failed 2/2 on 3ac8b507b with DirectoryNotFoundException; the fixed pre-scope suite passed 19/19 (22.7113 seconds). WPF reference: `MainWindow.TabNavigation.cs:213` has no diagnostic-file dependency.
 
 Final scope correction: restored the complete `74ac6ce3d` snapshot outside this
 focused lane, including WPF V1/V2/Rain behavior, its original tests/assets/settings,
@@ -120,7 +96,11 @@ contain the later perf-bench-windows workflow; obtain that artifact from the
 Windows bench integration rather than restoring unrelated CI/WPF benchmark edits.
 
 Final checks: `git diff --quiet 74ac6ce3d 8a44247de -- ConditioningControlPanel Tests/ConditioningControlPanel.Tests CCP.Core Assets .github` exits 1 (fail-proof); the same command without 8a44247de exits 0 on the corrected tree.
-Budget guard: reviewed +1277/-6862 = 8139 (FAIL); corrected cumulative +572/-22 = 594 (PASS). All ten language JSON files parse and match base bytes; each regains 19 keys.
+Budget guard: reviewed +1277/-6862 = 8139 (FAIL); corrected cumulative +577/-22 = 599 (PASS). All ten language JSON files parse and match base bytes; each regains 19 keys.
 `/tmp/ccp-dotnet/dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --filter 'FullyQualifiedName~TabTraceFailureTests|FullyQualifiedName~TabVisualReuseTests|FullyQualifiedName~ProgramsBrowseTests|FullyQualifiedName~BlinkTrainerTabLiveTests|FullyQualifiedName~SectionTabStripShellTests'` → 15 passed, exit 0, 17.8984 seconds.
 `node --test Assets/web/rain-wardrobe/tests/*.test.mjs` → 21 passed, 0 failed; `bash .github/scripts/core-guards.sh` → All Core guards passed.
 `/tmp/ccp-dotnet/dotnet build Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release -p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false` → exit 0, 571 warnings, 0 errors; WPF suites compiled, not executed on Linux.
+CI #3790 reproduction: the unchanged Skia source guard rejected the overlong TabSwitchWorkTests builder chain; local full-shard runs also exposed missing-font setup order and merged-palette corruption (Companion header expected #CBB9FC, got #A3ABFC).
+Fix: concise production builder with adjacent UseSkia/UseHeadless in the probe; assembly-level production-font setup on the test dispatcher; reuse only application-owned brush overrides (`TryGetValue`), preserving merged theme defaults. WPF reference: `MainWindow.SectionChrome.cs:194` replaces app brush keys without mutating the merged palette. Existing assertions and CI filters are unchanged; startup and merged-palette assertions were added.
+`LD_LIBRARY_PATH=/tmp/ccp-vlc/usr/lib/x86_64-linux-gnu VLC_PLUGIN_PATH=/tmp/ccp-vlc/usr/lib/x86_64-linux-gnu/vlc/plugins PATH=/tmp/ccp-dotnet:$PATH bash .github/scripts/avalonia-tests-sharded.sh --shard 3` → exit 0: 416 passed, 0 failed, 3 pre-existing conditional skips, 419 total (7 m 36 s). Fail-proof before the final probe repair: 415 passed, 1 unchanged source-guard failure, 3 skips; that guard passes after repair. VLC is extracted locally to match CI dependencies, with no native-video exclusion.
+`dotnet build Tests/CCP.Avalonia.Tests -c Release -m:1 -nodeReuse:false` → 0 errors; targeted TabVisualReuse/TypeScaleReadability/native-video checks → 7 passed (15.2550 seconds); `avalonia-tests-sharded.sh --expected` → 2086 tests. Windows execution is left to CI; GitHub log API access here returns Forbidden.
