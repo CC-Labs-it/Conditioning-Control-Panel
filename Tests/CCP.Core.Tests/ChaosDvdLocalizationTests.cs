@@ -44,7 +44,7 @@ public sealed class ChaosDvdLocalizationTests
     {
         var source = File.ReadAllText(Path.Combine(Root(), "CCP.Avalonia", "Views", "Chaos", "ChaosRunHost.cs"));
         Assert.Contains("ChaosEffectBannerOverlay.Show(\"dvd\", Loc.Get(\"chaos_dvd_banner\")", source);
-        Assert.Contains("_state.PushEvent(Loc.Get(\"chaos_dvd_loading\"))", source);
+        Assert.Contains("_state.PushEvent(LocalizationManager.Instance[\"chaos_dvd_loading\"])", source);
         Assert.DoesNotContain("\"Porn DVD\"", source);
         Assert.DoesNotContain("\"📀 now loading\"", source);
     }

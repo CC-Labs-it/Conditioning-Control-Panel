@@ -675,7 +675,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosOverlayWindow.ChaosSfx.Play("dvd_launch", 0.55f);
             ChaosEffectBannerOverlay.Show("dvd", Loc.Get("chaos_dvd_banner"), Color.FromRgb(0xFF, 0x69, 0xB4));
             _dvdBannerOn = true;
-            _state.PushEvent(Loc.Get("chaos_dvd_loading"));
+            // Feed data retains the icon prefix; ChaosHudWindow.FeedGlyph/FeedText render it separately.
+            _state.PushEvent(LocalizationManager.Instance["chaos_dvd_loading"]);
         }
 
         private static void RunAgain()

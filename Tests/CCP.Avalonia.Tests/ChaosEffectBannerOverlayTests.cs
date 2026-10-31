@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Media;
@@ -19,6 +20,23 @@ public sealed class ChaosEffectBannerOverlayTests
     {
         public DateTimeOffset Now = new(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
         public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    [Theory]
+    [InlineData("en", "now loading")]
+    [InlineData("ja", "読み込み中")]
+    public void Localized_dvd_feed_splits_the_glyph_from_the_text(string language, string expected)
+    {
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage(language);
+            var data = loc["chaos_dvd_loading"];
+            Assert.Equal("📀", ChaosHudWindow.FeedGlyph.Convert(data, typeof(string), null, CultureInfo.InvariantCulture));
+            Assert.Equal(expected, ChaosHudWindow.FeedText.Convert(data, typeof(string), null, CultureInfo.InvariantCulture));
+        }
+        finally { loc.SetLanguage(previous); }
     }
 
     // WPF ChaosModeService.cs:2722-2734, 3017-3027, 3176-3177.
