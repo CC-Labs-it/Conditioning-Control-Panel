@@ -2,9 +2,7 @@
 // BtnStartMenu_Click, MenuStartNormal_Click, StartEngine (:294), StopEngine (:444) and
 // UpdateStartButton (:944), for the features Core drives (CoreEngine). The session half of
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
-// ponytail: still missing, each with no service on this head: the remote-control gate,
-// Relapse/TotalSessions achievements, the bubble/brain-drain/pop-quiz/autonomy/
-// ramp starts, the scheduler, the Presets "running" label and the hero FX.
+// The scheduler and audio-only lifecycle are wired below. Ramp and hero FX remain unported.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
 using Avalonia.Controls;
@@ -12,6 +10,7 @@ using Avalonia.Data;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Localization;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -35,11 +34,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Serilog.Log.Information("Start button: asking to stop the running session");
                 await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body");
-                if (!App.Sessions.IsRunning) StopEngine();
+                if (!App.Sessions.IsRunning) ManualStop();
                 return;
             }
-            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); StopEngine(); }
-            else StartEngineFromUser();
+            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); ManualStop(); }
+            else { Scheduler.ManuallyStopped = false; StartEngineFromUser(); }
+        }
+
+        // WPF StartStop.cs:101-106: hold off scheduled restarts after this button stops inside the window.
+        private void ManualStop()
+        {
+            Scheduler.OnManualToggle(CoreSettings.Current, System.DateTime.Now, stopping: true);
+            StopEngine();
         }
 
         /// <summary>WPF StartEngineFromUser: only the user's own START ends the post-panic quiet early
@@ -101,6 +107,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreEngine.Stop();
         }
 
+        /// <summary>WPF StartStop.cs:365-367, 416-422. Called for button and session starts.</summary>
+        internal void OnEngineStarted()
+        {
+            if (CoreSettings.Current.AudioOnlySession) Platform.LayeredAudio.Instance?.Start(ignoreMasterToggle: true);
+            Autonomy.Start(); // internally checks entitlement, enable and consent
+        }
+
         /// <summary><see cref="CoreEngine.StoppedHook"/>: the head half of StopEngineCore.</summary>
         internal void OnEngineStopped()
         {
@@ -108,6 +121,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
+            // WPF StartStop.cs:533-547: keep a separately enabled bed or Takeover.
+            if (!AutonomyScheduler.CanStart(CoreSettings.Current)) Autonomy.Stop();
+            if (!CoreSettings.Current.AudioLayersEnabled) Platform.LayeredAudio.Instance?.Stop();
+            Platform.LibVlcAudio.Instance?.ForceUnduck();
             PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
             StopConditioningTimeTracker();         // WPF StartStop.cs:540
             App.StopDesktopOverlays(final: false);

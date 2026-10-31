@@ -212,6 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// a running engine or session, not paused. Unseeded (renders, tests) means the card owns it.</summary>
         private static bool ShouldShow()
             => App.Sessions?.IsPaused != true
+               && !(CoreEngine.IsRunning && CoreEngine.AudioOnlyRun)
                && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true);
 
         private static void BeginDecode(Visual host, string path)

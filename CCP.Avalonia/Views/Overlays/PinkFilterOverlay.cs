@@ -173,6 +173,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// paused one hides the tint (PauseSession's App.Overlay.Stop()).</para>
         private static bool ShouldShow()
             => PulseHold || (App.Sessions?.IsPaused != true
+               && !(CoreEngine.IsRunning && CoreEngine.AudioOnlyRun)
                && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true));
 
         // Start (MainShellWindow.StartEngine) is what restores a tint left enabled - WPF OverlayService.Start().

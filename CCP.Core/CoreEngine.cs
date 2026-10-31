@@ -22,12 +22,18 @@ namespace ConditioningControlPanel
 
         public static bool IsRunning => _running;
 
+        // WPF MainWindow.StartStop.cs:335-363 samples audio-only once for this engine run.
+        public static bool AudioOnlyRun { get; private set; }
+
         /// <summary>When the running engine started (WPF MainWindow._emiEngineStartedUtc); null when stopped.</summary>
         public static DateTime? StartedUtc { get; private set; }
 
         /// <summary>The head's half of StopEngineCore: close what is on screen (overlays, lock
         /// cards, the pink tint). Runs after every Stop, running or not.</summary>
         public static volatile Action? StoppedHook;
+
+        /// <summary>The head-owned audio-only bed and Takeover start, after each engine start.</summary>
+        public static volatile Action? StartedHook;
 
         /// <summary>The head's pop-quiz scheduler (it owns the <see cref="IPopQuizHost"/>); null
         /// on a head with no pop-quiz window.</summary>
@@ -47,10 +53,9 @@ namespace ConditioningControlPanel
             s.TotalSessions++;
             CoreSettings.Save();
 
-            // #668 Audio-Only Hypno (WPF :304): the visual features sit the session out.
-            // ponytail: WPF also starts the layered audio bed (LayeredAudio.Start(ignoreMasterToggle: true));
-            // no head here has it in Core yet - add it with the audio-layers port.
-            bool audioOnly = s.AudioOnlySession;
+            // #668 Audio-Only Hypno (WPF StartStop.cs:335): the visual features sit the session out.
+            // The head starts the layered audio bed through StartedHook.
+            bool audioOnly = AudioOnlyRun = s.AudioOnlySession;
             if (!audioOnly) CoreFlash.Start();   // it checks FlashEnabled itself
             if (!audioOnly && s.SubliminalEnabled) CoreSubliminal.Start();
             if (!audioOnly && s.MandatoryVideosEnabled) Video?.Start();   // WPF StartStop.cs:320
@@ -70,6 +75,8 @@ namespace ConditioningControlPanel
             StartedUtc = DateTime.UtcNow;
             Log.Information("Engine started - Flash: {Flash}, Subliminal: {Sub}, LockCard: {Lock}, BouncingText: {Bt}",
                 s.FlashEnabled, s.SubliminalEnabled, s.LockCardEnabled, s.BouncingTextEnabled);
+            try { StartedHook?.Invoke(); }
+            catch (Exception ex) { Log.Warning(ex, "Engine start hook failed"); }
         }
 
         /// <summary>WPF StopEngine: stop every driven service whether or not the engine ran (panic
@@ -91,6 +98,7 @@ namespace ConditioningControlPanel
                 PopQuiz?.Stop();   // closes an open quiz (WPF StartStop.cs:492)
                 CoreMindWipe.Stop();   // WPF StartStop.cs:489, also ends the loop
                 _running = false;
+                AudioOnlyRun = false;
                 StartedUtc = null;
                 try { StoppedHook?.Invoke(); }
                 catch (Exception ex) { Log.Warning(ex, "Engine stop hook failed"); }
