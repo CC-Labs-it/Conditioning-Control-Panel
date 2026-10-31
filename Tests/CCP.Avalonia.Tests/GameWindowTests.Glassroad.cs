@@ -269,7 +269,7 @@ public sealed partial class GameWindowTests
         finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
     });
     [Fact]
-    public void Glassroad_LinuxShellEscapePausesThenPanics() => RunGlassroad("1", (shell, _, _) =>
+    public void Glassroad_LinuxWaylandShellEscapePausesThenPanicsWithXWaylandListening() => RunGlassroad("1", (shell, _, _) =>
     {
         if (!OperatingSystem.IsLinux()) return;
         var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/setsid") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
@@ -277,7 +277,8 @@ public sealed partial class GameWindowTests
         using var p = System.Diagnostics.Process.Start(start)!;
         using var observer = System.Diagnostics.Process.GetProcessById(p.Id);
         var now = DateTime.Now; var press = 0;
-        using var host = new LinuxRaceHost(p, _ => shell.HandlePanicKeyPress(now.AddMilliseconds(100 * press++)));
+        using var host = new LinuxRaceHost(p, _ => shell.HandlePanicKeyPress(now.AddMilliseconds(100 * press++)), x11Listening: () => true);
+        host.Receive(new JObject { ["type"] = "shell-loaded", ["displayBackend"] = "wayland" });
         host.Receive(new JObject { ["type"] = "ready" });
         host.Receive(new JObject { ["type"] = "shell-focus", ["active"] = true });
         var escape = new JObject { ["type"] = "shell-escape", ["sequence"] = 1 };

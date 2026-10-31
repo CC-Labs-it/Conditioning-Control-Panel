@@ -11,7 +11,6 @@ using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
 using Serilog;
 namespace ConditioningControlPanel.Avalonia.Views.Games;
-// Both transports execute this session, including the signed relay and watchdog.
 internal sealed class GlassroadSession : IDisposable
 {
     private readonly Action<object> Post;

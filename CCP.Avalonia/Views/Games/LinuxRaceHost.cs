@@ -23,6 +23,8 @@ internal sealed class LinuxRaceHost : IDisposable
     private Task _writes = Task.CompletedTask;
     private int _closed;
     private long _lastEscape;
+    private string? _displayBackend;
+    private readonly Func<bool> _x11Listening;
     internal bool InFront { get; private set; }
     internal bool Ready => _session.Ready;
     internal static string EnginePath => Path.Combine(CorePaths.UserData, "engines", "electron-45.1.0", "electron");
@@ -56,9 +58,10 @@ internal sealed class LinuxRaceHost : IDisposable
             throw; // no silent renderer fallback on a startup failure
         }
     }
-    internal LinuxRaceHost(Process process, Action<DateTime>? panic = null)
+    internal LinuxRaceHost(Process process, Action<DateTime>? panic = null, Func<bool>? x11Listening = null)
     {
         _process = process; _pid = process.Id;
+        _x11Listening = x11Listening ?? (() => Platform.X11PanicKey.IsListening && Platform.X11PanicKey.BoundKeycode != 0);
         _panic = panic ?? (now => MainShellWindow.Current?.HandlePanicKeyPress(now));
         _session = new GlassroadSession(Post, Dispose, () => Post(new { type = "focus" }));
         _watch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -94,11 +97,11 @@ internal sealed class LinuxRaceHost : IDisposable
         if (Volatile.Read(ref _closed) != 0) return;
         switch ((string?)frame["type"])
         {
-            case RaceShellProtocol.Loaded: _session.PostGlassroadInit(); break;
+            case RaceShellProtocol.Loaded: _displayBackend = (string?)frame["displayBackend"]; _session.PostGlassroadInit(); break;
             case RaceShellProtocol.Focus: InFront = (bool?)frame["active"] == true; break;
             case RaceShellProtocol.Escape:
                 if (!RaceShellProtocol.AcceptEscape(ref _lastEscape, (long?)frame["sequence"] ?? 0,
-                    Platform.X11PanicKey.IsListening && Platform.X11PanicKey.BoundKeycode != 0 && CoreSettings.Current.PanicKey == "Escape")) break;
+                    _x11Listening() && CoreSettings.Current.PanicKey == "Escape", _displayBackend)) break;
                 InFront = true;
                 if (CoreSettings.Current.PanicKey == "Escape") _panic(DateTime.Now);
                 else Pause();

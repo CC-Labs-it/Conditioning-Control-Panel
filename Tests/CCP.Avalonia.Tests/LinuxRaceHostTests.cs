@@ -9,14 +9,17 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 public sealed class LinuxRaceHostTests
 {
-    [Fact]
-    public void EscapeDeliveryHasOneSourceAndDeduplicatesBySequence()
+    [Theory]
+    [InlineData("x11", true, false)]
+    [InlineData("wayland", true, true)]
+    [InlineData("x11", false, true)]
+    [InlineData(null, true, true)]
+    public void EscapeDeliveryHasOneSourceAndDeduplicatesBySequence(string? backend, bool listening, bool accepted)
     {
         long last = 0;
-        Assert.False(RaceShellProtocol.AcceptEscape(ref last, 1, nativeListening: true));
-        Assert.True(RaceShellProtocol.AcceptEscape(ref last, 1, nativeListening: false));
-        Assert.False(RaceShellProtocol.AcceptEscape(ref last, 1, nativeListening: false));
-        Assert.True(RaceShellProtocol.AcceptEscape(ref last, 2, nativeListening: false));
+        Assert.Equal(accepted, RaceShellProtocol.AcceptEscape(ref last, 1, listening, backend));
+        Assert.False(RaceShellProtocol.AcceptEscape(ref last, 1, listening, backend));
+        Assert.Equal(accepted, RaceShellProtocol.AcceptEscape(ref last, 2, listening, backend));
     }
     [Fact]
     public void ProtocolRejectsMalformedAndUnboundedFrames()

@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return false;
         }
 
-        private bool IsGlassroad => Spec.Id == GlassroadId;
+        private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
         private GlassroadSession? _glassroad;
         private DispatcherTimer? _grWatch;
 
@@ -60,7 +60,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _grWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _grWatch.Tick += (_, _) => CheckGlassroadWatch(DateTime.UtcNow);
             _grWatch.Start();
-            Closed += (_, _) => { _grWatch.Stop(); _glassroad.Dispose(); };
+            Closed += (_, _) => CloseGlassroad();
+        }
+
+        /// <summary>WPF Close: the one funnel every exit reaches (page, title-bar X, panic, boot failure, watchdog).</summary>
+        private void CloseGlassroad()
+        {
+            _grWatch?.Stop();
+            _glassroad?.Dispose();
         }
 
         /// <summary>The init frame, straight out (this head has no ready queue).</summary>
