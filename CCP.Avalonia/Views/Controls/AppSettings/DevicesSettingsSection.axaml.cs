@@ -706,7 +706,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 Log.Information("Panic key enabled");
             }
             // WPF also stops/starts its keyboard hook here; the X11 listener reads PanicKeyEnabled on
-            // every press instead (MainShellWindow.PanicKey.cs), so there is nothing to toggle.
+            // every press; MainShellWindow.PanicKey.cs observes the flag to release/rebind the Wayland portal.
         }
 
         /// <summary>Posted, not assigned inline: the revert has to run after the dialog's event

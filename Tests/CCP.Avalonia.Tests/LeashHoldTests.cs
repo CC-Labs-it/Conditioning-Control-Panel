@@ -300,7 +300,8 @@ public sealed class LeashHoldTests
         Dispatcher.UIThread.RunJobs();
         Assert.Null(LeashCutConfirmWindow.Current);
         Assert.False(LeashHoldRing.IsShown);
-        Assert.False(MainShellWindow.KeepPortalBound);
+        Assert.False(MainShellWindow.PortalHoldLive);
+        Assert.False(MainShellWindow.KeepPortalBound); // decision C: no effects or live hold.
     });
 
     [Fact]
@@ -314,9 +315,51 @@ public sealed class LeashHoldTests
         clock.Now += TimeSpan.FromMilliseconds(250);
         shell.LeashHoldClockTick();                     // X11 says up; no Deactivated ever arrives
         Assert.True(PortalPanicShortcut.IsHeld);        // the portal still believes it is held ...
-        Assert.False(MainShellWindow.KeepPortalBound);  // ... but no effect and no hold: the grab goes
+        Assert.False(MainShellWindow.PortalHoldLive);  // ... but the stale IsHeld never extends the hold
+        Assert.False(MainShellWindow.KeepPortalBound);  // a leash alone never retains the consuming grab
         PortalPanicShortcut.Route("/test/session", "panic", true, down, () => { }, (clock.Now + LeashHoldToCut.RepeatGap * 2).UtcDateTime);
         Assert.Equal(2, presses);                       // the panic key never goes dead
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DisablingPanicDuringPortalHold_PreservesLeashEscape(bool lockdown) => WithPortalShell(() => false, (shell, clock) =>
+    {
+        var s = CoreSettings.Current;
+        var ld = LockdownService.Current = new LockdownService();
+        s.PanicKeyEnabled = true;
+        s.LockdownDisablePanicKey = true;
+        s.LockdownForceStrictLock = false;
+        Dispatcher.UIThread.RunJobs();
+        // Real unbind calls this release callback: a premature close must end the hold and fail.
+        PortalPanicShortcut.SetSessionForTests("/test/session", shell.OnPortalPanicReleased);
+        PortalPanicShortcut.Route("/test/session", "panic", false, () => { }, shell.OnPortalPanicReleased);
+        PortalPanicShortcut.Route("/test/session", "panic", true, shell.OnPortalPanicPressed, shell.OnPortalPanicReleased, clock.Now.UtcDateTime);
+        Assert.True(PortalPanicShortcut.IsHeld);
+        for (int t = 250; t <= 2000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+        Assert.Equal(3, LeashHoldRing.Number);
+        try
+        {
+            if (lockdown) ld.Activate(TimeSpan.FromMinutes(30));
+            else s.PanicKeyEnabled = false;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(s.PanicKeyEnabled);
+            Assert.True(PortalPanicShortcut.IsBound);
+            Assert.True(MainShellWindow.PortalHoldLive);
+            MainShellWindow.ReleasePortalWhenUnused();
+            Assert.True(PortalPanicShortcut.IsBound);
+
+            for (int t = 2250; t <= 5000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+            Assert.NotNull(LeashCutConfirmWindow.Current);
+            Assert.NotNull(LeashHead.Service!.Snapshot.Me); // a hold asks; it never cuts without Yes.
+            LeashCutConfirmWindow.Current!.Close();
+            shell.OnPortalPanicReleased();
+            MainShellWindow.ReleasePortalWhenUnused();
+            Assert.NotNull(LeashHead.Service!.Snapshot.Me); // still leashed, but the live hold ended.
+            Assert.False(PortalPanicShortcut.IsBound); // decision C: give Escape back to other apps.
+        }
+        finally { ld.Deactivate(); }
     });
 
     /// <summary>Continues a running hold from 2 s to 4.75 s.</summary>
