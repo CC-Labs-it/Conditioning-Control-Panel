@@ -21,7 +21,7 @@ test('a kart body row finds its bars; anything else finds none', () => {
   for (const id of ['kart.body.nope', 'kart.body.constructor', 'kart.outfit.pit-crew', 'rain.dress.scarlet-bell', 'undertow', '', null, undefined]) assert.equal(kartBarsOf(id), null, String(id));
 });
 
-test('every kart body on sale has a row, and every row stays in 1..5 with a known type word', () => {
+test('every kart body on sale has a row, and every row stays in 1..7 with a known type word', () => {
   const items = JSON.parse(read('../assets/manifest.json')).items.map((i) => i.id).filter((id) => id.startsWith('kart.body.'));
   assert.ok(items.length >= 9, `found ${items.length}`);
   assert.deepEqual(items.filter((id) => !kartBarsOf(id)), []);
@@ -31,15 +31,15 @@ test('every kart body on sale has a row, and every row stays in 1..5 with a know
   }
 });
 
-test('the bars draw a type word and four rows of five pips, with no control in them', () => {
+test('the bars draw a type word and four rows of seven pips, with no control in them', () => {
   const tag = renderBars(fakeDocument(), kartBarsOf('kart.body.checkmate'));
   assert.equal(tag.querySelectorAll('.pc-bar').length, 4);
   assert.equal(tag.querySelectorAll('.pc-pip').length, 4 * PIPS);
-  assert.deepEqual(STATS().map((key) => lit(tag, key)), [4, 1, 3, 5]);
+  assert.deepEqual(STATS().map((key) => lit(tag, key)), [5, 1, 3, 7]);
   assert.match(tag.text(), /Heavy Speed Accel Handling Stability/);
   assert.equal(tag.querySelectorAll('button').length, 0);
   assert.equal(tag.getAttribute('aria-label'), barsLine(kartBarsOf('kart.body.checkmate')));
-  assert.match(tag.getAttribute('aria-label'), /^Heavy\. Speed 4 of 5, Accel 1 of 5, Handling 3 of 5, Stability 5 of 5$/);
+  assert.match(tag.getAttribute('aria-label'), /^Heavy\. Speed 5 of 7, Accel 1 of 7, Handling 3 of 7, Stability 7 of 7$/);
 });
 
 test('the confirm card shows the bars on a kart body only, on every face a buyer can reach', () => {
@@ -47,7 +47,7 @@ test('the confirm card shows the bars on a kart body only, on every face a buyer
     const m = cardModel({ ...face('kart.body.undertow'), face: f, short: 10 }, 100, t);
     const card = renderCard(fakeDocument(), m, () => {});
     assert.equal(card.querySelectorAll('.pc-bars').length, 1, f);
-    assert.equal(lit(card.querySelectorAll('.pc-bars')[0], 'speed'), 5, f);
+    assert.equal(lit(card.querySelectorAll('.pc-bars')[0], 'speed'), 7, f);
   }
   for (const id of ['kart.outfit.pit-crew', 'rain.dress.scarlet-bell']) {
     const m = cardModel(face(id), 1000, t);

@@ -164,12 +164,12 @@ html, body { margin: 0; height: 100%; background: #140d19; color: var(--ink); fo
 .pc-bars-type { margin: 0 0 2px; font: 700 18px/1.1 var(--hand); }
 .pc-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; line-height: 1.2; }
 .pc-pips { display: flex; gap: 2px; flex: none; }
-.pc-pip { display: block; width: 13px; height: 8px; box-sizing: border-box; border: 1.5px solid var(--ink); }
+.pc-pip { display: block; width: 10px; height: 8px; box-sizing: border-box; border: 1.5px solid var(--ink); }
 .pc-on { background: var(--pink); }
 .pc-peek-bars { margin-top: 8px; }
 .pc-peek-bars .pc-bars { grid-template-columns: 1fr 1fr; gap: 2px 10px; }
 .pc-peek-bars .pc-bars-type { grid-column: 1 / -1; }
 .pc-peek-bars .pc-bar { font-size: 10px; gap: 4px; }
-.pc-peek-bars .pc-pip { width: 7px; height: 7px; }
+.pc-peek-bars .pc-pip { width: 5px; height: 7px; }
 @media (max-width: 760px) { .pc-peek-bars { flex-basis: 100%; margin-top: 4px; } }
 /* end kart bars */

@@ -3,21 +3,21 @@
  * web tree. tests/kart-bars.test.mjs fails when this drifts and prints the rows to paste. Words stay in the web tree, as
  * the garage's do: no loc keys. */
 
-export const PIPS = 5;
+export const PIPS = 7;
 export const STAT_WORDS = [['speed', 'Speed'], ['accel', 'Accel'], ['handling', 'Handling'], ['stability', 'Stability']];
 export const TYPE_WORDS = Object.freeze({ allround: 'All-rounder', easy: 'Easy', drifter: 'Drifter', heavy: 'Heavy', fast: 'Fast' });
 
 export const KART_BARS = Object.freeze({
-  lovebomb: { speed: 3, accel: 3, handling: 3, stability: 3, type: 'allround' },
-  pendulum: { speed: 3, accel: 3, handling: 3, stability: 3, type: 'allround' },
-  petal: { speed: 1, accel: 5, handling: 5, stability: 5, type: 'easy' },
-  trinket: { speed: 1, accel: 5, handling: 5, stability: 4, type: 'easy' },
-  feedback: { speed: 2, accel: 3, handling: 4, stability: 3, type: 'drifter' },
-  reverie: { speed: 3, accel: 4, handling: 4, stability: 3, type: 'drifter' },
-  checkmate: { speed: 4, accel: 1, handling: 3, stability: 5, type: 'heavy' },
-  'house-edge': { speed: 3, accel: 2, handling: 3, stability: 5, type: 'heavy' },
-  undertow: { speed: 5, accel: 1, handling: 1, stability: 1, type: 'fast' },
-  'velvet-lock': { speed: 5, accel: 2, handling: 1, stability: 2, type: 'fast' },
+  lovebomb: { speed: 4, accel: 4, handling: 4, stability: 4, type: 'allround' },
+  pendulum: { speed: 5, accel: 3, handling: 4, stability: 4, type: 'allround' },
+  petal: { speed: 1, accel: 7, handling: 7, stability: 6, type: 'easy' },
+  trinket: { speed: 2, accel: 6, handling: 7, stability: 5, type: 'easy' },
+  feedback: { speed: 3, accel: 4, handling: 6, stability: 3, type: 'drifter' },
+  reverie: { speed: 3, accel: 5, handling: 5, stability: 3, type: 'drifter' },
+  checkmate: { speed: 5, accel: 1, handling: 3, stability: 7, type: 'heavy' },
+  'house-edge': { speed: 5, accel: 2, handling: 4, stability: 6, type: 'heavy' },
+  undertow: { speed: 7, accel: 1, handling: 1, stability: 1, type: 'fast' },
+  'velvet-lock': { speed: 6, accel: 2, handling: 2, stability: 2, type: 'fast' },
 });
 
 /** A counter row id -> that body's bars and type word; null for anything that is not a kart body. */
