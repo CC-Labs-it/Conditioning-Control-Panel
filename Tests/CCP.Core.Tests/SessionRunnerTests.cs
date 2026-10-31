@@ -110,6 +110,25 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.Equal(golden.ToString(), saved.ToString());
     }
 
+    [Theory, InlineData(false, 0), InlineData(true, 0), InlineData(true, 1)]
+    public void BrainDrainSessionOwnsStartEndAndRestoresTheUserFlag(bool enabled, int start)
+    {
+        var s = CoreSettings.Current; var old = s.BrainDrainEnabled; s.BrainDrainEnabled = true;
+        var session = OneMinute(); session.DurationMinutes = 3;
+        session.Settings.BrainDrainEnabled = enabled; session.Settings.BrainDrainStartMinute = start; session.Settings.BrainDrainEndMinute = 2;
+        try
+        {
+            _runner.Start(session); Assert.Equal(enabled && start == 0, s.BrainDrainEnabled);
+            _runner.Tick(TimeSpan.FromSeconds(59)); Assert.Equal(enabled && start == 0, s.BrainDrainEnabled);
+            _runner.Pause(); _runner.Tick(TimeSpan.FromMinutes(1)); Assert.Equal(enabled && start == 0, s.BrainDrainEnabled);
+            _runner.Resume(); _runner.Tick(TimeSpan.FromMinutes(1)); Assert.Equal(enabled, s.BrainDrainEnabled);
+            _runner.Tick(TimeSpan.FromMinutes(2)); Assert.False(s.BrainDrainEnabled);
+            _runner.Tick(TimeSpan.FromSeconds(150)); Assert.False(s.BrainDrainEnabled);
+            _runner.Stop(); Assert.True(s.BrainDrainEnabled);
+        }
+        finally { _runner.Stop(); s.BrainDrainEnabled = old; }
+    }
+
     [Fact]
     public void EarlyStop_IsNotCompleted()
     {

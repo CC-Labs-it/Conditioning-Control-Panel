@@ -125,7 +125,6 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern int XQueryTree(IntPtr d, IntPtr w, out IntPtr root, out IntPtr parent, out IntPtr children, out uint count);
     [DllImport(LibX11)] private static extern int XFree(IntPtr data);
     [DllImport(LibX11)] private static extern int XRestackWindows(IntPtr d, IntPtr[] windows, int count);
-
     private static IntPtr[] Property(IntPtr w, string name)
     {
         var data = IntPtr.Zero;
@@ -158,9 +157,7 @@ internal static class X11Overlay
         }
         return IntPtr.Zero;
     }
-    // WPF OverlayService.cs:3213-3248: visible own topmost windows, in SERVER order.
-    // Foreign entries cannot affect AnchorIfNeeded. Root frames include override-redirect pictures,
-    // unlike _NET_CLIENT_LIST_STACKING, which would omit those sharp foreground overlays.
+    // WPF OverlayService.cs:3213-3248: server-ordered own root frames include override-redirect pictures, unlike _NET_CLIENT_LIST_STACKING.
     internal static IReadOnlyList<BrainDrainKeepClear.BandEntry> VisibleOwnBand(IReadOnlyList<Window> windows)
     {
         if (OperatingSystem.IsWindows()) return Win32Overlay.VisibleOwnBand(windows);
@@ -190,7 +187,6 @@ internal static class X11Overlay
             return !_xErrored;
         }
     }
-
     /// <summary>Makes <paramref name="window"/> transparent to the mouse while it keeps drawing,
     /// or gives it back its input. The X11 equivalent of adding and clearing
     /// <c>WS_EX_TRANSPARENT</c>, and reversible at runtime the same way.
@@ -448,28 +444,6 @@ internal static class X11Overlay
     /// <c>XSync</c> only waits for the SERVER, so a caller that reads the stacking order straight
     /// after this call can legitimately still see the old one.</para></summary>
     internal static bool RestackAbove(TopLevel window, TopLevel sibling)
-        => Restack(window, sibling, Above);
-
-    /// <summary>WPF OverlayService.cs:3247: insert directly below the anchor without activation,
-    /// movement or resizing. Called by BrainDrainOverlay with the shared BrainDrainKeepClear.Sink ordering.
-    /// Unsupported backends return false; they must not pretend to have reordered anything.</summary>
-    internal static bool RestackBelow(TopLevel window, TopLevel sibling)
-    {
-        if (TryGet(window, OverlayBackend.Win32, out var hwnd)
-            && TryGet(sibling, OverlayBackend.Win32, out var after))
-            return Win32Overlay.RestackBelow(hwnd, after);
-        if (!TryGetXid(window, out var xid) || !TryGetXid(sibling, out var anchor)) return false;
-        lock (Gate)
-        {
-            if (!EnsureDisplay()) return false;
-            _xErrored = false;
-            XRestackWindows(_display, new[] { Frame(anchor), Frame(xid) }, 2);
-            XSync(_display, false);
-            return !_xErrored;
-        }
-    }
-
-    private static bool Restack(TopLevel window, TopLevel sibling, int detail)
     {
         if (!TryGetXid(window, out var xid)) return false;
         if (!TryGetXid(sibling, out var siblingXid)) return false;
@@ -494,7 +468,7 @@ internal static class X11Overlay
                 Marshal.WriteInt32(e, 48, 32);                                            // format
                 Marshal.WriteIntPtr(e, 56, new IntPtr(SourcePager));                      // data.l[0] source
                 Marshal.WriteIntPtr(e, 64, siblingXid);                                   // data.l[1] sibling
-                Marshal.WriteIntPtr(e, 72, new IntPtr(detail));                            // data.l[2] detail
+                Marshal.WriteIntPtr(e, 72, new IntPtr(Above));                            // data.l[2] detail
 
                 // Addressed to the ROOT window, not to ours: the WM holds SubstructureRedirect
                 // there, and that is how the request reaches it.
@@ -506,6 +480,24 @@ internal static class X11Overlay
         }
     }
 
+    /// <summary>WPF OverlayService.cs:3247: insert directly below the anchor without activation,
+    /// movement or resizing. Called by BrainDrainOverlay with the shared BrainDrainKeepClear.Sink ordering.
+    /// Unsupported backends return false; they must not pretend to have reordered anything.</summary>
+    internal static bool RestackBelow(TopLevel window, TopLevel sibling)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd)
+            && TryGet(sibling, OverlayBackend.Win32, out var after))
+            return Win32Overlay.RestackBelow(hwnd, after);
+        if (!TryGetXid(window, out var xid) || !TryGetXid(sibling, out var anchor)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            XRestackWindows(_display, new[] { Frame(anchor), Frame(xid) }, 2);
+            XSync(_display, false);
+            return !_xErrored;
+        }
+    }
     /// <summary>The window's X11 id, or false when there is not one to have.
     ///
     /// <para>Gating on the descriptor rather than on the OS is what lets the call sites stay

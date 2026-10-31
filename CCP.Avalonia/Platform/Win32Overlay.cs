@@ -53,12 +53,10 @@ internal static class Win32Overlay
         try { SetWindowDisplayAffinity(h.Handle, affinity); }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Brain Drain capture affinity failed"); }
     }
-
     // WPF OverlayService.cs:3247. hWndInsertAfter means immediately below this window.
     internal static bool RestackBelow(IntPtr hwnd, IntPtr after)
         => OperatingSystem.IsWindows() && hwnd != IntPtr.Zero && after != IntPtr.Zero
             && SetWindowPos(hwnd, after, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
-
     [DllImport("user32.dll")] private static extern IntPtr GetTopWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
@@ -74,7 +72,6 @@ internal static class Win32Overlay
         }
         return band;
     }
-
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
 

@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Services
     /// The session-scoped corner GIF too: admission, start/end minute, pause hide, stop handback and
     /// the #474 live edits; the head draws it through <see cref="CoreCornerGif.SessionShowHandler"/>.
     ///
-    /// ponytail: not driven here - video, bubbles, bubble count, mind wipe, brain drain, spiral,
+    /// ponytail: not driven here - video, bubbles, bubble count, mind wipe, spiral,
     /// ducking, phase events,
     /// EMI Desk, friends, season recap and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
@@ -165,8 +165,7 @@ namespace ConditioningControlPanel.Services
         private double RemainingMinutes =>
             Math.Max(0, (CurrentSession?.DurationMinutes ?? 0) - _lastElapsed.TotalMinutes);
 
-        /// <summary>WPF ApplySessionSettings (SessionEngine.cs:1337-1617), driven features only. No end
-        /// minute: WPF honours one only for corner GIF and brain drain.</summary>
+        /// <summary>WPF ApplySessionSettings (SessionEngine.cs:1337-1617): session-owned features and deferred starts.</summary>
         private void Apply(SessionSettings ss, AppSettings s)
         {
             _deferred.Clear();
@@ -195,6 +194,10 @@ namespace ConditioningControlPanel.Services
             }
             else CoreSubliminal.Stop();
 
+            // WPF SessionEngine.cs:1484-1496,969-980: sessions own the visual flag, including delayed starts.
+            s.BrainDrainEnabled = ss.BrainDrainEnabled && ss.BrainDrainStartMinute == 0;
+            if (ss.BrainDrainEnabled && ss.BrainDrainStartMinute > 0)
+                _deferred.Defer("brain drain", ss.BrainDrainStartMinute, () => CoreSettings.Current.BrainDrainEnabled = true);
             // Whispers are flag-driven: a delayed start holds the flag off until its minute.
             s.SubAudioEnabled = ss.AudioWhispersEnabled && ss.AudioWhispersStartMinute == 0;
             if (ss.AudioWhispersEnabled)
@@ -337,6 +340,8 @@ namespace ConditioningControlPanel.Services
                     Log.Information("Spiral activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, SpiralStartMinute);
                 }
             }
+            // WPF SessionEngine.cs:984-993: an end minute releases the visual even after a delayed start.
+            if (session.Settings.BrainDrainEnabled && session.Settings.BrainDrainEndMinute > 0 && minutes >= session.Settings.BrainDrainEndMinute) s.BrainDrainEnabled = false;
             TickCornerGif(session.Settings, minutes);
             Ticked?.Invoke();
         }

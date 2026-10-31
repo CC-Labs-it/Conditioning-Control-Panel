@@ -46,24 +46,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 
         private readonly CheckBox _keepClear;
         private bool _loading;
+        private ConditioningControlPanel.Models.AppSettings? _observed;
+        private ConditioningControlPanel.Services.SettingsService? _service;
 
         // WPF re-reads on Loaded and on its settings rebind hook; the Studio tab keeps this control
         // alive, so a Reset or cloud restore (CurrentReplaced) must repaint the toggle.
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced += LoadKeepClear;
+            _service = CoreSettings.Service; if (_service != null) _service.CurrentReplaced += QueueLoad;
             LoadKeepClear();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= LoadKeepClear;
+            if (_service != null) _service.CurrentReplaced -= QueueLoad;
+            if (_observed != null) _observed.PropertyChanged -= SettingsChanged;
+            _service = null; _observed = null;
             base.OnDetachedFromVisualTree(e);
         }
 
+        // WPF BrainDrainFeatureControl.xaml.cs:213-235: external writers repaint the live card.
+        private void SettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        { if (e.PropertyName is nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainEnabled) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainBlurStrength) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainKeepPicturesClear)) QueueLoad(); }
+        private void QueueLoad() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (TopLevel.GetTopLevel(this) != null) LoadKeepClear(); });
         private void LoadKeepClear()
         {
+            if (TopLevel.GetTopLevel(this) != null && !ReferenceEquals(_observed, CoreSettings.Current))
+            {
+                if (_observed != null) _observed.PropertyChanged -= SettingsChanged;
+                _observed = CoreSettings.Current; _observed.PropertyChanged += SettingsChanged;
+            }
             _loading = true;
             try
             {
