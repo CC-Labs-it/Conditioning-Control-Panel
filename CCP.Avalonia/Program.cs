@@ -227,7 +227,9 @@ namespace ConditioningControlPanel.Avalonia
                 return 0;
             }
 
-            var app = BuildAvaloniaApp();
+            // First dispatcher pump = startup is over (WPF App.xaml.cs:4069): acks come from the UI thread again.
+            var app = BuildAvaloniaApp().AfterSetup(_ =>
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(instance.EndStartupPhase));
 #if DEBUG
             // Keincheck MCP server on http://127.0.0.1:3001, Debug builds only. Kept out of
             // BuildAvaloniaApp so the XAML previewer does not start a second server.
