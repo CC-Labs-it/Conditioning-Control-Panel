@@ -26,6 +26,7 @@ using ConditioningControlPanel.Services.Startup.Conversion;
 using Newtonsoft.Json.Linq;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -158,6 +159,10 @@ public sealed class ConversionSyncTests
             Assert.True(ProfileExtras.GrantOpen(s.PostGrants, "voice", DateTime.UtcNow));
             var row = Assert.Single(StartupLadder.Inbox.Items);
             Assert.Equal("conv:free_member_hello", row.Key);
+            Assert.Equal("🎁", row.Glyph);
+            var icon = new ConditioningControlPanel.Avalonia.Controls.IconGlyph { Emoji = row.Glyph };
+            Assert.Equal(IconKind.Gift, icon.Kind);
+            Assert.False(icon.IsFallback);
             Assert.Contains(Loc.Get("conv_member_hello_body"), MainShellWindow.MemberHelloBody(row.Summary!));
             Assert.NotEqual(row.Summary, MainShellWindow.MemberHelloBody(row.Summary!));
             shell.ApplyConversionExtras(s.UnifiedId, ProfileExtras.Parse(new JObject()));

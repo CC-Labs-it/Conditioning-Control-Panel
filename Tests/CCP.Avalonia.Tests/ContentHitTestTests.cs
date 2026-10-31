@@ -45,6 +45,9 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                // Hit geometry must stay still while compositor batches and real pointer input are compared.
+                w.CompleteTabTransition();
+                Assert.Null(w.EnteringTab);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).

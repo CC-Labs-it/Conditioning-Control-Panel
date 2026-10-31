@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -69,7 +70,7 @@ public partial class MainShellWindow
         var summary = Loc.Get("conv_member_hello_body");
         Platform.StartupLadder.PresentOrInbox(new InboxItem
         {
-            Key = "conv:" + MemberHelloKey, Glyph = "🎁", Title = title, Summary = summary,
+            Key = "conv:" + MemberHelloKey, Glyph = IconMap.Entries.First(e => e.Value.Kind == IconKind.Gift).Key, Title = title, Summary = summary,
             Open = () => Dialogs.InboxNoticeCard.Present(this, title, MemberHelloBody(summary), null, null, Loc.Get("conv_ok")),
         });
     }

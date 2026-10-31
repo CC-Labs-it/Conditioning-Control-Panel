@@ -170,7 +170,7 @@ public sealed class BlinkTrainerSessionTests
         public void Dispose() => Disposed = true;
     }
 
-    /// <summary>One sandboxed run with consent, a folder, a fake camera and headless overlays; restores everything.</summary>
+    /// <summary>One sandboxed run with premium, consent, a folder, a fake camera and headless overlays; restores everything.</summary>
     private static void WithSession(Action<string, List<BlinkTrainerSession.OverlayWindow>> body)
         => WithSessionAsync((d, m) => { body(d, m); return System.Threading.Tasks.Task.CompletedTask; }).GetAwaiter().GetResult();
 
@@ -183,6 +183,8 @@ public sealed class BlinkTrainerSessionTests
         var s = CoreSettings.Current;
         var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, s.WebcamConsentDate, s.WebcamCalibrated, s.WebcamCalibrationMode,
             s.WebcamTriggersEnabled, s.FocusGameEnabled, s.BlinkTrainerFolders.ToArray(), s.BlinkTrainerDurationMinutes);
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        CoreEntitlement.HasPremiumProvider = () => true;
         var oldFactory = (WebcamTracker.SourceFactory, BlinkTrainerSession.CreateOverlays);
         var dir = Directory.CreateTempSubdirectory("ccp-blink-extra-").FullName;
         try
@@ -200,6 +202,7 @@ public sealed class BlinkTrainerSessionTests
         }
         finally
         {
+            CoreEntitlement.HasPremiumProvider = oldPremium;
             BlinkTrainerSession.Stop();
             WebcamTracker.Instance.Stop();
             (WebcamTracker.SourceFactory, BlinkTrainerSession.CreateOverlays) = oldFactory;
