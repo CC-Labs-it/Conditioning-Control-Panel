@@ -13,7 +13,7 @@ public class GentleVideoSyncTests
     [InlineData(true, 0.75)]
     [InlineData(true, 1)]
     public void Videos_keep_normal_rate(bool on, double speed)
-        => Assert.Equal(1f, GentleWindowRules.PlaybackRate(on, speed));
+        => Assert.Equal(1f, MandatoryVideoPlaybackRules.PlaybackRate(on, speed));
 
     [Theory]
     [InlineData(true, MotionLevel.Full, 0.25, 0.5)]

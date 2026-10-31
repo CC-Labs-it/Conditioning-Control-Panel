@@ -208,7 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live)
             {
                 LibVlcAudio.ApplyPreferredDevice(live);
-                live.SetRate(ConditioningControlPanel.Services.Video.GentleWindowRules.PlaybackRate(
+                live.SetRate(ConditioningControlPanel.Services.Video.MandatoryVideoPlaybackRules.PlaybackRate(
                     s.GentleVisuals, s.GentleSpeed));
             } });
             _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
