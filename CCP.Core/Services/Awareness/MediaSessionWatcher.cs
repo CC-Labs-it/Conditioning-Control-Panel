@@ -19,6 +19,10 @@ public sealed class MediaSessionWatcher : IMediaWatcher
     private MediaSample? _current;
     private bool _available, _started, _disposed, _reading;
     private long _generation;
+    private string? _mediaTitle;
+    private TimeSpan _mediaPosition;
+    private int _mediaRepeats;
+    private bool _mediaChangePending;
 
     public MediaSessionWatcher(Func<Task<bool>> initialize, Func<Task<MediaSample?>> read,
         TimeProvider? time = null)
@@ -30,6 +34,61 @@ public sealed class MediaSessionWatcher : IMediaWatcher
 
     public MediaSample? Current { get { lock (_gate) return _current; } }
     public bool IsAvailable { get { lock (_gate) return _available; } }
+
+    /// <summary>Fold the current sample on the observer tick, not on the backend poll.
+    /// WPF AwarenessObserver.cs:944-970 and :835-838. Titles remain local to MediaInfo.</summary>
+    public MediaInfo? TrackMedia()
+    {
+        lock (_gate)
+        {
+            var sample = _current;
+            if (sample == null)
+            {
+                _mediaTitle = null;
+                _mediaPosition = TimeSpan.Zero;
+                _mediaRepeats = 0;
+                return null;
+            }
+            if (!string.Equals(sample.Title, _mediaTitle, StringComparison.Ordinal))
+            {
+                _mediaRepeats = 1;
+                if (_mediaTitle != null) _mediaChangePending = true;
+                _mediaTitle = sample.Title;
+            }
+            else if (sample.Position + TimeSpan.FromSeconds(10) < _mediaPosition)
+            {
+                _mediaRepeats++;
+                if (_mediaRepeats >= ActivityLedger.MediaLoopMinimum) _mediaChangePending = true;
+            }
+            _mediaPosition = sample.Position;
+            return new MediaInfo(sample.Title, sample.Artist, sample.PlaybackState, _mediaRepeats);
+        }
+    }
+
+    /// <summary>Consume only when the observer reaches the stationary-app media candidate.
+    /// Earlier candidates leave the pending beat intact (WPF AwarenessObserver.cs:743-747).</summary>
+    public bool TakeMediaChange()
+    {
+        lock (_gate)
+        {
+            bool pending = _mediaChangePending;
+            _mediaChangePending = false;
+            return pending;
+        }
+    }
+
+    /// <summary>The media half of stop/wipe erasure (WPF AwarenessObserver.cs:420-423).
+    /// Does not acquire a session or read the desktop.</summary>
+    public void ResetMediaState()
+    {
+        lock (_gate)
+        {
+            _mediaTitle = null;
+            _mediaPosition = TimeSpan.Zero;
+            _mediaRepeats = 0;
+            _mediaChangePending = false;
+        }
+    }
 
     // Tests await the actual acquisition/arming operation rather than racing a background task.
     internal Task StartCompletion { get; private set; } = Task.CompletedTask;
@@ -85,6 +144,7 @@ public sealed class MediaSessionWatcher : IMediaWatcher
             _started = false;
             ++_generation;
             _current = null;
+            ResetMediaState();
             try { _timer?.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan); }
             catch { try { _timer?.Dispose(); } catch { } _timer = null; }
         }
@@ -100,6 +160,7 @@ public sealed class MediaSessionWatcher : IMediaWatcher
             ++_generation;
             _available = false;
             _current = null;
+            ResetMediaState();
             try { _timer?.Dispose(); } catch { }
             _timer = null;
         }

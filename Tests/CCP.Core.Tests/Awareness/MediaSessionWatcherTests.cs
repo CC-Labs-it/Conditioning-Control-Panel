@@ -250,4 +250,72 @@ public sealed class MediaSessionWatcherTests
         Assert.False(sample!.IsPlaying);
         Assert.True(MediaSample.FromSession("title", "artist", "playing", TimeSpan.Zero)!.IsPlaying);
     }
+    [Fact]
+    public async Task FrameMediaCountsStrictRewindsAndKeepsChangePendingUntilConsumed()
+    {
+        MediaSample? sample = Track("A") with { Position = TimeSpan.FromSeconds(30) };
+        using var watcher = new MediaSessionWatcher(() => Task.FromResult(true),
+            () => Task.FromResult(sample), new Clock());
+        watcher.Start(); await FinishStart(watcher);
+        async Task<MediaInfo?> Tick(string title, int seconds, string state = "Playing")
+        {
+            sample = new MediaSample(title, "artist", state, TimeSpan.FromSeconds(seconds));
+            await watcher.PollAsync();
+            return watcher.TrackMedia();
+        }
+        Assert.Equal(new MediaInfo("A", "artist", "Playing", 1), await Tick("A", 30));
+        Assert.False(watcher.TakeMediaChange()); // first track is not a change
+        Assert.Equal(1, (await Tick("A", 20))!.RepeatCount); // exactly 10s is not a rewind
+        Assert.Equal(2, (await Tick("A", 0))!.RepeatCount);
+        Assert.False(watcher.TakeMediaChange()); // second play is below the loop threshold
+        Assert.Equal(2, (await Tick("A", 30, "Paused"))!.RepeatCount);
+        Assert.Equal(3, (await Tick("A", 0))!.RepeatCount);
+        Assert.Equal(3, watcher.TrackMedia()!.RepeatCount); // observer faster than backend
+        Assert.True(watcher.TakeMediaChange());
+        Assert.False(watcher.TakeMediaChange());
+        Assert.Equal(new MediaInfo("B", "artist", "Paused", 1), await Tick("B", 0, "Paused"));
+        await Tick("B", 1); // another tick must not consume the pending candidate
+        Assert.True(watcher.TakeMediaChange());
+        Assert.Equal(1, (await Tick("A", 0))!.RepeatCount); // A/B/A does not accumulate
+    }
+
+    [Fact]
+    public async Task MissingSessionResetsRepeatIdentityButPreservesPendingCandidateLikeWpf()
+    {
+        MediaSample? sample = Track("A");
+        using var watcher = new MediaSessionWatcher(() => Task.FromResult(true),
+            () => Task.FromResult(sample), new Clock());
+        watcher.Start(); await FinishStart(watcher);
+        await watcher.PollAsync(); watcher.TrackMedia();
+        sample = Track("B"); await watcher.PollAsync(); watcher.TrackMedia();
+        sample = null; await watcher.PollAsync();
+        Assert.Null(watcher.TrackMedia());
+        Assert.True(watcher.TakeMediaChange());
+        sample = Track("B"); await watcher.PollAsync();
+        Assert.Equal(1, watcher.TrackMedia()!.RepeatCount);
+        Assert.False(watcher.TakeMediaChange());
+    }
+
+    [Theory]
+    [InlineData("wipe")]
+    [InlineData("stop")]
+    [InlineData("dispose")]
+    public async Task MediaErasureDropsPendingChangesAndLoopHistory(string action)
+    {
+        MediaSample? sample = Track("A");
+        using var watcher = new MediaSessionWatcher(() => Task.FromResult(true),
+            () => Task.FromResult(sample), new Clock());
+        watcher.Start(); await FinishStart(watcher);
+        await watcher.PollAsync(); watcher.TrackMedia();
+        sample = Track("B"); await watcher.PollAsync(); watcher.TrackMedia();
+        if (action == "wipe") watcher.ResetMediaState();
+        else if (action == "stop") watcher.Stop();
+        else watcher.Dispose();
+        Assert.False(watcher.TakeMediaChange());
+        if (action == "wipe")
+            Assert.Equal(1, watcher.TrackMedia()!.RepeatCount);
+        else
+            Assert.Null(watcher.TrackMedia());
+    }
+
 }
