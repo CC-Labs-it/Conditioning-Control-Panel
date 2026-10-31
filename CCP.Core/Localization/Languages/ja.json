@@ -7959,5 +7959,10 @@
   "online_official_plan_prime": "Primeは1日の割り当てが最大です。一度見たものは無料で再生できます。",
   "online_official_nice": "了解",
   "online_official_stamped_line": "オンラインメディアはScrolllerから届きます。各画像とクリップに小さな「via Scrolller」の表示があります。",
-  "online_cache_day_line": "オンラインメディアはこのパソコンの小さなキャッシュに1日だけ保存され、アップロードされることはありません。"
+  "online_cache_day_line": "オンラインメディアはこのパソコンの小さなキャッシュに1日だけ保存され、アップロードされることはありません。",
+  "lock_voice_hint_off": "入力する代わりにフレーズを声に出します（オフラインマイク）。マイクがない場合は文字入力を使えます。",
+  "lock_voice_hint_on": "有効です。フレーズを話すとカードを閉じられます。マイクが声を拾えない場合は文字入力も使えます。",
+  "lock_voice_hint_no_mic": "マイクが検出されません。マイクを接続するまでロックカードは文字入力を使います。",
+  "lock_voice_hint_load_failed": "音声モデルは見つかりましたが、読み込めませんでした。{0} に追加したモデルを削除して再起動してください。",
+  "lock_voice_hint_no_model": "音声モデルはまだインストールされていません。それまではロックカードは文字入力を使います。vosk-model-small-en-us-0.15 を {0} に展開してください。"
 }

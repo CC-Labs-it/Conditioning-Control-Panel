@@ -47,6 +47,50 @@ public sealed class LoginDeviceCodeTests
         finally { dialog.Close(); }
     });
 
+    [Theory]
+    [InlineData("Sign-in is temporarily paused.", "Sign-in is temporarily paused.")]
+    [InlineData("Redis ECONNREFUSED", "Server error. Please try again later.")]
+    public Task FailedInitiationShowsTheSanitizedServerError(string serverError, string expected) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var (oldCodes, oldTell) = (LoginDialog.DeviceCodes, LoginDialog.Tell);
+            using var wire = new FailedInitiationWire(serverError);
+            string? displayed = null;
+            LoginDialog.DeviceCodes = () => new V2DeviceCodeService(wire);
+            LoginDialog.Tell = (_, _, message) => { displayed = message; return Task.CompletedTask; };
+            var dialog = new LoginDialog();
+            try
+            {
+                Click(dialog.FindControl<Button>("BtnLoginDeviceCode")!);
+                await Until(() => displayed != null);
+                Assert.Equal(expected, displayed);
+                Assert.True(dialog.FindControl<StackPanel>("ProviderPanel")!.IsVisible);
+                Assert.False(dialog.FindControl<StackPanel>("DeviceCodePanel")!.IsVisible);
+                Assert.Null(dialog.Result);
+            }
+            finally
+            {
+                dialog.Close();
+                (LoginDialog.DeviceCodes, LoginDialog.Tell) = (oldCodes, oldTell);
+            }
+        });
+
+    private sealed class FailedInitiationWire(string error) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Assert.Equal("/v2/auth/device/initiate", request.RequestUri!.AbsolutePath);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { error }))
+            });
+        }
+    }
+
     private static readonly DateTimeOffset T0 = new(2026, 10, 9, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>Stepped clock whose timers fire only on <see cref="Advance"/> (Task.Delay(TimeSpan, TimeProvider)).</summary>

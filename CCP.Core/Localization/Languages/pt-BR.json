@@ -7959,5 +7959,10 @@
   "online_official_plan_prime": "O Prime recebe a maior cota diária. O que você já viu repete de graça.",
   "online_official_nice": "Legal",
   "online_official_stamped_line": "A mídia online vem do Scrolller. Cada imagem e clipe leva uma pequena marca \"via Scrolller\".",
-  "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada."
+  "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada.",
+  "lock_voice_hint_off": "Diga a frase em voz alta em vez de digitá-la (microfone offline). Sem microfone, você pode digitar.",
+  "lock_voice_hint_on": "Ativado. Diga a frase para fechar o cartão. Você pode digitar se o microfone não ouvir você.",
+  "lock_voice_hint_no_mic": "Nenhum microfone detectado. Os cartões de bloqueio usarão texto até que um seja conectado.",
+  "lock_voice_hint_load_failed": "O modelo de voz foi encontrado, mas não pôde ser carregado. Remova os modelos adicionais em {0} e reinicie.",
+  "lock_voice_hint_no_model": "O modelo de voz ainda não está instalado. Os cartões de bloqueio usarão texto enquanto isso. Extraia vosk-model-small-en-us-0.15 em {0}"
 }

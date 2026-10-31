@@ -52,6 +52,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// <summary>Test seams: the device-code client and the clock its poll loop waits on.</summary>
         internal static Func<V2DeviceCodeService> DeviceCodes = () => new V2DeviceCodeService();
         internal static TimeProvider Clock = TimeProvider.System;
+        internal static Func<Window, string, string, Task> Tell =
+            (owner, title, message) => MessageDialog.ShowAsync(owner, title, message);
         private CancellationTokenSource? _deviceCts;
         private string? _deviceCode;
         private DateTimeOffset _deviceCodeExpiresAt;
@@ -747,7 +749,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         {
             // A 5-minute OAuth timeout can land after the dialog closed; a dialog on a closed owner throws and kills the app.
             if (_closed) { Log.Warning("Login error after the dialog closed: {Message}", message); return; }
-            await MessageDialog.ShowAsync(this, Loc.Get("title_error"), message);
+            await Tell(this, Loc.Get("title_error"), message);
             ShowProviderSelection();
         }
 
@@ -826,7 +828,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 if (_closed) return;
                 if (!resp.Success || string.IsNullOrEmpty(resp.Code))
                 {
-                    await ShowError(Loc.Get("login_device_failed"));
+                    await ShowError(SanitizeError(resp.Error));
                     return;
                 }
 
