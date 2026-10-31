@@ -206,7 +206,8 @@ public sealed class LoginRetryTests
         return Task.CompletedTask;
     });
 
-    /// <summary>The title-bar "Sign in" chip opens Settings at Account (WPF MainWindow.UiUpdates.cs). On the first
+    /// <summary>The signed-in account chip opens Settings at Account (WPF MainWindow.UiUpdates.cs:514).
+    /// Signed out opens sign-in instead. On the first
     /// open of a launch the page had never been measured, the retry ran before the layout pass, and the user landed
     /// on General with no login in sight.</summary>
     [Fact]
@@ -216,12 +217,17 @@ public sealed class LoginRetryTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        var shell = new MainShellWindow();
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        MainShellWindow? shell = null;
         try
         {
+            CoreAccount.IsLoggedInProvider = () => true;
+            shell = new MainShellWindow();
             shell.Show();
             Dispatcher.UIThread.RunJobs();
+            Assert.True(CoreAccount.IsLoggedIn);
             Click(shell.Named<Button>("BtnAccountChip")!);
+            Assert.Empty(shell.OwnedWindows.OfType<LoginDialog>());
             var page = shell.AppSettingsPage!;
             var scroll = page.FindControl<ScrollViewer>("SectionScroll")!;
             var account = page.FindControl<Control>("SectionAccount")!;
@@ -230,7 +236,8 @@ public sealed class LoginRetryTests
         }
         finally
         {
-            shell.Close();
+            shell?.Close();
+            CoreAccount.IsLoggedInProvider = oldLogin;
             Dispatcher.UIThread.RunJobs();
         }
     });
