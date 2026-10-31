@@ -134,6 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeInviteTicket(); // MainShellWindow.InviteTicket.cs (WPF MainWindow.xaml.cs, main e2d4e35ef)
             InitializeInviteEnding(); // MainShellWindow.Patreon.cs (WPF MainWindow.xaml.cs:3590, main fbe161de2)
             InitializePremiumCelebration(); // MainShellWindow.Patreon.cs (WPF InitializePatreonTab + MainWindow.xaml.cs:3559)
+            InitializeSubscribeStarDependents(); // WPF MainWindow.SubscribeStar.cs:28-48
             InitializePremiumSpark();       // MainShellWindow.PremiumSpark.cs (WPF MainWindow.PremiumSpark.cs)
             InitializeSparkleWallet();      // MainShellWindow.SparkleWallet.cs (WPF MainWindow.SparkleWallet.cs)
             InitializeWebcamLoadingSplash(); // MainShellWindow.WebcamSplash.cs (WPF MainWindow.xaml.cs:3631)
