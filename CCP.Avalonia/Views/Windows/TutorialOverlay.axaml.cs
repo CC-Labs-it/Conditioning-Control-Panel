@@ -482,24 +482,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             timer.Start();
         }
 
-        /// <summary>Opens the sidebar door that owns this step's target before we try to measure
-        /// it. Returns true when a door was addressed (the caller then re-measures once it
-        /// settles).</summary>
+        /// <summary>Lights the sidebar section that owns this step's target before measuring it.
+        /// Returns true when a section was addressed so the caller re-measures after layout.</summary>
         private bool PrepareDoorForStep(TutorialStep step)
         {
-            // ponytail: needs MainShellWindow.ExpandDoorForTab, which does not exist on this head
-            // (MainShellWindow.TabNavigation.cs has ShowTab, which also NAVIGATES — and a step can
-            // spotlight a nav entry filed under a door other than the tab it requires, so ShowTab
-            // would jump the user off the page the card is talking about). The door key itself is
-            // deliberately not on CoreTutorial.Step either: TutorialService.DoorTabKeyFor is a pure
-            // function of the step, but with no way to act on the answer a field carrying it would
-            // just be seam surface nothing reads.
-            //
-            // Until that method exists, no door is opened, so a step whose target sits behind a
-            // collapsed door falls through to the full-overlay path below — the same degraded card
-            // WPF draws when an element cannot be found.
-            _ = step;
-            return false;
+            // WPF TutorialOverlay.xaml.cs:689-706 and MainWindow.TabNavigation.cs:879-886.
+            // The section rail no longer expands. Light the owning row without navigating:
+            // a target entry can belong to a different section than the current page.
+            if (_targetWindow is not MainShellWindow shell || HeadStepFor(step) is not { } head)
+                return false;
+            var tabKey = Tours.TutorialService.DoorTabKeyFor(head);
+            if (string.IsNullOrEmpty(tabKey)) return false;
+            shell.RefreshSectionRail(tabKey);
+            return true;
         }
 
         private void DrawFullOverlay(bool blockClicks = true)
