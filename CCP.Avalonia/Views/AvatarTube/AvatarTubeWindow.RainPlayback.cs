@@ -22,10 +22,12 @@ public partial class AvatarTubeWindow
     private RainPackReader? _rainPack;
     private JObject? _rainMap;
     private string? _rainFolder, _rainClip;
-    private int _rainLayer, _rainVersion;
+    private int _rainLayer, _rainVersion, _rainFailures;
+    private long _rainClickTick = -3000; // not WPF's long.MinValue (CirceEmotes.cs:138): now minus it wraps negative and blocks every click
     private IDisposable? _rainFade;
     internal string RainPackRoot { get; set; } = Path.Combine(CorePaths.UserData, "rain-packs");
     internal string? RainFolder => _rainFolder;
+    internal string? RainClip => _rainClip;
     internal RainClipPlayer? RainActivePlayer => _rainPlayers[_rainLayer];
 
     private void WatchRainSettings()
@@ -86,13 +88,30 @@ public partial class AvatarTubeWindow
         else
             await player.Load(Path.IsPathRooted(_rainFolder) ? new Uri(Path.Combine(_rainFolder, clip + ".webp"))
                 : new Uri($"avares://CCP.Avalonia/Resources/{_rainFolder}/{clip}.webp"));
-        if (version != _rainVersion || !player.IsReady) return;
-        _rainClip = clip; _rainLayer = next; image.Tag = clip; ApplyTubeLayoutOffsets(); _poseTimer.Stop(); _imgAvatar.IsVisible = false;
+        if (version != _rainVersion) return;
+        if (!player.IsReady)
+        {   // WPF watchdog (CirceEmotes.cs:555) re-issues a failed load, then advances; the shown frame stays up.
+            _rainFade?.Dispose();
+            if (++_rainFailures <= 3) _rainFade = DispatcherTimer.RunOnce(() => { if (version == _rainVersion) _ = PlayRainClip(PickRainIdle()); }, TimeSpan.FromMilliseconds(1200));
+            return;
+        }
+        _rainFailures = 0; _rainClip = clip; _rainLayer = next; image.Tag = clip; ApplyTubeLayoutOffsets(); _poseTimer.Stop(); _imgAvatar.IsVisible = false;
         int fade = ConditioningControlPanel.Services.Safety.GentleVisuals.FadeMs(Math.Max(0, (int?)_rainMap["fadeMs"] ?? 1000));
         image.Transitions = outgoing.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(fade) } };
         image.IsVisible = true; image.Opacity = 1; outgoing.Opacity = 0;
         _rainFade?.Dispose();
         _rainFade = DispatcherTimer.RunOnce(() => { if (version == _rainVersion) _rainPlayers[1 - next]?.Stop(); }, TimeSpan.FromMilliseconds(fade));
+    }
+    // WPF CirceClickEmote (CirceEmotes.cs:866): a click plays one click emote per 3 s, then idle resumes.
+    internal bool RainClickEmote()
+    {
+        long now = Environment.TickCount64;
+        var pool = (_rainMap?["clickEmotes"] as JArray)?.Select(c => (string?)c).Where(c => c != null && (_rainPack?.Clips.ContainsKey(c) ?? true)).ToList();
+        if (pool == null || pool.Count == 0 || now - _rainClickTick < 3000) return false;
+        if (pool.Count > 1) pool.Remove(_rainClip);
+        _rainClickTick = now;
+        _ = PlayRainClip(pool[_random.Next(pool.Count)]!);
+        return true;
     }
     private void StopRainPlayback()
     {
