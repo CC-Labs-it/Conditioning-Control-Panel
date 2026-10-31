@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Расписание активно",
+  "scheduler_started_body": "Сеанс автоматически запущен по расписанию.",
+  "scheduler_ended_title": "Расписание",
+  "scheduler_ended_body": "Запланированный сеанс завершён.",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",

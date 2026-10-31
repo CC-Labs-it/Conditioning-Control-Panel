@@ -4,7 +4,7 @@
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
 // ponytail: still missing, each with no service on this head: the remote-control gate,
 // Relapse/TotalSessions achievements, the bubble/brain-drain/pop-quiz/autonomy/
-// ramp starts, the scheduler, the Presets "running" label and the hero FX.
+// ramp starts, the Presets "running" label and the hero FX.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
 using Avalonia.Controls;
@@ -35,10 +35,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Serilog.Log.Information("Start button: asking to stop the running session");
                 await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body");
-                if (!App.Sessions.IsRunning) StopEngine();
+                if (!App.Sessions.IsRunning)
+                {
+                    Scheduler.NoteManualStop(CoreSettings.Current, SchedulerNow());
+                    StopEngine();
+                }
                 return;
             }
-            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); StopEngine(); }
+            if (CoreEngine.IsRunning) { Scheduler.NoteManualStop(CoreSettings.Current, SchedulerNow()); Serilog.Log.Information("Start button: stopping the engine"); StopEngine(); }
             else StartEngineFromUser();
         }
 
@@ -46,6 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (Core PanicAftermath); the scheduler, programs, a remote or the Lockdown keeper never do.</summary>
         internal void StartEngineFromUser()
         {
+            Scheduler.NoteManualStart();
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             StartEngine();
         }

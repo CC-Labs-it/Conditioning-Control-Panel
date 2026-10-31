@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Zeitplan aktiv",
+  "scheduler_started_body": "Sitzung automatisch nach Zeitplan gestartet.",
+  "scheduler_ended_title": "Zeitplan",
+  "scheduler_ended_body": "Geplante Sitzung beendet.",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",

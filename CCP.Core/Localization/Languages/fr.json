@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Planification active",
+  "scheduler_started_body": "Séance démarrée automatiquement selon le planning.",
+  "scheduler_ended_title": "Planification",
+  "scheduler_ended_body": "La séance planifiée est terminée.",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",
