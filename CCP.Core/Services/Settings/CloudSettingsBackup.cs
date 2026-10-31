@@ -35,6 +35,44 @@ namespace ConditioningControlPanel.Services
         public CloudSettingsBackup(HttpMessageHandler? handler = null) =>
             _http = handler == null ? Shared.Value : V2AuthService.Configure(new HttpClient(handler));
 
+        /// <summary>WPF ProfileSyncService.cs:4257-4325: GDPR export, including one retry
+        /// after genuine auth recovery. The caller saves the pretty JSON only after consent.</summary>
+        public async Task<(bool success, string? error, string? jsonData)> ExportDataAsync(AppSettings settings)
+        {
+            if (string.IsNullOrEmpty(settings.UnifiedId))
+                return (false, Localization.Loc.Get("msg_export_login_required"), null);
+            try
+            {
+                using var first = await PostAsync("/v2/user/export-data", settings, new { unified_id = settings.UnifiedId });
+                var response = first;
+                var json = await response.Content.ReadAsStringAsync();
+                HttpResponseMessage? retry = null;
+                try
+                {
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        if (V2AuthService.MergedRecovery is { } merged && await merged(response, json))
+                            return (false, Localization.Loc.Get("account_merged_retry_hint"), null);
+                        if (await AuthRecovery.HandleUnauthorizedAsync(response) && !string.IsNullOrEmpty(settings.AuthToken))
+                        {
+                            retry = await PostAsync("/v2/user/export-data", settings, new { unified_id = settings.UnifiedId });
+                            response = retry;
+                            json = await response.Content.ReadAsStringAsync();
+                        }
+                    }
+                    if (!response.IsSuccessStatusCode)
+                        return (false, (string?)JsonConvert.DeserializeObject<JObject>(json)?["error"] ?? Localization.Loc.GetF("msg_export_server_error_0", response.StatusCode), null);
+                    return (true, null, JToken.Parse(json).ToString(Formatting.Indented));
+                }
+                finally { retry?.Dispose(); }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Data export request failed");
+                return (false, Localization.Loc.Get("msg_export_connection_required"), null);
+            }
+        }
+
         // ---- copied unchanged from WPF ProfileSyncService.cs:4553-4635 ----
 
         /// <summary>

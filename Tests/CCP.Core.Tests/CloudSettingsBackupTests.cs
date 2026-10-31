@@ -300,6 +300,100 @@ public sealed class CloudSettingsBackupTests : IDisposable
     }
 
     [Fact]
+    public async Task ExportPostsIdentityAndTokenAndFormatsTheServerDocument()
+    {
+        _fake.Body = "{\"profile\":{\"name\":\"sample\"}}";
+        var result = await new CloudSettingsBackup(_fake).ExportDataAsync(Signed());
+        Assert.True(result.success);
+        Assert.Equal(JObject.Parse(_fake.Body).ToString(Formatting.Indented), result.jsonData);
+        var sent = Assert.Single(_fake.Seen);
+        Assert.Equal(Url + "/v2/user/export-data", sent.Url);
+        Assert.Equal("TOK", sent.Token);
+        Assert.Equal("u_abc", (string?)JObject.Parse(sent.Body)["unified_id"]);
+    }
+
+    [Fact]
+    public async Task ExportRejectsMissingIdentityServerErrorsAndMalformedData()
+    {
+        var c = new CloudSettingsBackup(_fake);
+        Assert.False((await c.ExportDataAsync(new AppSettings())).success);
+        Assert.Empty(_fake.Seen);
+        _fake.Status = HttpStatusCode.Forbidden;
+        _fake.Body = "{\"error\":\"refused\"}";
+        var result = await c.ExportDataAsync(Signed());
+        Assert.False(result.success);
+        Assert.Equal("refused", result.error);
+        Assert.Null(result.jsonData);
+        _fake.Status = HttpStatusCode.OK;
+        _fake.Body = "invalid json";
+        Assert.False((await c.ExportDataAsync(Signed())).success);
+    }
+
+    // WPF ProfileSyncService.cs:4262,4299,4314: keep each export failure's meaning.
+    [Theory]
+    [InlineData("identity", HttpStatusCode.OK, "You must be logged in to export your data")]
+    [InlineData("transport", HttpStatusCode.OK, "Data export requires an internet connection")]
+    [InlineData("malformed", HttpStatusCode.OK, "Data export requires an internet connection")]
+    [InlineData("status", HttpStatusCode.Forbidden, "Server error: Forbidden")]
+    [InlineData("status", HttpStatusCode.BadGateway, "Server error: BadGateway")]
+    [InlineData("empty", HttpStatusCode.BadGateway, "Server error: BadGateway")]
+    public async Task ExportErrorsMatchWpf(string failure, HttpStatusCode status, string expected)
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var oldLanguage = loc.CurrentLanguage;
+        loc.Initialize("en");
+        try
+        {
+            var settings = Signed();
+            if (failure == "identity") settings.UnifiedId = null;
+            _fake.Status = status;
+            _fake.Body = failure == "empty" ? "" : failure == "malformed" ? "invalid json" : "{}";
+            if (failure == "transport") _fake.BodyFor = _ => throw new HttpRequestException("connection failed");
+            var result = await new CloudSettingsBackup(_fake).ExportDataAsync(settings);
+            Assert.False(result.success);
+            Assert.Null(result.jsonData);
+            Assert.Equal(expected, result.error);
+            if (failure == "identity") Assert.Empty(_fake.Seen);
+        }
+        finally { loc.SetLanguage(oldLanguage); }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ExportRetriesOnlyAfterGenuineRecovery(bool recover)
+    {
+        var s = Signed();
+        AuthRecovery.ResetForTest();
+        AuthRecovery.SettingsForTest = () => s;
+        AuthRecovery.HandlerForTest = new Fake { Status = HttpStatusCode.Forbidden };
+        AuthRecovery.ProviderRevalidate = () => { if (recover) s.AuthToken = "fresh"; return Task.FromResult(recover); };
+        try
+        {
+            _fake.Status = HttpStatusCode.Unauthorized;
+            _fake.Body = "{\"error\":\"expired\"}";
+            var result = await new CloudSettingsBackup(_fake).ExportDataAsync(s);
+            Assert.False(result.success); // retry also refuses, and must not loop
+            Assert.Equal(recover ? 2 : 1, _fake.Seen.Count);
+            Assert.Equal(recover ? "fresh" : "TOK", _fake.Seen.Last().Token);
+        }
+        finally { AuthRecovery.ResetForTest(); AuthRecovery.ProviderRevalidate = null; }
+    }
+
+    [Fact]
+    public async Task ExportMergedAccountAsksForRetryWithoutSavingAResponse()
+    {
+        _fake.Status = HttpStatusCode.Conflict;
+        var called = false;
+        V2AuthService.MergedRecovery = (_, _) => { called = true; return Task.FromResult(true); };
+        var result = await new CloudSettingsBackup(_fake).ExportDataAsync(Signed());
+        Assert.True(called);
+        Assert.False(result.success);
+        Assert.Null(result.jsonData);
+        Assert.Single(_fake.Seen);
+    }
+
+    [Fact]
     public async Task StatusReadsTheBackupsDateAndVersion()
     {
         _fake.Body = "{\"backup\":{\"backed_up_at\":\"2026-10-01T12:30:00Z\",\"app_version\":\"6.11.0\",\"size_bytes\":10}}";

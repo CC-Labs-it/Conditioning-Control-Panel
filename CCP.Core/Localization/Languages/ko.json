@@ -1,4 +1,7 @@
 {
+  "msg_export_login_required": "데이터를 내보내려면 로그인해야 합니다",
+  "msg_export_connection_required": "데이터를 내보내려면 인터넷 연결이 필요합니다",
+  "msg_export_server_error_0": "서버 오류: {0}",
   "deeper_submission_badge_published": "게시됨",
   "deeper_submission_badge_published_tip": "이 인핸스먼트는 커뮤니티 카탈로그에 게시되어 있습니다.",
   "deeper_submission_badge_pending": "대기 중",

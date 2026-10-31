@@ -13,6 +13,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.Platform.Storage;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -35,6 +36,63 @@ namespace CCP.Avalonia.Tests;
 /// fake providers (in-memory secrets, no keyring, no server), Settings door, the card buttons.</summary>
 public sealed class AccountSettingsSectionTests
 {
+    [Theory]
+    [InlineData("save")]
+    [InlineData("cancel")]
+    [InlineData("server-error")]
+    [InlineData("picker-error")]
+    public Task ExportButtonDownloadsBeforePickingAndAlwaysRestoresItsState(string outcome) => RunAsync(async (shell, section, settings, _) =>
+    {
+        settings.UnifiedId = "u_export";
+        section.Refresh();
+        var button = section.FindControl<Button>("BtnExportData")!;
+        Assert.True(button.IsVisible);
+        var oldPick = AccountSettingsSection.PickExportFile;
+        var oldTell = AccountSettingsSection.Tell;
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+        var messages = new List<string>();
+        var picked = 0;
+        AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(new CannedBackup(
+            outcome == "server-error" ? "invalid json" : "{\"profile\":{\"name\":\"sample\"}}"));
+        AccountSettingsSection.Tell = (_, title, _) => { messages.Add(title); return Task.CompletedTask; };
+        AccountSettingsSection.PickExportFile = async owner =>
+        {
+            picked++;
+            Assert.False(button.IsEnabled);
+            Assert.Equal(Loc.Get("btn_exporting"), Text(section, "TxtBtnExportData"));
+            if (outcome == "cancel") return null;
+            if (outcome == "picker-error") throw new IOException("picker failed");
+            await File.WriteAllTextAsync(path, new string('x', 1000));
+            return await shell.StorageProvider.TryGetFileFromPathAsync(new Uri(path));
+        };
+        try
+        {
+            Click(section, "BtnExportData");
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!button.IsEnabled && DateTime.UtcNow < deadline)
+            {
+                Dispatcher.UIThread.RunJobs();
+                await Task.Delay(10);
+            }
+            Assert.True(button.IsEnabled);
+            Assert.Equal(Loc.Get("btn_export_my_data"), Text(section, "TxtBtnExportData"));
+            Assert.Equal(outcome == "server-error" ? 0 : 1, picked);
+            if (outcome == "save")
+            {
+                Assert.Equal(Newtonsoft.Json.Linq.JObject.Parse("{\"profile\":{\"name\":\"sample\"}}").ToString(), await File.ReadAllTextAsync(path));
+                Assert.Equal(new[] { Loc.Get("title_export_complete") }, messages);
+            }
+            else if (outcome == "cancel") Assert.Empty(messages);
+            else Assert.Equal(new[] { Loc.Get(outcome == "server-error" ? "title_export_failed" : "title_export_error") }, messages);
+        }
+        finally
+        {
+            AccountSettingsSection.PickExportFile = oldPick;
+            AccountSettingsSection.Tell = oldTell;
+            File.Delete(path);
+        }
+    });
+
     private static void Run(Action<MainShellWindow, AccountSettingsSection, AppSettings, Dictionary<string, string?>> body) =>
         RunAsync((shell, section, s, secrets) => { body(shell, section, s, secrets); return Task.CompletedTask; }).GetAwaiter().GetResult();
 
@@ -263,7 +321,7 @@ public sealed class AccountSettingsSectionTests
             Assert.True(Shown(section, "BtnLinkDiscord"));
             Assert.False(Shown(section, "BtnLinkPatreon"));         // the grant works
             Assert.True(Shown(section, "DataPrivacySection"));
-            Assert.False(Shown(section, "BtnExportData"));          // not ported: hidden, not inert
+            Assert.True(Shown(section, "BtnExportData"));           // live GDPR export
 
             Click(section, "BtnPatreonLogin");     // the only provider: the whole account goes
 

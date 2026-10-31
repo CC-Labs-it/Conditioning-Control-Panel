@@ -1,4 +1,7 @@
 {
+  "msg_export_login_required": "Для экспорта данных необходимо войти в аккаунт",
+  "msg_export_connection_required": "Для экспорта данных требуется подключение к интернету",
+  "msg_export_server_error_0": "Ошибка сервера: {0}",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",

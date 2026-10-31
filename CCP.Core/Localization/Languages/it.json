@@ -1,4 +1,7 @@
 {
+  "msg_export_login_required": "Devi accedere per esportare i tuoi dati",
+  "msg_export_connection_required": "Per esportare i dati serve una connessione Internet",
+  "msg_export_server_error_0": "Errore del server: {0}",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",
