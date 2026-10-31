@@ -84,7 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Glyph = "🎟️",
                     Title = title,
                     Summary = action,
-                    Open = () => BuildNudge().Show(),
+                    Open = () => BuildNudge().Show(this),
                     Dismiss = RecordDismissed,
                 });
 

@@ -159,6 +159,37 @@ public sealed class IntakePassNudgeTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ReminderBelongsToTheShellAndClosesWithIt(bool fromInbox) => Run(() =>
+    {
+        if (fromInbox) StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var opened = new List<AnnouncementPopup>();
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) =>
+        {
+            if (w is AnnouncementPopup popup) opened.Add(popup);
+        });
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.CheckIntakePassNudge();
+            if (fromInbox) Assert.Single(StartupLadder.Inbox.Items).Open!();
+            Dispatcher.UIThread.RunJobs();
+            var popup = Assert.Single(opened);
+            Assert.Same(shell, popup.Owner); // WPF Marquee.cs:1079
+            var closed = false;
+            popup.Closed += (_, _) => closed = true;
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(closed);
+            Assert.False(popup.IsVisible);
+        }
+        finally { shell.Close(); foreach (var popup in opened) popup.Close(); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task NudgeActionUsesTheIntakeAiGateAndKeepsTheServerDismissal() => Run(() =>
     {

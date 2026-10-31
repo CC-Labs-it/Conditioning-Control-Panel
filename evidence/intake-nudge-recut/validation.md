@@ -61,3 +61,22 @@ The first dismissal/slot mutation attempt hit the 8.8 GB worker disk limit durin
 - Dismissal/slot retry after disk recovery: 3 failed, 0 passed. The popup and Inbox tests saw an empty dismissed week; the announcement-priority test saw two rows instead of the sole server announcement. Sources were restored before the final run.
 
 Final restored isolated reminder run: Failed 0, Passed 4, Skipped 0, Total 4. The final Core guard and docs checks passed; git diff --check was clean. No interactive WPF comparison or native Windows browser launch was run.
+
+## Ownership review follow-up
+
+P2 accepted. WPF MainWindow/MainWindow.Marquee.cs:1079 sets Owner to the shell. MainShellWindow.IntakeNudge.cs:87 now opens with Show(this), including when the Inbox row runs the callback. IntakePassNudgeTests.ReminderBelongsToTheShellAndClosesWithIt tests both immediate and Inbox paths: the owner is the shell, the popup receives Closed when the shell closes, and the popup becomes invisible.
+
+Fail-proof: added the regression test before the product fix. Both cases compiled and failed with Assert.Same, expected MainShellWindow, actual null (2 failed, 0 passed). Assertions and existing tests were retained for the fixed run. No localization key or WPF source changed; all four reminder keys remain present in all ten language files. The parity row stays partial.
+
+Follow-up validation (dotnet is /tmp/dotnet/dotnet):
+
+```text
+dotnet build CCP.Core --no-restore: 0 warnings, 0 errors.
+dotnet build CCP.Avalonia --no-restore: 201 existing warnings, 0 errors.
+dotnet build Tests/CCP.Avalonia.Tests --no-restore: 145 existing warnings, 0 errors.
+dotnet test Tests/CCP.Core.Tests --no-build --no-restore: Failed 0, Passed 4644, Skipped 6, Total 4650.
+dotnet test Tests/CCP.Avalonia.Tests --no-build --no-restore --filter FullyQualifiedName~IntakePassNudgeTests: Failed 0, Passed 6, Skipped 0, Total 6.
+bash .github/scripts/core-guards.sh: All Core guards passed.
+python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
+git diff --check: clean.
+```
