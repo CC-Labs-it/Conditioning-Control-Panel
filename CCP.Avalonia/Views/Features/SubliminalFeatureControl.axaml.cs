@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -39,6 +40,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
 
             PopulateFonts();
+            // WPF FontPickerHelper.cs:246: preview the selected face in the closed picker.
+            // Scope the face to its text so sibling icons retain their inherited font.
+            CmbFont.SelectionBoxItemTemplate = new FuncDataTemplate<string>((name, _) => new TextBlock
+            {
+                Text = name,
+                FontFamily = CmbFont.Items.OfType<ComboBoxItem>().First(item => Equals(item.Tag, name)).FontFamily,
+            });
 
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
             SliderPerMin.ValueChanged += SliderPerMin_Changed;
@@ -112,12 +120,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>
         /// Moves the selection to the stored family, else to the fallback, else row 0 - WPF's
         /// <c>match ?? fallbackItem</c> chain.
-        ///
-        /// <para>WPF's <c>ApplySelectedFamily</c> (repainting the CLOSED box in the picked face) is
-        /// deliberately not ported: setting the ComboBox's own FontFamily shifts which face
-        /// Avalonia's fallback chain picks for the emoji on the sibling buttons, and a render
-        /// proved it turns the colour glyphs monochrome. The per-row preview below is the part
-        /// that carries the information.</para>
         /// </summary>
         private void SelectFont(string? wanted)
         {
