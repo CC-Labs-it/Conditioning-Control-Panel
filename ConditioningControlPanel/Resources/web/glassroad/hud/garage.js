@@ -1,6 +1,6 @@
 import {COURSES} from '../track/catalog.js';
 import {createTrackPicker} from './trackPicker.js';
-import {KARTS,OUTFITS,PRESETS,COLOR_KEYS,lockLine,PAINTS,UMBRELLAS,TRAILS,PAINT_COLORS,wearable,shopLockLine} from './garageState.js';
+import {KARTS,OUTFITS,PRESETS,COLOR_KEYS,lockLine,PAINTS,UMBRELLAS,TRAILS,PAINT_COLORS,wearable,shopLockLine,whereSold} from './garageState.js';
 import {createRecordPanel} from './record.js';
 import {loadRecord} from '../meta/record.js';
 import {createCourseMedia,mediaRecap} from './courseMedia.js';
@@ -13,6 +13,7 @@ export const LOGO=new URL('../art/ui/logo.webp',import.meta.url).href;
  * deny(line): a dark shop look was pressed (the garage plays the deny sound).
  * barsOf(kartId): that kart's stat bars + type word (render/garage.js, sim/kartStats.js); no tag without it. */
 export function garageUi({change,select,customize,action,hover,trackId='threshold',online=true,changeTrack,counter=false,deny=()=>{},barsOf=null}) {
+  const lockOf=kart=>whereSold(lockLine(kart),counter),shopOf=id=>whereSold(shopLockLine(id),counter);
   const root=document.createElement('section');root.id='race-garage';root.hidden=true;root.setAttribute('aria-label','Choose your racer');
   root.innerHTML=`<aside class="g-menu" aria-label="Main menu"><div class="g-title-card"><p>CC LABS</p><div class="g-logo g-logo-art"><img src="${LOGO}" alt="Racing Thoughts" width="720" height="311" decoding="async" draggable="false"></div><div class="g-title-rule" aria-hidden="true"></div></div>
       <nav class="g-menu-options" aria-label="Race options"><button data-g="race" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V3m0 1c5-4 9 4 15 0v10c-6 4-10-4-15 0"/></svg><span><b>Race</b><small class="g-track"></small></span><i aria-hidden="true">↗</i></button><button data-g="tracks" class="g-menu-row g-course-choice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h7a4 4 0 0 0 0-8H8a3 3 0 0 1 0-6h12M4 15v6m-3-3h6M17 1l3 3-3 3"/></svg><span><small>Choose track</small><b class="g-course-name"></b></span><i aria-hidden="true">›</i></button><button data-g="online" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="3"/><path d="M2 20v-3a6 6 0 0 1 12 0v3m2-16a3 3 0 0 1 0 6m2 3c3 1 4 3 4 7"/></svg><span><b>Race online</b></span><i aria-hidden="true">›</i></button><button data-g="customize" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5a3 3 0 0 1 6 0c0 3-3 3-3 6l9 6v3H3v-3l9-6"/></svg><span><b>Customize EMI</b></span><i aria-hidden="true">›</i></button><button data-g="counter" class="g-menu-row g-counter"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18l-2-5H5ZM4 9v11h16V9M9 20v-6h6v6"/></svg><span><b>Prize Counter</b></span><i aria-hidden="true">›</i></button><button data-g="record" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5Z"/><path d="M9 9h6m-6 4h6m-6 4h3"/></svg><span><b>Record</b></span><i aria-hidden="true">›</i></button><button data-g="options" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16m8-16v16m8-16v16M1 9h6m2 6h6m2-8h6"/></svg><span><b>Options</b></span><i aria-hidden="true">›</i></button><button data-g="controls" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10c4 0 7 13 3 13l-5-4H9l-5 4C0 20 3 7 7 7Z"/><path d="M6 10v5m-2-2h4m8-2h.01m3 3h.01"/></svg><span><b>Controls</b></span><i aria-hidden="true">›</i></button></nav></aside>
@@ -45,7 +46,7 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
   const plain=el=>{stopWorn();el.classList.remove('g-note-in','g-note-out');};
   // A dark shop look says where it is sold and changes nothing.
   const shop=(kind,id,values)=>()=>{if(wearable(kind,id,owns)){change(values());return;}
-    const el=$('.g-shop-note');plain(el);el.textContent=shopLockLine(id);clearTimeout(shopTimer);shopTimer=setTimeout(()=>{el.textContent='';},3200);deny(shopLockLine(id));};
+    const el=$('.g-shop-note');plain(el);el.textContent=shopOf(id);clearTimeout(shopTimer);shopTimer=setTimeout(()=>{el.textContent='';},3200);deny(shopOf(id));};
   for(const [id,label]of OUTFITS)make('.g-outfits',label,shop('outfit',id,()=>({outfit:id}))).dataset.outfit=id;
   for(const p of PRESETS){const b=make('.g-palettes','',()=>change({...p,skin:p.name,original:false}));b.setAttribute('aria-label',p.name+' colors');b.dataset.palette=p.name;b.style.background=`linear-gradient(135deg,${p.primary} 50%,${p.secondary} 50%)`;}
   ['Plain','Stripes','Dots','Checks'].forEach((label,pattern)=>{const b=make('.g-patterns','',()=>change({pattern,paint:null,original:false}));b.dataset.pattern=pattern;b.setAttribute('aria-label',label);});
@@ -73,13 +74,13 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
   return {
     root,get trackPicking(){return picker.open||courseMedia.open;},trackNav:dir=>courseMedia.open?courseMedia.nav(dir):picker.nav(dir),get recordOpen(){return record.open;},recordNav:dir=>record.nav(dir),
     setMedia(fn){mediaFor=typeof fn==='function'?fn:()=>({});refreshMedia();},refreshMedia,
-    lockNote(kart){const line=lockLine(kart);if(!line)return;const el=$('.g-lock-note');plain(el);el.textContent=KARTS.find(k=>k[0]===kart)[1]+'. '+line;clearTimeout(noteTimer);noteTimer=setTimeout(()=>{el.textContent='';},3200);
+    lockNote(kart){const line=lockOf(kart);if(!line)return;const el=$('.g-lock-note');plain(el);el.textContent=KARTS.find(k=>k[0]===kart)[1]+'. '+line;clearTimeout(noteTimer);noteTimer=setTimeout(()=>{el.textContent='';},3200);
       noteKart=kart;clearTimeout(peekTimer);peekTimer=setTimeout(()=>{noteKart=null;paintBars();},3200);paintBars();},
     layout(l){root.style.setProperty("--g-menu",l.menuWidth+"px");root.style.setProperty("--g-stage-center",l.center*100+"%");root.style.setProperty("--g-left-arrow",l.arrowLeft*100+"%");root.style.setProperty("--g-right-arrow",l.arrowRight*100+"%");root.style.setProperty("--g-arrow-y",l.arrowY*100+"%");},
     paint(s,{custom,busy,locked,owned}){
       current=s;owns=owned;
       if(s.kart!==barsKart){barsKart=s.kart;noteKart=null;}paintBars();
-      const dark=(el,kind,id,label)=>{const off=!wearable(kind,id,owns);el.classList.toggle('locked',off);el.title=off?shopLockLine(id):'';el.setAttribute('aria-label',label+(off?', locked. '+shopLockLine(id):''));};
+      const dark=(el,kind,id,label)=>{const off=!wearable(kind,id,owns);el.classList.toggle('locked',off);el.title=off?shopOf(id):'';el.setAttribute('aria-label',label+(off?', locked. '+shopOf(id):''));};
       for(const el of root.querySelectorAll('[data-outfit]'))dark(el,'outfit',el.dataset.outfit,el.textContent);
       for(const el of root.querySelectorAll('[data-paint]')){dark(el,'paint',el.dataset.paint,el.dataset.label);el.setAttribute('aria-pressed',String(!s.original&&s.paint===el.dataset.paint));}
       for(const el of root.querySelectorAll('[data-extra]')){dark(el,el.dataset.extra,el.dataset.extraId,el.textContent);el.setAttribute('aria-pressed',String(s[el.dataset.extra]===el.dataset.extraId));}
@@ -90,7 +91,7 @@ export function garageUi({change,select,customize,action,hover,trackId='threshol
       for(const el of root.querySelectorAll('[data-outfit]'))el.setAttribute('aria-pressed',String(el.dataset.outfit===s.outfit));
       for(const el of root.querySelectorAll('[data-palette]'))el.setAttribute('aria-pressed',String(!s.original&&el.dataset.palette===s.skin));
       for(const el of root.querySelectorAll('[data-pattern]'))el.setAttribute('aria-pressed',String(!s.paint&&Number(el.dataset.pattern)===s.pattern));
-      for(const el of root.querySelectorAll('[data-kart]')){const dark=locked.has(el.dataset.kart),line=dark&&lockLine(el.dataset.kart);el.classList.toggle('locked',dark);el.setAttribute('aria-disabled',String(dark));el.title=line||'';el.setAttribute('aria-pressed',String(el.dataset.kart===s.kart));el.setAttribute('aria-label',KARTS.find(k=>k[0]===el.dataset.kart)[1]+(dark?', locked'+(line?'. '+line:''):'')+(barsOf?'. '+barsLine(barsOf(el.dataset.kart)):''));}
+      for(const el of root.querySelectorAll('[data-kart]')){const dark=locked.has(el.dataset.kart),line=dark&&lockOf(el.dataset.kart);el.classList.toggle('locked',dark);el.setAttribute('aria-disabled',String(dark));el.title=line||'';el.setAttribute('aria-pressed',String(el.dataset.kart===s.kart));el.setAttribute('aria-label',KARTS.find(k=>k[0]===el.dataset.kart)[1]+(dark?', locked'+(line?'. '+line:''):'')+(barsOf?'. '+barsLine(barsOf(el.dataset.kart)):''));}
       for(const el of root.querySelectorAll('[data-g=race],[data-g=online],[data-g=tracks]'))el.disabled=busy;
       $('.g-announce').textContent=custom?'Customize EMI':KARTS.find(k=>k[0]===s.kart)[1]+' selected';
     },

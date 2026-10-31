@@ -121,6 +121,8 @@ export function lockLine(kart) {
 }
 /** The line under a dark shop look (outfit, paint, umbrella, trail). */
 export const shopLockLine = id => PRIME_LOOKS.has(id) ? 'Prime, in the Prize Counter' : COUNTER_LINE;
+/** A page with no door to the counter (website, phone) says where it is, so a dark item is never a dead end. */
+export const whereSold = (line, door) => door || !line ? line : line.replace('the Prize Counter', "the desktop app's Prize Counter");
 /** The race look (NET.md looks): vehicle, outfit and skin, plus the shop extras only when worn. A paint needs the
  * skin colours, so it rides only with a custom skin. `owns` (ownedLooks) drops anything no longer owned. */
 export function raceLook(s,owns=null) {
