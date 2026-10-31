@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -95,7 +96,9 @@ public sealed class LocalProvidersTests
         p.OpenAiCompatibleApiKey = "STORED-DPAPI-BLOB";
         var dir = Directory.CreateTempSubdirectory("ccp-local-").FullName;
         var strategy = new AiServiceStrategy();
-        var brain = new CompanionBrain(strategy, memory: new MemoryStore(Path.Combine(dir, "memory.json")),
+        // CompanionBrain borrows an injected store; this fixture owns its debounce timer.
+        var memory = new MemoryStore(Path.Combine(dir, "memory.json"));
+        var brain = new CompanionBrain(strategy, memory: memory,
             store: new CompanionSessionStore(Path.Combine(dir, "session.json"), Path.Combine(dir, "legacy.json")));
         try
         {
@@ -130,10 +133,13 @@ public sealed class LocalProvidersTests
             OpenAiCompatibleService.ApiKeyUnprotect = null;
             listener.Stop();
             brain.Dispose();
+            memory.Dispose();
             strategy.Dispose();
             CoreSettings.ServiceProvider = null;
             Directory.Delete(dir, true);
         }
+        await Task.Delay(MemoryStore.SaveDebounce + TimeSpan.FromMilliseconds(500), TestContext.Current.CancellationToken);
+        Assert.False(Directory.Exists(dir), "Disposed fixture must not leave a memory writer that recreates its directory");
     }
 
     [Fact]
@@ -240,11 +246,14 @@ public sealed class LocalProvidersTests
             Dispatcher.UIThread.RunJobs();
             listener.Stop();
             AvApp.Brain?.Dispose();
+            memory.Dispose();
             AvApp.Ai?.Dispose();
             (AvApp.Ai, AvApp.Brain) = (previousAi, previousBrain);
             service.SaveImmediate();
             CoreSettings.ServiceProvider = null;
             Directory.Delete(dir, true);
         }
+        await Task.Delay(MemoryStore.SaveDebounce + TimeSpan.FromMilliseconds(500), TestContext.Current.CancellationToken);
+        Assert.False(Directory.Exists(dir), "Disposed fixture must not leave a memory writer that recreates its directory");
     });
 }
