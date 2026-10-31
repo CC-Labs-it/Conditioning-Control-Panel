@@ -404,11 +404,16 @@ namespace ConditioningControlPanel
         /// </summary>
         private void PersistOwnCosmetics(ProfileCosmetics chosen)
         {
+            // Sanitized like chosen, so a slot the grants strip is not read as the player clearing it.
+            var slotsBefore = ProfileSlots.Of(CosmeticsCatalog.SanitizeOwn(App.Settings?.Current?.ProfileCosmetics));
             if (App.Settings?.Current != null)
             {
                 App.Settings.Current.ProfileCosmetics = chosen;
                 App.Settings.Save();
             }
+
+            // Frame and avatar live in /v2/equip: local first, PUT behind, fail soft.
+            ProfileEquipSync.Saved(slotsBefore, chosen);
 
             App.Logger?.Information(
                 "Profile cosmetics saved: banner={Banner}, accent={Accent}, title={Title}, pins={Pins}, deco={Deco}, charms={Charms}",
@@ -433,6 +438,34 @@ namespace ConditioningControlPanel
                 }
                 catch (Exception ex) { App.Logger?.Debug("Cosmetics sync push failed: {E}", ex.Message); }
             });
+        }
+
+        // ============================== frame and avatar from other platforms ==============================
+
+        /// <summary>
+        /// Reads the equip copy once per account per launch, after the profile has landed: the sync before
+        /// that has made a plain legacy loadout equal to the server, so a difference is a real pick elsewhere.
+        /// </summary>
+        private void InitializeProfileEquip()
+        {
+            ProfileEquipSync.Adopted += OnProfileEquipAdopted;
+            if (App.ProfileSync != null) App.ProfileSync.ProfileLoaded += OnProfileEquipProfileLoaded;
+            Closed += (_, _) =>
+            {
+                ProfileEquipSync.Adopted -= OnProfileEquipAdopted;
+                if (App.ProfileSync != null) App.ProfileSync.ProfileLoaded -= OnProfileEquipProfileLoaded;
+            };
+            // A launcher-first boot can load the profile before this window exists.
+            if (App.ProfileSync?.HasLoadedProfile == true) OnProfileEquipProfileLoaded(this, EventArgs.Empty);
+        }
+
+        private void OnProfileEquipProfileLoaded(object? sender, EventArgs e)
+            => Dispatcher.BeginInvoke(new Action(() => _ = ProfileEquipSync.PullOnceAsync()));
+
+        private void OnProfileEquipAdopted()
+        {
+            if (_profileViewingSelf) ApplyOwnProfileCosmetics();
+            RefreshProfileBubble();
         }
 
         // ============================== click-to-pin ==============================
