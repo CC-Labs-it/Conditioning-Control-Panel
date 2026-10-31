@@ -2,7 +2,7 @@
 
 Base: 74ac6ce3d5e0ae082c2871c00e864943e15aa2ad, clean local work branch.
 Repository fetch identified CC-Labs-it/Conditioning-Control-Panel.
-No WPF source changed. No new localization keys. Safety and Scrolller retain base behavior.
+No WPF source changed. One new completion body key in all ten languages; existing localized dialog_session_complete title reused. Safety and Scrolller retain base behavior.
 
 WPF paths below are relative to ConditioningControlPanel/.
 
@@ -17,7 +17,7 @@ Fetched all three named branches and read their own-work ranges, not their inher
 | Behavior | Result and WPF spec | Avalonia/Core evidence |
 | --- | --- | --- |
 | Ramp capture and 2 s timer | Ported, MainWindow/MainWindow.StartStop.cs:619 | CCP.Avalonia/Views/Windows/MainShellWindow.EngineRamp.cs:15; CCP.Core/Helpers/IntensityRampRun.cs:27 |
-| Six links, caps, range, preset visual/completion guard | Ported, MainWindow/MainWindow.StartStop.cs:709 | CCP.Core/Helpers/IntensityRampRun.cs:52; CCP.Avalonia/Views/Windows/MainShellWindow.EngineRamp.cs:33 |
+| Six links, caps, range, preset visual/completion guard | Ported, MainWindow/MainWindow.StartStop.cs:709 | CCP.Core/Helpers/IntensityRampRun.cs:52; CCP.Avalonia/Views/Windows/MainShellWindow.EngineRamp.cs:41 |
 | Restore values on stop | Ported, MainWindow/MainWindow.StartStop.cs:648 | CCP.Avalonia/Views/Windows/MainShellWindow.EngineRamp.cs:25; MainShellWindow.StartStop.cs:116 |
 | Crash journal | Ported current WPF addition, MainWindow/MainWindow.StartStop.cs:632 | CCP.Avalonia/Views/Windows/MainShellWindow.EngineRamp.cs:19; existing launch heal CCP.Avalonia/App.axaml.cs:509 |
 | Preset ramp captures user values before session overrides | Ported current WPF ordering, MainWindow/MainWindow.Presets.cs:1618 | CCP.Avalonia/Views/Windows/MainShellWindow.SessionRun.cs:59; EngineRampLifecycleTests.PresetStopRestoresUserValuesRatherThanPresetRampBases |
@@ -40,7 +40,6 @@ Each next complete lane plus focused tests would exceed the remaining budget whe
 | --- | --- | --- |
 | Scheduler startup/poll/manual-stop memory | MainWindow/MainWindow.StartStop.cs:795,834,875 | CCP.Avalonia/Views/Windows/MainShellWindow.StartStop.cs:5; no SchedulerRun on base |
 | Start hero charge/exhale/ignition/heartbeat and lifecycle | MainWindow/MainWindow.HeroFx.cs:169 | CCP.Avalonia/Views/Windows/MainShellWindow.HeroFx.cs:17; rings exist in MainShellWindow.axaml:2036 |
-| Ramp completion notification | MainWindow/MainWindow.StartStop.cs:785 | CCP.Avalonia/Views/Windows/MainShellWindow.EngineRamp.cs:35 stops silently |
 | Time-of-day counters, crash sentinel and autonomy engine start | MainWindow/MainWindow.StartStop.cs:343,454,421 | CCP.Avalonia/Views/Windows/MainShellWindow.StartStop.cs:88; old EngineTimers.cs:21-32 not copied |
 | Empty flash/wallpaper notices and second toast action | MainWindow/MainWindow.StartStop.cs:258,286 | CCP.Avalonia/Helpers/NotificationService.cs:37; old StartStop.cs:96 and BambiTakeoverTabView.axaml.cs:547 not copied |
 | Presets running label | MainWindow/MainWindow.StartStop.cs:91 | CCP.Avalonia/Views/Windows/MainShellWindow.StartStop.cs:133 |
@@ -74,3 +73,10 @@ Commands used /home/agent/.dotnet/dotnet (SDK 10.0.403).
 
 No live verification. Shell-close restore and the journal are covered by the passing lifecycle test;
 crash recovery already has Core SessionSettingsJournalCoreTests on this base.
+
+## Review follow-up
+
+- P2 live master volume: WPF MainWindow.StartStop.cs:676-680,749-754 drives MainWindow.UiUpdates.cs:998-1010. EngineRamp.cs now refreshes AudioSettingsBinder, the running layered bed and MandatoryVideoOverlay after ticks and restoration. Lifecycle tests assert displayed slider/label and the live player volume at 60% and restored 40%.
+- P2 completion notice: WPF MainWindow.StartStop.cs:780-786. EngineRamp.cs sends the localized OS notification before stopping. Tests assert title/body and pre-stop ordering; manual stop, disabled completion and active preset remain silent.
+- Review validation: Core build 0 errors; Avalonia build 0 errors; head tests build 0 errors. Full Core suite passed 4640 with 6 existing skips; all 4 focused EngineRampLifecycleTests passed. Core guards and avalonia_docs passed. Completion title/body exist in all 10 valid language files. No live verification.
+- Review fail-proof: temporarily omitted both audio refresh calls and the completion notification. Focused tests failed 2, passed 2: displayed volume stayed 40 instead of 60, and the completion notice was absent. Source restored in finally; rerun passed all 4 with 0 failed and 0 skipped.

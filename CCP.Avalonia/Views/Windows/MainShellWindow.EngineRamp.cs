@@ -27,11 +27,24 @@ public partial class MainShellWindow
         _rampTimer?.Stop();
         _rampTimer = null;
         Ramp.Stop(CoreSettings.Current);
+        RefreshRampAudio();
         SessionSettingsJournal.ClearRamp(CorePaths.UserData);
+    }
+
+    private static void RefreshRampAudio()
+    {
+        Views.Controls.AppSettings.AudioSettingsBinder.RaiseChanged();
+        Platform.LayeredAudio.Instance?.SetMasterVolumeLive();
+        Views.Overlays.MandatoryVideoOverlay.Instance.UpdateVolume();
     }
 
     internal void TickEngineRamp()
     {
-        if (Ramp.Tick(CoreSettings.Current, EngineNow(), App.Sessions?.IsRunning == true)) StopEngine();
+        bool complete = Ramp.Tick(CoreSettings.Current, EngineNow(), App.Sessions?.IsRunning == true);
+        RefreshRampAudio(); // WPF StartStop.cs:749-754 and :676-680 drive SliderMaster_Changed.
+        if (!complete) return;
+        Platform.OsNotifications.Show(ConditioningControlPanel.Localization.Loc.Get("dialog_session_complete"),
+            ConditioningControlPanel.Localization.Loc.Get("ramp_complete_stopping")); // WPF :785, before stop
+        StopEngine();
     }
 }
