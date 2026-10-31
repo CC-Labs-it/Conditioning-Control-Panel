@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// possible here, unlike what the first pass of these views assumed) and
     /// <see cref="InvokeScriptAsync"/>, plus the live URL (<see cref="CurrentUrl"/>,
     /// <see cref="NavigationCompleted"/>). NativeWebView additionally offers WebMessageReceived,
-    /// NewWindowRequested, GoBack/GoForward, Stop and Refresh; nothing needs
+    /// GoBack/GoForward, Stop and Refresh; nothing needs
     /// them yet, so they are not wrapped. It has NO zoom factor, no document-created script
     /// injection, and no fullscreen-element signal.
     ///
@@ -292,7 +292,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly TextBlock _txtReason, _txtSource;
         private readonly NativeWebView? _web;
 
-        public WebHost()
+        internal IDisposable? PreserveForMove() => _web?.BeginReparenting();
+        internal event Action? BrowserProcessFailed;
+        private IDisposable? _trailerPolicy;
+        public WebHost() : this(false) { }
+        internal WebHost(bool suppressNewWindows)
         {
             AvaloniaXamlLoader.Load(this);
             _webSlot = this.FindControl<Panel>("WebSlot")!;
@@ -323,8 +327,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
                     _web.NavigationStarted += OnNavigationStarted;
-                    _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
-                    _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
+                    if (suppressNewWindows)
+                    {
+                        _web.AdapterDestroyed += (_, _) =>
+                        {
+                            try { _trailerPolicy?.Dispose(); }
+                            catch (Exception ex) { Log.Debug(ex, "Trailer browser policy cleanup failed"); }
+                            finally { _trailerPolicy = null; }
+                        };
+                    }
+                    _web.NewWindowRequested += (_, e) => { if (suppressNewWindows) e.Handled = true; };
+                    _web.NavigationCompleted += (_, e) =>
+                    {
+                        if (suppressNewWindows && _trailerPolicy == null && e.IsSuccess)
+                        {
+                            try { _trailerPolicy = Platform.TrailerBrowserPolicy.Attach(_web.TryGetPlatformHandle(), () => BrowserProcessFailed?.Invoke())
+                                ?? throw new InvalidOperationException("Trailer browser policy unavailable"); }
+                            catch (Exception ex) { Log.Debug(ex, "Trailer browser policy failed"); BrowserProcessFailed?.Invoke(); return; }
+                        }
+                        OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
+                    };
+                    _web.WebMessageReceived += (_, e) => { if (!suppressNewWindows) OnWebMessage(e.Body); };
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
                     // the WebView2 gate on Windows, a WebKitGTK block filter on Linux. The first navigation waits for it.
@@ -435,7 +458,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private bool _loadedOnThisEngine;
 
         /// <summary>A new engine behind this view, or the old one gone (UI thread). Avalonia.Controls.WebView destroys
-        /// the native control on every detach (nothing here calls BeginReparenting), so a view that is unloaded and
+        /// the native control on detach unless preserved for a move, so a view that is unloaded and
         /// loaded again (a tab switch, a moved view) gets a NEW engine: it is held again until its own gate reports,
         /// and a late report from an older engine is dropped. Returns that engine's report.</summary>
         internal Action<bool> NewScrolllerEngine()

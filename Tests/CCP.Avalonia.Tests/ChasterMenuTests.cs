@@ -200,4 +200,22 @@ public sealed class ChasterMenuTests
         Assert.False(tab.BeginPriceEdit("typo"));
         Assert.Equal(Loc.Get("chaster_price_edit_locked"), ToolTip.GetTip(stamp));
     }));
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task OpenTrailerRefreshesAfterEditingAndResettingTheFigure(bool reset) => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
+    {
+        tab.OpenTrailer(tab.PriceRows["typo"]);
+        Assert.True(tab.BeginPriceEdit("typo"));
+        tab.PriceEditor!.Text = "2:00"; tab.CommitPriceEdit();
+        var why = tab.FindControl<TextBlock>("TxtTrailerWhy")!;
+        if (reset)
+        {
+            tab.OpenTrailer(tab.PriceRows["typo"]);
+            tab.FindControl<Button>("BtnResetPrices")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        }
+        Assert.Equal(TabMenuCopy.Why("typo", Loc.Get, reset ? ChasterTabView.ShownSeconds("typo") : 120), why.Text);
+        await Task.CompletedTask;
+    }));
+
 }

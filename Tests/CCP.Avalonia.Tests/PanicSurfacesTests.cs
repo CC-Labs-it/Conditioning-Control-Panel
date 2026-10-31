@@ -92,6 +92,7 @@ public sealed class PanicSurfacesTests
         "ai-followups",
         "blink-trainer",
         "camera",
+        "chaster-trailer",
         "chaster-hold",
         "chaos",
         "chaos-flash",
