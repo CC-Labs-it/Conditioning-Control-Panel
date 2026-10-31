@@ -400,7 +400,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var phrase = mercyPhrases[Random.Shared.Next(mercyPhrases.Length)];
 
             // Show mercy lock card (no answer in phrase!)
-            LockCardWindow.ShowOnAllMonitors(
+            LockCardWindow.ShowGameMercy(
                 phrase,
                 2, // Type twice
                 _strictMode);
