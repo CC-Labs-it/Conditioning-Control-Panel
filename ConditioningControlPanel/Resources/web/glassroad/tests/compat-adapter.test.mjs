@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { isCompatOnly, compatLimits, COMPAT_DEAD_ERRORS, noteCompatLoss, webgl2Died, DEAD_BACKEND_MS } from '../render/compatAdapter.js';
-import { trackTableWidth } from '../render/spectrum.js';
+import { trackTableWidth, setTrackTableLimit } from '../render/spectrum.js';
 
 const src = readFileSync(new URL('../render/renderer.js', import.meta.url), 'utf8');
 const boot = readFileSync(new URL('../boot.js', import.meta.url), 'utf8');
@@ -65,4 +65,16 @@ test('a refused WebGL2 gets a fresh canvas and the defaults, and the card carrie
 test('the compat WebGPU route never multisamples: RGBA16Float refuses it there, whatever the tier', () => {
   const post = readFileSync(new URL('../render/post.js', import.meta.url), 'utf8');
   assert.match(post, /samples: Q\.antialias && !\w+\.backend\?\.compatibilityMode \? 4 : 0/);
+});
+
+test('the course tables follow the GPU limit, and a bad reading falls back to the default', () => {
+  try {
+    setTrackTableLimit(4096);
+    assert.equal(trackTableWidth(8373), 4096);
+    assert.equal(trackTableWidth(1200), 1200);
+    setTrackTableLimit(16384);
+    assert.equal(trackTableWidth(1e6), 8192, 'never past the WebGPU default');
+    setTrackTableLimit(undefined);
+    assert.equal(trackTableWidth(1e6), 8192);
+  } finally { setTrackTableLimit(8192); }
 });

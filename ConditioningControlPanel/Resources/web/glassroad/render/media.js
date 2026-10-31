@@ -431,13 +431,13 @@ export function createMediaSlots(scene, track, opts = {}) {
     persistentSources.set(sl.index, o);
   }
 
-  function retainShared(o, index, el) {
+  function retainShared(o, index, el, still = false) {
     let owner = sharedVideos.get(el);
     if (!owner) {
       if (sharedVideos.size >= videoCapacity()) return false;
       owner = sharedPool.find(p => !p.el);
       if (!owner) return false;
-      owner.el = el; owner.ready = false; owner.uploaded = false;
+      owner.el = el; owner.ready = false; owner.uploaded = false; owner.still = still; owner.stale = true;
       sharedVideos.set(el, owner);
     }
     owner.refs.add(index); o.shared = owner; o.tex = owner.tex; o.mesh.userData.mediaTex = owner.tex;
@@ -501,7 +501,9 @@ export function createMediaSlots(scene, track, opts = {}) {
    * slot (null puts the placeholder back). url must be local or same origin (mediaMath.urlAllowed):
    * the host hands a cached copy, never a remote Scrolller url. credit 'scrolller' writes "via Scrolller"
    * on the slot's strip. An explicit el with borrowed:true stays owned by its provider, allowing
-   * many faces to share the current tier's limited video decoders. Returns true when taken.
+   * many faces to share the current tier's limited video decoders. A borrowed image or canvas shares the same
+   * prewarmed owners as a STILL: one texture and one material for all its faces, one budgeted upload, no decoder.
+   * Returns true when taken.
    */
   function setSource(slotId, src) {
     const sl = slots.find((s) => s.id === slotId);
@@ -518,7 +520,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     if (!el || !['image', 'video', 'canvas'].includes(src.kind)) { placeSlot(sl); flush(); return false; }
     const o = persistentSources.get(sl.index) || makeOwnSource(sl);
     o.el = el; o.kind = src.kind; o.borrowed = !!src.el && src.borrowed === true;
-    if (src.kind === 'video' && !retainShared(o, sl.index, el)) {
+    if ((src.kind === 'video' || o.borrowed) && !retainShared(o, sl.index, el, src.kind !== 'video')) {
       if (!o.borrowed) { try { el.pause?.(); el.removeAttribute?.('src'); el.load?.(); } catch { /* source rejected */ } }
       o.el = null; o.kind = null; o.borrowed = false;
       if (!o.persistent) { group.remove(o.mesh); o.baseTex.dispose(); releaseSourceMaterial(o.baseTex); }
@@ -594,6 +596,28 @@ export function createMediaSlots(scene, track, opts = {}) {
     }
   }
 
+  /** Cover-crop every face of a still owner to its current picture, at the moment its pixels go up. */
+  function refitStill(owner) {
+    const el = owner.el, w = el.naturalWidth || el.width || 1, h = el.naturalHeight || el.height || 1;
+    for (const i of owner.refs) {
+      const o = own.get(i), c = fitCover(w / h, slots[i].w / slots[i].h);
+      if (o) { o.el = el; o.crop.set(c.cx, c.cy, c.sx, c.sy); }
+    }
+  }
+  /**
+   * Put the next picture on a still owner in place: its faces keep the old pixels until the budgeted upload, so a
+   * face never drops to its placeholder between two pictures (that would be a one-frame flicker on Gentle too).
+   * Returns false for a clip, an unknown element or one that already has an owner.
+   */
+  function swapStill(from, to) {
+    const owner = sharedVideos.get(from);
+    if (!owner?.still || !to || (to !== from && sharedVideos.has(to))) return false;
+    sharedVideos.delete(from); sharedVideos.set(to, owner);
+    owner.el = to; owner.ready = true; owner.stale = true;
+    budget.list[owner.src].due = uploadClock;
+    return true;
+  }
+
   // ---- per frame ----
   let webScreens = null;
   let clock = 0, uploadClock = 0, uploads = 0, sharedVideoUploads = 0, sharedVideoUploadsTotal = 0;
@@ -639,7 +663,8 @@ export function createMediaSlots(scene, track, opts = {}) {
     for (const [i, o] of own) if (o.src >= 0) { const sl = slots[i]; budget.list[o.src].near = Math.hypot(sl.C[0] - EYE.x, sl.C[1] - EYE.y, sl.C[2] - EYE.z); }
     for (const owner of sharedVideos.values()) {
       const entry = budget.list[owner.src]; entry.near = Infinity; entry.every = 1 / Tl.videoFps;
-      entry.on = owner.ready && dt > 0;
+      // A still goes up once per picture; a clip goes up at the tier's video rate.
+      entry.on = owner.ready && dt > 0 && (!owner.still || owner.stale);
       for (const i of owner.refs) {
         const sl = slots[i];
         if (!hidden(sl)) entry.near = Math.min(entry.near, Math.hypot(sl.C[0] - EYE.x, sl.C[1] - EYE.y, sl.C[2] - EYE.z));
@@ -653,15 +678,16 @@ export function createMediaSlots(scene, track, opts = {}) {
       else if (x.kind === 'shared-video') {
         const owner = x.owner;
         if (owner.ready) {
-          const el = owner.el, width = el.videoWidth, height = el.videoHeight;
+          const el = owner.el, width = owner.still ? el.naturalWidth || el.width : el.videoWidth, height = owner.still ? el.naturalHeight || el.height : el.videoHeight;
           // Upload only a decoded frame: a loop seek or stall keeps the last frame, never a black one.
-          const copied = !el.error && el.readyState >= 2 && width > 0 && height > 0;
+          const copied = owner.still ? width > 0 && height > 0 : !el.error && el.readyState >= 2 && width > 0 && height > 0;
           owner.uploadError = el.error ? 'MediaError' + (el.error.code ? ':' + el.error.code : '') : null;
           if (copied && (owner.tex.image !== el || owner.width !== width || owner.height !== height)) {
             // Retain the warmed sampler graph, but release r186's old-size GPU allocation.
             if (!owner.idleDisposed) owner.tex.dispose();
             owner.idleDisposed = true; owner.tex.image = el; owner.width = width; owner.height = height;
           }
+          if (copied && owner.still) { owner.stale = false; refitStill(owner); }
           if (copied) {
             if (!owner.uploaded) {
               owner.uploaded = true;
@@ -706,6 +732,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     get videoCapacity() { return videoCapacity(); },
     tunnel: tun ? { fromS: tun.fromS, toS: tun.toS } : null,
     setSource,
+    swapStill,
     /** Browser feed is display-only. Its images and clips must never enter a GPU texture. */
     setDisplayFeed(feed, canvas = globalThis.document?.getElementById('view')) {
       if (!webScreens && feed) webScreens = createWebMediaScreens({ scene, canvas,
@@ -731,6 +758,7 @@ export function createMediaSlots(scene, track, opts = {}) {
         worldVideoCounts, mediaVideoDecoders: new Set(videos.map(o => o.el)).size, mediaVideoPlayback: playback.snapshot(videos.map(o => o.el)),
         videoCapacity: videoCapacity(), prewarmedVideoTextures: sharedPool.length,
         sharedVideoTextures: sharedVideos.size, sharedVideoUploads, sharedVideoUploadsTotal,
+        stillOwners: [...sharedVideos.values()].filter(o => o.still).length, readyStillFaces: [...own.values()].filter(o => o.shared?.still && o.ready).length,
         sharedVideoCopyErrors: [...sharedVideos.values()].map(o => o.uploadError).filter(Boolean),
         maxMediaUploads: tierOf(Q.name, M).maxUploads, videoUploadFps: tierOf(Q.name, M).videoFps,
       };

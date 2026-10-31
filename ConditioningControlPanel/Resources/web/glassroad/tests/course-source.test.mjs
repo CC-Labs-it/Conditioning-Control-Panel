@@ -5,11 +5,11 @@ import vm from 'node:vm';
 
 const boot = readFileSync(new URL('../boot.js', import.meta.url), 'utf8');
 const source = boot.slice(boot.indexOf('  const library = shared.library'), boot.indexOf("  lifetime.listen(cardEl, 'click'"));
-function run({ saved, consent = false, available = true, files = [] } = {}) {
+function run({ saved, consent = false, available = true, files = [], deviceOrigin = false } = {}) {
   const calls = [], events = {}, views = [];
   const feed = { consent, catalog: [], setConsent(on) { calls.push(['consent', on]); },
-    setNiches(id, niches) { calls.push(['niches', id, niches]); }, subscribe(fn) { this.echo = fn; return () => {}; } };
-  const context = { shared: { coursePicks: saved ? {keep:saved} : {}, courseFiles:{keep:files} }, TRACK_ID:'keep',
+    setNiches(id, niches) { calls.push(['niches', id, niches]); }, subscribe(fn) { this.echo = fn; return () => {}; }, onDeclined() { return () => {}; } };
+  const context = { deviceOrigin, shared: { coursePicks: saved ? {keep:saved} : {}, courseFiles:{keep:files} }, TRACK_ID:'keep',
     scrolller:available ? feed : null, init:{caps:{scrolller:{consent}}}, track:{id:'keep'}, trackName:'The Keep',
     createLocalLibrary:()=>({count:0,setFiles(rows){this.count=rows.length;},clear(){this.count=0;}}),
     nichesFor:()=>['beta'], isDefault:()=>true, saveCustomization(){}, saveFilesChoice(){}, pickFiles:rows=>rows,
@@ -33,4 +33,9 @@ test('an unconfigured course preserves remote consent off, while local files wor
   const local=run({saved:{source:'files'},available:false,files:[{},{}]});
   assert.equal(local.views.at(-1).source,'files');assert.equal(local.views.at(-1).files,2);
   assert.equal(local.calls.length,0);
+});
+test('on a device origin a saved Scrolller course never raises consent by itself: the phone asks the player first', () => {
+  const r=run({saved:{source:'scrolller'},deviceOrigin:true});
+  assert.equal(r.calls.some(c=>c[0]==='consent'),false);
+  assert.equal(r.views.at(-1).source,'off');
 });
