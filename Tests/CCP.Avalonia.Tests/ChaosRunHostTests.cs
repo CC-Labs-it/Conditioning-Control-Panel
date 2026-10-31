@@ -550,6 +550,65 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    // WPF ChaosModeService.cs:2028-2036 and BubbleService.cs:1703-1757.
+    [Theory]
+    [InlineData(false, false, 1.5, false, false)]
+    [InlineData(true, false, 1.5, true, false)]
+    [InlineData(false, true, 1.5, true, true)]
+    [InlineData(false, true, 1.501, false, false)]
+    public async Task Snaps_produce_boon_hazards_and_sweeps_use_paid_callbacks(
+        bool ripple, bool aftermath, double fuse, bool treatHit, bool liveHit)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var settings = global::ConditioningControlPanel.CoreSettings.Current;
+            bool skia = settings.ChaosSkiaFxEnabled;
+            try
+            {
+                settings.ChaosSkiaFxEnabled = false;
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
+                ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown();
+                var st = ChaosRunHost.State!; st.RippleEnabled = ripple; st.AftermathEnabled = aftermath;
+                BubbleOverlay.Field.Bubbles.Clear(); Assert.False(BubbleOverlay.CanIdle);
+                BubbleOverlay.Field.Clock = () => DateTime.UnixEpoch;
+                var source = BubbleOverlay.SpawnChaos(LiveSpec()); source.X = source.Y = 0;
+                source.FuseRemainingMs = fuse * 1000;
+                var treat = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { SizePx = 200, Payload = new FlashPayload() });
+                var live = BubbleOverlay.SpawnChaos(LiveSpec());
+                treat.X = treat.Y = live.X = live.Y = 0;
+                Assert.True(source.Snap()); BubbleOverlay.Field.ChaosDefused!(source);
+                Assert.Equal((ripple ? 1 : 0) + (aftermath && fuse <= 1.5 ? 1 : 0),
+                    ChaosFieldFxOverlay.Active!.Model.TransientCount);
+                BubbleOverlay.HoldChaos(true); BubbleOverlay.TickSnapHazards();
+                Assert.False(treat.Popping); Assert.False(live.Popping);
+                BubbleOverlay.HoldChaos(false); BubbleOverlay.TickSnapHazards();
+                Assert.Equal(treatHit, treat.Popping); Assert.Equal(liveHit, live.Popping);
+                Assert.Equal(treatHit ? 1 : 0, st.EffectsFired);
+                Assert.Equal(liveHit ? 2 : 1, st.Defused); Assert.Equal(0, st.Detonated);
+                if (liveHit)
+                {
+                    Assert.False(live.Deflating);   // WPF BubbleService.cs:1754,4672,3786: residue bursts.
+                    double scale = live.Scale;
+                    live.Step();
+                    Assert.Equal(scale + 0.04, live.Scale, 6);
+                }
+                ChaosRunHost.ForceShutdown();
+                Assert.True(BubbleOverlay.CanIdle);
+                var next = BubbleOverlay.SpawnChaos(LiveSpec()); next.X = next.Y = 0;
+                BubbleOverlay.TickSnapHazards(); Assert.False(next.Popping);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); BubbleOverlay.EndChaos(); FreshMeta();
+                BubbleOverlay.Field.Clock = () => DateTime.UtcNow;
+                settings.ChaosSkiaFxEnabled = skia;
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = false;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     private static EffectBubbleSpec LiveSpec() => new()
         { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() };
 

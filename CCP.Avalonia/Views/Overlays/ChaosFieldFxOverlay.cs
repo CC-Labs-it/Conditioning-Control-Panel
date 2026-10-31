@@ -24,8 +24,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>Refuses (draws nothing) unless X11 click-through and a compositor are there: an opaque or
     /// click-eating stage-sized topmost window would lock the desktop.</para>
     ///
-    /// <para>ponytail: nothing calls Ripple/SnapRipple/Residue/TrailDot/SetTether yet - the bubble field
-    /// (WPF BubbleService.TickFieldHazards) is not on this head (ChaosRunHost note).</para>
+    /// <para>ponytail: Size Queen and Aftermath have live snap producers. Player-cast Ripple,
+    /// trails and Bound tethers still need their gameplay producers.</para>
     /// </summary>
     internal sealed class ChaosFieldFxOverlay : Window
     {
