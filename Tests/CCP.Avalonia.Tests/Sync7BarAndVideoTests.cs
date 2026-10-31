@@ -11,9 +11,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class Sync7BarAndVideoTests
 {
     private static void Setup()
@@ -22,7 +20,38 @@ public sealed class Sync7BarAndVideoTests
             AppBuilder.Configure<AvApp>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
-
+    [Fact]
+    public async Task AudioTransitionsResetBreathAndParkAndWakeTheClock()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            double now = 0; bool audible = false; var settings = CoreSettings.Current; var savedMotion = settings.MotionLevel;
+            var border = new Border(); var window = new Window { Width = 300, Height = 200, Content = border };
+            window.Show();
+            var frame = new ConditioningControlPanel.Avalonia.Views.Overlays.FloatingVideoFrame(window, () => now, border, () => audible);
+            try
+            {
+                settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+                Assert.False(frame.Running); var brush = border.BorderBrush;
+                now = 500; frame.Tick(); Assert.Same(brush, border.BorderBrush);
+                audible = true; frame.Refresh(); Assert.True(frame.Running); Assert.Equal(0, frame.BreathSeconds);
+                for (int i = 0; i < 24; i++) { now += 50; frame.Tick(); }
+                Assert.Equal(1.2, frame.BreathSeconds, 5);
+                audible = false; frame.Refresh();
+                for (int i = 0; i < 7; i++) { now += 50; frame.Tick(); }
+                Assert.False(frame.Running);
+                audible = true; frame.Refresh(); Assert.Equal(0, frame.BreathSeconds);
+                settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off; global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                for (int i = 0; i < 4; i++) { now += 50; frame.Tick(); }
+                Assert.False(frame.Running);
+                settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full; global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.True(frame.Running);
+            }
+            finally { window.Close(); settings.MotionLevel = savedMotion; }
+            frame.Refresh(); Assert.False(frame.Running);
+            return Task.CompletedTask;
+        });
+    }
     [Theory]
     [InlineData(0, "label_session_bar_elapsed")]
     [InlineData(10, "label_session_bar_left")]
@@ -31,10 +60,13 @@ public sealed class Sync7BarAndVideoTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
+            var savedCountdown = CoreSettings.Current.ShowSessionCountdown;
+            var savedSessions = AvApp.Sessions;
             var shell = new MainShellWindow();
             var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
             try
             {
+                CoreSettings.Current.ShowSessionCountdown = true;
                 runner.Start(new Session { Id = "bar", Name = "Bar session", DurationMinutes = minutes });
                 shell.OnSessionTick();
                 var label = shell.Named<TextBlock>("TxtPresetsStatus")!;
@@ -50,11 +82,10 @@ public sealed class Sync7BarAndVideoTests
                 shell.UpdateStartButton(force: true);
                 Assert.Equal("", label.Text);
             }
-            finally { if (runner.IsRunning) runner.Stop(completed: false); shell.Close(); }
+            finally { try { if (runner.IsRunning) runner.Stop(completed: false); } finally { CoreSettings.Current.ShowSessionCountdown = savedCountdown; AvApp.Sessions = savedSessions; shell.Close(); } }
             return Task.CompletedTask;
         });
     }
-
     [Fact]
     public async Task FloatingFrameInsetsAndClipsVideo()
     {
@@ -73,7 +104,6 @@ public sealed class Sync7BarAndVideoTests
             return Task.CompletedTask;
         });
     }
-
     [Fact]
     public async Task FloatingSizeLoadsAndWritesTheSizeUsedByTheNextWindow()
     {

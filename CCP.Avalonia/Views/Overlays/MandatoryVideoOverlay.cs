@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             internal set { if (_scheduler != null) _scheduler.NoVideos -= ShowNoVideos; _scheduler = value; value.NoVideos += ShowNoVideos; }
         }
 
+        private Action? _refreshFloating;
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
         internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons);
 
@@ -204,7 +205,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
-            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
+            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) { LibVlcAudio.ApplyPreferredDevice(live); _refreshFloating?.Invoke(); } });
+            _player.Paused += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) _refreshFloating?.Invoke(); });
             _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
             _player.EndReached += (_, _) =>
             {
@@ -260,6 +262,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void UpdateVolume()
         {
             if (_player is { } p) ApplyVolume(p);
+            _refreshFloating?.Invoke();
         }
 
         /// <summary>WPF VideoService.VideoScreens -> App.ResolveScreens (ccp-bugs #1154): the Video
@@ -311,8 +314,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.ShowActivated = false;
                 PlaceFloating(w, screen, _random);
                 var frame = DecorateFloating(w);
-                w.Opened += (_, _) => _ = new FloatingVideoFrame(w, frame: frame,
-                    audible: () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0);
+                w.Opened += (_, _) =>
+                {
+                    var floatingFrame = new FloatingVideoFrame(w, frame: frame, audible: () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0);
+                    _refreshFloating += floatingFrame.Refresh;
+                    w.Closed += (_, _) => _refreshFloating -= floatingFrame.Refresh;
+                };
             }
             else Place(w, screen);
             void OnKey(KeyEventArgs e)

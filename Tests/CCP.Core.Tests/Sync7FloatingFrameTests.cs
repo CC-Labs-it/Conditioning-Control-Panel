@@ -1,10 +1,7 @@
-using System;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Video.Floating;
 using Xunit;
-
 namespace CCP.Core.Tests;
-
 public sealed class Sync7FloatingFrameTests
 {
     [Fact]
@@ -31,7 +28,6 @@ public sealed class Sync7FloatingFrameTests
         m.Release(5040, MotionLevel.Off);
         Assert.False(m.Flying);
     }
-
     [Fact]
     public void AudioLightEasesBreathesAndRespectsMotion()
     {

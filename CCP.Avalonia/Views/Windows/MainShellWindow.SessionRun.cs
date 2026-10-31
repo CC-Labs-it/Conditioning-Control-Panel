@@ -178,7 +178,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
         }
 
-        // WPF RefreshBarStatus: use the session clock, including while its tick is paused.
         internal void RefreshBarStatus()
         {
             if (Named<TextBlock>("TxtPresetsStatus") is not { } label) return;
