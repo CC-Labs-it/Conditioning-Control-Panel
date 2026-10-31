@@ -169,6 +169,45 @@ public sealed class KeywordAudioRuntimeTests
         finally { KeywordTriggerHead.Engine.Now = realNow; }
     });
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void PanicQuietSuppressesKeywordAudioUntilUserStartOrExpiry(bool legacy, bool expire) => Run((engine, s, played) =>
+    {
+        var trigger = s.KeywordTriggers[0];
+        if (legacy)
+        {
+            trigger.AudioFilePath = ((PlayAudioAction)trigger.Actions[0]).FilePath;
+            trigger.DuckAudio = false;
+            trigger.Actions.Clear();
+        }
+        s.AwarenessLoopProtectionEnabled = false;
+        var now = new DateTime(2026, 10, 14, 12, 0, 0);
+        engine.Now = () => now;
+        var quiet = ConditioningControlPanel.Services.Safety.PanicAftermath.QuietWindow;
+        try
+        {
+            // The quiet surface is armed by tray, voice and the shell panic stop pass.
+            PanicSurfaces.All.Single(x => x.Id == "panic-quiet").Stop(null);
+            Assert.True(engine.IsActive); // Panic does not turn Awareness off.
+            now = now.AddHours(2);
+            Type(engine, "sit");
+            Assert.Empty(played); // No clip during quiet, including legacy flat audio.
+            Assert.Equal(now, trigger.LastTriggeredAt); // WPF records matching before refusing dispatch.
+            if (expire)
+                ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet(
+                    Environment.TickCount64 - (long)quiet.TotalMilliseconds);
+            else
+                ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            now = now.AddHours(2);
+            Type(engine, "sit");
+            Assert.Single(played);
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
+
     [Fact]
     public void SavedOnSwitchArmsTheRuntimeWhenTheShellStarts() => Run((_, s, _) =>
     {
