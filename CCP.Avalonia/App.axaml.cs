@@ -235,9 +235,9 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>
         /// WPF App.xaml.cs SeedAskSeams + NoticeSurface: the asks service and the oversize-prompt toast.
-        /// ponytail: SessionOptions/StartSession stay unseeded (no session launcher on this head, so no
-        /// Session cards), Busy knows a session, video, lockdown, lock card, bubble count and pop quiz (not grace pause, Mantra, a connected remote controller or the startup ladder, which WPF also counts), and a Watch link opens in the external
-        /// browser - WPF's own fallback when its embedded browser cannot take it.
+        /// ponytail: SessionOptions/StartSession stay unseeded, so Session cards cannot build.
+        /// Busy still lacks WPF's CompanionSessionRunning and BrowserMedia playing/takeover checks
+        /// (App.xaml.cs:782-784). Startup quiet, mantra and remote are wired; Watch uses CompanionLinkLauncher.
         /// </summary>
         internal static void SeedCompanionTubeSeams()
         {
