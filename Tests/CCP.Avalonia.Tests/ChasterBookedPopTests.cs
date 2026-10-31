@@ -28,9 +28,13 @@ public sealed class ChasterBookedPopTests
         AvaloniaTestDispatcher.RunAsync(() => ChasterBillTests.Run(async (chaster, shell) =>
         {
             var (place, cursor, time, frames) = (ChasterBookedPop.Place, ChasterBookedPop.Cursor, ChasterBookedPop.Time, ChasterBookedPop.Frames);
+            var oldClock = MainShellWindow.ChasterClock;
             var (fakeFrames, fakeTime) = (new FakeFrames(), new SteppedTime());
             ChasterBookedPop.Place = (_, _) => placeable;
             ChasterBookedPop.Cursor = () => null;
+            // The shell decides whether to coalesce; the pop clock only drives its lifetime.
+            // Both must stand still while RunJobs drains a slow CI dispatcher.
+            MainShellWindow.ChasterClock = fakeTime;
             ChasterBookedPop.Time = fakeTime;
             ChasterBookedPop.Frames = fakeFrames;
             try
@@ -41,6 +45,7 @@ public sealed class ChasterBookedPopTests
             finally
             {
                 ChasterBookedPop.CloseAll();
+                MainShellWindow.ChasterClock = oldClock;
                 (ChasterBookedPop.Place, ChasterBookedPop.Cursor, ChasterBookedPop.Time, ChasterBookedPop.Frames) = (place, cursor, time, frames);
             }
         }));
@@ -63,6 +68,15 @@ public sealed class ChasterBookedPopTests
         Dispatcher.UIThread.RunJobs();
         Assert.Same(pop, ChasterBookedPop.Live.Single());
         Assert.Equal(CircesTab.Format(first.AppliedSeconds + second.AppliedSeconds), pop.Stage.Text);
+
+        // Crossing the SAME stepped coalescing deadline must create a separate figure.
+        // This also catches accidentally leaving the shell on wall time.
+        time.Advance(TimeSpan.FromMilliseconds(BookedFlashPlan.CoalesceMs + 1));
+        var third = chaster.NoteAt("attention", Bubble);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, ChasterBookedPop.Live.Count);
+        var next = ChasterBookedPop.Live.Single(p => !ReferenceEquals(p, pop));
+        Assert.Equal(CircesTab.Format(third.AppliedSeconds), next.Stage.Text);
 
         time.Advance(TimeSpan.FromMilliseconds(pop.Plan.TotalMs + 1));
         frames.Frame(TimeSpan.FromSeconds(5));
