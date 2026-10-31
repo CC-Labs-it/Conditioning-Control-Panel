@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///         goes: WPF's Left/Top are DIPs, Avalonia's <c>Window.Position</c> is a PixelPoint in
     ///         PHYSICAL pixels, which is what <c>Screen.WorkingArea</c> already is.</item>
     ///   <item><c>NoClickRaiseHook</c> (an HwndSource hook returning MA_NOACTIVATE for
-    ///         WM_MOUSEACTIVATE) has NO equivalent - see the stub below for what is lost.</item>
+    ///         WM_MOUSEACTIVATE) uses Win32Window on Windows. X11 still lacks an equivalent.</item>
     ///   <item><c>DisableProcessWindowsGhosting</c>-class calls: none in this file to drop.</item>
     /// </list>
     ///
@@ -348,12 +348,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // wedge watchdog before the first window existed. Both are VideoService, and both only
             // guard an in-process LibVLC decoder - browser mode never armed them at all.
 
-            // ponytail: the WPF original installed an HwndSource hook returning MA_NOACTIVATE for
-            // WM_MOUSEACTIVATE. LOST BEHAVIOUR, no X11 equivalent in the head today: a click on
-            // the game window will raise it inside the keep-above band, and the count bubbles -
-            // separate topmost windows - can disappear behind it until the next spawn restacks
-            // them. Needs an X11Overlay capability (deny focus-on-click / _NET_WM_USER_TIME), and
-            // this layer may not edit X11Overlay.cs, so it is its own change.
+            // WPF VideoService.cs:8709: clicking the game must not raise it over count bubbles.
+            // X11 still needs its own deny-focus-on-click implementation.
+            Platform.Win32Window.DenyMouseActivate(this);
 
             try
             {
