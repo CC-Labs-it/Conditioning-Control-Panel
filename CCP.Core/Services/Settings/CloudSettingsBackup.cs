@@ -290,7 +290,7 @@ namespace ConditioningControlPanel.Services
             else RestoreTriggerPaths(restored.KeywordTriggers, current.KeywordTriggers, Items(backup, nameof(AppSettings.KeywordTriggers)).ToList());
             if (Missing(nameof(AppSettings.KeywordTriggerPresets))) restored.KeywordTriggerPresets = new(current.KeywordTriggerPresets);
             else for (var i = 0; i < restored.KeywordTriggerPresets.Count; i++)
-                RestoreTriggerPaths(restored.KeywordTriggerPresets[i].Triggers,
+                RestoreTriggerPaths(restored.KeywordTriggerPresets[i].Triggers ??= new(),
                     ById(restored.KeywordTriggerPresets, i, current.KeywordTriggerPresets, p => p.Id)?.Triggers ?? new(),
                     Items(ItemAt(backup, nameof(AppSettings.KeywordTriggerPresets), i), "triggers").ToList());
         }
@@ -436,7 +436,13 @@ namespace ConditioningControlPanel.Services
             JObject ListsOnly(JObject source) => new(source.Properties()
                 .Where(p => listNames.Contains(PropertyNameOfJsonKey(p.Name), StringComparer.OrdinalIgnoreCase))
                 .Select(p => new JProperty(p.Name, p.Value.DeepClone())));
-            var local = ListsOnly(slotSettings).ToObject<AppSettings>(serializer)!;
+            var slotLists = ListsOnly(slotSettings);
+            // Older Linux backups leaked preset paths. Only Windows-style slot paths help frozen WPF.
+            foreach (var p in slotLists.Descendants().OfType<JProperty>().Where(p => p.Value.Type == JTokenType.String
+                && ((string?)p.Value)?.StartsWith('/') == true
+                && (p.Name.ToLowerInvariant() is "path" or "gifpath" or "audiofilepath" or "filepath")).ToList())
+                p.Remove();
+            var local = slotLists.ToObject<AppSettings>(serializer)!;
             var portable = ListsOnly(upload).ToObject<AppSettings>(serializer)!;
             KeepListPaths(local, portable, upload);
             var merged = JObject.FromObject(portable);

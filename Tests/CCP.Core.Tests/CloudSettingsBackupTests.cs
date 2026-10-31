@@ -186,6 +186,36 @@ public sealed class CloudSettingsBackupTests : IDisposable
             AssertItemPaths((await new CloudSettingsBackup(_fake).DownloadAsync(local))!, path);
     }
 
+    [Theory]
+    [InlineData("/home/me/old.mp3", false)]
+    [InlineData(@"C:\old.mp3", true)]
+    [InlineData(@"\\server\share\old.mp3", true)]
+    public async Task LegacySlotPathsDropLinuxLeaksButCarryWindowsPaths(string path, bool carry)
+    {
+        var slot = Signed();
+        SetItemPaths(slot, path); // matching preset, trigger and action ids, as in an old backup
+        var slotJson = JObject.FromObject(slot);
+        foreach (var name in CloudSettingsBackup.AbsolutePathFields) slotJson.Remove(name);
+        _fake.BodyFor = u => u.EndsWith("/v2/user/settings-backup")
+            ? new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(slotJson.ToString()) } }.ToString() : null;
+        var here = Signed();
+        SetItemPaths(here, "/home/me/current.mp3");
+        Assert.True(await new CloudSettingsBackup(_fake).BackupAsync(here));
+        var sent = Unpack((string)JObject.Parse(Assert.Single(Uploads).Body)["settings_data"]!);
+        Assert.DoesNotContain("/home/me", sent.ToString());
+        if (carry) AssertItemPaths(sent.ToObject<AppSettings>()!, path);
+        AssertItemPaths(slotJson.ToObject<AppSettings>()!, path); // only the slot copy is filtered
+        AssertItemPaths(here, "/home/me/current.mp3");
+    }
+
+    [Fact]
+    public async Task NullPresetTriggersRestoreAsAnEmptyBundle()
+    {
+        var restored = await RoundTrip(Signed(), b => b["KeywordTriggerPresets"]![0]!["triggers"] = null);
+        Assert.NotNull(restored);
+        Assert.Empty(Assert.Single(restored.KeywordTriggerPresets).Triggers);
+    }
+
     // WPF ProfileSyncService.cs:4561,4738 round-trips saved paths. The port keeps rooted paths local.
     [Theory]
     [InlineData("/home/me/retained.wav")]
