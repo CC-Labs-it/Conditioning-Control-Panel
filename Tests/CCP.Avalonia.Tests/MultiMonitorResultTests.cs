@@ -39,11 +39,15 @@ public sealed class MultiMonitorResultTests
     }
 
     [Theory]
-    [InlineData(true, 2, true)]
-    [InlineData(false, 1, true)]
-    [InlineData(true, 2, false)]
-    [InlineData(false, 1, false)]
-    public void ResultsUseTheReportedPrimaryAndMirrorsEchoInput(bool dual, int count, bool markedPrimary) => AvaloniaTestDispatcher.Run(() =>
+    [InlineData(true, 2, true, false)]
+    [InlineData(false, 1, true, false)]
+    [InlineData(true, 2, false, false)]
+    [InlineData(false, 1, false, false)]
+    [InlineData(true, 2, true, true)]
+    [InlineData(false, 1, true, true)]
+    [InlineData(true, 2, false, true)]
+    [InlineData(false, 1, false, true)]
+    public void ResultsUseTheReportedPrimaryAndMirrorsEchoInput(bool dual, int count, bool markedPrimary, bool lateTopology) => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
         var oldQuery = ScreenList.QueryOverride;
@@ -51,13 +55,19 @@ public sealed class MultiMonitorResultTests
         var secondary = MakeScreen(1.5, new PixelRect(-1920, 40, 1920, 1080), new PixelRect(-1920, 40, 1920, 1040), false);
         var primary = MakeScreen(2, new PixelRect(320, 40, 2560, 1440), new PixelRect(320, 40, 2560, 1400), markedPrimary);
         var typistScreen = markedPrimary ? primary : secondary;
-        ScreenList.QueryOverride = _ => new[] { secondary, primary };
+        int queries = 0;
+        ScreenList.QueryOverride = host =>
+        {
+            queries++;
+            return !lateTopology || host.IsVisible ? new[] { secondary, primary } : Array.Empty<Screen>();
+        };
         CoreSettings.Current.DualMonitorEnabled = dual;
         int completions = 0;
         try
         {
             BubbleCountResultWindow.ShowOnAllMonitors(42, strictMode: true, _ => completions++);
             Dispatcher.UIThread.RunJobs();
+            Assert.Equal(lateTopology ? 2 : 1, queries);
             var windows = BubbleCountResultWindow.OpenWindows.ToArray();
             Assert.Equal(count, windows.Length);
             var typist = windows.Single(w => !w.FindControl<TextBox>("TxtAnswer")!.IsReadOnly);

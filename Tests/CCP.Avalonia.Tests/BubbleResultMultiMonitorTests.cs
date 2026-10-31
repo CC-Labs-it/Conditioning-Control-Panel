@@ -17,11 +17,15 @@ namespace CCP.Avalonia.Tests;
 public sealed class BubbleResultMultiMonitorTests
 {
     [Theory]
-    [InlineData(true, true, 0)]
-    [InlineData(false, true, -3000)]
-    [InlineData(true, false, 0)]
-    [InlineData(false, false, -3000)]
-    public void ActualClientPixelsCoverTargetAtMapping(bool dual, bool markedPrimary, int offset) => AvaloniaTestDispatcher.Run(() =>
+    [InlineData(true, true, 0, false)]
+    [InlineData(false, true, -3000, false)]
+    [InlineData(true, false, 0, false)]
+    [InlineData(false, false, -3000, false)]
+    [InlineData(true, true, 0, true)]
+    [InlineData(false, true, -3000, true)]
+    [InlineData(true, false, 0, true)]
+    [InlineData(false, false, -3000, true)]
+    public void ActualClientPixelsCoverTargetAtMapping(bool dual, bool markedPrimary, int offset, bool lateTopology) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -37,11 +41,17 @@ public sealed class BubbleResultMultiMonitorTests
         var probe = (BackendProbe)(object)replacement;
         probe.Inner = platform;
         probe.Screens = screens;
+        bool topologyKnown = !lateTopology;
+        probe.TopologyKnown = () => topologyKnown;
         var opened = new List<(bool Typist, PixelRect Rect)>();
         probe.Mapped = w => opened.Add((!w.FindControl<TextBox>("TxtAnswer")!.IsReadOnly,
             new PixelRect(w.Position, new PixelSize((int)Math.Round(w.ClientSize.Width * w.RenderScaling),
                 (int)Math.Round(w.ClientSize.Height * w.RenderScaling)))));
-        ScreenList.QueryOverride = _ => screens;
+        ScreenList.QueryOverride = host =>
+        {
+            topologyKnown = !lateTopology || host.IsVisible;
+            return topologyKnown ? screens : Array.Empty<Screen>();
+        };
         CoreSettings.Current.DualMonitorEnabled = dual;
         Bind(replacement);
         try
@@ -87,21 +97,25 @@ public sealed class BubbleResultMultiMonitorTests
         public object Inner = null!;
         public Screen[] Screens = null!;
         public Action<BubbleCountResultWindow> Mapped = null!;
+        public Func<bool> TopologyKnown = null!;
         private bool _mapped;
         private IWindowImpl? _self;
         protected override object? Invoke(MethodInfo? method, object?[]? args)
         {
             if (method!.Name == "Move")
             {
-                Assert.False(_mapped, "A mapped result must never be re-placed by the Opened fallback");
+                Assert.False(_mapped && TopologyKnown(), "A mapped result must never be re-placed once topology is known");
                 var point = (PixelPoint)args![0]!;
                 var scale = Screens.FirstOrDefault(s => point.X >= s.Bounds.X && point.X < s.Bounds.Right
                     && point.Y >= s.Bounds.Y && point.Y < s.Bounds.Bottom)?.Scaling ?? 1;
                 Inner.GetType().GetInterface("IHeadlessWindow")!.GetMethod("SetRenderScaling")!.Invoke(Inner, new object[] { scale });
             }
+            if (method.Name == "Hide") _mapped = false;
             if (method.Name == "Show")
             {
-                Mapped(BubbleCountResultWindow.OpenWindows.Single(w => ReferenceEquals(w.PlatformImpl, _self)));
+                // An unknown-topology backend must map once to discover screens. Measure the
+                // corrected primary remap and every mirror, before Opened can repair geometry.
+                if (TopologyKnown()) Mapped(BubbleCountResultWindow.OpenWindows.Single(w => ReferenceEquals(w.PlatformImpl, _self)));
                 _mapped = true;
             }
             object? result;
@@ -115,6 +129,7 @@ public sealed class BubbleResultMultiMonitorTests
                 child._self = window;
                 child.Screens = Screens;
                 child.Mapped = Mapped;
+                child.TopologyKnown = TopologyKnown;
                 return window;
             }
             return result;

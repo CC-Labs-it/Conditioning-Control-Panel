@@ -162,8 +162,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         ///
         /// <para>Avalonia has no screen list without a TopLevel, so the primary window is built
         /// first and its <c>Screens</c> is what the set is drawn from - the reverse of WPF's
-        /// secondaries-first order, which nothing depends on. An empty enumeration (headless, or a
-        /// window with no platform impl yet) is the single-screen path rather than WPF's
+        /// secondaries-first order, which nothing depends on. If topology is unavailable before
+        /// mapping, retry once after Show. A still-empty enumeration is the single-screen path rather than WPF's
         /// <c>onComplete(false)</c>: on this head empty means "no topology reported", not "no
         /// display".</para>
         /// </summary>
@@ -179,6 +179,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var primary = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
             primaryWindow.PositionOnScreen(primary);
             primaryWindow.Show();
+
+            if (all.Count == 0)
+            {
+                // Some backends expose topology only after mapping. WPF mirrors the complete set
+                // (ConditioningControlPanel/Windows/BubbleCountResultWindow.xaml.cs:121-145).
+                all = Features.ScreenList.Enumerate(primaryWindow);
+                primary = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
+                if (primary is not null)
+                {
+                    // Unmap before correcting the provisional typist; never move it while mapped.
+                    primaryWindow.Hide();
+                    primaryWindow.PositionOnScreen(primary);
+                    primaryWindow.Show();
+                }
+            }
 
             if (CoreSettings.Current.DualMonitorEnabled)
             {
