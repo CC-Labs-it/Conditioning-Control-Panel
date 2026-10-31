@@ -3,8 +3,7 @@
 // UpdateStartButton (:944), for the features Core drives (CoreEngine). The session half of
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
 // ponytail: still missing, each with no service on this head: the remote-control gate,
-// Relapse/TotalSessions achievements, the bubble/brain-drain/pop-quiz/autonomy/
-// ramp starts, the scheduler, the Presets "running" label and the hero FX.
+// Relapse achievements, brain-drain/autonomy starts, the Presets "running" label and the hero FX.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
 using Avalonia.Controls;
@@ -35,10 +34,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Serilog.Log.Information("Start button: asking to stop the running session");
                 await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body");
-                if (!App.Sessions.IsRunning) StopEngine();
+                if (!App.Sessions.IsRunning) ManualScheduleStop();
                 return;
             }
-            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); StopEngine(); }
+            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); ManualScheduleStop(); }
             else StartEngineFromUser();
         }
 
@@ -46,8 +45,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (Core PanicAftermath); the scheduler, programs, a remote or the Lockdown keeper never do.</summary>
         internal void StartEngineFromUser()
         {
+            Scheduler.ManuallyStopped = false; // WPF StartStop.cs:112
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             StartEngine();
+        }
+
+        private void ManualScheduleStop()
+        {
+            Scheduler.OnManualToggle(CoreSettings.Current, System.DateTime.Now, stopping: true);
+            StopEngine();
         }
 
         private void MenuJumpRightIn_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => RandomizeAndStart();

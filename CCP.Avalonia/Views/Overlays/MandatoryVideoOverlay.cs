@@ -58,6 +58,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly List<(List<Target> Targets, AttentionToyButtonBinding Binding)> _toyBatches = new();
         private List<double> _spawnTimes = new();
         private MediaPlayer? _player;
+        private SettingsService? _volumeService;
+        private Models.AppSettings? _volumeSettings;
         private Media? _media;
         private VlcFrameSink? _sink;
         private WriteableBitmap? _fill;
@@ -159,7 +161,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
-            ApplyVolume(_player);
+            _volumeService = CoreSettings.Service;
+            if (_volumeService != null) _volumeService.CurrentReplaced += WatchVolume;
+            WatchVolume();
             var blur = s.VideoBlurredBackgroundEnabled;
             _sink = new VlcFrameSink(_player, () => _media, bmp =>
             {
@@ -238,6 +242,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF VideoService.UpdateMasterVolume / UpdateVideoVolume: a playing clip follows
         /// Settings · Audio live. UI thread (teardown runs there too).</summary>
+        private void WatchVolume()
+        {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => { if (_player != null) WatchVolume(); }); return; }
+            if (_volumeSettings != null) _volumeSettings.PropertyChanged -= VolumeChanged;
+            _volumeSettings = CoreSettings.Current;
+            if (_volumeSettings != null) _volumeSettings.PropertyChanged += VolumeChanged;
+            RefreshVolume();
+        }
+        private void VolumeChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is nameof(Models.AppSettings.MasterVolume) or nameof(Models.AppSettings.VideoVolume)) RefreshVolume();
+        }
+        // WPF MainWindow.UiUpdates.cs:1006: master changes reach the active player without an Audio page.
+        private void RefreshVolume()
+        {
+            if (Dispatcher.UIThread.CheckAccess()) UpdateVolume(); else Dispatcher.UIThread.Post(UpdateVolume);
+        }
         internal void UpdateVolume()
         {
             if (_player is { } p) ApplyVolume(p);
@@ -883,6 +904,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _closing = true;
             try
             {
+                if (_volumeService != null) _volumeService.CurrentReplaced -= WatchVolume;
+                _volumeService = null;
+                if (_volumeSettings != null) _volumeSettings.PropertyChanged -= VolumeChanged;
+                _volumeSettings = null;
                 _attention = _gracePaused = false;
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;
