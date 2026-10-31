@@ -23,6 +23,18 @@ namespace CCP.Avalonia.Tests;
 /// close-time cleanup (no voice, no singleton hook left behind).</summary>
 public sealed class TubeQuickMenuTests
 {
+    [Fact]
+    public Task CachedMenuColoursCanBeReadFromAnotherThread() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var fields = new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" };
+        var brushes = fields.Select(name => (global::Avalonia.Media.ISolidColorBrush)typeof(AvatarTubeWindow)
+            .GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!).ToArray();
+        // Mirror a worker initialising the tube's pure helpers before its menu is rendered on UI.
+        var colours = await Task.Run(() => brushes.Select(brush => brush.Color).ToArray());
+        Assert.Equal(new[] { "#ffff6347", "#ff90ee90", "#ff9b59b6", "#ff606070" },
+            colours.Select(colour => colour.ToUInt32()).Select(value => $"#{value:x8}").ToArray());
+    });
+
     private static void Click(AvatarTubeWindow tube, string name) =>
         tube.FindControl<MenuItem>(name)!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 

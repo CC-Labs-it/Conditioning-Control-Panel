@@ -7,6 +7,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Features;
@@ -88,11 +89,17 @@ public sealed class SplitFeatureCardFxTests
             Assert.Equal(0, F<Border>(card, "_activeGlow").Opacity);
 
             // Sweep gated off: hovering the OFF half B lands the seam on its end state at once, A's "?" steps aside.
+            // Pointer coordinates must be read after the shell's independently timed entrance lands.
+            shell.CompleteTabTransition();
+            card.BringIntoView();
+            Dispatcher.UIThread.RunJobs();
             shell.UpdateLayout();
             // Headless runs no transitions, so the gate is observed as the transition being detached (Snap).
             int snaps = 0;
             card.PropertyChanged += (_, e) => { if (e.Property == global::Avalonia.Animation.Animatable.TransitionsProperty) snaps++; };
             var inB = card.TranslatePoint(new Point(card.Bounds.Width - 12, card.Bounds.Height - 12), shell)!.Value;
+            var hit = shell.InputHitTest(inB) as Visual;
+            Assert.True(ReferenceEquals(hit, card) || hit?.GetVisualAncestors().Contains(card) == true);
             shell.MouseMove(inB);
             Dispatcher.UIThread.RunJobs();
             var progress = typeof(SplitFeatureCard).GetField("SplitProgressProperty", BindingFlags.NonPublic | BindingFlags.Static)!
