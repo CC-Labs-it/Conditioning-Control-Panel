@@ -39,6 +39,39 @@ internal sealed partial class GameWindow
         return false;
     }
 
+    internal static Func<DateTime> BackRoomUtcNow = () => DateTime.UtcNow;
+    private bool _roomPanicSuspended;
+    private DateTime _roomLastPanicUtc;
+
+    // WPF MainWindow.xaml.cs:1742-1747 and BackRoomHostService.cs:553-570.
+    // Only the legacy key ladder calls here; Stop everything still closes every game.
+    internal static bool TryBackRoomPanic()
+    {
+        GameWindow? room;
+        lock (Open) room = Open.FirstOrDefault(w => w.Spec.Id == BackRoomId);
+        if (room?._room == null) return false;
+        var now = BackRoomUtcNow();
+        bool second = room._roomPanicSuspended && now - room._roomLastPanicUtc <= TimeSpan.FromSeconds(2);
+        room._roomLastPanicUtc = now;
+        room._roomPanicSuspended = !second;
+        if (second)
+        {
+            room._shellExiting = true;
+            if (room.IsReady) room._room.RequestClose("panic");
+            else room.Close();
+        }
+        else room._room.Suspend(true, "panic");
+        return true;
+    }
+
+    // WPF BackRoomHostService.cs:581-585: activation after the two-second window wakes the room.
+    private void ResumeBackRoomAfterPanic()
+    {
+        if (!_roomPanicSuspended || BackRoomUtcNow() - _roomLastPanicUtc <= TimeSpan.FromSeconds(2)) return;
+        _roomPanicSuspended = false;
+        _room?.Suspend(false, "panic");
+    }
+
     private BackRoomBridge? _room;
     private AppSettings? _roomSettings;
     private SettingsService? _roomService;

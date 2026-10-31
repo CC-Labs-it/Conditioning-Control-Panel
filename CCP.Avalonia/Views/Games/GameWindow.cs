@@ -118,6 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 Opened += (_, _) => OpenBackRoom();
                 Closed += (_, _) => DisposeBackRoom();
+                Activated += (_, _) => ResumeBackRoomAfterPanic();
                 PropertyChanged += (_, e) =>
                 {
                     if (e.Property == WindowStateProperty) _room?.Suspend(WindowState == WindowState.Minimized, "minimise");

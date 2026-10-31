@@ -101,6 +101,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (rung != PanicPolicy.Rung.DismissSettingsPalette) PanicAftermath.ArmQuiet();
             if (rung == PanicPolicy.Rung.DismissLockCard) { StopLockCards(); StopCameraForPanic(); }
             if (!PanicPolicy.StopsSurfaces(rung)) return;
+            // WPF MainWindow.xaml.cs:1742-1747: the legacy room ladder consumes this key
+            // before the stop pass and app exit counter. Escape-pause already had first claim above.
+            if (rung == PanicPolicy.Rung.RunLadder && Games.GameWindow.TryBackRoomPanic()) return;
             // WPF MainWindow.xaml.cs:1709: close the game surface that owns the screen, then the normal
             // stop tail with the exit ladder NOT armed (and no grace pause), in BOTH modes: override
             // (MainWindow.xaml.cs:1627) and ladder (:1720 RunPanicStopTail(advanceExitLadder: false)).
@@ -176,6 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PanicPolicy.KeptEscapePage Route(bool claimed) => PanicPolicy.KeptEscapeGoesTo(claimed,
                     In(PanicPolicy.KeptEscapePage.Race), ready, In(PanicPolicy.KeptEscapePage.Board), ready,
                     In(PanicPolicy.KeptEscapePage.Breakout), ready, In(PanicPolicy.KeptEscapePage.Dtrh), ready,
+                    roomInFront: In(PanicPolicy.KeptEscapePage.Room), roomReady: ready,
                     intakeInFront: intake != null, intakeReady: intakeReady,
                     glassroadInFront: In(PanicPolicy.KeptEscapePage.Glassroad), glassroadReady: ready);
                 bool claim = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,

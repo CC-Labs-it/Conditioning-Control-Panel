@@ -173,6 +173,97 @@ public sealed class BackRoomWindowTests
         Assert.Null(GameWindow.OpenForTests(GameWindow.BackRoomId));
     });
 
+    // WPF MainWindow.xaml.cs:1694-1707,1742-1747; BackRoomHostService.cs:553-585.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PanicKeyUsesTheRoomLadderOnlyWithoutOverride(bool overrideAll) => Run(() =>
+    {
+        var now = new DateTime(2026, 10, 31, 0, 0, 0, DateTimeKind.Utc);
+        var oldClock = GameWindow.BackRoomUtcNow;
+        var oldSurfaces = PanicSurfaces.All;
+        int stops = 0;
+        GameWindow.BackRoomUtcNow = () => now;
+        PanicSurfaces.All = [oldSurfaces.Single(x => x.Id == "games"), new("probe", _ => stops++)];
+        try
+        {
+            using var shell = new ShellLifetime();
+            var s = CoreSettings.Current;
+            s.PanicKeyEnabled = true; s.PanicKey = "F8"; s.PanicOverridesAll = overrideAll;
+            var room = GameWindow.Launch(GameWindow.BackRoomId)!;
+            var sent = new List<JObject>();
+            room.Posted += json => sent.Add(JObject.Parse(json));
+            room.HandleMessage("{type:'ready'}"); Dispatcher.UIThread.RunJobs(); sent.Clear();
+            shell.Window.HandlePanicKeyPress(now); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(overrideAll ? 1 : 0, stops);
+            if (overrideAll) { Assert.Null(GameWindow.OpenForTests(GameWindow.BackRoomId)); return; }
+            Assert.Same(room, GameWindow.OpenForTests(GameWindow.BackRoomId));
+            Assert.Equal("suspend", (string?)Assert.Single(sent)["type"]);
+            Assert.True((bool)sent[0]["on"]!);
+            now = now.AddSeconds(2); // inclusive boundary on WPF's room ladder
+            shell.Window.HandlePanicKeyPress(now); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("close", (string?)sent.Last()["type"]);
+            Assert.Equal("panic", (string?)sent.Last()["reason"]);
+            Assert.False(room.KeptEscapeReady);
+            Assert.Equal(0, stops); // neither press reaches the global stop or app exit ladder
+            room.HandleMessage("{type:'exit-done'}");
+            Assert.Null(GameWindow.OpenForTests(GameWindow.BackRoomId));
+        }
+        finally { GameWindow.BackRoomUtcNow = oldClock; PanicSurfaces.All = oldSurfaces; }
+    });
+
+    [Fact]
+    public void SuspendedRoomResumesOnlyOnActivationAfterTheDoublePressWindow() => Run(() =>
+    {
+        var now = new DateTime(2026, 10, 31, 0, 0, 0, DateTimeKind.Utc);
+        var oldClock = GameWindow.BackRoomUtcNow;
+        GameWindow.BackRoomUtcNow = () => now;
+        try
+        {
+            using var shell = new ShellLifetime();
+            var room = GameWindow.Launch(GameWindow.BackRoomId)!;
+            var sent = new List<JObject>();
+            room.Posted += json => sent.Add(JObject.Parse(json));
+            Assert.True(GameWindow.TryBackRoomPanic()); Dispatcher.UIThread.RunJobs();
+            Assert.True((bool)Assert.Single(sent)["on"]!);
+            void ActivateRoom() { shell.Window.Activate(); room.Activate(); Dispatcher.UIThread.RunJobs(); }
+            now = now.AddSeconds(2); ActivateRoom(); Assert.Single(sent);
+            now = now.AddTicks(1); ActivateRoom();
+            Assert.False((bool)sent.Last()["on"]!);
+            Assert.Equal("panic", (string?)sent.Last()["reason"]);
+            sent.Clear();
+            GameWindow.TryBackRoomPanic();
+            now = now.AddSeconds(3); GameWindow.TryBackRoomPanic(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, sent.Count);
+            Assert.All(sent, frame => Assert.True((bool)frame["on"]!)); // spaced presses suspend again
+            Assert.Same(room, GameWindow.OpenForTests(GameWindow.BackRoomId));
+        }
+        finally { GameWindow.BackRoomUtcNow = oldClock; }
+    });
+
+    // WPF MainWindow.xaml.cs:1557,1577-1578: a ready foreground room keeps Escape as page pause.
+    [Fact]
+    public void ReadyForegroundRoomKeepsEscapeBeforeThePanicLadder() => Run(() =>
+    {
+        using var shell = new ShellLifetime();
+        var s = CoreSettings.Current;
+        s.PanicKeyEnabled = true; s.PanicKey = "Escape"; s.PanicOverridesAll = false;
+        var room = GameWindow.Launch(GameWindow.BackRoomId)!;
+        room.HandleMessage("{type:'ready'}"); Dispatcher.UIThread.RunJobs();
+        room.Activate(); Dispatcher.UIThread.RunJobs();
+        Assert.True(room.IsActive);
+        Assert.True(room.KeptEscapeReady);
+        Assert.False(CoreEngine.IsRunning);
+        Assert.False(LockCardWindow.IsAnyOpen());
+        Assert.Same(room, GameWindow.EscapePauseInFront());
+        Assert.Equal("Escape", CoreSettings.Current.PanicKey);
+        var sent = new List<JObject>();
+        room.Posted += json => sent.Add(JObject.Parse(json));
+        shell.Window.HandlePanicKeyPress(DateTime.Now); Dispatcher.UIThread.RunJobs();
+        Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
+        Assert.Same(room, GameWindow.OpenForTests(GameWindow.BackRoomId));
+    });
+
     private sealed class Relay : IBackRoomRelay
     {
         public int Calls;
