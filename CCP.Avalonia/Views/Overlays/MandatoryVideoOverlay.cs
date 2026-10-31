@@ -183,6 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 FrameTs = Stopwatch.GetTimestamp();
                 if (FirstFrameMs < 0)
                 {
+                    RevealGentleEntrance();
                     FirstFrameMs = _sinceShow.ElapsedMilliseconds;
                     if (!_gracePaused) _sinceFrame.Start();   // WPF arms the length/max timers once playing
                     Log.Information("VideoService: first frame after {Ms} ms", FirstFrameMs);
@@ -204,7 +205,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
-            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
+            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live)
+            {
+                LibVlcAudio.ApplyPreferredDevice(live);
+                live.SetRate(ConditioningControlPanel.Services.Video.GentleWindowRules.PlaybackRate(
+                    s.GentleVisuals, s.GentleSpeed));
+            } });
             _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
             _player.EndReached += (_, _) =>
             {
@@ -212,9 +218,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (len > 0) Interlocked.Exchange(ref _watchedMs, len);
                 Dispatcher.UIThread.Post(() =>   // never tear down on LibVLC's own thread
                 {
+                    if (_player != live) return;
                     // WPF OnEnded: a clip that really played to its end earns Circe's "video" note.
                     if (Scheduler.IsPlaying && FirstFrameMs >= 0) App.ChasterNote("video");
-                    Scheduler.Ended();
+                    _naturalEnd = true;
+                    try { Scheduler.Ended(); }
+                    finally { _naturalEnd = false; }
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
@@ -284,6 +293,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Background = Brushes.Black,
                 Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row } },
             };
+            CoverGentleEntrance((Panel)w.Content!);
             var floating = Floating;
             if (floating)
             {
@@ -881,6 +891,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
             _closing = true;
+            if (!_naturalEnd) DropGentleCurtains();
             try
             {
                 _attention = _gracePaused = false;
@@ -902,7 +913,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _player = null;
                 try { _media?.Dispose(); } catch { }
                 _media = null;
-                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; x.Window.Close(); }
+                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; CloseGentleSurface(x.Window, _naturalEnd); }
                 _surfaces.Clear();
                 _sink?.Free();
                 _sink = null;
