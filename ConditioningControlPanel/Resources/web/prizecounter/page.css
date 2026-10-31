@@ -159,6 +159,59 @@ html, body { margin: 0; height: 100%; background: #140d19; color: var(--ink); fo
 [data-gentle] .pc-gate.pc-out { transform: translate(-50%, -50%) rotate(-1.5deg); }
 [data-motion="off"] *, [data-motion="off"] *::before { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .pc-hud *, .pc-hud *::before { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+/* the how-to card and its door: three paper prints, same treatment as Racing Thoughts' hud/howto.js */
+.pc-howto { flex: none; height: 40px; min-width: 40px; padding: 0 12px; border: 2.5px solid var(--ink); border-radius: 20px; background: var(--paper);
+  box-shadow: 2px 3px 0 rgba(0,0,0,.35); font-size: 15px; white-space: nowrap; }
+.pc-howto-q { display: none; font: 900 20px/1 var(--type); }
+@media (max-width: 1099px) { .pc-howto { padding: 0; } .pc-howto-q { display: inline; } .pc-howto-w { display: none; } }
+.pc-modal.pc-guide-modal { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+.pc-card.pc-guide { --g-paper: #fbf8f2; --g-ink: #1c1722; --g-pink: #d4307c; --g-sans: system-ui, "Segoe UI", sans-serif; --g-mono: ui-monospace, Consolas, "Courier New", monospace;
+  width: min(880px, 100%); max-height: 100%; overflow: auto; padding: 16px 18px 14px; gap: 0; justify-items: stretch; background: #e9e2d4; color: var(--g-ink);
+  border-color: var(--g-ink); font-family: var(--g-sans); transform: rotate(-.4deg); }
+.pc-guide-title { margin: 0 0 12px 2px; font: 900 22px/1.1 var(--g-sans); letter-spacing: -.01em; }
+.pc-gbs { list-style: none; margin: 0 0 12px; padding: 8px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.pc-gb { --g-r: 0deg; position: relative; padding: 7px 7px 9px; background: var(--g-paper); border: 1.5px solid var(--g-ink); border-radius: 3px;
+  box-shadow: 2px 2px 0 rgba(28,23,34,.18); transform: rotate(var(--g-r)); }
+.pc-gb:nth-child(1) { --g-r: -.6deg; }
+.pc-gb:nth-child(2) { --g-r: .4deg; }
+.pc-gb:nth-child(3) { --g-r: -.3deg; }
+.pc-gb-n { position: absolute; z-index: 1; top: -13px; left: -8px; width: 30px; height: 30px; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--g-pink);
+  color: var(--g-pink); background: var(--g-paper); font: 900 17px/26px var(--g-sans); text-align: center; box-shadow: inset 0 0 0 2px var(--g-paper), inset 0 0 0 3.5px var(--g-pink); transform: rotate(-10deg); }
+.pc-gb-shot { display: block; width: 100%; height: auto; aspect-ratio: 520 / 273; object-fit: cover; box-sizing: border-box; border: 1.5px solid var(--g-ink); background: var(--g-ink); }
+.pc-gb-title { display: table; position: relative; margin: -13px 0 6px 5px; padding: 4px 7px 3px; background: var(--g-paper); color: var(--g-pink); border: 2px solid var(--g-pink); border-radius: 3px;
+  font: 900 13px/1 var(--g-sans); letter-spacing: .06em; text-transform: uppercase; transform: rotate(-1.6deg); }
+.pc-gb-gist { margin: 0 0 5px 2px; font: 700 14px/1.25 var(--g-sans); }
+.pc-gb-cap { margin: 0 0 0 2px; font: 700 12px/1.25 var(--g-mono); }
+.pc-hud .pc-guide-go { justify-self: end; color: var(--paper); font-family: var(--g-sans); font-weight: 800; font-size: 15px; }
+.pc-modal.pc-in .pc-gb { animation: pc-gb-in .3s cubic-bezier(.2,.9,.3,1.25) both; }
+.pc-modal.pc-in .pc-gb:nth-child(2) { animation-delay: .08s; }
+.pc-modal.pc-in .pc-gb:nth-child(3) { animation-delay: .16s; }
+@keyframes pc-gb-in { from { opacity: 0; transform: translateY(-6px) scale(1.05) rotate(var(--g-r)); } }
+.pc-hud[data-motion="less"] .pc-modal.pc-in .pc-gb { animation: none; }
+[data-gentle] .pc-modal.pc-in .pc-gb { animation-name: pc-fade; }
+[data-gentle] .pc-modal.pc-out .pc-card.pc-guide { transform: rotate(-.4deg); }
+/* phone upright: each print stands beside its words */
+@media (max-width: 760px) {
+  .pc-card.pc-guide { padding: 10px 10px 10px; }
+  .pc-guide-title { margin-bottom: 8px; font-size: 19px; }
+  .pc-gbs { grid-template-columns: minmax(0, 1fr); gap: 10px; margin-bottom: 10px; padding-top: 6px; }
+  .pc-gb { display: grid; grid-template-columns: 40% minmax(0, 1fr); gap: 8px; align-items: center; padding: 6px; }
+  .pc-gb-title { margin: 0 0 4px; font-size: 12px; }
+  .pc-gb-gist { margin: 0 0 3px; font-size: 13px; }
+  .pc-gb-cap { font-size: 11px; }
+}
+/* phone on its side: shorter prints and a tighter card, the button stays on screen */
+@media (max-height: 480px) and (min-width: 761px) {
+  .pc-modal.pc-guide-modal { padding: 6px 12px; }
+  .pc-card.pc-guide { padding: 8px 12px 8px; }
+  .pc-guide-title { margin-bottom: 4px; font-size: 16px; }
+  .pc-gbs { margin-bottom: 6px; padding-top: 4px; }
+  .pc-gb { padding: 5px 5px 6px; }
+  .pc-gb-gist { font-size: 12.5px; margin-bottom: 3px; }
+  .pc-gb-cap { font-size: 11px; }
+  .pc-hud .pc-guide-go { padding: 3px 14px; font-size: 14px; }
+}
+/* end how-to card */
 /* kart bars (hud/bars.js): the type word and four rows of ink pips. Nothing here moves, so Gentle and reduced motion have nothing to stop. */
 .pc-bars { display: grid; gap: 2px; width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1.5px dashed var(--ink-soft); }
 .pc-bars-type { margin: 0 0 2px; font: 700 18px/1.1 var(--hand); }
