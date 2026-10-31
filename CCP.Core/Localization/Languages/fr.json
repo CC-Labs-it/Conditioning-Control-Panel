@@ -7959,5 +7959,9 @@
   "online_official_plan_prime": "Prime a la plus grosse part quotidienne. Ce que tu as déjà vu se rejoue gratuitement.",
   "online_official_nice": "Cool",
   "online_official_stamped_line": "Les médias en ligne viennent de Scrolller. Chaque image et clip porte une petite mention \"via Scrolller\".",
-  "online_cache_day_line": "Les médias en ligne restent un jour dans un petit cache sur cet ordinateur, jamais envoyés."
+  "online_cache_day_line": "Les médias en ligne restent un jour dans un petit cache sur cet ordinateur, jamais envoyés.",
+  "toast_companion_max_title": "Niveau maximum",
+  "toast_companion_max_body": "{0} a atteint le niveau maximum.",
+  "toast_companion_level_title": "Niveau du compagnon",
+  "toast_companion_level_body": "{0} a atteint le niveau {1}."
 }

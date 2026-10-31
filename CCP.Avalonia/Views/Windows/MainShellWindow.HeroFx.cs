@@ -15,7 +15,7 @@
 //   the level-up burst (FireBurstAt) and THE BANK hold
 //   (MainWindow.BankFx.cs); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
 //   the Start button's charge/exhale/ignition/heartbeat set and FlashSaveAbsorb - no caller here
-//   (BtnStart_Click and the settings-save half are stubs); level-up sound and toast.
+//   (BtnStart_Click and the settings-save half are stubs); level-up sound and notices live in MainShellWindow.LevelNotifications.cs.
 // Sign-in, startup profile restore and logout repaint through UpdateQuickLoginUI
 // (MainShellWindow.Login.cs), and the login dialog's ProfileLoad is awaited before a repaint.
 
@@ -45,11 +45,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void HookLevelDisplay()
         {
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(UpdateLevelDisplay);
-            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { FlashLevelUp(); PopLevelChip(); UpdateLevelDisplay(); });
+            Action<int> levelUp = level => PostLevelNotice(() =>
+            {
+                FlashLevelUp(); PopLevelChip(); UpdateLevelDisplay();
+                NotifyPlayerLevelUp(level);
+            });
+            Action<Models.CompanionId, int> companionLevelUp = (id, level) => PostLevelNotice(() =>
+            {
+                NotifyCompanionLevelUp(id, level);
+            });
             HookHeroXpFx();
             ProgressionBank.Awarded += awarded;
             ProgressionBank.LevelUp += levelUp;
-            Closed += (_, _) => { ProgressionBank.Awarded -= awarded; ProgressionBank.LevelUp -= levelUp; };
+            ConditioningControlPanel.Services.Companion.CompanionCore.LevelUp += companionLevelUp;
+            Closed += (_, _) =>
+            {
+                ProgressionBank.Awarded -= awarded;
+                ProgressionBank.LevelUp -= levelUp;
+                ConditioningControlPanel.Services.Companion.CompanionCore.LevelUp -= companionLevelUp;
+                StopLevelUpSound();
+            };
             if (Named<Border>("XPBar")?.Parent is Control track)
                 track.SizeChanged += (_, _) => FillXpBar(animate: false);
             // WPF XPBarTrack_ToolTipOpening (MainWindow.UiUpdates.cs:2897): the ambient-bubble daily

@@ -311,8 +311,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 //   private void OnProfileLoaded(…)
 //   private void OnSyncHealthChanged(…)
 //   private void OnLevelUp(…)
-//   private void PlayLevelUpSound(…)
-//   private void StopLevelUpSound(…)
 //   private void OnGlobalKeyPressed(…)
 //   private static readonly TimeSpan PanicWatchdogTimeout
 //   private static int _panicFallbackRunning
