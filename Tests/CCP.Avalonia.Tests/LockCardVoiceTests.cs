@@ -9,6 +9,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Speech;
@@ -73,10 +74,65 @@ public sealed class LockCardVoiceTests
             CoreSpeech.IsAvailableProvider = () => false;
             CoreSpeech.ModelStatusProvider = () => CoreSpeechModelStatus.NoModelFound;
             var hint = ConditioningControlPanel.Avalonia.Views.Features.LockCardFeatureControl.VoiceHint(true);
-            Assert.Contains("not installed yet", hint);
+            Assert.Contains("not installed yet.", hint);
+            Assert.DoesNotContain("\u2014", hint);
             Assert.Contains(Path.Combine(CorePaths.UserData, "Models", "vosk"), hint);
         }
         finally { ResetSpeech(); }
+    }
+
+    [Theory]
+    [InlineData(true, true, CoreSpeechModelStatus.NoModelFound, "On. Speak")]
+    [InlineData(false, false, CoreSpeechModelStatus.NoModelFound, "No microphone detected.")]
+    [InlineData(false, true, CoreSpeechModelStatus.LoadFailed, "would not load. Remove")]
+    public void VoiceHintsUseSentenceStops(bool available, bool mic, CoreSpeechModelStatus status, string expected)
+    {
+        try
+        {
+            CoreSpeech.IsAvailableProvider = () => available;
+            CoreSpeech.HasCaptureDeviceProvider = () => mic;
+            CoreSpeech.ModelStatusProvider = () => status;
+            var hint = ConditioningControlPanel.Avalonia.Views.Features.LockCardFeatureControl.VoiceHint(true);
+            Assert.Contains(expected, hint);
+            Assert.DoesNotContain("\u2014", hint);
+        }
+        finally { ResetSpeech(); }
+    }
+
+    [Theory]
+    [InlineData(false, false, false, CoreSpeechModelStatus.NoModelFound, "lock_voice_hint_off")]
+    [InlineData(true, true, true, CoreSpeechModelStatus.NoModelFound, "lock_voice_hint_on")]
+    [InlineData(true, false, false, CoreSpeechModelStatus.NoModelFound, "lock_voice_hint_no_mic")]
+    [InlineData(true, false, true, CoreSpeechModelStatus.LoadFailed, "lock_voice_hint_load_failed")]
+    [InlineData(true, false, true, CoreSpeechModelStatus.NoModelFound, "lock_voice_hint_no_model")]
+    public void VoiceHintsUseEverySelectedLanguage(bool on, bool available, bool mic,
+        CoreSpeechModelStatus status, string key)
+    {
+        var loc = LocalizationManager.Instance;
+        var oldLanguage = loc.CurrentLanguage;
+        var folder = Path.Combine(CorePaths.UserData, "Models", "vosk");
+        try
+        {
+            CoreSpeech.IsAvailableProvider = () => available;
+            CoreSpeech.HasCaptureDeviceProvider = () => mic;
+            CoreSpeech.ModelStatusProvider = () => status;
+            loc.SetLanguage("en");
+            var english = Loc.GetF(key, folder);
+            foreach (var (language, _, _) in LocalizationManager.AvailableLanguages)
+            {
+                loc.SetLanguage(language);
+                var expected = Loc.GetF(key, folder);
+                Assert.NotEqual(key, expected);
+                if (language != "en") Assert.NotEqual(english, expected);
+                var hint = ConditioningControlPanel.Avalonia.Views.Features.LockCardFeatureControl.VoiceHint(on);
+                Assert.Equal(expected, hint);
+                if (key is "lock_voice_hint_load_failed" or "lock_voice_hint_no_model")
+                    Assert.Contains(folder, hint);
+                Assert.DoesNotContain("\u2014", hint);
+                Assert.DoesNotContain("\u2013", hint);
+            }
+        }
+        finally { loc.SetLanguage(oldLanguage); ResetSpeech(); }
     }
 
     private static void ResetSpeech()

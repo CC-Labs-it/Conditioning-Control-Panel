@@ -24,6 +24,33 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class HoverBubbleBarTests
 {
+    [Fact]
+    public void DiscordUsesTheRoundBrandBubble() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var page = new SettingsTabView();
+        var authoredBar = page.FindControl<HoverBubbleBar>("HomeBubbleBar")!;
+        var discord = page.FindControl<Button>("BtnDiscord")!;
+        authoredBar.Children.Remove(discord);
+        var bar = new HoverBubbleBar { Children = { discord } };
+        var window = new Window { Content = bar };
+        try
+        {
+            // Drive the initialization hook without laying out unrelated font-dependent controls.
+            typeof(HoverBubbleBar).GetMethod("OnInitialized", System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.NonPublic)!.Invoke(bar, null);
+            Assert.Contains(discord, bar.Bubbles);
+            Assert.Equal(Color.Parse("#5865F2"), bar.RestFillOf(discord));
+            Assert.Equal(Loc.Get("label_join_discord"), bar.LabelOf(discord));
+            var plate = Assert.IsType<Border>(discord.Content);
+            var row = Assert.IsType<StackPanel>(plate.Child);
+            var mark = Assert.IsType<global::Avalonia.Controls.Shapes.Path>(Assert.IsType<Border>(row.Children[1]).Child);
+            Assert.NotNull(mark.Data);
+            Assert.Equal(15, mark.Height);
+        }
+        finally { window.Close(); }
+    });
+
     private static void EnsureApp()
     {
         if (Application.Current is null)
@@ -54,15 +81,22 @@ public sealed class HoverBubbleBarTests
                 var bar = dash.FindControl<HoverBubbleBar>("HomeBubbleBar")!;
                 Button B(string n) => dash.FindControl<Button>(n)!;
 
-                // WPF order: Link phone, Logout | Discord pill (not a bubble), RP | five quick bubbles.
-                Assert.Equal(new[] { "BtnLinkPhone", "BtnQuickLogout", "ChkQuickDiscordRichPresence", "VelvetBtnWebcam",
+                // WPF order: Link phone, Logout | Discord, RP | five quick bubbles.
+                Assert.Equal(new[] { "BtnLinkPhone", "BtnQuickLogout", "BtnDiscord", "ChkQuickDiscordRichPresence", "VelvetBtnWebcam",
                                      "VelvetBtnSystem", "VelvetBtnSchedulerRamp", "VelvetBtnCatalogue", "VelvetBtnAppInfo" },
                              bar.Bubbles.Select(b => b.Name));
                 Assert.Same(bar, B("BtnDiscord").Parent);
-                Assert.DoesNotContain(B("BtnDiscord"), bar.Bubbles);
+                Assert.Contains(B("BtnDiscord"), bar.Bubbles);
+                Assert.Equal(Color.Parse("#5865F2"), bar.RestFillOf(B("BtnDiscord")));
+                Assert.Equal(Loc.Get("label_join_discord"), bar.LabelOf(B("BtnDiscord")));
+                var plate = Assert.IsType<Border>(B("BtnDiscord").Content);
+                var row = Assert.IsType<StackPanel>(plate.Child);
+                var mark = Assert.IsType<global::Avalonia.Controls.Shapes.Path>(Assert.IsType<Border>(row.Children[1]).Child);
+                Assert.NotNull(mark.Data);
+                Assert.Equal(15, mark.Height);
                 Assert.Null(dash.FindControl<Grid>("VelvetHelperButtonRow"));   // the row went back to the mosaic
                 // Fluent icons: every bubble draws a mapped IconGlyph, none falls back to emoji text.
-                Assert.All(bar.Bubbles, b => Assert.False(bar.GlyphOf(b)!.IsFallback, b.Name));
+                Assert.All(bar.Bubbles.Where(b => b.Name != "BtnDiscord"), b => Assert.False(bar.GlyphOf(b)!.IsFallback, b.Name));
 
                 // Labels come from Loc with the leading emoji stripped; two keys join with " + ".
                 string Strip(string k) => HoverBubbleBar.StripLeadingGlyph(Loc.Get(k));

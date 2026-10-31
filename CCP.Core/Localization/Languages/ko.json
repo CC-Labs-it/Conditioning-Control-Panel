@@ -7959,5 +7959,10 @@
   "online_official_plan_prime": "Prime은 하루 할당량이 가장 큽니다. 이미 본 것은 무료로 다시 재생됩니다.",
   "online_official_nice": "좋아요",
   "online_official_stamped_line": "온라인 미디어는 Scrolller에서 가져옵니다. 모든 이미지와 클립에 작은 \"via Scrolller\" 표시가 있습니다.",
-  "online_cache_day_line": "온라인 미디어는 이 컴퓨터의 작은 캐시에 하루 동안만 보관되며 업로드되지 않습니다."
+  "online_cache_day_line": "온라인 미디어는 이 컴퓨터의 작은 캐시에 하루 동안만 보관되며 업로드되지 않습니다.",
+  "lock_voice_hint_off": "입력하는 대신 문구를 소리 내어 말하세요(오프라인 마이크). 마이크가 없으면 문자 입력을 사용할 수 있습니다.",
+  "lock_voice_hint_on": "켜짐. 문구를 말하면 카드를 닫습니다. 마이크가 듣지 못하면 문자 입력도 사용할 수 있습니다.",
+  "lock_voice_hint_no_mic": "마이크가 감지되지 않았습니다. 마이크를 연결할 때까지 잠금 카드는 문자 입력을 사용합니다.",
+  "lock_voice_hint_load_failed": "음성 모델을 찾았지만 불러오지 못했습니다. {0}에 추가한 모델을 제거한 뒤 다시 시작하세요.",
+  "lock_voice_hint_no_model": "음성 모델이 아직 설치되지 않았습니다. 그동안 잠금 카드는 문자 입력을 사용합니다. vosk-model-small-en-us-0.15의 압축을 {0}에 푸세요."
 }

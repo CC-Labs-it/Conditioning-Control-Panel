@@ -9,6 +9,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -26,6 +27,70 @@ namespace CCP.Avalonia.Tests;
 /// <summary>Settings · Log in -> "Sign in via Web": Core V2DeviceCodeService over a stubbed server, polled on a stepped clock.</summary>
 public sealed class LoginDeviceCodeTests
 {
+    [Fact]
+    public void DevicePanelUsesLocalizedCopy() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var dialog = new LoginDialog();
+        try
+        {
+            var panel = dialog.FindControl<StackPanel>("DeviceCodePanel")!;
+            var texts = panel.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+            foreach (var key in new[] { "login_device_title", "login_device_body", "login_device_your_code",
+                "login_device_open_manually", "login_device_copy_code", "login_device_open_again",
+                "login_device_waiting", "btn_cancel" })
+                Assert.Contains(Loc.Get(key), texts);
+        }
+        finally { dialog.Close(); }
+    });
+
+    [Theory]
+    [InlineData("Sign-in is temporarily paused.", "Sign-in is temporarily paused.")]
+    [InlineData("Redis ECONNREFUSED", "Server error. Please try again later.")]
+    public Task FailedInitiationShowsTheSanitizedServerError(string serverError, string expected) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var (oldCodes, oldTell) = (LoginDialog.DeviceCodes, LoginDialog.Tell);
+            using var wire = new FailedInitiationWire(serverError);
+            string? displayed = null;
+            LoginDialog.DeviceCodes = () => new V2DeviceCodeService(wire);
+            LoginDialog.Tell = (_, _, message) => { displayed = message; return Task.CompletedTask; };
+            var dialog = new LoginDialog();
+            try
+            {
+                Click(dialog.FindControl<Button>("BtnLoginDeviceCode")!);
+                await Until(() => displayed != null);
+                Assert.Equal(expected, displayed);
+                Assert.True(dialog.FindControl<StackPanel>("ProviderPanel")!.IsVisible);
+                Assert.False(dialog.FindControl<StackPanel>("DeviceCodePanel")!.IsVisible);
+                Assert.Null(dialog.Result);
+            }
+            finally
+            {
+                dialog.Close();
+                (LoginDialog.DeviceCodes, LoginDialog.Tell) = (oldCodes, oldTell);
+            }
+        });
+
+    private sealed class FailedInitiationWire(string error) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Assert.Equal("/v2/auth/device/initiate", request.RequestUri!.AbsolutePath);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { error }))
+            });
+        }
+    }
+
     private static readonly DateTimeOffset T0 = new(2026, 10, 9, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>Stepped clock whose timers fire only on <see cref="Advance"/> (Task.Delay(TimeSpan, TimeProvider)).</summary>
@@ -129,7 +194,7 @@ public sealed class LoginDeviceCodeTests
             await Until(() => dialog.FindControl<StackPanel>("DeviceCodePanel")!.IsVisible);
             Assert.Equal("ABC-DEF", dialog.FindControl<TextBlock>("TxtDeviceCode")!.Text);
             Assert.Equal(V2DeviceCodeService.VerificationUrl, dialog.FindControl<TextBox>("TxtVerificationUrl")!.Text);
-            Assert.Equal("Waiting for browser confirmation...", dialog.FindControl<TextBlock>("TxtDeviceStatus")!.Text);
+            Assert.Equal(Loc.Get("login_device_waiting"), dialog.FindControl<TextBlock>("TxtDeviceStatus")!.Text);
             await body(dialog, clock, s);
         }
         finally
@@ -184,7 +249,7 @@ public sealed class LoginDeviceCodeTests
                 clock.Advance(TimeSpan.FromSeconds(3)); // past the server's expires_at: no second poll
                 await Until(() => dialog.OwnedWindows.OfType<MessageDialog>().Any());
                 var box = dialog.OwnedWindows.OfType<MessageDialog>().Single();
-                Assert.Equal("Sign-in code expired. Please try again.", box.FindControl<TextBlock>("TxtMessage")!.Text);
+                Assert.Equal(Loc.Get("login_device_expired"), box.FindControl<TextBlock>("TxtMessage")!.Text);
                 box.Close();
                 await dialog.DevicePoll;
                 Assert.Equal(1, wire.Polls);

@@ -7959,5 +7959,10 @@
   "online_official_plan_prime": "Prime a la plus grosse part quotidienne. Ce que tu as déjà vu se rejoue gratuitement.",
   "online_official_nice": "Cool",
   "online_official_stamped_line": "Les médias en ligne viennent de Scrolller. Chaque image et clip porte une petite mention \"via Scrolller\".",
-  "online_cache_day_line": "Les médias en ligne restent un jour dans un petit cache sur cet ordinateur, jamais envoyés."
+  "online_cache_day_line": "Les médias en ligne restent un jour dans un petit cache sur cet ordinateur, jamais envoyés.",
+  "lock_voice_hint_off": "Prononce la phrase au lieu de la saisir (micro hors ligne). Sans micro, la saisie reste disponible.",
+  "lock_voice_hint_on": "Activé. Prononce la phrase pour fermer la carte. Tu peux saisir le texte si le micro ne t'entend pas.",
+  "lock_voice_hint_no_mic": "Aucun micro détecté. Les cartes de verrouillage utiliseront la saisie jusqu'à la connexion d'un micro.",
+  "lock_voice_hint_load_failed": "Le modèle vocal a été trouvé, mais son chargement a échoué. Supprime les modèles supplémentaires dans {0}, puis redémarre.",
+  "lock_voice_hint_no_model": "Le modèle vocal n'est pas encore installé. Les cartes de verrouillage utiliseront la saisie en attendant. Décompresse vosk-model-small-en-us-0.15 dans {0}"
 }

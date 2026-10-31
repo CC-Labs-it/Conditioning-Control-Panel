@@ -7959,5 +7959,10 @@
   "online_official_plan_prime": "Prime bekommt den größten Tagesanteil. Was du schon gesehen hast, läuft gratis noch mal.",
   "online_official_nice": "Schön",
   "online_official_stamped_line": "Online-Medien kommen von Scrolller. Jedes Bild und jeder Clip trägt einen kleinen \"via Scrolller\"-Vermerk.",
-  "online_cache_day_line": "Online-Medien bleiben einen Tag in einem kleinen Cache auf diesem Computer und werden nie hochgeladen."
+  "online_cache_day_line": "Online-Medien bleiben einen Tag in einem kleinen Cache auf diesem Computer und werden nie hochgeladen.",
+  "lock_voice_hint_off": "Sprich den Satz laut aus, statt ihn zu tippen (Offline-Mikrofon). Ohne Mikrofon bleibt die Texteingabe verfügbar.",
+  "lock_voice_hint_on": "Aktiv. Sprich den Satz, um die Karte zu schließen. Du kannst weiter tippen, wenn das Mikrofon dich nicht hört.",
+  "lock_voice_hint_no_mic": "Kein Mikrofon erkannt. Sperrkarten verwenden die Texteingabe, bis eines angeschlossen ist.",
+  "lock_voice_hint_load_failed": "Sprachmodell gefunden, konnte aber nicht geladen werden. Entferne zusätzlich installierte Modelle unter {0} und starte neu.",
+  "lock_voice_hint_no_model": "Sprachmodell noch nicht installiert. Sperrkarten verwenden vorerst die Texteingabe. Entpacke vosk-model-small-en-us-0.15 nach {0}"
 }
