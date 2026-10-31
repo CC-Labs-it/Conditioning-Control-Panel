@@ -1,10 +1,13 @@
 // PORTED from ConditioningControlPanel/Controls/Friends/FriendsRailChip.cs: your face and name at the
 // foot of the rail with a mint pill for friends online; a click opens the drawer upward over the rail.
 // The pink unread badge counts the friends feed (WPF UpdateBadge).
-// ponytail: no bump / hover lift, no tier plate, no
+// ponytail: no online pill bump / hover lift, no tier plate, no
 // rail hold; Popup light-dismiss stands in for WPF's click-outside and host-moved watchers.
 using System;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using Avalonia.Styling;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -22,6 +25,8 @@ public sealed class FriendsRailChip : Grid
     private readonly Border _pill = new(), _badge = new(), _face = new() { Width = 48, Height = 48, CornerRadius = new CornerRadius(14) };
     private readonly TextBlock _pillText = new(), _badgeText = new(), _name;
     private FriendsFeed? _feed;
+    private int _lastUnread = -1;
+    private System.Threading.CancellationTokenSource? _badgeRun;
     private readonly Popup _popup;
     private IFriendsService? _svc;
     public FriendsRailChip() : this(null) { }
@@ -87,18 +92,56 @@ public sealed class FriendsRailChip : Grid
     internal int UnreadBadge => !_badge.IsVisible ? 0 : _badgeText.Text == "9+" ? 10 : int.TryParse(_badgeText.Text, out var n) ? n : 0;
 
     /// <summary>WPF UpdateBadge: the feed's unread count, and the tooltip says it.</summary>
-    internal void UpdateBadge()
+    internal void UpdateBadge(bool animate = false)
     {
         int n = 0;
         try { if (_svc?.Available != false) n = _feed?.Unread ?? 0; } catch { }
         _badgeText.Text = FriendsFeedRules.BadgeText(n);
         _badge.IsVisible = n > 0;
         ToolTip.SetTip(this, Tip(_name.Text, n));
+        // WPF FriendsRailChip.cs:358: increases only, never initial binding or decreases.
+        if (animate && n > _lastUnread && _lastUnread >= 0 && n > 0 && BadgeAnimation() is { } animation)
+        {
+            _badgeRun?.Cancel();
+            _badgeRun = new();
+            _badge.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+            _badge.RenderTransform = new ScaleTransform(1, 1);
+            _ = animation.RunAsync(_badge, _badgeRun.Token);
+        }
+        _lastUnread = n;
     }
     private void OnFeedChanged()
     {
         if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { global::Avalonia.Threading.Dispatcher.UIThread.Post(OnFeedChanged); return; }
-        UpdateBadge();
+        UpdateBadge(animate: true);
+    }
+
+    // WPF FriendsRailChip.cs:363-374: 120 ms rise, then 300 ms elastic return.
+    internal static Animation? BadgeAnimation()
+    {
+        var k = FriendsDrawer.FeedMotionAmount;
+        if (k <= 0) return null;
+        return new Animation
+        {
+            Duration = TimeSpan.FromMilliseconds(420), Easing = new BadgeEase(),
+            Children =
+            {
+                new KeyFrame { Cue = new Cue(0), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1d), new Setter(ScaleTransform.ScaleYProperty, 1d) } },
+                new KeyFrame { Cue = new Cue(1), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1 + 0.45 * k), new Setter(ScaleTransform.ScaleYProperty, 1 + 0.45 * k) } },
+            },
+        };
+    }
+
+    // WPF ElasticEase: one oscillation, springiness 4, EaseOut. The value returns to
+    // zero at the end, leaving the badge's base scale at one when the animation releases it.
+    private sealed class BadgeEase : Easing
+    {
+        public override double Ease(double progress)
+        {
+            if (progress <= 120d / 420) return progress * 420 / 120;
+            var t = 1 - (progress * 420 - 120) / 300;
+            return (Math.Exp(4 * t) - 1) / (Math.Exp(4) - 1) * Math.Sin(2.5 * Math.PI * t);
+        }
     }
 
     internal int PillCount => _pill.IsVisible && int.TryParse(_pillText.Text, out var n) ? n : 0;
@@ -128,6 +171,7 @@ public sealed class FriendsRailChip : Grid
     {
         if (_svc != null) _svc.SnapshotChanged -= OnSnapshot;
         if (_feed != null) _feed.Changed -= OnFeedChanged;
+        _badgeRun?.Cancel();
         (_svc, _feed) = (null, null);
     }
     private void OnSnapshot(FriendsSnapshot _) => UpdatePill();

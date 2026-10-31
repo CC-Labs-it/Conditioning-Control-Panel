@@ -443,21 +443,81 @@ public class AwarenessReviewFixTests : IDisposable
     [Fact]
     public void TheInputProbeSamplesAgainAfterAStopStartCycle()
     {
-        using var probe = new Win32InputProbe();
+        var clock = new InputProbeClock();
+        var samples = 0;
+        using var probe = new Win32InputProbe(clock, () => samples++);
         probe.Start();
+        clock.Advance(Win32InputProbe.SampleInterval);
+        Assert.Equal(1, samples);
         probe.Stop();
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(1, samples);
 
-        var tick = typeof(Win32InputProbe).GetField("_lastInputTick", BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.NotNull(tick);
-        tick!.SetValue(probe, (uint)0);
-
+        // Check cadence, repeated starts, and several restarts. A native input timestamp may
+        // legitimately stay zero on an unattended CI desktop, so it cannot prove timer activity.
+        var expected = samples;
+        for (var cycle = 0; cycle < 3; cycle++)
+        {
+            probe.Start();
+            probe.Start();
+            clock.Advance(Win32InputProbe.SampleInterval - TimeSpan.FromMilliseconds(1));
+            Assert.Equal(expected, samples);
+            clock.Advance(TimeSpan.FromMilliseconds(1));
+            Assert.Equal(++expected, samples);
+            clock.Advance(Win32InputProbe.SampleInterval * 3);
+            expected += 3;
+            Assert.Equal(expected, samples);
+            probe.Stop();
+            clock.Advance(TimeSpan.FromSeconds(1));
+            Assert.Equal(expected, samples);
+        }
+        probe.Dispose();
         probe.Start();
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(expected, samples);
+    }
 
-        // Four samples a second; give it a comfortable handful of intervals.
-        var deadline = DateTime.UtcNow.AddSeconds(3);
-        while ((uint)tick.GetValue(probe)! == 0 && DateTime.UtcNow < deadline) Thread.Sleep(50);
+    private sealed class InputProbeClock : TimeProvider
+    {
+        private TimeSpan _now;
+        private readonly List<InputTimer> _timers = new();
 
-        Assert.NotEqual((uint)0, (uint)tick.GetValue(probe)!);
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new InputTimer(this, callback, state);
+            _timers.Add(timer);
+            timer.Change(dueTime, period);
+            return timer;
+        }
+
+        public void Advance(TimeSpan by)
+        {
+            var end = _now + by;
+            while (_timers.Where(t => t.Due <= end).OrderBy(t => t.Due).FirstOrDefault() is { } next)
+            {
+                _now = next.Due!.Value;
+                next.Due = next.Period == Timeout.InfiniteTimeSpan ? null : _now + next.Period;
+                next.Fire();
+            }
+            _now = end;
+        }
+
+        private sealed class InputTimer(InputProbeClock clock, TimerCallback callback, object? state) : ITimer
+        {
+            public TimeSpan? Due;
+            public TimeSpan Period;
+            private bool _disposed;
+            public void Fire() => callback(state);
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                Due = dueTime == Timeout.InfiniteTimeSpan ? null : clock._now + dueTime;
+                Period = period;
+                return true;
+            }
+            public void Dispose() { _disposed = true; Due = null; }
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
     }
 
     /// <summary>The media watcher's restart guard has to clear, or the SMTC signal never comes back.</summary>
