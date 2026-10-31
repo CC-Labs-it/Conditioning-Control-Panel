@@ -205,6 +205,8 @@ public sealed class CompanionEditorsTests
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
+                shell.CompleteTabTransition();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 Dispatcher.UIThread.RunJobs();
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);

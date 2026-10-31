@@ -51,6 +51,5 @@ public partial class MainShellWindow
         }
     }
 
-    // WPF MainWindow.Lobby.cs:99-102: reuse the rail's count and freshness feed.
     private void PaintLobbyBadge(LobbySnapshot snapshot) => NavBadges.Set(NavSections.Social, snapshot.OpenCount);
 }
