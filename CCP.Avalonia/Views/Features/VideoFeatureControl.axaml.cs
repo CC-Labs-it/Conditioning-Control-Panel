@@ -55,6 +55,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             Windows.MainShellWindow.HoldWhileLockdown(ChkStrict, () => ConditioningControlPanel.Services.LockdownStrictHold.HoldsNow);
             SliderVideoMinDur.ValueChanged += SliderVideoMinDur_Changed;
             SliderVideoMaxDur.ValueChanged += SliderVideoMaxDur_Changed;
+            ChkVideoCutRandomStart.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.VideoCutRandomStart = ChkVideoCutRandomStart.IsChecked ?? true;
+                CoreSettings.Save();
+            };
             ChkMiniGame.IsCheckedChanged += ChkMiniGame_Changed;
             SliderTargets.ValueChanged += SliderTargets_Changed;
             ChkRandomize.IsCheckedChanged += ChkRandomize_Changed;
@@ -140,6 +146,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 TxtVideoMinDur.Text = FormatDuration(s.VideoMinDurationSeconds);
                 SliderVideoMaxDur.Value = s.VideoMaxDurationSeconds;
                 TxtVideoMaxDur.Text = FormatDuration(s.VideoMaxDurationSeconds);
+                ChkVideoCutRandomStart.IsChecked = s.VideoCutRandomStart;
+                ChkVideoCutRandomStart.IsEnabled = s.VideoMaxDurationSeconds > 0;
                 ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
                 SliderTargets.Value = s.AttentionDensity;
                 TxtTargets.Text = s.AttentionDensity.ToString();
@@ -184,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.StrictLockEnabled) ||
                 e.PropertyName == nameof(AppSettings.VideoMinDurationSeconds) ||
                 e.PropertyName == nameof(AppSettings.VideoMaxDurationSeconds) ||
+                e.PropertyName == nameof(AppSettings.VideoCutRandomStart) ||
                 e.PropertyName == nameof(AppSettings.AttentionChecksEnabled) ||
                 e.PropertyName == nameof(AppSettings.AttentionDensity) ||
                 e.PropertyName == nameof(AppSettings.RandomizeAttentionTargets) ||

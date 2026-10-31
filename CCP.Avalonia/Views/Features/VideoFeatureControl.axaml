@@ -110,6 +110,15 @@
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
 
+                            <Grid Height="34" ColumnDefinitions="*,Auto" ToolTip.Tip="{loc:Str tooltip_video_cut_random_start}">
+                                <TextBlock Text="{loc:Str setting_video_cut_random_start}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkVideoCutRandomStart" sessionLock:SessionLock.Owned="True"
+                                          Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
+                            </Grid>
+                            <TextBlock Text="{loc:Str tooltip_video_cut_random_start}" FontSize="11"
+                                       Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+
                             <!-- Power-user rows, folded (WPF MoreFold, house rule: progressive disclosure). -->
                             <sessionLock:MoreFold x:Name="FoldMore">
                                 <StackPanel>

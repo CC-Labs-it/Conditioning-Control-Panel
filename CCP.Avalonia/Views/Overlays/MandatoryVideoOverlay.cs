@@ -63,6 +63,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private WriteableBitmap? _fill;
         private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed;
         private long _watchedMs;
+        private global::ConditioningControlPanel.Services.Video.VideoCutPlayback? _cutClock;
+        private bool _cutStartChosen;
+
+        // UI thread only. Poll the native position after choosing the slice, never credit the seek.
+        private void SampleCutPlayback()
+        {
+            if (_cutClock == null || _player == null || _gracePaused) return;
+            if (!_cutStartChosen && _player.IsPlaying && _player.IsSeekable && _player.Length > 0)
+            {
+                _cutStartChosen = true;
+                var start = CoreSettings.Current.VideoCutRandomStart
+                    ? global::ConditioningControlPanel.Services.Video.VideoCutPlayback.StartOffsetMs(CoreSettings.Current.VideoMaxDurationSeconds, _player.Length, _random) : 0;
+                if (start > 0)
+                {
+                    _player.Time = start;
+                    _cutClock.ResetPosition();
+                    return; // wait for the native seek before taking a baseline
+                }
+            }
+            _cutClock.Observe(_player.Time, Environment.TickCount64);
+        }
         /// <summary>Stopwatch timestamp of the last frame shown (tests age it to fake a lost output).</summary>
         internal long FrameTs;
         private bool _healUsed, _strict;
@@ -133,6 +154,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             PlayedSkew = 0;
             FirstFrameMs = -1;
             _watchedMs = 0;
+            _cutClock = CoreSettings.Current.VideoMaxDurationSeconds > 0 ? new global::ConditioningControlPanel.Services.Video.VideoCutPlayback() : null;
+            _cutStartChosen = false;
             FillMs = FillCount = 0;
             _graceConsumed = false;   // WPF PlayVideo: one grace pause per clip, replays included
 
@@ -209,7 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _player.EndReached += (_, _) =>
             {
                 var len = _player?.Length ?? 0;
-                if (len > 0) Interlocked.Exchange(ref _watchedMs, len);
+                if (len > 0 && _cutClock == null) Interlocked.Exchange(ref _watchedMs, len);
                 Dispatcher.UIThread.Post(() =>   // never tear down on LibVLC's own thread
                 {
                     // WPF OnEnded: a clip that really played to its end earns Circe's "video" note.
@@ -221,7 +244,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _media = new Media(vlc, path, FromType.FromPath);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
-            _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _guard = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _guard.Tick += (_, _) => GuardTick();
             _guard.Start();
             if (_attention) DispatcherTimer.RunOnce(SetupAttention, TimeSpan.FromSeconds(2));   // WPF: Task.Delay(2000)
@@ -473,6 +496,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _sinceShow.Start();
             if (FirstFrameMs >= 0) _sinceFrame.Start();
             FrameTs = Stopwatch.GetTimestamp();
+            _cutClock?.ResetPosition();
             _player?.SetPause(false);
             Log.Information("VideoService: grace pause released ({Reason}) after {Sec:F1}s", reason, (Now - _gracePausedAt).TotalSeconds);
         }
@@ -482,18 +506,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void GuardTick()
         {
             if (_gracePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
+            SampleCutPlayback();
             var framed = FirstFrameMs >= 0;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
                 (_player?.VideoTrackCount ?? -1) != 0, (_player?.Length ?? 0) / 1000.0,
-                Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent);
+                Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent,
+                _cutClock == null ? null : _cutClock.PlayedMs / 1000.0 + PlayedSkew);
             if (why == null) return;
             if (MandatoryVideoScheduler.GuardHeals(why, _healUsed))
             {
                 // WPF DispatchVoutHeal(retry): the same clip once more, same strictness.
                 Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - replaying the clip once", why, Elapsed);
                 Scheduler.NoteReplay();
-                var spent = _capSpent + played;
+                var spent = _capSpent + (_cutClock == null ? played : _cutClock.PlayedMs / 1000.0 + PlayedSkew);
                 Play(_path, _strict);
                 _capSpent = spent;   // the replay continues the clip's max-length cap (BUG-7NAKK79CZ2)
                 _healUsed = true;
@@ -880,6 +906,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
+            SampleCutPlayback();
+            var watched = _cutClock?.PlayedMs;
             _closing = true;
             try
             {
@@ -913,7 +941,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (FillCount > 0) Log.Information("VideoService: blur fill {Avg:F3} ms/frame over {N} frames", FillMs / FillCount, FillCount);
             }
             finally { _closing = false; }
-            return Interlocked.Exchange(ref _watchedMs, 0) / 1000.0;
+            var position = Interlocked.Exchange(ref _watchedMs, 0);
+            _cutClock = null;
+            return (watched ?? position) / 1000.0;
         });
     }
 }
