@@ -33,10 +33,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
     public partial class AvatarTubeWindow
     {
-        private static readonly IBrush MenuRed = new SolidColorBrush(Color.FromRgb(255, 99, 71));
-        private static readonly IBrush MenuGreen = new SolidColorBrush(Color.FromRgb(144, 238, 144));
-        private static readonly IBrush MenuPatreon = new SolidColorBrush(Color.FromRgb(155, 89, 182));
-        private static readonly IBrush MenuLocked = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x70));
+        private static readonly IBrush MenuRed = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromRgb(255, 99, 71));
+        private static readonly IBrush MenuGreen = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromRgb(144, 238, 144));
+        private static readonly IBrush MenuPatreon = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromRgb(155, 89, 182));
+        private static readonly IBrush MenuLocked = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromRgb(0x60, 0x60, 0x70));
 
         private MenuItem? QuickItem(string name) => this.FindControl<MenuItem>(name);
 

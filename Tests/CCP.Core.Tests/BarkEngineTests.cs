@@ -39,13 +39,11 @@ public sealed class BarkEngineTests : IDisposable
         public readonly List<Serilog.Events.LogEvent> Events = new();
         public void Emit(Serilog.Events.LogEvent e) => Events.Add(e);
     }
-
     private sealed class IdleRandom(double roll) : Random
     {
         public override double NextDouble() => roll;
         public override int Next(int maxValue) => maxValue - 1;
     }
-
     [Theory]
     [InlineData(0.349, "gated")]
     [InlineData(0.35, "plain")]
@@ -65,7 +63,6 @@ public sealed class BarkEngineTests : IDisposable
         }
         finally { _s.BarkIdleRotation = saved; }
     }
-
     [Fact]
     public void WhisperHoldsOrdinaryBarksUntilTheLongestClipAndTailButSafetyAndGuaranteedBypass()
     {
@@ -86,7 +83,6 @@ public sealed class BarkEngineTests : IDisposable
         Assert.True(e.Raise("AttentionCheckFail", guaranteed: true));
         Assert.True(e.Raise("Panic"));
     }
-
     [Fact]
     public void DecisionLogsHaveWpfMetadataAndLengthButNeverText()
     {
@@ -110,7 +106,6 @@ public sealed class BarkEngineTests : IDisposable
         }
         finally { Serilog.Log.Logger = old; }
     }
-
     [Fact]
     public void TierLatchUsesTheRawAccountTierAndRetainsTheWpfSessionLatch()
     {
@@ -133,7 +128,6 @@ public sealed class BarkEngineTests : IDisposable
         }
         finally { CoreAccount.CurrentTierProvider = old; }
     }
-
     [Fact]
     public void IdleRotationSurvivesRestartRecyclesWithoutImmediateRepeatAndHonorsTheFloor()
     {
@@ -161,7 +155,6 @@ public sealed class BarkEngineTests : IDisposable
         }
         finally { _s.BarkIdleRotation = saved; }
     }
-
     [Fact]
     public void IdleSkipsMutedSpeakingAndIneligibleRulesWithoutSpendingThem()
     {
@@ -180,7 +173,6 @@ public sealed class BarkEngineTests : IDisposable
         Assert.True(_said[0].Unprompted);
         Assert.DoesNotContain(no.Id, _s.BarkIdleRotation);
     }
-
     [Theory]
     [InlineData("PossessionEffect")]
     [InlineData("PossessionTripwire")]
@@ -204,7 +196,6 @@ public sealed class BarkEngineTests : IDisposable
         Assert.False(e.Raise(trigger));
         Assert.Null(echo);
     }
-
     [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()
     {
