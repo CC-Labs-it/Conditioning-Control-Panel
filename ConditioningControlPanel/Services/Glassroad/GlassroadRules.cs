@@ -26,7 +26,7 @@ internal static class GlassroadRules
     /// them to sign in. <c>songs</c> stays empty: the private race song never ships in the app.
     /// </summary>
     public static JObject InitFrame(string? unifiedId, string? displayName, int tier,
-        bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null)
+        bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null, bool toysConnected = false)
     {
         bool signedIn = !string.IsNullOrWhiteSpace(unifiedId);
         return new JObject
@@ -43,6 +43,8 @@ internal static class GlassroadRules
                 ["friendInvite"] = true,
                 // the garage's Prize Counter row opens the counter window (host/prizeCounter.js)
                 ["prizeCounter"] = true,
+                // the race sends its toy plan here (host/raceToys.js); the Options row shows only with a toy connected
+                ["toys"] = true, ["toysConnected"] = toysConnected,
             },
             ["identity"] = signedIn
                 ? new JObject { ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
