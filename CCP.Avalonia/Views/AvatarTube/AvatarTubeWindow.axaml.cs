@@ -822,13 +822,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // same visual for a bottom-aligned avatar; only the parent's measured size differs, and
             // AvatarBorder's size is margin-driven anyway.
             var scale = EffAvatarScale();
-            var transform = Math.Abs(scale - 1.0) > 0.001 ? new ScaleTransform(scale, scale) : null;
             foreach (var name in new[] { "ImgAvatar", "ImgAvatarAnimated", "ImgAvatarAnimatedB" })
             {
                 var img = this.FindControl<Image>(name);
                 if (img == null) continue;
                 img.RenderTransformOrigin = new RelativePoint(0.5, 1.0, RelativeUnit.Relative);
-                img.RenderTransform = transform;
+                var m = name == "ImgAvatar" ? 1 : (double?)_emoteMap?["clipScale"]?[img.Tag as string ?? ""] ?? 1;
+                img.RenderTransform = new ScaleTransform(scale * m, scale * m);
             }
 
             // When the mod only overrides the ATTACHED tube image, force the attached layout in the
@@ -918,11 +918,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         // The clamps are ModService.GetAvatar*'s, verbatim: a mod manifest is author-written JSON,
         // so an out-of-range number must be pinned here rather than thrown off the canvas.
         //
-        private static double EffAvatarScale() => Math.Clamp(EffectiveTubeLayout()?.AvatarScale ?? 1.0, 0.1, 3.0);
-        private static int EffAvatarOffsetX() => Math.Clamp(EffectiveTubeLayout()?.AvatarOffsetX ?? 0, -1000, 1000);
-        private static int EffAvatarOffsetY() => Math.Clamp(EffectiveTubeLayout()?.AvatarOffsetY ?? 0, -500, 500);
-        private static int EffAvatarDetachedOffsetX() => Math.Clamp(EffectiveTubeLayout()?.AvatarDetachedOffsetX ?? 0, -1000, 1000);
-        private static int EffAvatarDetachedOffsetY() => Math.Clamp(EffectiveTubeLayout()?.AvatarDetachedOffsetY ?? 0, -500, 500);
+        private double EffAvatarScale() => Math.Clamp(EffectiveTubeLayout()?.AvatarScale ?? 1.0, 0.1, 3.0) * EmoteLayout("scale", 1);
+        private double EffAvatarOffsetX() => Math.Clamp(EffectiveTubeLayout()?.AvatarOffsetX ?? 0, -1000, 1000) + EmoteLayout("offsetX");
+        private double EffAvatarOffsetY() => Math.Clamp(EffectiveTubeLayout()?.AvatarOffsetY ?? 0, -500, 500) - EmoteLayout("offsetY");
+        private double EffAvatarDetachedOffsetX() => Math.Clamp(EffectiveTubeLayout()?.AvatarDetachedOffsetX ?? 0, -1000, 1000) + EmoteLayout("detachedX");
+        private double EffAvatarDetachedOffsetY() => Math.Clamp(EffectiveTubeLayout()?.AvatarDetachedOffsetY ?? 0, -500, 500) - EmoteLayout("detachedY");
 
         /// <summary>
         /// True when the mod replaces tube.png but not tube2.png - then the detached state uses the
@@ -1206,8 +1206,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 ClearSpeechQueue();   // WPF Speech.cs:345-350: the priority line drops the queue
                 _isGiggling = false;
-                _ = PlayEmoteSpeech(text, phraseAudioPath, mood);
-                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken);
+                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken, mood);
             });
         }
 
@@ -1238,7 +1237,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool NextPresetGiggleSound() => ++_presetGiggleCounter % 5 == 0;
 
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
-                                bool barkVoice, bool preset, Action? onSpoken = null)
+                                bool barkVoice, bool preset, Action? onSpoken = null, string? mood = null)
         {
                 var spokenHandled = false;
                 var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1262,6 +1261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     }
                     // Publish this line BEFORE cutting the last: the cut fires the old clip's onSpoken on the
                     // thread pool, and a voice waiter woken by it must already see this line in the air.
+                    _ = PlayEmoteSpeech(text, phraseAudioPath, mood); // WPF Speech.cs:490, after suppression
                     SpokenAudioDone = clipDone.Task;
                     _stopSpoken();   // WPF ShowGiggle StopSpokenAudio (Speech.cs:474): every new line cuts the last
                     _stopSpoken = static () => { };

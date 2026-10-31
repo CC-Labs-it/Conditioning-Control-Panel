@@ -28,22 +28,20 @@ public partial class AvatarTubeWindow
     // Portrait playback is absent in this head. Kept explicit at the rule boundary.
     internal bool EmotePortraitMode { get; set; }
     internal string? CurrentEmoteFolder => _emoteFolder;
-    private static string? GenerationFolder()
-    {
+    private double EmoteLayout(string key, double fallback = 0) => (double?)_emoteMap?["layout"]?[key] ?? fallback;
+    private static string? GenerationFolder() {
         using var stream = AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/avatar_emotes_registry.json"));
         using var reader = new StreamReader(stream);
         return AvatarGenerationRule.ParseRegistry(reader.ReadToEnd()).generations
             .FirstOrDefault(e => string.Equals(e.modId, CoreMods.ActiveModId, StringComparison.OrdinalIgnoreCase)
                 && AvatarGenerationRule.IsV2(e.generation)).folder;
     }
-    internal void UpdateGenerationPill()
-    {
+    internal void UpdateGenerationPill() {
         var pill = this.FindControl<Border>("BtnAvatarGeneration")!;
         bool has = GenerationFolder() != null;
         bool show = AvatarGenerationRule.PillVisible(has, EmotePortraitMode, _possessionGlitchLayer.IsVisible);
         bool v2 = AvatarGenerationRule.IsV2(CoreSettings.Current.AvatarGeneration);
-        foreach (int n in new[] { 1, 2 })
-        {
+        foreach (int n in new[] { 1, 2 }) {
             bool on = (n == 2) == v2;
             this.FindControl<Border>($"PillSegV{n}")!.Background =
                 this.TryFindResource(on ? "DepthPressedShade" : "DepthRaisedSheen", out var brush) ? brush as IBrush : Brushes.Transparent;
@@ -59,20 +57,17 @@ public partial class AvatarTubeWindow
         pill.IsHitTestVisible = show;
         if (show) pill.IsVisible = true;
         pill.Opacity = show ? 1 : 0;
-        if (!show) DispatcherTimer.RunOnce(() =>
-        {
+        if (!show) DispatcherTimer.RunOnce(() => {
             if (_pillShowing != false) return;
             // Glitch keeps the plate slot, matching WPF Hidden.
             pill.IsVisible = has && !EmotePortraitMode && _possessionGlitchLayer.IsVisible;
         }, TimeSpan.FromMilliseconds(ms));
     }
-    private void GenerationPillPressed(object? sender, PointerPressedEventArgs e)
-    {
+    private void GenerationPillPressed(object? sender, PointerPressedEventArgs e) {
         e.Handled = true;
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) FlipEmoteGeneration();
     }
-    internal void FlipEmoteGeneration()
-    {
+    internal void FlipEmoteGeneration() {
         if (!AvatarGenerationRule.PillVisible(GenerationFolder() != null, EmotePortraitMode, _possessionGlitchLayer.IsVisible)) return;
         CoreSettings.Current.AvatarGeneration = AvatarGenerationRule.Toggle(CoreSettings.Current.AvatarGeneration);
         try { CoreSettings.Save(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Avatar generation save failed"); }
@@ -80,8 +75,7 @@ public partial class AvatarTubeWindow
         UpdateQuickMenuState();
         PlayEmoteReaction("greeting", null);
     }
-    internal void StopEmoteGeneration()
-    {
+    internal void StopEmoteGeneration() {
         ++_emoteVersion;
         ++_emoteSpeechVersion; _emoteTalking = false;
         _emoteHold?.Dispose();
@@ -91,16 +85,14 @@ public partial class AvatarTubeWindow
         this.FindControl<Image>("ImgAvatar")!.IsVisible = true;
         ApplyAvatarTransform(_currentAvatarSet);
         _emoteFolder = null;
-        _emoteMap = null; CurrentEmoteClip = null;
+        _emoteMap = null; CurrentEmoteClip = null; ApplyTubeLayoutOffsets();
     }
-    private void RefreshEmoteGeneration()
-    {
+    private void RefreshEmoteGeneration() {
         StopEmoteGeneration();
         UpdateGenerationPill();
         if (EmotePortraitMode) return;
         // V1 retains the static fallback when no emote set exists. Generation rows never enter arrows.
-        _emoteFolder = AvatarGenerationRule.ResolveFolder(CoreSettings.Current.AvatarGeneration, GenerationFolder(), () =>
-        {
+        _emoteFolder = AvatarGenerationRule.ResolveFolder(CoreSettings.Current.AvatarGeneration, GenerationFolder(), () => {
             var local = Path.Combine(CoreMods.ActiveModPackage?.InstalledPath ?? "", "resources", "emotes", $"set{_currentAvatarSet}");
             if (File.Exists(Path.Combine(local, "emotes.json"))) return local;
             using var stream = AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/avatar_emotes_registry.json"));
@@ -109,17 +101,12 @@ public partial class AvatarTubeWindow
                 e.modId == CoreMods.ActiveModId && e.set == _currentAvatarSet).folder;
         });
         if (_emoteFolder == null) return;
-        try
-        {
+        try {
             using var stream = OpenEmote("emotes.json");
             using var reader = new StreamReader(stream);
             _emoteMap = JObject.Parse(reader.ReadToEnd());
             _poseTimer.Stop();
-            var layout = _emoteMap["layout"];
-            double scale = (double?)layout?["scale"] ?? 1;
-            foreach (var name in new[] { "ImgAvatarAnimated", "ImgAvatarAnimatedB" })
-                this.FindControl<Image>(name)!.RenderTransform = new TransformGroup { Children = {
-                    new ScaleTransform(scale, scale), new TranslateTransform((double?)layout?["offsetX"] ?? 0, (double?)layout?["offsetY"] ?? 0) } };
+            ApplyTubeLayoutOffsets();
             _ = PlayEmote("idle");
         }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Emote map unavailable"); StopEmoteGeneration(); }
@@ -127,8 +114,7 @@ public partial class AvatarTubeWindow
     private Uri EmoteUri(string file) => Path.IsPathRooted(_emoteFolder!)
         ? new Uri(Path.Combine(_emoteFolder!, file)) : new Uri($"avares://CCP.Avalonia/Resources/{_emoteFolder}/{file}");
     private Stream OpenEmote(string file) => EmoteUri(file) is var uri && uri.IsFile ? File.OpenRead(uri.LocalPath) : AssetLoader.Open(uri);
-    internal void PlayEmoteReaction(string? stem, string? mood, bool skipHold = false)
-    {
+    internal void PlayEmoteReaction(string? stem, string? mood, bool skipHold = false) {
         if (_emoteMap == null) return;
         _emoteHold?.Dispose();
         var prefixes = _emoteMap["stemPrefix"] as JObject;
@@ -142,8 +128,7 @@ public partial class AvatarTubeWindow
         _emoteHold?.Dispose();
         _emoteHold = DispatcherTimer.RunOnce(() => { _ = PlayEmote(clip); }, TimeSpan.FromMilliseconds(remaining));
     }
-    internal string PickEmoteIdle()
-    {
+    internal string PickEmoteIdle() {
         var all = (_emoteMap?["idleRotation"] as JArray)?.ToArray() ?? Array.Empty<JToken>();
         var pool = all.Where(e => (string?)e["clip"] != CurrentEmoteClip).ToArray();
         if (pool.Length == 0) pool = all;
@@ -153,8 +138,7 @@ public partial class AvatarTubeWindow
         foreach (var entry in pool) if ((pick -= Math.Max(1, (int?)entry["weight"] ?? 1)) < 0) return (string?)entry["clip"] ?? "idle";
         return "idle";
     }
-    internal async System.Threading.Tasks.Task PlayEmote(string clip)
-    {
+    internal async System.Threading.Tasks.Task PlayEmote(string clip) {
         if (_emoteMap == null || _avatarSetsClosed) return;
         CurrentEmoteClip = clip;
         int version = ++_emoteVersion, next = 1 - _emoteLayer;
@@ -166,12 +150,12 @@ public partial class AvatarTubeWindow
         void Recover() { if (version == _emoteVersion && clip != "idle") { _emoteTalking = false; _ = PlayEmote("idle"); } }
         player.Failed += (_, _) => Recover();
         player.Completed += sender => { if (version == _emoteVersion && !_emoteTalking) _ = PlayEmote(PickEmoteIdle()); };
-        try
-        {
+        try {
             var uri = EmoteUri(clip + ".webp");
             if (!(uri.IsFile ? File.Exists(uri.LocalPath) : AssetLoader.Exists(uri))) uri = EmoteUri(clip + ".gif");
             await player.Load(uri);
             if (version != _emoteVersion || !player.IsReady) return;
+            image.Tag = clip; ApplyTubeLayoutOffsets();
             int fade = GentleVisuals.FadeMs((int?)_emoteMap?["fadeMs"] ?? 1000);
             image.Transitions = outgoing.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(fade) } };
             image.IsVisible = true;
@@ -187,8 +171,7 @@ public partial class AvatarTubeWindow
     // WPF CirceEmotes.cs:623-726, 783-798, 845-860: voice first, authored mouth joins, early tail.
     private int _emoteSpeechVersion;
     private bool _emoteTalking;
-    internal async System.Threading.Tasks.Task PlayEmoteSpeech(string text, string? audio, string? mood)
-    {
+    internal async System.Threading.Tasks.Task PlayEmoteSpeech(string text, string? audio, string? mood) {
         if (_emoteMap == null) return;
         _emoteTalking = false;
         _emoteHold?.Dispose();
@@ -212,8 +195,7 @@ public partial class AvatarTubeWindow
         _emoteTalking = true;
         int at = start, covered = start, count = Math.Min(pool.Count, (int?)_emoteMap["talking"]?["maxTalkClips"] ?? 3);
         string? last = null;
-        foreach (var token in pool.OrderBy(_ => _random.Next()).Take(count))
-        {
+        foreach (var token in pool.OrderBy(_ => _random.Next()).Take(count)) {
             string clip = last = (string)token!;
             Schedule(at, () => _ = PlayEmote(clip));
             covered = at + ((int?)timing[clip]?["speakEndMs"] ?? 3100);
@@ -222,7 +204,6 @@ public partial class AvatarTubeWindow
         }
         if (last != null && covered + 250 < end && at < end) Schedule(at, () => _ = PlayEmote(last));
         Schedule(end, () => { _emoteTalking = false; PlayEmoteReaction(audio == null ? null : Path.GetFileNameWithoutExtension(audio), mood, skipHold: true); });
-        void Schedule(int ms, Action action) => EmoteSchedule((int)Math.Max(0, ms - (Environment.TickCount64 - began)), () =>
-        { if (version == _emoteSpeechVersion && !_avatarSetsClosed) action(); });
+        void Schedule(int ms, Action action) => EmoteSchedule((int)Math.Max(0, ms - (Environment.TickCount64 - began)), () => { if (version == _emoteSpeechVersion && !_avatarSetsClosed) action(); });
     }
 }

@@ -37,7 +37,7 @@ public sealed class RainGenerationTests
         CoreMods.ActiveModIdProvider = () => "builtin-bambisleep";
         CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = "builtin-bambisleep" }, null, false);
         service.Current.AvatarGeneration = "v1";
-        var tube = new AvatarTubeWindow();
+        var tube = new AvatarTubeWindow(null);
         try
         {
             var sets = tube.PickableAvatarSets();
@@ -47,8 +47,8 @@ public sealed class RainGenerationTests
             tube.FlipEmoteGeneration();
             Assert.Equal("v2", service.Current.AvatarGeneration);
             Assert.Equal("rain_emotes", tube.CurrentEmoteFolder);
-            var framing = Assert.IsType<global::Avalonia.Media.TransformGroup>(tube.FindControl<Image>("ImgAvatarAnimated")!.RenderTransform);
-            Assert.Equal(-30, Assert.IsType<global::Avalonia.Media.TranslateTransform>(framing.Children[1]).Y);
+            Assert.Equal(240, tube.FindControl<Border>("AvatarBorder")!.Margin.Bottom);
+            Assert.Equal(0.84, Assert.IsType<global::Avalonia.Media.ScaleTransform>(tube.FindControl<Image>("ImgAvatarAnimated")!.RenderTransform).ScaleX);
             Assert.Equal(sets, tube.PickableAvatarSets());
             tube.EmotePortraitMode = true; tube.UpdateGenerationPill(); tube.FlipEmoteGeneration();
             Assert.False(tube.FindControl<Border>("BtnAvatarGeneration")!.IsHitTestVisible);
@@ -90,13 +90,14 @@ public sealed class RainGenerationTests
     {
         string root = Path.Combine(TestUserDataProfile.Root, "rain-test"), folder = Path.Combine(root, "resources", "emotes", "set1");
         Directory.CreateDirectory(folder);
-        File.WriteAllText(Path.Combine(folder, "emotes.json"), "{idleRotation:[{clip:'idle',weight:100},{clip:'alt',weight:0},{clip:'third',weight:-2}],talking:{pool:['talk_a','talk_b']},minClipMs:0,mood:{soft:'alt'},stemPrefix:{greeting:'third'}}");
+        File.WriteAllText(Path.Combine(folder, "emotes.json"), "{idleRotation:[{clip:'idle',weight:100},{clip:'alt',weight:0},{clip:'third',weight:-2}],talking:{pool:['talk_a','talk_b']},minClipMs:0,layout:{scale:0.8,offsetX:11,offsetY:13,detachedX:17,detachedY:19},clipScale:{idle:0.5},mood:{soft:'alt'},stemPrefix:{greeting:'third'}}");
         foreach (var clip in new[] { "idle", "alt", "third", "talk_a", "talk_b" }) File.WriteAllBytes(Path.Combine(folder, clip + ".gif"), Asset("idle.gif"));
         var settings = new SettingsService(); settings.Current.AvatarGeneration = "v1"; settings.Current.SelectedAvatarSet = 1;
+        settings.Current.TubeLayoutOverridesByMod = new() { ["rain-test"] = new ModTubeLayout { AvatarScale = 1.5, AvatarOffsetX = 20, AvatarOffsetY = 30, AvatarDetachedOffsetX = 40, AvatarDetachedOffsetY = 50 } };
         CoreSettings.ServiceProvider = () => settings;
         CoreMods.ActiveModIdProvider = () => "rain-test";
         CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = "rain-test" }, root, false);
-        var tube = new AvatarTubeWindow();
+        var tube = new AvatarTubeWindow(null);
         try { await test(tube, folder); } finally { tube.StopEmoteGeneration(); tube.Close(); }
     });
     [Fact]
@@ -134,4 +135,29 @@ public sealed class RainGenerationTests
         tube.StopEmoteGeneration(); foreach (var e in events) e.fire();
         Assert.Null(tube.CurrentEmoteClip); Assert.Null(tube.CurrentEmoteFolder);
     });
+    [Fact]
+    public Task EmotesComposeWithModLayoutAndSurviveRefresh() => WithLocalSet(async (tube, _) =>
+    {
+        await tube.PlayEmote("idle"); tube.Attach();
+        var border = tube.FindControl<Border>("AvatarBorder")!;
+        Assert.Equal(new Thickness(5, 100, 95, 227), border.Margin);
+        tube.Detach(); tube.RefreshTubeLayout();
+        Assert.Equal(new Thickness(5, 100, 379, 259), border.Margin);
+        var image = new[] { "ImgAvatarAnimated", "ImgAvatarAnimatedB" }.Select(n => tube.FindControl<Image>(n)!).First(i => i.Opacity == 1);
+        Assert.Equal(0.6, Assert.IsType<global::Avalonia.Media.ScaleTransform>(image.RenderTransform).ScaleX, 6);
+    });
+    [Fact]
+    public Task ImmediateAndQueuedPresetsReplaceTalkAfterSuppression() => WithLocalSet(async (tube, _) =>
+    {
+        var events = new System.Collections.Generic.List<Action>(); tube.EmoteSchedule = (_, fire) => events.Add(fire);
+        tube.Giggle("one two three four five six seven eight nine ten");
+        Assert.NotEmpty(events); var stale = events.ToArray(); events.Clear();
+        tube.Giggle("mmm"); Assert.Equal(1, tube.QueuedSpeechCount); Assert.Empty(events);
+        Action? gap = null; tube.SpeechDelayScheduler = (_, fire) => { gap = fire; return () => { }; };
+        tube.EndSpeechBubble(); Assert.NotNull(gap); gap!();
+        Assert.Empty(events); var reaction = tube.CurrentEmoteClip; Assert.Contains(reaction, new[] { "alt", "third" });
+        foreach (var fire in stale) fire(); Assert.Equal(reaction, tube.CurrentEmoteClip);
+        Assert.Equal("mmm", tube.FindControl<TextBlock>("TxtSpeech")!.Text); await Task.CompletedTask;
+    });
+
 }
