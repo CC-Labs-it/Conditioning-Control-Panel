@@ -195,6 +195,9 @@ public sealed class PanicReachHeadTests
             var ld = StartLockdown();
             shell.RefreshLockdownGate();
             Assert.False(gate.IsVisible);
+            shell.ShowTab("settings");
+            shell.ShowTab("lockdown");                 // WPF 2b3e44432: reopening the tab must not re-draw it
+            Assert.False(gate.IsVisible);
             ld.Deactivate();
             shell.RefreshLockdownGate();
             Assert.True(gate.IsVisible);                // back as soon as it ends

@@ -373,6 +373,29 @@ public sealed class LockdownVeilTests
         finally { CoreSettings.Current.HideLockdownTimer = false; }
     });
 
+    /// <summary>WPF 605c451ae (Lab.cs:764): the padlock stands down when a run starts after a sign-out and is back the
+    /// moment it ends, through the shell's own lockdown events (MainShellWindow.Lockdown.cs:82), no manual refresh.</summary>
+    [Fact]
+    public void LockdownPadlock_StandsDownForTheRun_AndReturnsOnDeactivate() => Run((shell, ld) =>
+    {
+        var (oldPremium, oldFree) = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider);
+        (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = (() => false, _ => false);
+        try
+        {
+            var gate = shell.Named<Control>("LockdownTab")!.FindControl<Control>("LockdownGate")!;
+            shell.ShowTab("lockdown");
+            Frame();
+            Assert.True(gate.IsVisible);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Frame();
+            Assert.False(gate.IsVisible);
+            ld.Deactivate();
+            Frame();
+            Assert.True(gate.IsVisible);
+        }
+        finally { (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = (oldPremium, oldFree); }
+    });
+
     /// <summary>WPF StartEmergencyExitPulse (LockdownTabView.xaml.cs:267): the slab's glow breathes
     /// 0.26-0.62 / 24-42 on a 1.5 s sine while a lockdown runs, only while the tab shows (P01),
     /// never under LockdownPhotosafe or MotionLevel Off, never while minimised, and rests at 0.32 / 28 when stopped.</summary>
