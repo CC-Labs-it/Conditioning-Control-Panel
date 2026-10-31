@@ -130,6 +130,8 @@ namespace ConditioningControlPanel
                 // twin exists for this layer, so None is correct.
                 Ly(HapticLayer.Pattern, "🌊", "haptics_row_deeper", "haptics_hint_deeper",
                    HapticRowLegacyBinding.None),
+                // Racing Thoughts 3D: its steady buzz is this layer, its pulses read the same rule (RaceHapticDirector).
+                Ly(HapticLayer.Race, "🏁", "haptics_row_race", "haptics_hint_race", HapticRowLegacyBinding.None),
             }));
             HapticsTab.RoutingGroupsList.ItemsSource = _hapticRoutingGroups;
 

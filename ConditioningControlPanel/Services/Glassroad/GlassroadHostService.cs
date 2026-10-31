@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.Haptics;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
 using Microsoft.Web.WebView2.Core;
@@ -124,6 +125,7 @@ internal static class GlassroadHostService
             _host.Show();
             if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
             StartWatch();
+            if (App.Haptics != null) { App.Haptics.ConnectionChanged -= OnToyConnectionChanged; App.Haptics.ConnectionChanged += OnToyConnectionChanged; }
             if (App.Ownership != null) { App.Ownership.OwnershipChanged -= OnOwnershipChanged; App.Ownership.OwnershipChanged += OnOwnershipChanged; }
             _host.FocusWeb();
             try { App.Friends?.EnterActivity(Friends.PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -153,6 +155,8 @@ internal static class GlassroadHostService
             _core = null;
             try { if (App.Ownership != null) App.Ownership.OwnershipChanged -= OnOwnershipChanged; } catch (Exception ex) { Diag.Swallowed(ex); }
             _counterOpen = false;
+            try { if (App.Haptics != null) App.Haptics.ConnectionChanged -= OnToyConnectionChanged; } catch (Exception ex) { Diag.Swallowed(ex); }
+            RaceHapticDirector.Stop();
             try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
             if (had)
@@ -169,6 +173,12 @@ internal static class GlassroadHostService
 
     private static void OnDomContentLoaded(object? sender, CoreWebView2DOMContentLoadedEventArgs e) => PostInitNow();
 
+    private static bool ToysConnected => App.Settings?.Current?.Haptics is { Enabled: true } && App.Haptics is { IsConnected: true };
+
+    /// <summary>A toy came or went while the race is up: the Options row follows (host -> page <c>toys</c>).</summary>
+    private static void OnToyConnectionChanged(object? sender, bool connected)
+        => RunOnUi(() => _host?.Post(new { type = "toys", connected = ToysConnected }));
+
     /// <summary>Straight to the core, past the ready queue (see the class remarks).</summary>
     private static void PostInitNow()
     {
@@ -181,7 +191,7 @@ internal static class GlassroadHostService
             try { tier = EntitlementTierSync.EffectiveTierNow(); } catch (Exception ex) { Diag.Swallowed(ex); }
             var init = GlassroadRules.InitFrame(online ? uid : null, s?.UserDisplayName, tier, GentleVisuals.On,
                 s?.GentleFadeSeconds ?? GentleVisuals.DefaultFadeSeconds, s?.GentleSpeed ?? GentleVisuals.DefaultSpeed,
-                App.Ownership?.Grants);
+                App.Ownership?.Grants, ToysConnected);
             _core?.PostWebMessageAsJson(init.ToString(Newtonsoft.Json.Formatting.None));
         }
         catch (Exception ex) { App.Logger?.Debug("Glassroad: init post failed: {E}", ex.Message); }
@@ -238,6 +248,11 @@ internal static class GlassroadHostService
                     break;
                 case "open-prize-counter":
                     RunOnUi(OpenPrizeCounter);
+                    break;
+                case "toy":
+                case "toy-bed":
+                case "toy-stop":
+                    RaceHapticDirector.OnPageMessage(o);
                     break;
                 case "exit":
                 case "menu-back":
