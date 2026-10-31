@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -17,6 +18,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.FirstShow;
 using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services.Fyp;
 using Xunit;
@@ -28,6 +30,34 @@ namespace CCP.Avalonia.Tests;
 /// plays the script's beats on a stepped clock, and Stop, panic and Esc close it and hand her back.</summary>
 public sealed class FirstShowStageTests
 {
+    [Fact]
+    public Task SpeechWaitsForTheCardToSettleAndOnlySpeaksOnce() => Run(stage =>
+    {
+        var played = new List<(string Path, string Tag)>();
+        stage.Audio.Master = () => 50;
+        stage.Audio.Play = (path, _, tag) => { played.Add((path, tag)); return () => { }; };
+        double t = S.GreetAfter + .1; stage.Clock = () => t;
+        stage.Frame(); // motion off: the initial greeting is already settled
+        played.Clear();
+        Click(stage, 0); // the preset picker moves her to the centre
+        stage.Frame();
+        Assert.DoesNotContain(played, p => p.Tag == "first-show-voice");
+        t += .2; stage.Frame();
+        var voice = Assert.Single(played.Where(p => p.Tag == "first-show-voice"));
+        Assert.Equal(FirstShowVoice.WriteWav(FirstShowVoice.RenderBurst(FirstShowVoice.MakeScore(stage.SpeechText, "celebration"))), File.ReadAllBytes(voice.Path));
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        t += .2; stage.Frame();
+        Assert.Single(played.Where(p => p.Tag == "first-show-voice"));
+        var transforms = (TransformGroup)EmiDeskService.Instance.Window!.FindControl<Grid>("BodyRoot")!.RenderTransform!;
+        var bob = transforms.Children.OfType<TranslateTransform>().Last().Y;
+        var ambientBob = Math.Sin(t * 2.5) * 3 + Math.Sin(t * 1.1) * 2;
+        Assert.True(Math.Abs(bob - ambientBob) > .1); // WPF's 1.4 s speaking emphasis
+        t += 1.5; stage.Frame();
+        bob = transforms.Children.OfType<TranslateTransform>().Last().Y;
+        Assert.Equal(Math.Sin(t * 2.5) * 3 + Math.Sin(t * 1.1) * 2, bob, 6);
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task OpensPlaysTheScriptAndStopHandsEmiBack() => Run(stage =>
     {
