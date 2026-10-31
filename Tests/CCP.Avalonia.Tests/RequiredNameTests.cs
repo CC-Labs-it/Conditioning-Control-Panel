@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.IO;
+using Newtonsoft.Json.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -16,10 +18,12 @@ using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Friends;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)]
 public sealed class RequiredNameTests
 {
     private static void Setup()
@@ -136,7 +140,7 @@ public sealed class RequiredNameTests
             var d = Assert.Single(shell.OwnedWindows.OfType<DisplayNameDialog>());
             CoreAccount.ChangeDisplayNameProvider = _ => Task.FromResult((true, (string?)null, (string?)"Own Name"));
             d.FindControl<TextBox>("TxtDisplayName")!.Text = "Own Name";
-        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             d.FindControl<Button>("BtnConfirm")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await ask.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal("Own Name", s.UserDisplayName);
@@ -155,4 +159,117 @@ public sealed class RequiredNameTests
             AccountSeed.NewV2 = factory;
         }
     });
+    private sealed class ProfileWire : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                { Content = new StringContent("""{"user":{"unified_id":"restored-name","display_name":null}}""") });
+    }
+
+    private static async Task<DisplayNameDialog> Prompt(MainShellWindow shell)
+    {
+        var until = DateTime.UtcNow.AddSeconds(10);
+        while (!shell.OwnedWindows.OfType<DisplayNameDialog>().Any() && DateTime.UtcNow < until)
+            await Task.Delay(10);
+        return Assert.Single(shell.OwnedWindows.OfType<DisplayNameDialog>());
+    }
+
+    // WPF DisplayNameAsk.cs:34-59: profile arrival, one ask, dismissal, next launch, hold at show.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RestoredProfileAsksOncePerLaunchAndReoffersAfterAHold(bool defer) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var s = CoreSettings.Current;
+        var saved = (s.UnifiedId, s.UserDisplayName, s.OfflineMode, AccountSeed.LoadedProfileUid);
+        var sync = AccountSeed.Sync;
+        var world = FriendsLanding.World;
+        MainShellWindow? shell = null;
+        Window? blocker = null;
+        bool holding = false;
+        try
+        {
+            (s.UnifiedId, s.UserDisplayName, s.OfflineMode) = ("restored-name", null, false);
+            AccountSeed.LoadedProfileUid = null;
+            AccountSeed.Sync = null;
+            FriendsLanding.World = () => new LandingWorld(holding, false, false, true, false, false, false);
+            shell = new MainShellWindow();
+            shell.Show();
+            Assert.Null(shell.NameAskTask); // no ask before a profile has actually loaded
+            if (defer) { blocker = new Window(); _ = blocker.ShowDialog<bool>(shell); }
+            async Task Load() => Assert.True(await AccountSeed.LoadProfileAsync(new V2AuthService(() => s, new ProfileWire())));
+            await Load();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var queued = Assert.IsAssignableFrom<Task>(shell.NameAskTask);
+            if (defer)
+            {
+                await Task.Delay(850);
+                Assert.False(queued.IsCompleted); // another modal owns the screen
+                Assert.Empty(shell.OwnedWindows.OfType<DisplayNameDialog>());
+                holding = true; // the hold begins after enqueue, before show
+                blocker!.Close();
+                await queued.WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.Empty(shell.OwnedWindows.OfType<DisplayNameDialog>());
+                holding = false;
+                await Load(); // the next profile load may offer again
+            }
+            var ask = await Prompt(shell);
+            ask.Close(false);
+            await shell.NameAskTask!.WaitAsync(TimeSpan.FromSeconds(10));
+            var done = shell.NameAskTask;
+            await Load();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Same(done, shell.NameAskTask);
+            Assert.Empty(shell.OwnedWindows.OfType<DisplayNameDialog>());
+            shell.Close();
+            shell = new MainShellWindow(); // same restored account, fresh launch latch
+            shell.Show();
+            (await Prompt(shell)).Close(false);
+            await shell.NameAskTask!.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            blocker?.Close();
+            if (shell != null) { foreach (var w in shell.OwnedWindows.ToArray()) w.Close(); shell.Close(); }
+            (s.UnifiedId, s.UserDisplayName, s.OfflineMode, AccountSeed.LoadedProfileUid) = saved;
+            AccountSeed.Sync = sync;
+            FriendsLanding.World = world;
+        }
+    });
+
+    [Fact]
+    public void RemoteDirectoryCopyUsesAllTenLanguages()
+    {
+        try
+        {
+            var root = new DirectoryInfo(AppContext.BaseDirectory);
+            while (root != null && !File.Exists(Path.Combine(root.FullName, "CCP.Core", "CCP.Core.csproj"))) root = root.Parent;
+            Assert.NotNull(root);
+            foreach (var lang in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" })
+            {
+                var resource = JObject.Parse(File.ReadAllText(Path.Combine(root.FullName, "CCP.Core", "Localization", "Languages", lang + ".json")));
+                LocalizationManager.Instance.SetLanguage(lang);
+                foreach (var (state, opted, claimed) in new[] { ("private", false, false), ("listed", true, false), ("claimed", true, true) })
+                {
+                    var key = "remote_directory_" + state;
+                    var pill = MainShellWindow.DirectoryPillFor(true, opted, claimed);
+                    Assert.False(string.IsNullOrWhiteSpace((string?)resource[key]));
+                    Assert.False(string.IsNullOrWhiteSpace((string?)resource[key + "_tip"]));
+                    Assert.Equal((string?)resource[key], pill.Text);
+                    Assert.Equal((string?)resource[key + "_tip"], pill.Tip);
+                    Assert.NotEqual(key, Loc.Get(key));
+                    Assert.NotEqual(key + "_tip", Loc.Get(key + "_tip"));
+                    Assert.Equal(Loc.Get(key), pill.Text);
+                    Assert.Equal(Loc.Get(key + "_tip"), pill.Tip);
+                    Assert.DoesNotContain('—', pill.Tip);
+                    Assert.DoesNotContain('–', pill.Tip);
+                    Assert.DoesNotContain('!', pill.Tip);
+                }
+            }
+        }
+        finally { LocalizationManager.Instance.SetLanguage("en"); }
+    }
+
 }
