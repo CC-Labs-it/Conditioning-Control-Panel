@@ -29,6 +29,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             DataContext = new EngineRoomVm(this);
         }
 
+        // WPF EngineRoomDrawer.xaml.cs PasswordChanged: writes only user edits, never an
+        // initial binding value. A new drawer must not erase a key saved by a previous one.
+        private void CustomKeyChanged(object? sender, TextChangedEventArgs e)
+        {
+            if (sender is TextBox { Text: { } text } && DataContext is EngineRoomVm vm)
+                vm.CustomApiKey = text;
+        }
+
         /// <summary>
         /// "Sampler settings" — the OpenAI-compatible provider's temperature/top_p/… editor.
         ///

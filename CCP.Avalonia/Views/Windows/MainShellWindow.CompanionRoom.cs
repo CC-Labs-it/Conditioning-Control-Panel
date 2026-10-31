@@ -1,6 +1,6 @@
 // Ported write surface: WPF MainWindow/MainWindow.CompanionRoom.cs.
 // Awareness refreshes follow the controls after the v2 tab reparenting.
-// Part B: secure BYO key writer/reader and full v2 observer integration.
+// Part B: full v2 observer integration. BYO key storage is in Platform/CompanionApiKey.cs.
 
 using System;
 using System.Linq;

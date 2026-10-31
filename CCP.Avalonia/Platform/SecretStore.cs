@@ -37,6 +37,7 @@ internal static class SecretStore
 
     internal static void Seed()
     {
+        CompanionApiKey.Seed();
         CoreSecrets.RetrieveProvider = Retrieve;
         CoreSecrets.StoreProvider = Store;
     }

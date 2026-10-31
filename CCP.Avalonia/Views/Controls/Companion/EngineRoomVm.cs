@@ -22,8 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// heads cannot drift; the active transport follows the setting through Core AiServiceStrategy.
     ///
     /// <para>The live-actions collection is shared with the command sink, and remains observable.
-    /// The BYO API key box writes nothing:
-    /// MainShellWindow.CompanionRoom.cs says why (no at-rest store reads it yet). Login has
+    /// The BYO key travels one way to the OS secret store. Login has
     /// no account tab deep link here yet, so LoginCommand stays null.</para>
     /// </summary>
     public sealed class EngineRoomVm : INotifyPropertyChanged
@@ -128,8 +127,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             set { if (Set(ref _customEndpoint, value ?? "") && !_suppressWrite) Write(p => p.OpenAiCompatibleEndpoint = _customEndpoint.Trim()); }
         }
 
-        /// <summary>Never round-trips, never stored on this head (see the class remarks).</summary>
-        public string CustomApiKey { get => ""; set { } }
+        /// <summary>WPF MainWindow.CompanionRoom.cs:312-321: one-way protected write and save.</summary>
+        public string CustomApiKey
+        {
+            get => "";
+            set
+            {
+                if (_suppressWrite || _preview) return;
+                Write(p => p.OpenAiCompatibleApiKey = Platform.CompanionApiKey.Store(value));
+                Raise(nameof(ApiKeyNote));
+            }
+        }
+
+        public string ApiKeyNote => Loc.Get(Platform.SecretStore.NotRemembered
+            ? "companion_engine_api_key_session_only" : "companion_engine_api_key_note");
 
         public string CustomModel
         {
