@@ -75,6 +75,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
+            return Launch(spec, raceRoom);
+        }
+
+        private static GameWindow? Launch(Game spec, string? raceRoom)
+        {
+            var id = spec.Id;
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
             if (live != null)

@@ -30,7 +30,7 @@ public sealed class KnockCardTests
         new(id, SendKind.Invite, "u_mia", "Mia", null, null, dest, null, null, T0, T0.AddMinutes(5));
 
     /// <summary>Raises what the real service would; records the receipts it is asked to report.</summary>
-    private sealed class FakeFriends : IFriendsService
+    internal sealed class FakeFriends : IFriendsService
     {
         public readonly List<ReceiptReport> Receipts = new();
         public bool Available => true;

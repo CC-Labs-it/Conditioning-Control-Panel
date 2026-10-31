@@ -2,7 +2,7 @@
 
 Base verified: CC-Labs-it/Conditioning-Control-Panel, work,
 74ac6ce3d5e0ae082c2871c00e864943e15aa2ad, clean after the requested reset.
-One commit, target avalonia-port/cloud-r72-a5-lobby-race.
+Original delivery: one commit, target avalonia-port/cloud-r72-a5-lobby-race.
 
 References read from origin/release/7.2.0:
 - ConditioningControlPanel/MainWindow/MainWindow.Lobby.cs:273, race dispatch; :283, room validation.
@@ -50,3 +50,20 @@ room validation, first-load query, live join-room, friend bridge replies, course
 The broader font-dependent coverage must be run on the tester machine. No claim of live verification is made.
 The launcher Lobby dropdown and other lobby game host/join lanes remain open; main-sync row 499 is explicitly partial.
 Rows 586 and 588 close this page/invite wiring slice. The Linux Electron engine and its measured performance gate remain separate work.
+
+Review follow-up (one commit on bca9dcb33)
+
+- P2 fixed: GameWindow.LobbyRace.cs:21 uses the existing window launcher with the preview gate removed after the Prime check. GameWindow.cs:81 shares the launch implementation, leaving the old launcher gate intact. WPF reference: origin/release/7.2.0 ConditioningControlPanel/Services/Glassroad/GlassroadHostService.cs:80-87, Prime only; FriendsLanding.cs:532-540, Declined below Prime and Joined otherwise.
+- P3 fixed: AvailableSubjectsTabView.Race.cs:63 treats signed-out rounds as successful for polling. WPF reference: ConditioningControlPanel/Services/Lobby/LobbyService.cs:115-121 initializes ok=true for signed-out rounds, :152 applies LobbyPollPlan.Next.
+- GameWindowTests.LobbyRace.cs:20 now runs with the preview switch unset and set and checks both receipt states. It reuses the existing receipt spy in KnockCardTests rather than adding a second fake service.
+- LobbyPageTests.cs:215 verifies no signed-out fetches, a 10-second signed-out cadence, a 20-second retry after a signed-in failure, reset on sign-out, then a successful sign-in at 10 seconds.
+- No finding rejected. No new localization keys, generated files or copied files. WPF source is unchanged.
+- dotnet build CCP.Core / CCP.Avalonia / Tests/CCP.Avalonia.Tests, Release, -m:1: 0 errors.
+- dotnet test Tests/CCP.Core.Tests, Release, -m:1: Failed 0, Passed 4644, Skipped 5, Total 4649, Duration 43 s.
+- Combined focused Avalonia run: page tests passed; both host cases stopped at Segoe UI Black font creation. Host-only retry: Failed 0, Passed 2, Total 2, Duration 13 s. This is environment-limited combined validation, not a claim that the mixed run passed.
+- node --test Assets/web/glassroad/tests/friend-invite.test.mjs: pass 6, fail 0. No JS changed.
+- P2 fail-proof: restore the preview-gated join call, host theory reports Failed 1, Passed 1; unset-switch case expected joined but got declined at GameWindowTests.LobbyRace.cs:44.
+- P3 fail-proof: restore failure backoff while signed out, cadence test reports Failed 1; expected 10 seconds, got 60 seconds at LobbyPageTests.cs:231.
+- Both production fixes were restored after the mutation checks.
+- Final restored build: 0 errors. Separate dotnet test --no-build runs: host/launcher filter Failed 0, Passed 3, Total 3 (21 s); page filter Failed 0, Passed 2, Total 2 (1 s).
+- Final bash .github/scripts/core-guards.sh: All Core guards passed. python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK. git diff --check: clean.

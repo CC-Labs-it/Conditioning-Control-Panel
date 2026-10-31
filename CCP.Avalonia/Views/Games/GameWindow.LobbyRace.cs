@@ -16,7 +16,9 @@ internal sealed partial class GameWindow
     {
         if (room != null && !RaceJoinLink.IsRoomId(room)) return false;
         if (!TierGate.DemandLab(Loc.Get("launcher_game_race_title"))) return false;
-        return Launch(GlassroadId, room) != null;
+        // WPF GlassroadHostService.Launch: Prime is the only race-join gate.
+        // Keep the preview gate on the old launcher door, not on lobby/invite joins.
+        return Launch(Games[GlassroadId] with { Gate = null }, room) != null;
     }
 
     private async Task InviteRaceFriend(JObject o)

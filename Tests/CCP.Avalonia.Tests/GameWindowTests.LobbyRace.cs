@@ -9,6 +9,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -16,17 +17,31 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class GameWindowTests
 {
-    [Fact]
-    public void RaceJoinValidatesGatesReusesWindowAndPanicCloses() => RunGlassroad("1", (shell, launcher, http) =>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("1")]
+    public void RaceJoinValidatesGatesReusesWindowAndPanicCloses(string? preview) => RunGlassroad(preview, (shell, launcher, http) =>
     {
         var old = CoreEntitlement.HasLabProvider;
+        var oldService = FriendsLanding.Service;
+        var spy = new KnockCardTests.FakeFriends();
+        var invite = new InboxItem(Guid.NewGuid().ToString("N").Substring(0, 16), SendKind.Invite,
+            "f", "Friend", null, null, InviteDestination.Race, null, null,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(2)) { Room = "abcdefghijkl" };
+        FriendsLanding.Service = () => spy;
         try
         {
             CoreEntitlement.HasLabProvider = () => false;
             Assert.False(GameWindow.JoinRace("abcdefghijkl"));
             Assert.False(GameWindow.IsAnyOpen());
+            FriendsLanding.OnKnockDone(invite with { Id = Guid.NewGuid().ToString("N").Substring(0, 16) }, KnockOutcome.Go);
+            Assert.Equal(ReceiptState.Declined, Assert.Single(spy.Receipts).State);
+            Assert.False(GameWindow.IsAnyOpen());
+            spy.Receipts.Clear();
             CoreEntitlement.HasLabProvider = () => true;
             Assert.False(GameWindow.JoinRace("bad"));
+            FriendsLanding.OnKnockDone(invite, KnockOutcome.Go);
+            Assert.Equal(ReceiptState.Joined, Assert.Single(spy.Receipts).State);
             Assert.True(GameWindow.JoinRace("abcdefghijkl"));
             var w = GameWindow.OpenForTests(GameWindow.GlassroadId)!;
             Assert.Contains("join=abcdefghijkl", w.PageUrl!.Query);
@@ -49,6 +64,11 @@ public sealed partial class GameWindowTests
             Dispatcher.UIThread.RunJobs();
             Assert.False(GameWindow.IsAnyOpen());
         }
-        finally { CoreEntitlement.HasLabProvider = old; GameWindow.CloseAllForPanic(); }
+        finally
+        {
+            FriendsLanding.Service = oldService;
+            CoreEntitlement.HasLabProvider = old;
+            GameWindow.CloseAllForPanic();
+        }
     });
 }

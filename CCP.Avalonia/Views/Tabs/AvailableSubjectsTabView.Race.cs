@@ -25,6 +25,7 @@ public partial class AvailableSubjectsTabView
     };
     internal Action<string> OpenRace = room => GameWindow.JoinRace(room);
     internal bool RacePolling => _raceStop != null;
+    internal TimeSpan? RacePollInterval => _racePoll?.Interval;
 
     internal void StartRaceRows()
     {
@@ -59,7 +60,7 @@ public partial class AvailableSubjectsTabView
             var snapshot = LobbyMerge.Build(null, null, null, FriendsHead.Service?.Snapshot.Friends,
                 signedIn, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), reply);
             PaintSnapshot(snapshot, ReadGates(), signedIn && !reply.Ok);
-            if (_racePoll != null) _racePoll.Interval = LobbyPollPlan.Next(_racePoll.Interval, reply.Ok);
+            if (_racePoll != null) _racePoll.Interval = LobbyPollPlan.Next(_racePoll.Interval, !signedIn || reply.Ok);
         }
         catch (OperationCanceledException) { }
         catch { if (!stop.IsCancellationRequested) PaintSnapshot(LobbySnapshot.Empty, ReadGates(), true); }

@@ -211,6 +211,45 @@ public sealed class LobbyPageTests
         Assert.Empty(Named<ItemsControl>(page, "AvailableSubjectsList").Items);
     });
 
+    [Fact]
+    public void SignedOutRacePollingKeepsBaseCadenceAndResetsFailedSignIn() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        var signedIn = false;
+        var calls = 0;
+        page.ReadGates = () => LobbyGates.From(signedIn, false, false);
+        page.FetchRace = _ =>
+        {
+            calls++;
+            return System.Threading.Tasks.Task.FromResult(RaceOpenReply.Empty);
+        };
+        page.StartRaceRows();
+        try
+        {
+            for (var i = 0; i < 8; i++) page.RefreshRaceRows().GetAwaiter().GetResult();
+            Assert.Equal(0, calls);
+            Assert.Equal(LobbyPollPlan.Base, page.RacePollInterval);
+            signedIn = true;
+            page.RefreshRaceRows().GetAwaiter().GetResult();
+            Assert.Equal(1, calls);
+            Assert.Equal(TimeSpan.FromSeconds(20), page.RacePollInterval);
+            signedIn = false;
+            page.RefreshRaceRows().GetAwaiter().GetResult();
+            Assert.Equal(1, calls);
+            Assert.Equal(LobbyPollPlan.Base, page.RacePollInterval);
+            signedIn = true;
+            page.FetchRace = _ =>
+            {
+                calls++;
+                return System.Threading.Tasks.Task.FromResult(new RaceOpenReply(Array.Empty<RaceOpenRoom>(), true));
+            };
+            page.RefreshRaceRows().GetAwaiter().GetResult();
+            Assert.Equal(2, calls);
+            Assert.Equal(LobbyPollPlan.Base, page.RacePollInterval);
+        }
+        finally { page.StopRaceRows(); }
+    });
+
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
