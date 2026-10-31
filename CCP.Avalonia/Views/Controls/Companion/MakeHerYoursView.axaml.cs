@@ -172,6 +172,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             _host = host;
             StartInterviewCommand = new CompanionRelayCommand(() => { }, () => false);
+            // WPF PersonalityPage.xaml.cs:29-33 opens the detached studio from the personality picker.
+            PersonalityStudioCommand = new CompanionRelayCommand(async () =>
+            {
+                if (Shell is { } shell) await ConditioningControlPanel.Avalonia.Views.Windows.PersonalityStudio.Show(shell);
+                Sync();
+            });
             OpenTraitDashboardCommand = new CompanionRelayCommand(OpenPromptEditor);
             ViewCompiledPromptCommand = new CompanionRelayCommand(OpenPromptEditor);
             ForkPromptCommand = new CompanionRelayCommand(OpenPromptEditor);
@@ -259,6 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public string ResetLabel => Loc.Get("companion_personality_reset");
 
         public ICommand StartInterviewCommand { get; }
+        public ICommand PersonalityStudioCommand { get; }
         public ICommand OpenTraitDashboardCommand { get; }
         public ICommand ResetPersonalityCommand { get; }
         public ICommand ViewCompiledPromptCommand { get; }
