@@ -180,9 +180,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             bool offline = CoreSettings.Current.OfflineMode;
             bool prompt = popped || offline || BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
             BrowserLoadingText.IsVisible = prompt;
-            BrowserLoadingText.Bind(TextBlock.TextProperty, LocBinding(offline
+            BrowserLoadingText.Bind(TextBlock.TextProperty, (Binding)new StrBareExtension(offline
                 ? "label_browser_disabled_in_offline_mode" : popped   // WPF MainWindow.Browser.cs:2737
-                ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser"));
+                ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser").ProvideValue(null!));
             // The placeholder belongs to the card; the popped-out host stays visible in its window.
             BrowserWebHost.IsVisible = popped || !prompt;
         }

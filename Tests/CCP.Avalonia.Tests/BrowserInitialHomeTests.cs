@@ -6,6 +6,8 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -87,6 +89,48 @@ public sealed class BrowserInitialHomeTests
         page.OnBrowserPromptClick();
         Assert.Null(host.Source);
         Assert.Equal(0, host.NavigationRequests);
+    });
+
+    [Theory]
+    [InlineData("label_click_to_load_browser")]
+    [InlineData("label_browser_disabled_in_offline_mode")]
+    [InlineData("label_browser_popped_out_nclick_to_focus_window")]
+    public Task PromptUsesBareCopyAndKeepsItsLanguageBinding(string key) => Run((shell, page, host, mod) =>
+    {
+        if (key == "label_browser_disabled_in_offline_mode") CoreSettings.Current.OfflineMode = true;
+        if (key == "label_browser_popped_out_nclick_to_focus_window")
+            shell.BtnPopOutBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        page.SyncBrowserPrompt();
+        var prompt = page.FindControl<TextBlock>("BrowserLoadingText")!;
+        var loc = LocalizationManager.Instance;
+        var language = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("en");
+            Assert.Equal(IconText.BareLoc(key), prompt.Text);
+            loc.SetLanguage("de");
+            Assert.Equal(IconText.BareLoc(key), prompt.Text);
+        }
+        finally { loc.SetLanguage(language); }
+    });
+
+    [Fact]
+    public Task OfflineRoundTripBeforeFirstLoadRestoresTheLoadPrompt() => Run((shell, page, host, mod) =>
+    {
+        host.ScriptInvoker = _ => Task.FromResult<string?>(null); // an available, not-yet-loaded engine
+        page.SyncBrowserPrompt();
+        var prompt = page.FindControl<TextBlock>("BrowserLoadingText")!;
+        Assert.True(prompt.IsVisible);
+        CoreSettings.Current.OfflineMode = true;
+        shell.SyncOfflineModeState();
+        CoreSettings.Current.OfflineMode = false;
+        shell.SyncOfflineModeState();
+        Assert.Null(host.Source);
+        Assert.True(prompt.IsVisible);
+        Assert.False(host.IsVisible);
+        Assert.Equal(IconText.BareLoc("label_click_to_load_browser"), prompt.Text);
+        page.OnBrowserPromptClick();
+        Assert.Equal(mod.DefaultUrl, host.Source!.AbsoluteUri);
     });
 
 }
