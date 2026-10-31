@@ -230,7 +230,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // The shell's live hold, not PortalPanicShortcut.IsHeld: that stays true after a lost Deactivated.
         internal static bool KeepPortalBound =>
-            (CoreSettings.Current.PanicKeyEnabled && AnyEffectRunning) || PortalLeashSafetyNeeded;
+            (PanicRouteWanted && AnyEffectRunning) || PortalLeashSafetyNeeded;
+
+        // WPF MainWindow.xaml.cs:878-881,2329-2330: panic-off and Lockdown retain
+        // the leash-only route. Decision C still limits the consuming grab to effects/holds.
+        private static bool PanicRouteWanted => CoreSettings.Current.PanicKeyEnabled || LeashHoldLeashed;
 
         // Decision C: unlike WPF's non-consuming hook (MainWindow.Leash.cs:434-437),
         // a portal grab must not last the whole leash. Only finish an already-live hold.
@@ -306,7 +310,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // An explicit settings transition gets a fresh attempt after an earlier refusal.
                 if (!PortalPanicShortcut.IsBound) _portalBind = null;
                 if (reenabled) _portalFailed = false;
-                if (!CoreSettings.Current.PanicKeyEnabled && !PortalLeashSafetyNeeded)
+                if (!PanicRouteWanted && !PortalLeashSafetyNeeded)
                 {
                     _portalWatch?.Stop();
                     _portalWatch = null;
@@ -321,7 +325,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal static void StartEffect(Action start)
         {
-            if ((!_portalAllowed && PortalPanicShortcut.BindForTests == null) || PortalPanicShortcut.IsBound || _portalFailed || (!CoreSettings.Current.PanicKeyEnabled && !PortalLeashSafetyNeeded)
+            if ((!_portalAllowed && PortalPanicShortcut.BindForTests == null) || PortalPanicShortcut.IsBound || _portalFailed || (!PanicRouteWanted && !PortalLeashSafetyNeeded)
                 || (PortalPanicShortcut.BindForTests == null && (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))))
             {
                 start();
