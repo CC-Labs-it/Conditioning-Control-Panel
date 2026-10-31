@@ -199,8 +199,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.Marquee.cs:135: unified identity, then provider names.
             var displayName = new[] { s.UserDisplayName, Platform.AccountSeed.Patreon?.DisplayName,
                 Platform.AccountSeed.Discord?.DisplayName }.FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))?.Trim();
+            // WPF Marquee.cs:144 accepts a stored id; this head requires AccountSeed.RestoreSession's proven identity.
             secondary.Text = string.IsNullOrEmpty(displayName)
-                ? Loc.Get(!string.IsNullOrEmpty(s.UnifiedId) || CoreAccount.IsLoggedIn
+                ? Loc.Get(CoreAccount.IsLoggedIn
                     ? "banner_signed_in_no_name" : "label_welcome_consider_logging_in_with_patreon_for")
                 : Loc.GetF("label_welcome_back_0", displayName!);
         }

@@ -87,3 +87,26 @@ dotnet test Tests/CCP.Avalonia.Tests --no-build --no-restore --filter 'FullyQual
 bash .github/scripts/core-guards.sh: All Core guards passed.
 python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
 ```
+
+## Local second-gate follow-up
+
+Accepted P2: the nameless header now gates only on CoreAccount.IsLoggedIn (MainShellWindow.Marquee.cs:204). WPF MainWindow/MainWindow.Marquee.cs:144 accepts a stored settings id; the Avalonia head deliberately requires proven identity (MainShellWindow.Login.cs:36; Platform/AccountSeed.cs:88-103). This keeps the banner consistent with the Settings Login button when a stored id survives without a token or authenticated provider. Core and WPF code remain unchanged.
+
+WelcomeFollowsIdentityChangesAndProviderFallback now seeds CoreAccount.UnifiedUserId for authenticated cases and adds stale-id-only coverage with CoreAccount.IsLoggedIn false. It asserts the complete expected banner and Settings Login button visibility. Existing assertions were retained; no localization key was added.
+
+Fail-proof against a4ad95f7a's gate, with the new tests in place: dotnet test Tests/CCP.Avalonia.Tests --no-restore --filter FullyQualifiedName~BannerMotionTests.WelcomeFollowsIdentityChangesAndProviderFallback returned exit 1, 4 total, 3 passed, 1 failed. Only source=stale-id failed. The production gate was then fixed, without modifying the test expectations.
+
+Ledger: shell-marquee is stub because the retained notes list missing WPF behavior. All prior a4ad95f7a notes remain intact, this gate's evidence is appended, and the original 74ac6ce3d notes have been restored as explicitly historical evidence. Current coverage above supersedes that historical missing list. Deferred part B remains unchanged.
+
+Local second-gate final commands and result tails:
+
+```text
+dotnet build CCP.Core --no-restore: Build succeeded; 0 warnings; 0 errors.
+dotnet build CCP.Avalonia --no-restore: 201 warnings; 0 errors.
+dotnet build Tests/CCP.Avalonia.Tests --no-restore: 145 warnings; 0 errors.
+dotnet test Tests/CCP.Core.Tests --no-build --no-restore: Failed 0, Passed 4635, Skipped 6, Total 4641.
+dotnet test Tests/CCP.Avalonia.Tests --no-build --no-restore --filter 'FullyQualifiedName~BannerMotionTests|FullyQualifiedName~TestIsolationTests|FullyQualifiedName~AccountSeedTests|FullyQualifiedName~ShellSettingsWiringTests': Test Run Successful; Total tests 80; Passed 80.
+bash .github/scripts/core-guards.sh: All Core guards passed.
+python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
+Ledger structural check: one stub row; a4ad95f7a and 74ac6ce3d notes preserved in full.
+```

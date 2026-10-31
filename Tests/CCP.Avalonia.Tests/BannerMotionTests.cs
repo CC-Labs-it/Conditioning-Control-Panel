@@ -79,26 +79,39 @@ public sealed class BannerMotionTests
     [InlineData("unified")]
     [InlineData("provider")]
     [InlineData("signed-in")]
+    [InlineData("stale-id")]
     public Task WelcomeFollowsIdentityChangesAndProviderFallback(string source) => InShell(w =>
     {
         var s = CoreSettings.Current;
         s.OfflineMode = false;
         var property = typeof(ConditioningControlPanel.Avalonia.Platform.AccountSeed).GetProperty("Patreon", BindingFlags.Static | BindingFlags.NonPublic)!;
         var previous = property.GetValue(null);
+        var account = (CoreAccount.IsLoggedInProvider, CoreAccount.UnifiedUserId);
         using var provider = new ConditioningControlPanel.Services.ProviderSubscription("patreon");
         try
         {
             property.SetValue(null, provider);
             s.UserDisplayName = source == "unified" ? "Bambi" : " ";
             provider.DisplayName = source == "provider" ? "Provider" : null;
-            s.UnifiedId = "signed-in";
+            CoreAccount.IsLoggedInProvider = () => !string.IsNullOrEmpty(CoreAccount.UnifiedUserId);
+            CoreAccount.UnifiedUserId = source == "stale-id" ? null : "signed-in";
+            s.UnifiedId = source == "stale-id" ? "stale-id" : null;
+            Assert.Equal(source != "stale-id", CoreAccount.IsLoggedIn);
             w.UpdateQuickLoginUI(accountChanged: true);
-            var expected = source == "signed-in"
+            var expected = source == "stale-id"
+                ? ConditioningControlPanel.Localization.Loc.Get("label_welcome_consider_logging_in_with_patreon_for")
+                : source == "signed-in"
                 ? ConditioningControlPanel.Localization.Loc.Get("banner_signed_in_no_name")
                 : ConditioningControlPanel.Localization.Loc.GetF("label_welcome_back_0", source == "unified" ? "Bambi" : "Provider");
             Assert.Equal(expected, w.Named<TextBlock>("TxtBannerSecondary")!.Text);
+            Assert.Equal(source == "stale-id", w.SettingsPage!.FindControl<Button>("BtnUnifiedLogin")!.IsVisible);
         }
-        finally { property.SetValue(null, previous); }
+        finally
+        {
+            property.SetValue(null, previous);
+            CoreAccount.UnifiedUserId = account.UnifiedUserId;
+            CoreAccount.IsLoggedInProvider = account.IsLoggedInProvider;
+        }
     });
 
     [Fact]
