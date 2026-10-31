@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using ConditioningControlPanel;
 using Xunit;
+using PanicAftermath = ConditioningControlPanel.Services.Safety.PanicAftermath;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
@@ -47,6 +48,34 @@ public class TestIsolationTests
     [InlineData(typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay), "PanicListenerLive")]
     public void TheHookCoversEverySeamThatLeakedBefore(System.Type type, string member) =>
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
+
+    [Fact]
+    public void RestorePutsPanicQuietEngineHoldAndCountBack()
+    {
+        var original = ProcessStateSnapshot.Take();
+        try
+        {
+            PanicAftermath.EndQuiet();
+            var count = PanicAftermath.PanicCount;
+            var clear = ProcessStateSnapshot.Take();
+            PanicAftermath.ArmQuiet();
+            Assert.True(PanicAftermath.TriggersSilenced());
+            Assert.True(PanicAftermath.HoldsEngineRestart);
+            Assert.Equal(count + 1, PanicAftermath.PanicCount);
+            clear.Restore();
+            Assert.False(PanicAftermath.TriggersSilenced());
+            Assert.False(PanicAftermath.HoldsEngineRestart);
+            Assert.Equal(count, PanicAftermath.PanicCount);
+
+            PanicAftermath.ArmQuiet();
+            var armed = ProcessStateSnapshot.Take();
+            PanicAftermath.EndQuiet();
+            armed.Restore();
+            Assert.True(PanicAftermath.TriggersSilenced());
+            Assert.True(PanicAftermath.HoldsEngineRestart);
+        }
+        finally { original.Restore(); }
+    }
 
     [Fact]
     public void RestorePutsStaticsSettingsAndProfileFilesBack()

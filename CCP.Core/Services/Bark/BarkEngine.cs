@@ -358,10 +358,10 @@ namespace ConditioningControlPanel.Services.Bark
             if (mouth == null || string.IsNullOrWhiteSpace(line)) return false;
             var mood = string.IsNullOrEmpty(rule.Mood) ? null : rule.Mood;
             if (rule.Class == BarkClass.EasterEgg && CoreSettings.Current.MasterVolume == 0)
-                mouth(new BarkSpeech(line, null, false, mood, SilentEgg: true, Unprompted: Companion.CompanionIdleVoice.IsUnprompted(rule.Trigger)));
+                mouth(new BarkSpeech(line, null, false, mood, SilentEgg: true, Unprompted: Companion.CompanionVoicePolicy.IsUnprompted(rule.Trigger)));
             else
                 mouth(new BarkSpeech(line, SafeResolveAudio(variant.Audio),
-                    rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold, mood, SilentEgg: false, Unprompted: Companion.CompanionIdleVoice.IsUnprompted(rule.Trigger)));
+                    rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold, mood, SilentEgg: false, Unprompted: Companion.CompanionVoicePolicy.IsUnprompted(rule.Trigger)));
             try { BarkSpoken?.Invoke(rule, line); }
             catch (Exception ex) { Log.Debug("[BARK] BarkSpoken subscriber error: {Error}", ex.Message); }
             return true;

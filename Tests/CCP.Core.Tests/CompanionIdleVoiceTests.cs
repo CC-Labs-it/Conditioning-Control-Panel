@@ -32,13 +32,13 @@ public sealed class CompanionIdleVoiceTests
     [InlineData("StillOnActivity")]
     public void SensingNeedsAnActiveRunOrOptIn(string trigger)
     {
-        Assert.True(CompanionIdleVoice.IsUnprompted(trigger));
-        Assert.False(CompanionIdleVoice.ShouldVoice(true, false, false, false, false, false));
-        Assert.True(CompanionIdleVoice.ShouldVoice(true, true, false, false, false, false));
-        Assert.True(CompanionIdleVoice.ShouldVoice(true, false, true, false, false, false));
-        Assert.True(CompanionIdleVoice.ShouldVoice(true, false, false, false, true, false));
-        Assert.False(CompanionIdleVoice.ShouldVoice(true, false, true, true, false, false));
-        Assert.False(CompanionIdleVoice.ShouldVoice(true, true, true, false, true, true));
+        Assert.True(CompanionVoicePolicy.IsUnprompted(trigger));
+        Assert.False(CompanionVoicePolicy.ShouldVoice(true, false, false, false, false, false));
+        Assert.True(CompanionVoicePolicy.ShouldVoice(true, true, false, false, false, false));
+        Assert.True(CompanionVoicePolicy.ShouldVoice(true, false, true, false, false, false));
+        Assert.True(CompanionVoicePolicy.ShouldVoice(true, false, false, false, true, false));
+        Assert.False(CompanionVoicePolicy.ShouldVoice(true, false, true, true, false, false));
+        Assert.False(CompanionVoicePolicy.ShouldVoice(true, true, true, false, true, true));
     }
 
     [Theory]
@@ -52,7 +52,7 @@ public sealed class CompanionIdleVoiceTests
     [InlineData(null)]
     public void AnswersKeepTheirVoice(string? trigger)
     {
-        Assert.False(CompanionIdleVoice.IsUnprompted(trigger));
-        Assert.True(CompanionIdleVoice.ShouldVoice(false, false, false, false, false, true));
+        Assert.False(CompanionVoicePolicy.IsUnprompted(trigger));
+        Assert.True(CompanionVoicePolicy.ShouldVoice(false, false, false, false, false, true));
     }
 }

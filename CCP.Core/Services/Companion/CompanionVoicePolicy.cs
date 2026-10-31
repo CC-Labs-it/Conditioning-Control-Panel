@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Services.Companion
     /// to Normal, so the trigger is the one signal the code actually carries. The tube's own
     /// awareness reactions (AvatarTubeWindow.Reactions.cs) pass <c>unprompted: true</c>.</para>
     /// </summary>
-    public static class CompanionIdleVoice
+    public static class CompanionVoicePolicy
     {
         /// <summary>The bark trigger the idle timer raises (and nothing else does).</summary>
         public const string IdleTrigger = "Idle";

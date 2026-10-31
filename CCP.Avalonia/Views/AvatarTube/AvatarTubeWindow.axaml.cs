@@ -1427,7 +1427,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal Action<bool, string?, bool, Action?>? SpeechAudioPlayer;
 
         private static bool MayVoice(bool unprompted) =>
-            ConditioningControlPanel.Services.Companion.CompanionIdleVoice.ShouldVoice(
+            ConditioningControlPanel.Services.Companion.CompanionVoicePolicy.ShouldVoice(
                 unprompted, CoreEngine.IsRunning, CoreSession.IsSessionRunning,
                 App.Sessions?.IsPaused == true, CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff,
                 ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());

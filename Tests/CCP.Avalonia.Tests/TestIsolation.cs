@@ -248,6 +248,11 @@ internal sealed class ProcessStateSnapshot
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
 
+        // Panic is raised through methods, so the assignment scanner cannot see its private state.
+        // Restore the quiet deadline, engine hold and count together after every test.
+        foreach (var f in typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetFields(AnyStatic)
+                     .Where(f => !f.IsInitOnly && !f.IsLiteral)) found.Add(f);
+
         // Every `Type.Member =` a test writes, through `using Alias = ...;` too.
         var alias = new Regex(@"^using\s+(\w+)\s*=\s*(?:global::)?([\w.]+)\s*;", RegexOptions.Multiline);
         var assign = new Regex(@"(?<![\w.])(?:global::)?((?:\w+\.)*\w+)\.(\w+)\s*=(?![=>])");
