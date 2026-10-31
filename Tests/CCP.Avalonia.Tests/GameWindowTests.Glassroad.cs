@@ -38,13 +38,13 @@ public sealed partial class GameWindowTests
     /// <summary>Signed in, no Racing Thoughts track, the door at <paramref name="door"/>, the relay on a fake transport.</summary>
     private static void RunGlassroad(string? door, Action<MainShellWindow, LauncherWindow, GrHttp> body) => Run((shell, launcher) =>
     {
-        var (oldDoor, oldOwns, oldHttp, oldBase) = (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
+        var (oldDoor, oldOwns, oldHttp, oldBase) = (CoreEntitlement.HasLabProvider, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var (oldUid, oldSecret, oldGate) = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider);
         var fake = new GrHttp();
         using var http = new System.Net.Http.HttpClient(fake);
         try
         {
-            GameWindow.GlassroadDoorEnv = () => door;
+            CoreEntitlement.HasLabProvider = () => door == "1";
             RacingAccess.IsGrantedProvider = _ => false;
             GameWindow.PbpHttpClient = () => http;
             GameWindow.PbpServerBase = () => GrBase;
@@ -57,7 +57,7 @@ public sealed partial class GameWindowTests
         }
         finally
         {
-            (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
+            (CoreEntitlement.HasLabProvider, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
     });
@@ -140,29 +140,93 @@ public sealed partial class GameWindowTests
 
     // ---- the window ----
 
-    /// <summary>Door shut: the page cannot be opened and the race tile stays hidden without a track. Door open: the
-    /// Racing Thoughts tile shows, Play opens Glassroad (not dtrh/race.html), and panic closes it.</summary>
     [Fact]
-    public void Glassroad_DoorHidesIt_TheRaceTileOpensIt_PanicClosesIt()
+    public void RacingThoughts_DoorRules_FailClosedWithoutATierProvider()
     {
-        RunGlassroad(null, (_, _, _) =>
+        var (oldLab, oldPremium, oldFree, oldDenied) = (CoreEntitlement.HasLabProvider,
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler);
+        try
         {
-            Assert.Equal("race", GameWindow.ResolveDoor("race"));
-            Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
-            Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
-            Assert.False(GameWindow.IsAnyOpen());
-        });
-        RunGlassroad("1", (shell, launcher, _) =>
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreEntitlement.IsFreeTodayProvider = _ => true;
+            int refusals = 0;
+            CoreEntitlement.ShowDeniedHandler = _ => refusals++;
+            foreach (var lab in new Func<bool>?[] { null, () => false, () => throw new InvalidOperationException() })
+            {
+                CoreEntitlement.HasLabProvider = lab;
+                Assert.True(GameWindow.GlassroadLocked());
+                Assert.False(GameWindow.GlassroadGate());
+            }
+            Assert.Equal(3, refusals);
+            CoreEntitlement.HasLabProvider = () => true;
+            Assert.False(GameWindow.GlassroadLocked());
+            Assert.True(GameWindow.GlassroadGate());
+            Assert.Equal(GameWindow.GlassroadId, GameWindow.ResolveDoor("RACE"));
+            Assert.Equal("loom", GameWindow.ResolveDoor("loom"));
+            Assert.DoesNotContain(GameWindow.Games.Values, g => g.Page == "dtrh/race.html");
+            Assert.Equal("glassroad/index.html", GameWindow.Games["race"].Page);
+        }
+        finally
         {
+            (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider,
+                CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler) = (oldLab, oldPremium, oldFree, oldDenied);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void RacingThoughts_PrimeOnlyIncludingSolo_AndPanic(bool prime, bool solo)
+    {
+        RunGlassroad(prime ? "1" : null, (shell, launcher, _) =>
+        {
+            CoreAccount.IsLoggedInProvider = () => !solo;
             Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
-            launcher.Play(LauncherCards.Find("race")!);
-            Dispatcher.UIThread.RunJobs();
-            var w = Assert.Single(GameWindow.OpenWindowsForTests());
-            Assert.Equal(GameWindow.GlassroadId, w.Spec.Id);
-            Assert.EndsWith("/glassroad/index.html", w.PageUrl!.AbsolutePath);
-            Assert.Same(w, GameWindow.Launch("race"));                 // one live window, focused
-            PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
-            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(!prime, LauncherWindow.Destinations["race"].Locked());
+            Assert.Equal(GameWindow.GlassroadId, GameWindow.ResolveDoor("RACE"));
+            Assert.DoesNotContain(GameWindow.Games.Values, g => g.Page == "dtrh/race.html");
+            if (prime && !solo)
+            {
+                int gates = 0;
+                MainShellWindow.LeashGateDueProvider = () => true;
+                var oldPresent = MainShellWindow.PresentLeashGateProvider;
+                try
+                {
+                    MainShellWindow.PresentLeashGateProvider = _ => gates++;
+                    launcher.Play(LauncherCards.Find("race")!);
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(1, gates);
+                    Assert.False(GameWindow.IsAnyOpen());
+                    MainShellWindow.LeashGateDueProvider = () => false;
+                    launcher.Play(LauncherCards.Find("race")!);
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(GameWindow.GlassroadId, Assert.Single(GameWindow.OpenWindowsForTests()).Spec.Id);
+                    PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+                    Assert.False(GameWindow.IsAnyOpen());
+                }
+                finally { MainShellWindow.PresentLeashGateProvider = oldPresent; }
+            }
+            foreach (var id in new[] { "race", GameWindow.GlassroadId })
+            {
+                var w = GameWindow.Launch(id);
+                if (!prime) { Assert.Null(w); continue; }
+                Assert.NotNull(w);
+                Assert.Equal(GameWindow.GlassroadId, w.Spec.Id);
+                Assert.EndsWith("/glassroad/index.html", w.PageUrl!.AbsolutePath);
+                Assert.Same(w, GameWindow.Launch("race"));
+                var old = CoreEntitlement.HasLabProvider;
+                try
+                {
+                    CoreEntitlement.HasLabProvider = () => false;
+                    Assert.Null(GameWindow.Launch(id)); // gate also runs before refocusing
+                }
+                finally { CoreEntitlement.HasLabProvider = old; }
+                PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(GameWindow.IsAnyOpen());
+            }
             Assert.False(GameWindow.IsAnyOpen());
         });
     }
