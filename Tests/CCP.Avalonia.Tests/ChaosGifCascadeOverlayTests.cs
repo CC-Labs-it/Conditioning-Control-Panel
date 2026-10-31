@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -47,6 +48,7 @@ public sealed class ChaosGifCascadeOverlayTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var clock = new SteppedClock();
+            ChaosGifCascadeOverlay? rain = null;
             try
             {
                 ChaosGifCascadeOverlay.CloseActive();
@@ -59,7 +61,7 @@ public sealed class ChaosGifCascadeOverlayTests
                 ChaosGifCascadeOverlay.ManualFramesForTests = true;
                 Show(gif);
 
-                var w = ChaosGifCascadeOverlay.Active!;
+                var w = rain = ChaosGifCascadeOverlay.Active!;
                 Assert.NotNull(w);
                 Assert.Equal(TimeSpan.Zero, w.FrameInterval);  // every composed frame, as WPF Rendering
                 Assert.Equal(w.DesktopScaling, w.Scale);       // the factor SetOverrideRedirect sizes with
@@ -96,12 +98,14 @@ public sealed class ChaosGifCascadeOverlayTests
             finally
             {
                 ChaosGifCascadeOverlay.CloseActive();
+                if (rain != null) await rain.PendingDecodes;
+                Dispatcher.UIThread.RunJobs();
                 ChaosGifCascadeOverlay.Clock = TimeProvider.System;
                 ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
                 ChaosGifCascadeOverlay.ManualFramesForTests = false;
             }
         });
-        try { Directory.Delete(dir, true); } catch { }
+        Directory.Delete(dir, true);
     }
 
     [Fact]
@@ -119,6 +123,7 @@ public sealed class ChaosGifCascadeOverlayTests
                         .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var clock = new SteppedClock();
+                ChaosGifCascadeOverlay? rain = null;
                 try
                 {
                     CorePaths.EffectiveAssetsProvider = () => dir;
@@ -144,7 +149,7 @@ public sealed class ChaosGifCascadeOverlayTests
                     Assert.NotNull(ChaosGifCascadeOverlay.LastPick);
                     await ChaosGifCascadeOverlay.LastPick!;
                     Dispatcher.UIThread.RunJobs();
-                    var w = ChaosGifCascadeOverlay.Active!;
+                    var w = rain = ChaosGifCascadeOverlay.Active!;
                     Assert.NotNull(w);
                     Assert.True(ChaosGifCascadeOverlay.IsRaining);
                     var image = Assert.IsType<Image>(Assert.Single(w.Surface.Children));
@@ -175,6 +180,8 @@ public sealed class ChaosGifCascadeOverlayTests
                 {
                     ChaosRunHost.ForceShutdown();
                     ChaosGifCascadeOverlay.CloseActive();
+                    if (rain != null) await rain.PendingDecodes;
+                    Dispatcher.UIThread.RunJobs();
                     ChaosGifCascadeOverlay.Clock = TimeProvider.System;
                     ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
                     ChaosGifCascadeOverlay.ManualFramesForTests = false;
@@ -271,6 +278,70 @@ public sealed class ChaosGifCascadeOverlayTests
             finally { ChaosRunHost.ForceShutdown(); }
             return Task.CompletedTask;
         });
+    }
+
+    [Fact]
+    public async Task Teardown_waits_for_older_decode_even_after_newest_decode_finishes()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-rain-readers-").FullName;
+        var gif = Path.Combine(dir, "tiny.gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                using var release = new ManualResetEventSlim();
+                var reading = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                int readers = 0;
+                ChaosGifCascadeOverlay? rain = null;
+                Task? first = null;
+                try
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    ChaosGifCascadeOverlay.BeforeDecodeForTests = path =>
+                    {
+                        if (Interlocked.Increment(ref readers) != 1) return;
+                        using var stream = File.OpenRead(path);
+                        reading.SetResult();
+                        release.Wait(); // hold a real reader, as the Windows CI failure did
+                    };
+                    Show(gif);
+                    rain = ChaosGifCascadeOverlay.Active!;
+                    first = ChaosGifCascadeOverlay.LastDecode!;
+                    await reading.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                    Show(gif); // restart removes the first faller while its decode still reads
+                    await Decoded();
+                    Assert.False(first.IsCompleted);
+                    var pending = rain.PendingDecodes;
+                    Assert.False(pending.IsCompleted); // newest alone is insufficient
+                    ChaosGifCascadeOverlay.CloseActive();
+                    Assert.Null(ChaosGifCascadeOverlay.Active); // panic still closes immediately
+                    Assert.False(pending.IsCompleted);
+                    release.Set();
+                    await pending;
+                    Dispatcher.UIThread.RunJobs(); // dispose late frames for removed fallers
+                    using var exclusive = File.Open(gif, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                }
+                finally
+                {
+                    release.Set();
+                    ChaosGifCascadeOverlay.CloseActive();
+                    if (first != null) await first;
+                    if (rain != null) await rain.PendingDecodes;
+                    Dispatcher.UIThread.RunJobs();
+                    ChaosGifCascadeOverlay.BeforeDecodeForTests = null;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     private static void Show(string gif) => ChaosGifCascadeOverlay.ShowWithFiles(new() { gif },
