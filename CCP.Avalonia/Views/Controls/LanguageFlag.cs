@@ -147,7 +147,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             using (dc.PushTransform(new RotateTransform(tilt, cx, cy).Value))
             {
                 dc.DrawEllipse(red, null, new Point(cx, cy), r, r);
-                dc.DrawGeometry(blue, null, Geometry.Parse("M 6.5,7 A 3.5,3.5 0 0 0 13.5,7 Z"));
+                // Lower half-disc, counterclockwise like WPF Controls/LanguageFlag.cs:180-183.
+                var half = new StreamGeometry();
+                using (var g = half.Open())
+                {
+                    g.BeginFigure(new Point(cx - r, cy), true);
+                    g.ArcTo(new Point(cx + r, cy), new Size(r, r), 0, false, SweepDirection.CounterClockwise);
+                    g.EndFigure(true);
+                }
+                dc.DrawGeometry(blue, null, half);
                 dc.DrawEllipse(red, null, new Point(cx - r / 2, cy), r / 2, r / 2);
                 dc.DrawEllipse(blue, null, new Point(cx + r / 2, cy), r / 2, r / 2);
             }
