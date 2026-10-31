@@ -21,6 +21,9 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>In-app corner toasts (WPF App.Notifications). Queues until the shell attaches it.</summary>
         public static Helpers.NotificationService Notifications { get; } = new();
 
+        /// <summary>Daily rotation used by the gift tile (WPF App.DailyFree).</summary>
+        internal static DailyFreeService? DailyFree { get; set; }
+
         /// <summary>Weekly free-tier pass for the Graded Intake (WPF App.IntakePass).</summary>
         public static IntakePassService IntakePass { get; } = new();
 
@@ -626,7 +629,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:490/2549: the ? box's daily-free rotation that TierGate ORs in.
                 // Pure ctor; the override fetch is fire-and-forget and falls back to the seeded pick.
                 // A sandbox never reaches the real proxy (the SkipStartupFetch rule); the seeded pick still works.
-                var dailyFree = new DailyFreeService(
+                var dailyFree = DailyFree = new DailyFreeService(
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;

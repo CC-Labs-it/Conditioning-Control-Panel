@@ -13,6 +13,8 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using Xunit;
+using AvApp = ConditioningControlPanel.Avalonia.App;
+using ConditioningControlPanel.Services;
 
 namespace CCP.Avalonia.Tests;
 
@@ -30,6 +32,16 @@ public sealed class DashboardGiftPresentationTests
         return Task.CompletedTask;
     });
 
+    internal static DailyFreeService GiftFor(string key)
+    {
+        var gift = new DailyFreeService(fetchOverride: false);
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        typeof(DailyFreeService).GetField("_serverKey", flags)!.SetValue(gift, key);
+        typeof(DailyFreeService).GetField("_serverKeyForDate", flags)!.SetValue(gift, DateTime.Now.ToString("yyyy-MM-dd"));
+        ((System.Threading.Timer)typeof(DailyFreeService).GetField("_dayRollTimer", flags)!.GetValue(gift)!).Dispose();
+        return gift;
+    }
+
     [Theory]
     [InlineData("takeover", "tab_takeover", 1)]
     [InlineData("awareness", "tab_awareness", 1)]
@@ -41,11 +53,11 @@ public sealed class DashboardGiftPresentationTests
     [InlineData("unknown", "mosaic_daily_gift", 0)]
     public Task GiftFacesUseTodaysIdentityAndPremiumOwnsThePool(string key, string? locKey, int tier) => WithView((_, view) =>
     {
-        var oldFree = CoreEntitlement.IsFreeTodayProvider;
+        var oldDaily = AvApp.DailyFree;
         var oldPremium = CoreEntitlement.HasPremiumProvider;
         try
         {
-            CoreEntitlement.IsFreeTodayProvider = k => k == key;
+            AvApp.DailyFree = GiftFor(key);
             CoreEntitlement.HasPremiumProvider = () => false;
             view.RefreshMysteryGift();
             Assert.Equal(Loc.Get("mosaic_free_today"), view.CardMystery.Title);
@@ -59,7 +71,7 @@ public sealed class DashboardGiftPresentationTests
             Assert.Equal(0, view.MysteryRevealBadge.Tier);
             Assert.False(view.MysteryRevealBadge.FreeToday);
         }
-        finally { CoreEntitlement.IsFreeTodayProvider = oldFree; CoreEntitlement.HasPremiumProvider = oldPremium; }
+        finally { AvApp.DailyFree = oldDaily; CoreEntitlement.HasPremiumProvider = oldPremium; }
     });
 
     [Fact]
