@@ -10,6 +10,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Safety;
 using Avalonia.Threading;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Serilog;
 
@@ -141,17 +142,43 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 var plain = System.Text.RegularExpressions.Regex.Replace(trigger,
                     @"\[([^\]]+)\]\((https?://[^\)]+)\)", "$1", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                 _txtSpeech.Text = "";
-                if (plain.Length == 0) { _txtSpeech.Text = trigger; return; }
+                if (plain.Length == 0) { RenderTriggerText(trigger); return; }
                 var index = 0;
                 _cancelTriggerAnimation = TriggerLoopScheduler(TimeSpan.FromMilliseconds(TriggerTypewriterStepMs(plain.Length)), () =>
                 {
                     if (generation != _triggerAnimationGeneration || !_triggersAttached) return;
                     if (PanicAftermath.TriggersSilenced()) { PanicSilence(); return; }
                     index = Math.Min(plain.Length, index + Math.Max(1, plain.Length / 100));
-                    _txtSpeech.Text = index == plain.Length ? trigger : plain[..index];
-                    if (index == plain.Length) _cancelTriggerAnimation();
+                    if (index == plain.Length) { _cancelTriggerAnimation(); RenderTriggerText(trigger); }
+                    else _txtSpeech.Text = plain[..index];
                 });
             });
+        }
+
+        // WPF Speech.cs:1278-1295,1448-1455,3033: final labels become clickable HTTP(S) links.
+        private void RenderTriggerText(string text)
+        {
+            var matches = System.Text.RegularExpressions.Regex.Matches(text,
+                @"\[([^\]]+)\]\(([^)]+)\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (matches.Count == 0) { _txtSpeech.Text = text; return; }
+            _txtSpeech.Text = "";
+            _txtSpeech.Inlines!.Clear();
+            var at = 0;
+            foreach (System.Text.RegularExpressions.Match match in matches)
+            {
+                _txtSpeech.Inlines!.Add(new Run(text[at..match.Index]));
+                var label = match.Groups[1].Value;
+                if (Uri.TryCreate(match.Groups[2].Value.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
+                    _txtSpeech.Inlines.Add(new InlineUIContainer(new global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton
+                    {
+                        Content = label, Padding = new(0), FontSize = _txtSpeech.FontSize,
+                        Foreground = global::Avalonia.Media.Brush.Parse("#ffb0e0"),
+                        Command = Controls.Companion.CompanionLinkLauncher.CommandFor(uri.AbsoluteUri)
+                    }));
+                else _txtSpeech.Inlines.Add(new Run(label));
+                at = match.Index + match.Length;
+            }
+            _txtSpeech.Inlines!.Add(new Run(text[at..]));
         }
 
         // WPF Windowing.cs:2210-2233. The head's parent visibility handler also hides the dock.

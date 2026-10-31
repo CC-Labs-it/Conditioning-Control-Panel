@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Avalonia.Controls.Documents;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -123,6 +126,32 @@ public sealed class TubeTriggerModeTests
             Assert.True(replacedTyping.Stopped());
             Assert.Equal("replacement", text.Text);
             tube.EndSpeechBubble();
+
+            // Linked-trigger regression: type the label, then render a real link, preserving surrounding text.
+            s.CustomTriggers = new() { "Before [Watch](https://example.com) [Local](file:///tmp/a) after" };
+            ((Stepped)tube.SpeechClock).Now += TimeSpan.FromSeconds(8); // replacement earned the AI-source gap
+            Assert.True(tube.IsSpeechReady());
+            loop.Tick();
+            delays[^1].Fire();
+            var linkedTyping = loops[^1];
+            linkedTyping.Tick();
+            Assert.Equal("B", text.Text);
+            for (var i = 1; i < "Before Watch [Local](file:///tmp/a) after".Length; i++) linkedTyping.Tick();
+            Assert.True(linkedTyping.Stopped());
+            var link = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>(Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
+            Assert.Equal("Watch", link.Content);
+            Assert.Equal(new[] { "Before ", " ", "Local", " after" }, text.Inlines!.OfType<Run>().Select(r => r.Text));
+            var previousNavigate = CompanionLinkLauncher.Navigate;
+            string? opened = null;
+            try
+            {
+                CompanionLinkLauncher.Navigate = url => { opened = url; return true; };
+                typeof(Button).GetMethod("OnClick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(link, null);
+                Assert.Equal("https://example.com/", opened); // fail-proof: a label without navigation fails
+            }
+            finally { CompanionLinkLauncher.Navigate = previousNavigate; }
+            tube.EndSpeechBubble();
+            s.CustomTriggers = new() { "freeze" }; // retain the close-path audio fail-proof
 
             s.TriggerIntervalSeconds = 120; // the settings event alone must restart the loop
             Dispatcher.UIThread.RunJobs();
