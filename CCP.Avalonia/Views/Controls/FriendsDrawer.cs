@@ -409,7 +409,7 @@ public sealed partial class FriendsDrawer : Border
         {
             bool block = c.What == "block";
             var keep = Pill(Loc.Get("friends_confirm_keep"), Raised, Text, "friends-confirm-keep");
-            keep.Click += (_, _) => { _confirm = null; Render(); };
+            keep.Click += (_, _) => { FriendsLanding.SfxClick(); _confirm = null; Render(); };
             var yes = Pill(Loc.Get(block ? "friends_menu_block" : "friends_confirm_yes_remove"), Red, Text, "friends-confirm-yes");
             yes.Margin = new Thickness(6, 0, 0, 0);
             yes.Click += async (_, _) => await ConfirmAsync(f.Id, f.Name, c.What);
@@ -433,7 +433,7 @@ public sealed partial class FriendsDrawer : Border
         var more = Pill(GlyphContent(IconKind.MoreHorizontal, Loc.Get("friends_action_more"), center: true, glyphFg: Lilac), Brushes.Transparent, Muted, "friends-action:more", Line2);   // WPF E712
         more.HorizontalAlignment = HorizontalAlignment.Stretch;
         more.HorizontalContentAlignment = HorizontalAlignment.Center;
-        more.Click += (_, _) => Menu(f).Open(more);
+        more.Click += (_, _) => { FriendsLanding.SfxClick(); Menu(f).Open(more); };
         card.Children.Add(more);
         if (_picker != null)
         {
@@ -477,19 +477,21 @@ public sealed partial class FriendsDrawer : Border
     internal async Task RunMenuAsync(Friend f, string what)
     {
         if (_svc == null) return;
-        if (what is "remove" or "block") { _confirm = (f.Id, what); _openId = f.Id; Render(); return; }
+        if (what is "remove" or "block") { FriendsLanding.SfxClick(); _confirm = (f.Id, what); _openId = f.Id; Render(); return; }
         ActResult r = ActResult.TryLater;
         try { r = await _svc.SetSquelchAsync(f.Id, what == "squelch"); }
         catch (Exception ex) { Serilog.Log.Debug("[Friends] menu {What} failed: {E}", what, ex.Message); }
-        if (r == ActResult.Done) ShowTimed(f.Id, Loc.Get(what == "squelch" ? "friends_squelch_done" : "friends_unsquelch_done"), true);
-        else ShowTimed(f.Id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false);
+        if (r == ActResult.Done) { FriendsLanding.SfxClick(); ShowTimed(f.Id, Loc.Get(what == "squelch" ? "friends_squelch_done" : "friends_unsquelch_done"), true); }
+        else { FriendsLanding.SfxDenied(); ShowTimed(f.Id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false); }
         await SafeRefreshAsync();
     }
     internal async Task<ActResult> ReportAsync(string friendId, string reason)
     {
         if (_svc == null) return ActResult.TryLater;
+        FriendsLanding.SfxClick();
         ActResult r;
         try { r = await _svc.ReportAsync(friendId, reason); } catch { r = ActResult.TryLater; }
+        if (r != ActResult.Done) FriendsLanding.SfxDenied();
         ShowTimed(friendId, Loc.Get(r == ActResult.Done ? "friends_report_done" : FriendsDrawerRules.ActResultKey(r)), r == ActResult.Done);
         return r;
     }
@@ -504,11 +506,12 @@ public sealed partial class FriendsDrawer : Border
         if (r == ActResult.Done)
         {
             if (what == "block") RememberBlock(id, name);
+            FriendsLanding.SfxDismiss();
             if (_openId == id) _openId = null;
             // The row is gone after the refresh, so the word goes where the player is looking.
             Say(Loc.GetF(what == "block" ? "friends_blocked_done" : "friends_removed_done", name), true);
         }
-        else ShowTimed(id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false);
+        else { FriendsLanding.SfxDenied(); ShowTimed(id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false); }
         await SafeRefreshAsync();
         Render();
         return r;
@@ -558,7 +561,7 @@ public sealed partial class FriendsDrawer : Border
             ContextMenu = menu,
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
-            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null), mid, buttons } },
+            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto,Auto"), Children = { Avatar(r.Name, 38, null), mid, buttons } },
         };
     }
 
@@ -587,6 +590,7 @@ public sealed partial class FriendsDrawer : Border
     internal async Task<ActResult> AnswerRequestAsync(FriendRequest r, string what)
     {
         if (_svc == null) return ActResult.TryLater;
+        FriendsLanding.SfxClick();
         ActResult res;
         try
         {
@@ -598,8 +602,13 @@ public sealed partial class FriendsDrawer : Border
             };
         }
         catch { res = ActResult.TryLater; }
-        // WPF Honesty.cs AnswerRequestAsync: an accept answered after the drawer folded is said where the player is looking.
-        if (res == ActResult.Done && what == "accept" && !_isOpen) Say(Loc.Get("friends_add_accepted"), true);
+        if (res == ActResult.Done && what == "accept")
+        {
+            FriendsLanding.SfxAccepted();
+            if (!_isOpen) Say(Loc.Get("friends_add_accepted"), true);   // WPF TellOutside: only a folded drawer says it outside
+        }
+        else if (res == ActResult.Done) FriendsLanding.SfxDismiss();
+        else FriendsLanding.SfxDenied();
         if (res != ActResult.Done) ShowTimed((what == "cancel" ? "out:" : "in:") + r.Id, Loc.Get(FriendsDrawerRules.ActResultKey(res)), false);
         await SafeRefreshAsync();
         return res;
@@ -627,19 +636,21 @@ public sealed partial class FriendsDrawer : Border
     internal async Task<ActResult> UnblockAsync(BlockedEntry b)
     {
         if (_svc == null) return ActResult.TryLater;
+        FriendsLanding.SfxClick();
         ActResult r;
         try { r = await _svc.UnblockAsync(b.Id); } catch { r = ActResult.TryLater; }
         if (r == ActResult.Done)
         {
+            FriendsLanding.SfxAccepted();
             FriendsBlockList.Shared.Remove(b.Account, b.Id);
             Say(Loc.GetF("friends_unblocked_done", b.Name), true);
             await SafeRefreshAsync();
             Render();
         }
-        else ShowTimed("blocked:" + b.Id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false);
+        else { FriendsLanding.SfxDenied(); ShowTimed("blocked:" + b.Id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false); }
         return r;
     }
-    internal void ToggleBlocked() { _showBlocked = !_showBlocked; Render(); }
+    internal void ToggleBlocked() { FriendsLanding.SfxClick(); _showBlocked = !_showBlocked; Render(); }
     private void RenderFoot(FriendsSnapshot snap)
     {
         var settings = Pill(GlyphContent(IconKind.Settings, Loc.Get("friends_settings"), glyphFg: null), Brushes.Transparent, Muted, "friends-settings");   // WPF E713
@@ -672,6 +683,7 @@ public sealed partial class FriendsDrawer : Border
             copy.Click += async (_, _) =>
             {
                 try { await (TopLevel.GetTopLevel(this)?.Clipboard?.SetTextAsync(code) ?? Task.CompletedTask); } catch { return; }
+                FriendsLanding.SfxClick();
                 copied.Text = Loc.Get("friends_copied");
                 copied.Foreground = Mint;
             };
@@ -694,8 +706,9 @@ public sealed partial class FriendsDrawer : Border
         bool good = FriendsDrawerRules.IsGood(r);
         _addResult.Text = Loc.Get(FriendsDrawerRules.AddResultKey(r));
         _addResult.Foreground = good ? Mint : Gold;
-        if (good) _codeBox.Text = "";
-        else _addGo.IsEnabled = FriendsDrawerRules.NormaliseCode(_codeBox.Text).Length == FriendsDrawerRules.CodeLength;
+        if (good) { FriendsLanding.SfxAccepted(); _codeBox.Text = ""; }
+        else FriendsLanding.SfxDenied();
+        if (!good) _addGo.IsEnabled = FriendsDrawerRules.NormaliseCode(_codeBox.Text).Length == FriendsDrawerRules.CodeLength;
         await SafeRefreshAsync();
         return r;
     }
