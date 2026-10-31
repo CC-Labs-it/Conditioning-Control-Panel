@@ -18,7 +18,7 @@ function verdict(r) {
   if (!(x.fpsMean >= 57)) why.push('mean ' + x.fpsMean);
   if (!(x.worst1sFps >= 50)) why.push('worst 1 s ' + x.worst1sFps);
   if (x.hitches100 > 0) why.push(x.hitches100 + ' frames > 100 ms');
-  if (r.hashes && r.hashes.match === false) why.push('course hash differs');
+  if (r.hashes?.match !== true) why.push('course hash not verified');
   if (x.tier && x.tier !== 'high') why.push('tier ' + x.tier);
   return why.length ? 'BELOW BAR: ' + why.join(', ') : 'MEETS BAR';
 }
@@ -30,7 +30,7 @@ const rows = runs.map((r) => {
   return '| ' + [r.run, engine, n(x.backend), n(x.tier) + '/' + n(x.renderScale), n(r.garageS), n(r.warmS), n(x.fpsMean), n(x.low1pctFps), n(x.worst1sFps),
     n(x.hitches50) + '/' + n(x.hitches100), n(x.worstGapMs), n(r.countdown && r.countdown.worstGapMs), n(x.cpuMedianMs) + '/' + n(x.cpuP95Ms),
     n(r.memory && r.memory.peakMB), n(r.audio && r.audio.driftMsPerMin), n(r.audio && r.audio.outputLatencyMs),
-    r.hashes ? (r.hashes.match ? 'yes' : 'NO') : '-', (r.errors || []).length, verdict(r)].join(' | ') + ' |';
+    r.hashes ? (r.hashes.match === true ? 'yes' : 'NO') : '-', (r.errors || []).length, verdict(r)].join(' | ') + ' |';
 });
 
 const lines = [];

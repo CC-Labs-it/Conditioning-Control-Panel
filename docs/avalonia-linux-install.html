@@ -64,8 +64,15 @@ The browser fallback must say &quot;Panic cannot close a browser tab.&quot;</li>
 Keep the release blocked until the shell restrictions, host panic lifetime and codec decision are proven.</li>
 </ul>
 <h3 id="rt-spike-rerun">Spike re-run (measurement only)</h3>
-<p>The nine files in <code>packaging/linux/rt-spike/</code> are verbatim from
-<code>origin/mich/rt-linux-spike:handoff-1029/rt-linux-spike/</code>. From the repository root:</p>
+<p>The nine files in <code>packaging/linux/rt-spike/</code> were copied from
+<code>origin/mich/rt-linux-spike:handoff-1029/rt-linux-spike/</code>. Eight remain verbatim;
+<code>make-report.mjs</code> now requires <code>hashes.match === true</code> before reporting MEETS BAR.
+Missing, null, mismatched or malformed hash evidence is BELOW BAR, even with passing frame rates.
+The report's hash column also accepts only boolean true as yes. Focused Node tests cover these cases.
+The copy exception is explicit in <code>handoff-1031/MICH-72-ANSWERS-1031.md:95-97</code>:
+verbatim copies do not count toward the 600 hand-written lines. Count the whole corrected report file
+conservatively as hand-written and list the other eight as copied. No prerequisite split is needed.
+From the repository root:</p>
 <pre><code>GLASSROAD_DIR="$PWD/Assets/web/glassroad" bash packaging/linux/rt-spike/run.sh</code></pre>
 <p>This overrides the kit's historical WPF tree path. The kit fetches latest Electron and uses
 <code>--no-sandbox</code>: it is a benchmark, not the production installer or a release-pin check.

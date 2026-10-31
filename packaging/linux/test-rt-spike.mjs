@@ -1,4 +1,4 @@
-// Exercise the verbatim kit without opening an engine or downloading anything.
+// Exercise the copied kit without opening an engine or downloading anything.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
@@ -26,6 +26,32 @@ for (const [name, change, verdict] of [
       const result = spawnSync(process.execPath, [join(kit, 'make-report.mjs'), out], { encoding: 'utf8' });
       assert.equal(result.status, 0, result.stderr);
       assert.ok((await readFile(join(out, 'report.md'), 'utf8')).includes(verdict));
+    } finally {
+      await rm(out, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const [name, hashes] of [
+  ['absent hashes', undefined], ['null hashes', null], ['missing match', {}],
+  ['null match', { match: null }], ['mismatch', { match: false }],
+  ['string match', { match: 'true' }], ['numeric match', { match: 1 }],
+]) {
+  test(`spike report refuses unverified course parity: ${name}`, async () => {
+    const out = await mkdtemp(join(tmpdir(), 'ccp-spike-test-'));
+    try {
+      await mkdir(join(out, 'runs'));
+      await writeFile(join(out, 'runs', 'sample.json'), JSON.stringify({
+        run: 'sample', hashes,
+        race: { fpsMean: 60, worst1sFps: 60, hitches100: 0, tier: 'high' },
+      }));
+      const result = spawnSync(process.execPath, [join(kit, 'make-report.mjs'), out], { encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+      const report = await readFile(join(out, 'report.md'), 'utf8');
+      assert.ok(report.includes('BELOW BAR: course hash not verified'));
+      assert.ok(!report.includes('MEETS BAR'));
+      const row = report.split('\n').find(line => line.startsWith('| sample |'));
+      assert.equal(row.split('|')[17].trim(), hashes ? 'NO' : '-');
     } finally {
       await rm(out, { recursive: true, force: true });
     }
