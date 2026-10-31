@@ -91,12 +91,19 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]   // WPF FireDemoTrigger never reads saved triggers or plays audio (#887 back door)
-    public void TutorialDemoNeverPlaysTheSavedTriggerAudio() => Run((engine, _, played) =>
+    public void TutorialDemoNeverPlaysTheSavedTriggerAudio() => Run((engine, s, played) =>
     {
+        var fired = new List<KeywordTrigger>(); engine.TriggerFired += fired.Add;
         CoreEntitlement.HasPremiumProvider = () => false;
         engine.FireDemo("sit", "tutorial");
+        Assert.Empty(engine.GetRecentFires()); Assert.Empty(fired);
         CoreEntitlement.HasPremiumProvider = () => true;
+        engine.Stop(); s.KeywordTriggersEnabled = false; engine.FireDemo("  ", "tutorial"); Assert.Empty(fired);
         engine.FireDemo("sit", "tutorial");
+        var record = Assert.Single(engine.GetRecentFires()); Assert.Equal(("sit", "tutorial", engine.Now()), (record.Keyword, record.Source, record.FiredAt));
+        Assert.Equal(new[] { "Highlight", "AvatarComment" }, record.ActionKeys);
+        var demo = Assert.Single(fired); var comment = Assert.IsType<AvatarCommentAction>(demo.Actions[1]); Assert.Equal(("tutorial:demo", "PuppyPraise", false), (demo.Id, comment.FallbackPhraseCategory, comment.RequireAiAvailable));
+        CoreEntitlement.HasPremiumProvider = () => false; CoreEntitlement.IsFreeTodayProvider = _ => true; engine.FireDemo("sit", "tutorial"); Assert.Equal(2, fired.Count);
         Assert.Empty(played);
     });
 

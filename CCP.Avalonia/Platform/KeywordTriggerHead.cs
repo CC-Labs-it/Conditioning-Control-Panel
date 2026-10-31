@@ -259,7 +259,15 @@ internal sealed class KeywordAudioRuntime
         _chasterCap.Record(id, applied, now);
         _chasterCap.Save(path);
     }
-    internal void FireDemo(string keyword, string source) { }
+    // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic
+    internal void FireDemo(string keyword, string source) {
+        if (string.IsNullOrWhiteSpace(keyword) || !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return;
+        var demo = new KeywordTrigger { Id = "tutorial:demo", Keyword = keyword, VisualEffect = KeywordVisualEffect.HighlightOnly,
+            Actions = [new HighlightAction(), new AvatarCommentAction { FallbackPhraseCategory = "PuppyPraise", RequireAiAvailable = false }] };
+        RecordFire(demo, source, Now());
+        try { TriggerFired?.Invoke(demo); } catch (Exception ex) { Log.Debug(ex, "Keyword demo handler failed"); }
+        // ponytail: Highlight/AvatarComment dispatch remains wire-shell-keyword-triggers-b-next (WPF KeywordTriggerService.cs:428).
+    }
 
     internal void StopAudio()
     {
