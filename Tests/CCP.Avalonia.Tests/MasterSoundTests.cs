@@ -15,10 +15,12 @@ public sealed class MasterSoundTests
     private sealed class Voice(Action ended) : LibVlcAudio.ISoundVoice
     {
         public double Gain;
-        public bool Disposed;
+        public bool Disposed, Playing;
+        public string? Routed;
         public double Volume { set => Gain = value; }
         public Action<long>? Started { private get; set; }
-        public bool Play() { Started?.Invoke(2000); return true; }
+        public void ApplyPreferredDevice() { Assert.True(Playing); Routed = LibVlcAudio.PreferredDevice(CoreSettings.Current.AudioOutputDeviceId, "default", new[] { "headset" }); }
+        public bool Play() { Playing = true; Started?.Invoke(2000); return true; }
         public void Dispose() { Disposed = true; ended(); }
     }
 
@@ -50,19 +52,21 @@ public sealed class MasterSoundTests
     }
 
     [Fact]
-    public void Sound_starts_muted_follows_master_and_unsubscribes_when_finished()
+    public void Sound_routes_after_start_follows_master_and_unsubscribes_when_finished()
     {
         var settings = CoreSettings.Current;
-        var before = settings.MasterVolume;
+        var before = (settings.MasterVolume, settings.AudioOutputDeviceId);
         Voice? voice = null;
         Action? stop = null;
         var finished = 0;
         try
         {
             settings.MasterVolume = 0;
+            settings.AudioOutputDeviceId = "headset";
             stop = LibVlcAudio.StartSound(ended => voice = new Voice(ended), 50,
                 duration => Assert.Equal(TimeSpan.FromSeconds(2), duration), () => finished++);
-            Assert.Equal(0, voice!.Gain);
+            Assert.Equal("headset", voice!.Routed);
+            Assert.Equal(0, voice.Gain);
             settings.MasterVolume = 60;
             Assert.Equal(MasterVolumeBinding.SoundGain(50, 60), voice.Gain, 5);
             settings.MasterVolume = 0;
@@ -73,6 +77,6 @@ public sealed class MasterSoundTests
             settings.MasterVolume = 100;
             Assert.Equal(0, voice.Gain);
         }
-        finally { if (voice?.Disposed == false) stop?.Invoke(); settings.MasterVolume = before; }
+        finally { if (voice?.Disposed == false) stop?.Invoke(); (settings.MasterVolume, settings.AudioOutputDeviceId) = before; }
     }
 }

@@ -167,6 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal interface ISoundVoice : MindWipePlayer.IVoice
         {
             Action<long>? Started { set; }
+            void ApplyPreferredDevice();
             bool Play();
         }
 
@@ -182,7 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             voice = create(() => { master?.Dispose(); Fire(finished); });
             master = new(Apply);
-            voice.Started = ms => { Apply(master.Level); started?.Invoke(TimeSpan.FromMilliseconds(ms)); };
+            voice.Started = ms => { voice.ApplyPreferredDevice(); Apply(master.Level); started?.Invoke(TimeSpan.FromMilliseconds(ms)); };
             Apply(master.Level);
             var stopped = 0;
             void Stop() { if (Interlocked.Exchange(ref stopped, 1) == 0) { master.Dispose(); voice.Dispose(); } }
@@ -266,6 +267,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 // Cubic like PlayOneShot; applied off libvlc's thread once the output exists.
                 set { _vol = (int)Math.Round(Math.Cbrt(Math.Clamp(value, 0, 1)) * 100); Apply(); }
             }
+            public void ApplyPreferredDevice() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) { LibVlcAudio.ApplyPreferredDevice(player); player.Volume = _vol; } });
             private void Apply() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) player.Volume = _vol; });
             public bool Play()
             {
