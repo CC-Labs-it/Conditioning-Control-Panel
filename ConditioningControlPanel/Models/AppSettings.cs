@@ -8787,6 +8787,16 @@ namespace ConditioningControlPanel.Models
         // ---- Piece by Piece pictures (2026-09-28) ----
         // The chess game's Distraction pictures: the Goon Game's flavour model, host-owned.
 
+        private bool? _glassroadPictures;
+        /// <summary>The race's own Scrolller switch: null before the player has pressed it (it then follows the app-wide
+        /// online source), else their last press. App consent is still required (<c>GlassroadRules.PicturesOn</c>).</summary>
+        [JsonProperty("glassroadPictures")]
+        public bool? GlassroadPictures
+        {
+            get => _glassroadPictures;
+            set { _glassroadPictures = value; OnPropertyChanged(); }
+        }
+
         private string _pbpMediaFlavour = "";
         /// <summary>
         /// Piece by Piece's picture flavour (trance, pink, frills, shiny, censored, mine), or ""
