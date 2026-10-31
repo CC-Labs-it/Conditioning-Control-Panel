@@ -253,6 +253,7 @@ namespace ConditioningControlPanel.Services
             PauseCount++;
             _stopwatch.Stop();
             _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+            CoreAudio.StopSound();
             CoreFlash.Stop();
             CoreSubliminal.Stop();
             LockCardScheduler.Instance.Stop();

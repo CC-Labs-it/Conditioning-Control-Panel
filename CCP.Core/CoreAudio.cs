@@ -50,6 +50,16 @@ namespace ConditioningControlPanel
             catch { try { onFinished?.Invoke(); } catch { } return Noop; }
         }
 
+        public static volatile Action? StopSoundProvider;
+        public static void StopSound() { try { StopSoundProvider?.Invoke(); } catch { } }
+        public static volatile Action<string, int, Action<TimeSpan>?, Action?>? PlaySoundProvider;
+        public static void PlaySound(string path, int volume, Action<TimeSpan>? started = null, Action? finished = null)
+        {
+            var play = PlaySoundProvider;
+            if (play == null) { finished?.Invoke(); return; }
+            try { play(path, volume, started, finished); } catch { finished?.Invoke(); }
+        }
+
         private static void Noop() { }
 
         public static void Duck(int strength = 80) { try { DuckProvider?.Invoke(strength); } catch { } }

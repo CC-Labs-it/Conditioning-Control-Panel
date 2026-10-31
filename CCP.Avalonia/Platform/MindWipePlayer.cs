@@ -14,7 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// <para>The loop is one player on LibVLC's own repeat instead of WPF's two-player 120 ms
     /// crossfade: the clip restarts in the decoder, so there is no rebuild between cycles to hide.</para>
     /// </summary>
-    internal sealed class MindWipePlayer
+    internal sealed class MindWipePlayer : IDisposable
     {
         /// <summary>One playing clip; volume is 0..1 and can change while it plays.</summary>
         internal interface IVoice : IDisposable { double Volume { set; } }
@@ -22,6 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private readonly Func<string, double, bool, Action, IVoice?> _play;
         private readonly TimeProvider _time;
         private readonly Func<double> _roll;
+        private readonly ConditioningControlPanel.Services.Audio.MasterVolumeBinding _master;
         private readonly Random _random = new();
         private readonly object _lock = new();
         private string[] _clips = Array.Empty<string>();
@@ -40,6 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             _play = play;
             _time = time ?? TimeProvider.System;
             _roll = roll ?? _random.NextDouble;
+            _master = new(_ => ApplyGain());
             ReloadClips();
         }
 
@@ -111,10 +113,24 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 _frequency = MindWipeSchedule.ClampFrequency(frequencyPerHour);
                 _volume = MindWipeSchedule.ClampVolume(volume);
-                if (_oneShot != null) _oneShot.Volume = _volume;
-                if (_loop != null) _loop.Volume = _volume;
+                ApplyGain();
             }
         }
+
+        private double CurrentGain => ConditioningControlPanel.Services.Audio.MasterVolumeBinding.MindWipeGain(
+            CoreSettings.Current.MasterVolume, _volume);
+
+        private void ApplyGain()
+        {
+            lock (_lock)
+            {
+                var gain = CurrentGain;
+                try { if (_oneShot != null) _oneShot.Volume = gain; } catch { }
+                try { if (_loop != null) _loop.Volume = gain; } catch { }
+            }
+        }
+
+        public void Dispose() { Stop(); _master.Dispose(); }
 
         /// <summary>WPF Timer_Tick: no random clips over a loop.</summary>
         private void Tick()
@@ -142,12 +158,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 if (_clips.Length == 0) return;
                 clip = _clips[_random.Next(_clips.Length)];
-                volume = _volume;
+                volume = CurrentGain;
             }
             IVoice? voice = null;
             voice = _play(clip, volume, false, () => { lock (_lock) if (ReferenceEquals(_oneShot, voice)) _oneShot = null; });
             IVoice? displaced;
-            lock (_lock) { displaced = _oneShot; _oneShot = voice; }
+            lock (_lock) { displaced = _oneShot; _oneShot = voice; ApplyGain(); }
             displaced?.Dispose();
             Log.Debug("MindWipe: Playing {File} at volume {Vol}%", Path.GetFileName(clip), volume * 100);
         }
@@ -164,7 +180,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             IVoice? voice = null;
             // A loop that dies (decode error, device gone) is no longer looping: IsLooping says so.
-            voice = _play(clip, _volume, true, () =>
+            voice = _play(clip, CurrentGain, true, () =>
             {
                 ITimer? dead = null;
                 lock (_lock) if (ReferenceEquals(_loop, voice)) { _loop = null; dead = _cleanSlate; _cleanSlate = null; }
@@ -177,7 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_lock) if (!ReferenceEquals(_loop, voice)) return;
                 CleanSlate?.Invoke(_time.GetElapsedTime(started).TotalSeconds);
             }, null, TimeSpan.FromSeconds(60), Timeout.InfiniteTimeSpan);
-            lock (_lock) { _loop = voice; _cleanSlate = check; }
+            lock (_lock) { _loop = voice; _cleanSlate = check; ApplyGain(); }
             Log.Information("MindWipe: Loop started with {File} at {Vol}% volume", Path.GetFileName(clip), volume * 100);
         }
 

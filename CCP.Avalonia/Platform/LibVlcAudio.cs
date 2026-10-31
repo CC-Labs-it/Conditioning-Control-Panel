@@ -146,12 +146,49 @@ namespace ConditioningControlPanel.Avalonia.Platform
             LayeredAudio.Instance = new LayeredAudio(path => new LayeredAudio.VlcLayerPlayer(_vlc, path));
             CoreAudio.PlayOneShotProvider = (path, volume, tag, started, finished) => PlayOneShot(path, volume, tag, started, finished);
             CoreAudio.PlayStoppableProvider = PlayOneShot;
+            CoreAudio.StopSoundProvider = StopSound;
+            CoreAudio.PlaySoundProvider = (path, volume, started, finished) => PlaySound(path, volume, started, finished);
             // Windows ducking is seeded by StartDuckJournal (App start-up only): a probe or test must never
             // lower the desk's real apps.
             if (!OperatingSystem.IsLinux()) return;
             CoreAudio.DuckProvider = Duck;
             CoreAudio.UnduckProvider = Unduck;
             CoreAudio.DuckGenerationProvider = () => { lock (_duckLock) return _duckGeneration; };
+        }
+
+        private Action? _stopSound;
+        internal void StopSound() => Interlocked.Exchange(ref _stopSound, null)?.Invoke();
+        internal void PlaySound(string path, int volume, Action<TimeSpan>? started, Action? finished, Func<Action, ISoundVoice>? create = null)
+        {
+            StopSound();
+            _stopSound = StartSound(create ?? (ended => NewVoice(path, ended)), volume, started, finished);
+        }
+
+        internal interface ISoundVoice : MindWipePlayer.IVoice
+        {
+            Action<long>? Started { set; }
+            void ApplyPreferredDevice();
+            bool Play();
+        }
+
+        // Device-free lifecycle seam: the same binding drives the native voice and regression tests.
+        internal static Action StartSound(Func<Action, ISoundVoice> create, int volume,
+            Action<TimeSpan>? started, Action? finished)
+        {
+            ConditioningControlPanel.Services.Audio.MasterVolumeBinding? master = null;
+            ISoundVoice? voice = null;
+            void Apply(int level)
+            {
+                if (voice != null) voice.Volume = ConditioningControlPanel.Services.Audio.MasterVolumeBinding.SoundGain(volume, level);
+            }
+            voice = create(() => { master?.Dispose(); Fire(finished); });
+            master = new(Apply);
+            voice.Started = ms => { voice.ApplyPreferredDevice(); Apply(master.Level); started?.Invoke(TimeSpan.FromMilliseconds(ms)); };
+            Apply(master.Level);
+            var stopped = 0;
+            void Stop() { if (Interlocked.Exchange(ref stopped, 1) == 0) { master.Dispose(); voice.Dispose(); } }
+            if (!voice.Play()) Stop();
+            return Stop;
         }
 
         /// <summary>Same contract as WPF's AudioService.PlayOneShot: onStarted gets the clip length
@@ -219,17 +256,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return new Voice(new MediaPlayer(media), media, onEnded);
         }
 
-        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : MindWipePlayer.IVoice
+        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : ISoundVoice
         {
             private int _vol, _done;
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
-            internal Action<long>? Started;
+            public Action<long>? Started { get; set; }
             internal volatile bool Failed;
             public double Volume
             {
                 // Cubic like PlayOneShot; applied off libvlc's thread once the output exists.
                 set { _vol = (int)Math.Round(Math.Cbrt(Math.Clamp(value, 0, 1)) * 100); Apply(); }
             }
+            public void ApplyPreferredDevice() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) { LibVlcAudio.ApplyPreferredDevice(player); player.Volume = _vol; } });
             private void Apply() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) player.Volume = _vol; });
             public bool Play()
             {
@@ -394,6 +432,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>App exit: never leave other apps ducked behind us.</summary>
         internal void Shutdown()
         {
+            StopSound();
             if (_win != null) { _win.Shutdown(); return; }
             lock (_duckLock) { if (_isDucked) ForceUnduck(); }
             Drain();
