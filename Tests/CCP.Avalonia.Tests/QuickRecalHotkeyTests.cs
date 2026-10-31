@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Input;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -473,10 +474,9 @@ public sealed class QuickRecalHotkeyTests
     {
         Init();
         var s = CoreSettings.Current;
-        s.WebcamConsentGiven = false;
-        s.CompanionPrompt.CameraShortcutGlobal = false;
-        s.CompanionPrompt.CameraShortcutKey = "K";
-        s.CompanionPrompt.CameraShortcutModifiers = "Control,Alt";
+        var p = s.CompanionPrompt;
+        var old = (s.WebcamConsentGiven, p.CameraShortcutGlobal, p.CameraShortcutKey, p.CameraShortcutModifiers);
+        (s.WebcamConsentGiven, p.CameraShortcutGlobal, p.CameraShortcutKey, p.CameraShortcutModifiers) = (false, false, "K", "Control,Alt");
         var shell = new MainShellWindow();
         shell.QuickRecalPlatformSupported = true;
         shell.RegisterQuickRecal = (_, _) => null;
@@ -510,7 +510,11 @@ public sealed class QuickRecalHotkeyTests
             held.SetResult(false);
             Assert.False(WebcamTracker.Instance.IsRunning);
         }
-        finally { held.TrySetResult(false); shell.StopQuickRecalHotkey(); shell.Close(); }
+        finally
+        {
+            held.TrySetResult(false); shell.StopQuickRecalHotkey(); shell.Close();
+            (s.WebcamConsentGiven, p.CameraShortcutGlobal, p.CameraShortcutKey, p.CameraShortcutModifiers) = old;
+        }
     });
 
     [Theory]
@@ -519,7 +523,9 @@ public sealed class QuickRecalHotkeyTests
     public Task CameraHotkey_ClosingAfterEnable_DoesNotStartUntilDialogFinished(bool finish) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Init();
-        CoreSettings.Current.WebcamConsentGiven = false;
+        var s = CoreSettings.Current;
+        var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, s.WebcamConsentDate, WebcamTracker.SourceFactory);
+        s.WebcamConsentGiven = false;
         WebcamTracker.SourceFactory = () => new BlinkTrainerSessionTests.BlackFrames();
         var tracker = WebcamTracker.Instance;
         var shell = new MainShellWindow();
@@ -541,7 +547,11 @@ public sealed class QuickRecalHotkeyTests
             await pending;
             Assert.Equal(finish, tracker.IsRunning);
         }
-        finally { await tracker.StopAsync(); shell.Close(); }
+        finally
+        {
+            await tracker.StopAsync(); shell.Close();
+            (s.WebcamConsentGiven, s.WebcamConsentVersion, s.WebcamConsentDate, WebcamTracker.SourceFactory) = old;
+        }
     });
 
     [Fact]
@@ -549,7 +559,7 @@ public sealed class QuickRecalHotkeyTests
     {
         int toggles = 0;
         var grabs = new[] { (45, 12u, (Action)(() => toggles++)) };
-        var held = new HashSet<int>();
+        var held = new Dictionary<int, PanicKeyHold>();
         void Send(int type, long time, (int, int, long) next = default) =>
             X11SummonChord.MatchKeyEvent(grabs, held, type, 45, 12, time, next)?.Invoke();
         Send(2, 100); Send(2, 200); Send(2, 300); // detectable repeat: repeated presses only
@@ -560,6 +570,10 @@ public sealed class QuickRecalHotkeyTests
         Assert.Equal(2, toggles);
         Send(3, 600); Send(2, 700);
         Assert.Equal(3, toggles);
+        for (long t = 800; t < 3000; t += 100) Send(2, t); // held longer than RepeatGap, with repeats refreshing it
+        Assert.Equal(3, toggles);
+        Send(2, 3000 + (long)PanicKeyHold.RepeatGap.TotalMilliseconds); // release lost: next real press recovers
+        Assert.Equal(4, toggles);
     }
 
 }

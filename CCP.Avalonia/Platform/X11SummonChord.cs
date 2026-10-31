@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
+using ConditioningControlPanel.Input;
 using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
 
@@ -148,17 +149,15 @@ internal static class X11SummonChord
         return null;
     }
 
-    // WPF Services/Input/GlobalHotkeyService.cs:108 uses MOD_NOREPEAT. Legacy X11 repeats
-    // synthesize a release immediately followed by a press with the same keycode and timestamp.
+    // WPF Services/Input/GlobalHotkeyService.cs:108 uses MOD_NOREPEAT; Core PanicKeyHold recovers lost releases.
+    // Legacy X11 repeats synthesize a release then a press with the same keycode and timestamp.
     internal static Action? MatchKeyEvent(IEnumerable<(int Code, uint Mask, Action OnPress)> grabs,
-        HashSet<int> held, int type, int code, uint state, long time, (int Type, int Code, long Time) next = default)
+        Dictionary<int, PanicKeyHold> held, int type, int code, uint state, long time, (int Type, int Code, long Time) next = default)
     {
-        if (type == KeyRelease)
-        {
-            if (next != (KeyPress, code, time)) held.Remove(code);
-            return null;
-        }
-        return type == KeyPress && held.Add(code) ? Match(grabs, code, state) : null;
+        if (type == KeyRelease && next != (KeyPress, code, time)) held.Remove(code);
+        if (type != KeyPress) return null;
+        if (!held.TryGetValue(code, out var key)) held[code] = key = new PanicKeyHold();
+        return key.Down(DateTime.UnixEpoch.AddMilliseconds(time)) ? null : Match(grabs, code, state);
     }
 
     private static bool EnsureDisplay()
@@ -190,7 +189,7 @@ internal static class X11SummonChord
     {
         var ev = Marshal.AllocHGlobal(XEventSize);
         var next = Marshal.AllocHGlobal(XEventSize);
-        var held = new HashSet<int>();
+        var held = new Dictionary<int, PanicKeyHold>();
         var pfd = new[] { new PollFd { Fd = fd, Events = 1 /* POLLIN */ }, new PollFd { Fd = _wake[0], Events = 1 } };
         var buf = new byte[16];
         while (true)
