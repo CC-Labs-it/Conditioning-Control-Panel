@@ -62,6 +62,46 @@ public sealed class BubbleOverlayTests
         }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void End_chaos_retires_parked_one_shot_windows_unless_ambient_owns_them(bool ambient) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true;
+            host.Show();
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Single(BubbleOverlay.Field.Bubbles);
+            if (ambient) BubbleOverlay.Start(host);
+            var windows = BubbleOverlay.WindowCount;
+            Assert.True(windows > 0);
+            BubbleOverlay.BeginChaos(host, _ => { });
+            // Model expiry, then run the last frame while Chaos still owns the field.
+            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.OnFrame(System.TimeSpan.FromSeconds(100));
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            Assert.Equal(windows, BubbleOverlay.WindowCount);
+            BubbleOverlay.EndChaos();
+            // No later frame is available to do this cleanup.
+            Assert.Equal(ambient ? windows : 0, BubbleOverlay.WindowCount);
+            Assert.Equal(ambient, BubbleOverlay.IsRunning);
+        }
+        finally
+        {
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop();
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks;
+            host.Close();
+        }
+    });
+
     /// <summary>WPF BubbleService.cs:221 LoadBubbleImage: each Start re-resolves bubble.png through the
     /// active mod, so after a mod switch the next start draws the new mod's sprite, not the cached one.</summary>
     [Fact]

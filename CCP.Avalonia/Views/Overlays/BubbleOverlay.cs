@@ -267,7 +267,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
-            if (_chaosOpenedWindows) { Stop(); return; }
+            // WPF BubbleService.cs:2031, :1388: ending Chaos also retires an idle one-shot driver.
+            if (_chaosOpenedWindows || (_oneShotWindows && Field.Bubbles.Count == 0)) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
         }
 
