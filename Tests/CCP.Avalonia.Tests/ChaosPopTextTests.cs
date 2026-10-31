@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using System.Linq;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Media;
@@ -29,10 +28,11 @@ public sealed class ChaosPopTextTests
 
     // WPF BubbleService.cs:4685/:4918: pressing a treat shows its effect word at its centre.
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public async Task Pressing_a_treat_reaches_the_pooled_overlay_without_an_injected_sink(bool lowFocus, bool scores)
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public async Task Pressing_a_treat_reaches_the_pooled_overlay_without_an_injected_sink(bool lowFocus, bool scores, bool panicBeforeDrain)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -60,6 +60,17 @@ public sealed class ChaosPopTextTests
                             Payload = new FlashPayload()
                         });
                     global::ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                    if (enabled && panicBeforeDrain)
+                    {
+                        Assert.Empty(ChaosPopText.Pool.All); // the pop is still queued
+                        ChaosRunHost.ForceShutdown();
+                        Dispatcher.UIThread.RunJobs();
+                        Assert.Empty(ChaosPopText.Pool.All); // panic must invalidate that pop
+                        ChaosPopText.Show(500, 300, "snap", Colors.Red);
+                        Dispatcher.UIThread.RunJobs();
+                        Assert.Equal("SNAP", Assert.Single(ChaosPopText.Pool.All).LabelText);
+                        return Task.CompletedTask; // later shows still work after teardown
+                    }
                     Dispatcher.UIThread.RunJobs();
                     if (!enabled) { Assert.Empty(ChaosPopText.Pool.All); continue; }
                     Assert.Equal(1 + (lowFocus ? 1 : 0) + (scores ? 1 : 0), ChaosPopText.Pool.All.Count);
@@ -67,7 +78,7 @@ public sealed class ChaosPopTextTests
                         w.LabelText == $"+{(int)ChaosFieldMath.TreatFocusGain(1)} FOCUS");
                     if (scores) Assert.Contains(ChaosPopText.Pool.All, w =>
                         w.LabelText == "+" + ((long)(ChaosRunHost.State.Score - beforeScore)).ToString("N0"));
-                    var word = Assert.Single(ChaosPopText.Pool.All.Where(w => w.LabelText == "SPIRAL"));
+                    var word = Assert.Single(ChaosPopText.Pool.All, w => w.LabelText == "SPIRAL");
                     Assert.True(word.IsVisible);
                     Assert.Equal("SPIRAL", word.LabelText);
                     Assert.Equal(Color.FromRgb(71, 215, 255), ((ISolidColorBrush)word.LabelFill).Color);

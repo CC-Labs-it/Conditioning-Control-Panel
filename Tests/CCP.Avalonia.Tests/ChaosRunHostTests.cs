@@ -624,9 +624,12 @@ public sealed class ChaosRunHostTests
     }
 
     /// <summary>The run's juice hooks recorded in order: labels (PopText), cues (CoreAudio), pulses, shakes.</summary>
+    private static Action<double, double, string, global::Avalonia.Media.Color>? _previousPopText;
+
     private static System.Collections.Generic.List<string> Juice()
     {
         var log = new System.Collections.Generic.List<string>();
+        _previousPopText = ChaosRunHost.PopText;
         ChaosRunHost.PopText = (_, y, w, _) => log.Add("label:" + w);
         ChaosRunHost.PulseFx = (c, s) => log.Add($"pulse:{c.R},{c.G},{c.B}@{s:0.00}");
         ChaosRunHost.ShakeFx = (i, ms) => log.Add($"shake:{i:0.000}/{ms}");
@@ -636,8 +639,17 @@ public sealed class ChaosRunHostTests
 
     private static void Unjuice()
     {
-        ChaosRunHost.PopText = null; ChaosRunHost.PulseFx = null; ChaosRunHost.ShakeFx = null;
+        ChaosRunHost.PopText = _previousPopText; ChaosRunHost.PulseFx = null; ChaosRunHost.ShakeFx = null;
         CoreAudio.PlayOneShotProvider = null;
+    }
+
+    [Fact]
+    public void Juice_restores_the_previous_pop_text_sink()
+    {
+        var previous = ChaosRunHost.PopText;
+        try { Juice(); }
+        finally { Unjuice(); }
+        Assert.Same(previous, ChaosRunHost.PopText);
     }
 
     /// <summary>WPF CompleteDefuse (SNAP, :4577) + the hiss (:1571) + OnDefused's green confirm (:2049);

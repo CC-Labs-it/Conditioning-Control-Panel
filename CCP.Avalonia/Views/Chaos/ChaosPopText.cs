@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     internal sealed class ChaosPopText : Window
     {
         internal static readonly ChaosPopPool<ChaosPopText> Pool = new(ChaosPopTextMotion.POOL_MAX);
+        private static int _generation;
 
         /// <summary>Click-through + invisible + override-redirect at <paramref name="rect"/> (screen
         /// px), before the first map. False = the platform refused; the word is dropped. Test seam.</summary>
@@ -54,10 +55,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             try
             {
                 if (!ChaosPopTextMotion.ShouldShow(text, CoreSettings.Current.ChaosAnnouncerEnabled)) return;
+                int generation = System.Threading.Volatile.Read(ref _generation);
                 Dispatcher.UIThread.Post(() =>
                 {
                     try
                     {
+                        if (generation != System.Threading.Volatile.Read(ref _generation)) return;
                         if (!PlatformCanShow()) return;
                         var w = Pool.Acquire(() => new ChaosPopText(sample: false));
                         w?.Play(anchorXDip, anchorYDip, text, color);   // null = pool exhausted: drop the word
@@ -72,6 +75,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// they die). Inline on the UI thread so teardown leaves nothing behind.</summary>
         public static void ShutdownPool()
         {
+            // WPF :83-94 queues cleanup behind pending shows. Our inline cleanup must
+            // invalidate them first so a queued pop cannot outlive panic or run teardown.
+            System.Threading.Interlocked.Increment(ref _generation);
             void Run()
             {
                 foreach (var w in Pool.All) { try { w.Close(); } catch (Exception ex) { Log.Debug("ChaosPopText close: {E}", ex.Message); } }
