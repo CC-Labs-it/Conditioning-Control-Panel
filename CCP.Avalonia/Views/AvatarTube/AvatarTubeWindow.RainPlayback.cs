@@ -37,6 +37,8 @@ public partial class AvatarTubeWindow
     }
     private void RainSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(AppSettings.AvatarMuted) && IsMuted)
+            RunOnAvatar(MuteRainSpeech);
         if (e.PropertyName is nameof(AppSettings.AvatarGeneration) or nameof(AppSettings.RainPackHash))
             RunOnAvatar(() => { if (!_avatarSetsClosed) _ = RefreshRainPlayback(); });
     }
@@ -56,6 +58,7 @@ public partial class AvatarTubeWindow
             using var stream = OpenRainFile("emotes.json");
             using var map = new StreamReader(stream);
             _rainMap = JObject.Parse(map.ReadToEnd());
+            LoadRainTiming();
             await PlayRainClip(PickRainIdle());
         }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Rain emote playback could not start"); StopRainPlayback(); }
@@ -82,7 +85,7 @@ public partial class AvatarTubeWindow
         var outgoing = this.FindControl<Image>(_rainLayer == 0 ? "ImgAvatarAnimated" : "ImgAvatarAnimatedB")!;
         _rainPlayers[next]?.Dispose();
         var player = _rainPlayers[next] = new RainClipPlayer(image);
-        player.Completed += sender => { if (version == _rainVersion) _ = PlayRainClip(PickRainIdle()); };
+        player.Completed += sender => { if (version == _rainVersion && !_rainTalkActive) { if (_rainSpeechTimer == null) _rainSpeechOwned = false; _ = PlayRainClip(PickRainIdle()); } };
         if (_rainPack != null && _rainPack.Clips.TryGetValue(clip, out var entry))
             await player.LoadStrip(Path.Combine(_rainFolder, entry.File), entry.Frames, entry.Fps);
         else
@@ -95,7 +98,7 @@ public partial class AvatarTubeWindow
             if (++_rainFailures <= 3) _rainFade = DispatcherTimer.RunOnce(() => { if (version == _rainVersion) _ = PlayRainClip(PickRainIdle()); }, TimeSpan.FromMilliseconds(1200));
             return;
         }
-        _rainFailures = 0; _rainClip = clip; _rainLayer = next; image.Tag = clip; ApplyTubeLayoutOffsets(); _poseTimer.Stop(); _imgAvatar.IsVisible = false;
+        _rainFailures = 0; _rainClip = clip; _rainClipTick = RainClock(); _rainLayer = next; image.Tag = clip; ApplyTubeLayoutOffsets(); _poseTimer.Stop(); _imgAvatar.IsVisible = false;
         int fade = ConditioningControlPanel.Services.Safety.GentleVisuals.FadeMs(Math.Max(0, (int?)_rainMap["fadeMs"] ?? 1000));
         image.Transitions = outgoing.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(fade) } };
         image.IsVisible = true; image.Opacity = 1; outgoing.Opacity = 0;
@@ -110,11 +113,13 @@ public partial class AvatarTubeWindow
         if (pool == null || pool.Count == 0 || now - _rainClickTick < 3000) return false;
         if (pool.Count > 1) pool.Remove(_rainClip);
         _rainClickTick = now;
+        CancelRainSpeech();
         _ = PlayRainClip(pool[_random.Next(pool.Count)]!);
         return true;
     }
     private void StopRainPlayback()
     {
+        CancelRainSpeech(); _rainTiming = null;
         ++_rainVersion; _rainFade?.Dispose(); _rainFade = null;
         foreach (var player in _rainPlayers) player?.Dispose();
         Array.Clear(_rainPlayers);
