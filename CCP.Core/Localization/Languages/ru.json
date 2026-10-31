@@ -5981,8 +5981,6 @@
   "rf_skill_early_bird_bimbo_req": "Открой приложение 10 раз до 7 утра",
   "rf_skill_eternal_doll_req": "Достигни 50-го уровня",
   "webcam_device_unnamed": "(устройство без имени)",
-  "webcam_debug_mouth_fmt": "Рот открыт № {0}",
-  "webcam_debug_tongue_fmt": "Язык высунут № {0}",
   "rf_webcam_stopped": "Остановлено",
   "rf_webcam_starting": "Запуск…",
   "rf_webcam_tracking": "Слежу",
