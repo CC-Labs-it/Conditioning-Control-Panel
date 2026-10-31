@@ -79,6 +79,41 @@ public sealed class LoginDeviceCodeTests
             }
         });
 
+    [Theory]
+    [InlineData("en")]
+    [InlineData("de")]
+    public Task ThrowingDeviceCodeStartShowsWpfLoginFailure(string language) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var (oldCodes, oldTell) = (LoginDialog.DeviceCodes, LoginDialog.Tell);
+            var loc = LocalizationManager.Instance;
+            var oldLanguage = loc.CurrentLanguage;
+            string? displayed = null;
+            LoginDialog.DeviceCodes = () => throw new InvalidOperationException("Device-code start failed");
+            LoginDialog.Tell = (_, _, message) => { displayed = message; return Task.CompletedTask; };
+            var dialog = new LoginDialog();
+            try
+            {
+                loc.SetLanguage(language);
+                Click(dialog.FindControl<Button>("BtnLoginDeviceCode")!);
+                await Until(() => displayed != null);
+                Assert.Equal(Loc.Get("login_failed_please_try_again"), displayed);
+                Assert.True(dialog.FindControl<StackPanel>("ProviderPanel")!.IsVisible);
+                Assert.False(dialog.FindControl<StackPanel>("DeviceCodePanel")!.IsVisible);
+                Assert.Null(dialog.Result);
+            }
+            finally
+            {
+                dialog.Close();
+                (LoginDialog.DeviceCodes, LoginDialog.Tell) = (oldCodes, oldTell);
+                loc.SetLanguage(oldLanguage);
+            }
+        });
+
     private sealed class FailedInitiationWire(string error) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)

@@ -846,7 +846,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             catch (Exception ex)
             {
                 Log.Error(ex, "[DeviceCode] Initiate exception");
-                await ShowError(Loc.Get("login_device_failed"));
+                await ShowError(Loc.Get("login_failed_please_try_again"));
             }
         }
 

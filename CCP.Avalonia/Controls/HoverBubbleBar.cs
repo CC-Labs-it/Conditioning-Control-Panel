@@ -19,6 +19,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.UI;
+using Path = Avalonia.Controls.Shapes.Path;
 
 namespace ConditioningControlPanel.Avalonia.Controls
 {
@@ -179,7 +180,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 {
                     Width = BubbleSize - 3,
                     VerticalAlignment = VerticalAlignment.Center,
-                    Child = new global::Avalonia.Controls.Shapes.Path
+                    Child = new Path
                     {
                         Data = mark, Fill = Brushes.White, Stretch = Stretch.Uniform,
                         Height = 15, HorizontalAlignment = HorizontalAlignment.Center,

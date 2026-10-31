@@ -29,14 +29,12 @@ public sealed class HoverBubbleBarTests
     {
         EnsureApp();
         var page = new SettingsTabView();
-        var authoredBar = page.FindControl<HoverBubbleBar>("HomeBubbleBar")!;
+        var bar = page.FindControl<HoverBubbleBar>("HomeBubbleBar")!;
         var discord = page.FindControl<Button>("BtnDiscord")!;
-        authoredBar.Children.Remove(discord);
-        var bar = new HoverBubbleBar { Children = { discord } };
-        var window = new Window { Content = bar };
+        var window = new Window { Content = page };
         try
         {
-            // Drive the initialization hook without laying out unrelated font-dependent controls.
+            // Initialize the page's authored bar without requesting font-dependent layout.
             typeof(HoverBubbleBar).GetMethod("OnInitialized", System.Reflection.BindingFlags.Instance |
                 System.Reflection.BindingFlags.NonPublic)!.Invoke(bar, null);
             Assert.Contains(discord, bar.Bubbles);
