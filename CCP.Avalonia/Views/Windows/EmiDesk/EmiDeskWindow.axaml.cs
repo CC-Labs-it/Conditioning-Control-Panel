@@ -263,9 +263,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private double _resizeStartWidth;
 
         /// <summary>True while a chain is on screen.</summary>
-        // ponytail: the pat faces are the only chain this head plays; the full chain player (EmiChainPlayer, WPF head only;
-        // the chain data is in Core as EmiChains) is wire-win-emi-desk-b.
-        public bool ChainLive => _patFeedback is not null;
+        // Speech and pat feedback are live here. Canon chain playback remains PR #3516.
+        public bool ChainLive => _patFeedback is not null || _speechTimer?.IsEnabled == true;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -895,17 +894,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         /// <summary>Say a line on the locked . / .. / ... cadence.</summary>
-        // ponytail: EmiChains.MakeSay / SayHoldMs / FrameForFace are in Core now; still needs
-        // EmiChainPlayer (WPF head) to play the result.
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
         {
-            done?.Invoke();
+            // WPF EmiDeskWindow.xaml.cs:1048,1076. Canon playback is PR #3516.
+            if (PresentationActive || _closingForGood) return;
+            StopIdleBeats();
+            CancelChain();
+            _speech = EmiChains.MakeSay(line, reactionFace, EmiChains.SayHoldMs(line));
+            _speechIndex = 0;
+            _speechDone = done;
+            _speechTimer ??= new DispatcherTimer();
+            _speechTimer.Tick -= OnSpeechTick;
+            _speechTimer.Tick += OnSpeechTick;
+            PaintSpeechFrame();
         }
 
         /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
         {
             StopPatFeedback();
+            StopSpeech();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -1302,8 +1310,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 // The two buttons agree about the entrance: if the left one may cut it, so may this
                 // one, or the ring would open over a chain that is still animating her body.
-                FinishSummon();
-                CancelChain();
+                // WPF EmiDeskWindow.xaml.cs:1629: only a live summon is cut here.
+                if (_summonChainLive) { FinishSummon(); CancelChain(); }
 
                 RaiseActivity();
                 PlayClickSquash();
@@ -1472,8 +1480,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// rather than building a second panel.</para>
         ///
         /// <para>Bookmark and the lifetime open count are the router's own (EmiBook.cs Open):
-        /// <c>EmiState.BookBookmark</c> / <c>NoteCodexOpened</c> in Core. ponytail: still missing
-        /// <c>NoteSideChanged</c> (the bubble dodge in EmiDeskWindow.Bubble.cs).</para>
+        /// <c>EmiState.BookBookmark</c> / <c>NoteCodexOpened</c> in Core. Bubble placement
+        /// re-reads the live book side after open, close and placement changes.</para>
         /// </summary>
         internal void OpenBook(string? cardId = null)
         {
@@ -1494,6 +1502,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.Closed += OnBookClosed;
                 _book = win;
                 win.OpenBook(cardId);
+                LayoutBubble();
             }
             catch (Exception ex)
             {
@@ -1507,6 +1516,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             var win = _book;
             _book = null;
+            LayoutBubble();
             if (win == null) return;
             try
             {
@@ -1520,6 +1530,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             if (!ReferenceEquals(sender, _book)) return;
             _book = null;
+            LayoutBubble();
         }
 
         /// <summary>Clear the resize hold, whichever way the drag ended.</summary>
@@ -2606,8 +2617,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <inheritdoc cref="LayoutProp"/>
         private void HideProp() { }
 
-        /// <summary>ponytail: EmiDeskWindow.Bubble.cs - drops the voice hooks.</summary>
-        private void TearDownVox() { }
+        /// <summary>Stop speech on teardown. Voice playback remains part B.</summary>
+        private void TearDownVox() => StopSpeech();
 
         /// <summary>WPF EmiDeskWindow.xaml.cs:1832 - the pat sound.</summary>
         private void PlayPatSfx() => EmiSfx.Pat();

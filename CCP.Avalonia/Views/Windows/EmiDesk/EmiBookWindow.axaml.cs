@@ -1037,20 +1037,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             }
         }
 
-        /// <summary>
-        /// Her line in the margin: a comment ON the card, not a reading of it.
-        ///
-        /// <para>ponytail: the OWNER is here now, so this is one member away. What is missing is
-        /// <c>EmiDeskWindow.SpeakLine</c> and the <c>LineDraw</c> record, and those are blocked on
-        /// <c>EmiLineEngine</c> + <c>EmiChainPlayer</c> (WPF head).
-        /// EmiLineEngine is in Core now (CCP.Core/Services/EmiDesk, WPF seeds its ask probes;
-        /// unset here means no offers);
-        /// EmiChains is still WPF-only, its whole head coupling is Player's DispatcherTimer, one
-        /// seam swap. Meanwhile the widget's <c>Say</c> and
-        /// <c>PlayChain</c> are still no-ops on this head, so a line handed over would be swallowed
-        /// rather than spoken. Priority 2, keyed "book.margin.&lt;id&gt;", face from the card - all
-        /// of that is data this stub already carries, so only the delivery is missing.</para>
-        /// </summary>
+        /// <summary>WPF EmiBookWindow.xaml.cs:967: a card comment through her speech path.</summary>
         private void SpeakMargin()
         {
             try
@@ -1059,7 +1046,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 if (_index < 0 || _index >= cards.Count) return;
                 var card = cards[_index];
                 if (string.IsNullOrWhiteSpace(card.MarginEn)) return;
-                Log.Verbose("[EmiDesk] book margin {Id}: {Line} {Face}", card.Id, card.MarginEn, card.MarginFace);
+                _owner?.SpeakBookMargin(card);
             }
             catch (Exception ex)
             {
@@ -1176,12 +1163,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 _sweepHost.RenderTransformOrigin = new RelativePoint(_onHerLeft ? 1 : 0, 0.5, RelativeUnit.Relative);
 
-                // ponytail: needs EmiBook.NoteSideChanged (her bubble dodges to the side the panel
-                // is NOT on). The event itself is trivial, but its one subscriber is the bubble's
-                // LayoutBubble dodge in EmiDeskWindow.Bubble.cs, which is not ported on this head -
-                // so an event raised here today would have nobody listening.
-                if (wasOnHerLeft != _onHerLeft)
-                    Log.Debug("[EmiDesk] book changed side, now {Side}", SideOfHer);
+                // WPF EmiBookWindow.xaml.cs:1093: re-read after placement settles.
+                if (wasOnHerLeft != _onHerLeft) _owner?.LayoutBubble();
             }
             catch (Exception ex)
             {
