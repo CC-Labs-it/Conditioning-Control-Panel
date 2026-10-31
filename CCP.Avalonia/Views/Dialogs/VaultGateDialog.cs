@@ -60,9 +60,10 @@ public sealed class VaultGateDialog : Window
     private readonly ExclusiveFeature? _feature;
     private readonly int _tier;
     private readonly Action _signIn;
-    // WPF 5265111bc: prices from the plan list, dollars headline (the euro second line ports with sync7-conversion).
-    private readonly PriceCurrency _currency = VaultOffer.HeadlineCurrency();
-    private readonly List<(StackPanel Slot, int Tier, bool Compact, bool Yearly)> _priceSlots = new();
+    // WPF 5265111bc: one plan snapshot drives prices and checkout links.
+    private PlanSet _plans = PlanCatalog.Current;
+    private PriceCurrency _currency => VaultOffer.HeadlineCurrency(_plans);
+    private readonly List<(StackPanel Slot, int Tier, bool Compact, bool Yearly, bool Hints)> _priceSlots = new();
     private bool _yearly;
     private StackPanel? _proofSlot, _codeSlot;
 
@@ -103,7 +104,7 @@ public sealed class VaultGateDialog : Window
         var dialog = new VaultGateDialog(feature, Math.Max(tier, feature?.Tier ?? 1), signIn);
         dialog.BuildOffer();
         Present(dialog, owner);
-        _ = dialog.FillSaleAsync();
+        _ = dialog.FillPlansAsync();
         _ = dialog.FillAsyncBits();
         return dialog;
     }
@@ -114,7 +115,7 @@ public sealed class VaultGateDialog : Window
         var dialog = new VaultGateDialog(null, 1, signIn);
         dialog.BuildEnding(grantUntilUtc);
         Present(dialog, owner);
-        _ = dialog.FillSaleAsync();
+        _ = dialog.FillPlansAsync();
         return dialog;
     }
 
@@ -143,11 +144,10 @@ public sealed class VaultGateDialog : Window
         _proofSlot = new StackPanel();
         _body.Children.Add(_proofSlot);
         PaintProof();
-        _body.Children.Add(Price(_tier));
-        _body.Children.Add(YearlyHint(_tier));
+        _body.Children.Add(Price(_tier, hints: true));
 
         var open = PrimaryButton(Loc.Get(lab ? "vaultgate_open_lab" : "vaultgate_open_vault"));
-        open.Click += (_, _) => { OpenPatreon("gate"); Close(); };
+        open.Click += (_, _) => { OpenPlan(_tier, "gate"); Close(); };
         _body.Children.Add(open);
         _body.Children.Add(CardLink(lab, "gate"));
 
@@ -215,6 +215,25 @@ public sealed class VaultGateDialog : Window
         _codeSlot.Children.Add(link);
     }
 
+    internal async Task FillPlansAsync()
+    {
+        try
+        {
+            var url = InviteApi.DefaultBaseUrl();
+            // Null disables reads on this head; Core interprets it as the default server.
+            _plans = url == null ? PlanCatalog.Current : await PlanCatalog.GetAsync(url);
+            if (_plans.FromServer)
+            {
+                Sale = _plans.Sale;
+                _saleReadUtc = DateTime.UtcNow;
+            }
+            foreach (var (slot, tier, compact, yearly, hints) in _priceSlots)
+                PaintPrice(slot, tier, compact, yearly, hints);
+            if (!_plans.FromServer) await FillSaleAsync();
+        }
+        catch (Exception ex) { Log.Debug("[VaultGate] plans refresh failed: {E}", ex.GetType().Name); }
+    }
+
     /// <summary>Reads the sale switch (cached five minutes); any failure means no sale.</summary>
     private async Task FillSaleAsync()
     {
@@ -229,7 +248,7 @@ public sealed class VaultGateDialog : Window
         }
         catch (Exception ex) { Log.Debug("[VaultGate] sale read failed: {E}", ex.GetType().Name); }
         Sale = sale;
-        foreach (var (slot, tier, compact, yearly) in _priceSlots) PaintPrice(slot, tier, compact, yearly);
+        foreach (var (slot, tier, compact, yearly, hints) in _priceSlots) PaintPrice(slot, tier, compact, yearly, hints);
     }
 
     private void PaintProof()
@@ -279,7 +298,7 @@ public sealed class VaultGateDialog : Window
         var choose = SmallButton(Loc.GetF("vaultgate_choose", tierName));
         choose.Margin = new Thickness(0, 12, 0, 0);
         choose.HorizontalAlignment = HorizontalAlignment.Stretch;
-        choose.Click += (_, _) => { OpenPatreon(lab ? "compare-lab" : "compare-vault"); Close(); };
+        choose.Click += (_, _) => { OpenPlan(tier, lab ? "compare-lab" : "compare-vault"); Close(); };
         col.Children.Add(choose);
         col.Children.Add(CardLink(lab, lab ? "compare-lab" : "compare-vault"));
         return new Border { Background = RowBg, BorderBrush = lab ? Gold : Edge, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(14), Child = col };
@@ -301,10 +320,9 @@ public sealed class VaultGateDialog : Window
         });
         _body.Children.Add(Para(Loc.GetF("vaultgate_ending_until", grantUntilUtc.ToLocalTime().ToString("ddd d MMM, HH:mm")),
             Warn, 12.5, new Thickness(0, 10, 0, 0)));
-        _body.Children.Add(Price(1));
-        _body.Children.Add(YearlyHint(1));
+        _body.Children.Add(Price(1, hints: true));
         var keep = PrimaryButton(Loc.Get("vaultgate_ending_keep"));
-        keep.Click += (_, _) => { OpenPatreon("ending"); Close(); };
+        keep.Click += (_, _) => { OpenPlan(1, "ending"); Close(); };
         _body.Children.Add(keep);
         _body.Children.Add(CardLink(false, "ending"));
         var let = Link(Loc.Get("vaultgate_ending_let_close"));
@@ -316,10 +334,10 @@ public sealed class VaultGateDialog : Window
 
     // ============================== bits ==============================
 
-    private static void OpenPatreon(string from)
+    private void OpenPlan(int tier, string from)
     {
-        Log.Information("[VaultGate] open Patreon from {From}", from);
-        if (!Launch(PatreonUrl)) Log.Warning("[VaultGate] Patreon link refused or failed");
+        Log.Information("[VaultGate] open plan {Tier} from {From}", tier, from);
+        if (!Launch(_plans.For(tier).PatreonUrl)) Log.Warning("[VaultGate] checkout link refused or failed");
     }
 
     /// <summary>The other way to pay, under every Patreon button: the site's card / PayPal checkout (WPF CardLink).</summary>
@@ -328,14 +346,14 @@ public sealed class VaultGateDialog : Window
         var link = Link(Loc.Get("vaultgate_or_card"));
         link.Margin = new Thickness(0, 8, 0, 0);
         if (link.Content is TextBlock t) t.TextAlignment = TextAlignment.Center;   // WPF CardLink: wrapped lines centred
-        link.Click += (_, _) => { OpenCard(lab ? "prime" : "basic", from); Close(); };
+        link.Click += (_, _) => { OpenCard(lab ? 2 : 1, from); Close(); };
         return link;
     }
 
-    private static void OpenCard(string plan, string from)
+    private void OpenCard(int tier, string from)
     {
-        Log.Information("[VaultGate] open card checkout ({Plan}) from {From}", plan, from);
-        if (!Launch(string.Format(CardUrlFormat, plan))) Log.Warning("[VaultGate] card checkout link refused or failed");
+        Log.Information("[VaultGate] open card checkout ({Plan}) from {From}", tier, from);
+        if (!Launch(PlanCatalog.WebUrlFor(_plans.For(tier), "panel"))) Log.Warning("[VaultGate] card checkout link refused or failed");
     }
 
     private static Control Chip(string text, IBrush? tint) => new Border
@@ -395,20 +413,20 @@ public sealed class VaultGateDialog : Window
         return list;
     }
 
-    private Control Price(int tier, bool compact = false, bool yearly = false)
+    private Control Price(int tier, bool compact = false, bool yearly = false, bool hints = false)
     {
         var slot = new StackPanel { Margin = new Thickness(0, compact ? 8 : 12, 0, compact ? 0 : 4) };
-        _priceSlots.Add((slot, tier, compact, yearly));
-        PaintPrice(slot, tier, compact, yearly);
+        _priceSlots.Add((slot, tier, compact, yearly, hints));
+        PaintPrice(slot, tier, compact, yearly, hints);
         return slot;
     }
 
     /// <summary>The price, or during a first-month sale the sale price beside the struck normal one,
     /// the "then" line and the end date. Yearly never shows a sale.</summary>
-    private void PaintPrice(StackPanel slot, int tier, bool compact, bool yearly)
+    private void PaintPrice(StackPanel slot, int tier, bool compact, bool yearly, bool hints)
     {
         slot.Children.Clear();
-        var price = VaultOffer.PriceFor(tier, _currency);
+        var price = VaultOffer.PriceFor(tier, _currency, _plans);
         var sale = VaultSale.AppliesTo(Sale, tier, DateTime.UtcNow, yearly) ? Sale : null;
         var line = new WrapPanel();
         line.Children.Add(new TextBlock
@@ -433,16 +451,30 @@ public sealed class VaultGateDialog : Window
             Foreground = Dim, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 5), TextWrapping = TextWrapping.Wrap,
         });
         slot.Children.Add(line);
-        if (sale == null) return;
+        if (sale == null)
+        {
+            if (hints && !yearly) AddHints(slot, tier, price);
+            return;
+        }
         slot.Children.Add(Para(Loc.GetF("vaultgate_sale_line", sale.Percent, VaultOffer.Money(price.MonthlyCents, _currency)),
             Good, compact ? 12 : 12.5, new Thickness(0, 2, 0, 0)));
         if (VaultSale.EndsText(sale) is string ends)
             slot.Children.Add(Para(Loc.GetF("vaultgate_sale_ends", ends), Dim, compact ? 11.5 : 12, new Thickness(0, 2, 0, 0)));
     }
 
-    private Control YearlyHint(int tier)
-        => Para(Loc.GetF("vaultgate_yearly_hint", VaultOffer.Money(VaultOffer.PriceFor(tier, _currency).YearlyCents, _currency)),
-            Gold, 12, new Thickness(0, 0, 0, 10));
+    private void AddHints(StackPanel slot, int tier, TierPrice price)
+    {
+        if (_currency == PriceCurrency.Usd)
+        {
+            var eur = VaultOffer.PriceFor(tier, PriceCurrency.Eur, _plans);
+            slot.Children.Add(Para(Loc.GetF("vaultgate_price_eur", VaultOffer.Money(eur.MonthlyCents, PriceCurrency.Eur)),
+                Dim, 12, new Thickness(0)));
+        }
+        var off = PlanCatalog.YearlyOffPercent(_plans.For(tier));
+        if (off > 0)
+            slot.Children.Add(Para(Loc.GetF("vaultgate_yearly_hint", VaultOffer.Money(price.YearlyCents, _currency), off),
+                Gold, 12, new Thickness(0, 2, 0, 6)));
+    }
 
     /// <summary>Monthly / Yearly pills on the compare face. Rebuilds the face on a switch.</summary>
     private Control BillingSwitch()
@@ -455,7 +487,8 @@ public sealed class VaultGateDialog : Window
             {
                 CornerRadius = new CornerRadius(99), Padding = new Thickness(12, 5, 12, 5),
                 Background = on ? RowBg : Brushes.Transparent, BorderBrush = on ? Gold : Edge, BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = Loc.Get(yearly ? "vaultgate_billing_yearly" : "vaultgate_billing_monthly"), Foreground = on ? Gold : Muted, FontSize = 12, FontWeight = FontWeight.SemiBold },
+                Child = new TextBlock { Text = yearly ? Loc.GetF("vaultgate_billing_yearly", PlanCatalog.YearlyOffPercent(_plans.Basic))
+                    : Loc.Get("vaultgate_billing_monthly"), Foreground = on ? Gold : Muted, FontSize = 12, FontWeight = FontWeight.SemiBold },
             });
             pill.Margin = new Thickness(0, 0, 6, 0);
             var choice = yearly;
