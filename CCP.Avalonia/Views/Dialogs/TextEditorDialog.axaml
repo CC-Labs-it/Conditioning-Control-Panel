@@ -45,6 +45,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -80,8 +81,11 @@
             </Button>
         </Grid>
 
+        <TextBlock Grid.Row="2" x:Name="TxtSilentHint" Text="{Binding LocSilentHint}" IsVisible="False"
+                   FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}" Margin="2,0,0,8"/>
+
         <!-- Item List -->
-        <Border Grid.Row="2" Background="{StaticResource PanelBgBrush}" CornerRadius="8">
+        <Border Grid.Row="3" Background="{StaticResource PanelBgBrush}" CornerRadius="8">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="5">
                 <ItemsControl x:Name="ItemList">
                     <ItemsControl.ItemTemplate>
@@ -94,6 +98,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <CheckBox Grid.Column="0" Theme="{StaticResource ItemCheckBox}"
                                               IsChecked="{Binding IsEnabled, Mode=TwoWay}"
@@ -101,7 +106,11 @@
                                     <TextBlock Grid.Column="1" Text="{Binding Text}"
                                                Foreground="White" FontSize="13"
                                                VerticalAlignment="Center"/>
-                                    <fx:IconGlyph x:Name="BtnRemove" Grid.Column="2" Kind="Dismiss" Foreground="{DynamicResource TextMutedBrush}"
+                                    <fx:IconGlyph x:Name="SilentMark" Grid.Column="2" Kind="SpeakerMute" Size="12"
+                                               Foreground="{DynamicResource TextMutedBrush}" Opacity="0.7"
+                                               VerticalAlignment="Center" Margin="8,0,10,0" IsVisible="{Binding IsSilent}"
+                                               ToolTip.Tip="{Binding $parent[Window].((vm:TextEditorViewModel)DataContext).LocSilentTooltip}"/>
+                                    <fx:IconGlyph x:Name="BtnRemove" Grid.Column="3" Kind="Dismiss" Foreground="{DynamicResource TextMutedBrush}"
                                                Size="14" VerticalAlignment="Center"
                                                Cursor="Hand"
                                                ToolTip.Tip="{Binding $parent[Window].((vm:TextEditorViewModel)DataContext).LocTooltipRemoveItem}">
@@ -124,7 +133,7 @@
         </Border>
 
         <!-- Footer Buttons -->
-        <Grid Grid.Row="3" Margin="0,15,0,0">
+        <Grid Grid.Row="4" Margin="0,15,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>

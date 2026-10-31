@@ -41,6 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private readonly TextBox _txtNewItem;
         private readonly ItemsControl _itemList;
         private bool _hasChanges = false;
+        private Func<string, bool>? _hasVoice;
         private bool? _dialogResult;
 
         /// <summary>
@@ -89,6 +90,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _itemList.AddHandler(InputElement.PointerPressedEvent, ItemList_PointerPressed);
         }
 
+        public void MarkSilentLines(Func<string, bool> hasVoice)
+        {
+            _hasVoice = hasVoice;
+            foreach (var item in _items)
+                item.IsSilent = ConditioningControlPanel.Services.SpokenClipRule.IsSilent(item.Text, hasVoice);
+            RefreshSilentHint();
+        }
+
+        private void RefreshSilentHint() => this.FindControl<TextBlock>("TxtSilentHint")!.IsVisible =
+            _hasVoice != null && ConditioningControlPanel.Services.SpokenClipRule.AnySilent(_items.Select(x => x.Text), _hasVoice);
+
         private async void AddNewItem()
         {
             var text = (_txtNewItem.Text ?? "").Trim().ToUpperInvariant();
@@ -104,9 +116,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 return;
             }
 
-            var added = new TextItem { Text = text, IsEnabled = true };
+            var added = new TextItem { Text = text, IsEnabled = true,
+                IsSilent = _hasVoice != null && ConditioningControlPanel.Services.SpokenClipRule.IsSilent(text, _hasVoice) };
             added.PropertyChanged += TextItem_Changed;
             _items.Add(added);
+            RefreshSilentHint();
             _txtNewItem.Clear();
             _txtNewItem.Focus();
             _hasChanges = true;
@@ -154,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 if (confirm == true)
                 {
                     _items.Remove(item);
+                    RefreshSilentHint();
                     _hasChanges = true;
                 }
                 return;
@@ -197,6 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 {
                     _items.Remove(item);
                 }
+                RefreshSilentHint();
                 _hasChanges = true;
             }
         }
@@ -328,6 +344,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         public string LocTooltipRemoveItem => Loc.Get("tooltip_remove_item");
         public string LocBtnCancel => Loc.Get("btn_cancel");
         public string LocBtnSave => Loc.Get("btn_save");
+        public string LocSilentHint => Loc.Get("hint_silent_lines");
+        public string LocSilentTooltip => Loc.Get("tooltip_silent_line");
     }
 
     /// <summary>
@@ -340,6 +358,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private string _text = "";
         private bool _isEnabled = true;
         private bool _isSelected = false;
+
+        private bool _isSilent;
+        public bool IsSilent
+        {
+            get => _isSilent;
+            set { _isSilent = value; OnPropertyChanged(nameof(IsSilent)); }
+        }
 
         public string Text
         {

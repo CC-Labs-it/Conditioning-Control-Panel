@@ -31,6 +31,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static int _gen;   // bumped by StopAll: anything scheduled before it is stale
 
         /// <summary>WPF <c>_audioPath</c>: BaseDirectory/Resources/sub_audio.</summary>
+        internal static bool HasRecordedVoice(string text) => FindRecordedVoice(text) != null;
+
+        private static string? FindRecordedVoice(string text) => SubliminalWhisper.FindLinkedAudio(text,
+            SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath), SubAudioDir, App.Mods?.ActiveModId);
+
         internal static string SubAudioDir => Path.Combine(AppContext.BaseDirectory, "Resources", "sub_audio");
 
         /// <summary>Test seams: the card, and the clock every delay runs on.</summary>
@@ -109,8 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool Whisper(string text)
         {
             var s = CoreSettings.Current;
-            var path = SubliminalWhisper.FindLinkedAudio(text, SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath),
-                SubAudioDir, App.Mods?.ActiveModId);
+            var path = FindRecordedVoice(text);
             if (path == null || !s.SubAudioAudible) return false;
 
             var entry = Volatile.Read(ref _gen);   // a Stop after this drops this whisper and its card
