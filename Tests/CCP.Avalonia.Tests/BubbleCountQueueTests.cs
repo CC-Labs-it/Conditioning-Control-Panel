@@ -24,10 +24,49 @@ namespace CCP.Avalonia.Tests;
 public sealed class BubbleCountQueueTests
 {
     [Fact]
+    public Task VideoTestNowWaitsForTheBubbleRound() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var clock = new Clock();
+        var b = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => Array.Empty<string>());
+        var video = new MandatoryVideoScheduler(
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance,
+            clock, () => new[] { "/none/clip.mp4" });
+        var (oldBubble, oldVideo, oldFreeze) =
+            (CoreEngine.BubbleCount, CoreEngine.Video, CoreSubliminal.BambiFreezeProvider);
+        CoreEngine.BubbleCount = b;
+        CoreEngine.Video = video;
+        CoreSubliminal.BambiFreezeProvider = () => { };
+        try
+        {
+            b.Trigger(forceTest: true);
+            Assert.True(b.IsBusy); // the round owns even its Freeze lead-in
+            var card = new VideoFeatureControl();
+            card.FindControl<Button>("BtnTestVideo")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(video.IsPlaying);
+            b.ForceCleanup();
+            clock.Advance(BubbleCountScheduler.QueuePoll);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(video.IsPlaying); // pre-roll begins only after the game releases the screen
+        }
+        finally
+        {
+            video.Stop(); b.ForceCleanup();
+            (CoreEngine.BubbleCount, CoreEngine.Video, CoreSubliminal.BambiFreezeProvider) =
+                (oldBubble, oldVideo, oldFreeze);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task TestNowOverALockCardWaitsForIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -75,7 +114,7 @@ public sealed class BubbleCountQueueTests
     public Task StrictGameWithoutLibVlcIsSkippedNotRetried() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 

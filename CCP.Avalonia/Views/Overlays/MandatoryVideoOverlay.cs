@@ -79,6 +79,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private DispatcherTimer? _graceTimer, _guard;
         private readonly Stopwatch _sinceShow = new();
 
+        // WPF VideoService.cs:2305: the game owns its lead-in, answer and retry cards too.
+        public bool BubbleCountActive => CoreEngine.BubbleCount?.IsBusy == true;
+
         private MandatoryVideoOverlay() => Scheduler = new MandatoryVideoScheduler(this)
         {
             DurationOf = LengthOf,

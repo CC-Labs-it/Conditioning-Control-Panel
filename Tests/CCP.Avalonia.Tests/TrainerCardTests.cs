@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -62,7 +64,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 LocalizationManager.Instance.SetLanguage("en");
@@ -150,7 +152,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -159,20 +161,37 @@ public sealed partial class AccountSeedTests
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
                 Dispatcher.UIThread.RunJobs();
+                using var frame = w.CaptureRenderedFrame(); // settle layout and the hit-test tree before taking row coordinates
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
+                var name = ((LeaderboardRow)row.DataContext!).DisplayName;
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                // Headless MouseDown/Up render on every call and timestamp from the host clock.
+                // Slow Windows frames can turn the intended double-click into two single clicks.
+                // Hit-test the real row, then feed press/release pairs with explicit click counts
+                // through Avalonia's gesture recognizer, not a hand-raised DoubleTapped event.
+                var target = Assert.IsAssignableFrom<Control>(w.InputHitTest(at));
+                Assert.Same(row.DataContext, target.DataContext);
+                var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+                void Click(int count, ulong timestamp)
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    target.RaiseEvent(new PointerPressedEventArgs(target, pointer, w, at, timestamp,
+                        new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
+                        KeyModifiers.None, count));
+                    target.RaiseEvent(new PointerReleasedEventArgs(target, pointer, w, at, timestamp + 1,
+                        new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.LeftButtonReleased),
+                        KeyModifiers.None, MouseButton.Left));
+                    pointer.Capture(null);
                 }
+                Click(1, 1000);
+                Assert.Same(row.DataContext, list.SelectedItem);
+                Assert.False(w.ProfilePage!.IsEffectivelyVisible); // a single click must not navigate
+                Click(2, 1100);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
-                var name = ((LeaderboardRow)row.DataContext!).DisplayName;
                 Assert.True(card.IsEffectivelyVisible);                          // the Profile tab is up
                 Assert.Equal(name, card.FindControl<TextBox>("TxtProfileSearch")!.Text);
                 Assert.Equal(name, card.FindControl<TextBlock>("TxtProfileViewerName")!.Text);
