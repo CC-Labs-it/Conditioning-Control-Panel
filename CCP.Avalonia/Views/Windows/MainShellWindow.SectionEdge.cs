@@ -61,8 +61,8 @@ public partial class MainShellWindow
     private void UpdateEdgeLap()
     {
         if (_edgeLifts == null) return;
-        _edgeLevel = SectionEdgeMotion.EffectiveLevel(AmbientFxCanvas.Env.Level, AmbientFxCanvas.Env.AllowAmbientLoops);
-        bool run = SectionEdgeMotion.ShouldRun(_edgeLevel, IsActive, IsVisible, WindowState == WindowState.Minimized);
+        _edgeLevel = SectionEdgeLiftRules.EffectiveLevel(AmbientFxCanvas.Env.Level, AmbientFxCanvas.Env.AllowAmbientLoops);
+        bool run = SectionEdgeLiftRules.ShouldRun(_edgeLevel, IsActive, IsVisible, WindowState == WindowState.Minimized);
         if (!run) { _edgeLap?.Stop(); _edgeLap = null; }
         if (_edgeLevel != MotionLevel.Full) { _edgeSeconds = 0; PlaceEdgeLift(0); }
         else if (run && _edgeLap == null)
@@ -82,7 +82,7 @@ public partial class MainShellWindow
             var lift = _edgeLifts[side];
             lift.IsVisible = _edgeLevel != MotionLevel.Off;
             var mask = (LinearGradientBrush)lift.OpacityMask!;
-            var position = SectionEdgeMotion.Position(side, seconds, _edgeLevel);
+            var position = SectionEdgeLiftRules.Position(side, seconds, _edgeLevel);
             for (int stop = 0; stop < 3; stop++) mask.GradientStops[stop].Offset = 0.4 + stop * 0.1 + position;
         }
     }

@@ -4,7 +4,7 @@ using ConditioningControlPanel.Models;
 namespace ConditioningControlPanel.Services.UI;
 
 /// <summary>Clockwise thin-strip lift from WPF SectionEdgeRules (8f4bb7814, 3f94b09af).</summary>
-public static class SectionEdgeMotion
+public static class SectionEdgeLiftRules
 {
     public const double LapSeconds = 12;
 
