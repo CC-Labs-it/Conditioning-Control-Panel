@@ -61,6 +61,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.Keyboard, R, null, "⌨", "📐"); M(IconKind.Window, R, null, "🪟"); M(IconKind.ArrowCircleUp, R, null, "⬆");
             M(IconKind.ArrowDown, R, null, "⬇", "↓");
 
+            // Named token for the Core Inbox row data; the head renders it through IconGlyph.
+            M(IconKind.Cloud, R, null, nameof(IconKind.Cloud));
+
             // D2 media, files, data
             M(IconKind.Play, F, null, "▶");
             M(IconKind.Pause, F, null, "⏸");

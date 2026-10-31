@@ -31,6 +31,63 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class ModChoiceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task WelcomeBackOffersTheBackupsMissingFlavourAndHonoursTheChoice(bool restore) => Run(async (shell, svc, server) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("welcome-flavour-");
+        var backup = new AppSettings { ActiveModId = BuiltInMods.BambiSleepId, FlashEnabled = false };
+        var settings = CoreSettings.Current;
+        settings.FlashEnabled = true;
+        var old = CoreAccount.UnifiedUserId;
+        settings.UnifiedId = CoreAccount.UnifiedUserId = "welcome-test";
+        ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.ResetForTests();
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Shell = () => shell;
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.NewBackup = () => WelcomeBackRestoreTests.ClientFor(backup);
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Choose = content =>
+            {
+                Assert.True(content.Plan.ShowFlavourRow);
+                Assert.Equal("mod-bambi", content.Plan.FlavourPackId);
+                Assert.False(string.IsNullOrWhiteSpace(content.BackupModName));
+                Assert.Equal(content.BackupModName, content.FlavourModName);
+                Assert.False(string.IsNullOrWhiteSpace(content.FlavourSizeText));
+                return Task.FromResult((restore, true));
+            };
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Arm(true, dir.FullName);
+            await ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.TryOfferAsync("test");
+            await WaitFor(() => svc.IsInstalled("mod-bambi") && AvApp.Mods!.ActiveModId == BuiltInMods.BambiSleepId);
+            Assert.Equal(!restore, CoreSettings.Current.FlashEnabled);
+            Assert.Equal(1, server.PackGets);
+            Assert.Null(PendingModChoice.Pending);
+            shell.ActivateChosenMod(BuiltInMods.CCPDefaultId, MainShellWindow.ModChoiceTrigger.Immediate);
+            await ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.BringFlavourAsync(BuiltInMods.BambiSleepId, "mod-bambi");
+            Assert.Equal(BuiltInMods.BambiSleepId, AvApp.Mods!.ActiveModId); // installed: immediate, no second download
+            Assert.Equal(1, server.PackGets);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.ResetForTests();
+            CoreAccount.UnifiedUserId = old;
+            dir.Delete(true);
+        }
+    });
+
+    // WPF App.xaml.cs:5183-5214: a welcome-back choice uses the wizard's pending activation path.
+    [Fact]
+    public Task WelcomeBackFlavourRecordsDownloadsAndActivates() => Run(async (shell, svc, server) =>
+    {
+        var task = ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.BringFlavourAsync(BuiltInMods.BambiSleepId, "mod-bambi");
+        Assert.Equal(BuiltInMods.BambiSleepId, PendingModChoice.Pending);
+        await task;
+        await WaitFor(() => AvApp.Mods!.ActiveModId == BuiltInMods.BambiSleepId);
+        Assert.True(svc.IsInstalled("mod-bambi"));
+        Assert.Equal(1, server.PackGets);
+        Assert.Null(PendingModChoice.Pending);
+    });
+
     [Fact]
     public Task HeaderComboSwitchesTheModSavesAndRethemes() => Run(async (shell, svc, server) =>
     {

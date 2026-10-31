@@ -234,6 +234,21 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>WPF App.xaml.cs:5249-5305: startup restore keeps this install's
+        /// one-shots and the higher lifetime/companion history, as well as the normal local fields.</summary>
+        public static void PrepareWelcomeBackRestore(AppSettings current, AppSettings restored)
+        {
+            KeepLocal(current, restored);
+            restored.Welcomed = current.Welcomed;
+            restored.FirstRunAssetsPromptShown = current.FirstRunAssetsPromptShown;
+            restored.TotalConditioningMinutes = Math.Max(current.TotalConditioningMinutes, restored.TotalConditioningMinutes);
+            foreach (var (id, progress) in current.CompanionProgressData)
+                if (!restored.CompanionProgressData.TryGetValue(id, out var previous)
+                    || progress.Level > previous.Level
+                    || (progress.Level == previous.Level && progress.TotalXPEarned > previous.TotalXPEarned))
+                    restored.CompanionProgressData[id] = progress;
+        }
+
         // ---- the server (WPF BackupSettingsAsync / GetSettingsBackupInfoAsync / RestoreSettingsFromCloudAsync) ----
 
         /// <summary>The "Backup now" upload (WPF BackupSettingsAsync with force: true). False when there is

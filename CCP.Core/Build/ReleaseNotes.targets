@@ -1,0 +1,28 @@
+<Project>
+  <!-- WPF Services/Update/UpdateService.cs:29-301 owns the release copy; extract only its literal. -->
+  <UsingTask TaskName="GenerateSharedReleaseNotes" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <SourceFile ParameterType="System.String" Required="true" />
+      <OutputFile ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        var match = Regex.Match(File.ReadAllText(SourceFile), "public const string CurrentPatchNotes = (@\"(?:\"\"|[^\"])*\");");
+        if (!match.Success) { Log.LogError("WPF CurrentPatchNotes must be a verbatim string literal."); return false; }
+        var code = "namespace ConditioningControlPanel\n{\n    public static class ReleaseNotes\n    {\n        public const string Current = " + match.Groups[1].Value + ";\n    }\n}\n";
+        Directory.CreateDirectory(Path.GetDirectoryName(OutputFile));
+        if (!File.Exists(OutputFile) || File.ReadAllText(OutputFile) != code)
+            File.WriteAllText(OutputFile, code);
+      ]]></Code>
+    </Task>
+  </UsingTask>
+  <Target Name="GenerateReleaseNotes" BeforeTargets="CoreCompile">
+    <GenerateSharedReleaseNotes SourceFile="$(MSBuildProjectDirectory)/../ConditioningControlPanel/Services/Update/UpdateService.cs" OutputFile="$(IntermediateOutputPath)ReleaseNotes.g.cs" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)ReleaseNotes.g.cs" />
+      <FileWrites Include="$(IntermediateOutputPath)ReleaseNotes.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -15,6 +15,8 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class WelcomeBackContentTests
 {
+    private static string SourcePath([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+
     [Theory]
     [InlineData("2026-09", "2026-08", true)]
     [InlineData("2026-09", "2026-09", false)]
@@ -49,6 +51,11 @@ public sealed class WelcomeBackContentTests
             await WelcomeBackOffer.TryOfferAsync("content test");
 
             Assert.NotNull(offered);
+            var wpf = Path.Combine(Path.GetDirectoryName(SourcePath())!, "../../ConditioningControlPanel/Services/Update/UpdateService.cs");
+            var match = System.Text.RegularExpressions.Regex.Match(File.ReadAllText(wpf), "public const string CurrentPatchNotes = (@\"(?:\"\"|[^\"])*\");");
+            Assert.True(match.Success);
+            var literal = match.Groups[1].Value;
+            Assert.Equal(literal.Substring(2, literal.Length - 3).Replace("\"\"", "\""), ReleaseNotes.Current);
             Assert.Equal(ReleaseNotes.Current, offered!.PatchNotes);
             Assert.StartsWith("v7.1.15", offered.PatchNotes);
             Assert.Equal(seasonShown, !string.IsNullOrWhiteSpace(offered.SeasonLine));
