@@ -193,12 +193,14 @@ public sealed class DashboardGiftPresentationTests
     [InlineData(-3)]
     public Task RestingInTheGutterKeepsTheOfferFace(int edge) => WithView((window, view) =>
     {
-        CoreSettings.Current.MotionLevel = MotionLevel.Full;
-        CoreSettings.Current.PerformanceMode = false;
+        var settings = CoreSettings.Current;
+        var saved = (settings.MotionLevel, settings.PerformanceMode, settings.DailyGiftLastRevealDate);
         var oldTime = BeatLoop.Time;
         var time = new SteppedTime();
         try
         {
+            settings.MotionLevel = MotionLevel.Full;
+            settings.PerformanceMode = false;
             BeatLoop.Time = time;
             var host = view.MysteryFlipHost;
             var pointer = new Pointer(6, PointerType.Mouse, true);
@@ -215,20 +217,25 @@ public sealed class DashboardGiftPresentationTests
             Assert.True(view.CardMystery.IsVisible);
             Assert.False(view.MysteryRevealFace.IsVisible);
         }
-        finally { view.ResetGift(); BeatLoop.Time = oldTime; }
+        finally
+        {
+            view.ResetGift(); BeatLoop.Time = oldTime;
+            (settings.MotionLevel, settings.PerformanceMode, settings.DailyGiftLastRevealDate) = saved;
+        }
     });
 
     [Fact]
     public Task UnopenedBreathUsesSharedTimeAndParksOnMotionGateAndDetach() => WithView((window, view) =>
     {
         var settings = CoreSettings.Current;
-        settings.DailyGiftLastRevealDate = "";
-        settings.MotionLevel = MotionLevel.Full;
-        settings.PerformanceMode = false;
+        var saved = (settings.DailyGiftLastRevealDate, settings.MotionLevel, settings.PerformanceMode, settings.GentleVisuals, settings.AutoPerformanceMode);
         var oldTime = BeatLoop.Time;
         var time = new SteppedTime();
         try
         {
+            settings.DailyGiftLastRevealDate = "";
+            settings.MotionLevel = MotionLevel.Full;
+            settings.PerformanceMode = false;
             BeatLoop.Time = time;
             settings.GentleVisuals = false;
             settings.AutoPerformanceMode = false;
@@ -257,7 +264,11 @@ public sealed class DashboardGiftPresentationTests
             Assert.False(view.MysteryRevealFace.IsVisible);
             Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, view.MysteryFlipHost));
         }
-        finally { view.ResetGift(); BeatLoop.Time = oldTime; }
+        finally
+        {
+            view.ResetGift(); BeatLoop.Time = oldTime;
+            (settings.DailyGiftLastRevealDate, settings.MotionLevel, settings.PerformanceMode, settings.GentleVisuals, settings.AutoPerformanceMode) = saved;
+        }
     });
     [Fact]
     public Task PanicRegistryClosesTheRevealedGift() => AvaloniaTestDispatcher.RunAsync(() =>
@@ -265,10 +276,12 @@ public sealed class DashboardGiftPresentationTests
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        var settings = CoreSettings.Current;
+        var saved = (settings.MotionLevel, settings.DailyGiftLastRevealDate);
         var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
         try
         {
+            settings.MotionLevel = MotionLevel.Off;
             shell.Show();
             var view = shell.SettingsPage!;
             var host = view.MysteryFlipHost;
@@ -281,7 +294,11 @@ public sealed class DashboardGiftPresentationTests
             Assert.False(view.MysteryRevealFace.IsVisible);
             Assert.True(view.CardMystery.IsVisible);
         }
-        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        finally
+        {
+            shell.Close(); Dispatcher.UIThread.RunJobs();
+            (settings.MotionLevel, settings.DailyGiftLastRevealDate) = saved;
+        }
         return Task.CompletedTask;
     });
 }

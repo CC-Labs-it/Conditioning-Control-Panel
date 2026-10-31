@@ -51,6 +51,7 @@ public sealed class HomeMarqueeTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var s = CoreSettings.Current;
+            var (oldProvider, oldDaily) = (CoreSettings.ServiceProvider, global::ConditioningControlPanel.Avalonia.App.DailyFree);
             var saved = (s.MarqueeMessage, s.BrowserVideoMuted, s.ForceShowBambiCloud, s.DiscordRichPresenceEnabled,
                 s.HasLinkedDiscord, s.MotionLevel, s.PerformanceMode, s.OfflineMode);
             var (oldClient, oldFree, oldShell, oldTime) =
@@ -66,6 +67,8 @@ public sealed class HomeMarqueeTests
             }
             finally
             {
+                CoreSettings.ServiceProvider = oldProvider;
+                global::ConditioningControlPanel.Avalonia.App.DailyFree = oldDaily;
                 w.Close();
                 MainShellWindow.AnnouncementClient = oldClient;
                 CoreEntitlement.IsFreeTodayProvider = oldFree;
