@@ -61,6 +61,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) return Open.FirstOrDefault(w => w.IsDtrh && w.IsActive);
         }
 
+        private IDisposable? _dtrhCloseWatchdog;
+
+        /// <summary>WPF App.xaml.cs:356 and DtrhHostService.cs:250-266: retire the
+        /// old mod's host, allowing a ready page 1200 ms to send its final snapshot.</summary>
+        internal static void CloseDtrhForModSwitch()
+        {
+            GameWindow? host;
+            lock (Open) host = Open.FirstOrDefault(w => w.IsDtrh);
+            if (host == null) return;
+            if (host.DtrhReady)
+            {
+                host._dtrhExiting = true;
+                host.Post(new { type = "end-run", reason = "host" });
+                host._dtrhCloseWatchdog = DispatcherTimer.RunOnce(host.Close, TimeSpan.FromMilliseconds(1200));
+            }
+            else host.Close();
+        }
+
         // WPF PostKeptEscape (:119): GameWindow.Escape.cs, shared with the race, the board and Breakout.
 
         /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>
@@ -204,6 +222,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void DisposeDtrh()
         {
             if (!IsDtrh) return;
+            _dtrhCloseWatchdog?.Dispose();
+            _dtrhCloseWatchdog = null;
             DtrhRemoteMedia.CopiesReady -= OnDtrhCopiesReady;
             if (DtrhRunCloseRule.ShouldBookOnClose(_dtrhRunActive, _dtrhLastProgress != null))
             {
