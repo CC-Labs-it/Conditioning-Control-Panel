@@ -71,6 +71,35 @@ public sealed class FriendsLinkPortTests
     });
 
     [Fact]
+    public Task PersistentPageCanCreateANewLinkAfterSigningIn() => Run(async () =>
+    {
+        var oldService = FriendsHead.Service;
+        FriendsDrawer? drawer = null;
+        try
+        {
+            FriendsHead.Service = null;
+            string? copied = null;
+            drawer = new FriendsDrawer(null, asPage: true)
+            { CopyText = text => { copied = text; return Task.FromResult(true); } };
+            Assert.Null(drawer.Service);
+            var newLink = Tag<Button>(drawer, "friends-new-link")!;
+            var (svc, wire) = Service();
+            FriendsHead.Service = svc;
+            drawer.OnOpened();
+            drawer.ToggleAddBox(true);
+            Assert.Same(svc, drawer.Service);
+            Assert.Same(newLink, Tag<Button>(drawer, "friends-new-link"));
+            Assert.True(newLink.IsEnabled);
+            Click(drawer, "friends-new-link");
+            await Until(() => copied != null);
+            Assert.Equal(FriendsLinkRules.UrlFor(Token), copied);
+            Assert.Equal(new[] { "link_revoke", "link" }, wire.Ops.Where(o => o is "link_revoke" or "link"));
+            Assert.Equal(Loc.Get("friends_link_new_done"), Tag<TextBlock>(drawer, "friends-add-result")!.Text);
+        }
+        finally { drawer?.OnClosed(); FriendsHead.Service = oldService; }
+    });
+
+    [Fact]
     public Task DrawerOffersCopyAndNewLinkAndAcceptsPastedTokens() => Run(async () =>
     {
         var (svc, _) = Service();

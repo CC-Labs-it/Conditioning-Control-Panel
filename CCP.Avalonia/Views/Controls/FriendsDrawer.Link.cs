@@ -58,7 +58,6 @@ public sealed partial class FriendsDrawer
     {
         var link = Pill(Loc.Get("friends_link_new"), Brushes.Transparent, Pink, "friends-new-link");
         link.Padding = new Thickness(0);
-        link.IsEnabled = _svc?.Available == true;
         link.Click += async (_, _) => await NewLinkAsync();
         return new WrapPanel { Margin = new Thickness(2, 6, 0, 0), Tag = "friends-new-link-line", Children =
         { Label(Loc.Get("friends_link_new_line") + " ", 11.5, Muted, Display), link } };
