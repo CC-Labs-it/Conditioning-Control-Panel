@@ -50,6 +50,7 @@ public sealed class Sync7AudioTests
     [Theory]
     [InlineData(0)]
     [InlineData(25)]
+    [InlineData(32)]
     [InlineData(100)]
     public void MantraTonesUseMasterGainWithoutOpeningAWindow(int master)
     {
@@ -77,11 +78,12 @@ public sealed class Sync7AudioTests
     [Theory]
     [InlineData(0)]
     [InlineData(25)]
+    [InlineData(32)]
     [InlineData(100)]
     public Task MantraDroneAndTonesStartAtMasterVolume(int master) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previous = CoreAudio.PlayOneShotProvider;
         var opener = MantraWindow.DroneOpener;
@@ -117,7 +119,7 @@ public sealed class Sync7AudioTests
     public Task IdleDroneFollowsVolumeChangesAndUnhooksOnStop(bool panic) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var opener = MantraWindow.DroneOpener;
         var settings = CoreSettings.Current;
