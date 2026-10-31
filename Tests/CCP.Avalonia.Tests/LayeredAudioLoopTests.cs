@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
 
@@ -43,6 +44,23 @@ public sealed class LayeredAudioLoopTests
         }
     }
 
+    [Fact]
+    public void Voice_routes_the_saved_device_when_playing_starts()
+    {
+        var audio = new LibVlcAudio("--aout=dummy");
+        var dir = Directory.CreateTempSubdirectory("ccp-voice-"); var wav = Path.Combine(dir.FullName, "voice.wav");
+        WriteSilentWav(wav, ms: 6000);
+        using var routed = new ManualResetEventSlim(); string? selected = null;
+        CoreSettings.Current.AudioOutputDeviceId = "headphones";
+        audio.RouteVoice = p => { selected = LibVlcAudio.PreferredDevice(CoreSettings.Current.AudioOutputDeviceId,
+            p.OutputDevice, ["headphones"]); routed.Set(); };
+        using var voice = audio.CreateVoice(wav, .5, false, () => { });
+        try {
+            Assert.NotNull(voice); Assert.False(routed.IsSet);
+            Assert.True(voice.Play()); Assert.True(routed.Wait(5000)); Assert.Equal("headphones", selected);
+        }
+        finally { voice?.Dispose(); try { dir.Delete(true); } catch { } }
+    }
     private static void WriteSilentWav(string path, int ms)
     {
         const int rate = 8000;

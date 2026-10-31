@@ -27,6 +27,7 @@ public sealed class MindWipeTests
         public double Vol;
         public Action Ended = () => { };
         public double Volume { set => Vol = value; }
+        public bool Play() => true;
         public void Dispose() => Disposed = true;
     }
 
