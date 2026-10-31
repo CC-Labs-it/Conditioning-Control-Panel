@@ -22,13 +22,13 @@ public class ProfileSyncPrizesFeedTests
     private string? _account = Me;
     private readonly List<OwnershipChangedEventArgs> _events = new();
     private readonly OwnershipService _ownership;
-    private readonly ProfileSyncService.PrizesFeed _feed;
+    private readonly PrizesFeed _feed;
 
     public ProfileSyncPrizesFeedTests()
     {
         _ownership = new OwnershipService(() => _account, null, invoke => invoke());
         _ownership.OwnershipChanged += (_, e) => _events.Add(e);
-        _feed = new ProfileSyncService.PrizesFeed(() => _ownership, () => _account, invoke => invoke());
+        _feed = new PrizesFeed(() => _ownership, () => _account, invoke => invoke());
     }
 
     private static PrizesBlock Block(long revision, params string[] grants)
@@ -139,7 +139,7 @@ public class ProfileSyncPrizesFeedTests
         var ownership = new OwnershipService(() => account, null, invoke => { if (onUi) invoke(); else queue.Enqueue(invoke); });
         var heard = new HashSet<string>();
         ownership.OwnershipChanged += (_, e) => { heard.UnionWith(e.Added); heard.ExceptWith(e.Removed); };
-        var feed = new ProfileSyncService.PrizesFeed(() => ownership, () => account, queue.Enqueue);
+        var feed = new PrizesFeed(() => ownership, () => account, queue.Enqueue);
 
         // A Task.Run sync answers on a pool thread...
         feed.Apply(Me, Me, Block(3, PrizeGrants.JackpotRemix), "V2 sync");
