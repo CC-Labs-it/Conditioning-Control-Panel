@@ -138,6 +138,64 @@ public sealed partial class GameWindowTests
     public void Glassroad_Signing_Refusals(string method, string path, string body)
         => Assert.False(GlassroadHostRules.TrySign(method, path, body, "u_1", out _, out _));
 
+    [Fact]
+    public void Glassroad_OwnershipAndToys_KeepShopClosed()
+    {
+        var grants = new[] { "cos.kart.body.petal", "cos.other", "cos.kart.body.petal", "cos.kart." + new string('x', 65) };
+        var init = GlassroadHostRules.InitFrame("u", "Kit", 2, false, 1, 1, grants, true);
+        Assert.Equal(new[] { "cos.kart.body.petal" }, init["identity"]!["grants"]!.Values<string>());
+        Assert.True((bool)init["caps"]!["toysConnected"]!);
+        Assert.False((bool)init["caps"]!["prizeCounter"]!);
+        Assert.Equal("owned", (string?)GlassroadHostRules.OwnedFrame(grants)["type"]);
+        Assert.Equal(64, GlassroadHostRules.KartGrants(Enumerable.Range(0, 100).Select(i => "cos.kart." + i)).Count);
+        Assert.Equal(JTokenType.Null, GlassroadHostRules.InitFrame(null, "Kit", 0, false, 1, 1, grants)["identity"]!.Type);
+    }
+
+    [Fact]
+    public void Glassroad_InviteNamesKnownCourseOnly()
+    {
+        var item = new ConditioningControlPanel.Services.Friends.InboxItem("a",
+            ConditioningControlPanel.Services.Friends.SendKind.Invite, "u", "Kit", null, null,
+            ConditioningControlPanel.Services.Friends.InviteDestination.Race, null, null,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(1)) { Track = "keep" };
+        Assert.Contains("The Keep", ConditioningControlPanel.Avalonia.Platform.FriendsLanding.KnockLine(item));
+        item = item with { Track = "unknown" };
+        Assert.DoesNotContain("unknown", ConditioningControlPanel.Avalonia.Platform.FriendsLanding.KnockLine(item));
+    }
+
+    [Fact]
+    public void Glassroad_OneDayEventPerWindow_PanicStopsRaceBed() => RunGlassroad("1", (_, _, _) =>
+    {
+        var oldNote = GameWindow.GlassroadNoteEvent;
+        var oldHaptics = CoreHaptics.Service;
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        using var haptics = new HapticService(new ConditioningControlPanel.Models.HapticSettings { Enabled = true });
+        var notes = new List<string>();
+        try
+        {
+            GameWindow.GlassroadNoteEvent = notes.Add;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreHaptics.Service = haptics;
+            GameWindow.Launch(GameWindow.GlassroadId);
+            GameWindow.Launch(GameWindow.GlassroadId);
+            Assert.Equal(new[] { "e_race3d" }, notes);
+            haptics.SetLayer(ConditioningControlPanel.Services.Haptics.Core.HapticLayer.Race, 0.8);
+            Assert.Equal(0.8, haptics.GetLayer(ConditioningControlPanel.Services.Haptics.Core.HapticLayer.Race));
+            GameWindow.CloseAllForPanic();
+            Assert.Equal(0, haptics.GetLayer(ConditioningControlPanel.Services.Haptics.Core.HapticLayer.Race));
+            Assert.Null(GameWindow.OpenForTests(GameWindow.GlassroadId));
+            GameWindow.Launch(GameWindow.GlassroadId);
+            Assert.Equal(2, notes.Count);
+        }
+        finally
+        {
+            GameWindow.CloseAllForPanic();
+            GameWindow.GlassroadNoteEvent = oldNote;
+            CoreHaptics.Service = oldHaptics;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+        }
+    });
+
     // ---- the window ----
 
     /// <summary>Door shut: the page cannot be opened and the race tile stays hidden without a track. Door open: the

@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.Haptics;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
@@ -45,6 +46,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return false;
         }
 
+        internal static Action<string> GlassroadNoteEvent { get; set; } = key => App.FeatureDayLog?.Note(key);
+
         private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
         private bool _grOpen, _grEarlyInitSent, _grPinged;
         private DateTime _grLastBeatUtc = DateTime.UtcNow, _grLastProgressUtc = DateTime.UtcNow;
@@ -65,6 +68,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _grWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _grWatch.Tick += (_, _) => CheckGlassroadWatch(DateTime.UtcNow);
             _grWatch.Start();
+            PrizeOwnership.Changed += OnGlassroadOwned;
+            _grHaptics = CoreHaptics.Service;
+            if (_grHaptics != null) _grHaptics.ConnectionChanged += OnGlassroadToys;
+            try { GlassroadNoteEvent(ConditioningControlPanel.Models.SeasonFeatureKeys.ToDayLogEvent(
+                ConditioningControlPanel.Models.SeasonFeatureKeys.Race3d)!); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { FriendsHead.Service?.EnterActivity(PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("GlassroadHost: launched");
         }
@@ -74,11 +82,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_grOpen) return;
             _grOpen = false;
+            PrizeOwnership.Changed -= OnGlassroadOwned;
+            if (_grHaptics != null) _grHaptics.ConnectionChanged -= OnGlassroadToys;
+            _grHaptics = null;
+            GlassroadHapticDirector.Stop();
             try { _grWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _grWatch = null;
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("GlassroadHost: closed");
         }
+
+        private HapticService? _grHaptics;
+        private static bool GlassroadToysConnected => CoreSettings.Current.Haptics is { Enabled: true }
+            && CoreHaptics.Service is { IsConnected: true };
+        private void OnGlassroadOwned() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_grOpen && !_closing) Post(GlassroadHostRules.OwnedFrame(PrizeOwnership.Grants));
+        });
+        private void OnGlassroadToys(object? sender, bool connected) => Dispatcher.UIThread.Post(() =>
+        {
+            if (_grOpen && !_closing) Post(new { type = "toys", connected = GlassroadToysConnected });
+        });
 
         /// <summary>The init frame, straight out (this head has no ready queue).</summary>
         internal void PostGlassroadInit()
@@ -89,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var uid = CoreAccount.UnifiedUserId;
                 bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(PbpAuthToken());
                 Post(GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed));
+                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, PrizeOwnership.Grants, GlassroadToysConnected));
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
         }
@@ -105,6 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF OnPageMessage. True = claimed; boot-error and log fall through to the shell frames.</summary>
         private bool HandleGlassroad(JObject o)
         {
+            if (_closing) return true;
             _grLastProgressUtc = DateTime.UtcNow;
             var type = (string?)o["type"];
             try
@@ -128,6 +153,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         _grLastBeatUtc = DateTime.UtcNow;
                         _grPinged = false;
                         return true;
+                    case "toy":
+                    case "toy-bed":
+                    case "toy-stop":
+                        GlassroadHapticDirector.OnPageMessage(o);
+                        return true;
+                    case "open-prize-counter":
+                        return true; // B3: no shop on this head.
                     case "net":
                         OnGlassroadNet(o);
                         return true;
