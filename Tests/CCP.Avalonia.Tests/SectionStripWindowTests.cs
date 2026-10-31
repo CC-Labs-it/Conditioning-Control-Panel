@@ -50,7 +50,9 @@ public sealed class SectionStripWindowTests
             host.Show();
             strip.Show(NavSections.Studio, "presets");
             host.UpdateLayout();
+            var bursts = strip.BurstsFired;
             Click(strip.PillFor("justdrop")!);
+            Assert.Equal(bursts, strip.BurstsFired);
             Assert.Equal("justdrop", strip.ConfirmingKey);
             Assert.Equal("presets", strip.ActivePillKey);
             Assert.Equal(0, requests);
@@ -71,6 +73,7 @@ public sealed class SectionStripWindowTests
             yes.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, yes, new Pointer(1, PointerType.Mouse, true), yes, default, 0, new PointerPointProperties(), KeyModifiers.None));
             Assert.Equal(1, yes.Opacity);
             Click(Answer(strip, false));
+            Assert.Equal(bursts, strip.BurstsFired);
             Assert.Null(strip.ConfirmingKey);
             Assert.Equal(0, requests);
             Click(strip.PillFor("justdrop")!);
@@ -81,6 +84,7 @@ public sealed class SectionStripWindowTests
             Assert.Null(strip.ConfirmingKey);
             Click(strip.PillFor("justdrop")!);
             Click(Answer(strip, true));
+            Assert.Equal(bursts + (level == MotionLevel.Off ? 0 : 1), strip.BurstsFired);
             Assert.Null(strip.ConfirmingKey);
             Assert.Equal(1, requests);
             Assert.Equal("presets", strip.ActivePillKey);

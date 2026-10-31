@@ -177,7 +177,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             var tab = _confirmTab;
             CloseConfirm();
-            if (open && tab != null) TabRequested?.Invoke(tab);
+            if (open && tab != null) { FxOnChosen(tab); TabRequested?.Invoke(tab); }
         }
 
         /// <summary>WPF ConfirmButton: own template (a rounded Border that dims to 0.85 on hover), hand

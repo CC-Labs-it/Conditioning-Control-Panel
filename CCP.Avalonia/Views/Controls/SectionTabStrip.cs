@@ -466,8 +466,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // Launchers and windows open something else; the page on screen keeps its pill.
             if (tab.Kind is NavTabKind.Tab or NavTabKind.Zone) SetActive(tab.Key, animate: true);
             if (focus) PillFor(tab.Key)?.Focus();
-            FxOnChosen(tab);
             if (tab.Kind == NavTabKind.Window) { AskBeforeOpening(tab); return; }
+            FxOnChosen(tab);
             TabRequested?.Invoke(tab);
         }
 
