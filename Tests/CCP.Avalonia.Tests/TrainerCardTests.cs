@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -62,7 +65,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 LocalizationManager.Instance.SetLanguage("en");
@@ -150,7 +153,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -164,16 +167,37 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                // Headless MouseDown/Up render between calls and timestamp from a Stopwatch. A
+                // slow Windows frame can exceed the double-click interval. Keep real hit-testing
+                // and gesture recognition, but supply input time independently of rendering time.
+                var presses = new List<int>();
+                list.AddHandler(InputElement.PointerPressedEvent, (_, e) => presses.Add(e.ClickCount), RoutingStrategies.Tunnel);
+                // Avalonia 12 hides these platform members from its reference API. Only the
+                // test clock changes; the headless helpers still render, hit-test and route input.
+                var inputProperty = w.PlatformImpl!.GetType().GetProperty("Input")!;
+                var input = (Action<RawInputEventArgs>)inputProperty.GetValue(w.PlatformImpl)!;
+                var timestampProperty = typeof(RawInputEventArgs).GetProperty("Timestamp")!;
+                ulong timestamp = 1000;
+                inputProperty.SetValue(w.PlatformImpl, (Action<RawInputEventArgs>)(e =>
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    timestampProperty.SetValue(e, timestamp++);
+                    input(e);
+                }));
+                try
+                {
+                    for (var i = 0; i < 2; i++)
+                    {
+                        w.MouseDown(at, MouseButton.Left);
+                        w.MouseUp(at, MouseButton.Left);
+                    }
                 }
+                finally { inputProperty.SetValue(w.PlatformImpl, input); }
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
                 var name = ((LeaderboardRow)row.DataContext!).DisplayName;
                 Assert.True(card.IsEffectivelyVisible);                          // the Profile tab is up
+                Assert.Equal(new[] { 1, 2 }, presses);                            // two real presses recognized as a double-click
                 Assert.Equal(name, card.FindControl<TextBox>("TxtProfileSearch")!.Text);
                 Assert.Equal(name, card.FindControl<TextBlock>("TxtProfileViewerName")!.Text);
                 // The double-click search costs one card board GET.
