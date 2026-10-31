@@ -6,8 +6,7 @@
 // sync6-nav-rail-c added the edge spur, the art tint (navtint), the label glow, the 160 ms halo
 // fade, NavBadges pills, the rich row tooltip and ChromeFx's hover nudge (NudgeNavIcon).
 // ponytail: not yet here: the coin depth (BuildNavCoin, press travel, tilt, specular), the
-// rail shadow (PaintDepthRail) - lane
-// wire-shell-nav-rail-b; the possession reroute seam (WPF PossessionReroute, written only by
+// possession reroute seam (WPF PossessionReroute, written only by
 // Services/Possession/Effects/MisrouteEffect.cs - that effect has no writer on this head). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
 // Social pill stays down until the Lobby service lands.
 
@@ -86,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (_navRailReady) return;
                 CacheNavSectionRows();
+                if (Named<Rectangle>("NavRailShadow") is { } shadow) shadow.Width = DepthLaw.RailShadowPx;
                 RegisterSectionShortcuts();
                 // WPF :122. Per-window subscriber, so it leaves with the window (P41/P68).
                 NavBadges.Changed += OnNavBadgeChanged;
@@ -191,6 +191,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PaintNavRowActive(row);
                 _navSectionRows.Add(row);
             }
+        }
+
+        // WPF MainWindow.NavRail.cs:486-494 and Controls/NavRail/NavRailRules.cs:262-266.
+        // The wash owns the hue; like WPF this static shadow changes at once, even with motion Off.
+        private void PaintDepthRail(Color hue)
+        {
+            if (Named<Rectangle>("NavRailShadow") is not { } shadow) return;
+            shadow.Fill = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), 0xBF / 255.0)), 0),
+                    new GradientStop(Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), 0)), 1),
+                },
+            };
         }
 
         private static Color WithAlpha(Color c, byte a) => Color.FromArgb(a, c.R, c.G, c.B);

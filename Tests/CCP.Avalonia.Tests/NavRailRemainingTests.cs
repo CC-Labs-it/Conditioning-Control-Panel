@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -20,9 +21,12 @@ public sealed class NavRailRemainingTests
 {
     private static void Run(Action<MainShellWindow> body) => AvaloniaTestDispatcher.Run(() =>
     {
+        // Use the desktop font setup so isolated Linux runs can construct the shell without Segoe UI.
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previous = CoreMods.MakeModAwareProvider;
         var language = LocalizationManager.Instance.CurrentLanguage;
         var motion = CoreSettings.Current.MotionLevel;
@@ -42,6 +46,35 @@ public sealed class NavRailRemainingTests
             CoreSettings.Current.MotionLevel = motion;
             LocalizationManager.Instance.SetLanguage(language);
             Dispatcher.UIThread.RunJobs();
+        }
+    });
+
+    [Fact]
+    public void RailShadowFollowsUserNavigationAndDoesNotInterceptThePage() => Run(w =>
+    {
+        var shadow = w.Named<global::Avalonia.Controls.Shapes.Rectangle>("NavRailShadow")!;
+        Assert.NotNull(shadow);
+        Assert.Equal(DepthLaw.RailShadowPx, shadow.Width);
+        Assert.False(shadow.IsHitTestVisible);
+        Assert.Equal(1, Grid.GetColumn(shadow));
+        Assert.Equal(1, Grid.GetRow(shadow));
+        Assert.Equal(5, Grid.GetRowSpan(shadow));
+        Assert.Equal(HorizontalAlignment.Left, shadow.HorizontalAlignment);
+        Assert.Equal(59, shadow.ZIndex);
+        Assert.True(shadow.Bounds.Height > 0);
+        foreach (var section in new[] { NavSections.Studio, NavSections.Play, NavSections.Home })
+        {
+            var button = w.NavSectionRowsForTests.Single(r => r.Section == section).Button;
+            button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(section, NavSections.SectionForTab(w.CurrentTab));
+            var brush = Assert.IsType<LinearGradientBrush>(shadow.Fill);
+            Assert.Equal(new RelativePoint(0, 0, RelativeUnit.Relative), brush.StartPoint);
+            Assert.Equal(new RelativePoint(1, 0, RelativeUnit.Relative), brush.EndPoint);
+            Assert.Equal(new[] { 0.0, 1.0 }, brush.GradientStops.Select(s => s.Offset));
+            var hue = NavStripPaint.Accent(section);
+            Assert.Equal(Color.FromUInt32(DepthLaw.ShadowColor(hue, 0xBF / 255.0)), brush.GradientStops[0].Color);
+            Assert.Equal(Color.FromUInt32(DepthLaw.ShadowColor(hue, 0)), brush.GradientStops[1].Color);
         }
     });
 
