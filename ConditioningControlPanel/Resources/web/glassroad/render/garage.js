@@ -12,6 +12,7 @@ import {dressKart,riderOnly,VEHICLE_MECHANISMS} from './wardrobe.js';
 import {createEmiSkin} from './emiSkin.js';
 import {garageArrows} from './garageArrows.js';
 import {garageUi} from '../hud/garage.js';
+import {statBars,TYPE_LABELS} from '../sim/kartStats.js';
 import {createGarageNav} from '../hud/garageNav.js';
 import {KARTS,OUTFITS,STORAGE,loadGarage,cleanGarage,stepKart,routeTo,raceLook,lockedKarts,ownedKarts,ownedLooks,wearPick} from '../hud/garageState.js';
 import {loadRecord} from '../meta/record.js';
@@ -25,7 +26,7 @@ import {cascadeIn} from './worldFeel.js';
 const STEP=2*Math.PI/KARTS.length,RING=2.35*KARTS.length/8;
 /** `owned()` = the account's Prize Counter grants (meta/owned.js); only owned, earned or free karts are selectable,
  * and the shop outfits, paints, umbrella and trail are worn only when owned. `counter`: the host opens the Prize Counter. */
-export async function createGarage({art,renderer,canvas,action,sound,track,laps,trackId='threshold',online=true,changeTrack,onProgress,owned:ownedGrants=()=>[],counter=false}) {
+export async function createGarage({art,renderer,canvas,action,sound,track,laps,trackId='threshold',online=true,changeTrack,onProgress,owned:ownedGrants=()=>[],counter=false,feel}) {
   const base=art?.model('emi-teacup-kart');
   if(!base||KARTS.some(([id])=>!art.model('emi-vehicle-'+id)))return null;
   let storage;try{storage=localStorage;}catch{}
@@ -66,7 +67,8 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   const arrows=garageArrows(scene),ray=new T.Raycaster(),pointer=new T.Vector2(),particles=[];
   const particleGeo=new T.OctahedronGeometry(.014),particleMaterial=new T.MeshBasicNodeMaterial({color:0xffd4ae});
   for(const arrow of arrows.arrows)style.apply(arrow.root);
-  const ui=garageUi({change,select,customize,trackId,online,counter,deny:()=>sound('menu-deny'),changeTrack:id=>changeTrack?.(id),action:name=>{if(!moving&&!viewBusy){sound('menu-ok');action(name);}},hover:(dir,on)=>arrows.hover(dir,on)});ui.track(track,laps);
+  const barsOf=id=>{const bars=statBars(feel,id);return {...bars,word:TYPE_LABELS[bars.type]||''};};
+  const ui=garageUi({change,select,customize,trackId,online,counter,barsOf,deny:()=>sound('menu-deny'),changeTrack:id=>changeTrack?.(id),action:name=>{if(!moving&&!viewBusy){sound('menu-ok');action(name);}},hover:(dir,on)=>arrows.hover(dir,on)});ui.track(track,laps);
   function save(){try{storage?.setItem(STORAGE,JSON.stringify(state));}catch{}}
   function paint(){skin.set(state);ui.paint(state,{custom:custom||view>0,busy:!!moving||viewBusy,locked,owned:owns});save();}
   // A kart earned in the logbook or bought in the Prize Counter since the last look gets its own paint back; nothing re-darkens until the next page.
