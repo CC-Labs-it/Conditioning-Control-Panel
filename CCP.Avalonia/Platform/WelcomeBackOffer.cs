@@ -94,7 +94,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             // WPF StartupPresenter.cs:572-587: the flag every startup surface (feature intros) defers to.
             MainShellWindow.IsStartupDialogShowing = true;
             try { await new WelcomeBackSheet(content).ShowDialogSafe<bool>(desktop?.MainWindow); }
-            finally { MainShellWindow.IsStartupDialogShowing = false; }
+            finally
+            {
+                MainShellWindow.IsStartupDialogShowing = false;
+                RemoteMediaOffer.FlushPending();
+            }
         }
 
         /// <summary>WPF ConsumeFactoryResetMarker (:5033); the marker DataSettingsSection drops.</summary>
