@@ -39,13 +39,15 @@ public sealed class OnlineMeterTests
         Assert.Equal(ScrolllerAllowance.Percent, shell.OnlinePillRing!.Percent);
         Assert.Equal(OnlineMeterTone.Pink, shell.OnlinePillRing.Tone);
         Assert.True(tab.BtnOnlineMeterPlans.IsVisible);
+        var inlines = tab.TxtOnlineMeterLine.Inlines!;
+        Assert.Same(tab.TxtOnlineMeterExplanation, inlines[0]);
+        Assert.Same(tab.BtnOnlineMeterPlans, inlines.OfType<global::Avalonia.Controls.Documents.InlineUIContainer>().Single().Child);
         tab.BtnOnlineMeterPlans.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.NotNull(global::ConditioningControlPanel.Avalonia.Views.Dialogs.VaultGateDialog.Open);
         global::ConditioningControlPanel.Avalonia.Views.Dialogs.VaultGateDialog.Open!.Close();
         ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes * 40 / 100);
         shell.RefreshOnlineMeterPill();
         Assert.Equal(OnlineMeterTone.Amber, shell.OnlinePillRing.Tone);
-        // 50a0074f1: no remote media consent, no meter, whatever the source says.
         (s.RemoteMediaConsented, s.FypOnlineConsented) = (false, false);
         shell.RefreshOnlineMeterPill();
         shell.Named<AssetsTabView>("AssetsTab")!.RefreshOnlineMeter();
@@ -57,7 +59,6 @@ public sealed class OnlineMeterTests
         shell.Named<AssetsTabView>("AssetsTab")!.RefreshOnlineMeter();
         Assert.False(pill.IsVisible);
         s.MediaSource = "mixed";
-        // Spent: grey "done for today", the card says when it is back, the hover card offers plans.
         ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes);
         Dispatcher.UIThread.RunJobs();
         shell.RefreshOnlineMeterPill();
@@ -65,12 +66,11 @@ public sealed class OnlineMeterTests
         Assert.True(pill.IsVisible);
         Assert.Equal(Loc.Get("online_pill_done"), pillText.Text);
         Assert.Equal(string.Format(Loc.Get("online_meter_spent"), string.Format(Loc.Get("online_meter_hours"), 6)),
-            tab.TxtOnlineMeterLine.Text!.Split("   ")[0]);
+            tab.TxtOnlineMeterExplanation.Text!.Split("   ")[0]);
         Assert.Equal(OnlineMeterTone.Spent, shell.OnlinePillRing!.Tone);
         shell.OpenOnlineMeterHover();
         Assert.True(shell.OnlineMeterHover!.IsOpen);
         Assert.Contains(shell.OnlineMeterHover.Child!.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("online_see_plans"));
-        // The pill is a door to the Assets tab (Enter, as a click).
         shell.ShowTab("dashboard");
         Dispatcher.UIThread.RunJobs();
         pill.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
@@ -177,6 +177,30 @@ public sealed class OnlineMeterTests
             Assert.False(queue.Pending);
         }
         Assert.DoesNotContain(beats, b => ReferenceEquals(b.Owner, toast.Border));
+    });
+    [Fact]
+    public void MinimizedNoticeFoldsDuringHoldAndReturnsOnRestore() => Run((shell, _) =>
+    {
+        var host = shell.Named<Panel>("NotificationHost")!;
+        FriendsLanding.World = () => Quiet;
+        ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes);
+        Dispatcher.UIThread.RunJobs();
+        var original = host.Children.Last();
+        var beats = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running;
+        var beat = beats.Single(b => ReferenceEquals(b.Owner, original));
+        Assert.True(shell.OnlineSpentPolling);
+        shell.WindowState = WindowState.Minimized;
+        Assert.False(beat.IsTicking);
+        FriendsLanding.World = () => Session;
+        shell.ReleaseOnlineSpentNotice(); // The existing three-second queue poll, even while the beat is parked.
+        Assert.DoesNotContain(original, host.Children);
+        FriendsLanding.World = () => Quiet;
+        shell.ReleaseOnlineSpentNotice();
+        var replacement = host.Children.Last();
+        Assert.NotSame(original, replacement);
+        Assert.True(shell.OnlineSpentPolling);
+        shell.WindowState = WindowState.Normal;
+        Assert.Contains(beats, b => ReferenceEquals(b.Owner, replacement) && b.IsTicking);
     });
     private static void Platform()
     {

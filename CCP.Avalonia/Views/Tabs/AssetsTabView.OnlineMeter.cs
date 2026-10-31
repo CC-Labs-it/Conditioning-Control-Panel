@@ -72,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             OnlineMeterBar.ColumnDefinitions[0].Width = new GridLength(st.Percent, GridUnitType.Star);
             OnlineMeterBar.ColumnDefinitions[1].Width = new GridLength(100 - st.Percent, GridUnitType.Star);
             OnlineMeterBarFill.Background = tone;
-            TxtOnlineMeterLine.Text = OnlineMeterHead.CardLine(st, now, reset);
+            TxtOnlineMeterExplanation.Text = OnlineMeterHead.CardLine(st, now, reset) + (st.SeePlansTier != null ? "   " : "");
         }
 
         /// <summary>WPF OnlineMeterRing.ColorFor: pink, amber from 80%, grey once used up.</summary>

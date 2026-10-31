@@ -15,11 +15,11 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
-    // WPF MainWindow/MainWindow.OnlineMeter.cs:170-370, 497-552.
     public partial class MainShellWindow
     {
         private bool _onlinePillWired;
         private Helpers.OnlineSpentToast? _onlineSpentToast;
+        internal bool OnlineSpentPolling => _onlineSpentWait?.IsEnabled == true;
 
         // This window loads with AvaloniaXamlLoader.Load (no generated fields): the pill's parts by name.
         internal Border? OnlinePill => Named<Border>("OnlineMeterPill");
@@ -113,12 +113,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshOnlineMeterPill();
             Named<Tabs.AssetsTabView>("AssetsTab")?.RefreshOnlineMeter();
         });
-
         private static bool OnlineNoticeHolding()
         {
             try { return FriendsLanding.World().Holding; } catch { return true; }
         }
-
         internal void OnlineMeterPill_Click()
         {
             CloseOnlineMeterHover();
@@ -132,7 +130,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             catch (Exception ex) { Log.Debug("Online meter pill click: {E}", ex.Message); }
         }
-
         internal void OpenOnlineMeterHover()
         {
             if (_onlineMeterHover is { IsOpen: true }) return;
@@ -145,7 +142,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 holder.PointerExited += (_, _) => _onlineMeterHoverLeave?.Start();
                 if (_onlineMeterHover == null)
                 {
-                    // Hover-open without light dismiss; a short grace to cross onto the card (popup house rules).
                     _onlineMeterHover = new Popup
                     {
                         PlacementTarget = pill,
@@ -160,37 +156,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             catch (Exception ex) { Log.Debug("Online meter hover: {E}", ex.Message); }
         }
-
         internal void CloseOnlineMeterHover()
         {
             _onlineMeterHoverLeave?.Stop();
             if (_onlineMeterHover != null) _onlineMeterHover.IsOpen = false;
         }
-
         private Border BuildOnlineMeterHoverCard(OnlineMeterState st)
         {
             var body = new StackPanel { Width = 276 };
-            body.Children.Add(new TextBlock
+            TextBlock Line(string key, IBrush brush, bool title = false) => new()
             {
-                Text = Loc.Get("online_hover_title"),
-                FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = OnlineText, TextWrapping = TextWrapping.Wrap,
-            });
-            body.Children.Add(new TextBlock
-            {
-                Text = Loc.Get("online_hover_body"),
-                FontSize = 12, Foreground = OnlineText2, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0),
-            });
-            if (st.UpsellKey != null)
-                body.Children.Add(new TextBlock
-                {
-                    Text = Loc.Get(st.UpsellKey),
-                    FontSize = 12, Foreground = OnlineLilac, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0),
-                });
+                Text = Loc.Get(key), FontSize = title ? 13 : 12, TextWrapping = TextWrapping.Wrap, Foreground = brush,
+                FontWeight = title ? FontWeight.SemiBold : FontWeight.Normal, Margin = new Thickness(0, title ? 0 : 6, 0, 0),
+            };
+            body.Children.Add(Line("online_hover_title", OnlineText, true));
+            body.Children.Add(Line("online_hover_body", OnlineText2));
+            if (st.UpsellKey != null) body.Children.Add(Line(st.UpsellKey, OnlineLilac));
             if (st.SeePlansTier is int tier)
             {
                 var btn = new Button
                 {
-                    // TextBlock content: Avalonia's Button would read '_' in a label as an access key.
                     Content = new TextBlock { Text = Loc.Get("online_see_plans") },
                     HorizontalAlignment = HorizontalAlignment.Left,
                     Padding = new Thickness(12, 5, 12, 5),
@@ -205,15 +190,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Background = new SolidColorBrush(Color.FromRgb(0x18, 0x18, 0x30)),
                 BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x5C)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(12),
+                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12),
                 Padding = new Thickness(16, 14, 16, 14),
                 Child = body,
             };
         }
-
-        /// <summary>"See plans": the vault gate card on the next tier up (Free sees Basic, Basic sees Prime); a
-        /// patron whose grant died here is sent to Reconnect, as every gate does.</summary>
         internal void OpenOnlinePlans(int tier)
         {
             if (LockdownActive) return;
@@ -225,28 +206,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             catch (Exception ex) { Log.Debug("Online meter plans: {E}", ex.Message); }
         }
-
         internal void QueueOnlineSpentNotice()
         {
             RefreshOnlineMeterPill();
             _onlineSpentQueue.Arm(ScrolllerAllowance.Now());
             ReleaseOnlineSpentNotice();
         }
-
         internal void ReleaseOnlineSpentNotice()
         {
             try
             {
-                // A notice that waited out a hold is dropped when the share is no longer spent: another
-                // account signed in (the share is per account) or the plan went up.
+                _onlineSpentToast?.PollHold();
                 if (_onlineSpentQueue.TryRelease(ScrolllerAllowance.Now(), OnlineNoticeHolding()) && ScrolllerAllowance.Spent)
                     ShowOnlineSpentNotice();
-                if (_onlineSpentQueue.Pending) _onlineSpentWait?.Start();
+                if (_onlineSpentQueue.Pending || _onlineSpentToast?.Active == true) _onlineSpentWait?.Start();
                 else _onlineSpentWait?.Stop();
             }
             catch (Exception ex) { Log.Debug("Online spent notice queue: {E}", ex.Message); }
         }
-
         private void ShowOnlineSpentNotice()
         {
             try

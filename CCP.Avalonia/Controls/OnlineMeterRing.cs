@@ -11,10 +11,8 @@ public sealed class OnlineMeterRing : Control
     internal static readonly Color Pink = Color.FromRgb(0xFF, 0x69, 0xB4);
     internal static readonly Color Amber = Color.FromRgb(0xFF, 0xB3, 0x47);
     internal static readonly Color Grey = Color.FromRgb(0xA7, 0xA7, 0xC1);
-    public static readonly StyledProperty<int> PercentProperty =
-        AvaloniaProperty.Register<OnlineMeterRing, int>(nameof(Percent));
-    internal static readonly StyledProperty<OnlineMeterTone> ToneProperty =
-        AvaloniaProperty.Register<OnlineMeterRing, OnlineMeterTone>(nameof(Tone));
+    public static readonly StyledProperty<int> PercentProperty = AvaloniaProperty.Register<OnlineMeterRing, int>(nameof(Percent));
+    internal static readonly StyledProperty<OnlineMeterTone> ToneProperty = AvaloniaProperty.Register<OnlineMeterRing, OnlineMeterTone>(nameof(Tone));
     static OnlineMeterRing() => AffectsRender<OnlineMeterRing>(PercentProperty, ToneProperty);
     public OnlineMeterRing()
     {
@@ -22,22 +20,9 @@ public sealed class OnlineMeterRing : Control
         Height = 18;
         IsHitTestVisible = false;
     }
-    public int Percent
-    {
-        get => GetValue(PercentProperty);
-        set => SetValue(PercentProperty, value);
-    }
-    internal OnlineMeterTone Tone
-    {
-        get => GetValue(ToneProperty);
-        set => SetValue(ToneProperty, value);
-    }
-    internal static Color ColorFor(OnlineMeterTone tone) => tone switch
-    {
-        OnlineMeterTone.Amber => Amber,
-        OnlineMeterTone.Spent => Grey,
-        _ => Pink,
-    };
+    public int Percent { get => GetValue(PercentProperty); set => SetValue(PercentProperty, value); }
+    internal OnlineMeterTone Tone { get => GetValue(ToneProperty); set => SetValue(ToneProperty, value); }
+    internal static Color ColorFor(OnlineMeterTone tone) => tone == OnlineMeterTone.Amber ? Amber : tone == OnlineMeterTone.Spent ? Grey : Pink;
     public override void Render(DrawingContext dc)
     {
         var w = Bounds.Width;

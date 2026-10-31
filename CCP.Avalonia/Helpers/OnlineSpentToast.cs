@@ -4,8 +4,6 @@ using Avalonia.Controls;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Fyp.Online;
 namespace ConditioningControlPanel.Avalonia.Helpers;
-// WPF Windows/Friends/FriendNotices.cs:72-73,142-160; Services/Friends/FriendsLanding.cs:66;
-// MainWindow/MainWindow.OnlineMeter.cs:541-548. A folded notice returns through the same-day queue.
 internal sealed class OnlineSpentToast : IDisposable
 {
     private readonly FriendNoticeStack _stack = new();
@@ -29,10 +27,12 @@ internal sealed class OnlineSpentToast : IDisposable
         Border.DetachedFromVisualTree += (_, _) => _beat.Stop();
         _beat.Start();
     }
+    internal bool Active => Border.IsHitTestVisible && Border.Parent != null;
+    internal void PollHold() { if (Active && _holding()) { Dispose(); _fold(); } }
     internal void Tick(double elapsedMs)
     {
-        if (!Border.IsHitTestVisible || Border.Parent == null) { _beat.Stop(); return; }
-        if (_holding()) { Dispose(); _fold(); return; }
+        PollHold();
+        if (!Active) { _beat.Stop(); return; }
         if (_stack.Tick(elapsedMs).Count == 0) return;
         _beat.Stop();
         _service.FadeOutAndRemove(Border);
