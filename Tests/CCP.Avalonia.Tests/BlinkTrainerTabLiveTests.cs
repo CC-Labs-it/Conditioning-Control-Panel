@@ -10,7 +10,6 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
 using Xunit;
-using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
@@ -35,7 +34,7 @@ public sealed class BlinkTrainerTabLiveTests
             try
             {
                 if (Application.Current is null)
-                    AppBuilder.Configure<AvApp>().UseSkia()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                         .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
 
