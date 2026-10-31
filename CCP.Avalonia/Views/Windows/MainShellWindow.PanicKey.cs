@@ -119,6 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // after the grace pause and before the stop pass: her calm safety line, then 6 s of no other bark.
             if (rung == PanicPolicy.Rung.RunLadder && !gameOwnedTheScreen) Platform.BarkHead.Engine?.Raise("Panic");
             bool wasRunning = CoreEngine.IsRunning;
+            if (wasRunning) App.Achievements?.TrackPanicPressed(now);
             PanicSurfaces.StopAll("panic key", this);
             if (wasRunning) ShowFromTray();   // WPF: Show + Activate the main window after a running stop
 

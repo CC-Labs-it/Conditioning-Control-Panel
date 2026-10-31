@@ -55,6 +55,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try
                 {
                     Named<Tabs.PresetsTabView>("PresetsTab")?.ApplyCornerGifOption(session);   // WPF StartSession :1588
+                    App.Achievements?.CheckRelapse();
+                    StartEngineRamp(); // WPF Presets.cs:1618: capture user values before session overrides.
                     runner.Start(session);
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()
@@ -92,6 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!confirmed || !ReferenceEquals(runner.CurrentSession, session)) return;
             Log.Information("Session stop confirmed by the user");
             runner.Stop(completed: false);
+            App.Achievements?.TrackPanicPressed(); // WPF SessionEngine.cs:477-478, every confirmed early stop
             Platform.AccountSeed.Sync?.Nudge("session end");   // explicit end: the runner no longer counts as running
         }
 

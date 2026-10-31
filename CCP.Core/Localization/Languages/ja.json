@@ -7959,5 +7959,6 @@
   "online_official_plan_prime": "Primeは1日の割り当てが最大です。一度見たものは無料で再生できます。",
   "online_official_nice": "了解",
   "online_official_stamped_line": "オンラインメディアはScrolllerから届きます。各画像とクリップに小さな「via Scrolller」の表示があります。",
-  "online_cache_day_line": "オンラインメディアはこのパソコンの小さなキャッシュに1日だけ保存され、アップロードされることはありません。"
+  "online_cache_day_line": "オンラインメディアはこのパソコンの小さなキャッシュに1日だけ保存され、アップロードされることはありません。",
+  "ramp_complete_stopping": "強度ランプが終了しました。停止しています..."
 }
