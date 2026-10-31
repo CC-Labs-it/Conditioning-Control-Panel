@@ -481,8 +481,13 @@ public sealed partial class FriendsDrawer : Border
         ActResult r = ActResult.TryLater;
         try { r = await _svc.SetSquelchAsync(f.Id, what == "squelch"); }
         catch (Exception ex) { Serilog.Log.Debug("[Friends] menu {What} failed: {E}", what, ex.Message); }
-        if (r == ActResult.Done) ShowTimed(f.Id, Loc.Get(what == "squelch" ? "friends_squelch_done" : "friends_unsquelch_done"), true);
-        else ShowTimed(f.Id, Loc.Get(FriendsDrawerRules.ActResultKey(r)), false);
+        // WPF FriendsDrawer.Pickers.cs:395-401: click after success, denied after refusal.
+        if (r == ActResult.Done)
+        {
+            FriendsSfx.Click();
+            ShowTimed(f.Id, Loc.Get(what == "squelch" ? "friends_squelch_done" : "friends_unsquelch_done"), true);
+        }
+        else ShowActResult(f.Id, r);
         await SafeRefreshAsync();
     }
     internal Task<ActResult> ReportAsync(string friendId, string reason) => ReportAsync(friendId, friendId, reason);

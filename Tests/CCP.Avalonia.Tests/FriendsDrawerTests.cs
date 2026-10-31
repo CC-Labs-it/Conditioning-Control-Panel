@@ -827,9 +827,10 @@ public sealed class FriendsDrawerTests
         var d = new FriendsDrawer(svc);
         await svc.RefreshAsync();
         var tags = new List<string>();
-        var (oldAudio, oldNow, oldVolume) = (CoreAudio.PlayOneShotProvider, FriendsLanding.SfxNow, CoreSettings.Current.MasterVolume);
+        var saved = new CueState();
         try
         {
+            CoreAudio.IsOutputSuppressedProvider = () => false;
             CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
             CoreModArt.AudioOverridePathProvider = _ => typeof(FriendsDrawerTests).Assembly.Location;
             FriendsLanding.SfxGate = new();
@@ -845,13 +846,87 @@ public sealed class FriendsDrawerTests
         }
         finally
         {
-            (CoreAudio.PlayOneShotProvider, FriendsLanding.SfxNow) = (oldAudio, oldNow);
-            CoreSettings.Current.MasterVolume = oldVolume;
+            saved.Restore();
         }
     });
 
-    /// <summary>The landing's gap gate is process-wide and remembers the last cue, so every cue test steps one
-    /// clock that never runs behind a previous test's: each cue is past every gap and judged on its own.</summary>
+    private sealed class CueState
+    {
+        private readonly Action<string, float, string, Action<TimeSpan>?, Action?>? _audio = CoreAudio.PlayOneShotProvider;
+        private readonly Func<bool>? _suppressed = CoreAudio.IsOutputSuppressedProvider;
+        private readonly Func<string, string?>? _art = CoreModArt.AudioOverridePathProvider;
+        private readonly FriendsSfxGate _gate = FriendsLanding.SfxGate;
+        private readonly Func<DateTime> _now = FriendsLanding.SfxNow;
+        private readonly int _volume = CoreSettings.Current.MasterVolume;
+        private readonly DateTime _clock = _sfxClock;
+        public void AssertRestored()
+        {
+            Assert.Same(_audio, CoreAudio.PlayOneShotProvider);
+            Assert.Same(_suppressed, CoreAudio.IsOutputSuppressedProvider);
+            Assert.Same(_art, CoreModArt.AudioOverridePathProvider);
+            Assert.Same(_gate, FriendsLanding.SfxGate);
+            Assert.Same(_now, FriendsLanding.SfxNow);
+            Assert.Equal(_volume, CoreSettings.Current.MasterVolume);
+            Assert.Equal(_clock, _sfxClock);
+        }
+        public void Restore()
+        {
+            CoreAudio.PlayOneShotProvider = _audio;
+            CoreAudio.IsOutputSuppressedProvider = _suppressed;
+            CoreModArt.AudioOverridePathProvider = _art;
+            FriendsLanding.SfxGate = _gate;
+            FriendsLanding.SfxNow = _now;
+            CoreSettings.Current.MasterVolume = _volume;
+            _sfxClock = _clock;
+        }
+    }
+
+    [Fact]
+    public Task CueTestsRestoreStateWithoutAnAssemblyHookBetweenThem() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var original = new CueState();
+        try
+        {
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            var expected = new CueState();
+            await ReportAndPickerCuesReflectTheWireAndMute();
+            expected.AssertRestored();
+            await BlockAndUnblockPlayWpfsCues();
+            expected.AssertRestored();
+            await AnsweringARequestPlaysWpfsCues();
+            expected.AssertRestored();
+        }
+        finally { original.Restore(); }
+    });
+
+    [Fact]
+    public Task SquelchAndUnsquelchPlayOnlyTheWireResultCue() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        var saved = new CueState();
+        var tags = new List<string>();
+        try
+        {
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
+            CoreModArt.AudioOverridePathProvider = _ => typeof(FriendsDrawerTests).Assembly.Location;
+            FriendsLanding.SfxGate = new();
+            FriendsLanding.SfxNow = SfxStep;
+            CoreSettings.Current.MasterVolume = 50;
+            var friend = svc.Snapshot.Friends.First(f => f.Id == "u_on");
+            await d.RunMenuAsync(friend, "squelch");
+            await d.RunMenuAsync(friend, "unsquelch");
+            wire.ActSucceeds = false;
+            await d.RunMenuAsync(friend, "squelch");
+            Assert.Equal(new[] { "friends-click", "friends-click", "friends-denied" }, tags);
+        }
+        finally { saved.Restore(); }
+    });
+
+    /// <summary>Each cue test uses a fresh gate and steps past every gap. CueState restores both
+    /// the gate and the clock so no test changes the next one's timing.</summary>
     private static DateTime _sfxClock = DateTime.UtcNow;
     private static DateTime SfxStep() => _sfxClock = (_sfxClock > DateTime.UtcNow ? _sfxClock : DateTime.UtcNow).AddSeconds(2);
 
@@ -865,9 +940,10 @@ public sealed class FriendsDrawerTests
         await svc.RefreshAsync();
         var r = svc.Snapshot.Incoming[0];
         var tags = new List<string>();
-        var (oldAudio, oldNow, oldVolume) = (CoreAudio.PlayOneShotProvider, FriendsLanding.SfxNow, CoreSettings.Current.MasterVolume);
+        var saved = new CueState();
         try
         {
+            CoreAudio.IsOutputSuppressedProvider = () => false;
             CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
             CoreModArt.AudioOverridePathProvider = _ => typeof(FriendsDrawerTests).Assembly.Location;
             FriendsLanding.SfxGate = new();
@@ -882,8 +958,7 @@ public sealed class FriendsDrawerTests
         }
         finally
         {
-            (CoreAudio.PlayOneShotProvider, FriendsLanding.SfxNow) = (oldAudio, oldNow);
-            CoreSettings.Current.MasterVolume = oldVolume;
+            saved.Restore();
         }
     });
 
@@ -898,14 +973,16 @@ public sealed class FriendsDrawerTests
                 .SetupWithoutStarting();
         var (svc, _) = Service();
         var oldHead = FriendsHead.Service;
-        FriendsHead.Service = svc;
+        global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow? game = null;
+        global::ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow? player = null;
         try
         {
-            var game = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow();
+            FriendsHead.Service = svc;
+            game = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow();
             game.Show();
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.Equal(PresenceActivity.Breakout, svc.Activity);
-            var player = new global::ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow(null, null);
+            player = new global::ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow(null, null);
             player.Show();
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.Equal(PresenceActivity.Deeper, svc.Activity);
@@ -914,27 +991,42 @@ public sealed class FriendsDrawerTests
             player.Close();
             Assert.Equal(PresenceActivity.Panel, svc.Activity);
         }
-        finally { FriendsHead.Service = oldHead; }
+        finally
+        {
+            try { game?.Close(); player?.Close(); }
+            finally { FriendsHead.Service = oldHead; }
+        }
         return Task.CompletedTask;
     });
     [Fact]
     public Task SessionPresenceRestoresTheUnderlyingActivity() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var (svc, _) = Service();
-        FriendsHead.Service = svc;
-        svc.EnterActivity(PresenceActivity.Deeper);
-        var runner = global::ConditioningControlPanel.Avalonia.App.Sessions =
-            new ConditioningControlPanel.Services.SessionRunner(new ConditioningControlPanel.Services.SessionLogService());
-        FriendsHead.WatchSessionStop(runner);
-        var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        var oldHead = FriendsHead.Service;
+        var oldSessions = global::ConditioningControlPanel.Avalonia.App.Sessions;
+        var runner = new ConditioningControlPanel.Services.SessionRunner(new ConditioningControlPanel.Services.SessionLogService());
+        global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow? shell = null;
         try
         {
+            FriendsHead.Service = svc;
+            global::ConditioningControlPanel.Avalonia.App.Sessions = runner;
+            svc.EnterActivity(PresenceActivity.Deeper);
+            FriendsHead.WatchSessionStop(runner); // Startup subscription is pinned separately by FriendsPresenceWiringTests.
+            shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
             shell.StartSession(new Session { Id = "presence-test", Name = "Presence", DurationMinutes = 5 });
             Assert.Equal(PresenceActivity.Session, svc.Activity);
             runner.Stop();
             Assert.Equal(PresenceActivity.Deeper, svc.Activity);
         }
-        finally { runner.Stop(); shell.Close(); }
+        finally
+        {
+            try { runner.Stop(); shell?.Close(); }
+            finally
+            {
+                FriendsHead.Service = oldHead;
+                global::ConditioningControlPanel.Avalonia.App.Sessions = oldSessions;
+            }
+        }
         return Task.CompletedTask;
     });
 
@@ -945,26 +1037,32 @@ public sealed class FriendsDrawerTests
         var d = new FriendsDrawer(svc);
         await svc.RefreshAsync();
         var tags = new List<string>();
-        CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
-        CoreModArt.AudioOverridePathProvider = _ => typeof(FriendsDrawerTests).Assembly.Location;
-        FriendsLanding.SfxGate = new();
+        var saved = new CueState();
+        try
+        {
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
+            CoreModArt.AudioOverridePathProvider = _ => typeof(FriendsDrawerTests).Assembly.Location;
+            FriendsLanding.SfxGate = new();
             FriendsLanding.SfxNow = SfxStep;
-        CoreSettings.Current.MasterVolume = 50;
-        wire.ActSucceeds = false;
-        Assert.NotEqual(ActResult.Done, await d.ReportAsync("in:u_req", "u_req", ReportReason.All[0]));
-        Assert.Equal(Loc.Get(FriendsDrawerRules.ActResultKey(ActResult.TryLater)), Tagged<TextBlock>(d, "friends-result")?.Text);
-        Assert.Equal(new[] { "friends-click", "friends-denied" }, tags);
-        tags.Clear();
-        d.Toggle("u_on");
-        Tagged<Button>(d, "friends-action:poke")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Assert.Equal(new[] { "friends-click" }, tags);
-        tags.Clear();
-        await d.PokeAsync("u_on", PokeSet.Shipped[0]);
-        Assert.Equal(new[] { "friends-sent" }, tags);
-        tags.Clear();
-        CoreAudio.IsOutputSuppressedProvider = () => true;
-        await d.PokeAsync("u_on", PokeSet.Shipped[0]);
-        Assert.Empty(tags);
+            CoreSettings.Current.MasterVolume = 50;
+            wire.ActSucceeds = false;
+            Assert.NotEqual(ActResult.Done, await d.ReportAsync("in:u_req", "u_req", ReportReason.All[0]));
+            Assert.Equal(Loc.Get(FriendsDrawerRules.ActResultKey(ActResult.TryLater)), Tagged<TextBlock>(d, "friends-result")?.Text);
+            Assert.Equal(new[] { "friends-click", "friends-denied" }, tags);
+            tags.Clear();
+            d.Toggle("u_on");
+            Tagged<Button>(d, "friends-action:poke")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(new[] { "friends-click" }, tags);
+            tags.Clear();
+            await d.PokeAsync("u_on", PokeSet.Shipped[0]);
+            Assert.Equal(new[] { "friends-sent" }, tags);
+            tags.Clear();
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            await d.PokeAsync("u_on", PokeSet.Shipped[0]);
+            Assert.Empty(tags);
+        }
+        finally { saved.Restore(); }
     });
 
     private sealed class PresenceRelay : HttpMessageHandler
@@ -978,21 +1076,32 @@ public sealed class FriendsDrawerTests
     public Task RemotePresenceStartsAfterPairingAndEndsWithTheSession() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var (svc, _) = Service();
-        FriendsHead.Service = svc;
-        svc.EnterActivity(PresenceActivity.Deeper);
+        var oldHead = FriendsHead.Service;
+        var oldRelay = global::ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay;
         using var relay = new ConditioningControlPanel.Services.RemoteRelay(() => "token", () => "test", "test",
             (_, _) => null, _ => { }, new PresenceRelay()) { AutoPoll = false };
-        global::ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay = new Lazy<ConditioningControlPanel.Services.RemoteRelay>(() => relay);
-        var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
-        var tab = new global::ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView();
+        global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow? shell = null;
         try
         {
+            FriendsHead.Service = svc;
+            svc.EnterActivity(PresenceActivity.Deeper);
+            global::ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay = new Lazy<ConditioningControlPanel.Services.RemoteRelay>(() => relay);
+            shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            var tab = new global::ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView();
             await tab.StartAsync(shell, "light");
             Assert.Equal(PresenceActivity.Remote, svc.Activity);
             shell.OnRemoteSessionEnded();
             Assert.Equal(PresenceActivity.Deeper, svc.Activity);
         }
-        finally { await relay.StopAsync(); shell.Close(); }
+        finally
+        {
+            try { await relay.StopAsync(); shell?.Close(); }
+            finally
+            {
+                FriendsHead.Service = oldHead;
+                global::ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay = oldRelay;
+            }
+        }
     });
 
     [Fact]
