@@ -31,6 +31,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Test seam: the owned-check every caller uses.</summary>
         internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
 
+        internal static event Action? Changed;
+        internal static string[] Grants
+        {
+            get
+            {
+                var current = FriendsHead.Identity()?.UnifiedId;
+                lock (Gate) return current != null && current == _heldAccount ? _grants.ToArray() : Array.Empty<string>();
+            }
+        }
+
         private static readonly object Gate = new();
         private static string? _heldAccount;
         private static long _revision;
@@ -56,6 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 (_heldAccount, _revision) = (accountId, revision);
                 _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
             }
+            Changed?.Invoke();
         }
 
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
