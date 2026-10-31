@@ -45,7 +45,7 @@ public sealed class SparkleWalletTests
     {
         Platform();
         var s = CoreSettings.Current;
-        var old = (s.SkillPoints, s.MotionLevel, s.PerformanceMode);
+        var old = (s.SkillPoints, s.MotionLevel, s.PerformanceMode, s.UnifiedId, s.WalletNetSeen, s.PendingSkillsResetAck);
         var time = new SteppedTime();
         BeatLoop.Time = time;
         MainShellWindow? shell = null;
@@ -63,6 +63,17 @@ public sealed class SparkleWalletTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1200, wallet.Balance);
             Assert.False(wallet.RewardShowing);
+
+            // A spend on another device reaches the same chip without a local award cue.
+            s.UnifiedId = "wallet-chip-test";
+            s.PendingSkillsResetAck = false;
+            s.WalletNetSeen = new() { [s.UnifiedId] = -20 };
+            Assert.True(SyncPush.ApplySyncWallet(s, s.UnifiedId,
+                Newtonsoft.Json.Linq.JObject.Parse("{\"skill_points\":1100,\"wallet_net\":-120}")));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1100, wallet.Balance);
+            Assert.False(wallet.RewardShowing);
+            s.SkillPoints = 1200;
 
             // A settled local credit: refresh + "+N" badge, which accumulates and clears after 1.6 s.
             s.SkillPoints = 1201;
@@ -90,7 +101,7 @@ public sealed class SparkleWalletTests
         finally
         {
             shell?.Close();
-            (s.SkillPoints, s.MotionLevel, s.PerformanceMode) = old;
+            (s.SkillPoints, s.MotionLevel, s.PerformanceMode, s.UnifiedId, s.WalletNetSeen, s.PendingSkillsResetAck) = old;
             BeatLoop.Time = TimeProvider.System;
         }
     });

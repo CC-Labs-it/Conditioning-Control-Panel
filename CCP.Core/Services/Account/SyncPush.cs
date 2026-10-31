@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Prizes;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -209,6 +210,43 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Debug("SyncPush cosmetics payload: {E}", ex.Message); return null; }
         }
 
+        /// <summary>Apply the sync wallet to the live settings, as WPF ApplySyncWallet does.
+        /// The net is per account and the dictionary is replaced so saves can serialize it safely.</summary>
+        internal static bool ApplySyncWallet(AppSettings live, string syncAccount, JObject reply)
+        {
+            if (!string.Equals(live.UnifiedId, syncAccount, StringComparison.Ordinal)) return false;
+            // WPF handles a skills reset before the wallet, or clears its pending acknowledgement.
+            // This head cannot handle a new reset yet, so do not consume its wallet or net.
+            var reset = reply["force_skills_reset"]?.Type == JTokenType.Boolean && reply.Value<bool>("force_skills_reset");
+            if (reset && !live.PendingSkillsResetAck) return false;
+            if (!reset && live.PendingSkillsResetAck)
+            {
+                live.PendingSkillsResetAck = false;
+                return true;
+            }
+            int? sp;
+            try { sp = reply["skill_points"]?.ToObject<int?>(); }
+            catch (Exception ex) when (ex is JsonException or FormatException or OverflowException or InvalidCastException or ArgumentException) { return false; }
+            if (sp == null) return false;
+            int? net;
+            try { net = V2WalletNet.ParseNet(reply["wallet_net"]); }
+            catch (Exception ex) when (ex is JsonException or FormatException or OverflowException or InvalidCastException or ArgumentException) { net = null; }
+            int? seen = live.WalletNetSeen.TryGetValue(syncAccount, out var stored) ? stored : null;
+            var step = V2WalletNet.Decide(true, net, seen, sp.Value, live.SkillPoints);
+            var changed = false;
+            if (step.NextSp != live.SkillPoints)
+            {
+                live.SkillPoints = step.NextSp;
+                changed = true;
+            }
+            if (step.StoreNet is { } nextNet && seen != nextNet)
+            {
+                live.WalletNetSeen = new Dictionary<string, int>(live.WalletNetSeen) { [syncAccount] = nextNet };
+                changed = true;
+            }
+            return changed;
+        }
+
         /// <param name="waitForGate">Logout: wait (bounded) for an in-flight push instead of skipping.</param>
         public async Task<bool> PushAsync(string reason, bool waitForGate = false)
         {
@@ -291,6 +329,7 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    ApplySyncWallet(CoreSettings.Current, id, reply);
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.
