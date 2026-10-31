@@ -12,12 +12,14 @@ public sealed class CompanionApiKeyTests
     public void WritesAndClearsTheDedicatedOsSlot()
     {
         Assert.True(SecretStore.Sandboxed);
+        var protector = CompanionApiKey.WindowsProtect;
+        CompanionApiKey.WindowsProtect = null;
         var previous = SecretStore.OsWriteOverride;
         string? writtenName = null, writtenValue = null;
         SecretStore.OsWriteOverride = (name, value) => { writtenName = name; writtenValue = value; return true; };
         try
         {
-            var reference = CompanionApiKey.Store("synthetic-key");
+            var reference = Assert.IsType<string>(CompanionApiKey.Store("synthetic-key"));
             Assert.Equal(CompanionApiKey.Slot, writtenName);
             Assert.Equal("synthetic-key", writtenValue);
             Assert.Equal(CompanionApiKey.Reference, reference);
@@ -27,7 +29,21 @@ public sealed class CompanionApiKeyTests
             Assert.Null(CompanionApiKey.Read(reference));
             Assert.Null(CompanionApiKey.Read(Convert.ToBase64String(new byte[] { 1, 2, 3 })));
         }
-        finally { SecretStore.Store(CompanionApiKey.Slot, null); SecretStore.OsWriteOverride = previous; }
+        finally { SecretStore.Store(CompanionApiKey.Slot, null); SecretStore.OsWriteOverride = previous; CompanionApiKey.WindowsProtect = protector; }
+    }
+
+    [Fact]
+    public void WindowsWritesUseTheProtectorAndReportFailure()
+    {
+        var previous = CompanionApiKey.WindowsProtect;
+        try
+        {
+            CompanionApiKey.WindowsProtect = key => Convert.ToBase64String(Encoding.UTF8.GetBytes(key));
+            Assert.Equal("c3ludGhldGlj", CompanionApiKey.Store("synthetic"));
+            CompanionApiKey.WindowsProtect = _ => throw new CryptographicException();
+            Assert.Null(CompanionApiKey.Store("synthetic"));
+        }
+        finally { CompanionApiKey.WindowsProtect = previous; }
     }
 
     [Fact]
@@ -38,5 +54,8 @@ public sealed class CompanionApiKeyTests
         var blob = Convert.ToBase64String(ProtectedData.Protect(
             Encoding.UTF8.GetBytes("synthetic-wpf-key"), null, DataProtectionScope.CurrentUser));
         Assert.Equal("synthetic-wpf-key", CompanionApiKey.Read(blob));
+        var written = CompanionApiKey.Store("synthetic-wpf-key")!;
+        Assert.Equal("synthetic-wpf-key", Encoding.UTF8.GetString(ProtectedData.Unprotect(
+            Convert.FromBase64String(written), null, DataProtectionScope.CurrentUser)));
     }
 }

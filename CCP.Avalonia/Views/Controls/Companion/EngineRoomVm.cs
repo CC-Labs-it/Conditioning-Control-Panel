@@ -134,7 +134,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             set
             {
                 if (_suppressWrite || _preview) return;
-                Write(p => p.OpenAiCompatibleApiKey = Platform.CompanionApiKey.Store(value));
+                if (Platform.CompanionApiKey.Store(value) is not { } stored) return;
+                Write(p => p.OpenAiCompatibleApiKey = stored);
                 Raise(nameof(ApiKeyNote));
             }
         }

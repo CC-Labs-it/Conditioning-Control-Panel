@@ -1690,6 +1690,11 @@ padlock never covers a running lockdown, and an unreadable recovery file fails o
 <li>Main's <code>AppSettings.AvatarGeneration</code> (in Core since the stack moved AppSettings) uses <code>AvatarGenerationRule</code>, so the pure rule moved to <code>CCP.Core/Services/Companion</code> in the same namespace. The Avalonia tube parses the emote registry through it, because main's <code>generation</code> rows have no <code>avatarSet</code>. <code>RainPackHash</code> stays out of the Core settings backup, as on WPF.</li>
 </ul>
 
+<h2 id="2026-10-31-byo-key-compatibility">2026-10-31: BYO key storage and WPF compatibility</h2>
+<ul>
+<li>Supersedes the earlier local-provider decision that ApiKeyUnprotect is unseeded and the key box writes nothing. EngineRoomVm.CustomApiKey is wired through Platform/CompanionApiKey.cs. Windows writes the same DPAPI string as WPF MainWindow.CompanionRoom.cs:318 and SecureStringHelper.cs:23-25. Other platforms use the existing secret store.</li>
+<li>Legacy plaintext reads follow WPF SecureStringHelper.cs:47-51. Migration replaces the setting only after persistence succeeds; an unavailable store leaves the legacy setting intact. New key entry can still use session memory with the translated drawer notice. Native DPAPI tests require Windows; keyring integration requires its dedicated container. The per-keystroke write cadence remains as WPF EngineRoomDrawer.xaml.cs:59-61.</li>
+</ul>
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
 const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();

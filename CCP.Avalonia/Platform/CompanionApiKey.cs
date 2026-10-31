@@ -1,12 +1,13 @@
 using System;
 using System.Security.Cryptography;
+using System.Runtime.Versioning;
 using System.Text;
 using ConditioningControlPanel.Services.AIService;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>WPF MainWindow.CompanionRoom.cs:312-321 and App.xaml.cs:659.
-/// Settings hold a reference; the existing OS store owns the key. No plaintext disk fallback.</summary>
+/// Windows settings use WPF DPAPI blobs; other platforms use the OS store. No new plaintext fallback.</summary>
 internal static class CompanionApiKey
 {
     internal const string Slot = "companion_byo_key";
@@ -14,8 +15,20 @@ internal static class CompanionApiKey
 
     internal static void Seed() => OpenAiCompatibleService.ApiKeyUnprotect = Read;
 
-    internal static string Store(string? key)
+    // Platform boundary; tests substitute a protector without touching an OS store.
+    internal static Func<string, string>? WindowsProtect = OperatingSystem.IsWindows() ? ProtectWindows : null;
+
+    [SupportedOSPlatform("windows")]
+    private static string ProtectWindows(string key) => Convert.ToBase64String(
+        ProtectedData.Protect(Encoding.UTF8.GetBytes(key), null, DataProtectionScope.CurrentUser));
+
+    internal static string? Store(string? key)
     {
+        if (WindowsProtect is { } protect)
+        {
+            try { return string.IsNullOrEmpty(key) ? "" : protect(key); }
+            catch { Serilog.Log.Warning("Could not protect the companion API key"); return null; }
+        }
         SecretStore.Store(Slot, key);
         return string.IsNullOrEmpty(key) ? "" : Reference;
     }
@@ -31,9 +44,12 @@ internal static class CompanionApiKey
             // WPF SecureStringHelper.cs:47-51 accepts legacy plaintext. Migrate only the
             // current setting, never replace it because an old in-flight request read a key.
             var prompt = CoreSettings.Current?.CompanionPrompt;
-            if (prompt?.OpenAiCompatibleApiKey == stored)
+            var persisted = prompt?.OpenAiCompatibleApiKey != stored ? null
+                : WindowsProtect is not null ? Store(stored)
+                : SecretStore.TryStore(Slot, stored) ? Reference : null;
+            if (prompt?.OpenAiCompatibleApiKey == stored && persisted is not null)
             {
-                prompt.OpenAiCompatibleApiKey = Store(stored);
+                prompt.OpenAiCompatibleApiKey = persisted;
                 CoreSettings.Save();
             }
             return stored;

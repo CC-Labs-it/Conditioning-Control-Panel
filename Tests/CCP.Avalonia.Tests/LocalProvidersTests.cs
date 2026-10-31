@@ -33,9 +33,10 @@ public sealed class LocalProvidersTests
     /// <summary>WPF EngineRoomDrawer.xaml.cs:59-61 -> MainWindow.CompanionRoom.cs:312-321;
     /// App.xaml.cs:659 supplies the protected-key reader used by the real transport.</summary>
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public Task ByoKeyEditPersistsOnlyAReferenceAndAuthenticates(bool legacyPlaintext) => AvaloniaTestDispatcher.RunAsync(async () =>
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public Task ByoKeyEditPersistsOnlyAReferenceAndAuthenticates(bool legacyPlaintext, bool persisted) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -43,6 +44,8 @@ public sealed class LocalProvidersTests
                 .SetupWithoutStarting();
         var service = FreshSettings();
         var (listener, baseUrl, hits) = StartFake();
+        var oldProtect = ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.WindowsProtect;
+        ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.WindowsProtect = null;
         var oldReader = OpenAiCompatibleService.ApiKeyUnprotect;
         var oldOverride = ConditioningControlPanel.Avalonia.Platform.SecretStore.OsWriteOverride;
         var oldNotice = ConditioningControlPanel.Avalonia.Platform.SecretStore.NotRemembered;
@@ -50,7 +53,7 @@ public sealed class LocalProvidersTests
         try
         {
             Assert.True(oldSandbox); // fail before any test could touch the user's keyring
-            ConditioningControlPanel.Avalonia.Platform.SecretStore.OsWriteOverride = (_, _) => false;
+            ConditioningControlPanel.Avalonia.Platform.SecretStore.OsWriteOverride = (_, _) => persisted;
             ConditioningControlPanel.Avalonia.Platform.SecretStore.Sandboxed = false;
             ConditioningControlPanel.Avalonia.Platform.SecretStore.NotRemembered = false;
             ConditioningControlPanel.Avalonia.Platform.SecretStore.Seed();
@@ -73,13 +76,17 @@ public sealed class LocalProvidersTests
             else box.Text = "sk-test-byo";
             Dispatcher.UIThread.RunJobs();
             var reference = CoreSettings.Current.CompanionPrompt.OpenAiCompatibleApiKey;
-            Assert.Equal(ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Reference, reference);
+            Assert.Equal(legacyPlaintext && !persisted ? "sk-test-byo"
+                : ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Reference, reference);
             Assert.Equal("", vm.CustomApiKey);
-            Assert.Equal(Loc.Get("companion_engine_api_key_session_only"), vm.ApiKeyNote);
+            Assert.Equal(Loc.Get(persisted ? "companion_engine_api_key_note" : "companion_engine_api_key_session_only"), vm.ApiKeyNote);
             service.SaveImmediate(); // flush the production debounced save before reading disk
-            Assert.DoesNotContain("sk-test-byo", File.ReadAllText(Path.Combine(CorePaths.UserData, "settings.json")));
+            var saved = File.ReadAllText(Path.Combine(CorePaths.UserData, "settings.json"));
+            if (legacyPlaintext && !persisted) Assert.Contains("sk-test-byo", saved);
+            else Assert.DoesNotContain("sk-test-byo", saved);
             var reloaded = new SettingsService();
             Assert.Equal(reference, reloaded.Current.CompanionPrompt.OpenAiCompatibleApiKey);
+            service = reloaded;
             _ = new EngineRoomDrawer();
             vm.Sync();
             Dispatcher.UIThread.RunJobs();
@@ -93,7 +100,7 @@ public sealed class LocalProvidersTests
             box.Text = "";
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("", CoreSettings.Current.CompanionPrompt.OpenAiCompatibleApiKey);
-            Assert.Null(OpenAiCompatibleService.ApiKeyUnprotect!(reference));
+            Assert.Null(OpenAiCompatibleService.ApiKeyUnprotect!(ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Reference));
             Assert.Null(OpenAiCompatibleService.ApiKeyUnprotect!(Convert.ToBase64String(new byte[] { 1, 2, 3 })));
         }
         finally
@@ -103,6 +110,7 @@ public sealed class LocalProvidersTests
             ConditioningControlPanel.Avalonia.Platform.SecretStore.OsWriteOverride = oldOverride;
             ConditioningControlPanel.Avalonia.Platform.SecretStore.NotRemembered = oldNotice;
             ConditioningControlPanel.Avalonia.Platform.SecretStore.Sandboxed = oldSandbox;
+            ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.WindowsProtect = oldProtect;
             OpenAiCompatibleService.ApiKeyUnprotect = oldReader;
             listener.Stop();
             CoreSettings.ServiceProvider = null;

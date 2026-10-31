@@ -50,23 +50,26 @@ internal static class SecretStore
         return value;
     }
 
-    internal static void Store(string name, string? value)
+    internal static void Store(string name, string? value) => TryStore(name, value);
+
+    internal static bool TryStore(string name, string? value)
     {
         if (string.IsNullOrEmpty(value)) value = null;
         _cache[name] = value;
-        if (OsWrite(name, value)) return;
+        if (OsWrite(name, value)) return true;
         if (value is null)
         {
             // Memory-only runs (sandbox, no Secret Service) wrote nothing to the OS store: the memory clear is the clear.
-            if (Sandboxed || NotRemembered) return;
+            if (Sandboxed || NotRemembered) return false;
             Log.Warning("Could not clear {Name} from the secret store", name);
             ClearFailed = true;
-            return;
+            return false;
         }
         // A sandbox is memory-only on purpose, not a missing Secret Service: no warning, no "no secret store" notice.
-        if (Sandboxed) return;
+        if (Sandboxed) return false;
         Log.Warning("No usable secret store: {Name} is kept in memory for this run only", name);
         NotRemembered = true;
+        return false;
     }
 
     // A faked OS write means a test owns the store: it never reads the real keyring either (empty store).
