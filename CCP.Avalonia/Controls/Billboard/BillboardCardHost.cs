@@ -168,7 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         }
 
         /// <summary>The motion level or a visibility gate changed: re-read every gate now.</summary>
-        public void RefreshMotion() => UpdateRunning();
+        public void RefreshMotion() { UpdateCtaPress(); UpdateRunning(); }
 
         internal bool HoldMayRun =>
             !_folding && _card != null && _fill != null && IsEffectivelyVisible && TopLevel.GetTopLevel(this) is { IsVisible: true } &&
@@ -397,11 +397,16 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
                 Template = Bare(), Content = _ctaFace, Cursor = new Cursor(StandardCursorType.Hand),
                 HorizontalAlignment = HorizontalAlignment.Left, Focusable = true, Margin = new Thickness(0, 12, 0, 0),
             };
+            button.PropertyChanged += (_, e) => { if (e.Property == Button.IsPressedProperty) UpdateCtaPress(); };
             button.Click += (_, _) => { if (_card != null && !_folding) Press(); };
             button.GotFocus += (_, _) => _ctaFace.BorderBrush = Brushes.White;
             button.LostFocus += (_, _) => _ctaFace.BorderBrush = new SolidColorBrush(Colors.White, 0.35);
             return button;
         }
+
+        // WPF PressDown: sink the face by 2 px. Motion Off keeps it still.
+        private void UpdateCtaPress() => _ctaFace.RenderTransform =
+            new TranslateTransform(0, Env.AllowTransitions && _cta.IsPressed ? 2 : 0);
 
         private Button BuildSnooze()
         {
