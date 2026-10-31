@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
     /// ponytail: the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
-    /// the head supplies the live Chaos narrator floor.
+    /// the Chaos-narrator gate requires its narrative host (not yet ported).
     /// </summary>
     public sealed class BarkEngine
     {
@@ -67,7 +67,6 @@ namespace ConditioningControlPanel.Services.Bark
 
         // Head seams; unseeded = WPF's answer for a missing service. No mouth = nothing said, nothing spent.
         public Action<BarkSpeech>? Speak;
-        public Func<bool>? IsNarratorPlaying;           // WPF ChaosNarrator.IsPlaying, BarkService.cs:1676
         public Func<bool>? IsSpeaking;                 // App.AvatarWindow.IsSpeaking
         public Func<int, bool>? IsCompanionBusy;       // App.AvatarWindow.IsCompanionBusy(windowMs)
         public Func<bool>? EmiDeskAvatarMuted;         // App.EmiDesk.AvatarMuted
@@ -346,7 +345,6 @@ namespace ConditioningControlPanel.Services.Bark
                 var now = Now;
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
                 if (now < _whisperBusyUntilUtc && !IsTextAttribution(rule.Trigger)) return (false, -1, "whisper-active");
-                if (Safe(IsNarratorPlaying)) return (false, -1, "narrator-active");
                 int window = s.BarkChatSuppressionMs;
                 if (Safe(() => IsCompanionBusy?.Invoke(window) == true)
                     || (window > 0 && (now - _lastUserMessageUtc).TotalMilliseconds < window))

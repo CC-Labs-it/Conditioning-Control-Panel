@@ -52,7 +52,6 @@ internal static class BarkHead
     internal static void Seed(BarkEngine e)
     {
         e.Speak = Speak;
-        e.IsNarratorPlaying = () => ChaosCardNarrator.IsPlaying;
         e.IsSpeaking = () => Views.AvatarTube.AvatarTubeWindow.Live?.IsSpeaking == true;
         e.IsCompanionBusy = ms => Views.AvatarTube.AvatarTubeWindow.Live?.IsCompanionBusy(ms) == true;
         e.EmiDeskAvatarMuted = () => Views.Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted;

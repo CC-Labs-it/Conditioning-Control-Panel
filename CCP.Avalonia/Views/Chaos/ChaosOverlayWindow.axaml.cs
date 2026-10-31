@@ -83,7 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <c>ChaosBoonColors</c> (an id table, now ChaosBoonColors.cs beside this file),
     /// <c>ChaosRanks</c>/<c>ChaosRank</c>/<c>ChaosGlyphs</c> (Core, Services/Chaos/ChaosRanks.cs)
     /// and <c>ChaosWindowZ.BornTopmost</c> (<c>AppSettings.ChaosPinOnTop</c>). <c>ChaosArt</c> and
-    /// <c>ChaosNarrativeDirector</c> remain in the WPF head; card voice uses the live head host;
+    /// <c>ChaosNarrator</c> still live in the WPF head and are stubbed in the Stubs region below;
     /// <c>ChaosAnnouncerOverlay</c> is the head's real overlay (ChaosAnnouncerOverlay.cs). <c>ChaosBoon</c>, <c>ChaosRunState</c>, <c>ChaosMeta</c>,
     /// <c>ChaosLessons</c>, <c>RevealService</c> and <c>ChaosConversation</c> are the real Core
     /// types; <see cref="ChaosRunHost"/> (the run-lifecycle slice of WPF ChaosModeService) drives
@@ -1101,7 +1101,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             base.OnClosed(e);
             _closed = true;
-            if (_storyLines != null) ChaosCardNarrator.EndCard();
             // The three forever tweens (the boon pulse, the two ken-burns drifts) would otherwise
             // keep the 16ms pump awake on a dead window for the process's life.
             _tweens.Clear();
@@ -1204,7 +1203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             // duck the bed + play the line's clip (placeholder ok → text-only still ducks). NO auto-advance —
             // the scene waits for the user to press forward.
-            ChaosCardNarrator.PlayCardLine(line.AudioKey, line.Text);
+            ChaosNarrator.PlayCardLine(line.AudioKey, line.Text);
         }
 
         /// <summary>A slow ken-burns drift on the background so the scene breathes: a 16s zoom and
@@ -1251,7 +1250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _storyClosing = true;
             StopTween("story:chevron");
             StopBgPan();
-            ChaosCardNarrator.EndCard();   // unduck + drop the speaking/bark hold
+            ChaosNarrator.EndCard();   // unduck + drop the speaking/bark hold
 
             double from = _storyCardPanel.Opacity;
             StartTween("story:fade", 220, t => _storyCardPanel.Opacity = from + (0 - from) * t, done: () =>
@@ -1602,6 +1601,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         // ChaosBoonColors is no longer stubbed here: the head's class is a pure id -> family
         // colour table, so it is copied whole into ChaosBoonColors.cs beside this file and the
         // two call sites above now bind to that. Draft cards get their real family colour.
+
+        private static class ChaosNarrator
+        {
+            public static void PlayCardLine(string? audioKey, string text) { }
+            public static void EndCard() { }
+        }
 
         /// <summary>Real now, not a stand-in. The head's <c>ChaosWindowZ.BornTopmost</c> is its
         /// <c>PinTopmost</c> field, and the ONE place that writes it is
