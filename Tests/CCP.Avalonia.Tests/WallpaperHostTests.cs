@@ -1,5 +1,3 @@
-using Avalonia;
-using Avalonia.Headless;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -44,7 +42,7 @@ public sealed class WallpaperHostTests
         finally { Directory.Delete(folder, true); File.Delete(original); }
     }
     [Fact]
-    public void GnomePreservesLightDarkAndOptionsAndPropagatesFailure()
+    public async Task GnomePreservesLightDarkAndOptionsAndPropagatesFailure()
     {
         var file = Path.GetTempFileName();
         try
@@ -72,11 +70,17 @@ public sealed class WallpaperHostTests
             fail = false;
             options = "'none'";
             Assert.Null(platform.Capture());
+            File.Delete(file);
+            calls.Clear();
+            CoreSettings.Current.WallpaperOriginalPath = snapshot;
+            Assert.False(await new WallpaperHost(platform).DeactivateAsync());
+            Assert.Equal(snapshot, CoreSettings.Current.WallpaperOriginalPath);
+            Assert.Empty(calls);
         }
         finally { File.Delete(file); }
     }
     [Fact]
-    public void KdeFallsBackToQdbusAndRestoresEachScreenWithEscapedArguments()
+    public async Task KdeFallsBackToQdbusAndRestoresEachScreenWithEscapedArguments()
     {
         var file = Path.GetTempFileName();
         try
@@ -96,6 +100,12 @@ public sealed class WallpaperHostTests
             Assert.Equal(4, scripts.Count);
             Assert.Contains("String(d.id)", scripts[2]);
             Assert.Contains("String(d.id)", scripts[3]);
+            File.Delete(file);
+            scripts.Clear();
+            CoreSettings.Current.WallpaperOriginalPath = snapshot;
+            Assert.False(await new WallpaperHost(platform).DeactivateAsync());
+            Assert.Equal(snapshot, CoreSettings.Current.WallpaperOriginalPath);
+            Assert.Empty(scripts);
         }
         finally { File.Delete(file); }
     }

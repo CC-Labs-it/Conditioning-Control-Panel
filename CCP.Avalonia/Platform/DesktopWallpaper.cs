@@ -62,6 +62,8 @@ public sealed class LinuxWallpaperPlatform : IWallpaperPlatform
     {
         var state = JsonSerializer.Deserialize<Snapshot>(snapshot);
         if (state == null) return false;
+        if (state.Backend == "gnome" && GnomeKeys.Where(key => key != "picture-options").Any(key => !state.Values.TryGetValue(key, out var value) || !LocalImage(value.Trim('\'')))) return false;
+        if (state.Backend == "kde" && state.Values.Values.Any(value => !LocalImage(value))) return false;
         if (state.Backend == "gnome") return GnomeWrite(state.Values);
         if (state.Backend != "kde") return false;
         var success = true;
