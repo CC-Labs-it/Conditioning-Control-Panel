@@ -46,7 +46,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             {
                 Text = name,
                 FontFamily = CmbFont.Items.OfType<ComboBoxItem>().First(item => Equals(item.Tag, name)).FontFamily,
-                FontSize = 14,
             });
 
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
