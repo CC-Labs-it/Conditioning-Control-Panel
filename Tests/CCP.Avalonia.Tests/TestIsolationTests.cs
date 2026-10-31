@@ -31,6 +31,20 @@ public class TestIsolationTests
         Assert.Empty(bad);
     }
 
+    [Fact]
+    public void SharedPlatformUsesTheProductionFontConfiguration() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
+            var face = new global::Avalonia.Media.Typeface(
+                new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                weight: global::Avalonia.Media.FontWeight.Bold);
+            Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyph), "bundled bold Inter must resolve without system fonts");
+            Assert.Equal("Inter", glyph!.FamilyName);
+        });
+
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
     [Fact]
