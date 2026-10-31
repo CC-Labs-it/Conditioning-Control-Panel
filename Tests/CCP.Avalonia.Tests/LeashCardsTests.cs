@@ -166,11 +166,15 @@ public sealed class LeashCardsTests
         foreach (var tag in new[] { "sticker:star", "praise:proud", "pardon", "credit:900" })
         { Click(card, "leash-btn:reward"); Click(card, "leash-reward:" + tag); }
         Click(card, "leash-btn:punish");
-        Assert.Equal(12, Find<NumericUpDown>(card, "leash-video-cap").Maximum);
+        var cap = Find<LeashCapSlider>(card, "leash-video-cap");
+        Assert.Equal(12, cap.Ceiling); Assert.Equal(12, cap.Value);
+        Assert.Equal(Loc.Get("leash_video_max_hint"), ToolTip.GetTip(cap));
+        cap.RaiseEvent(new global::Avalonia.Input.KeyEventArgs { RoutedEvent = global::Avalonia.Input.InputElement.KeyDownEvent, Key = global::Avalonia.Input.Key.PageDown });
+        Assert.Equal(7, cap.Value);
         Find<TextBox>(card, "leash-ht-box").Text = "12x34";
         Assert.Equal("1234", Find<TextBox>(card, "leash-ht-box").Text);
-        Click(card, "leash-video-send"); Assert.Equal("punish:Video:12", svc.Calls.Last()); Assert.Equal("1234", svc.Watch!.Id);
-        Click(card, "leash-release"); Assert.Equal("punish:Video:12", svc.Calls.Last());   // WPF asks first
+        Click(card, "leash-video-send"); Assert.Equal("punish:Video:7", svc.Calls.Last()); Assert.Equal("1234", svc.Watch!.Id);
+        Click(card, "leash-release"); Assert.Equal("punish:Video:7", svc.Calls.Last());   // WPF asks first
         var confirm = LeashCutConfirmWindow.Current!;
         Assert.Equal(Loc.Get("leash_release_confirm_yes"), ((TextBlock)confirm.YesButton.Content!).Text);
         confirm.YesButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
@@ -178,6 +182,19 @@ public sealed class LeashCardsTests
         Assert.Contains("assign:Minutes:30", svc.Calls); Assert.Contains("assign:Quests:2", svc.Calls);
         Assert.Contains("reward:Sticker:star:", svc.Calls); Assert.Contains("reward:Praise:proud:", svc.Calls);
         Assert.Contains("reward:Pardon::", svc.Calls); Assert.Contains("reward:Credit::900", svc.Calls);
+    });
+    [Theory]
+    [InlineData(LeashSendStatus.Sent, true)]
+    [InlineData(LeashSendStatus.Queued, true)]
+    [InlineData(LeashSendStatus.Dnd, false)]
+    [InlineData(LeashSendStatus.Failed, false)]
+    [InlineData(LeashSendStatus.TooFast, false)]
+    public void SendResultUsesMintForSuccessAndGoldForRefusal(LeashSendStatus status, bool good) => Run(() =>
+    {
+        var svc = new Service { Reply = status }; var card = new LeashHolderCard(Held(), () => svc);
+        Click(card, "leash-btn:reward"); Click(card, "leash-reward:pardon");
+        Assert.Equal("reward:Pardon::", Assert.Single(svc.Calls));
+        Assert.Same(good ? FriendsDrawer.Mint : FriendsDrawer.Gold, Find<TextBlock>(card, "leash-holder-result").Foreground);
     });
     [Fact]
     public void PageKeepsHeldCardsAndSheetsAcrossPollsAndReceipts_AndFoldsOnHide() => Run(() =>

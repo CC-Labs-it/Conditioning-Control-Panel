@@ -81,6 +81,7 @@ public sealed class LeashHolderCard : Border
     private readonly DispatcherTimer _resultTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private static readonly LeashTugThrottle TugThrottle = new();
     private string? _sheet, _result;
+    private bool _resultGood;
     internal LeashHolderCard() : this(new HeldLeash(new("friend", "Friend", null), true, LeashIntensity.Standard,
         DateTimeOffset.UtcNow, 1, null, new DayReport("20261023", 30, 2, 3, 4, false, null, null, false, DateTimeOffset.UtcNow),
         Array.Empty<WeekDay>(), Array.Empty<Punishment>(), null, 0), () => null) { }
@@ -180,7 +181,7 @@ public sealed class LeashHolderCard : Border
             return Task.CompletedTask;
         }, IconKind.Link));
         if (LeashSentList.For(_service(), h.Who.Id) is { } receipts) _body.Children.Add(receipts);
-        if (_result != null) _body.Children.Add(LeashCardUi.Text(_result, "leash-holder-result", F.Gold));
+        if (_result != null) _body.Children.Add(LeashCardUi.Text(_result, "leash-holder-result", _resultGood ? F.Mint : F.Gold));
     }
     // WPF LeashHolderCard.cs:339-397: three figures, with goal-relative minutes and unknowns kept unknown.
     private Control Figures()
@@ -219,9 +220,9 @@ public sealed class LeashHolderCard : Border
         if (punish)
         {
             _videoCap = Math.Min(_videoCap, _held.VideoMax);
-            var cap = new NumericUpDown { Minimum = 1, Maximum = _held.VideoMax, Value = _videoCap, FormatString = "0", Tag = "leash-video-cap" };
-            cap.ValueChanged += (_, _) => _videoCap = (int)Math.Clamp(cap.Value ?? 1, 1, _held.VideoMax);
-            panel.Children.Add(LeashCardUi.Text(Loc.Get("leash_video_cap_label")));
+            var cap = new LeashCapSlider(Loc.Get("leash_video_cap_label"), _videoCap, "leash-video-cap") { Ceiling = _held.VideoMax };
+            ToolTip.SetTip(cap, Loc.Get("leash_video_max_hint"));
+            cap.Committed += v => _videoCap = v;
             panel.Children.Add(cap);
         }
         foreach (var (id, title) in FriendsInviteCodes.CatalogueWatches().Take(5))
@@ -265,7 +266,8 @@ public sealed class LeashHolderCard : Border
     }
     private void Word(LeashSendResult result, string goodText)
     {
-        _result = R.IsGood(result.Status) ? goodText
+        _resultGood = R.IsGood(result.Status);
+        _result = _resultGood ? goodText
             : result.Status == LeashSendStatus.Dnd && result.DndUntil is { } until
                 ? Loc.GetF("leash_res_dnd_until", _held.Who.Name, R.DndUntilText(until)) : Loc.Get(R.ResultKey(result.Status));
         _resultTimer.Stop();
