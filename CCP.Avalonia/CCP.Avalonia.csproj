@@ -314,4 +314,11 @@
     </ItemGroup>
     <Copy SourceFiles="@(LibVLCFiles)" DestinationFolder="$(PublishDir)libvlc\%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
+  <ItemGroup>
+    <Content Include="../Assets/DeeperDemos/**/*" Link="Resources/DeeperDemos/%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
 </Project>
