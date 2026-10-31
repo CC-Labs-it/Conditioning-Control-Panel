@@ -71,6 +71,8 @@ public sealed class OnlineMeterSurfaceTests
         {
             shell.PaintOnlineMeterPill(State(42));
             Assert.True(shell.OnlinePill!.IsVisible);
+            Assert.Equal(new CornerRadius(12), shell.OnlinePill.CornerRadius);
+            Assert.Equal(new Thickness(6, 3, 10, 3), shell.OnlinePill.Padding);
             Assert.Equal(string.Format(Loc.Get("online_pill"), 42), shell.OnlinePillText!.Text);
             Assert.Equal(42, shell.OnlinePillRing!.Percent);
             Assert.Equal(OnlineMeterTone.Pink, shell.OnlinePillRing.Tone);

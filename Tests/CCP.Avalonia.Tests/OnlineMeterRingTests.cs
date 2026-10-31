@@ -38,6 +38,10 @@ public sealed class OnlineMeterRingTests
                 {
                     bitmap.CopyPixels(new PixelRect(0, 0, 32, 32), memory, pixels.Length, 32 * 4);
                     Marshal.Copy(memory, pixels, 0, pixels.Length);
+                    // Compare colour channels in BGRA order on both rendering backends.
+                    if (bitmap.Format == global::Avalonia.Platform.PixelFormats.Rgba8888)
+                        for (int i = 0; i < pixels.Length; i += 4)
+                            (pixels[i], pixels[i + 2]) = (pixels[i + 2], pixels[i]);
                     return pixels;
                 }
                 finally { Marshal.FreeHGlobal(memory); }
@@ -50,7 +54,12 @@ public sealed class OnlineMeterRingTests
             Assert.False(half.SequenceEqual(amber));
             Assert.False(amber.SequenceEqual(spent));
             Assert.Equal(spent, Frame(0, OnlineMeterTone.Spent));
-            Assert.True(spent.Any(b => b > 100));
+            // WPF's spent track is #A7A7C1. Alpha on the black window proves nothing.
+            Assert.Contains(Enumerable.Range(0, spent.Length / 4), pixel =>
+                Math.Abs(spent[pixel * 4] - 0xC1) <= 3 &&
+                Math.Abs(spent[pixel * 4 + 1] - 0xA7) <= 3 &&
+                Math.Abs(spent[pixel * 4 + 2] - 0xA7) <= 3);
+            Assert.False(spent.SequenceEqual(empty));
         }
         finally { window.Close(); }
     });
