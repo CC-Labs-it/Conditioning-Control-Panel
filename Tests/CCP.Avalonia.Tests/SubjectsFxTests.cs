@@ -167,11 +167,12 @@ public sealed class SubjectsFxTests
     private static void Paint(AvailableSubjectsTabView view, int open)
     {
         view.ReadGates = () => LobbyGates.From(true, false, false);
-        // Keep the fixture roster while exercising real watch ownership; no network or completed refresh.
+        // A synchronous fake round supplies the roster on attach and reopen, without network work.
         view.CreateLobby = () => new LobbyService(new ConditioningControlPanel.Avalonia.Platform.FriendsHead.Timer(),
             () => true, () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>(),
-            () => new TaskCompletionSource<PbpLobbyReply>().Task, () => throw new InvalidOperationException(),
-            () => throw new InvalidOperationException());
+            () => Task.FromResult(new PbpLobbyReply(Enumerable.Range(0, open)
+                .Select(i => new PbpOpenSeat("p_fx" + i, "Host" + i, 300000, 0, 0)).ToArray(), Array.Empty<PbpPlayingGame>(), true)),
+            () => throw new InvalidOperationException(), () => throw new InvalidOperationException());
         view.PaintSnapshot(
         new LobbySnapshot(Enumerable.Range(0, open).Select(i => new LobbyRow
             { Game = LobbyGame.Remote, Key = "r" + i, HostName = "Host" + i, RemoteTier = "light" }).ToArray(),

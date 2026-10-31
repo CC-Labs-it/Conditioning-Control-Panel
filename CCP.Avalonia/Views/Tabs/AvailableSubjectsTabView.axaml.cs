@@ -23,7 +23,9 @@ public partial class AvailableSubjectsTabView : UserControl
     internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
     internal Func<LobbyService>? CreateLobby;
+    internal Func<LobbyService> GetLobby = Platform.LobbyHead.Get;
     private LobbyService? _lobby;
+    private bool _ownsLobby;
     private IDisposable? _lease;
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
 
@@ -40,7 +42,9 @@ public partial class AvailableSubjectsTabView : UserControl
         {
             if (_lobby == null)
             {
-                _lobby = CreateLobby?.Invoke() ?? BuildLobby();
+                _ownsLobby = CreateLobby != null;
+                _lobby = CreateLobby?.Invoke() ?? GetLobby();
+                _snapshot = _lobby.Snapshot;
                 _lobby.Changed += OnLobbyChanged;
             }
             Repaint();
@@ -51,18 +55,14 @@ public partial class AvailableSubjectsTabView : UserControl
         Unloaded += (_, _) =>
         {
             _lease?.Dispose(); _lease = null;
-            if (_lobby != null) { _lobby.Changed -= OnLobbyChanged; _lobby.Dispose(); _lobby = null; }
+            if (_lobby != null)
+            {
+                _lobby.Changed -= OnLobbyChanged;
+                if (_ownsLobby) _lobby.Dispose();
+                _lobby = null;
+            }
             SubjectsAmbientFx.Stop();
         };
-    }
-
-    private static LobbyService BuildLobby()
-    {
-        var remote = new RemoteLobbyApi();
-        return new LobbyService(new Platform.FriendsHead.Timer(),
-            () => Platform.FriendsHead.Identity() != null,
-            () => Platform.FriendsHead.Service?.Snapshot.Friends ?? Array.Empty<Friend>(),
-            () => new PbpLobbyApi().FetchAsync(), () => GoonOpenTables.RefreshAsync(), () => remote.FetchAsync());
     }
 
     private void SyncWatch()

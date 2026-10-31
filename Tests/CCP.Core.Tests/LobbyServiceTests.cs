@@ -83,6 +83,7 @@ public sealed class LobbyServiceTests
         public bool Fail;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
+            Assert.Equal(HttpMethod.Get, request.Method);
             Assert.Equal("/v2/directory/list", request.RequestUri!.AbsolutePath);
             Assert.Equal("caller", Assert.Single(request.Headers.GetValues("X-Caller-Unified-Id")));
             Assert.Equal("test-token", Assert.Single(request.Headers.GetValues("X-Auth-Token")));

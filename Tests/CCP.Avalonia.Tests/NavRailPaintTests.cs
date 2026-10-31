@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using System.Linq;
 using Avalonia;
 using Avalonia.Animation;
@@ -17,6 +19,11 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -38,7 +45,17 @@ public sealed class NavRailPaintTests
         s.NavLastTabBySection = null;
         s.MotionLevel = motion;
         NavBadges.ResetForTests();
-        var w = new MainShellWindow();
+        // This fixture drives NavBadges directly. Keep discovery pending so opening Social
+        // cannot replace those counts with an unrelated signed-out service snapshot.
+        using var lobby = new LobbyService(
+            new FriendsHead.Timer(), () => true,
+            () => Array.Empty<Friend>(),
+            () => new TaskCompletionSource<PbpLobbyReply>().Task,
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        var w = new MainShellWindow { GetLobby = () => lobby };
+        w.FindControl<AvailableSubjectsTabView>("AvailableSubjectsTab")!
+            .GetLobby = () => lobby;
         try
         {
             w.Show();

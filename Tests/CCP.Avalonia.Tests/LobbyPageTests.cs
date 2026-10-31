@@ -136,7 +136,8 @@ public sealed class LobbyPageTests
         public TimeSpan Interval { get; set; }
         public event EventHandler? Tick { add { } remove { } }
         public bool Running;
-        public void Start() => Running = true;
+        public int Starts;
+        public void Start() { Running = true; Starts++; }
         public void Stop() => Running = false;
         public void OnUiThread(Action action) => action();
     }
@@ -292,6 +293,103 @@ public sealed class LobbyPageTests
             CoreEntitlement.IsFreeTodayProvider = free;
             CoreEntitlement.ShowDeniedHandler = refusal;
         }
+    });
+
+    [Fact]
+    public void ProductionPageAndShellResolveTheSameAppOwnedService() => Run(() =>
+    {
+        var shell = new MainShellWindow();
+        try
+        {
+            var page = Named<AvailableSubjectsTabView>(shell, "AvailableSubjectsTab");
+            var shared = shell.GetLobby();
+            Assert.Same(shared, page.GetLobby());
+            LobbyHead.Stop();
+            Assert.NotSame(shared, page.GetLobby());
+            Assert.Same(page.GetLobby(), shell.GetLobby());
+        }
+        finally { shell.Close(); LobbyHead.Stop(); }
+    });
+
+    // WPF MainWindow.Lobby.cs:38-68,84-102: both consumers lease the same service.
+    [Fact]
+    public void SharedPageAndRailKeepOneTimerAndReleaseOnlyTheirOwnLeases() => Run(() =>
+    {
+        var timer = new LobbyTimer();
+        var signedIn = true;
+        using var service = new LobbyService(timer, () => signedIn, () => Array.Empty<Friend>(),
+            () => Task.FromResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p_shared", "Shared", 300000, 0, 0) }, Array.Empty<PbpPlayingGame>(), true)),
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((System.Collections.Generic.IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        var shell = new MainShellWindow { GetLobby = () => service };
+        var page = Named<AvailableSubjectsTabView>(shell, "AvailableSubjectsTab");
+        page.GetLobby = () => service;
+        page.ReadGates = () => LobbyGates.From(signedIn, false, false);
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(timer.Running); // badge runs while a different tab is selected
+            Assert.Equal(1, timer.Starts);
+            Assert.Equal(1, ConditioningControlPanel.Services.UI.NavBadges.Get(ConditioningControlPanel.Services.UI.NavSections.Social));
+            shell.ShowTab("availablesubjects");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Shared", Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "AvailableSubjectsList").Items.Single()).Title);
+            Assert.Equal(1, timer.Starts); // page did not create a second timer
+            shell.WindowState = WindowState.Minimized;
+            Assert.True(timer.Running); // page still owns its independent lease, as in WPF
+            shell.ShowTab("settings");
+            Assert.False(timer.Running);
+            shell.WindowState = WindowState.Normal;
+            Assert.True(timer.Running);
+            Assert.Equal(2, timer.Starts);
+            shell.Hide();
+            Assert.False(timer.Running);
+            shell.Show();
+            Assert.True(timer.Running);
+            signedIn = false;
+            service.RefreshAsync().GetAwaiter().GetResult();
+            Assert.Equal(0, ConditioningControlPanel.Services.UI.NavBadges.Get(ConditioningControlPanel.Services.UI.NavSections.Social));
+            shell.Close();
+            Assert.False(timer.Running);
+            ConditioningControlPanel.Services.UI.NavBadges.Set(ConditioningControlPanel.Services.UI.NavSections.Social, 7);
+            service.RefreshAsync().GetAwaiter().GetResult();
+            Assert.Equal(7, ConditioningControlPanel.Services.UI.NavBadges.Get(ConditioningControlPanel.Services.UI.NavSections.Social)); // closed shell unsubscribed
+        }
+        finally
+        {
+            shell.Close();
+            ConditioningControlPanel.Services.UI.NavBadges.Set(ConditioningControlPanel.Services.UI.NavSections.Social, 0);
+        }
+    });
+
+    [Fact]
+    public void DetachingSharedPageKeepsRailServiceAliveAndReattachPaintsCachedSnapshot() => Run(() =>
+    {
+        var timer = new LobbyTimer();
+        var pending = new TaskCompletionSource<PbpLobbyReply>();
+        var first = true;
+        using var service = new LobbyService(timer, () => true, () => Array.Empty<Friend>(),
+            () => { if (!first) return pending.Task; first = false; return Task.FromResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p_cached", "Cached", 300000, 0, 0) }, Array.Empty<PbpPlayingGame>(), true)); },
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((System.Collections.Generic.IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        using var rail = service.Watch();
+        var page = new AvailableSubjectsTabView { GetLobby = () => service };
+        page.ReadGates = () => LobbyGates.From(true, false, false);
+        var window = new Window { Content = page };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Cached", Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "AvailableSubjectsList").Items.Single()).Title);
+            window.Content = null;
+            Assert.True(timer.Running); // page must not dispose the app-owned service
+            window.Content = page;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Cached", Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "AvailableSubjectsList").Items.Single()).Title);
+            Assert.Equal(1, timer.Starts);
+        }
+        finally { window.Close(); pending.TrySetResult(PbpLobbyReply.Empty); }
     });
 
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
