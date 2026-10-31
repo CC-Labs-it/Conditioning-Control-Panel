@@ -9,6 +9,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Speech;
@@ -78,6 +79,90 @@ public sealed class LockCardVoiceTests
         }
         finally { ResetSpeech(); }
     }
+
+    [Theory]
+    [InlineData(true, true, CoreSpeechModelStatus.NoModelFound, "On. Speak")]
+    [InlineData(false, false, CoreSpeechModelStatus.NoModelFound, "No microphone detected.")]
+    [InlineData(false, true, CoreSpeechModelStatus.LoadFailed, "would not load. Remove")]
+    [InlineData(false, true, CoreSpeechModelStatus.NoModelFound, "not installed yet. Lock")]
+    public void VoiceHintsUseSentences(bool available, bool capture, CoreSpeechModelStatus status, string expected) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Dispatcher.UIThread.VerifyAccess();
+        var saved = (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider, CoreSpeech.ModelStatusProvider);
+        var lang = LocalizationManager.Instance.CurrentLanguage;
+        try
+        {
+            LocalizationManager.Instance.SetLanguage("en");
+            CoreSpeech.IsAvailableProvider = () => available;
+            CoreSpeech.HasCaptureDeviceProvider = () => capture;
+            CoreSpeech.ModelStatusProvider = () => status;
+            var hint = ConditioningControlPanel.Avalonia.Views.Features.LockCardFeatureControl.VoiceHint(true);
+            Assert.Contains(expected, hint);
+            Assert.DoesNotContain("—", hint);
+            Assert.DoesNotContain("–", hint);
+        }
+        finally
+        {
+            (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider, CoreSpeech.ModelStatusProvider) = saved;
+            LocalizationManager.Instance.SetLanguage(lang);
+        }
+    });
+
+    [Theory]
+    [InlineData("en")]
+    [InlineData("de")]
+    [InlineData("es")]
+    [InlineData("fr")]
+    [InlineData("it")]
+    [InlineData("pt-BR")]
+    [InlineData("ru")]
+    [InlineData("ja")]
+    [InlineData("ko")]
+    [InlineData("zh-CN")]
+    public void VoiceHintsTranslateEveryStateAndFormatModelPaths(string language) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Dispatcher.UIThread.VerifyAccess();
+        var saved = (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider, CoreSpeech.ModelStatusProvider);
+        var loc = LocalizationManager.Instance;
+        var lang = loc.CurrentLanguage;
+        try
+        {
+            var english = new List<string>();
+            foreach (var selected in new[] { "en", language })
+            {
+                loc.SetLanguage(selected);
+                var hints = new List<string> { ConditioningControlPanel.Avalonia.Views.Features.LockCardFeatureControl.VoiceHint(false) };
+                CoreSpeech.IsAvailableProvider = () => true;
+                hints.Add(ConditioningControlPanel.Avalonia.Views.Features.LockCardFeatureControl.VoiceHint(true));
+                CoreSpeech.IsAvailableProvider = () => false;
+                CoreSpeech.HasCaptureDeviceProvider = () => false;
+                hints.Add(ConditioningControlPanel.Avalonia.Views.Features.LockCardFeatureControl.VoiceHint(true));
+                CoreSpeech.HasCaptureDeviceProvider = () => true;
+                foreach (var status in new[] { CoreSpeechModelStatus.LoadFailed, CoreSpeechModelStatus.NoModelFound })
+                {
+                    CoreSpeech.ModelStatusProvider = () => status;
+                    var hint = ConditioningControlPanel.Avalonia.Views.Features.LockCardFeatureControl.VoiceHint(true);
+                    Assert.Contains(Path.Combine(CorePaths.UserData, "Models", "vosk"), hint);
+                    hints.Add(hint);
+                }
+                for (int i = 0; i < hints.Count; i++)
+                {
+                    Assert.DoesNotContain("lockcard_voice_hint_", hints[i]);
+                    Assert.DoesNotContain("{0}", hints[i]);
+                    Assert.DoesNotContain("—", hints[i]);
+                    Assert.DoesNotContain("–", hints[i]);
+                    Assert.DoesNotContain("!", hints[i]);
+                    if (selected != "en") Assert.NotEqual(english[i], hints[i]);
+                }
+                if (selected == "en") english = hints;
+            }
+        }
+        finally
+        {
+            (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider, CoreSpeech.ModelStatusProvider) = saved;
+            loc.SetLanguage(lang);
+        }
+    });
 
     private static void ResetSpeech()
     {

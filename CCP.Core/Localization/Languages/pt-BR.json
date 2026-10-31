@@ -1,4 +1,9 @@
 {
+  "lockcard_voice_hint_off": "Diga a frase em vez de digitá-la (microfone offline). Sem microfone, você pode digitar.",
+  "lockcard_voice_hint_on": "Ativado. Diga a frase para fechar o cartão. Você pode digitar se o microfone não ouvir você.",
+  "lockcard_voice_hint_no_mic": "Nenhum microfone detectado. Os cartões de bloqueio usarão digitação até você conectar um.",
+  "lockcard_voice_hint_model_failed": "Modelo de fala encontrado, mas não foi possível carregá-lo. Remova os modelos extras de {0} e reinicie.",
+  "lockcard_voice_hint_model_missing": "O modelo de fala ainda não está instalado. Os cartões de bloqueio usarão digitação por enquanto. Extraia vosk-model-small-en-us-0.15 em {0}",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Este aprimoramento está publicado no catálogo da comunidade.",
   "deeper_submission_badge_pending": "Pendente",

@@ -1,4 +1,9 @@
 {
+  "lockcard_voice_hint_off": "입력하는 대신 문구를 말하세요(오프라인 마이크). 마이크가 없으면 글자로 입력할 수 있습니다.",
+  "lockcard_voice_hint_on": "켜짐. 문구를 말하면 카드가 닫힙니다. 마이크가 듣지 못하면 글자로 입력할 수 있습니다.",
+  "lockcard_voice_hint_no_mic": "마이크가 감지되지 않았습니다. 연결할 때까지 잠금 카드는 글자 입력을 사용합니다.",
+  "lockcard_voice_hint_model_failed": "음성 모델을 찾았지만 불러오지 못했습니다. {0}에 추가한 모델을 삭제한 뒤 다시 시작하세요.",
+  "lockcard_voice_hint_model_missing": "음성 모델이 아직 설치되지 않았습니다. 그동안 잠금 카드는 글자 입력을 사용합니다. vosk-model-small-en-us-0.15를 {0}에 압축 해제하세요.",
   "deeper_submission_badge_published": "게시됨",
   "deeper_submission_badge_published_tip": "이 인핸스먼트는 커뮤니티 카탈로그에 게시되어 있습니다.",
   "deeper_submission_badge_pending": "대기 중",

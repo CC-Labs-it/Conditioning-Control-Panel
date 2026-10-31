@@ -1,4 +1,9 @@
 {
+  "lockcard_voice_hint_off": "Dis la phrase au lieu de la saisir (micro hors ligne). Sans micro, la saisie reste disponible.",
+  "lockcard_voice_hint_on": "Activé. Dis la phrase pour fermer la carte. Tu peux la saisir si le micro ne t'entend pas.",
+  "lockcard_voice_hint_no_mic": "Aucun micro détecté. Les cartes de verrouillage utiliseront la saisie jusqu'à sa connexion.",
+  "lockcard_voice_hint_model_failed": "Modèle vocal trouvé, mais impossible à charger. Supprime les modèles supplémentaires dans {0}, puis redémarre.",
+  "lockcard_voice_hint_model_missing": "Le modèle vocal n'est pas encore installé. Les cartes de verrouillage utiliseront la saisie en attendant. Décompresse vosk-model-small-en-us-0.15 dans {0}",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",

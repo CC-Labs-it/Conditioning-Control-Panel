@@ -1,4 +1,9 @@
 {
+  "lockcard_voice_hint_off": "说出短语，无需打字（离线麦克风）。没有麦克风时可使用打字。",
+  "lockcard_voice_hint_on": "已开启。说出短语即可关闭卡片。麦克风听不到时仍可打字。",
+  "lockcard_voice_hint_no_mic": "未检测到麦克风。连接麦克风前，锁定卡片将使用打字。",
+  "lockcard_voice_hint_model_failed": "已找到语音模型，但无法加载。请删除添加到 {0} 的额外模型，然后重启。",
+  "lockcard_voice_hint_model_missing": "尚未安装语音模型。在此之前，锁定卡片将使用打字。请将 vosk-model-small-en-us-0.15 解压到 {0}。",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",
