@@ -8709,5 +8709,6 @@
   "online_official_stamped_line": "I media online arrivano da Scrolller. Ogni immagine e clip porta un piccolo marchio \"via Scrolller\".",
   "online_cache_day_line": "I media online restano un giorno in una piccola cache su questo computer e non vengono mai caricati.",
   "chaos_dvd_title": "DVD porno",
-  "chaos_dvd_loading": "📀 caricamento"
+  "chaos_dvd_loading": "📀 caricamento",
+  "chaos_thought_fallback": "CEDI"
 }

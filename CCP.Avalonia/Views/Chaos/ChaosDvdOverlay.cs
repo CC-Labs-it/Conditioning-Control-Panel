@@ -27,7 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// logo would draw on a black slab). Tests swap both seams: headless has no X server.</summary>
         internal static Func<bool> CanOverlay = () => X11Overlay.IsAvailable && X11Overlay.IsCompositing;
         internal static Func<Window, PixelRect, bool> PrepareWindow = (w, bounds) =>
-            X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, bounds);
+            X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, bounds, passive: true, topmost: w.Topmost);
         /// <summary>Tests swap in a stepped source; live: the host window's own frame source.</summary>
         internal static Func<TopLevel, IFrameSource> FrameSourceFor = top => TopLevelFrameSource.For(top);
         internal static Action<Window> RaiseWindow = w => X11Overlay.Raise(w);
@@ -36,8 +36,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Func<bool> SharedHost = () => CoreSettings.Current.ChaosDvdSharedHost;
         internal static Func<bool> SpankerRedirect = () => ChaosRunHost.State is { SpankerActive: true } s
             && s.MaxedBoons.Contains("the_spanker"); // WPF ChaosModeService.cs:407-408
+        // WPF ChaosDvdOverlay.cs:164,473-484 and ChaosWindowZ.cs:35,50: input never activates or forces pinning.
+        internal static Func<Window, PixelRect, bool, bool, bool, bool> PrepareNativeWindow = (w, bounds, through, passive, pin) =>
+            X11Overlay.SetClickThrough(w, through) && X11Overlay.SetOverrideRedirect(w, bounds, passive, pin);
         internal static Func<Window, PixelRect, bool, bool> PrepareLogoWindow = (w, bounds, clickable) =>
-            X11Overlay.SetClickThrough(w, !clickable) && X11Overlay.SetOverrideRedirect(w, bounds);
+            PrepareNativeWindow(w, bounds, !clickable, true, w.Topmost);
         private static readonly Dictionary<ChaosDvdLogo, Window> Windows = new();
         private static readonly HashSet<ChaosDvdLogo> Clickable = new();
         internal static IReadOnlyDictionary<ChaosDvdLogo, Window> LogoWindows => Windows;
@@ -103,7 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 WindowDecorations = WindowDecorations.None,
                 TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
                 Background = Brushes.Transparent,
-                Topmost = true,
+                Topmost = CoreSettings.Current.ChaosPinOnTop,
                 ShowInTaskbar = false,
                 ShowActivated = false,
                 CanResize = false,
@@ -160,7 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 {
                     WindowDecorations = WindowDecorations.None,
                     TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
-                    Background = Brushes.Transparent, Topmost = true, ShowInTaskbar = false,
+                    Background = Brushes.Transparent, Topmost = CoreSettings.Current.ChaosPinOnTop, ShowInTaskbar = false,
                     ShowActivated = false, CanResize = false, Focusable = false,
                     IsHitTestVisible = clickable, Content = panel,
                 };

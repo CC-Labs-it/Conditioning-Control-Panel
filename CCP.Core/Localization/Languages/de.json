@@ -7961,5 +7961,6 @@
   "online_official_stamped_line": "Online-Medien kommen von Scrolller. Jedes Bild und jeder Clip trägt einen kleinen \"via Scrolller\"-Vermerk.",
   "online_cache_day_line": "Online-Medien bleiben einen Tag in einem kleinen Cache auf diesem Computer und werden nie hochgeladen.",
   "chaos_dvd_title": "Porno-DVD",
-  "chaos_dvd_loading": "📀 wird geladen"
+  "chaos_dvd_loading": "📀 wird geladen",
+  "chaos_thought_fallback": "GIB NACH"
 }

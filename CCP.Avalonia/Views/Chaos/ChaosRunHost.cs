@@ -641,7 +641,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     var pool = CoreSettings.Current.BouncingTextPool;
                     var enabled = pool?.Where(kv => kv.Value).Select(kv => kv.Key).ToArray();
                     // WPF ChaosModeService.cs:2819-2832: enabled user lines, then the fixed fallback.
-                    var text = enabled is { Length: > 0 } ? enabled[Rng.Next(enabled.Length)] : "GIVE IN";
+                    var text = enabled is { Length: > 0 } ? enabled[Rng.Next(enabled.Length)] : Loc.Get("chaos_thought_fallback");
                     ChaosDvdOverlay.Launch(_overlay, _state.IntrusiveThoughtsSec, 1.3, 0.8,
                         text: text, splitOnRabbit: _state.MaxedBoons.Contains("intrusive_thoughts"));
                 }

@@ -127,7 +127,7 @@ public sealed class ChaosDvdOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
-            var (can, prep) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow);
+            var (can, prep, shared) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.SharedHost);
             var host = new Window();
             host.Show();
             try
@@ -142,7 +142,7 @@ public sealed class ChaosDvdOverlayTests
             finally
             {
                 ChaosDvdOverlay.CloseActive();
-                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow) = (can, prep);
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.SharedHost) = (can, prep, shared);
                 host.Close();
             }
             return Task.CompletedTask;
