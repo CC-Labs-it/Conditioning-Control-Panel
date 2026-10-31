@@ -1871,11 +1871,11 @@
                             <Border x:Name="XPGrooveFoot" Height="1" VerticalAlignment="Bottom" Margin="5,0"
                                     Background="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
                             <!-- The TUBE: DepthTubeGloss over whatever colour the fill wears (pink,
-                                 the mod gradient, Lockdown crimson) and a DepthTubeBead riding the
-                                 leading edge. Both are children of the fill, so they follow its
-                                 width on the fill's own clock; the sheen sweep and level flash stay. -->
+                                 the mod gradient, Lockdown crimson). A child of the fill, so it follows
+                                 its width on the fill's own clock; the sheen sweep and level flash stay.
+                                 No light rides the tip (owner 2026-10-31: the white dot is gone). -->
                             <Border x:Name="XPBar" Background="{DynamicResource PinkBrush}" CornerRadius="5"
-                                    HorizontalAlignment="Left" Width="100" SizeChanged="XPBar_SizeChanged">
+                                    HorizontalAlignment="Left" Width="100">
                                 <!-- Chrome FX (PR-1): a slow gloss travelling along the filled part of
                                      the bar. White on purpose - it reads as light catching the fill
                                      rather than a second accent colour on top of the accent. Parked at
@@ -1887,15 +1887,6 @@
                                 <Grid>
                                 <Border x:Name="XPTubeGloss" CornerRadius="5" Background="{DynamicResource DepthTubeGloss}"
                                         IsHitTestVisible="False"/>
-                                <!-- Polish wave 11: the bead hangs HALF past the fill (Margin -4 on an 8 px dot), so
-                                     its centre is the tip and it lights the same spot as the meniscus.
-                                     It sat inside the fill before (Margin 1, bright origin at 0.4) and
-                                     read as a white glow about 6 px behind the tip. Hidden until the
-                                     fill is XpBeadMinFillPx wide (XPBar_SizeChanged), so it never
-                                     sits past the track start. A Border does not clip, so it shows. -->
-                                <Ellipse x:Name="XPTubeBead" Width="8" Height="8" HorizontalAlignment="Right"
-                                         VerticalAlignment="Center" Margin="0,0,-4,0" Visibility="Hidden"
-                                         Fill="{DynamicResource DepthTubeBead}" IsHitTestVisible="False"/>
                                 <Border x:Name="XPBarSheen" Margin="4,0" IsHitTestVisible="False" Opacity="0">
                                     <Border.Background>
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
@@ -1914,29 +1905,6 @@
                                 <Border.Effect>
                                     <DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="20" ShadowDepth="0" Opacity="0.95"/>
                                 </Border.Effect>
-                            </Border>
-                            <!-- Velvet Kit 2 (FX lane B): the meniscus - a small radial glow dot that
-                                 rides the tip of the fill, so the bar reads as liquid with a surface
-                                 rather than a rectangle. Pre-built and parked at Opacity 0; its X is
-                                 tweened on the fill's own clock from AnimateXpDisplay, and the pulse
-                                 is an ambient loop owned by MainWindow.HeroFx.cs. No Effect: the
-                                 halo IS the gradient, so nothing here needs an intermediate surface.
-                                 Polish wave 11: 10 px, the groove's own height (was 12). At 12 the
-                                 10 px track clipped it top and bottom and the halo read as a flat grey
-                                 block past the tip. AnimateXpMeniscus reads this Width for its centre. -->
-                            <Border x:Name="XPMeniscus" Width="10" Height="10" CornerRadius="5"
-                                    HorizontalAlignment="Left" VerticalAlignment="Center"
-                                    Opacity="0" IsHitTestVisible="False">
-                                <Border.Background>
-                                    <RadialGradientBrush>
-                                        <GradientStop Offset="0" Color="#FFFFFFFF"/>
-                                        <GradientStop Offset="0.35" Color="#CCFFFFFF"/>
-                                        <GradientStop Offset="1" Color="#00FFFFFF"/>
-                                    </RadialGradientBrush>
-                                </Border.Background>
-                                <Border.RenderTransform>
-                                    <TranslateTransform x:Name="XPMeniscusSlide"/>
-                                </Border.RenderTransform>
                             </Border>
                         </Grid>
                     </Border>
