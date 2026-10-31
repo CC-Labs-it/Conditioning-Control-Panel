@@ -298,6 +298,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             CoreAudio.PlayOneShot(Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "bubbles", pop), Math.Min(vol, 1f), "bubble-pop");
         }
 
+        /// <summary>WPF BubbleService.cs:2060-2072: a random chime at the bubble volume and scale.</summary>
+        internal static void PlayChime(float scale)
+        {
+            var path = ContentLocator.Resolve(Path.Combine("Resources", "sounds", $"chime{Field.Random.Next(1, 4)}.mp3"));
+            if (!File.Exists(path)) return;
+            var s = CoreSettings.Current;
+            var volume = (float)Math.Pow(s.MasterVolume / 100f * (s.BubblesVolume / 100f), 1.5) * scale;
+            CoreAudio.PlayOneShot(path, volume, "bubble-chime");
+        }
+
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
         internal static void Pop(AmbientBubble b)
         {

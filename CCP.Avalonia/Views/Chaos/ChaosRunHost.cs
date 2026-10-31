@@ -132,6 +132,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _boonBar.SetPicks(picks);
             _boonBar.Show();
             picks.CollectionChanged += (_, _) => _boonBar?.SetPicks(picks);
+            // WPF ChaosModeService.cs:369: the field is ready before the opening payload.
+            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse);
             // WPF ChaosModeService.cs:422-435: the loadout pick enters before wave 1.
             // Scripted first descents ignore even a stale equipped id.
             var equipped = _state.Config.ScriptedFirstRun ? null : ChaosMeta.State.EquippedStartBoon;
@@ -142,6 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosMeta.MarkDiscovered("boon:" + boon.Id);
                 ChaosAnnouncerOverlay.Announce($"◈ {boon.Name}", ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
+            if (_state.WelcomeShowerEnabled) SpawnWelcomeShower(); // WPF :438-440, before lifetime modifiers
             ChaosRunEffects.ApplyLifetimeBoons(_state);
             _hud?.SetPreRunExpanded(false);
             _hud?.SetClockVisible(_state.ShowWaveTimer);
@@ -160,12 +163,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer.Start();
 
             _spawnSerial = _ordinarySpawns = 0;
-            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse);
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
             _spawnTimer.Start();
         }
 
+        /// <summary>WPF ChaosModeService.cs:1645-1659: six benign rain-down treats, chime and feed.</summary>
+        private static void SpawnWelcomeShower()
+        {
+            if (_state == null) return;
+            for (int i = 0; i < 6; i++)
+            {
+                var variant = ChaosBubbleVariants.All[Random.Shared.Next(2)];
+                BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(variant, _state.RunIntensity,
+                    _state.FuseTimeMult, ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale));
+            }
+            BubbleOverlay.PlayChime(0.25f);
+            _state.PushEvent(ConditioningControlPanel.Localization.Loc.Get("chaos_welcome_shower_event"));
+        }
         /// <summary>WPF SpawnTick (:1101), the treat half. Re-times its own timer like WPF.</summary>
         internal static void SpawnTick()
         {

@@ -7,6 +7,9 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Localization;
 
 namespace CCP.Avalonia.Tests;
 
@@ -74,18 +77,20 @@ public sealed class ChaosBoonBarOverlayTests
             return Task.CompletedTask;
         });
     }
-
     // WPF ChaosModeService.cs:422-435, ChaosBoonBarOverlay.cs:179-192, ChaosArt.cs:58-69.
     [Fact]
-    public async Task Equipped_boon_lands_with_cached_art_and_scripted_or_invalid_loadouts_stay_empty()
+    public async Task Equipped_welcome_shower_lands_with_art_and_treats_unless_scripted_or_invalid()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
             ChaosRunState.IconResolver = null; // included in the suite's static seam restore
-            var boon = ChaosBoonPool.All.Last(b => !b.IsCurse);
+            var boon = ChaosBoonPool.All.First(b => b.Id == "welcome_shower");
             var meta = ChaosMeta.State;
             var equipped = meta.EquippedStartBoon;
+            var audio = CoreAudio.PlayOneShotProvider;
+            var chimes = new System.Collections.Generic.List<float>();
+            CoreAudio.PlayOneShotProvider = (_, volume, tag, _, _) => { if (tag == "bubble-chime") chimes.Add(volume); };
             var path = System.IO.Path.Combine(global::ConditioningControlPanel.CorePaths.UserData,
                 "assets", "assets", "Chaos", "boons", boon.Id + ".png");
             var prior = System.IO.File.Exists(path) ? System.IO.File.ReadAllBytes(path) : null;
@@ -107,20 +112,30 @@ public sealed class ChaosBoonBarOverlayTests
                 Assert.NotNull(image.Source);
                 Assert.Same(image.Source, ChaosEffectBannerOverlay.ResolveArt(boon.Id, "boons"));
                 Assert.Contains("boon:" + boon.Id, meta.DiscoveredCodexIds);
+                // WPF ChaosModeService.cs:438-440,1645-1659: six opening treats, chime and feed.
+                Assert.Equal(6, BubbleOverlay.ChaosCount);
+                Assert.All(BubbleOverlay.Field.Bubbles.Where(b => b.Spec != null), b =>
+                {
+                    Assert.False(b.Spec!.IsLive); Assert.Equal(ChaosMotion.RainDown, b.Spec.Motion);
+                    Assert.Contains(b.Spec.Payload.Kind, new[] { EffectBubblePayloadKind.Flash, EffectBubblePayloadKind.Subliminal });
+                });
+                var settings = CoreSettings.Current;
+                Assert.Equal((float)System.Math.Pow(settings.MasterVolume / 100f * (settings.BubblesVolume / 100f), 1.5) * 0.25f, Assert.Single(chimes));
+                Assert.Contains(Loc.Get("chaos_welcome_shower_event"), ChaosRunHost.State.RecentEvents);
                 ChaosRunHost.ForceShutdown();
-
                 var scripted = Cfg();
                 scripted.ScriptedFirstRun = true;
                 ChaosRunHost.StartRun(scripted);
                 ChaosRunHost.Overlay!.FinishCountdown();
                 Assert.Empty(ChaosRunHost.State!.RunPickTiles);
+                Assert.Equal(0, BubbleOverlay.ChaosCount); Assert.Single(chimes);
                 Assert.False(ChaosRunHost.BoonBar!.Pill.IsVisible);
                 ChaosRunHost.ForceShutdown();
-
                 meta.EquippedStartBoon = "unknown-boon";
                 ChaosRunHost.StartRun(Cfg());
                 ChaosRunHost.Overlay!.FinishCountdown();
                 Assert.Empty(ChaosRunHost.State!.RunPickTiles);
+                Assert.Equal(0, BubbleOverlay.ChaosCount); Assert.Single(chimes);
                 Assert.Null(ChaosEffectBannerOverlay.ResolveArt("unknown-boon", "boons"));
                 ChaosRunHost.State.ApplyBoon(ChaosBoonPool.All.First(b => b.IsCurse));
                 var fallback = (Border)Assert.Single(ChaosRunHost.BoonBar!.Row.Children);
@@ -130,6 +145,7 @@ public sealed class ChaosBoonBarOverlayTests
             {
                 ChaosRunHost.ForceShutdown();
                 meta.EquippedStartBoon = equipped;
+                CoreAudio.PlayOneShotProvider = audio;
                 if (prior == null) System.IO.File.Delete(path); else System.IO.File.WriteAllBytes(path, prior);
             }
             return Task.CompletedTask;
