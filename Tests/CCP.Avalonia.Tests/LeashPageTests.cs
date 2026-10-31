@@ -11,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -177,5 +178,55 @@ public sealed class LeashPageTests
         }
         finally { window.Close(); }
     });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void HoldHintNamesTheConfiguredKeyAndShelfKeepsNewestFourteen(bool hint) =>
+        Run(true, (shell, _, svc) =>
+        {
+            CoreSettings.Current.PanicKey = "F9";
+            var block = LeashHeadTests.BlockWithPunishment();
+            block["me"]!["stickers"] = new JArray(Enumerable.Range(0, 16).Select(i => new JObject
+            {
+                ["sticker"] = "good", ["from"] = new JObject { ["id"] = "holder", ["name"] = "Juno" + i },
+                ["at"] = DateTimeOffset.UtcNow.ToString("o"),
+            }));
+            svc.ApplyBlock(block);
+            Assert.Equal(16, svc.Snapshot.Me!.Stickers.Count);
+            shell.ShowTab("leash");
+            var page = shell.Named<LeashTabView>("LeashTab")!;
+            var words = page.GetLogicalDescendants().OfType<TextBlock>().ToArray();
+            if (hint)
+            {
+                Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("leash_self_hold_hint", "F9"),
+                    words.Single(t => t.Tag as string == "leash-self-hold").Text);
+                return;
+            }
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("leash_self_shelf", 16),
+                words.Single(t => t.Tag as string == "leash-shelf").Text);
+            Assert.Equal(Enumerable.Range(2, 14).Reverse().Select(i => "good · " +
+                ConditioningControlPanel.Localization.Loc.GetF("leash_sticker_from", "Juno" + i)),
+                words.Where(t => t.Tag as string == "leash-sticker").Select(t => t.Text));
+        });
+
+    [Fact]
+    public void OpenPageRebindsWhenServiceArrivesOrGoesAndHiddenPageUnsubscribes() =>
+        Run(true, (shell, _, svc) =>
+        {
+            LeashHead.Service = null;
+            shell.ShowTab("leash");
+            var page = shell.Named<LeashTabView>("LeashTab")!;
+            Assert.True(page.ShowingEmpty);
+            LeashHead.Service = svc;
+            Assert.False(page.ShowingEmpty);
+            LeashHead.Service = null;
+            Assert.True(page.ShowingEmpty);
+            shell.ShowTab("friends");
+            LeashHead.Service = svc;
+            Assert.True(page.ShowingEmpty);
+            shell.ShowTab("leash");
+            Assert.False(page.ShowingEmpty);
+        });
 
 }

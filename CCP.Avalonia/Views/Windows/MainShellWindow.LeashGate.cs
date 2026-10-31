@@ -108,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             GameUp: PanicSurfaces.AnyOwnsTheScreen(),
             LockCardOpen: LockCardWindow.IsAnyOpen() || BubbleCountWindow.IsAnyOpen(),
             FullscreenEffect: CoreEngine.Video?.IsPlaying == true,
-            ModalUp: LockdownActive || Named<Border>("RemoteControlOverlay")?.IsVisible == true,
+            ModalUp: CoreTutorial.IsActive || IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive || LockdownActive || Named<Border>("RemoteControlOverlay")?.IsVisible == true,
             PanelAway: !IsVisible || WindowState == WindowState.Minimized,
             Watching: _leashRunner?.IsRunning == true || DateTime.UtcNow < _leashSnoozeUntilUtc);
 

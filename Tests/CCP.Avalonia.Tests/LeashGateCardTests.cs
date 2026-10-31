@@ -94,6 +94,37 @@ public sealed class LeashGateCardTests
         Dispatcher.UIThread.RunJobs();
     }
 
+    [Theory]
+    [InlineData("tutorial")]
+    [InlineData("startup")]
+    [InlineData("update")]
+    public void GateStandsBackForTutorialAndStartupModal(string modal) => Run(true, (shell, launcher, _) =>
+    {
+        var oldTutorial = CoreTutorial.IsActiveProvider;
+        var oldModal = MainShellWindow.IsStartupDialogShowing;
+        var offering = typeof(AppUpdater).GetField("_offering", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var oldOffering = offering.GetValue(null);
+        try
+        {
+            CoreTutorial.IsActiveProvider = () => modal == "tutorial";
+            MainShellWindow.IsStartupDialogShowing = modal == "startup";
+            offering.SetValue(null, modal == "update");
+            PressTile(launcher);
+            Assert.False(shell.LeashGate!.IsUp);
+            CoreTutorial.IsActiveProvider = () => false;
+            MainShellWindow.IsStartupDialogShowing = false;
+            offering.SetValue(null, false);
+            shell.CheckLeashGate();
+            Assert.True(shell.LeashGate.IsUp);
+        }
+        finally
+        {
+            CoreTutorial.IsActiveProvider = oldTutorial;
+            MainShellWindow.IsStartupDialogShowing = oldModal;
+            offering.SetValue(null, oldOffering);
+        }
+    });
+
     [Fact]
     public void PendingPunishment_TileShowsTheGateCard_WithPanicAndCut() => Run(punished: true, (shell, launcher, _) =>
     {

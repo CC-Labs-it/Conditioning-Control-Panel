@@ -30,6 +30,7 @@ public partial class LeashTabView : UserControl
     internal void OnShown()
     {
         Unsubscribe();
+        LeashHead.ServiceChanged += OnServiceChanged;
         try { _service = _resolve(); } catch { _service = null; }
         if (_service != null) _service.SnapshotChanged += OnSnapshot;
         Render();
@@ -37,7 +38,14 @@ public partial class LeashTabView : UserControl
 
     private void Unsubscribe()
     {
+        LeashHead.ServiceChanged -= OnServiceChanged;
         if (_service != null) _service.SnapshotChanged -= OnSnapshot;
+    }
+    // WPF LeashDrawerSection.cs:37-39,48-60 rebinds on load. Also handle late service startup here.
+    private void OnServiceChanged()
+    {
+        if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) OnShown();
+        else global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (IsEffectivelyVisible) OnShown(); });
     }
     private void OnSnapshot(LeashSnapshot _) => Render();
 
