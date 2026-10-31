@@ -265,7 +265,8 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>SessionEngine.ResumeSession (SessionEngine.cs:554): restart only what has reached its
-        /// start minute; a still-deferred start fires from Tick as before.</summary>
+        /// start minute; a still-deferred start fires from Tick as before. Bubbles use the session
+        /// switch even before a delayed start or between bursts (SessionEngine.cs:570).</summary>
         public void Resume()
         {
             if (!IsRunning || !IsPaused || CurrentSession is not { } session) return;
@@ -279,7 +280,7 @@ namespace ConditioningControlPanel.Services
             if (ss.LockCardEnabled && !_deferred.IsPending("lock cards")) LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
             if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
-            if (CoreSettings.Current.BubblesEnabled) CoreBubbles.Start(); // WPF SessionEngine.cs:570
+            if (ss.BubblesEnabled) CoreBubbles.Start(); // WPF SessionEngine.cs:570
             // SessionEngine.cs:575: the pause closed it; admission is asked afresh.
             var minutes = Elapsed.TotalMinutes;
             if (!CornerGifShown && CanRaiseCornerGif(ss) && minutes >= ss.CornerGifStartMinute

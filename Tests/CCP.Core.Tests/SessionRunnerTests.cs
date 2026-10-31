@@ -150,7 +150,7 @@ public sealed class SessionRunnerTests : IDisposable
             _runner.Tick(TimeSpan.FromMinutes(4), now.AddMinutes(3));
             Assert.False(running);
             _runner.Resume();
-            Assert.True(running); // WPF resumes the saved enabled flag before the next tick.
+            Assert.True(running); // WPF resumes from the session switch before the next tick.
             _runner.Tick(TimeSpan.FromMinutes(4), now.AddMinutes(3));
             Assert.False(running);
             _runner.Tick(TimeSpan.FromMinutes(10), now.AddMinutes(10));
@@ -159,6 +159,53 @@ public sealed class SessionRunnerTests : IDisposable
             _runner.Start(session);
             _runner.Tick(TimeSpan.FromMinutes(4), now.AddMinutes(20));
             Assert.True(running); // new run resets the schedule
+        }
+        finally
+        {
+            _runner.Stop();
+            (CoreBubbles.StartAction, CoreBubbles.StopAction, CoreBubbles.RefreshFrequencyAction) = hooks;
+            (s.BubblesEnabled, s.BubblesFrequency, s.BubblesClickable) = saved;
+        }
+    }
+
+    // WPF SessionEngine.cs:570: Resume uses the session switch even while the live flag is off.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SessionBubblesResumeBeforeDelayedStartOrBetweenBursts(bool intermittent)
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.BubblesEnabled, s.BubblesFrequency, s.BubblesClickable);
+        var hooks = (CoreBubbles.StartAction, CoreBubbles.StopAction, CoreBubbles.RefreshFrequencyAction);
+        bool running = false;
+        CoreBubbles.StartAction = () => running = true;
+        CoreBubbles.StopAction = () => running = false;
+        CoreBubbles.RefreshFrequencyAction = () => { };
+        try
+        {
+            var session = OneMinute();
+            session.DurationMinutes = 30;
+            var ss = session.Settings;
+            ss.BubblesEnabled = true;
+            ss.BubblesIntermittent = intermittent;
+            ss.BubblesStartMinute = 8;
+            ss.BubblesBurstCount = 2;
+            ss.BubblesGapMin = ss.BubblesGapMax = 10;
+            _runner.Start(session);
+            if (intermittent)
+            {
+                var now = new DateTime(2026, 1, 1);
+                _runner.Tick(TimeSpan.FromMinutes(4), now);
+                Assert.True(running);
+                _runner.Tick(TimeSpan.FromMinutes(4), now.AddMinutes(3));
+            }
+            else _runner.Tick(TimeSpan.FromMinutes(1));
+            Assert.False(s.BubblesEnabled);
+            Assert.False(running);
+            _runner.Pause();
+            _runner.Resume();
+            Assert.True(running);
+            Assert.False(s.BubblesEnabled); // Resume requests Start without rewriting the timeline flag.
         }
         finally
         {
