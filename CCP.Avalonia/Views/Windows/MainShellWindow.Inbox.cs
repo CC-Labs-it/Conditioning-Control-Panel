@@ -53,12 +53,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var held = info?.Tier >= 2 ? CoreAccount.HasLabAccess : CoreAccount.HasPremiumAccess;
                 if (!PostCodeFlow.StampRow(settings, live, held, DateTime.Now)) return;
                 CoreSettings.Save();
-                StartupLadder.Inbox.File(new InboxItem
-                {
-                    Key = "conv:" + PostCodeFlow.RowKey, Glyph = "🔖", Title = Loc.Get("conv_postcode_title"),
-                    Summary = Loc.GetF("conv_postcode_body", info == null ? live!.Feature! : Loc.Get(info.TitleLocKey)),
-                    Open = () => PostCodeDialog.Present(this),
-                });
+                PostCodeDialog.Offer(this, Loc.GetF("conv_postcode_body", info == null ? live!.Feature! : Loc.Get(info.TitleLocKey)));
             }
             catch (Exception ex) { Log.Debug(ex, "Post code live check failed"); }
         }
