@@ -272,6 +272,10 @@ public sealed record InboxItem(
 
     /// <summary>The Glassroad room a <c>race</c> invite carries (12 a-z0-9), else null.</summary>
     public string? Room { get; init; }
+
+    /// <summary>The course of that room (the server reads it off the room record), else null. Only a
+    /// course this build can name is kept.</summary>
+    public string? Track { get; init; }
 }
 
 /// <summary>What a send came back with. Only <see cref="Sent"/> did anything.</summary>
