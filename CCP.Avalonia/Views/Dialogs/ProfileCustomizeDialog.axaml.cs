@@ -111,6 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             BuildBanners();
             BuildAvatars();
+            BuildFrames();
             BuildAccents();
             BuildTitles();
             BuildPins();
@@ -211,6 +212,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 _avatarHost.Children.Add(BuildAvatarTile(preset.Id, preset.Name, new ImageBrush(image) { Stretch = Stretch.UniformToFill }));
             }
 
+            foreach (var item in ShopCosmeticsRegistry.Avatars)
+            {
+                if (ModArt.AvatarPreset(item.Id) is not { } image) continue;
+                var tile = BuildAvatarTile(item.Id, Loc.Get(item.NameKey), new ImageBrush(image));
+                LockShopTile(tile, item);
+                _avatarHost.Children.Add(tile);
+            }
             SelectAvatar(_draft.AvatarId ?? NoneKey);
         }
 
@@ -248,9 +256,53 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
         private void SelectAvatar(string key)
         {
+            if (_avatarTiles.TryGetValue(key, out var picked) && Equals(picked.Tag, "locked")) return;
             _draft.AvatarId = key == NoneKey ? null : key;
             foreach (var (id, tile) in _avatarTiles)
                 tile.BorderBrush = id == key ? SelectedBorder : IdleBorder;
+        }
+
+        private readonly Dictionary<string, Border> _frameTiles = new(StringComparer.Ordinal);
+        private static void LockShopTile(Border tile, ShopProfileItem item)
+        {
+            if (Platform.PrizeOwnership.IsGranted(item.Grant)) return;
+            tile.Tag = "locked";
+            tile.Opacity = 0.45;
+            tile.Cursor = new Cursor(StandardCursorType.Arrow);
+            ToolTip.SetTip(tile, Loc.Get(item.NameKey) + Environment.NewLine + Loc.Get("shop_locked_in_counter"));
+        }
+
+        private void BuildFrames()
+        {
+            var host = this.FindControl<WrapPanel>("FrameHost")!;
+            Add(NoneKey, Loc.Get("profile_customize_none"), null, null);
+            foreach (var item in ShopCosmeticsRegistry.Frames)
+                if (ModArt.ShopFrame(item.Id) is { } art) Add(item.Id, Loc.Get(item.NameKey), art, item);
+            this.FindControl<Border>("FrameSection")!.IsVisible = ShopCosmeticsRegistry.Frames.Any();
+            SelectFrame(_draft.FrameId ?? NoneKey);
+
+            void Add(string key, string label, IImage? art, ShopProfileItem? item)
+            {
+                var stage = new Grid { Width = 56, Height = 56, IsHitTestVisible = false };
+                stage.Children.Add(new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Background = TileBg });
+                if (art != null) stage.Children.Add(new Image { Source = art, Stretch = Stretch.Uniform });
+                var tile = new Border { Width = 64, Height = 64, Margin = new Thickness(0, 0, 8, 8),
+                    CornerRadius = new CornerRadius(8), Background = Brushes.Transparent,
+                    BorderBrush = IdleBorder, BorderThickness = new Thickness(2), Child = stage,
+                    Cursor = new Cursor(StandardCursorType.Hand) };
+                ToolTip.SetTip(tile, label);
+                Clickable(tile, () => SelectFrame(key));
+                if (item != null) LockShopTile(tile, item);
+                _frameTiles[key] = tile;
+                host.Children.Add(tile);
+            }
+        }
+
+        private void SelectFrame(string key)
+        {
+            if (_frameTiles.TryGetValue(key, out var picked) && Equals(picked.Tag, "locked")) return;
+            _draft.FrameId = key == NoneKey ? null : key;
+            foreach (var (id, tile) in _frameTiles) tile.BorderBrush = id == key ? SelectedBorder : IdleBorder;
         }
 
         // ============================== accent ==============================
@@ -722,6 +774,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
         private void BtnReset_Click()
         {
+            SelectFrame(NoneKey);
             SelectBanner(NoneKey);
             SelectAccent(NoneKey);
             SelectTitle(NoneKey);

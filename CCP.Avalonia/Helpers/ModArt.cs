@@ -150,10 +150,29 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 Bitmap? art = null;
                 try
                 {
-                    var path = ConditioningControlPanel.Services.CosmeticsPool.AvatarPath(id);
+                    var shop = ConditioningControlPanel.Services.ShopCosmeticsRegistry.Find(id);
+                    var path = shop is { IsAvatar: true } ? ShopPath(shop) : ConditioningControlPanel.Services.CosmeticsPool.AvatarPath(id);
                     if (path != null && File.Exists(path)) { using var file = File.OpenRead(path); art = Decode(file, 256); }
                 }
                 catch (Exception ex) { Log.Debug("CosmeticsCatalog: avatar preset {Id} failed to load: {E}", id, ex.Message); }
+                return WardrobeCache[key] = art;
+            }
+        }
+
+        private static string ShopPath(ConditioningControlPanel.Services.ShopProfileItem item) =>
+            Path.Combine(AppContext.BaseDirectory, "Resources", "cosmetics", item.File.Replace('/', Path.DirectorySeparatorChar));
+
+        internal static Bitmap? ShopFrame(string? id)
+        {
+            var item = ConditioningControlPanel.Services.ShopCosmeticsRegistry.Find(id);
+            if (item is not { IsFrame: true }) return null;
+            lock (WardrobeCache)
+            {
+                var key = "frame:" + id;
+                if (WardrobeCache.TryGetValue(key, out var cached)) return cached;
+                Bitmap? art = null;
+                try { using var file = File.OpenRead(ShopPath(item)); art = Decode(file, 256); }
+                catch (Exception ex) { Log.Debug("Frame art unavailable: {E}", ex.Message); }
                 return WardrobeCache[key] = art;
             }
         }

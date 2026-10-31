@@ -58,6 +58,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
+        internal static ISet<string>? KnownGrants()
+        {
+            var current = FriendsHead.Identity()?.UnifiedId;
+            lock (Gate) return current != null && current == _heldAccount && _revision > 0
+                ? new HashSet<string>(_grants, StringComparer.Ordinal) : null;
+        }
+
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
         internal static void ResetHeld() { lock (Gate) (_heldAccount, _revision, _grants) = (null, 0, new(StringComparer.Ordinal)); }
 

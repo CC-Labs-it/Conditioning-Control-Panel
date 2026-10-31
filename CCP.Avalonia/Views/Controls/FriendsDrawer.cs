@@ -334,7 +334,7 @@ public sealed partial class FriendsDrawer : Border
         bool open = _openId == f.Id;
         var table = TableFor(f);
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto") };
-        var avatar = Avatar(f.Name, 38, f.Online || table != null);
+        var avatar = Avatar(f.Name, 38, f.Online || table != null, f.Look);
         if (!f.Online && table == null) avatar.Opacity = 0.55;
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
@@ -558,7 +558,7 @@ public sealed partial class FriendsDrawer : Border
             ContextMenu = menu,
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
-            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null), mid, buttons } },
+            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null, r.Look), mid, buttons } },
         };
     }
 
@@ -780,7 +780,7 @@ public sealed partial class FriendsDrawer : Border
     }
 
     /// <summary>Initials on a lilac disc, with a presence dot (mint on, grey off, none for null).</summary>
-    internal static Control Avatar(string name, double size, bool? dot)
+    internal static Control Avatar(string name, double size, bool? dot, ConditioningControlPanel.Services.PlayerLook? look = null)
     {
         var g = new Grid { Width = size, Height = size };
         g.Children.Add(new Border
@@ -792,6 +792,20 @@ public sealed partial class FriendsDrawer : Border
                 Foreground = new SolidColorBrush(Color.FromRgb(0x0B, 0x07, 0x16)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             },
         });
+        if (look is { IsEmpty: false })
+        {
+            if (Helpers.ModArt.AvatarPreset(look.AvatarId) is { } art && g.Children[0] is Border disc)
+            {
+                disc.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill };
+                disc.Child = null;
+            }
+            if (Helpers.ModArt.ShopFrame(look.FrameId) is { } frameArt)
+            {
+                var frame = size / ConditioningControlPanel.Services.ShopCosmeticsRegistry.FrameWindowRatio;
+                g.Children.Add(new Image { Source = frameArt, Width = frame, Height = frame, Stretch = Stretch.Fill,
+                    Margin = new Thickness(-(frame - size) / 2), IsHitTestVisible = false, Tag = "friends-frame" });
+            }
+        }
         if (dot is bool on)
             g.Children.Add(new Ellipse
             {
