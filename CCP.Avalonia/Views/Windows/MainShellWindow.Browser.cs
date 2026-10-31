@@ -190,7 +190,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (autoPlayFullscreen)
                 Log.Warning("Auto-play/fullscreen requested but WebHost has no script channel - takeover skipped: {Url}", url);
 
-            return NavigateBrowser(url);
+            // WPF BrowserService.cs:1205-1214 returns false if no native adapter accepted
+            // the request. Naming a URL in WebHost's fallback panel is not navigation:
+            // companion watch chips need this failure to reach their HTTPS fallback.
+            return NavigateBrowser(url) && BrowserView?.HasEngine == true;
         }
 
         // ============================== the profile viewer ==============================

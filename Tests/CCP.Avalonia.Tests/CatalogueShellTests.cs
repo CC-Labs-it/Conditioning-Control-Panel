@@ -141,6 +141,8 @@ public sealed class CatalogueShellTests
 
                 // Asking for an HT video looks nothing up: only a completed navigation does.
                 var video = new Uri("https://hypnotube.com/video/sleepy-123.html");
+                // Stand in for the native adapter: a fallback panel cannot accept navigation.
+                web.ScriptInvoker = _ => Task.FromResult<string?>(null);
                 Assert.True(shell.NavigateToUrlInBrowser(video.AbsoluteUri));
                 for (var i = 0; i < 20; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(5); }
                 Assert.DoesNotContain(fake.Seen, u => u.Contains("by-ht-url"));
