@@ -54,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             // PLAYBOOK P01: the shell hides tabs with IsVisible, so the motion clock follows it too.
-            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { EnsureVisibleContent(); UpdateMotion(); } };
+            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { Dispatcher.UIThread.Post(EnsureVisibleContent, DispatcherPriority.Background); UpdateMotion(); } };
             // Main bf57cecdf: columns follow the width, cards stretch to fill the row (Core ExclusiveShelfFit).
             this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, e) => { if (e.WidthChanged) FitShelf(); };
         }
@@ -105,9 +105,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void EnsureVisibleContent()
         {
-            if (!IsLoaded || !IsEffectivelyVisible || (CatalogueBuilt && _backdropLoaded && !_catalogueDirty)) return;
+            if (!IsLoaded || (!CatalogueBuilt && !IsEffectivelyVisible)) return;
             if (!_backdropLoaded) { LoadBackdrop(); _backdropLoaded = true; }
-            RefreshVault();
+            // ShowTab refreshes synchronously; the queued visibility pass must not rebuild it.
+            if (!CatalogueBuilt || _catalogueDirty) RefreshVault();
         }
 
         /// <summary>WPF LoadBackdrop: null keeps what is already painted rather than blanking the room.</summary>
@@ -145,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void RefreshVault()
         {
-            if (!IsEffectivelyVisible) { _catalogueDirty = true; return; } // refresh on the next visit
+            if (!CatalogueBuilt && !IsEffectivelyVisible) { _catalogueDirty = true; return; }
             CatalogueBuilt = true;
             _catalogueDirty = false;
             RetintVaultChrome();

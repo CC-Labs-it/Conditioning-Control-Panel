@@ -162,21 +162,6 @@ namespace ConditioningControlPanel
             var modId = App.Mods?.ActiveModId;
             if (string.IsNullOrEmpty(modId)) return null;
 
-            // The V1/V2 pill (Rain): with V2 on and a v2 row for this mod the whole avatar is Rain,
-            // whatever the set; otherwise today's (mod, set) answer. The setting is never changed here.
-            // A baked look (RainPackHash) plays its pack folder; a missing or corrupt pack plays the
-            // embedded clips (lane R8).
-            return Services.Companion.RainPackPlayback.ResolveTubeFolder(
-                App.Settings?.Current?.AvatarGeneration,
-                EmoteGenerationFolder(modId, Services.Companion.AvatarGenerationRule.V2),
-                App.Settings?.Current?.RainPackHash,
-                hash => Services.Companion.RainPackStore.CreateDefault().TryGetFolder(hash),
-                () => ResolveV1EmoteFolder(modId!));
-        }
-
-        /// <summary>Today's (mod, set) folder: mod-local set{N} first, then the embedded registry.</summary>
-        private string? ResolveV1EmoteFolder(string modId)
-        {
             var local = ModLocalEmoteFolder(_currentAvatarSet);
             if (local != null) return local;
 
@@ -291,34 +276,10 @@ namespace ConditioningControlPanel
             return null;
         }
 
-        /// <summary>The embedded folder name of Rain's clips (the v2 generation on BambiSleep, Sissy, CCP Default).</summary>
-        internal const string RainEmoteFolder = "rain_emotes";
-
-        /// <summary>True for Rain's clip folder: the embedded name, or an absolute path ending in it.</summary>
-        internal static bool IsRainFolder(string? folder) =>
-            !string.IsNullOrEmpty(folder)
-            && string.Equals(System.IO.Path.GetFileName(folder.TrimEnd('/', System.IO.Path.DirectorySeparatorChar)), RainEmoteFolder, StringComparison.OrdinalIgnoreCase);
-
-        /// <summary>True while the tube plays Rain (the wardrobe door shows only then). Follows the V1/V2
-        /// setting through the folder: V2 on a mod with a v2 row plays that row's folder (embedded, or later
-        /// an absolute baked pack), V1 never does.</summary>
-        internal bool IsRainLookActive => _circeEmoteMode
-            && (IsRainFolder(_emoteFolder)
-                || Services.Companion.RainPackPlayback.IsPackFolder(_emoteFolder)
-                || (Services.Companion.AvatarGenerationRule.IsV2(App.Settings?.Current?.AvatarGeneration)
-                    && !string.IsNullOrEmpty(_emoteFolder)
-                    && string.Equals(_emoteFolder,
-                        EmoteGenerationFolder(App.Mods?.ActiveModId, Services.Companion.AvatarGenerationRule.V2),
-                        StringComparison.OrdinalIgnoreCase)));
-
-        private void MenuItemRainWardrobe_Click(object sender, RoutedEventArgs e)
-            => Services.Companion.RainWardrobeHostService.Open();
-
         private static List<(string modId, int set, string folder)> LoadEmoteRegistry()
         {
             if (_emoteRegistry != null) return _emoteRegistry;
             var list = new List<(string, int, string)>();
-            var generations = new List<(string, string, string)>();
             try
             {
                 var uri = new Uri("pack://application:,,,/Resources/avatar_emotes_registry.json", UriKind.Absolute);
@@ -326,9 +287,16 @@ namespace ConditioningControlPanel
                 if (sri != null)
                 {
                     using var r = new System.IO.StreamReader(sri.Stream);
-                    // A generation row (Rain = v2) is a whole avatar, never an avatar set: it
-                    // stays off the arrows, the level picker and EmoteSetsForActiveMod.
-                    (list, generations) = Services.Companion.AvatarGenerationRule.ParseRegistry(r.ReadToEnd());
+                    var j = JObject.Parse(r.ReadToEnd());
+                    if (j["sets"] is JArray arr)
+                        foreach (var it in arr)
+                        {
+                            var modId = (string?)it["modId"];
+                            var set = (int?)it["avatarSet"];
+                            var folder = (string?)it["folder"];
+                            if (!string.IsNullOrEmpty(modId) && set.HasValue && !string.IsNullOrEmpty(folder))
+                                list.Add((modId!, set.Value, folder!));
+                        }
                 }
                 else App.Logger?.Warning("avatar_emotes_registry.json not found");
             }
@@ -336,29 +304,8 @@ namespace ConditioningControlPanel
             {
                 App.Logger?.Error(ex, "Failed to load avatar_emotes_registry.json");
             }
-            _emoteGenerations = generations;
             _emoteRegistry = list;
             return list;
-        }
-
-        // (modId, generation) -> folder, the registry's generation rows (parsed with the sets).
-        private static List<(string modId, string generation, string folder)>? _emoteGenerations;
-
-        /// <summary>
-        /// The embedded emote folder of a whole-avatar generation for a mod (Rain: "v2" on BambiSleep,
-        /// Sissy and CCP Default -> "rain_emotes"), or null when the mod has none. The V1/V2 switch
-        /// (handoff-1030/RAIN-V2-PLAN.md lane R1) resolves through this; <see cref="ResolveEmoteFolder"/>
-        /// also takes an absolute folder, so a baked pack can stand in for the embedded one.
-        /// </summary>
-        internal static string? EmoteGenerationFolder(string? modId, string generation)
-        {
-            if (string.IsNullOrEmpty(modId) || string.IsNullOrEmpty(generation)) return null;
-            LoadEmoteRegistry();
-            foreach (var g in _emoteGenerations ?? new())
-                if (string.Equals(g.modId, modId, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(g.generation, generation, StringComparison.OrdinalIgnoreCase))
-                    return g.folder;
-            return null;
         }
 
         /// <summary>Call after any avatar/mod/set setup to enter, leave, or switch the emote set.</summary>
@@ -395,7 +342,6 @@ namespace ConditioningControlPanel
             {
                 App.Logger?.Warning("Emote mode toggle failed: {Error}", ex.Message);
             }
-            UpdateGenerationPill();
         }
 
         private void EnterCirceEmoteMode(string folder)
@@ -510,7 +456,7 @@ namespace ConditioningControlPanel
             // EnterCirceEmoteMode. Otherwise the current clip is untouched — just ensure it's shown.
             var active = _circeActiveImg ?? ImgAvatarAnimated;
             var expected = _circeCurrentClip != null ? CirceClipUri(_circeCurrentClip).ToString() : null;
-            var actual = LayerSource(active)?.ToString();
+            var actual = AnimationBehavior.GetSourceUri(active)?.ToString();
             if (expected == null || !string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
             {
                 StopTalkSequence();
@@ -544,9 +490,9 @@ namespace ConditioningControlPanel
         internal double EmoteAudioLeadInSeconds(double fallbackSec)
             => _circeEmoteMode ? _circeNextAudioLeadInMs / 1000.0 : fallbackSec;
 
-        private void ClearGifLayer(Image img)
+        private static void ClearGifLayer(Image img)
         {
-            LayerStop(img);   // either lane: XamlAnimatedGif or the WebP player (AvatarTubeWindow.EmoteLayers.cs)
+            try { AnimationBehavior.SetSourceUri(img, null); } catch { /* ignore */ }
             img.Source = null;
             img.Visibility = Visibility.Collapsed;
         }
@@ -565,11 +511,12 @@ namespace ConditioningControlPanel
                 }
                 var active = _circeActiveImg;
                 if (active == null) return;
-                if (LayerFrameToken(active) != null)
+                var anim = AnimationBehavior.GetAnimator(active);
+                if (anim != null)
                 {
                     _circeNoAnimTicks = 0;
                     _circeStallRetried = false;
-                    if (LayerIsComplete(active))
+                    if (anim.IsComplete)
                     {
                         // The active clip has finished its single pass. A clean completion is handled promptly
                         // by OnCirceClipCompleted; this only steps in when that event was DROPPED. Require the
@@ -728,10 +675,10 @@ namespace ConditioningControlPanel
         /// Play a single expressive/reaction emote (no talking) for its full length, then return to idle —
         /// used for giggles / "mmm" / short non-verbal sounds. Honors the min-hold of whatever's showing.
         /// </summary>
-        private void StartReactionOnly(string clip, int leadInMs, bool skipHold = false)
+        private void StartReactionOnly(string clip, int leadInMs)
         {
             StopTalkSequence();
-            int defer = skipHold ? 0 : CurrentClipRemainingHold();
+            int defer = CurrentClipRemainingHold();
             _circeNextAudioLeadInMs = Math.Clamp(defer + leadInMs, 0, 3000);
 
             void Begin()
@@ -943,12 +890,6 @@ namespace ConditioningControlPanel
         /// <summary>One clip finished playing → move to the next (queued reaction, else idle rotation).</summary>
         private void OnCirceClipCompleted(object? sender, AnimationCompletedEventArgs e)
         {
-            if (sender is Image img) OnCirceLayerCompleted(img);
-        }
-
-        /// <summary>Either lane's single pass ended on <paramref name="sender"/>.</summary>
-        private void OnCirceLayerCompleted(Image sender)
-        {
             if (!_circeEmoteMode) return;
             if (_circeTalkSeqActive) return;                       // the talk timer owns transitions mid-line
             if (!ReferenceEquals(sender, _circeActiveImg)) return; // stale outgoing layer
@@ -964,15 +905,9 @@ namespace ConditioningControlPanel
         /// </summary>
         private void OnCirceGifError(object? sender, AnimationErrorEventArgs e)
         {
-            if (sender is Image img) OnCirceLayerError(img, "GIF " + e.Kind, e.Exception?.Message);
-        }
-
-        /// <summary>Either lane failed to load or decode a clip on <paramref name="sender"/>.</summary>
-        private void OnCirceLayerError(Image sender, string kind, string? error)
-        {
             var layer = ReferenceEquals(sender, ImgAvatarAnimated) ? "A" : "B";
-            App.Logger?.Warning("[EMOTE] {Kind} error on layer {Layer} (clip={Clip}): {Error}",
-                kind, layer, _circeCurrentClip, error);
+            App.Logger?.Warning("[EMOTE] GIF {Kind} error on layer {Layer} (clip={Clip}): {Error}",
+                e.Kind, layer, _circeCurrentClip, e.Exception?.Message);
             if (!_circeEmoteMode || _circeTalkSeqActive) return;
             if (!ReferenceEquals(sender, _circeActiveImg)) return;
             // The dead layer is the active one — keep the safety poll running so its stalled-load grace
@@ -1046,7 +981,10 @@ namespace ConditioningControlPanel
         {
             try
             {
-                LayerLoadOnce(img, CirceClipUri(clip));
+                if (AnimationBehavior.GetSourceUri(img) != null) AnimationBehavior.SetSourceUri(img, null);
+                AnimationBehavior.SetAutoStart(img, true);
+                AnimationBehavior.SetRepeatBehavior(img, new RepeatBehavior(1));
+                AnimationBehavior.SetSourceUri(img, CirceClipUri(clip));
             }
             catch (Exception ex) { App.Logger?.Warning("Emote clip reload failed ({Clip}): {Error}", clip, ex.Message); }
         }
@@ -1065,7 +1003,7 @@ namespace ConditioningControlPanel
             // sees the STALE animator and fades the visible frame out while the new GIF is still loading —
             // the residual ~1.5s blank the watchdog had to reload. Capture it so InReady() can require a
             // genuinely NEW animator instance instead.
-            var inOldAnim = LayerFrameToken(inImg);
+            var inOldAnim = AnimationBehavior.GetAnimator(inImg);
 
             try
             {
@@ -1074,7 +1012,11 @@ namespace ConditioningControlPanel
                 // runs ClearGifLayer). Re-setting an identical URI would be a silent no-op: the old,
                 // already-finished animator stays (RepeatBehavior(1)) → no restart, no AnimationCompleted,
                 // and the rotation strands on a dead layer.
-                LayerLoadOnce(inImg, CirceClipUri(clip)); // play once, then rotate
+                if (AnimationBehavior.GetSourceUri(inImg) != null)
+                    AnimationBehavior.SetSourceUri(inImg, null);
+                AnimationBehavior.SetRepeatBehavior(inImg, new RepeatBehavior(1)); // play once, then rotate
+                AnimationBehavior.SetAutoStart(inImg, true);
+                AnimationBehavior.SetSourceUri(inImg, CirceClipUri(clip));
             }
             catch (Exception ex)
             {
@@ -1143,7 +1085,7 @@ namespace ConditioningControlPanel
             // the outgoing frame until the new clip can actually be shown — never fade into nothing.
             bool InReady()
             {
-                var a = LayerFrameToken(inImg);
+                var a = AnimationBehavior.GetAnimator(inImg);
                 return a != null && !ReferenceEquals(a, inOldAnim);
             }
             bool talkSeq = _circeTalkSeqActive;
@@ -1163,7 +1105,7 @@ namespace ConditioningControlPanel
                 // never blanks). If it doesn't (first clip / a prior swap left it empty), there is nothing to
                 // hold — waiting only extends the blank, so cap the wait short and let recovery re-pick fast.
                 bool outVisible = outImg.Visibility == Visibility.Visible && outImg.Opacity > 0.01
-                                  && (outImg.Source != null || LayerFrameToken(outImg) != null);
+                                  && (outImg.Source != null || AnimationBehavior.GetAnimator(outImg) != null);
                 long graceCap = talkSeq ? CirceTalkLoadGraceMs : CirceLoadGraceMs;
                 if (!outVisible) graceCap = Math.Min(graceCap, CirceEmptyHoldGraceMs);
                 long gateStart = Environment.TickCount64;
@@ -1232,13 +1174,24 @@ namespace ConditioningControlPanel
 
         // _emoteFolder is either a bare embedded folder name (pack://Resources/) or, for a
         // user-installed mod, an absolute directory path — Path.IsPathRooted discriminates.
-        // A clip is <clip>.webp (the SkiaSharp lane) when the folder ships one, else <clip>.gif.
-        private Uri CirceClipUri(string clip) => ResolveEmoteClipUri(_emoteFolder ?? "", clip);
+        private Uri CirceClipUri(string clip)
+            => System.IO.Path.IsPathRooted(_emoteFolder)
+                ? new Uri(System.IO.Path.Combine(_emoteFolder!, clip + ".gif"), UriKind.Absolute)
+                : new Uri($"pack://application:,,,/Resources/{_emoteFolder}/{clip}.gif", UriKind.Absolute);
 
-        /// <summary>True if the clip (WebP or GIF) actually ships in the current pose folder.</summary>
+        /// <summary>True if the clip's GIF actually ships in the current pose folder.</summary>
         private bool CirceClipExists(string clip)
         {
-            try { return !string.IsNullOrEmpty(_emoteFolder) && EmoteClipFileExists(CirceClipUri(clip)); }
+            try
+            {
+                if (System.IO.Path.IsPathRooted(_emoteFolder))
+                    return System.IO.File.Exists(System.IO.Path.Combine(_emoteFolder!, clip + ".gif"));
+
+                var sri = Application.GetResourceStream(CirceClipUri(clip));
+                if (sri == null) return false;
+                sri.Stream.Dispose();
+                return true;
+            }
             catch { return false; }
         }
 
@@ -1422,8 +1375,8 @@ namespace ConditioningControlPanel
         private void CircePause()
         {
             if (!_circeEmoteMode) return;
-            LayerPause(ImgAvatarAnimated);
-            LayerPause(ImgAvatarAnimatedB);
+            try { AnimationBehavior.GetAnimator(ImgAvatarAnimated)?.Pause(); } catch { }
+            try { AnimationBehavior.GetAnimator(ImgAvatarAnimatedB)?.Pause(); } catch { }
             StopTalkSequence(); // abort any in-flight spoken line; resume returns to idle rotation
             _circeWatchdog?.Stop(); _circeMinHoldTimer?.Stop();
 
@@ -1437,8 +1390,8 @@ namespace ConditioningControlPanel
         private void CirceResume()
         {
             if (!_circeEmoteMode) return;
-            LayerPlay(ImgAvatarAnimated);
-            LayerPlay(ImgAvatarAnimatedB);
+            try { AnimationBehavior.GetAnimator(ImgAvatarAnimated)?.Play(); } catch { }
+            try { AnimationBehavior.GetAnimator(ImgAvatarAnimatedB)?.Play(); } catch { }
             // Restart the rotation-safety poll so rotation keeps going after returning on-screen.
             // #744: unconditionally - the watchdog is what recovers a rotation that has no current
             // clip, so gating it on _circeCurrentClip left exactly the stuck case unrecoverable.

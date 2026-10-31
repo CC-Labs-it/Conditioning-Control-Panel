@@ -99,7 +99,6 @@ namespace ConditioningControlPanel.Views.Controls.Companion.Runtime
         private string _chatShortcutHint = string.Empty;
         private bool _isMuted;
         private bool _isCompanionShown = true;
-        private bool _isRainWardrobeAvailable;
 
         public CompanionHeroRuntimeVm(CompanionRuntimeContext ctx)
         {
@@ -113,8 +112,6 @@ namespace ConditioningControlPanel.Views.Controls.Companion.Runtime
                 () => _ctx.Navigator?.RevealWorkshop(CompanionRoomAnchors.WorkshopRosterCell));
             DetachCommand = new CompanionRelayCommand(
                 () => _ctx.WithWindow(w => w.BtnDetachCompanion_Click(this, CompanionRuntimeContext.Routed())));
-            OpenRainWardrobeCommand = new CompanionRelayCommand(
-                () => CompanionRuntimeContext.Guarded(Services.Companion.RainWardrobeHostService.Open, "open Rain's wardrobe"));
             ToggleMuteCommand = new CompanionRelayCommand(
                 () => _ctx.WithWindow(w => { w.SetAvatarMuted(!IsMuted); Sync(); }));
             ToggleShownCommand = new CompanionRelayCommand(
@@ -162,8 +159,6 @@ namespace ConditioningControlPanel.Views.Controls.Companion.Runtime
         public ICommand ChatCommand { get; }
         public ICommand SwitchCommand { get; }
         public ICommand DetachCommand { get; }
-        public ICommand OpenRainWardrobeCommand { get; }
-        public bool IsRainWardrobeAvailable { get => _isRainWardrobeAvailable; private set => Set(ref _isRainWardrobeAvailable, value); }
         public ICommand ToggleMuteCommand { get; }
         public ICommand ToggleShownCommand { get; }
         public ICommand OpenEngineRoomCommand { get; }
@@ -227,8 +222,6 @@ namespace ConditioningControlPanel.Views.Controls.Companion.Runtime
             IsCompanionEnabled = IsCompanionShown;
             IsMuted = settings?.AvatarMuted ?? false;
             ChatShortcutHint = SafeShortcut();
-            IsRainWardrobeAvailable = AvatarTubeWindow.EmoteGenerationFolder(
-                App.Mods?.ActiveModId, Services.Companion.AvatarGenerationRule.V2) != null;
 
             // ---- the pills ----
             bool aiOn = settings?.AiChatEnabled == true;

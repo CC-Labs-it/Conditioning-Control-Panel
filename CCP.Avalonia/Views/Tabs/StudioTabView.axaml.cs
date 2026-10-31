@@ -327,7 +327,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             Try(RefreshRackLabels);
             _artLoaded = false;
-            if (IsLoaded && IsEffectivelyVisible) Try(EnsureRackArt);
+            if (_artEverLoaded || (IsLoaded && IsEffectivelyVisible)) Try(EnsureRackArt);
             Try(RetintChrome);
             Try(RefreshDots);           // after RetintChrome: it reads the accent-tinted dot halo
             Try(RefreshDetailHeader);
@@ -340,6 +340,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private bool _artLoaded;
+        private bool _artEverLoaded;
         internal bool ArtLoaded => _artLoaded;
 
         private void EnsureRackArt()
@@ -347,7 +348,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_artLoaded) return;
             RefreshRackArt();
             ApplyDoorIcon();
-            _artLoaded = true;
+            _artLoaded = _artEverLoaded = true;
         }
 
         /// <summary>

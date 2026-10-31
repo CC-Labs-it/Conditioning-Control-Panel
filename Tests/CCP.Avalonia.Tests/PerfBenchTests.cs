@@ -36,6 +36,12 @@ public sealed class PerfBenchTests
             Assert.False(vault.CatalogueBuilt);
             Assert.False(studio.ArtLoaded);
             Assert.Empty(vault.FindControl<ItemsControl>("ExclusivesShelf")!.Items);
+            shell.Hide();
+            vault.RefreshVault();
+            studio.RepaintModAwareChrome();
+            Assert.False(vault.CatalogueBuilt);
+            Assert.False(studio.ArtLoaded);
+            shell.Show();
             Assert.True(PerfBench.Show(shell, "ExclusivesTab"));
             Assert.True(vault.CatalogueBuilt);
             Assert.NotEmpty(vault.FindControl<ItemsControl>("ExclusivesShelf")!.Items);
@@ -64,6 +70,99 @@ public sealed class PerfBenchTests
         finally { shell.Close(); }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task FirstPremiumVisitBuildsTheCatalogueOnce() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var shelf = shell.Named<ExclusivesTabView>("ExclusivesTab")!.FindControl<ItemsControl>("ExclusivesShelf")!;
+            var builds = 0;
+            shelf.PropertyChanged += (_, e) => { if (e.Property == ItemsControl.ItemsSourceProperty) builds++; };
+            Assert.True(PerfBench.Show(shell, "ExclusivesTab"));
+            Dispatcher.UIThread.RunJobs(); // Include the queued visibility pass, not just ShowTab.
+            Assert.Equal(1, builds);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BuiltPremiumRepaintsTierAndArtWhileShellIsHidden() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var (premium, free) = (global::ConditioningControlPanel.CoreEntitlement.HasPremiumProvider,
+            global::ConditioningControlPanel.CoreEntitlement.IsFreeTodayProvider);
+        var shell = new MainShellWindow();
+        try
+        {
+            global::ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => false;
+            global::ConditioningControlPanel.CoreEntitlement.IsFreeTodayProvider = _ => false;
+            shell.Show();
+            PerfBench.Show(shell, "ExclusivesTab");
+            Dispatcher.UIThread.RunJobs();
+            var vault = shell.Named<ExclusivesTabView>("ExclusivesTab")!;
+            var veil = vault.FindControl<Border>("SpotVeil")!;
+            var art = vault.FindControl<Image>("SpotArtImage")!;
+            Assert.True(veil.IsVisible);
+            var before = art.Source;
+            Assert.NotNull(before);
+            shell.Hide();
+            Assert.True(vault.IsVisible);
+            Assert.False(vault.IsEffectivelyVisible);
+            global::ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => true;
+            shell.RefreshExclusivesTab(); // Tier/day rollover's production repaint entry point.
+            Assert.False(veil.IsVisible);
+            Assert.NotSame(before, art.Source);
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(veil.IsVisible); // No tab switch is required after tray restore.
+        }
+        finally
+        {
+            shell.Close();
+            (global::ConditioningControlPanel.CoreEntitlement.HasPremiumProvider,
+                global::ConditioningControlPanel.CoreEntitlement.IsFreeTodayProvider) = (premium, free);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BuiltStudioRepaintsArtWhileShellIsHidden() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            PerfBench.Show(shell, "StudioTab");
+            Dispatcher.UIThread.RunJobs();
+            var studio = shell.Named<StudioTabView>("StudioTab")!;
+            var art = studio.FindControl<Image>("ImgStudioDoorArt")!;
+            var before = art.Source;
+            Assert.NotNull(before);
+            shell.Hide();
+            Assert.True(studio.IsVisible);
+            studio.RepaintModAwareChrome(); // ModChanged's production repaint entry point.
+            Assert.True(studio.ArtLoaded);
+            Assert.NotSame(before, art.Source);
+            shell.Show();
+            Assert.True(studio.ArtLoaded);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
+    private static void Setup()
+    {
+        if (Application.Current is null)
+            Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+    }
 
     [Fact]
     public void MedianInterpolatesAndP95IsNearestRank()
