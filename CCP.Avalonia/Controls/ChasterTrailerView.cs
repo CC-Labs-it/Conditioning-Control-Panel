@@ -9,7 +9,6 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 namespace ConditioningControlPanel.Avalonia.Controls;
 public sealed class ChasterTrailerView : Grid {
-    internal static bool BrowserEnabled = true; // WPF Controls/ChasterTrailerView.cs:35, tab xaml.cs:126.
     internal WebHost? Browser { get; set; }
     internal Uri? Page { get; private set; }
     private bool _started, _disposed, _mounting, _paused;
@@ -24,8 +23,8 @@ public sealed class ChasterTrailerView : Grid {
         + "return window.__ccpTrailerStage=window.__ccpTrailerRun.apply(CT,arguments);};}return true;})()";
     internal const string PauseScript = "(function(){var s=window.__ccpTrailerStage;if(s)s.dead=true;"
         + "document.getAnimations().forEach(function(a){a.cancel();});})()";
-    public void Start() {
-        if (!BrowserEnabled || _started || _disposed || HasFailed) return;
+    private void Start() {
+        if (_started || _disposed || HasFailed) return;
         _started = true;
         try {
             if (!File.Exists(Path.Combine(AppContext.BaseDirectory, "Resources", "web", "chaster", "trailers.html"))) { Fail(); return; }

@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal bool SuppressNewWindows { get; set; }
         internal event Action? BrowserProcessFailed;
         private IDisposable? _failureWatch;
+        internal Func<IPlatformHandle?, Action, IDisposable> FailurePolicy = Platform.TrailerBrowserPolicy.Attach;
         internal void OnBrowserProcessFailed() => BrowserProcessFailed?.Invoke();
         internal IDisposable? PreserveForMove() => _web?.BeginReparenting();
 
@@ -330,10 +331,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     _web.AdapterDestroyed += (_, _) => { try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Trailer failure cleanup failed"); } finally { _failureWatch = null; } };
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => {
-                        // The native core exists now; subscribe before observers can reveal a scene.
-                        if (BrowserProcessFailed != null && _failureWatch == null)
-                            try { _failureWatch = Platform.TrailerBrowserPolicy.Attach(_web.TryGetPlatformHandle(), OnBrowserProcessFailed); }
-                            catch (Exception ex) { Log.Debug(ex, "Trailer failure subscription failed"); OnBrowserProcessFailed(); }
                         OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
                     };
                     _web.NewWindowRequested += (_, e) => { if (SuppressNewWindows) e.Handled = true; };
@@ -464,6 +461,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnScrolllerGate(int engine, bool gated)
         {
             if (engine != _scrolllerEngine) return;
+            // WPF Controls/ChasterTrailerView.cs:164-165. The gate holds navigation until the native core exists.
+            if (BrowserProcessFailed != null && _failureWatch == null)
+                try { _failureWatch = FailurePolicy(_web?.TryGetPlatformHandle(), OnBrowserProcessFailed); }
+                catch (Exception ex) { Log.Debug(ex, "Trailer failure subscription failed"); OnBrowserProcessFailed(); return; }
             _scrolllerGate = gated;
             var src = Source;
             if (ReloadAfterGate(_web?.Source, src, _loadedOnThisEngine) && ConditioningControlPanel.Services.SandboxNet.Allows(src))

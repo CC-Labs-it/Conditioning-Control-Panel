@@ -34,7 +34,7 @@ public sealed class ChasterMenuTests
     private static readonly string Locked =
         "[{\"_id\":\"l1\",\"title\":\"Test Cage\",\"status\":\"locked\",\"role\":\"wearer\",\"endDate\":\"" + DateTime.UtcNow.AddDays(2).ToString("o") + "\"}]";
 
-    private sealed class FakeChaster : HttpMessageHandler
+    internal sealed class FakeChaster : HttpMessageHandler
     {
         public volatile string Locks = NoLock;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
@@ -49,7 +49,7 @@ public sealed class ChasterMenuTests
             });
     }
 
-    private static async Task Run(Func<ChasterService, FakeChaster, ChasterTabView, Window, Task> body)
+    internal static async Task Run(Func<ChasterService, FakeChaster, ChasterTabView, Window, Task> body)
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
