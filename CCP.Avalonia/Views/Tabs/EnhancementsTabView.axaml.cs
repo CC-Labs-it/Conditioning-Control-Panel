@@ -30,7 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// CreateAnimatedSkillTreeBrush. Ownership, purchasability, multiplier and time come from Core
     /// <c>SkillTreeRules</c>, the same rules WPF SkillTreeService delegates to.
     ///
-    /// <para>Purchasing lives in EnhancementsTabView.Purchase.cs; PRO analytics in EnhancementsTabView.Analytics.cs.</para>
+    /// <para>Not here (see the parity rows): purchasing (SkillCard_Click / PurchaseSkillAsync is a
+    /// server call behind account auth) and purchase FX. PRO analytics live in EnhancementsTabView.Analytics.cs.</para>
     /// </summary>
     public partial class EnhancementsTabView : UserControl
     {
@@ -446,7 +447,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             prestige.Children.Add(pInfo);
             var prestigeBox = Box(Rgb(52, 44, 28), new Thickness(15, 6, 15, 6), prestige);
             ToolTip.SetTip(prestigeBox, Loc.Get("tooltip_prestige"));
-            PrestigeAnchor = prestigeBox;
             main.Children.Add(prestigeBox);
 
             if (SkillTreeRules.HasSkill(settings, "ditzy_data"))
@@ -672,7 +672,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (owned) _ownedGlows.Add(glow);
             }
             wrapper.Children.Add(node);
-            if (canPurchase) WirePurchase(wrapper, skill);
 
             wrapper.PointerEntered += (_, _) => ApplyNodeHover(wrapper, true);
             wrapper.PointerExited += (_, _) => ApplyNodeHover(wrapper, false);
@@ -810,7 +809,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var card = SecretBorder(owned ? Rgb(40, 30, 50) : canPurchase ? Rgb(50, 30, 60) : Rgb(35, 25, 45),
                 owned ? Rgb(180, 100, 255) : canPurchase ? Rgb(153, 50, 204) : Rgb(100, 70, 130), owned ? 2 : 1, body, opacity: 1);
             card.Tag = skill.Id;
-            if (canPurchase) WirePurchase(card, skill);
             // The card is a Border, so its glow is its own BoxShadow (WPF DropShadowEffect; P82 rule 3).
             if (owned) card.BoxShadow = new BoxShadows(new BoxShadow { Blur = 12, Color = Color.FromArgb(128, Colors.Purple.R, Colors.Purple.G, Colors.Purple.B) });
             else if (canPurchase) card.BoxShadow = new BoxShadows(new BoxShadow { Blur = 10, Color = Color.FromArgb(102, Colors.MediumPurple.R, Colors.MediumPurple.G, Colors.MediumPurple.B) });

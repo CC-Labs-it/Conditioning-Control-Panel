@@ -20,7 +20,7 @@ namespace ConditioningControlPanel.Services
     /// <see cref="CoreReleaseContent.AppVersion"/>. Applying a profile to settings stays in the
     /// WPF head (<c>V2AuthServiceHead.ApplyUserDataToSettings</c>) until unit 6.</para>
     /// </summary>
-    public partial class V2AuthService
+    public class V2AuthService
     {
         // One shared client per process, as before; configured on first use rather than at type
         // init so the head has seeded CoreReleaseContent.AppVersion by then.

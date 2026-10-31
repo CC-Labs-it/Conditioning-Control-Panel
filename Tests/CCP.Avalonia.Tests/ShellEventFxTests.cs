@@ -8,8 +8,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
-using ConditioningControlPanel.Avalonia.Helpers;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -131,141 +129,6 @@ public sealed class ShellEventFxTests
         Assert.Equal(2, Bursts(shell)); // service subscriptions cannot pin or repaint a closed shell
     });
 
-    [Fact]
-    public void EnhancementClickConfirmsBuysAndCelebratesBeforeRebuild() => WithShell((shell, engine, _) =>
-    {
-        var clock = new FxClock();
-        BeatLoop.Time = clock;
-        CoreSettings.Current.SkillPoints = 100;
-        shell.ShowTab("enhancements");
-        Dispatcher.UIThread.RunJobs();
-        var tab = shell.Named<EnhancementsTabView>("EnhancementsTab")!;
-        var skill = SkillDefinition.All.First(x => SkillTreeRules.CanPurchaseSkill(CoreSettings.Current, x.Id) && !x.IsSecret);
-        var card = tab.GetVisualDescendants().OfType<Panel>().First(x => (string?)x.Tag == skill.Id);
-        int confirmed = 0, bought = 0;
-        tab.ConfirmPurchase = (_, title, message) =>
-        {
-            confirmed++;
-            Assert.Contains(skill.LocalizedName, message);
-            Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("msg_skill_permanent_note"), message);
-            return System.Threading.Tasks.Task.FromResult(true);
-        };
-        engine.SuppressPopups = true;
-        engine.Progress.LifetimeSkillPointsSpent = 99;
-        tab.Purchase = id =>
-        {
-            bought++;
-            Assert.Equal(skill.Id, id);
-            Assert.False(card.IsEnabled);
-            return System.Threading.Tasks.Task.FromResult((true, (string?)null, (long?)100));
-        };
-        var at = card.TranslatePoint(new Point(card.Bounds.Width / 2, card.Bounds.Height / 2), shell)!.Value;
-        shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-        shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-        Assert.Equal(1, confirmed);
-        Assert.Equal(1, bought);
-        Assert.Equal(2, Bursts(shell));
-        Assert.True(shell.PrestigeSweeping, $"host={shell.Named<Grid>("EventFxHost")?.Bounds}, transform={shell.Named<Border>("PrestigeSheen")?.RenderTransform}, active={shell.IsActive}");
-        clock.Now += TimeSpan.FromSeconds(0.3).Ticks;
-        BeatLoop.StepAll();
-        Assert.Equal(0.16, shell.Named<Border>("PrestigeSheen")!.Opacity, 5);
-        shell.StopEventFx();
-        Assert.False(shell.PrestigeSweeping);
-        Assert.Equal(0, shell.Named<Border>("PrestigeSheen")!.Opacity);
-        Dispatcher.UIThread.RunJobs();
-
-        tab.ConfirmPurchase = (_, _, _) => System.Threading.Tasks.Task.FromResult(false);
-        tab.BuyAsync(card, skill).GetAwaiter().GetResult();
-        Assert.Equal(1, bought);
-        Assert.Equal(2, Bursts(shell));
-        shell.ShowTab("home");
-        Dispatcher.UIThread.RunJobs();
-        shell.CelebrateEnhancementPurchase(new Border(), 2, null);
-        Assert.Equal(3, Bursts(shell));
-        AssertAt(shell, shell.NavAnchorForTab("enhancements")!);
-        CoreSettings.Current.MotionLevel = MotionLevel.Off;
-        shell.CelebrateEnhancementPurchase(new Border(), 1, tab.PrestigeAnchor);
-        Assert.Equal(3, Bursts(shell));
-        Assert.False(shell.PrestigeSweeping);
-        CoreSettings.Current.MotionLevel = MotionLevel.Full;
-        shell.CelebrateEnhancementPurchase(new Border(), 1, null);
-        Assert.True(shell.PrestigeSweeping);
-        clock.Now += TimeSpan.FromSeconds(1.2).Ticks;
-        BeatLoop.StepAll();
-        Assert.False(shell.PrestigeSweeping);
-        Assert.Equal(0, shell.Named<Border>("PrestigeSheen")!.Opacity);
-        shell.CelebrateEnhancementPurchase(new Border(), 1, null);
-        Assert.True(shell.PrestigeSweeping);
-        shell.Close();
-        Assert.False(shell.PrestigeSweeping);
-    }, signedIn: true);
-
-    [Theory]
-    [InlineData("good_girl_streak")]
-    [InlineData("oopsie_insurance")]
-    [InlineData("pink_rush")]
-    public void PurchaseAppliesImmediateSkillEffects(string id) => WithShell((shell, engine, _) =>
-    {
-        var s = CoreSettings.Current;
-        s.SkillPoints = 100;
-        s.UnlockedSkills = SkillDefinition.All.Where(x => x.Id != id).Select(x => x.Id).ToList();
-        shell.ShowTab("enhancements");
-        Dispatcher.UIThread.RunJobs();
-        var tab = shell.Named<EnhancementsTabView>("EnhancementsTab")!;
-        tab.ConfirmPurchase = (_, _, _) => System.Threading.Tasks.Task.FromResult(true);
-        tab.Purchase = skillId =>
-        {
-            s.UnlockedSkills.Add(skillId);
-            return System.Threading.Tasks.Task.FromResult((true, (string?)null, (long?)null));
-        };
-        var skill = SkillDefinition.All.Single(x => x.Id == id);
-        int fixes = s.StreakFixCharges;
-        try
-        {
-            tab.BuyAsync(tab, skill).GetAwaiter().GetResult();
-            Assert.Equal(skill.Cost, s.SeasonPointsSpent);
-            Assert.Equal(skill.Cost, engine.Progress.LifetimeSkillPointsSpent);
-            if (id == "good_girl_streak")
-            {
-                Assert.Equal(1, s.StreakShieldsRemaining);
-                Assert.Equal(DateTime.UtcNow.Date, s.LastStreakShieldResetDate);
-            }
-            if (id == "oopsie_insurance") Assert.Equal(fixes + 1, s.StreakFixCharges);
-            if (id == "pink_rush") Assert.True(PinkRushHost.IsChecking);
-        }
-        finally { PinkRushHost.Stop(); }
-    });
-
-    [Theory]
-    [InlineData(true, true, 1)]
-    [InlineData(false, true, 0)]
-    [InlineData(true, false, 0)]
-    public void PurchaseRaisesSkillBarkOnlyAfterSuccess(bool confirmed, bool success, int expected) => WithShell((shell, _, _) =>
-    {
-        CoreSettings.Current.SkillPoints = 100;
-        var tab = shell.Named<EnhancementsTabView>("EnhancementsTab")!;
-        var old = ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine;
-        var rule = new ConditioningControlPanel.Services.Bark.BarkRule
-        {
-            Id = "purchase-test", Trigger = "SkillUnlocked", VariantPool = new() { new("{skill}") },
-            ClassRaw = "safety", // bypass cooldowns so duplicates cannot hide
-        };
-        var bark = new ConditioningControlPanel.Services.Bark.BarkEngine(() => new(new[] { rule }));
-        var spoken = new List<string>();
-        bark.Speak = speech => spoken.Add(speech.Text);
-        bark.Start();
-        ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = bark;
-        try
-        {
-            tab.ConfirmPurchase = (_, _, _) => System.Threading.Tasks.Task.FromResult(confirmed);
-            tab.Purchase = _ => System.Threading.Tasks.Task.FromResult((success, (string?)null, (long?)null));
-            tab.BuyAsync(tab, SkillDefinition.All.Single(x => x.Id == "pink_hours")).GetAwaiter().GetResult();
-            Assert.Equal(expected, spoken.Count);
-            if (expected > 0) Assert.Equal("pink_hours", spoken.Single());
-        }
-        finally { ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = old; }
-    });
-
     // Reading the existing EventBurstLayer counter lets the same behavior test fail on the old
     // shell, which has no burst layer at all, before the implementation is applied.
     internal static int Bursts(MainShellWindow shell) =>
@@ -292,16 +155,13 @@ public sealed class ShellEventFxTests
         Assert.Equal(at.Y - 280, Canvas.GetTop(layer), 3);
     }
 
-    private static void WithShell(Action<MainShellWindow, AchievementEngine, QuestService> body, bool signedIn = false) => AvaloniaTestDispatcher.Run(() =>
+    private static void WithShell(Action<MainShellWindow, AchievementEngine, QuestService> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var dir = Directory.CreateTempSubdirectory("ccp-shell-event-fx-").FullName;
         var (oldSettings, oldAchievements, oldQuests) = (CoreSettings.ServiceProvider, AvApp.Achievements, AvApp.Quests);
-        var oldTime = BeatLoop.Time;
-        var oldLogin = CoreAccount.IsLoggedInProvider;
-        if (signedIn) CoreAccount.IsLoggedInProvider = () => true;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var s = service.Current;
@@ -331,21 +191,12 @@ public sealed class ShellEventFxTests
             shell?.Close();
             Dispatcher.UIThread.RunJobs();
             quests.Dispose();
-            BeatLoop.Time = oldTime;
-            CoreAccount.IsLoggedInProvider = oldLogin;
             CoreSettings.ServiceProvider = oldSettings;
             AvApp.Quests = oldQuests;
             SetAchievements(oldAchievements);
             Directory.Delete(dir, true);
         }
     });
-
-    private sealed class FxClock : TimeProvider
-    {
-        public long Now;
-        public override long GetTimestamp() => Now;
-        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
-    }
 
     private static void SetAchievements(AchievementEngine? engine) => typeof(AvApp)
         .GetProperty("Achievements", BindingFlags.NonPublic | BindingFlags.Static)!.SetValue(null, engine);

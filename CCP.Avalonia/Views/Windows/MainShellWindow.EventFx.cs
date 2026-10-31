@@ -2,7 +2,7 @@
 // tiles already own their on-tab burst; the shell owns the rail fallback, level cap and program
 // banner. EventBurstLayer carries the shared particle/focus gates and native-pixel anchoring.
 // WPF MainWindow.EventFx.cs:249,276,412. Quest nav fallback already lives in MainShellWindow.Quests.cs.
-// Enhancement purchase/prestige: MainShellWindow.Enhancements.cs. THE BANK remains follow-up.
+// Enhancement purchase/prestige and THE BANK remain separate follow-up work.
 
 using System;
 using Avalonia.Controls;
@@ -68,7 +68,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _eventBursts.Stop();
             _questCompletionBurst.Stop();
-            ParkPrestigeSheen();
         }
     }
 }
