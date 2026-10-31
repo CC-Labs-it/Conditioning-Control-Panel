@@ -49,9 +49,9 @@ public static class ChaosFxEnvelope
     public const double HEAT_TINT_MAX_OPACITY = 0.30;
     public static readonly (byte R, byte G, byte B) FreezeEdgeColor = (150, 210, 255);
 
-    /// <summary>Pulse (:151): peak = clamp(0.22 + s*0.5, 0.15, 0.72); snap up 40 ms, fade out by 300 ms.</summary>
-    public static ChaosFxRamp Pulse(double from, double strength) =>
-        new(from, (40, Math.Clamp(0.22 + strength * 0.5, 0.15, 0.72)), (300, 0.0));
+    /// <summary>Pulse (:151): peak = clamp(0.22 + s*0.5, 0.15, 0.72); snap up 40 ms (gentle: 300 ms), then fade for 260 ms.</summary>
+    public static ChaosFxRamp Pulse(double from, double strength, int riseMs = 40) =>
+        new(from, (riseMs, Math.Clamp(0.22 + strength * 0.5, 0.15, 0.72)), (riseMs + 260, 0.0));
 
     /// <summary>FreezeBurst (:126): to 0.6 in 50 ms, melt to 0 by 650 ms.</summary>
     public static ChaosFxRamp FreezeBurst(double from) => new(from, (50, 0.6), (650, 0.0));

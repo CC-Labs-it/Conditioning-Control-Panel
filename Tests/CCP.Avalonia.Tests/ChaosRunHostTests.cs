@@ -664,7 +664,8 @@ public sealed class ChaosRunHostTests
                 var b = BubbleOverlay.SpawnChaos(LiveSpec());
                 BubbleOverlay.Press(b, b.CenterX, b.CenterY);
                 for (int i = 0; i < 40 && !b.Popping; i++) BubbleOverlay.Field.Step();
-                Assert.Equal(new[] { "sfx:defuse_hiss", "label:SNAP", "pulse:90,255,150@0.16" }, log.Where(e => !e.StartsWith("label:+")));
+                Assert.Equal(new[] { "sfx:defuse_hiss", "label:SNAP", "pulse:90,255,150@0.16",
+                    "pulse:255,170,80@0.05" }, log.Where(e => !e.StartsWith("label:+")));
 
                 string[] Press(int shields, int collars)
                 {
@@ -707,10 +708,47 @@ public sealed class ChaosRunHostTests
                 var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
                     { VariantId = "spiral", SizePx = 200, Payload = new FlashPayload() });
                 BubbleOverlay.Press(b, b.CenterX, b.CenterY);
-                Assert.Equal(new[] { "sfx:", "label:SPIRAL" },
+                Assert.Equal(new[] { "sfx:", "label:SPIRAL", "pulse:255,200,235@0.10", "pulse:255,170,80@0.05" },   // + WPF benign pulse, combo micro pulse
                     log.Where(e => !e.StartsWith("label:+")).Select(e => e.StartsWith("sfx:Pop") ? "sfx:" : e));
             }
             finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF CheckComboMilestone (:3081-3084): crossing ×25 plays streak_milestone, announces
+    /// "STREAK ×25" and fires the big gold pulse once.</summary>
+    [Fact]
+    public async Task Crossing_a_big_combo_threshold_plays_the_cue_and_announces_the_streak()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            var s = CoreSettings.Current;
+            bool was = s.ChaosAnnouncerEnabled;
+            s.ChaosAnnouncerEnabled = true;
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosAnnouncerOverlay.CloseActive();
+                ChaosRunHost.State!.Combo = 24;
+                log.Clear();
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "spiral", SizePx = 200, Payload = new FlashPayload() });
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Assert.Equal(new[] { "sfx:streak_milestone", "pulse:255,230,120@0.55" },
+                    log.SkipWhile(e => e != "sfx:streak_milestone").Take(2));
+                Assert.Equal("STREAK ×25", ChaosAnnouncerOverlay.Active?.Current?.Text);
+            }
+            finally
+            {
+                ChaosAnnouncerOverlay.CloseActive();
+                s.ChaosAnnouncerEnabled = was;
+                Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta();
+            }
             return Task.CompletedTask;
         });
     }
