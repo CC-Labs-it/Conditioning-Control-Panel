@@ -87,6 +87,67 @@ public sealed class LeashPageTests
             Assert.All(wire.Calls, call => Assert.Equal("settings", call.Op));
         });
 
+    [Fact]
+    public void LiveShelfShowsNewestFourteenWithTotalAndSenderAndDisappearsWhenEmpty() =>
+        Run(true, (shell, _, svc) =>
+        {
+            shell.ShowTab("leash");
+            var page = shell.Named<LeashTabView>("LeashTab")!;
+            Assert.DoesNotContain(page.GetLogicalDescendants().OfType<Control>(), c => c.Tag as string == "leash-shelf");
+            var block = LeashHeadTests.BlockWithPunishment();
+            var stickers = new JArray();
+            for (var i = 0; i < 16; i++) stickers.Add(new JObject
+            {
+                ["sticker"] = LeashGrammar.Stickers[i % 5],
+                ["from"] = new JObject { ["id"] = "sender" + i, ["name"] = "Sender " + i },
+                ["at"] = DateTimeOffset.UtcNow.AddMinutes(i).ToString("o"),
+            });
+            block["me"]!["stickers"] = stickers;
+            svc.ApplyBlock(block);
+            Assert.Equal(16, svc.Snapshot.Me!.Stickers.Count);
+            var shelf = page.GetLogicalDescendants().OfType<StackPanel>().Single(c => c.Tag as string == "leash-shelf");
+            Assert.Contains(shelf.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == ConditioningControlPanel.Localization.Loc.GetF("leash_self_shelf", 16));
+            var discs = shelf.GetLogicalDescendants().OfType<Grid>().Where(c => (c.Tag as string)?.StartsWith("leash-sticker:") == true).ToArray();
+            Assert.Equal(14, discs.Length);
+            for (var i = 0; i < discs.Length; i++)
+            {
+                Assert.Equal("leash-sticker:" + LeashGrammar.Stickers[(15 - i) % 5], discs[i].Tag);
+                Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("leash_sticker_from", "Sender " + (15 - i)), ToolTip.GetTip(discs[i]));
+            }
+            svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
+            Assert.DoesNotContain(page.GetLogicalDescendants().OfType<Control>(), c => c.Tag as string == "leash-shelf");
+        });
+
+    [Theory]
+    [InlineData("good", "GOOD", "#FFFFCF6B")]
+    [InlineData("star", "★", "#FFFFCF6B")]
+    [InlineData("pet", "PET", "#FFB99CFF")]
+    [InlineData("heart", "♥", "#FFFF5FB4")]
+    [InlineData("wow", "WOW", "#FF5FFFD0")]
+    [InlineData("unknown", "UNKN", "#FFB99CFF")]
+    [InlineData("x", "X", "#FFB99CFF")]
+    public void ShelfUsesWpfDiscPaletteWordsSizingAndTilt(string id, string word, string color) =>
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            var me = new MyLeash(new LeashPerson("h", "Holder", null), LeashIntensity.Standard,
+                DateTimeOffset.UtcNow, 1, null, LeashRemoteMode.Ask, Array.Empty<Punishment>(), null, 0,
+                new[] { new Sticker(id, new LeashPerson("h", "Holder", null), DateTimeOffset.UtcNow),
+                    new Sticker(id, new LeashPerson("h", "Holder", null), DateTimeOffset.UtcNow) });
+            var card = new LeashSelfCard(me, () => null);
+            var discs = card.GetLogicalDescendants().OfType<Grid>().Where(c => c.Tag as string == "leash-sticker:" + id).ToArray();
+            Assert.Equal(2, discs.Length);
+            for (var i = 0; i < discs.Length; i++)
+            {
+                Assert.Equal(26, discs[i].Width);
+                Assert.Equal(26, discs[i].Height);
+                Assert.Equal(((i * 37) % 21) - 10, Assert.IsType<global::Avalonia.Media.RotateTransform>(discs[i].RenderTransform).Angle);
+                Assert.Equal(global::Avalonia.Media.Color.Parse(color), Assert.IsType<global::Avalonia.Media.SolidColorBrush>(discs[i].Children.OfType<Border>().Single().Background).Color);
+                var text = discs[i].Children.OfType<TextBlock>().Single();
+                Assert.Equal(word, text.Text);
+                Assert.Equal(word.Length > 1 ? 26 * 0.26 : 26 * 0.5, text.FontSize);
+            }
+        });
+
     private sealed class Runner : ILeashTaskRunner
     {
         public int Starts;
