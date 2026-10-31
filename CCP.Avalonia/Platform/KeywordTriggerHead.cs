@@ -170,7 +170,8 @@ internal sealed class KeywordAudioRuntime
             audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
                 PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
         }
-        if (audio != null) Play(audio);
+        if (audio != null && CoreAudioDiagnostics.EngineRunning) Play(audio);
+        else if (audio != null) CoreAudioDiagnostics.NoteHeld("keyword-trigger");
     }
 
     // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic

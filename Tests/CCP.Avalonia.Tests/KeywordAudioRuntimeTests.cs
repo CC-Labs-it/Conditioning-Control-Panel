@@ -45,6 +45,7 @@ public sealed class KeywordAudioRuntimeTests
             CoreEntitlement.IsFreeTodayProvider = _ => false;
             CoreAudio.PlayStoppableProvider = (path, volume, _, _, _) => { played.Add((path, volume)); return () => played.Add(("stopped", 0)); };
             engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 0);
+            CoreSession.IsEngineRunningProvider = () => true;
             engine.Start();
             await body(engine, s, played);
         }
@@ -58,6 +59,30 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    public void AutomaticAudioRequiresEngineOrSession(bool engineOn, bool sessionOn, bool plays) => Run((engine, s, played) =>
+    {
+        CoreSession.IsEngineRunningProvider = () => engineOn;
+        CoreSession.IsSessionRunningProvider = () => sessionOn;
+        var ducks = 0;
+        CoreAudio.DuckProvider = _ => ducks++;
+        s.AudioDuckingEnabled = true;
+        ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).DuckSystemAudio = true;
+        Type(engine, "sit");
+        Assert.Equal(plays ? 1 : 0, played.Count);
+        Assert.Equal(plays ? 1 : 0, ducks);
+        engine.StopAudio();
+        s.KeywordTriggers[0].AudioFilePath = ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).FilePath;
+        s.KeywordTriggers[0].Actions.Clear();
+        played.Clear();
+        engine.Now = () => new DateTime(2026, 10, 15);
+        Type(engine, "sit");
+        Assert.Equal(plays ? 1 : 0, played.Count);
+    });
 
     [Fact]
     public void TypedMatchPlaysConfiguredClipAtWpfVolumeAndStopCutsIt() => Run((engine, s, played) =>
