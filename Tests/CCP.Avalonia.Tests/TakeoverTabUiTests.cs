@@ -41,21 +41,26 @@ public sealed class TakeoverTabUiTests
         var gate = loop.GetType().GetField("_gate", flags)!.GetValue(loop)!;
         var old = CoreSettings.Current.MantraChantEnabled;
         var voice = new ChantVoice();
+        var oldAudio = LibVlcAudio.Instance; var oldStop = CoreMindWipe.StopProvider; var mindWipes = 0;
         Task? teardown = null;
         try
         {
             CoreSettings.Current.MantraChantEnabled = true;
+            LibVlcAudio.Instance = new LibVlcAudio(_ => ""); CoreMindWipe.StopProvider = () => System.Threading.Interlocked.Increment(ref mindWipes);
             typeof(MantraChantHost).GetField("_voice", flags)!.SetValue(chant, voice);
             lock (gate)
             {
                 teardown = Task.Run(PanicWatchdog.Teardown);
                 Assert.True(System.Threading.SpinWait.SpinUntil(() => voice.Disposed, TimeSpan.FromSeconds(2)), "audio stops while the UI owns the loop lock");
-                Assert.False(teardown.IsCompleted);
+                teardown.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+                Assert.True(teardown.IsCompletedSuccessfully);
+                Assert.Equal(1, mindWipes);
+                Assert.Equal(1L, typeof(LibVlcAudio).GetField("_duckGeneration", flags)!.GetValue(LibVlcAudio.Instance));
+                Assert.False(chant.IsRunning);
             }
-            teardown.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
             Assert.True(CoreSettings.Current.MantraChantEnabled);
         }
-        finally { teardown?.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult(); chant.Stop(); CoreSettings.Current.MantraChantEnabled = old; ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+        finally { teardown?.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult(); chant.Stop(); LibVlcAudio.Instance = oldAudio; CoreMindWipe.StopProvider = oldStop; CoreSettings.Current.MantraChantEnabled = old; ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
         return Task.CompletedTask;
     });
 
