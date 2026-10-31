@@ -65,6 +65,25 @@ public sealed class AuthRecoveryTests : IDisposable
     private V2AuthService Client() => new(() => _settings, _http);
     private static HttpResponseMessage Status(HttpStatusCode code) => new(code) { Content = new StringContent("{}") };
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SkillPurchaseRetriesOnlyAfterGenuineRecovery(bool recovered)
+    {
+        _settings.SkillPoints = 100;
+        _http.Answers.Enqueue((HttpStatusCode.Unauthorized, "{}"));
+        _http.Answers.Enqueue(recovered
+            ? (HttpStatusCode.OK, "{\"auth_token\":\"fresh\"}")
+            : (HttpStatusCode.Unauthorized, "{}"));
+        if (recovered) _http.Answers.Enqueue((HttpStatusCode.OK,
+            "{\"success\":true,\"skill_points\":98,\"unlocked_skills\":[\"pink_hours\"]}"));
+        var result = await Client().PurchaseSkillAsync("pink_hours", () => Task.FromResult(false));
+        Assert.Equal(recovered, result.Success);
+        Assert.Equal(recovered ? 3 : 2, _http.Calls.Count);
+        Assert.Equal(recovered ? 98 : 100, _settings.SkillPoints);
+        if (recovered) Assert.Equal(("/v2/user/purchase-skill", "fresh"), _http.Calls.Last());
+    }
+
     [Fact]
     public async Task AnythingButA401IsNotRecovered()
     {
