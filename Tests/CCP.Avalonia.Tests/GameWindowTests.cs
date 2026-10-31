@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Platform;
 using Avalonia.Headless;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -359,6 +362,55 @@ public sealed partial class GameWindowTests
             Assert.True(board.Web.IsFocused);
         }
         finally { board.Close(); }
+    });
+
+    [Theory]
+    [InlineData("windows")]
+    [InlineData("gtk")]
+    [InlineData("wpe")]
+    public void PieceByPiece_NativeEnvironment_IsolatesProfileAndConfiguresAutoplay(string engine) => Run((shell, launcher) =>
+    {
+        var type = engine switch
+        {
+            "windows" => typeof(WindowsWebView2EnvironmentRequestedEventArgs),
+            "gtk" => typeof(GtkWebViewEnvironmentRequestedEventArgs),
+            _ => typeof(LinuxWpeWebViewEnvironmentRequestedEventArgs),
+        };
+        var board = GameWindow.Launch(GameWindow.PbpId)!;
+        var args = (WebViewEnvironmentRequestedEventArgs)RuntimeHelpers.GetUninitializedObject(type);
+        // Drive the registered native callback, not the policy helper directly.
+        board.Web.OnEnvironmentRequested(args);
+        var folder = Path.Combine(CorePaths.UserData, "browser_data_piecebypiece_avalonia");
+        Assert.True(Directory.Exists(folder));
+        Assert.NotEqual(WebViewProfile.Folder, folder);
+        switch (args)
+        {
+            case WindowsWebView2EnvironmentRequestedEventArgs windows:
+                Assert.Equal(folder, windows.UserDataFolder);
+                Assert.Equal("--autoplay-policy=no-user-gesture-required", windows.AdditionalBrowserArguments);
+                break;
+            case GtkWebViewEnvironmentRequestedEventArgs gtk:
+                Assert.Equal(folder, gtk.BaseDataDirectory);
+                Assert.Equal(Path.Combine(folder, "cache"), gtk.BaseCacheDirectory);
+                break;
+            case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
+                Assert.Equal(folder, wpe.DataDirectory);
+                Assert.Equal(Path.Combine(folder, "cache"), wpe.CacheDirectory);
+                break;
+        }
+        // The board policy must not leak to another game's environment.
+        var other = new GameWindow(GameWindow.Games["breakoutdemo"]);
+        var untouched = (WebViewEnvironmentRequestedEventArgs)RuntimeHelpers.GetUninitializedObject(type);
+        other.Web.OnEnvironmentRequested(untouched);
+        switch (untouched)
+        {
+            case WindowsWebView2EnvironmentRequestedEventArgs windows:
+                Assert.Null(windows.UserDataFolder);
+                Assert.Null(windows.AdditionalBrowserArguments);
+                break;
+            case GtkWebViewEnvironmentRequestedEventArgs gtk: Assert.Null(gtk.BaseDataDirectory); break;
+            case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe: Assert.Null(wpe.DataDirectory); break;
+        }
     });
 
     [Theory]

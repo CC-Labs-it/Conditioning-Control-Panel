@@ -100,6 +100,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             Web = new WebHost();
+            // Before Load/Show can create the native environment (WPF Pbp host :200-215).
+            if (spec.Id == PbpId) Web.EnvironmentRequested += ConfigurePbpEnvironment;
             Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
             Height = 800;
