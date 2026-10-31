@@ -53,7 +53,11 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
   const status = el('p', 'pc-status');
   status.setAttribute('role', 'status');
   const modal = el('div', 'pc-modal'), scrim = el('div', 'pc-scrim');
-  scrim.onclick = () => send({ type: 'back' });
+  // Only a press that began on the scrim closes the card. A shelf tap opens the card on pointerup, and a touch's click
+  // lands on the scrim that just appeared under the finger (emulator, 2026-10-31: shut about 3 ms after opening).
+  let scrimPressed = false;
+  scrim.onpointerdown = () => { scrimPressed = true; };
+  scrim.onclick = () => { if (scrimPressed) send({ type: 'back' }); scrimPressed = false; };
   modal.append(scrim);
   modal.hidden = true;
   const fx = el('div', 'pc-fx');
@@ -177,6 +181,7 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
     card = next;
     modal.hidden = false;
     modal.classList.remove('pc-out');
+    if (!wasOpen) scrimPressed = false;
     if (!wasOpen) pulse(modal, 'pc-in'); else modal.classList.remove('pc-in');
     if (fresh) guard.card();
     const bs = buttons();
