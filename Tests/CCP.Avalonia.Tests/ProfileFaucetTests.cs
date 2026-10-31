@@ -47,6 +47,7 @@ public sealed class ProfileFaucetTests
     [InlineData(MotionLevel.Full)]
     public Task KeyboardChargeCancelsSilentlyForPanicAndTabExitThenPoursExactlyOnce(MotionLevel motion) => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        var previousAudio = CoreAudio.PlayOneShotProvider;
         var cues = new List<(string File, float Volume)>();
         CoreAudio.PlayOneShotProvider = (path, volume, _, _, _) => cues.Add((System.IO.Path.GetFileName(path), volume));
         var shell = Create();
@@ -101,12 +102,13 @@ public sealed class ProfileFaucetTests
             Assert.False(tap.IsVisible);
             Assert.Null(glass.ExternalSpoutXFraction);
         }
-        finally { shell.Close(); }
+        finally { try { shell.Close(); } finally { CoreAudio.PlayOneShotProvider = previousAudio; } }
         return Task.CompletedTask;
     });
     [Fact]
     public Task PointerReleaseExitAndCaptureLossKeepTheWatermark() => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        var previousAudio = CoreAudio.PlayOneShotProvider;
         var cues = new List<string>();
         CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(System.IO.Path.GetFileName(path));
         var shell = Create();
@@ -134,12 +136,13 @@ public sealed class ProfileFaucetTests
             Assert.Equal(400, shell.FaucetHeldXp);
             Assert.Equal(0, CoreSettings.Current.VatPouredTodayXp);
         }
-        finally { shell.Close(); }
+        finally { try { shell.Close(); } finally { CoreAudio.PlayOneShotProvider = previousAudio; } }
         return Task.CompletedTask;
     });
     [Fact]
     public Task PourCrossingTheLipAddsOneBrimCueAndHonorsTheHapticRow() => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        var previous = (CoreHaptics.Service, CoreEntitlement.HasPremiumProvider, MockProviderV2.Toast, CoreAudio.PlayOneShotProvider);
         var cues = new List<string>();
         CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(System.IO.Path.GetFileName(path));
         var shell = Create();
@@ -169,8 +172,11 @@ public sealed class ProfileFaucetTests
                 else { Thread.Sleep(100); Assert.DoesNotContain(toasts, t => t.Contains('%')); }
             }
         }
-        finally { haptics.PanicStop(); shell.Close(); }
+        finally
+        {
+            try { haptics.PanicStop(); shell.Close(); }
+            finally { (CoreHaptics.Service, CoreEntitlement.HasPremiumProvider, MockProviderV2.Toast, CoreAudio.PlayOneShotProvider) = previous; }
+        }
         return Task.CompletedTask;
     });
-
 }

@@ -28,7 +28,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal int FaucetHeldXp => _faucetHold.HeldXp;
         internal bool FaucetCharging => _faucetCharging;
         internal VatFaucetHold FaucetHold => _faucetHold;
-
         private void ArmFaucet(VatGlassCanvas glass, double jarW, double jarH)
         {
             var faucet = Vat<Grid>("ProfileVatFaucet");
@@ -45,7 +44,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PositionVatTickGlyphs();
             UpdateFaucetPresentation();
         }
-
         private void PositionVatTickGlyphs()
         {
             if (VatGlass is not { } glass) return;
@@ -61,7 +59,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     glyph.Margin = new Thickness(Math.Round(glass.TickInnerX - 3 - glyph.Size), Math.Round(y!.Value - glyph.Size / 2), 0, 0);
             }
         }
-
         private void DisarmFaucet()
         {
             CancelFaucetCharge(silent: true);
