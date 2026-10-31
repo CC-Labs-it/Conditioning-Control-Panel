@@ -22,6 +22,14 @@ namespace CCP.Avalonia.Tests;
 /// (MockProviderV2, an Intiface address nobody listens on) - never a real toy.</summary>
 public sealed class HapticsHeadTests
 {
+    private static void EnsureApplication()
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+    }
+
     private static void WithHaptics(bool premium, bool mock, Action<HapticService, ConcurrentQueue<string>> body)
     {
         var s = CoreSettings.Current.Haptics;
@@ -51,9 +59,7 @@ public sealed class HapticsHeadTests
     [Fact]
     public void AllToyPatternPreviewsWorkWithMasterOffAndStopOnHide() => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        EnsureApplication();
         WithHaptics(premium: true, mock: true, (h, toasts) =>
         {
             Assert.True(h.ConnectAsync().Result);
@@ -107,10 +113,7 @@ public sealed class HapticsHeadTests
     [Fact]
     public void PanicKeyAndTrayStopZeroTheToy() => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApplication();
         var s = CoreSettings.Current;
         var (enabled, key) = (s.PanicKeyEnabled, s.PanicKey);
         (s.PanicKeyEnabled, s.PanicKey) = (true, "F8");
@@ -148,10 +151,7 @@ public sealed class HapticsHeadTests
     {
         AvaloniaTestDispatcher.Run(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            EnsureApplication();
             WithHaptics(premium: true, mock: true, (h, _) =>
             {
                 var s = h.Settings;
@@ -235,10 +235,7 @@ public sealed class HapticsHeadTests
     {
         AvaloniaTestDispatcher.Run(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            EnsureApplication();
             WithHaptics(premium: true, mock: true, (_, _) =>
             {
                 var tab = new HapticsTabView();
@@ -286,10 +283,7 @@ public sealed class HapticsHeadTests
     {
         AvaloniaTestDispatcher.Run(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            EnsureApplication();
             WithHaptics(premium: true, mock: true, (h, _) =>
             {
                 h.Settings.Enabled = true;
@@ -330,10 +324,7 @@ public sealed class HapticsHeadTests
     [Fact]
     public void SetupWizardFromStudioPicksMockConnectsAndBuzzes() => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApplication();
         WithHaptics(premium: false, mock: false, (h, toasts) =>
         {
             var s = h.Settings;
@@ -399,10 +390,7 @@ public sealed class HapticsHeadTests
     {
         AvaloniaTestDispatcher.Run(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            EnsureApplication();
             WithHaptics(premium: false, mock: false, (h, _) =>
             {
                 h.Settings.V2.MasterCap = 0.9;
