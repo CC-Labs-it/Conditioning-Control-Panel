@@ -74,7 +74,8 @@
                        Foreground="{StaticResource WarningBrush}" FontSize="11" Margin="0,5,60,0"
                        TextWrapping="Wrap" VerticalAlignment="Top"/>
             <Button x:Name="BtnClose" Grid.Row="0" IsVisible="False"
-                    HorizontalAlignment="Right" VerticalAlignment="Top" Padding="5">
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Padding="5"
+                    ToolTip.Tip="{loc:Str name_ask_close_tip}">
                 <TextBlock Text="×"/>
             </Button>
             <!-- Buttons -->

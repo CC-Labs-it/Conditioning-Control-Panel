@@ -85,6 +85,7 @@ public sealed class RequiredNameTests
         void Click() => confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.False(d.FindControl<Button>("BtnCancel")!.IsVisible);
         Assert.True(d.FindControl<Button>("BtnClose")!.IsVisible);
+        Assert.Equal(Loc.Get("name_ask_close_tip"), Assert.IsType<string>(ToolTip.GetTip(d.FindControl<Button>("BtnClose")!)));
         input.Text = "ab";
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Assert.False(confirm.IsEnabled);
@@ -174,9 +175,10 @@ public sealed class RequiredNameTests
 
     // WPF DisplayNameAsk.cs:34-59: profile arrival, one ask, dismissal, next launch, hold at show.
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public Task RestoredProfileAsksOncePerLaunchAndReoffersAfterAHold(bool defer) =>
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public Task RestoredProfileAsksOncePerLaunchAndReoffersAfterAHold(bool defer, bool modeless) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
@@ -196,7 +198,14 @@ public sealed class RequiredNameTests
             shell = new MainShellWindow();
             shell.Show();
             Assert.Null(shell.NameAskTask); // no ask before a profile has actually loaded
-            if (defer) { blocker = new Window(); _ = blocker.ShowDialog<bool>(shell); }
+            // WPF StartupPresenter.cs:444-468 gates modal occupancy, not modeless tools.
+            if (defer || modeless)
+            {
+                blocker = new Window();
+                if (defer) _ = blocker.ShowDialog<bool>(shell);
+                else blocker.Show(shell);
+                Assert.Equal(defer, blocker.IsDialog);
+            }
             async Task Load() => Assert.True(await AccountSeed.LoadProfileAsync(new V2AuthService(() => s, new ProfileWire())));
             await Load();
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -214,6 +223,7 @@ public sealed class RequiredNameTests
                 await Load(); // the next profile load may offer again
             }
             var ask = await Prompt(shell);
+            if (modeless) Assert.True(blocker!.IsVisible); // the prompt did not wait for the tool to close
             ask.Close(false);
             await shell.NameAskTask!.WaitAsync(TimeSpan.FromSeconds(10));
             var done = shell.NameAskTask;

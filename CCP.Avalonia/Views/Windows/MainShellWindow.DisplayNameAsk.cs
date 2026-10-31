@@ -46,7 +46,7 @@ public partial class MainShellWindow
         var waited = 0;
         bool Parked() => !IsVisible || WindowState == WindowState.Minimized
             || ConditioningControlPanel.Avalonia.Views.Games.GameWindow.ActiveOpen() != null;
-        bool Ready() => StartupQueueCore.CanStartModal(IsStartupDialogShowing || OwnedWindows.Any(w => w.IsVisible),
+        bool Ready() => StartupQueueCore.CanStartModal(IsStartupDialogShowing || OwnedWindows.Any(w => w.IsVisible && w.IsDialog),
             AppUpdater.IsUpdateDialogActive, CoreTutorial.IsActive, IsVisible, Parked());
         while (!_nameAskClosed && generation == _nameAskGeneration && !Ready() && waited < 300000)
         {
