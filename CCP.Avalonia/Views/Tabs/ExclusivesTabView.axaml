@@ -104,7 +104,7 @@
             <fx:AmbientFxCanvas x:Name="ExclusivesAmbientFx"/>
 
             <!-- 2 + 3. Content -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
+            <ScrollViewer x:Name="ContentScroll" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="26,20,26,22">
 

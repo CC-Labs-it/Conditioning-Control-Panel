@@ -91,7 +91,8 @@ public sealed class FirstRunGateDeadClickTests
 
         shell.ShowTab("settings");
         Card("CardVault").RaiseEvent(new RoutedEventArgs(FeatureCard.ClickEvent));
-        Assert.Equal("premium", shell.CurrentTab);
+        Assert.Equal("appsettings", shell.CurrentTab);
+        Assert.Equal("account", shell.Named<AppSettingsTabView>("AppSettingsTab")!.CheckedSectionKey);
 
         shell.OpenNavSection("library");   // the Media Log is a Library launcher pill now
         shell.PageStrip!.PillFor("medialog")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -120,7 +121,7 @@ public sealed class FirstRunGateDeadClickTests
     private static Task Run(bool welcomed, bool accepted, System.Func<MainShellWindow, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();

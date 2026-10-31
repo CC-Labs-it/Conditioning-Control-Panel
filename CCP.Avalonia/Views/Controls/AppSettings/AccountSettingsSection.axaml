@@ -14,11 +14,14 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:tabs="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AccountSettingsSection">
 
     <StackPanel>
 
         <TextBlock Text="{loc:Str set2_section_account}" Theme="{StaticResource SectionHeader}"/>
+
+        <tabs:ExclusivesTabView x:Name="HostedPlansView" PlansMode="True" Margin="0,0,0,12"/>
 
         <!-- Net-new: who you are, and which bar you clear. Painted by RefreshTierBadge(). -->
         <Border x:Name="AccountTierCard" CornerRadius="12" Padding="0" Margin="0,0,0,12"

@@ -91,6 +91,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// Host seam: the Settings door repaints the tier card every time it opens, so a login that
         /// happened behind another door is never shown stale.
         /// </summary>
+        internal Views.Tabs.ExclusivesTabView PlansView => this.FindControl<Views.Tabs.ExclusivesTabView>("HostedPlansView")!;
+
         public void OnSectionShown() => Refresh();
 
         private void Post() => global::Avalonia.Threading.Dispatcher.UIThread.Post(Refresh);
@@ -160,6 +162,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// (UpdatePatreonUI/UpdateDiscordUI/UpdateSubscribeStarUI/UpdateAccountLinkingUI) repaint it.</summary>
         public void Refresh()
         {
+            PlansView.RefreshVault();
+            _ = PlansView.FindControl<Invites.InvitePanel>("InvitesHost")?.RefreshAsync();
             RefreshTierBadge();
             try { RefreshProviders(); RefreshLinking(); }
             catch (Exception ex) { Log.Debug("AccountSettingsSection.RefreshProviders failed: {E}", ex.Message); }
