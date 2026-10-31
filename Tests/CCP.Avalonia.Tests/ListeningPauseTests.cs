@@ -16,7 +16,7 @@ public sealed class ListeningPauseTests
 {
     // WPF AutonomyService.VoiceCommandHost.cs:104-105, MainWindow.RemoteControl.cs:1341-1407.
     [Fact]
-    public void SessionGrammarPausesResumesAndCannotUndoStop() => Run(shell =>
+    public void SessionGrammarResumesOrdinaryStopsButCannotUndoLocalPanic() => Run(shell =>
     {
         var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
         try
@@ -43,6 +43,12 @@ public sealed class ListeningPauseTests
             Command(shell, "resume the session");
             Assert.False(runner.IsPaused);
             MainShellWindow.StopEngine();
+            Assert.True(runner.IsPaused);
+            Command(shell, "resume the session");
+            Assert.False(runner.IsPaused);
+            CoreSettings.Current.PanicKeyEnabled = true;
+            CoreSettings.Current.PanicOverridesAll = true;
+            shell.HandlePanicKeyPress(DateTime.Now);
             Assert.True(runner.IsPaused);
             Command(shell, "resume the session");
             Assert.True(runner.IsPaused);

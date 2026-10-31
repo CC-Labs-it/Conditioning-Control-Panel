@@ -62,6 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private VlcFrameSink? _sink;
         private WriteableBitmap? _fill;
         private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed, _voicePaused;
+        internal readonly ConditioningControlPanel.Services.Video.VideoSafetyDeadline SafetyDeadline = new();
         private long _watchedMs;
         /// <summary>Stopwatch timestamp of the last frame shown (tests age it to fake a lost output).</summary>
         internal long FrameTs;
@@ -134,6 +135,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             FirstFrameMs = -1;
             _watchedMs = 0;
             FillMs = FillCount = 0;
+            SafetyDeadline.Reset();
+            SafetyDeadline.Arm(Now, 0);
             _graceConsumed = false;   // WPF PlayVideo: one grace pause per clip, replays included
 
             var s = CoreSettings.Current;
@@ -205,6 +208,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
+            _player.LengthChanged += (_, e) => Dispatcher.UIThread.Post(() =>
+            {
+                if (_player == live && e.Length > 0) SafetyDeadline.Arm(Now, e.Length / 1000.0);
+            });
             _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
             _player.EndReached += (_, _) =>
             {
@@ -435,6 +442,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (d == GraceDecision.ConsumedDedup) return true;
             if (d != GraceDecision.Pause) return false;
             _gracePaused = true;
+            SafetyDeadline.PauseForGrace(now);
             _lastGraceUtc = _gracePausedAt = now;
             _player?.SetPause(true);
             _sinceShow.Stop();
@@ -466,6 +474,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (!_gracePaused) return;
             _gracePaused = _voicePaused = false;
+            SafetyDeadline.ResumeFromGrace(Now);
             _graceConsumed = true;   // spent whether it ended by hand or by timeout
             _graceTimer?.Stop();
             _graceTimer = null;
@@ -505,7 +514,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// that shows no frame, stalls, overruns or passes the user's max ends like a dismiss.</summary>
         internal void GuardTick()
         {
-            if (_gracePaused || _voicePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
+            if (_gracePaused || !Scheduler.IsPlaying) return;
+            // WPF VideoService.cs:6645: voice pause never suspends the safety timeout.
+            if (SafetyDeadline.Expired(Now)) { Scheduler.End(); return; }
+            if (_voicePaused || _surfaces.Count == 0) return;
             var framed = FirstFrameMs >= 0;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
@@ -908,6 +920,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try
             {
                 _attention = _gracePaused = _voicePaused = false;
+                SafetyDeadline.Reset();
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;
                 _userMuted = false;

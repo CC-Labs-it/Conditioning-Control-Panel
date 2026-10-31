@@ -155,28 +155,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SetPauseButton(true);
         }
 
-        // WPF MainWindow.RemoteControl.cs:1385: voice cannot undo a local panic pause.
-        // Stricter: any head StopEngine pause requires a local resume, including tray Stop.
-        private static SessionRunner? _voiceStoppedRunner;
-        private static object? _voiceStoppedSession;
-        private static int _voiceStoppedPauseCount;
-        private static void NoteVoiceStoppedSession()
+        // WPF MainWindow.RemoteControl.cs:1364-1401 and MainWindow.xaml.cs:1898.
+        private static PanicAftermath.PanicPause? _localPanicPause;
+        private static int _voiceSessionRun;
+        internal static void NoteLocalPanicPause()
         {
-            _voiceStoppedRunner = App.Sessions;
-            _voiceStoppedSession = App.Sessions?.CurrentSession;
-            _voiceStoppedPauseCount = App.Sessions?.PauseCount ?? 0;
+            var r = App.Sessions;
+            _localPanicPause = PanicAftermath.MarkPause(r?.CurrentSession, _voiceSessionRun,
+                r?.IsRunning == true, r?.IsPaused == true, r?.PauseCount ?? 0);
         }
+
+        internal static bool LocalPanicHoldsSession => App.Sessions is { IsRunning: true } r
+            && PanicAftermath.RemoteResumeRefused(_localPanicPause, r.CurrentSession,
+                _voiceSessionRun, r.IsPaused, r.PauseCount);
 
         internal bool ResumeSessionByVoice()
         {
             if (App.Sessions is not { IsRunning: true, IsPaused: true } runner) return false;
-            bool Held() => ReferenceEquals(runner, _voiceStoppedRunner)
-                && ReferenceEquals(runner.CurrentSession, _voiceStoppedSession)
-                && runner.PauseCount == _voiceStoppedPauseCount;
-            if (Held()) return false;
+            if (LocalPanicHoldsSession) return false;
             StartEffect(() =>
             {
-                if (!ReferenceEquals(App.Sessions, runner) || !runner.IsRunning || !runner.IsPaused || Held()) return;
+                if (!ReferenceEquals(App.Sessions, runner) || !runner.IsRunning || !runner.IsPaused || LocalPanicHoldsSession) return;
                 runner.Resume();
                 PinkFilterOverlay.Refresh(this);
                 SpiralOverlay.Refresh(this);
