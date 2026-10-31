@@ -3,13 +3,13 @@ using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Helpers;
 
 namespace CCP.Avalonia.Tests;
 
@@ -28,10 +28,6 @@ public sealed class FlashGentleRenderingTests
 
     private static Task OnUi(Func<Clock, Task> test) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
-                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options(systemEmoji: false))
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var service = new ConditioningControlPanel.Services.SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var clock = new Clock();
@@ -43,9 +39,7 @@ public sealed class FlashGentleRenderingTests
     });
 
     [Theory]
-    [InlineData(true, 0.25, 0.25, 0.2)]
-    [InlineData(true, 4, 0.125, 0.1)] // never shorten an already slower ramp
-    [InlineData(false, 0.25, 1, 0.95)]
+    [InlineData(true, 0.25, 0.25, 0.2), InlineData(true, 4, 0.125, 0.1), InlineData(false, 0.25, 1, 0.95)]
     public Task FadeFloorReachesTheNativeOpacityRamp(bool gentle, double normal, double expected, double afterExit) => OnUi(clock =>
     {
         var s = CoreSettings.Current;
@@ -110,9 +104,8 @@ public sealed class FlashGentleRenderingTests
     });
 
     [Theory]
-    [InlineData(true, false, true, false), InlineData(true, true, true, false)]
-    [InlineData(false, true, true, false), InlineData(true, false, false, false)]
-    [InlineData(true, true, true, true)]
+    [InlineData(true, false, true, false), InlineData(true, true, true, false), InlineData(false, true, true, false)]
+    [InlineData(true, false, false, false), InlineData(true, true, true, true), InlineData(true, false, true, true)]
     public Task VideoCurtainsFollowPlayingNaturalEndAndForcedStop(bool gentle, bool force, bool playing, bool forceBefore) => OnUi(clock =>
     {
         var o = MandatoryVideoOverlay.Instance; var old = o.Scheduler;
@@ -125,8 +118,10 @@ public sealed class FlashGentleRenderingTests
             ((System.Collections.Generic.ICollection<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(o.Build(null, false));
             o.CoverGentle(o.Windows, waiting: true);
             if (gentle) Assert.Single(o.GentleCurtains); else Assert.Empty(o.GentleCurtains);
+            Assert.All(o.GentleCurtains, c => Assert.Contains(BeatLoop.Running, b => b.Owner == c && b.OnFrameBeat));
             if (forceBefore) { o.LiftGentle(); clock.Now += 1000; o.GentleFrame();
-                o.Scheduler.Stop(); Assert.Empty(o.Windows); Assert.Empty(o.GentleCurtains); return Task.CompletedTask;
+                if (force) o.Scheduler.Stop(); else Assert.Single(o.GentleCurtains).Hide();
+                if (force) Assert.Empty(o.Windows); else Assert.Single(o.Windows); Assert.Empty(o.GentleCurtains); return Task.CompletedTask;
             }
             byte Alpha() { Assert.Single(o.GentleCurtains); Assert.True(o.GentleCurtains[0].IsVisible); return ((global::Avalonia.Media.SolidColorBrush)((global::Avalonia.Controls.Border)o.GentleCurtains[0].Content!).Background!).Color.A; }
             if (gentle)
@@ -143,15 +138,14 @@ public sealed class FlashGentleRenderingTests
                 clock.Now += 1000; o.GentleFrame(); Assert.InRange(Alpha(), (byte)127, (byte)128); clock.Now += 1000; o.GentleFrame();
             }
             Assert.Empty(o.GentleCurtains);
+            Assert.DoesNotContain(BeatLoop.Running, b => b.Owner is ConditioningControlPanel.Avalonia.Views.Overlays.TintOverlayWindow);
         }
-        finally { o.CloseAll(); o.Scheduler = old; o.Time = TimeProvider.System; }
+        finally { o.Scheduler.Stop(); o.Scheduler = old; o.Time = TimeProvider.System; }
         return Task.CompletedTask;
     });
 
     [Theory]
-    [InlineData(false, 1, 30)]
-    [InlineData(true, 1, 120)]
-    [InlineData(true, 2, 60)]
+    [InlineData(false, 1, 30), InlineData(true, 1, 120), InlineData(true, 2, 60)]
     public Task ActualGifFramesUseTheGentleDelayAndStopOnClose(bool gentle, double speed, int delay) => OnUi(async clock =>
     {
         var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".gif");

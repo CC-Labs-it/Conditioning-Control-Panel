@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Safety;
 
@@ -11,8 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 internal sealed partial class MandatoryVideoOverlay
 {
     private bool _naturalEnd;
-    private readonly List<(TintOverlayWindow Window, DateTime Start, double Seconds)> _curtains = new();
-    private DispatcherTimer? _curtainTimer;
+    private readonly List<(TintOverlayWindow Window, DateTime Start, double Seconds, BeatLoop Beat)> _curtains = new();
     internal static bool SkipGentlePlatformChecks;
     internal IReadOnlyList<TintOverlayWindow> GentleCurtains => _curtains.Select(c => c.Window).ToArray();
     // WPF VideoService.cs:7413: only natural completion leaves a fading desktop curtain.
@@ -30,32 +29,31 @@ internal sealed partial class MandatoryVideoOverlay
             if (!SkipGentlePlatformChecks && (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOverrideRedirect(w, rect))) { w.Close(); continue; }
             try { w.Show(); } catch { w.Close(); continue; }
             if (!SkipGentlePlatformChecks && w.ActualTransparencyLevel == WindowTransparencyLevel.None) { w.Close(); continue; }
-            _curtains.Add((w, waiting ? Now.AddSeconds(3) : DateTime.MaxValue, GentleVisuals.FadeSeconds));
+            var beat = new BeatLoop(w, _ => { GentleFrame(w); w.InvalidateVisual(); });
+            beat.OnParked = () => { _curtains.RemoveAll(c => c.Window == w); beat.Stop(); w.Close(); };
+            _curtains.Add((w, waiting ? Now.AddSeconds(3) : DateTime.MaxValue, GentleVisuals.FadeSeconds, beat)); beat.Start();
         }
-        _curtainTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => GentleFrame());
-        if (_curtains.Count > 0) _curtainTimer.Start();
     }
     // WPF VideoService.cs:7385-7399: Playing lifts once; a 3 s backstop handles a missing event.
     internal void LiftGentle()
     {
         for (var i = 0; i < _curtains.Count; i++)
-            if (_curtains[i].Start > Now) _curtains[i] = (_curtains[i].Window, Now, _curtains[i].Seconds);
+            if (_curtains[i].Start > Now) _curtains[i] = (_curtains[i].Window, Now, _curtains[i].Seconds, _curtains[i].Beat);
     }
-    internal void GentleFrame()
+    internal void GentleFrame(TintOverlayWindow? owner = null)
     {
         for (var i = _curtains.Count - 1; i >= 0 && i < _curtains.Count; i--)
         {
             var c = _curtains[i];
+            if (owner != null && c.Window != owner) continue;
             c.Window.SetTint(0, 0, 0, 1 - Math.Clamp((Now - c.Start).TotalSeconds / c.Seconds, 0, 1));
             if ((Now - c.Start).TotalSeconds < c.Seconds) continue;
-            _curtains.RemoveAt(i); c.Window.Close();
+            _curtains.RemoveAt(i); c.Beat.Stop(); c.Window.Close();
         }
-        if (_curtains.Count == 0) _curtainTimer?.Stop();
     }
     internal void DropGentle()
     {
-        _curtainTimer?.Stop();
         var live = _curtains.ToArray(); _curtains.Clear();
-        foreach (var c in live) c.Window.Close();
+        foreach (var c in live) { c.Beat.Stop(); c.Window.Close(); }
     }
 }

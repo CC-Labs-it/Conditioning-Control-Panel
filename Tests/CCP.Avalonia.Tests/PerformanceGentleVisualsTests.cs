@@ -1,7 +1,6 @@
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -22,12 +21,6 @@ public sealed class PerformanceGentleVisualsTests
     [InlineData("fadeChoices"), InlineData("speedChoices")]
     public Task GentleActionsReachLiveSettings(string action) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().WithInterFont()
-                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options(systemEmoji: false))
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
         var service = new ConditioningControlPanel.Services.SettingsService();
         CoreSettings.ServiceProvider = () => service; // assembly-wide isolation restores this seam
         var s = CoreSettings.Current;
@@ -78,12 +71,6 @@ public sealed class PerformanceGentleVisualsTests
     [Fact]
     public Task GentleEditorSeedsWithoutWritingAndAppliesChoicesAndMotionCap() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().WithInterFont()
-                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options(systemEmoji: false))
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
         var previousProvider = CoreSettings.ServiceProvider;
         var service = new ConditioningControlPanel.Services.SettingsService();
         CoreSettings.ServiceProvider = () => service;
