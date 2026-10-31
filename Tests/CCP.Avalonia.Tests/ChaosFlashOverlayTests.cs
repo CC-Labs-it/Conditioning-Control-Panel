@@ -78,8 +78,10 @@ public sealed class ChaosFlashOverlayTests
     }
 
     [Fact]
-    public void DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation()
+    public Task DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation() => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        // Decode creates Avalonia bitmaps; initialize Skia even when this test runs first.
+        Setup();
         var gif = WriteGif(out var dir);
         try
         {
@@ -89,7 +91,8 @@ public sealed class ChaosFlashOverlayTests
             foreach (var f in frames) f.Dispose();
         }
         finally { Directory.Delete(dir, true); }
-    }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public async Task APlatformWithoutClickThroughShowsNothing()
@@ -126,7 +129,7 @@ public sealed class ChaosFlashOverlayTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
