@@ -92,6 +92,7 @@ namespace ConditioningControlPanel.Services
         {
             SessionLog = sessionLog;
             CoreSession.IsSessionRunningProvider = () => IsRunning && CurrentSession != null;
+            CoreSession.IsSessionPausedProvider = () => IsPaused;
         }
 
         /// <summary>SessionEngine.RemainingTime.</summary>

@@ -53,6 +53,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                         await shell.SetBrowserPausedFromWorkshopAsync(paused);
                 };
 
+            SliderVoiceLevelCompanion.ValueChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                var value = (int)Math.Round(SliderVoiceLevelCompanion.Value);
+                TxtVoiceLevelCompanion.Text = value.ToString();
+                CoreSettings.Current.CompanionVoiceLevel = value;
+                CoreSettings.Save();
+            };
+            ChkIdleVoiceEngineOffCompanion.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff = ChkIdleVoiceEngineOffCompanion.IsChecked == true;
+                CoreSettings.Save();
+            };
             SyncFromSettings();
         }
 
@@ -85,6 +99,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 // "Muted" is its own flag, not the inverse of the enable (AppSettings.SubAudioMuted).
                 ChkMuteWhispersCompanion.IsChecked = s.SubAudioMuted;
                 ChkVoiceLinesCompanion.IsChecked = s.CompanionVoiceLinesMuted;
+                ChkIdleVoiceEngineOffCompanion.IsChecked = s.CompanionSpeaksIdleWhenEngineOff;
+                SliderVoiceLevelCompanion.Value = s.CompanionVoiceLevel;
+                TxtVoiceLevelCompanion.Text = s.CompanionVoiceLevel.ToString();
 
                 // Labels set explicitly rather than left to ValueChanged, which _isLoading blocks.
                 SliderIdleIntervalCompanion.Value = s.IdleGiggleIntervalSeconds;

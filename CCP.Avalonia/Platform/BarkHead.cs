@@ -52,6 +52,8 @@ internal static class BarkHead
     internal static void Seed(BarkEngine e)
     {
         e.Speak = Speak;
+        ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.IdleLineVoiced = trigger =>
+            ConditioningControlPanel.Services.Companion.CompanionIdleVoiceRule.ShouldVoiceNow(ConditioningControlPanel.Services.Companion.CompanionIdleVoiceRule.IsUnprompted(trigger));
         e.IsSpeaking = () => Views.AvatarTube.AvatarTubeWindow.Live?.IsSpeaking == true;
         e.IsCompanionBusy = ms => Views.AvatarTube.AvatarTubeWindow.Live?.IsCompanionBusy(ms) == true;
         e.EmiDeskAvatarMuted = () => Views.Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted;
@@ -91,9 +93,9 @@ internal static class BarkHead
     {
         var tube = Views.AvatarTube.AvatarTubeWindow.Live;
         if (tube == null) return;
-        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }
+        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text, unprompted: s.Unprompted); return; }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
-            phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
+            phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood, unprompted: s.Unprompted);
     }
 
     private static readonly Dictionary<string, PropertyInfo?> SettingProps = new(StringComparer.Ordinal);
