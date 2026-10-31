@@ -679,6 +679,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// bound before the overlay appears.</summary>
         private async void BtnBlinkTrainerStartSession_Click(object? sender, RoutedEventArgs e)
         {
+            if (!BlinkTrainerSession.IsRunning && !TierGate.DemandPremium(Loc.Get("tab_blink_trainer"))) return;
             BtnBlinkTrainerStartSession.IsEnabled = false;   // #743: work is in flight
             try
             {

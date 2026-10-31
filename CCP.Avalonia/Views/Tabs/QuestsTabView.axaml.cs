@@ -5,6 +5,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Styling;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
@@ -123,7 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (quests.RerollDailyQuest(card.Slot)) { RefreshQuestViews(); return; }
             // Out of rerolls is the only refusal worth a dialog; a finished seat stays as it was.
             if (quests.GetRemainingDailyRerolls() > 0) return;
-            ShowRerollLimit(CoreEntitlement.HasPremium ? "quest_reroll_daily_none_patron" : "quest_reroll_daily_none_free");
+            TellRerollsSpent(weekly: false);
         }
 
         private void RerollWeekly()
@@ -131,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var quests = App.Quests;
             if (quests == null) return;
             if (quests.RerollWeeklyQuest()) RefreshQuestViews();
-            else ShowRerollLimit(CoreEntitlement.HasPremium ? "quest_reroll_weekly_none_patron" : "quest_reroll_weekly_none_free");
+            else TellRerollsSpent(weekly: true);
         }
 
         private void RefreshQuestViews()
@@ -140,10 +141,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             (TopLevel.GetTopLevel(this) as ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow)?.RefreshQuestStamps();
         }
 
-        private void ShowRerollLimit(string key)
+        internal void TellRerollsSpent(bool weekly)
         {
-            if (TopLevel.GetTopLevel(this) is Window owner)
-                _ = Dialogs.MessageDialog.ShowAsync(owner, ConditioningControlPanel.Localization.Loc.Get("quest_reroll_limit_title"), ConditioningControlPanel.Localization.Loc.Get(key));
+            var key = weekly ? "quest_reroll_weekly_none_" : "quest_reroll_daily_none_";
+            if (CoreEntitlement.HasPremium)
+            {
+                if (TopLevel.GetTopLevel(this) is Window owner)
+                    _ = Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("quest_reroll_limit_title"), Loc.Get(key + "patron"));
+                return;
+            }
+            App.Notifications.Show(Loc.Get(key + "free"), Helpers.NotificationType.Info,
+                TimeSpan.FromSeconds(8), Loc.Get("quest_reroll_see_basic"),
+                () => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenPricedCard("quest_reroll", 1));
         }
 
         // ---- STREAK CALENDAR ------------------------------------------------------
