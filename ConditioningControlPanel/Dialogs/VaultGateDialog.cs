@@ -491,7 +491,7 @@ public sealed class VaultGateDialog : Window
 
     private static readonly string[] PrimePerks =
     {
-        "vaultgate_prime_1", "vaultgate_prime_3", "vaultgate_prime_4",
+        "vaultgate_prime_8", "vaultgate_prime_1", "vaultgate_prime_3", "vaultgate_prime_4",
         "vaultgate_prime_6", "vaultgate_prime_7",
     };
 
