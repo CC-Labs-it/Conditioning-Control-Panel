@@ -330,6 +330,71 @@ public sealed class ChaosUnlockCardOverlayTests
         }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Freeze_pickup_keeps_its_remaining_window_across_a_lesson_or_manual_pause(bool manual) => await Run(clock =>
+    {
+        ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
+            EnabledVariants = new System.Collections.Generic.List<string> { "bambifreeze" } });
+        ChaosRunHost.Overlay!.FinishCountdown();
+        ChaosRunHost.StopTimerForTests();
+        ChaosMeta.State.LessonsComplete.Remove("freeze_trigger");
+        ChaosMeta.State.LessonProgress["freeze_trigger"] = ChaosLessons.ById("freeze_trigger")!.Target - 1;
+        ChaosRunHost.SpawnTick();
+        var bubble = Assert.Single(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsFreeze == true);
+        BubbleOverlay.Pop(bubble);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(ChaosLessons.IsComplete("freeze_trigger"));
+        Assert.Equal(3.5, ChaosRunHost.FreezeRemainingSec);
+        Assert.True(BubbleOverlay.Field.FreezeChaos);
+        for (int i = 0; i < 30; i++) ChaosRunHost.Tick();
+        Assert.Equal(3.5, ChaosRunHost.FreezeRemainingSec);
+        Step(clock, 240); Click(); Step(clock, 150);
+        ChaosRunHost.StopTimerForTests();
+        ChaosRunHost.Tick();
+        Assert.Equal(3.25, ChaosRunHost.FreezeRemainingSec);
+        // WPF ChaosModeService.cs:1930,1991: frozen defuses need and spend no focus.
+        var state = ChaosRunHost.State!;
+        state.Focus = 0;
+        var live = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+            { IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
+        var savedClock = BubbleOverlay.Field.Clock;
+        var now = DateTime.UnixEpoch;
+        try
+        {
+            BubbleOverlay.Field.Clock = () => now = now.AddMilliseconds(32);
+            BubbleOverlay.Press(live, live.CenterX, live.CenterY);
+            Assert.True(live.Channeling);
+            state.Focus = 50; // completion must preserve focus as well as admitting a zero-focus press
+            for (int i = 0; i < 32; i++) BubbleOverlay.Field.Step();
+            Assert.Equal(1, state.Defused);
+            Assert.Equal(50, state.Focus);
+        }
+        finally { BubbleOverlay.Field.Clock = savedClock; }
+        if (manual) ChaosRunHost.ToggleManualPause();
+        else Complete("taking_chances");
+        for (int i = 0; i < 30; i++) ChaosRunHost.Tick();
+        Assert.Equal(3.25, ChaosRunHost.FreezeRemainingSec);
+        if (manual) ChaosRunHost.ToggleManualPause();
+        else { Step(clock, 240); Click(); Step(clock, 150); }
+        ChaosRunHost.StopTimerForTests();
+        int count = BubbleOverlay.ChaosCount; // the caught pickup's pop burst may already be gone
+        ChaosRunHost.SpawnTick();
+        Assert.Equal(count, BubbleOverlay.ChaosCount);
+        Assert.True(BubbleOverlay.Field.FreezeChaos);
+        Assert.Equal(2.5, EffectPayload.GlobalDurationMult);
+        for (int i = 0; i < 13; i++) ChaosRunHost.Tick();
+        Assert.Equal(0, ChaosRunHost.FreezeRemainingSec);
+        Assert.False(BubbleOverlay.Field.FreezeChaos);
+        Assert.Equal(1, EffectPayload.GlobalDurationMult);
+        ChaosRunHost.SpawnTick();
+        Assert.True(BubbleOverlay.ChaosCount > count);
+        ChaosRunHost.ForceShutdown();
+        Assert.Equal(0, ChaosRunHost.FreezeRemainingSec);
+        Assert.False(BubbleOverlay.Field.FreezeChaos);
+    });
+
     private sealed class SteppedClock : TimeProvider
     {
         public long Ticks;
