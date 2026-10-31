@@ -68,7 +68,7 @@ namespace ConditioningControlPanel.Services
         private readonly Random _random = new();
         private Queue<string> _queue = new();
         private ITimer? _scheduler, _preroll, _bubbleWait;
-        private volatile bool _running, _playing;
+        private volatile bool _running, _playing, _verdictPending;
         private int _retryGeneration, _noVideosShown;
 
         /// <summary>The library came back empty for the first time this launch (WPF's "no videos"
@@ -108,6 +108,8 @@ namespace ConditioningControlPanel.Services
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
         public bool IsPlaying => _playing;
+        /// <summary>WPF VideoService.cs:7036-7041: keep the slot through verdicts, but not queued waits.</summary>
+        public bool HoldsSlot => _playing || _verdictPending;
         public bool IsStrict { get; private set; }
 
         /// <summary>WPF ScheduleNext: 3600/perHour jittered 0.8-1.2x, never under 60 s.</summary>
@@ -341,6 +343,7 @@ namespace ConditioningControlPanel.Services
             }
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
             _playing = true;
+            _verdictPending = false;
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
             AttentionSpawned = AttentionHits = 0;
             CoreFlash.Stop();   // WPF PlayVideo: App.Flash?.Stop()
@@ -413,10 +416,12 @@ namespace ConditioningControlPanel.Services
             var mercy = Penalties >= s.MercyAfterFails && s.MercySystemEnabled;   // #1145: 2..10, default 3
             var strict = IsStrict;
             var gen = ++_retryGeneration;
+            _verdictPending = true;
             Finish();
             _host.ShowMessage(mercy ? AttentionVerdict.Mercy : verdict, mercy ? 2500 : 2000, () =>
             {
                 if (gen != _retryGeneration) return;   // stopped or replaced while the message was up
+                _verdictPending = false;
                 if (mercy || !Trigger(strict)) AfterEnd();
             });
         }
@@ -449,6 +454,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            _verdictPending = false;
             Dispose(ref _bubbleWait);
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's

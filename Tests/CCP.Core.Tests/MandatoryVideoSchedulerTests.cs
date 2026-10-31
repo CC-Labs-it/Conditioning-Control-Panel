@@ -315,7 +315,9 @@ public sealed class MandatoryVideoSchedulerTests
             }
             v.NoteSpawn(); v.Ended();                        // third miss: mercy, no replay
             Assert.Equal(AttentionVerdict.Mercy, host.Messages[^1]);
+            Assert.True(v.HoldsSlot);
             host.Then!();
+            Assert.False(v.HoldsSlot);
             Assert.Equal("resume", bubbles[^1]);
             clock.Advance(TimeSpan.FromSeconds(5));
             Assert.Equal(3, host.Shown.Count);
@@ -393,6 +395,8 @@ public sealed class MandatoryVideoSchedulerTests
             Assert.Equal(2, host.Shown.Count);
             Assert.True(v.IsPlaying);
             Assert.Equal(1, v.Penalties);                    // a stale replay would have run AfterEnd (reset to 0)
+            v.End();
+            Assert.False(v.HoldsSlot);
         }
         finally { (s.AttentionChecksEnabled, s.MercySystemEnabled) = (a, m); }
     });

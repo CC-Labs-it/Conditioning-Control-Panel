@@ -515,6 +515,56 @@ public sealed class BubbleCountQueueTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task HeldCardWaitsThroughAttentionVerdict(int exit) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var host = new VerdictHost();
+        var video = new MandatoryVideoScheduler(host, new Clock(), () => new[] { "/none/clip.mp4" });
+        var s = CoreSettings.Current;
+        var saved = (CoreEngine.Video, s.AttentionChecksEnabled, s.MercySystemEnabled);
+        CoreEngine.Video = video;
+        s.AttentionChecksEnabled = true; s.MercySystemEnabled = false;
+        try
+        {
+            video.Trigger(); video.NoteSpawn();
+            LockCardWindow.ShowOnAllMonitors("held", 1, false, isTest: true);
+            video.Ended();
+            Assert.False(video.IsPlaying);
+            Assert.True(video.HoldsSlot);
+            LockCardWindow.ReplayAfterGame();
+            Assert.False(LockCardWindow.IsAnyOpen());
+            if (exit == 0)
+            {
+                host.Then!();
+                Assert.True(video.IsPlaying);
+                LockCardWindow.ReplayAfterGame();
+                Assert.False(LockCardWindow.IsAnyOpen());
+            }
+            if (exit == 1) video.Stop(); else video.ForceCleanup();
+            host.Then!(); // cancelled callbacks cannot reclaim the slot
+            Assert.False(video.HoldsSlot);
+            LockCardWindow.ReplayAfterGame();
+            Assert.True(LockCardWindow.IsAnyOpen());
+        }
+        finally { video.Stop(); LockCardWindow.ForceCloseAll(); (CoreEngine.Video, s.AttentionChecksEnabled, s.MercySystemEnabled) = saved; }
+        return Task.CompletedTask;
+    });
+
+    private sealed class VerdictHost : IMandatoryVideoHost
+    {
+        public Action? Then;
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => Then = then;
+    }
+
     /// <summary>Stepped clock: timers fire only on <see cref="Advance"/>.</summary>
     private sealed class Clock : TimeProvider
     {

@@ -1202,7 +1202,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static bool HoldForGame(Action replay)
         {
             // WPF InteractionQueueService.cs:88-121: video owns the slot from pre-roll onward.
-            if (CoreEngine.BubbleCount?.IsBusy != true && CoreEngine.Video?.IsPlaying != true && _heldForGame == null) return false;
+            if (CoreEngine.BubbleCount?.IsBusy != true && CoreEngine.Video?.HoldsSlot != true && _heldForGame == null) return false;
             // WPF InteractionQueueService.cs:108-121: preserve the first pending request.
             _heldForGame ??= replay;
             _gameWait.Start();
@@ -1213,7 +1213,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // card also blocks replay if the round was externally cleaned up before it closed.
         internal static void ReplayAfterGame()
         {
-            if (CoreEngine.BubbleCount?.IsBusy == true || CoreEngine.Video?.IsPlaying == true || IsAnyOpen() || PopQuizWindow.IsAnyOpen()) return;
+            if (CoreEngine.BubbleCount?.IsBusy == true || CoreEngine.Video?.HoldsSlot == true || IsAnyOpen() || PopQuizWindow.IsAnyOpen()) return;
             var replay = _heldForGame;
             _heldForGame = null;
             _gameWait.Stop();
