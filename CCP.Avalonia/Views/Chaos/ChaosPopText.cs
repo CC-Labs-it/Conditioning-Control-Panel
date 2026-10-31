@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -38,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// </summary>
     internal sealed class ChaosPopText : Window
     {
+        private static int _generation;
         internal static readonly ChaosPopPool<ChaosPopText> Pool = new(ChaosPopTextMotion.POOL_MAX);
 
         /// <summary>Click-through + invisible + override-redirect at <paramref name="rect"/> (screen
@@ -56,11 +58,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             try
             {
                 if (!ChaosPopTextMotion.ShouldShow(text, CoreSettings.Current.ChaosAnnouncerEnabled)) return;
+                int generation = Volatile.Read(ref _generation);
                 Dispatcher.UIThread.Post(() =>
                 {
                     try
                     {
-                        if (!PlatformCanShow()) return;
+                        if (generation != Volatile.Read(ref _generation) || !PlatformCanShow()) return;
                         var w = Pool.Acquire(() => new ChaosPopText(sample: false));
                         w?.Play(anchorXDip, anchorYDip, text, color);   // null = pool exhausted: drop the word
                     }
@@ -74,6 +77,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// they die). Inline on the UI thread so teardown leaves nothing behind.</summary>
         public static void ShutdownPool()
         {
+            // WPF ChaosPopText.cs:58-94 queues cleanup after Show. This head clears inline,
+            // so invalidate pending Show callbacks before they can recreate a closed pool.
+            Interlocked.Increment(ref _generation);
             void Run()
             {
                 foreach (var w in Pool.All) { try { w.Close(); } catch (Exception ex) { Log.Debug("ChaosPopText close: {E}", ex.Message); } }
