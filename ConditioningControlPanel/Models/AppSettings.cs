@@ -9926,6 +9926,37 @@ namespace ConditioningControlPanel.Models
             set { _emiDeskEquipPushOwed = value; OnPropertyChanged(); }
         }
 
+        private string? _profileEquipAccount;
+        /// <summary>The account <see cref="ProfileEquipUpdatedMs"/> and <see cref="ProfileEquipPushOwed"/> belong to
+        /// (Services/Profile/ProfileEquipSync). Null = this client has not settled a frame or avatar here, so an
+        /// existing pick goes up once. Machine-local, like the other two: never in a cloud backup.</summary>
+        [JsonProperty]
+        public string? ProfileEquipAccount
+        {
+            get => _profileEquipAccount;
+            set { _profileEquipAccount = value; OnPropertyChanged(); }
+        }
+
+        private long _profileEquipUpdatedMs;
+        /// <summary>The equip stamp of the frame and avatar on this PC (unix ms). A server copy is adopted only
+        /// when its updatedAt is newer.</summary>
+        [JsonProperty]
+        public long ProfileEquipUpdatedMs
+        {
+            get => _profileEquipUpdatedMs;
+            set { _profileEquipUpdatedMs = Math.Max(0, value); OnPropertyChanged(); }
+        }
+
+        private bool _profileEquipPushOwed;
+        /// <summary>True while a local frame or avatar pick has not reached /v2/equip. It goes up instead of being
+        /// judged against the server copy, whose stamp any other family's PUT can move.</summary>
+        [JsonProperty]
+        public bool ProfileEquipPushOwed
+        {
+            get => _profileEquipPushOwed;
+            set { _profileEquipPushOwed = value; OnPropertyChanged(); }
+        }
+
         private double _emiDeskWidth = 220;
         /// <summary>
         /// Her body width in DIPs, mirrored from the widget's own resize handle. Clamped to the
