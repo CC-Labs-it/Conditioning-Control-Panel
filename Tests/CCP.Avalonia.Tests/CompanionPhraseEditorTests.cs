@@ -120,6 +120,120 @@ public sealed class CompanionPhraseEditorTests
         }
     });
 
+    [Fact]
+    public void TriggerControlsLoadWithoutSavingAndPersistUserChanges() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        service.Current.TriggerModeEnabled = true;
+        service.Current.TriggerIntervalSeconds = 137;
+        var cell = new WorkshopTriggersCell();
+        var toggle = cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
+        var slider = cell.FindControl<Slider>("SliderTriggerIntervalCompanion")!;
+        var panel = cell.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!;
+        var label = cell.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!;
+        Assert.True(toggle.IsChecked);
+        Assert.True(panel.IsVisible);
+        Assert.Equal(137, slider.Value);
+        Assert.Equal("137s", label.Text);
+        Assert.False(service.HasPendingSave);
+        slider.Value = 183.9;
+        Assert.Equal(183, service.Current.TriggerIntervalSeconds);
+        Assert.Equal("183s", label.Text);
+        Assert.False(service.HasPendingSave); // WPF saves the toggle, not each slider tick.
+        toggle.IsChecked = false;
+        Assert.False(panel.IsVisible);
+        Assert.False(service.Current.TriggerModeEnabled);
+        Assert.True(service.HasPendingSave);
+        service.SaveImmediate();
+        var reload = new SettingsService();
+        Assert.False(reload.Current.TriggerModeEnabled);
+        Assert.Equal(183, reload.Current.TriggerIntervalSeconds);
+        // Reopening the page re-reads externally changed state without writing it.
+        service.Current.TriggerModeEnabled = true;
+        service.Current.TriggerIntervalSeconds = 245;
+        cell.SyncSettings();
+        Assert.True(toggle.IsChecked);
+        Assert.True(panel.IsVisible);
+        Assert.Equal("245s", label.Text);
+        Assert.False(service.HasPendingSave);
+    });
+
+    [Fact]
+    public void AiPageTriggerEditorNormalizesSavesAndCancelsWithoutRestoringDefaults() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var settings = service.Current;
+        settings.Welcomed = true;
+        settings.HasAcceptedAgeVerification = true;
+        settings.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        settings.AwarenessModeEnabled = false;
+        settings.TriggerModeEnabled = true;
+        settings.CustomTriggers = new() { "KEEP", "keep", " ", "REMOVE" };
+        settings.UserAddedCustomTriggers.Clear();
+        settings.UserAddedCustomTriggers.UnionWith(new[] { "REMOVE", "KEEP" });
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("companionai");
+            Dispatcher.UIThread.RunJobs();
+            var page = shell.Named<AiPage>("CompanionAiTab")!;
+            var cell = (WorkshopTriggersCell)page.FindControl<ContentControl>("TriggersHost")!.Content!;
+            Assert.True(page.IsVisualAncestorOf(cell));
+            Assert.True(cell.FindControl<Button>("BtnEditTriggersCompanion")!.IsEffectivelyVisible);
+            settings.TriggerIntervalSeconds = 229;
+            shell.ShowTab("companion");
+            shell.ShowTab("companionai");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("229s", cell.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text);
+            void Open() => cell.FindControl<Button>("BtnEditTriggersCompanion")!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            TextEditorDialog Editor() => Assert.Single(shell.OwnedWindows.OfType<TextEditorDialog>());
+            TextItem[] Items(TextEditorDialog d) => d.FindControl<ItemsControl>("ItemList")!.Items.OfType<TextItem>().ToArray();
+            void ClickEditor(TextEditorDialog d, string name) => d.FindControl<Button>(name)!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            Open();
+            var editor = Editor();
+            Assert.Equal(new[] { "KEEP", "REMOVE" }, Items(editor).Select(x => x.Text));
+            Items(editor).Single(x => x.Text == "REMOVE").IsEnabled = false;
+            editor.FindControl<TextBox>("TxtNewItem")!.Text = "hand typed";
+            ClickEditor(editor, "BtnAdd");
+            ClickEditor(editor, "BtnSave");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "KEEP", "HAND TYPED" }, settings.CustomTriggers);
+            Assert.Contains("HAND TYPED", settings.UserAddedCustomTriggers);
+            Assert.Contains("KEEP", settings.UserAddedCustomTriggers);
+            Assert.DoesNotContain("REMOVE", settings.UserAddedCustomTriggers);
+            Assert.True(service.HasPendingSave);
+            service.SaveImmediate();
+            Assert.Equal(settings.CustomTriggers, new SettingsService().Current.CustomTriggers);
+
+            Open();
+            editor = Editor();
+            ClickEditor(editor, "BtnCancel");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "KEEP", "HAND TYPED" }, settings.CustomTriggers);
+            Assert.False(service.HasPendingSave);
+            settings.CustomTriggers.Clear();
+            Open();
+            editor = Editor();
+            Assert.Empty(Items(editor));
+            ClickEditor(editor, "BtnSave");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(settings.CustomTriggers);
+        }
+        finally
+        {
+            foreach (var owned in shell.OwnedWindows.ToArray()) owned.Close();
+            shell.RequestExit();
+        }
+    });
+
     private static CompanionPhrase[] Rows(CompanionPhraseEditorDialog dialog) =>
         dialog.FindControl<ItemsControl>("PhraseList")!.Items.OfType<PhraseGroup>().SelectMany(g => g.Items).ToArray();
     private static void Click(CompanionPhraseEditorDialog dialog, string name) =>

@@ -29,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
             if (room.FindControl<WorkshopAccordion>("WorkshopZone")?.DataContext is WorkshopRuntimeVm workshop)
             {
                 CompanionPageHost.Adopt(workshop.Parts.Behavior, BehaviorHost);
+                workshop.Parts.Triggers.SyncSettings(); // WPF MainWindow.CompanionTab.cs:38 reloads the live trigger controls.
                 CompanionPageHost.Adopt(workshop.Parts.Triggers, TriggersHost);
             }
             if (room.FindControl<EngineRoomDrawer>("EngineZone") is { } engine)
