@@ -397,6 +397,8 @@ namespace ConditioningControlPanel.Avalonia
         public override void Initialize()
         {
             AvaloniaXamlLoader.Load(this);
+            ConditioningControlPanel.Services.PlayerLook.KnownIdsProvider = () =>
+                (ConditioningControlPanel.Services.ShopCosmeticsRegistry.AllAvatarIds(), ConditioningControlPanel.Services.ShopCosmeticsRegistry.FrameIds());
             Controls.ButtonAccessibleName.Install();   // a panel-content button is not read as its type name
 
             // Load the language table before any view binds a string. The WPF head does this in
@@ -669,7 +671,7 @@ namespace ConditioningControlPanel.Avalonia
                     var sync = Platform.AccountSeed.Sync = new SyncPush(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
-                        { Countdown = DescentCountdown, DescentReader = Descent };
+                        { Countdown = DescentCountdown, DescentReader = Descent, PrizesReceived = Platform.PrizeOwnership.ApplySyncSnapshot };
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>

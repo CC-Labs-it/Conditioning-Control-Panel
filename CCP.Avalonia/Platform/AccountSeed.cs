@@ -35,6 +35,7 @@ internal static class AccountSeed
     /// <param name="makeDiscord">Tests only: builds the Discord account.</param>
     internal static bool Seed(Func<string, ProviderSubscription>? make = null, Func<ProviderSubscription, DiscordAccount>? makeDiscord = null)
     {
+        ProviderSubscription.PrizesSink = PrizeOwnership.ApplyValidateSnapshot;
         make ??= prefix => new ProviderSubscription(prefix);
         makeDiscord ??= peer => new DiscordAccount(() => peer);
         ProviderSubscription patreon, substar;
@@ -206,6 +207,7 @@ internal static class AccountSeed
     {
         if (!accountDeleted && Sync is { Loaded: true } sync) await sync.PushAsync("pre-logout", waitForGate: true);
         Sync?.StopHeartbeat();
+        PrizeOwnership.ResetHeld();
         SecretStore.ClearFailed = false;
         Patreon?.Logout();
         Discord?.Logout();

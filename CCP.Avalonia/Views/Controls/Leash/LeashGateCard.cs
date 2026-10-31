@@ -120,7 +120,7 @@ public sealed class LeashGateCard : Grid
         };
         top.Children.Add(stamp);
         var from = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
-        var av = F.Avatar(p.From.Name, 26, null);
+        var av = F.Avatar(p.From.Name, 26, null, p.From.Look);
         av.Margin = new Thickness(0, 0, 8, 0);
         from.Children.Add(av);
         from.Children.Add(F.Label(Loc.GetF("leash_gate_says", p.From.Name), 13.5, F.Gold, null, FontWeight.SemiBold));
