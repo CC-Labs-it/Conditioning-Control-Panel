@@ -110,8 +110,10 @@ public sealed class ChaosAmbientRainTests
 
     // WPF EffectPayloadFiring.cs:177-220: actual runner, enabled phrase, scoped duration,
     // 12 bounces, user ownership, and stop releasing an old timeout before a new owner.
-    [Fact]
-    public async Task Text_runner_uses_renderer_and_releases_ownership_on_timeout_bounces_and_stop()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Text_runner_uses_renderer_and_releases_ownership_on_timeout_bounces_and_stop(bool rebuild)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -137,6 +139,15 @@ public sealed class ChaosAmbientRainTests
                 clock.Now = TimeSpan.FromSeconds(15.9).Ticks;
                 ChaosBouncingTextEffect.CheckExpiry();
                 Assert.True(BouncingTextOverlay.IsRunning);
+                // WPF BouncingTextService.cs:165-170, EffectPayloadFiring.cs:190-203:
+                // a settings rebuild must retain the original deadline and bounce count.
+                if (rebuild)
+                {
+                    CoreSettings.Current.BouncingTextOutline = !CoreSettings.Current.BouncingTextOutline;
+                    BouncingTextOverlay.Restart();
+                    Assert.True(ChaosBouncingTextEffect.IsActive);
+                    Assert.All(BouncingTextOverlay.Engine.Logos, l => Assert.Equal("enabled", l.Text));
+                }
                 clock.Now = TimeSpan.FromSeconds(16).Ticks;
                 ChaosBouncingTextEffect.CheckExpiry();
                 Assert.False(BouncingTextOverlay.IsRunning);
@@ -153,6 +164,7 @@ public sealed class ChaosAmbientRainTests
                     logo.VelX = -100;
                     BouncingTextOverlay.Advance(0.016);
                     Assert.Equal(i < BouncingTextPayload.MAX_BOUNCES - 1, BouncingTextOverlay.IsRunning);
+                    if (rebuild && i == 5) BouncingTextOverlay.Restart();
                 }
                 AvApp.FireChaosPayload(new BouncingTextPayload());
                 BouncingTextOverlay.Stop(); // panic/user stop cancels the payload's lifetime

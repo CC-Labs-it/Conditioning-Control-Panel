@@ -126,7 +126,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Log.Information("Bouncing text started - Logos: {Count}", Engine.Logos.Count);
         }
 
-        public static void Stop()
+        public static void Stop() => Stop(rebuilding: false);
+
+        private static void Stop(bool rebuilding)
         {
             _running = false;
             _paused = false;
@@ -134,7 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Close();
             Windows.Clear();
             Engine.Stop();
-            Stopped?.Invoke();
+            if (!rebuilding) Stopped?.Invoke();
         }
 
         /// <summary>WPF Restart: rebuild for the settings that change the element (outline, second logo).</summary>
@@ -142,8 +144,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (!_running || _host is not { } host) return;
             var pool = Engine.PoolOverride?.ToList();
-            Stop();
+            // WPF BouncingTextService.cs:165-170 and EffectPayloadFiring.cs:190-203:
+            // rebuilding retains the payload timer and accumulated bounces.
+            Stop(rebuilding: true);
             Start(host, pool);
+            if (!_running) Stopped?.Invoke(); // a refused rebuild releases ownership
         }
 
         /// <summary>WPF Refresh: speed, size, family, opacity, fixed colour - live.</summary>
