@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { FAILURE_KEY, reasonOf, describeFailure, failureLine, rememberFailure, readLastFailure, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS } from '../core/failure.js';
+import { earlierLine, readFailureLog, rebuildAllowed, FAILURE_LOG_MAX, REBUILD_WINDOW_MS } from '../core/failure.js';
 import { createLoading } from '../hud/loading.js';
 
 const src = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
@@ -102,7 +103,7 @@ test('boot.js: a failure is recorded with the stage and shown on the cover with 
   const b = src('boot.js');
   const fn = b.slice(b.indexOf('function fail(e) {'), b.indexOf('function teardownGpu('));
   assert.match(fn, /const rec = record\('boot', e\)/);
-  assert.match(fn, /loading\.fail\(failureLine\(rec\)\)/);
+  assert.match(fn, /loading\.fail\(\[failureLine\(rec\), earlierLine\(rec\)\]/);
   assert.match(fn, /loading\.onRetry\(\(\) => void retry\(rec\.course\)\)/);
   const rc = b.slice(b.indexOf('function record(kind, e) {'), b.indexOf('function fail(e) {'));
   assert.match(rc, /stage: ms && ms\.length \? ms\[ms\.length - 1\]\.stage : null/);
@@ -157,4 +158,46 @@ test('renderer.js: a WebGPU init failure falls back to WebGL2 on a fresh canvas;
   assert.match(r, /const autoTier = capTier\(pickTier\(/);
   // dispose survives a dead device: each step on its own
   assert.match(r, /for \(const step of \[\(\) => post && post\.dispose\(\), \(\) => readout\(false\), \(\) => disposeSceneResources\(three\), \(\) => three\.dispose\(\)\]\)/);
+});
+
+// DrankoCZ, moto g54 5G, 2026-10-31: the card said "the browser refused a WebGL2 context" and hid what came first.
+const memory = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, v) }; };
+
+test('the failure log keeps the last few records, without stack or user agent', () => {
+  const s = memory();
+  for (let i = 0; i < FAILURE_LOG_MAX + 2; i++) rememberFailure(describeFailure(new Error('e' + i), { kind: 'lost', at: i, ua: 'phone' }), s);
+  const log = readFailureLog(s);
+  assert.equal(log.length, FAILURE_LOG_MAX);
+  assert.equal(log.at(-1).reason, 'e' + (FAILURE_LOG_MAX + 1));
+  assert.equal(log[0].stack, undefined);
+  assert.equal(log[0].ua, undefined);
+  s.setItem('glassroad.failureLog', 'not json');
+  assert.deepEqual(readFailureLog(s), []);
+});
+
+test('a later refusal names the loss before it, and an old one stays out of it', () => {
+  const lost = describeFailure(new Error('WebGPU device lost'), { kind: 'lost', course: 'threshold', backend: 'webgl2', at: 1000 });
+  const refused = describeFailure(new Error('refused'), { kind: 'boot', at: 31000 });
+  assert.equal(earlierLine(refused, [lost, refused]), 'Earlier (30 s ago): graphics device lost (threshold, webgl2): WebGPU device lost');
+  assert.equal(earlierLine(lost, [lost]), '');
+  assert.equal(earlierLine({ ...refused, at: 1000 + 11 * 60 * 1000 }, [lost]), '');
+  assert.match(earlierLine({ ...refused, at: 1000 + 180 * 1000 }, [lost]), /^Earlier \(3 min ago\)/);
+});
+
+test('one automatic rebuild per window, because a second GPU loss makes Chrome refuse the site', () => {
+  const lost = { kind: 'lost', at: 1000 };
+  assert.equal(rebuildAllowed([], 1000), true);
+  assert.equal(rebuildAllowed([lost], 2000), false);
+  assert.equal(rebuildAllowed([{ kind: 'stalled', at: 1000 }], 2000), false);
+  assert.equal(rebuildAllowed([{ kind: 'frame', at: 1000 }], 2000), false);
+  assert.equal(rebuildAllowed([lost], 1000 + REBUILD_WINDOW_MS), true);
+  assert.equal(rebuildAllowed([{ kind: 'boot', at: 1000 }], 2000), true, 'a boot failure already ended on the card');
+  assert.match(src('boot.js'), /const again = !rebuildAllowed\(shared\.failures\);/);
+});
+
+test('a refusal says which API went and how long to wait', () => {
+  const r = src('render/renderer.js');
+  assert.ok(r.includes('the browser refused a WebGL2 context on this device'));
+  assert.ok(r.includes('the browser refused both WebGPU and WebGL2 on this device'));
+  assert.ok(r.includes('close the tab and try again in 3'));
 });

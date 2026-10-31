@@ -38,6 +38,7 @@ namespace ConditioningControlPanel
 
         private readonly Dictionary<string, Border> _bannerTiles = new(StringComparer.Ordinal);
         private readonly Dictionary<string, Border> _avatarTiles = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, Border> _frameTiles = new(StringComparer.Ordinal);
         private readonly Dictionary<string, Border> _accentTiles = new(StringComparer.Ordinal);
         private readonly Dictionary<string, Border> _titleRows = new(StringComparer.Ordinal);
         private readonly Dictionary<string, Border> _pinTiles = new(StringComparer.Ordinal);
@@ -83,6 +84,7 @@ namespace ConditioningControlPanel
 
             BuildBanners();
             BuildAvatars();
+            BuildFrames();
             BuildAccents();
             BuildTitles();
             BuildPins();
@@ -185,7 +187,98 @@ namespace ConditioningControlPanel
                 AvatarHost.Children.Add(BuildAvatarTile(preset.Id, preset.Name, image));
             }
 
+            // Prize Counter avatars: owned ones equip like a preset, the rest stay visible and locked.
+            foreach (var item in ShopCosmetics.Avatars)
+            {
+                var image = ShopCosmetics.GetImage(item.Id);
+                if (image == null) continue;
+                var tile = BuildAvatarTile(item.Id, Loc.Get(item.NameKey), image);
+                if (!OwnsShopItem(item)) LockTile(tile, item);
+                AvatarHost.Children.Add(tile);
+            }
+
             SelectAvatar(_draft.AvatarId ?? NoneKey);
+        }
+
+        /// <summary>True when the signed-in account holds the item's grant (contract 2). Prime items stay owned
+        /// after Prime ends.</summary>
+        private static bool OwnsShopItem(ShopCosmeticItem item)
+        {
+            try { return App.Ownership?.IsGranted(item.Grant) == true; }
+            catch { return false; }
+        }
+
+        /// <summary>A locked shop row: visible, dimmed, never selectable, and says where it is sold.</summary>
+        private static void LockTile(Border tile, ShopCosmeticItem item)
+        {
+            tile.Tag = "locked";
+            tile.Opacity = 0.45;
+            tile.Cursor = Cursors.Arrow;
+            tile.ToolTip = Loc.Get(item.NameKey) + Environment.NewLine + Loc.Get("shop_locked_in_counter");
+        }
+
+        // ============================== Prize Counter frame ==============================
+
+        private void BuildFrames()
+        {
+            var items = ShopCosmetics.Frames;
+            if (items.Count == 0)
+            {
+                FrameSection.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            FrameHost.Children.Add(BuildFrameTile(NoneKey, Loc.Get("profile_customize_none"), null));
+            foreach (var item in items)
+            {
+                var image = ShopCosmetics.GetImage(item.Id);
+                if (image == null) continue;
+                var tile = BuildFrameTile(item.Id, Loc.Get(item.NameKey), image);
+                if (!OwnsShopItem(item)) LockTile(tile, item);
+                FrameHost.Children.Add(tile);
+            }
+
+            SelectFrame(_draft.FrameId ?? NoneKey);
+        }
+
+        private Border BuildFrameTile(string key, string label, ImageSource? art)
+        {
+            var stage = new Grid { Width = 56, Height = 56, IsHitTestVisible = false };
+            stage.Children.Add(new Border
+            {
+                Width = 40,
+                Height = 40,
+                CornerRadius = new CornerRadius(20),
+                Background = TileBg
+            });
+            if (art != null)
+                stage.Children.Add(new Image { Source = art, Stretch = Stretch.Uniform });
+
+            var tile = new Border
+            {
+                Width = 64,
+                Height = 64,
+                Margin = new Thickness(0, 0, 8, 8),
+                CornerRadius = new CornerRadius(8),
+                Background = Brushes.Transparent,
+                BorderBrush = IdleBorder,
+                BorderThickness = new Thickness(2),
+                Cursor = Cursors.Hand,
+                ToolTip = label,
+                Child = stage
+            };
+            tile.MouseLeftButtonUp += (_, _) => SelectFrame(key);
+
+            _frameTiles[key] = tile;
+            return tile;
+        }
+
+        private void SelectFrame(string key)
+        {
+            if (_frameTiles.TryGetValue(key, out var picked) && Equals(picked.Tag, "locked")) return;
+            _draft.FrameId = key == NoneKey ? null : key;
+            foreach (var (id, tile) in _frameTiles)
+                tile.BorderBrush = id == key ? SelectedBorder : IdleBorder;
         }
 
         private Border BuildAvatarTile(string key, string label, ImageSource? art)
@@ -225,6 +318,7 @@ namespace ConditioningControlPanel
 
         private void SelectAvatar(string key)
         {
+            if (_avatarTiles.TryGetValue(key, out var picked) && Equals(picked.Tag, "locked")) return;
             _draft.AvatarId = key == NoneKey ? null : key;
             foreach (var (id, tile) in _avatarTiles)
             {

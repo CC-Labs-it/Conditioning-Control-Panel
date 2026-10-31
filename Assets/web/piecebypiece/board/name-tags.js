@@ -30,6 +30,7 @@
 import * as THREE from 'three';
 import { TAG, tagState, reduce, namesFor, anchorFor, spring, tremble, trembleAmp, sweatRate, bob, inCheck, checkTint } from './name-tags-plan.js';
 import { presentation, onPresentation, setPresentation } from '../game/preferences.js';
+import { artUrl, faceKey, FRAME_WINDOW } from '../skins/profile.js';
 
 const SIDES = ['w', 'b'];
 const LOOK = {
@@ -62,8 +63,9 @@ function roundedRect(w, h, r) {
   return s;
 }
 
-/** The face of a tag: a disc in the side's colour, the name, and the rating under it. */
-function paintLabel(ctx, side, label) {
+/** The face of a tag: a disc in the side's colour, the name, and the rating under it. A player who wears a
+ *  Prize Counter avatar shows it in the disc, and their frame rides round it (contract 4). */
+function paintLabel(ctx, side, label, face = null) {
   const look = LOOK[side];
   ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
   // the side's man, as a disc
@@ -71,9 +73,22 @@ function paintLabel(ctx, side, label) {
   ctx.arc(108, CANVAS_H / 2, 66, 0, Math.PI * 2);
   ctx.fillStyle = look.disc;
   ctx.fill();
-  ctx.lineWidth = 10;
-  ctx.strokeStyle = look.discEdge;
-  ctx.stroke();
+  const avatar = face && face.avatar && face.avatar.complete && face.avatar.naturalWidth ? face.avatar : null;
+  const frame = face && face.frame && face.frame.complete && face.frame.naturalWidth ? face.frame : null;
+  if (avatar) {
+    ctx.save();
+    ctx.clip();
+    ctx.drawImage(avatar, 108 - 66, CANVAS_H / 2 - 66, 132, 132);
+    ctx.restore();
+  }
+  if (frame) {
+    const s = 132 / FRAME_WINDOW;
+    ctx.drawImage(frame, 108 - s / 2, CANVAS_H / 2 - s / 2, s, s);
+  } else {
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = look.discEdge;
+    ctx.stroke();
+  }
   const left = 206, room = CANVAS_W - left - 30;
   const hasRating = label.rating !== null && label.rating !== undefined;
   let size = 96;
@@ -246,11 +261,37 @@ export function createNameTags({ view, bus, game = null, menuUp = () => false, o
     for (const side of SIDES) {
       const t = tags[side];
       const label = names[side];
-      if (t.label && t.label.name === label.name && t.label.rating === label.rating) continue;
+      const key = faceKey(faces[side]) + ':' + faceArt[side].loaded;
+      if (t.label && t.label.name === label.name && t.label.rating === label.rating && t.faceKey === key) continue;
       t.label = label;
-      paintLabel(t.canvas.getContext('2d'), side, label);
+      t.faceKey = key;
+      paintLabel(t.canvas.getContext('2d'), side, label, faceArt[side]);
       t.tex.needsUpdate = true;
     }
+  }
+
+  /* ---- the players' profile looks (contract 4) --------------------------- */
+  // What each seat wears (skins/profile.js), as loaded pictures. A picture that fails to load is a quiet no:
+  // the tag keeps its plain disc. A new deal with nobody wearing anything puts the plain discs back.
+  const faces = { w: null, b: null };
+  const faceArt = { w: { loaded: 0 }, b: { loaded: 0 } };
+  function picture(id, side, turn) {
+    if (!id || typeof Image === 'undefined') return null;
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => { if (faceArt[side].turn === turn) { faceArt[side].loaded++; paintNames(); } };
+    img.src = artUrl(id);
+    return img;
+  }
+  function setFaces(p) {
+    const next = { w: (p && p.white) || null, b: (p && p.black) || null };
+    for (const side of SIDES) {
+      if (faceKey(next[side]) === faceKey(faces[side])) continue;
+      faces[side] = next[side];
+      const turn = (faceArt[side].turn || 0) + 1;
+      faceArt[side] = { turn, loaded: 0, avatar: picture(next[side]?.avatar, side, turn), frame: picture(next[side]?.frame, side, turn) };
+    }
+    paintNames();
   }
 
   /* ---- the beats -------------------------------------------------------- */
@@ -316,6 +357,8 @@ export function createNameTags({ view, bus, game = null, menuUp = () => false, o
   const on = (type, fn) => { if (bus) offs.push(bus.on(type, fn)); };
   on('local', (p) => { deal = p || {}; players = null; fold('local', p); paintNames(); });
   on('newgame', (p) => fold('newgame', p));
+  on('cosmetics', (p) => setFaces(p));
+  on('local', () => setFaces(null));
   on('capture', (p) => fold('capture', p));
   on('check', (p) => fold('check', p));
   on('turn', (p) => fold('turn', p));

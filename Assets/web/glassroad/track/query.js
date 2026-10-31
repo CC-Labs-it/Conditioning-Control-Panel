@@ -237,6 +237,7 @@ export function copyQuery(o, a) {
   o.normal[0] = a.normal[0]; o.normal[1] = a.normal[1]; o.normal[2] = a.normal[2];
   o.onRoad = a.onRoad; o.edgeDist = a.edgeDist; o.surface = a.surface; o.flags = a.flags; o.railed = a.railed;
   o.hole = a.hole; o.holeDist = a.holeDist; o.stone = a.stone || null;
+  if (a.ramp !== undefined || o.ramp !== undefined) { o.ramp = a.ramp || null; o.rampH = a.rampH || 0; }
   if (!o.flow) o.flow = [0, 0];
   if (a.flow) { o.flow[0] = a.flow[0]; o.flow[1] = a.flow[1]; } else { o.flow[0] = 0; o.flow[1] = 0; }
   o.p[0] = a.p[0]; o.p[1] = a.p[1]; o.p[2] = a.p[2];

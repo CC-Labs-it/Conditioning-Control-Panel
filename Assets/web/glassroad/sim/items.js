@@ -14,6 +14,9 @@ import { cancelDrift } from './drift.js';
 import { endBoost } from './boost.js';
 import { ITEMS, bucketOf, rollItem, durationOf, makeRand, BUCKETS, SPIN_KINDS } from './itemTable.js';
 import { itemUseMode } from './itemUse.js';
+import { liftedNear } from './ramps.js';
+import { boostArchPlan } from '../track/boostArches.js';
+import { createBoostArchRun } from './boostArches.js';
 
 const GROW_S = 0.4;          // feel gap: a respawned box or bubble grows in over this
 const WAVE_S = 1.2;          // feel gap: a Pink wave stays in the view this long
@@ -25,6 +28,7 @@ const VIEW_KINDS = { full: 1, mild: 1 };
 
 export function createItems(track, feel, events, { seed = 1 } = {}) {
   const L = track.lengthM;
+  const archRun = createBoostArchRun(track, feel, events), replaced = new Set(boostArchPlan(track).replaced);
   const g = (k) => feel.get('items.' + k);
   const pathFrame = (s, seg, out) => track.pathFrameAt ? track.pathFrameAt(s, seg, out) : track.frameAt(s, out);
   const forkOf = seg => track.forkAtSeg?.(seg) || null;
@@ -91,11 +95,13 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     for (let j = 0; j < 3; j++) pr.landingN[j] = n[j];
   }
 
+  // ramps: a lifted item (liftM > 0) floats liftM above the road and is only taken in 3D (sim/ramps.js liftedNear)
   const pick = (track.items || []).map((it, i) => {
-    const f = track.frameAt(it.s);
-    return { kind: it.kind, s: it.s, x: it.x, downT: 0, upT: 1e9,
-      v: { i, p: point(it.s, it.x, 0), n: f.n.slice(), t: f.t.slice(), b: f.b.slice(), alive: true, k: 1 } };
-  });
+    const f = track.frameAt(it.s), liftM = it.liftM > 0 ? it.liftM : 0;
+    return { kind: it.kind, s: it.s, x: it.x, liftM, downT: 0, upT: 1e9,
+      v: { i, p: point(it.s, it.x, liftM), n: f.n.slice(), t: f.t.slice(), b: f.b.slice(), alive: true, k: 1, ...(liftM ? { lift: liftM } : {}) } };
+  }).filter(b => !replaced.has(b.v.i));
+  const anyLift = pick.some((b) => b.liftM > 0);
   let projectiles = [], traps = [], waves = [], pops = [], R = [], links = [];
   const sinks = [];
   const sink = (i) => (i === 0 ? events : (sinks[i] ||= { emit: (name, p) => events.emit('racer-event', { racer: i, name, p }) }));
@@ -292,23 +298,24 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
 
   // ---- per tick -------------------------------------------------------------------------------
   function pickups(r, standings) {
-    if (!low(r)) return;
+    const grounded = low(r);
+    if (!grounded && !anyLift) return;
     const boxR = g('boxRadiusM'), bubbleR = g('bubbleRadiusM');   // read once per racer, not per pickup
     for (let i = 0; i < pick.length; i++) {
       const b = pick[i];
-      if (b.downT > 0) continue;
+      if (b.downT > 0 || (!b.liftM && !grounded)) continue;
       if (b.kind === 'box') {
-        if (r.item.id || r.item.rolling || !near(r, b.s, b.x, boxR)) continue;
+        if (r.item.id || r.item.rolling || !(b.liftM ? liftedNear(r.st, b.v, boxR) : near(r, b.s, b.x, boxR))) continue;
         b.downT = g('boxRespawnS'); b.upT = 0;
         const id = rollItem(feel, bucketOf(feel, standings.placeOf(r.i), standings.gapToLeader(r.i)), rand);
         r.item.id = id; r.item.rolling = true; r.item.rollT = 0; r.item.heldT = 0;
-        pop('box', 'box', b.s, b.x);
-        events.emit('item-box', { racer: r.i, box: i, p: b.v.p.slice() });
-      } else if (near(r, b.s, b.x, bubbleR)) {
+        pop('box', 'box', b.s, b.x, b.liftM || 0);
+        events.emit('item-box', { racer: r.i, box: b.v.i, p: b.v.p.slice() });
+      } else if (b.liftM ? liftedNear(r.st, b.v, bubbleR) : near(r, b.s, b.x, bubbleR)) {
         b.downT = g('bubbleRespawnS'); b.upT = 0;
         grantBoost(r.st, g('bubbleAmount'), g('bubbleHoldS'), 'bubble', feel, sink(r.i));
-        pop('bubble', 'bubble', b.s, b.x);
-        events.emit('bubble-pop', { racer: r.i, i, p: b.v.p.slice() });
+        pop('bubble', 'bubble', b.s, b.x, b.liftM || 0);
+        events.emit('bubble-pop', { racer: r.i, i: b.v.i, p: b.v.p.slice() });
       }
     }
   }
@@ -476,6 +483,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     if (!race || (race.phase !== 'racing' && race.phase !== 'finished')) return;
     list = racers;
     now += dt; ver++;
+    archRun.update(dt, racers);
     for (const b of pick) {
       if (b.downT > 0) b.downT = Math.max(0, b.downT - dt);
       else b.upT += dt;
@@ -499,7 +507,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   // ---- view -----------------------------------------------------------------------------------
   // Built at most once per tick (ver moves on update and reset) into pooled rows: the arrays and their
   // row objects are reused, so a reader must not keep a row past the next tick.
-  const V = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
+  const V = { boxes: [], bubbles: [], arches: archRun.rows, held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
   for (const b of pick) (b.kind === 'box' ? V.boxes : V.bubbles).push(b.v);
   const POOL = { held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
   let builtVer = -1;
@@ -566,6 +574,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   const trapRows = () => traps;
 
   function reset() {
+    archRun.reset();
     rand = makeRand(seed); now = 0; nextId = 1; ver++;
     projectiles = []; traps = []; waves = []; pops = []; R = []; links = [];
     for (const b of pick) { b.downT = 0; b.upT = 1e9; }

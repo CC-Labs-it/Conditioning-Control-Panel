@@ -49,6 +49,11 @@ export function lipAhead(track, s, lateral, distM, feel, seg = -1) {
   const L = track.lengthM;
   const fork = track.forkAtSeg?.(seg);
   for (const j of fork ? [] : track.jumps || []) { const d = wrap(j.s - s, L); if (d <= distM) return { at: 'lip', d }; }
+  // a ramp lip under the kart's line (track/ramps.js): a hop on the wedge just before it is an early trick
+  for (const r of fork ? [] : track.ramps || []) {
+    const d = wrap(r.lipS - s, L);
+    if (d <= distM && Math.abs(lateral - r.x) <= r.widthM / 2) return { at: 'lip', d };
+  }
   for (const p of fork ? [] : track.boosts || []) {
     const d = wrap(p.s - s, L);
     if (d <= distM && Math.abs(lateral - p.x) <= p.w / 2) return { at: 'pad', d };

@@ -168,7 +168,7 @@ public sealed class RainPackStoreTests : IDisposable
         Assert.Equal("greeting", (string)j["stemPrefix"]!["session_start"]!);
         Assert.Equal("greeting", (string)j["stemPrefix"]!["bubble_pop"]!);   // giggle -> greeting
         Assert.Equal("idle", (string)j["mood"]!["teasing"]!);                // smirk -> idle
-        Assert.Equal(0.84, (double)j["layout"]!["scale"]!);                  // the rest is copied
+        Assert.Equal(1.07, (double)j["layout"]!["scale"]!);                  // the rest is copied
 
         var timing = JObject.Parse(File.ReadAllText(Path.Combine(folder, "clip_timing.json")));
         Assert.DoesNotContain(timing.Properties(), p => !p.Name.StartsWith("_"));

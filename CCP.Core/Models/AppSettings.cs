@@ -397,6 +397,19 @@ namespace ConditioningControlPanel.Models
             set { _rainLook = value ?? ""; OnPropertyChanged(); }
         }
 
+        private string _chessLook = "";
+        /// <summary>
+        /// What the player's chess men wear (7.2 shop, Services/PieceByPiece/PbpLookRules), JSON
+        /// <c>{"set":id|null,"banner":id|null,"insignia":id|null,"at":unixMs}</c>. Empty = bare men. Always
+        /// clamped to the account's grants before the board sees it; synced through <c>/v2/equip</c> family
+        /// chess (newer <c>at</c> wins) and rides the settings backup like RainLook.
+        /// </summary>
+        public string ChessLook
+        {
+            get => _chessLook;
+            set { _chessLook = value ?? ""; OnPropertyChanged(); }
+        }
+
         private string _avatarGeneration = "v1";
         /// <summary>
         /// The tube's avatar generation, one GLOBAL choice: "v1" (the classic avatar, default) or
@@ -4774,6 +4787,26 @@ namespace ConditioningControlPanel.Models
         {
             get => _rainPackHash;
             set { _rainPackHash = value ?? ""; OnPropertyChanged(); }
+        }
+
+        private bool _rainLookPushOwed;
+        /// <summary>Rain look sync (/v2/equip family rain, Services/Companion/RainLookSync): this PC changed
+        /// the look and the server has not taken it yet. While true the next sync PUTs instead of adopting.
+        /// Machine-local (left out of the cloud backup, kept across a restore).</summary>
+        public bool RainLookPushOwed
+        {
+            get => _rainLookPushOwed;
+            set { _rainLookPushOwed = value; OnPropertyChanged(); }
+        }
+
+        private DateTime? _rainLookAgreedUtc;
+        /// <summary>The server's equip <c>updatedAt</c> the last time this PC and the server agreed on
+        /// Rain's look (a push landed, an adopt, or both already equal). Null = never synced. A newer server
+        /// copy is adopted. Machine-local like <see cref="RainPackHash"/>.</summary>
+        public DateTime? RainLookAgreedUtc
+        {
+            get => _rainLookAgreedUtc;
+            set { _rainLookAgreedUtc = value; OnPropertyChanged(); }
         }
 
         /// <summary>True when the user has agreed to see remote content anywhere. Read THIS,
@@ -9843,6 +9876,48 @@ namespace ConditioningControlPanel.Models
         {
             get => _emiDeskGlass;
             set { _emiDeskGlass = value; OnPropertyChanged(); }
+        }
+
+        private string? _emiDeskHat;
+        /// <summary>
+        /// Prize Counter hat EMI wears on the desk (<c>desk.hat.*</c>), or null. Clamped to owned grants on
+        /// read (Services/EmiDesk/EmiDeskItems); synced through /v2/equip family desk (DeskEquipSync).
+        /// </summary>
+        [JsonProperty]
+        public string? EmiDeskHat
+        {
+            get => _emiDeskHat;
+            set { _emiDeskHat = value; OnPropertyChanged(); }
+        }
+
+        private string? _emiDeskToy;
+        /// <summary>Prize Counter toy EMI holds on the desk (<c>desk.toy.*</c>), or null. Same rules as the hat.</summary>
+        [JsonProperty]
+        public string? EmiDeskToy
+        {
+            get => _emiDeskToy;
+            set { _emiDeskToy = value; OnPropertyChanged(); }
+        }
+
+        private long _emiDeskEquipUpdatedMs;
+        /// <summary>When the desk pick last changed (unix ms, local or adopted server copy). A server copy is
+        /// adopted only when its updatedAt is newer.</summary>
+        [JsonProperty]
+        public long EmiDeskEquipUpdatedMs
+        {
+            get => _emiDeskEquipUpdatedMs;
+            set { _emiDeskEquipUpdatedMs = Math.Max(0, value); OnPropertyChanged(); }
+        }
+
+        private bool _emiDeskEquipPushOwed;
+        /// <summary>True while a local desk pick has not reached /v2/equip (route missing, offline, signed out).
+        /// The launch pull sends it up instead of adopting the server copy, so a pick made before the route
+        /// deployed is never replaced by an empty server copy stamped by another family's PUT.</summary>
+        [JsonProperty]
+        public bool EmiDeskEquipPushOwed
+        {
+            get => _emiDeskEquipPushOwed;
+            set { _emiDeskEquipPushOwed = value; OnPropertyChanged(); }
         }
 
         private double _emiDeskWidth = 220;

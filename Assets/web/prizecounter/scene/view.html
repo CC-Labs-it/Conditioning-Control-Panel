@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prize Counter scene</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #140d19; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    #say { position: fixed; left: 12px; bottom: 10px; font: 13px/1.4 system-ui, sans-serif; color: #f3d7e8; opacity: .8; pointer-events: none; }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "../../vendor/three/three.module.min.js", "three/addons/": "../../vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <canvas id="c" aria-label="Prize Counter"></canvas>
+  <div id="say">Q / E tabs, arrows move, tap picks</div>
+  <script type="module">
+    // Standalone look at the scene on the mock state. ?motion=less|off, ?spread=1 hangs four tabs in four bays.
+    import { createScene } from './index.js';
+    const q = new URLSearchParams(location.search);
+    const state = await (await fetch('../mock/state.sample.json')).json();
+    let tabs = state.tabs;
+    if (q.get('spread')) tabs = [{ id: 'spread', shelves: tabs.slice(0, 4).map((t) => t.shelves[0]) }, ...tabs];
+    const scene = await createScene(document.getElementById('c'), { base: '../assets/', motion: q.get('motion') || 'full' });
+    let tab = 0, bay = 0, slot = 0;
+    const rows = (b) => tabs[tab].shelves[b]?.rows.length || 0;
+    const say = (s) => { document.getElementById('say').textContent = s; };
+    const put = () => { scene.focus(bay, slot); window.view.at = { tab: tabs[tab].id, bay, slot }; say(`${tabs[tab].id}  bay ${bay}  slot ${slot}  ${tabs[tab].shelves[bay].rows[slot].id}`); };
+    async function open(i) { tab = (i + tabs.length) % tabs.length; bay = 0; slot = 0; await scene.showTab(tabs[tab].id, tabs[tab].shelves); put(); }
+    scene.onIntent((i) => {
+      const r = Math.floor(slot / 3), c = slot % 3, n = tabs[tab].shelves.length;
+      if (i.type === 'tabPrev' || i.type === 'tabNext') return open(tab + (i.type === 'tabNext' ? 1 : -1));
+      if (i.type === 'pick') { bay = i.bay; slot = i.slot; return put(); }
+      if (i.type === 'left' || i.type === 'right') {
+        const d = i.type === 'right' ? 1 : -1;
+        if (c + d >= 0 && c + d < 3 && slot + d < rows(bay)) slot += d;
+        else if (bay + d >= 0 && bay + d < n) { bay += d; slot = Math.min(rows(bay) - 1, r * 3 + (d > 0 ? 0 : 2)); }
+      }
+      if (i.type === 'up' && r > 0) slot -= 3;
+      if (i.type === 'down' && slot + 3 < rows(bay)) slot += 3;
+      if (i.type === 'select') say('select ' + tabs[tab].shelves[bay].rows[slot].id);
+      if (['left', 'right', 'up', 'down'].includes(i.type)) put();
+    });
+    window.addEventListener('resize', () => scene.resize());
+    window.view = { scene, open, focus: (b, s) => { bay = b; slot = s; put(); }, ready: false };
+    await open(0);
+    window.view.ready = true;
+  </script>
+</body>
+</html>

@@ -36,6 +36,11 @@ namespace ConditioningControlPanel
         private void ApplyProfileWardrobe(ProfileCosmetics cosmetics)
         {
             ApplyProfileAvatarDecoration(cosmetics.AvatarDeco, cosmetics.DecoTransform);
+            try
+            {
+                if (DiscordTab?.ProfileHeroAvatar is { } hero) hero.FrameId = cosmetics.FrameId;
+            }
+            catch (Exception ex) { App.Logger?.Debug("ApplyProfileFrame: {E}", ex.Message); }
             ApplyProfileCharms(cosmetics.Charms, cosmetics.CharmTransforms);
         }
 

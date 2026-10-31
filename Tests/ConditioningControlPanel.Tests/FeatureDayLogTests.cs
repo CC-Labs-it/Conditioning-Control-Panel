@@ -62,7 +62,7 @@ public class FeatureDayLogTests
     [Fact]
     public void AllEventKeys_HaveWireNamesAndNoOverlapWithCounters()
     {
-        Assert.Equal(21, FeatureDayEntry.EventKeys.Length);
+        Assert.Equal(23, FeatureDayEntry.EventKeys.Length);
         Assert.Contains("e_backroom_slot", FeatureDayEntry.EventKeys);   // BackRoomBridge notes it on station-open
         Assert.All(FeatureDayEntry.EventKeys, k => Assert.StartsWith("e_", k));
         Assert.Empty(FeatureDayEntry.EventKeys.Intersect(FeatureDayEntry.CounterKeys));
@@ -82,10 +82,13 @@ public class FeatureDayLogTests
         }
         foreach (var lab in new[] { SeasonFeatureKeys.ChaosMode, SeasonFeatureKeys.Dtrh, SeasonFeatureKeys.Race,
                                     SeasonFeatureKeys.PieceByPiece, SeasonFeatureKeys.PopQuiz,
-                                    SeasonFeatureKeys.BlinkTrainer, SeasonFeatureKeys.Companion })
+                                    SeasonFeatureKeys.BlinkTrainer, SeasonFeatureKeys.Companion,
+                                    SeasonFeatureKeys.Race3d, SeasonFeatureKeys.Shop })
         {
             Assert.True(FeatureDayEntry.IsEventKey(SeasonFeatureKeys.ToDayLogEvent(lab)!), lab);
         }
+        Assert.Equal("e_race3d", SeasonFeatureKeys.ToDayLogEvent(SeasonFeatureKeys.Race3d));
+        Assert.Equal("e_shop", SeasonFeatureKeys.ToDayLogEvent(SeasonFeatureKeys.Shop));
         Assert.Null(SeasonFeatureKeys.ToDayLogEvent("not-a-feature"));
     }
 
