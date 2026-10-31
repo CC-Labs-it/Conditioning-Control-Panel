@@ -95,6 +95,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Platform.AccountSeed.Sync?.Nudge("session end");   // explicit end: the runner no longer counts as running
         }
 
+        internal Action<Action> ResumeEffect = StartEffect;
+
         /// <summary>WPF BtnPauseSession_Click: resume at once; a pause asks first (it costs 100 XP)
         /// unless SkipPauseXpWarning. ponytail: MessageDialog has no "don't ask again" box, so the opt-out
         /// is only settable from the WPF head. Lockdown refuses the pause, never the resume (LockdownPauseRule).</summary>
@@ -110,8 +112,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 // WPF BtnPauseSession_Click: the user's own Resume ends the post-panic quiet (PanicAftermath).
                 ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
-                StartEffect(() =>   // effects come back, so the portal panic bind comes first
+                var gen = _engineGen;
+                ResumeEffect(() =>   // effects come back, so the portal panic bind comes first
                 {
+                    if (gen != _engineGen) return;
                     if (App.Sessions is not { IsPaused: true } r) return;
                     if (SessionClockSafety.ResumeStartsEngine(CoreEngine.IsRunning, RemoteControllerConnected)) StartEngineFromUser();
                     else r.Resume();
@@ -168,6 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Named<Tabs.PresetsTabView>("PresetsTab")?.SetSessionButtonLabel(SessionClockLabel.StopButton(
                 remaining, showCountdown, Loc.Get("btn_stop_session_0_1"), Loc.Get("btn_stop_session_2"), pauseMark));
 
+            if (!CoreEngine.IsRunning) return;
             var mName = session.GetModeAwareName();
             var nameMax = showCountdown ? 14 : 22;
             var name = mName.Length > nameMax ? mName.Substring(0, nameMax - 3) + "..." : mName;
