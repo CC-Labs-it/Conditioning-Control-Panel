@@ -104,6 +104,7 @@ public sealed class RainGenerationTests
     public Task FailedClipFallsBackToIdleWithoutRetryingFailedIdle() => WithLocalSet(async (tube, folder) =>
     {
         await tube.PlayEmote("absent"); Assert.Equal("idle", tube.CurrentEmoteClip);
+        using (File.Open(Path.Combine(folder, "idle.gif"), FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
         File.Delete(Path.Combine(folder, "idle.gif")); await tube.PlayEmote("idle");
         Assert.Equal("idle", tube.CurrentEmoteClip);
     });
@@ -159,5 +160,4 @@ public sealed class RainGenerationTests
         foreach (var fire in stale) fire(); Assert.Equal(reaction, tube.CurrentEmoteClip);
         Assert.Equal("mmm", tube.FindControl<TextBlock>("TxtSpeech")!.Text); await Task.CompletedTask;
     });
-
 }

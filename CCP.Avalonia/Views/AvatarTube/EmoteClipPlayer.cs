@@ -47,8 +47,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             Decoded? d = null;
             string? error = null;
             try {
-                using var stream = source.IsFile ? File.OpenRead(source.LocalPath) : AssetLoader.Open(source);
-                using var bytes = new MemoryStream(); stream.CopyTo(bytes);
+                using var bytes = new MemoryStream();
+                using (var stream = source.IsFile ? File.OpenRead(source.LocalPath) : AssetLoader.Open(source)) stream.CopyTo(bytes);
                 d = await Task.Run(() => Decode(bytes.ToArray()));
                 if (d == null) error = "not decodable";
             }
