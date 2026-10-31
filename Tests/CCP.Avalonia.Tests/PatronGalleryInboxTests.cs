@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -147,4 +148,34 @@ public sealed class PatronGalleryInboxTests
         }
         Assert.Equal(0, actions);
     });
+    [Fact]
+    public Task NoticeTracksThemeAndSmallPinkButtonStates() => Run(shell =>
+    {
+        // WPF InboxNoticeCard.cs:85,104; Resources/Theme/MainWindow.xaml:122-158.
+        InboxNoticeCard.Present(shell, "Heading", "Body", "Action", () => { });
+        var card = InboxNoticeCard.Open!;
+        var primary = card.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Primary");
+        var border = (Border)card.Content!;
+        Assert.Equal(Colors.White, ((ISolidColorBrush)primary.Foreground!).Color);
+        Assert.Equal(FontWeight.SemiBold, primary.FontWeight);
+        card.Resources["PinkBrush"] = Brushes.Cyan;
+        card.Resources["PinkButtonHoveredBrush"] = Brushes.Blue;
+        card.Resources["AccentPressedBrush"] = Brushes.Red;
+        Drain();
+        var chrome = primary.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "border");
+        Assert.Same(Brushes.Cyan, chrome.Background);
+        Assert.Same(Brushes.Cyan, border.BorderBrush);
+        card.Resources["PinkBrush"] = Brushes.Lime;
+        Drain();
+        Assert.Same(Brushes.Lime, chrome.Background);
+        Assert.Same(Brushes.Lime, border.BorderBrush);
+        var point = primary.TranslatePoint(new Point(primary.Bounds.Width / 2, primary.Bounds.Height / 2), card)!.Value;
+        card.MouseMove(point); Drain();
+        Assert.Same(Brushes.Blue, chrome.Background);
+        card.MouseDown(point, MouseButton.Left); Drain();
+        Assert.Same(Brushes.Red, chrome.Background);
+        Assert.Equal(0.97, chrome.RenderTransform!.Value.M11, 2);
+        card.MouseMove(new Point(1, 1)); card.MouseUp(new Point(1, 1), MouseButton.Left);
+    });
+
 }

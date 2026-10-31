@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Localization;
@@ -45,8 +46,8 @@ internal sealed class InboxNoticeCard : Window, IPassiveStartupSurface
             Name = "Primary", Content = primary, FontSize = 14,
             Padding = new Thickness(14, 9), Margin = new Thickness(0, 16, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            Background = Brush.Parse("#FF69B4"), Foreground = Brushes.Black,
         };
+        button[!ThemeProperty] = new DynamicResourceExtension("SmallPinkButton"); // WPF InboxNoticeCard.cs:85
         button.Click += (_, _) =>
         {
             Close();
@@ -67,9 +68,10 @@ internal sealed class InboxNoticeCard : Window, IPassiveStartupSurface
         var card = new Border
         {
             Background = Brush.Parse("#151528"), CornerRadius = new CornerRadius(14),
-            BorderThickness = new Thickness(1.5), BorderBrush = Brush.Parse("#FF69B4"),
+            BorderThickness = new Thickness(1.5),
             Margin = new Thickness(12), Padding = new Thickness(22, 18, 22, 16), Child = stack,
         };
+        card[!Border.BorderBrushProperty] = new DynamicResourceExtension("PinkBrush"); // WPF InboxNoticeCard.cs:104
         // Button input must not become a drag (WPF InboxNoticeCard.cs:38-43,136-145).
         card.PointerPressed += (_, e) =>
         {
