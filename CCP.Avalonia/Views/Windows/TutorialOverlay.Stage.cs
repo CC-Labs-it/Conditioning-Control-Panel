@@ -39,6 +39,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public new event EventHandler? Closed;
 
         /// <summary>True while the live card is on a window.</summary>
+        internal bool HasClosed => _tornDown;
+
+        // WPF NewEnhancementDialog.xaml.cs:60-102 hides the coachmark around the picker.
+        public new void Hide()
+        {
+            if (!_live) { base.Hide(); return; }
+            Detach();
+        }
+
         internal bool IsOnStage => _stage != null && _layer != null;
 
         /// <summary>The window the card is on right now.</summary>

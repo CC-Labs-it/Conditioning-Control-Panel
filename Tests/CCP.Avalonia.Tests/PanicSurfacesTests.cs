@@ -85,6 +85,7 @@ public sealed class PanicSurfacesTests
     {
         "intake",
         "leash-task",
+        "deeper-tutorial",
         "tour",
         "games",
         "first-show",
