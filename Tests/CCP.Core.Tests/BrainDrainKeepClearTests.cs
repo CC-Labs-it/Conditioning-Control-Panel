@@ -59,4 +59,24 @@ public class BrainDrainKeepClearTests
         var band = new[] { new E(Flash, true, false), new E(Video, true, false) };
         Assert.Equal(IntPtr.Zero, BrainDrainKeepClear.AnchorIfNeeded(band));
     }
+    [Fact]
+    public void SinkChainsEveryDrainInExistingOrderUnderLowestOwnWindow()
+    {
+        var moves = new System.Collections.Generic.List<(IntPtr, IntPtr)>();
+        var band = new[] { new E(Drain2, true, true), new E(Flash, true, false),
+            new E(Other, false, false), new E(Video, true, false), new E(Drain, true, true) };
+        BrainDrainKeepClear.Sink(true, band, (window, anchor) => moves.Add((window, anchor)));
+        Assert.Equal(new[] { (Drain2, Video), (Drain, Drain2) }, moves);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void SinkDoesNotTouchNativeOrderWhenDisabledOrAlreadyCorrect(bool enabled, bool drifted)
+    {
+        var band = drifted
+            ? new[] { new E(Drain, true, true), new E(Flash, true, false) }
+            : new[] { new E(Flash, true, false), new E(Drain, true, true) };
+        BrainDrainKeepClear.Sink(enabled, band, (_, _) => Assert.Fail("Unexpected native restack"));
+    }
 }

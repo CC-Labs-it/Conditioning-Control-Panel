@@ -21,7 +21,7 @@ public sealed class BrainDrainKeepClearRowTests
     public Task RowLoadsAndWritesTheSetting() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -57,7 +57,7 @@ public sealed class BrainDrainKeepClearRowTests
     public Task RowRepaintsWhenSettingsAreReplaced() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -76,9 +76,18 @@ public sealed class BrainDrainKeepClearRowTests
             var chk = card.FindControl<CheckBox>("ChkKeepClear")!;
             Assert.False(chk.IsChecked);
 
-            service.RestoreFrom(new AppSettings { BrainDrainKeepPicturesClear = true });
+            var enable = card.FindControl<CheckBox>("ChkEnable")!; var blur = card.FindControl<Slider>("SliderBlurStrength")!;
+            service.Current.BrainDrainEnabled = true; service.Current.BrainDrainBlurStrength = 37; service.Current.BrainDrainKeepPicturesClear = true;
+            Dispatcher.UIThread.RunJobs(); Assert.True(enable.IsChecked); Assert.Equal(37, blur.Value); Assert.True(chk.IsChecked);
+            var oldModel = service.Current; oldModel.BrainDrainKeepPicturesClear = false; Dispatcher.UIThread.RunJobs(); Assert.False(chk.IsChecked);
+            service.RestoreFrom(new AppSettings { BrainDrainKeepPicturesClear = true, BrainDrainBlurStrength = 72 });
             Dispatcher.UIThread.RunJobs();
-            Assert.True(chk.IsChecked);
+            Assert.True(chk.IsChecked); Assert.False(enable.IsChecked); Assert.Equal(72, blur.Value);
+            var propertyEvent = typeof(AppSettings).GetField("PropertyChanged", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            Assert.DoesNotContain(((System.Delegate?)propertyEvent.GetValue(oldModel))?.GetInvocationList() ?? System.Array.Empty<System.Delegate>(), d => ReferenceEquals(d.Target, card));
+            host.Content = null;
+            Assert.DoesNotContain(((System.Delegate?)propertyEvent.GetValue(service.Current))?.GetInvocationList() ?? System.Array.Empty<System.Delegate>(), d => ReferenceEquals(d.Target, card));
+            service.Current.BrainDrainEnabled = true; Dispatcher.UIThread.RunJobs(); Assert.False(enable.IsChecked);
         }
         finally
         {

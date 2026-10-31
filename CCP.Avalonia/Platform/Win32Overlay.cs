@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using ConditioningControlPanel.Services;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Avalonia.Controls;
@@ -41,6 +44,34 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
+    [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+    // WPF Compositor/OverlayCaptureAffinity.cs:48-59: best effort, including older Windows.
+    internal static uint CaptureAffinity(bool allowCapture) => allowCapture ? 0u : 0x11u;
+    internal static void SetCaptureAffinity(TopLevel window, uint affinity)
+    {
+        if (!OperatingSystem.IsWindows() || window.TryGetPlatformHandle() is not { HandleDescriptor: "HWND" } h || h.Handle == IntPtr.Zero) return;
+        try { SetWindowDisplayAffinity(h.Handle, affinity); }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Brain Drain capture affinity failed"); }
+    }
+    // WPF OverlayService.cs:3247. hWndInsertAfter means immediately below this window.
+    internal static bool RestackBelow(IntPtr hwnd, IntPtr after)
+        => OperatingSystem.IsWindows() && hwnd != IntPtr.Zero && after != IntPtr.Zero
+            && SetWindowPos(hwnd, after, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+    [DllImport("user32.dll")] private static extern IntPtr GetTopWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    internal static IReadOnlyList<BrainDrainKeepClear.BandEntry> VisibleOwnBand(IReadOnlyList<Window> windows)
+    {
+        var own = windows.Select(w => w.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero).ToHashSet();
+        var band = new List<BrainDrainKeepClear.BandEntry>();
+        int steps = 0;
+        for (var h = GetTopWindow(IntPtr.Zero); h != IntPtr.Zero && steps++ < 1024; h = GetWindow(h, 2))
+        {
+            if ((GetWindowLong(h, GwlExStyle) & WsExTopmost) == 0) break;
+            if (IsWindowVisible(h)) band.Add(new(h, own.Contains(h), false));
+        }
+        return band;
+    }
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
 

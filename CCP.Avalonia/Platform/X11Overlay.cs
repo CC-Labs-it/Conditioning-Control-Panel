@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using ConditioningControlPanel.Services;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -117,6 +120,73 @@ internal static class X11Overlay
         }
     }
 
+    [DllImport(LibX11)] private static extern int XGetWindowProperty(IntPtr d, IntPtr w, IntPtr atom, nint offset, nint length,
+        bool delete, IntPtr type, out IntPtr actualType, out int format, out nuint count, out nuint remaining, out IntPtr data);
+    [DllImport(LibX11)] private static extern int XQueryTree(IntPtr d, IntPtr w, out IntPtr root, out IntPtr parent, out IntPtr children, out uint count);
+    [DllImport(LibX11)] private static extern int XFree(IntPtr data);
+    [DllImport(LibX11)] private static extern int XRestackWindows(IntPtr d, IntPtr[] windows, int count);
+    private static IntPtr[] Property(IntPtr w, string name)
+    {
+        var data = IntPtr.Zero;
+        try
+        {
+            if (XGetWindowProperty(_display, w, XInternAtom(_display, name, false), 0, 4096, false,
+                IntPtr.Zero, out _, out int format, out var count, out _, out data) != 0 || format != 32) return Array.Empty<IntPtr>();
+            return Enumerable.Range(0, (int)Math.Min(count, (nuint)4096)).Select(i => Marshal.ReadIntPtr(data, i * IntPtr.Size)).ToArray();
+        }
+        finally { if (data != IntPtr.Zero) XFree(data); }
+    }
+    private static IntPtr[] Children(IntPtr w, out IntPtr parent)
+    {
+        var data = IntPtr.Zero; parent = IntPtr.Zero;
+        try
+        {
+            if (XQueryTree(_display, w, out _, out parent, out data, out uint count) == 0) return Array.Empty<IntPtr>();
+            return Enumerable.Range(0, (int)Math.Min(count, 4096u)).Select(i => Marshal.ReadIntPtr(data, i * IntPtr.Size)).ToArray();
+        }
+        finally { if (data != IntPtr.Zero) XFree(data); }
+    }
+    private static IntPtr Frame(IntPtr w)
+    {
+        var root = XDefaultRootWindow(_display);
+        for (int i = 0; i < 32; i++)
+        {
+            Children(w, out var parent);
+            if (parent == root || parent == IntPtr.Zero) return w;
+            w = parent;
+        }
+        return IntPtr.Zero;
+    }
+    // WPF OverlayService.cs:3213-3248: server-ordered own root frames include override-redirect pictures, unlike _NET_CLIENT_LIST_STACKING.
+    internal static IReadOnlyList<BrainDrainKeepClear.BandEntry> VisibleOwnBand(IReadOnlyList<Window> windows)
+    {
+        if (OperatingSystem.IsWindows()) return Win32Overlay.VisibleOwnBand(windows);
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return Array.Empty<BrainDrainKeepClear.BandEntry>();
+            var frames = new Dictionary<IntPtr, IntPtr>();
+            foreach (var w in windows.Where(w => w.IsVisible && w.Topmost && w.WindowState != WindowState.Minimized))
+                if (TryGetXid(w, out var id)) frames[Frame(id)] = id;
+            return Children(XDefaultRootWindow(_display), out _).Reverse().Where(frames.ContainsKey)
+                .Select(f => new BrainDrainKeepClear.BandEntry(frames[f], true, false)).ToArray();
+        }
+    }
+    internal static bool EnableDesktopBlur(Window w)
+    {
+        if (!SetClickThrough(w, true) || w.ActualTransparencyLevel == WindowTransparencyLevel.None) return false;
+        if (OperatingSystem.IsWindows()) return w.ActualTransparencyLevel == WindowTransparencyLevel.Blur;
+        if (!TryGetXid(w, out var id)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay() || !IsCompositing) return false;
+            var atom = XInternAtom(_display, "_KDE_NET_WM_BLUR_BEHIND_REGION", false);
+            if (!Property(XDefaultRootWindow(_display), "_NET_SUPPORTED").Contains(atom)) return false;
+            _xErrored = false;
+            XChangeProperty(_display, id, atom, new IntPtr(6), 32, 0, Array.Empty<IntPtr>(), 0);
+            XSync(_display, false);
+            return !_xErrored;
+        }
+    }
     /// <summary>Makes <paramref name="window"/> transparent to the mouse while it keeps drawing,
     /// or gives it back its input. The X11 equivalent of adding and clearing
     /// <c>WS_EX_TRANSPARENT</c>, and reversible at runtime the same way.
@@ -410,6 +480,24 @@ internal static class X11Overlay
         }
     }
 
+    /// <summary>WPF OverlayService.cs:3247: insert directly below the anchor without activation,
+    /// movement or resizing. Called by BrainDrainOverlay with the shared BrainDrainKeepClear.Sink ordering.
+    /// Unsupported backends return false; they must not pretend to have reordered anything.</summary>
+    internal static bool RestackBelow(TopLevel window, TopLevel sibling)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd)
+            && TryGet(sibling, OverlayBackend.Win32, out var after))
+            return Win32Overlay.RestackBelow(hwnd, after);
+        if (!TryGetXid(window, out var xid) || !TryGetXid(sibling, out var anchor)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            XRestackWindows(_display, new[] { Frame(anchor), Frame(xid) }, 2);
+            XSync(_display, false);
+            return !_xErrored;
+        }
+    }
     /// <summary>The window's X11 id, or false when there is not one to have.
     ///
     /// <para>Gating on the descriptor rather than on the OS is what lets the call sites stay

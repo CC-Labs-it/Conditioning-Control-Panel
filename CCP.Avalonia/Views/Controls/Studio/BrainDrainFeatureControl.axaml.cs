@@ -6,26 +6,8 @@ using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 {
-    /// <summary>
-    /// Brain Drain panel, ported from the WPF head.
-    ///
-    /// What is real here: both slider read-outs, the clip-library readout's format string and the
-    /// empty-state banner it drives.
-    ///
-    /// What is not, and WHY - the settings are the interesting case. BrainDrainEnabled, Intensity,
-    /// HighRefresh, BlurStrength, MeltEnabled and AllowOverlayCapture are all on
-    /// <c>CoreSettings.Current</c> today, so "needs App.Settings" would be a stale reading. They
-    /// stay unwired here on purpose: on WPF each of these writes is followed by a call into
-    /// App.BrainDrain (Start/Stop, ReloadAudioFiles, the overlay-capture re-arm), so a control
-    /// that wrote the setting alone would show BRAIN DRAIN as ON with nothing draining. The
-    /// genuinely absent pieces are App.BrainDrain, BrainDrainService's folder paths,
-    /// OverlayService.BrainDrainWithheld and the shell folder-open - all WPF-head services with
-    /// no seam. Mod art is NOT a blocker any more (CoreModArt plus Helpers.ModArt), but there is
-    /// no art in this panel's markup to write into.
-    ///
-    /// The clip count is a placeholder 0, which is also the honest default for a fresh install and
-    /// is what puts the empty-state banner on screen in the render.
-    /// </summary>
+    /// <summary>Visual settings drive BrainDrainOverlay while the engine runs.
+    /// Audio, melt and clip-library actions still await the head's BrainDrainService.</summary>
     public partial class BrainDrainFeatureControl : UserControl
     {
         public BrainDrainFeatureControl()
@@ -37,18 +19,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 
             RefreshClipCount();
 
-            // ponytail: needs App.BrainDrain, Services.BrainDrainService and OverlayService -
-            // NOT App.Settings, which is CoreSettings.Current today. See the class summary for
-            // why the settings writes are still deliberately absent. ChkEnable, ChkMelt,
-            // ChkHighRefresh, ChkAllowCapture, both sliders' setting writes, BtnOpenAudioFolder
-            // (Empty) and BtnRefreshAudio are inert until the service lands, and WithheldNotice
-            // stays hidden (OverlayService.BrainDrainWithheld is false anyway).
+            // Audio library remains a placeholder until BrainDrainService lands.
             this.FindControl<Button>("BtnRefreshAudio")!.Click += (_, _) => RefreshClipCount();
 
-            // Keep pictures clear is a pure preference (WPF ChkKeepClear_Changed writes and saves;
-            // OverlayService re-sorts on the settings hook), so unlike the rows above it shows no
-            // false "running" state and is wired now. This head has no Brain Drain blur overlay
-            // yet, so the z-order rule (Core BrainDrainKeepClear) has nothing to act on here.
+            // WPF .xaml.cs:221-244,289-304: arm the visual and apply its strength live.
+            this.FindControl<CheckBox>("ChkEnable")!.IsChecked = CoreSettings.Current.BrainDrainEnabled;
+            this.FindControl<Slider>("SliderBlurStrength")!.Value = CoreSettings.Current.BrainDrainBlurStrength;
+            this.FindControl<CheckBox>("ChkEnable")!.IsCheckedChanged += (_, _) =>
+            { if (_loading) return; CoreSettings.Current.BrainDrainEnabled = this.FindControl<CheckBox>("ChkEnable")!.IsChecked == true; CoreSettings.Save(); };
+            this.FindControl<Slider>("SliderBlurStrength")!.PropertyChanged += (_, e) =>
+            {
+                if (!_loading && e.Property == Slider.ValueProperty)
+                { CoreSettings.Current.BrainDrainBlurStrength = (int)this.FindControl<Slider>("SliderBlurStrength")!.Value; CoreSettings.Save(); }
+            };
+
             _keepClear = this.FindControl<CheckBox>("ChkKeepClear")!;
             LoadKeepClear();
             _keepClear.IsCheckedChanged += (_, _) =>
@@ -61,23 +45,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         }
 
         private readonly CheckBox _keepClear;
+        private bool _loading;
+        private ConditioningControlPanel.Models.AppSettings? _observed;
+        private ConditioningControlPanel.Services.SettingsService? _service;
 
         // WPF re-reads on Loaded and on its settings rebind hook; the Studio tab keeps this control
         // alive, so a Reset or cloud restore (CurrentReplaced) must repaint the toggle.
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced += LoadKeepClear;
+            _service = CoreSettings.Service; if (_service != null) _service.CurrentReplaced += QueueLoad;
             LoadKeepClear();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= LoadKeepClear;
+            if (_service != null) _service.CurrentReplaced -= QueueLoad;
+            if (_observed != null) _observed.PropertyChanged -= SettingsChanged;
+            _service = null; _observed = null;
             base.OnDetachedFromVisualTree(e);
         }
 
-        private void LoadKeepClear() => _keepClear.IsChecked = CoreSettings.Current.BrainDrainKeepPicturesClear;
+        // WPF BrainDrainFeatureControl.xaml.cs:213-235: external writers repaint the live card.
+        private void SettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        { if (e.PropertyName is nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainEnabled) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainBlurStrength) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainKeepPicturesClear)) QueueLoad(); }
+        private void QueueLoad() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (TopLevel.GetTopLevel(this) != null) LoadKeepClear(); });
+        private void LoadKeepClear()
+        {
+            if (TopLevel.GetTopLevel(this) != null && !ReferenceEquals(_observed, CoreSettings.Current))
+            {
+                if (_observed != null) _observed.PropertyChanged -= SettingsChanged;
+                _observed = CoreSettings.Current; _observed.PropertyChanged += SettingsChanged;
+            }
+            _loading = true;
+            try
+            {
+                _keepClear.IsChecked = CoreSettings.Current.BrainDrainKeepPicturesClear;
+                this.FindControl<CheckBox>("ChkEnable")!.IsChecked = CoreSettings.Current.BrainDrainEnabled;
+                this.FindControl<Slider>("SliderBlurStrength")!.Value = CoreSettings.Current.BrainDrainBlurStrength;
+            }
+            finally { _loading = false; }
+        }
 
         /// <summary>
         /// Repaint the clip-library readout. An empty pool makes the whole audio half a silent

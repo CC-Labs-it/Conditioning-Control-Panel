@@ -49,6 +49,15 @@ public class TestIsolationTests
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
 
     [Fact]
+    public void BrainDrainHooksAndProvidersAreCoveredByTheSharedSnapshot()
+    {
+        Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == typeof(CoreSession) && m.Name == nameof(CoreSession.IsEngineRunningProvider));
+        Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == typeof(CoreSettings) && m.Name == nameof(CoreSettings.ServiceProvider));
+        foreach (var name in new[] { "Prepare", "ReadBand", "Capture", "Alpha", "Raise", "Below", "Screens", "OwnWindows", "Handle" })
+            Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == typeof(ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay) && m.Name == name);
+    }
+
+    [Fact]
     public void RestorePutsStaticsSettingsAndProfileFilesBack()
     {
         var settingsFile = Path.Combine(TestUserDataProfile.Root, "settings.json");
