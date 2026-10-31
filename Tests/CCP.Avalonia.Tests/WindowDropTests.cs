@@ -32,9 +32,9 @@ public sealed class WindowDropTests
         File.WriteAllBytes(video, new byte[] { 1, 2, 3 });
 
         Drop(shell, video);
-        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
-        Assert.Equal(Loc.Get("dlg_media_drop_library"), ButtonText(ask, "BtnOk"));
-        Click(ask, "BtnOk");
+        var ask = await WaitFor(() => shell.OwnedWindows.SingleOrDefault(w => w.FindControl<Button>("MediaDrop_library") != null));
+        Assert.Equal(Loc.Get("dlg_media_drop_library"), ButtonText(ask, "MediaDrop_library"));
+        Click(ask, "MediaDrop_library");
 
         var done = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault(d => d != ask));
         Assert.Equal("Imported 1 video", done.FindControl<TextBlock>("TxtMessage")!.Text);
@@ -51,8 +51,8 @@ public sealed class WindowDropTests
         File.WriteAllBytes(video, new byte[] { 1, 2, 3 });
 
         Drop(shell, video);
-        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
-        Click(ask, "BtnCancel");
+        var ask = await WaitFor(() => shell.OwnedWindows.SingleOrDefault(w => w.FindControl<Button>("MediaDrop_library") != null));
+        Click(ask, "MediaDrop_cancel");
         await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any() ? null : shell);
 
         Assert.False(File.Exists(Path.Combine(assets, "videos", "clip.mp4")));
@@ -196,7 +196,7 @@ public sealed class WindowDropTests
     private static Task Run(Func<MainShellWindow, string, string, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var root = Directory.CreateTempSubdirectory("ccp-window-drop-").FullName;

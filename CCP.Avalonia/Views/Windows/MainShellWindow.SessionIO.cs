@@ -67,6 +67,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -125,14 +126,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (files == null || files.Length == 0) return;
 
-            // WPF prompts Play / Edit / Add-to-Library. Play and Edit need the Deeper player and
-            // editor, which this head does not host yet, so only the library half is offered.
             if (files.Length == 1 && File.Exists(files[0]) && DropRules.IsDeeperPlayableMedia(files[0]))
             {
-                var library = await Dialogs.MessageDialog.ConfirmAsync(this, Loc.Get("dlg_media_drop_title"),
-                    Path.GetFileName(files[0]), okText: Loc.Get("dlg_media_drop_library"),
-                    cancelText: Loc.Get("dlg_media_drop_cancel"));
-                if (library) await HandleAssetDropAsync(files);
+                var choice = await ShowMediaDropChoiceAsync(files[0]);
+                try
+                {
+                    switch (choice)
+                    {
+                    case "play": ShowOrActivateDeeperPlayer().OpenLocalMediaFile(files[0]); break;
+                    case "edit":
+                        OpenDeeperEditor(new Models.Deeper.Enhancement
+                        {
+                            MediaType = DropRules.AssetVideoExtensions.Contains(Path.GetExtension(files[0]))
+                                ? Models.Deeper.MediaTypes.Video : Models.Deeper.MediaTypes.Audio,
+                            MediaSource = files[0]
+                        }, null);
+                        break;
+                    case "library": await HandleAssetDropAsync(files); break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to open dropped media");
+                    await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_import_error"),
+                        Loc.GetF("msg_import_failed_0", ex.Message));
+                }
                 return;
             }
 
@@ -159,6 +177,65 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     App.Notifications.Show(Loc.Get("drop_not_recognised"), Helpers.NotificationType.Info);
                     break;
             }
+        }
+
+        private Window? _mediaDropDialog;
+
+        // WPF ShowMediaDropChoiceDialog (MainWindow.Presets.cs:825-935): DarkerBg card with a pink
+        // border and pink bold title, three pink buttons and a faint Cancel link. TextBlock
+        // children, not Content strings: Avalonia parses "_" as an access key (CLAUDE.md trap 1).
+        private async Task<string?> ShowMediaDropChoiceAsync(string path)
+        {
+            T? Res<T>(string key) where T : class => this.TryFindResource(key, out var r) ? r as T : null;
+            var pink = Res<IBrush>("PinkBrush");
+            var dialog = new Window
+            {
+                Title = Loc.Get("dlg_media_drop_title"), Width = 460, CanResize = false, MinHeight = 240, MaxHeight = 600,
+                SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                WindowDecorations = WindowDecorations.None, // WPF MainWindow.Presets.cs:834-836
+                TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
+                Background = Brushes.Transparent
+            };
+            var scope = new NameScope();
+            NameScope.SetNameScope(dialog, scope);
+            var stack = new StackPanel();
+            stack.Children.Add(new TextBlock { Text = dialog.Title, Foreground = pink, FontSize = 18, FontWeight = FontWeight.Bold,
+                HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center, Margin = new global::Avalonia.Thickness(0, 0, 0, 8) });
+            stack.Children.Add(new TextBlock { Text = Path.GetFileName(path), Foreground = Brushes.White, FontSize = 12, Opacity = 0.75,
+                TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new global::Avalonia.Thickness(0, 0, 0, 16) });
+            foreach (var action in new[] { "play", "edit", "library", "cancel" })
+            {
+                var value = action;
+                var cancel = action == "cancel";
+                var button = new Button
+                {
+                    Name = "MediaDrop_" + action,
+                    Theme = Res<global::Avalonia.Styling.ControlTheme>(cancel ? "SecondaryButton" : "ActionButton"),
+                    Content = new TextBlock { Text = Loc.Get("dlg_media_drop_" + action) },
+                    HorizontalAlignment = cancel ? global::Avalonia.Layout.HorizontalAlignment.Center : global::Avalonia.Layout.HorizontalAlignment.Stretch,
+                    Padding = cancel ? new global::Avalonia.Thickness(8, 6) : new global::Avalonia.Thickness(20, 12),
+                    Margin = new global::Avalonia.Thickness(0, cancel ? 8 : 0, 0, cancel ? 0 : 8),
+                    FontSize = cancel ? 11 : 13, FontWeight = cancel ? FontWeight.Normal : FontWeight.SemiBold
+                };
+                if (cancel) { button.Background = Brushes.Transparent; button.Opacity = 0.7; }
+                scope.Register(button.Name!, button);
+                button.Click += (_, _) => dialog.Close(value);
+                stack.Children.Add(button);
+            }
+            dialog.Content = new Border
+            {
+                Background = Res<IBrush>("DarkerBgBrush"), BorderBrush = pink, BorderThickness = new global::Avalonia.Thickness(2),
+                CornerRadius = new global::Avalonia.CornerRadius(12), Padding = new global::Avalonia.Thickness(20), Child = stack
+            };
+            _mediaDropDialog = dialog;
+            try { return await dialog.ShowDialogSafe<string?>(this); }
+            finally { if (_mediaDropDialog == dialog) _mediaDropDialog = null; }
+        }
+
+        internal void StopDroppedMediaForPanic()
+        {
+            _mediaDropDialog?.Close();
+            _deeperPlayer?.Close();
         }
 
         /// <summary>WPF UpdateDropOverlay (SessionIO.cs:1621), same icons, keys and subtitles.</summary>
