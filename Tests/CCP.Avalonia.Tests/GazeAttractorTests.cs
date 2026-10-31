@@ -77,9 +77,17 @@ public sealed class GazeAttractorTests
             tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord
                 { DeviceName = "left", X = -1920, Y = 300, DpiScale = 1.5 } };
             var center = GazeFocus.GazeToDesktop(new Point(150, 150));
-            GazeFocus.SetCursorLock(new Rect(center.X - size / 2, center.Y - size / 2, size, size));
+            var bounds = new Rect(center.X - size / 2, center.Y - size / 2, size, size);
+            GazeFocus.SetCursorLock(bounds);
             var actual = Lock.Apply(150 + radius, 150);
             Assert.Equal(150 + radius * (1 - .93 * .22), actual.X, 6);
+            Assert.Equal(150, actual.Y, 6);
+            // At twice the expected radius the taper is 2/3. A missing upper cap instead
+            // puts this probe inside the oversized radius and incorrectly gives full pull.
+            Lock.Clear(); Lock.Apply(0, 0);
+            GazeFocus.SetCursorLock(bounds);
+            actual = Lock.Apply(150 + 2 * radius, 150);
+            Assert.Equal(150 + 2 * radius - 2 * radius * .93 * .22 * (2.0 / 3), actual.X, 6);
             Assert.Equal(150, actual.Y, 6);
             GazeFocus.SetCursorLock(new Rect(0, 0, 0, 0));
             Assert.Equal((170d, 150d), Lock.Apply(170, 150));
