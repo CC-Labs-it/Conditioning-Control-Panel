@@ -5,6 +5,10 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.UI;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -79,13 +83,49 @@ internal sealed class LeashCutConfirmWindow : Window
         };
     }
 
-    private static Button Pill(string text, IBrush bg, IBrush fg, IBrush border, IBrush hover, string tag)
+    internal static Button Pill(string text, IBrush bg, IBrush fg, IBrush border, IBrush hover, string tag)
     {
         var b = F.Pill(text, bg, fg, tag, border);
         (b.Padding, b.CornerRadius, b.Focusable) = (new Thickness(18, 7, 18, 7), new CornerRadius(10), false);
         foreach (var state in new[] { "PointerOver", "Pressed" })
             (b.Resources["ButtonBackground" + state], b.Resources["ButtonForeground" + state], b.Resources["ButtonBorderBrush" + state]) = (hover, fg, border);
         if (b.Content is TextBlock t) t.FontSize = 13;
+        // WPF FriendsLook.cs:131-134 and MotionFx.cs:75-103. Both effects own the same scale.
+        var scale = new ScaleTransform(1, 1);
+        b.RenderTransformOrigin = RelativePoint.Center;
+        b.RenderTransform = scale;
+        void Move(double target, int milliseconds)
+        {
+            var settings = CoreSettings.Current;
+            var level = Platform.UiMotionPreference.ResolveLevel(settings.MotionLevel,
+                Platform.UiMotionPreference.AnimationsEnabled, settings.GentleVisuals);
+            if (level == MotionLevel.Off) scale.Transitions = null;
+            else
+            {
+                // Replacing the collection cancels active tweens and snaps to their old targets.
+                // WPF MotionFx.cs:279-286 starts the replacement animation at the current scale.
+                scale.Transitions ??= new Transitions
+                {
+                    new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Easing = new QuadraticEaseOut() },
+                    new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Easing = new QuadraticEaseOut() },
+                };
+                foreach (var transition in scale.Transitions)
+                    ((DoubleTransition)transition).Duration = TimeSpan.FromMilliseconds(milliseconds);
+            }
+            scale.ScaleX = scale.ScaleY = target;
+        }
+        b.PointerEntered += (_, _) => { if (b.IsEnabled) Move(1.02, 150); };
+        b.PointerExited += (_, _) => Move(1, 150);
+        b.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (e.GetCurrentPoint(b).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed)
+                Move(InteractionPressMotion.ScaleFor(true), InteractionPressMotion.DurationMs);
+        }, RoutingStrategies.Tunnel);
+        b.AddHandler(PointerReleasedEvent, (_, e) =>
+        {
+            if (e.InitialPressMouseButton == MouseButton.Left)
+                Move(InteractionPressMotion.ScaleFor(false), InteractionPressMotion.DurationMs);
+        }, RoutingStrategies.Tunnel);
         return b;
     }
 }
