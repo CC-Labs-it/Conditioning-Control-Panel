@@ -35,10 +35,12 @@ public sealed class CompanionBrainHostTests
             property.SetValue(null, engine);
             AvApp.SeedCompanionRecall();
             AvApp.SeedCompanionRecall(); // repeated composition must not add listeners
-            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => false;
+            var entitlementChecks = 0;
+            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => { entitlementChecks++; return false; };
             ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled!();
             Dispatcher.UIThread.RunJobs();
             Assert.False(engine.Progress.IsUnlocked("she_remembers"));
+            Assert.Equal(1, entitlementChecks); // each subscribed handler attempts the denied unlock
             ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => true;
             ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled!();
             Dispatcher.UIThread.RunJobs();
@@ -94,6 +96,47 @@ public sealed class CompanionBrainHostTests
         Assert.Empty(page.CompanionSessionOptions());
         Assert.All(options, option => Assert.False(option.IsAllowed));
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BackgroundAskReadsTheShownSessionRack() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().WithInterFont()
+                .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        var previousBrain = AvApp.Brain;
+        var dir = Directory.CreateTempSubdirectory("ccp-background-ask-");
+        using var brain = new ConditioningControlPanel.Services.Companion.Brain.CompanionBrain(
+            new ConditioningControlPanel.Services.AiService("http://127.0.0.1:9"),
+            memory: new ConditioningControlPanel.Services.Companion.Brain.MemoryStore(Path.Combine(dir.FullName, "memory.json")),
+            store: new ConditioningControlPanel.Services.Companion.Brain.CompanionSessionStore(
+                Path.Combine(dir.FullName, "session.json"), Path.Combine(dir.FullName, "legacy.json")));
+        try
+        {
+            ConditioningControlPanel.CoreSettings.Current.AvatarEnabled = true;
+            ConditioningControlPanel.CoreSettings.Current.CompanionAsksEnabled = true;
+            AvApp.Brain = brain;
+            shell.Show();
+            AvApp.SeedCompanionTubeSeams();
+            // Headless has no desktop MainWindow lifetime. Use the same target on this shown shell.
+            CompanionAskService.SessionOptions = shell.CompanionSessionOptions;
+            CompanionAskService.BusyProvider = () => false;
+            ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.ActivitiesProvider =
+                () => Array.Empty<ConditioningControlPanel.Services.Companion.CompanionActivity>();
+            Assert.NotEmpty(await Task.Run(shell.CompanionSessionOptions));
+            Assert.True(await Task.Run(() => CompanionAskService.Instance.CanOfferFor("what can I do")));
+        }
+        finally
+        {
+            CompanionAskService.Instance.Stop();
+            shell.Close();
+            AvApp.Brain = previousBrain;
+            brain.Dispose();
+            dir.Delete(true);
+        }
     });
 
     [Fact]
