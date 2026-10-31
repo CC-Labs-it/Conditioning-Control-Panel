@@ -183,7 +183,7 @@ public sealed class InvitePanel : Border
             badge.Children.Add(new Border
             {
                 CornerRadius = new CornerRadius(10), ClipToBounds = true, Opacity = reached ? 1 : 0.45,
-                Child = new Image { Source = art, Width = 60, Height = 60, Stretch = Stretch.UniformToFill },
+                Child = new Image { Source = reached ? art : Grey(art), Width = 60, Height = 60, Stretch = Stretch.UniformToFill },
             });
         if (!reached)
             badge.Children.Add(new Border
@@ -280,6 +280,34 @@ public sealed class InvitePanel : Border
             return x1 < x0 ? bmp : new CroppedBitmap(bmp, new PixelRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1));
         }
         catch (Exception ex) { Diag.Swallowed(ex, "invite wardrobe preview crop"); return bmp; }
+    }
+
+    /// <summary>WPF Controls/Invites/InvitePanel.cs:405-414: BadgeImage uses Gray8 when locked. Same luma, but alpha is kept
+    /// (Gray8 drops it); the badge art is opaque, so the tile looks the same.</summary>
+    internal static IImage Grey(Bitmap bmp)
+    {
+        try
+        {
+            int w = bmp.PixelSize.Width, h = bmp.PixelSize.Height, stride = w * 4;
+            var px = new byte[stride * h];
+            var pin = System.Runtime.InteropServices.GCHandle.Alloc(px, System.Runtime.InteropServices.GCHandleType.Pinned);
+            try { bmp.CopyPixels(new PixelRect(0, 0, w, h), pin.AddrOfPinnedObject(), px.Length, stride); }
+            finally { pin.Free(); }
+            var format = bmp.Format ?? global::Avalonia.Platform.PixelFormat.Bgra8888;
+            bool rgba = format == global::Avalonia.Platform.PixelFormat.Rgba8888;
+            for (var i = 0; i < px.Length; i += 4)
+            {
+                int r = px[rgba ? i : i + 2], g = px[i + 1], b = px[rgba ? i + 2 : i];
+                var l = (byte)((299 * r + 587 * g + 114 * b + 500) / 1000);
+                px[i] = px[i + 1] = px[i + 2] = l;
+            }
+            var grey = new WriteableBitmap(bmp.PixelSize, bmp.Dpi, format, bmp.AlphaFormat ?? global::Avalonia.Platform.AlphaFormat.Premul);
+            using (var fb = grey.Lock())
+                for (var y = 0; y < h; y++)
+                    System.Runtime.InteropServices.Marshal.Copy(px, y * stride, fb.Address + y * fb.RowBytes, stride);
+            return grey;
+        }
+        catch (Exception ex) { Diag.Swallowed(ex, "invite badge grey"); return bmp; }
     }
 
     // ============================== redeem ==============================
