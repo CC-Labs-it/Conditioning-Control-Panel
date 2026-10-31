@@ -242,6 +242,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         break;
                     // WPF :581 - only once the room shows the map (its IsVisible hook re-read the gates).
                     case "spiral":
+                        // WPF MainWindow.TabNavigation.cs:725: also refresh on same-tab navigation.
+                        Named<Tabs.SpiralTabView>("SpiralTab")?.OnTabShown();
                         if (Named<Tabs.SpiralTabView>("SpiralTab")?.IsShowingSpiral == true)
                             MaybeShowFeatureIntro("descent-spiral", "spiral");
                         break;

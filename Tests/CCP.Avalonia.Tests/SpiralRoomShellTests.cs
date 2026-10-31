@@ -20,6 +20,63 @@ namespace CCP.Avalonia.Tests;
 /// SpiralTabView.Refresh reading Core SpiralRoom.StateFor.</summary>
 public sealed class SpiralRoomShellTests
 {
+    // WPF MainWindow.TabNavigation.cs:725: ShowTab("spiral") calls OnTabShown, so explicit navigation
+    // to the tab already showing retries a failed embed (the visibility flip alone never fires).
+    [Fact]
+    public Task ShowTabSpiral_OnTheSameTab_RetriesAFailedEmbed() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        var oldSettings = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = () => service;
+        var oldAudio = CoreAudio.PlayOneShotProvider;
+        var oldEngine = SpiralTabView.EngineAvailable;
+        var oldStart = SpiralTabView.StartEmbed;
+        var attempts = 0;
+        var chimes = 0;
+        service.Current.OfflineMode = true;
+        service.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+        CoreSettings.Current.MasterVolume = 50;
+        CoreSettings.Current.DescentCountdownAudio = true;
+        CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => { if (tag == "descent-spiral-open") chimes++; };
+        SpiralTabView.EngineAvailable = () => true;
+        SpiralTabView.StartEmbed = _ => { attempts++; throw new InvalidOperationException("fixture"); };
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("spiral");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.Named<SpiralTabView>("SpiralTab")!;
+            Assert.True(tab.IsVisible);
+            tab.SoundResolver = name => name;
+            tab.ApplyState(SpiralRoomState.Spiral);
+            tab.ApplyState(SpiralRoomState.Spiral);
+            Assert.Equal(1, attempts);   // latched for this entry
+            Assert.Equal(1, chimes);
+
+            shell.ShowTab("spiral");     // same tab: no hide/show, only OnTabShown clears the latch
+            Dispatcher.UIThread.RunJobs();
+            tab.ApplyState(SpiralRoomState.Spiral);
+            Assert.Equal(2, attempts);
+            Assert.Equal(1, chimes); // WPF SpiralTabView.xaml.cs:376-378: retry keeps the cue spent
+        }
+        finally
+        {
+            shell.Close();
+            CoreAudio.PlayOneShotProvider = oldAudio;
+            SpiralTabView.EngineAvailable = oldEngine;
+            SpiralTabView.StartEmbed = oldStart;
+            service.SealForReset();
+            CoreSettings.ServiceProvider = oldSettings;
+        }
+        Assert.Same(oldAudio, CoreAudio.PlayOneShotProvider);
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task FuseArmsTheRailChip_ChipOpensTheFog_KillSwitchEndsBoth() => AvaloniaTestDispatcher.RunAsync(() =>
     {

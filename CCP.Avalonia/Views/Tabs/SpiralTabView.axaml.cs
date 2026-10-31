@@ -308,7 +308,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// original calls here and on every entry to let the companion say hello to the room once
         /// ever. It is decoration and it never blocks the entry it rides on.</para>
         /// </summary>
-        internal void OnTabShown() => Refresh();
+        internal void OnTabShown()
+        {
+            // WPF SpiralTabView.xaml.cs:374-378: explicit navigation earns a retry, not another cue.
+            _embedGaveUp = false;
+            Refresh();
+        }
 
         /// <summary>WPF Wire: the fuse's phase and tick drive the fog. BlockChanged has no twin
         /// (DescentService is WPF-only).</summary>
