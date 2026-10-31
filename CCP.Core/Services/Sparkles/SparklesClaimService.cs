@@ -11,24 +11,15 @@ using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Services.Sparkles;
 
-/// <summary>What one claim came to: a receipt (paid, zero-pay or shadow) or a reason. Reasons are the
-/// server's refusals plus ours: <c>unreachable</c> (no answer, a 5xx or a 404: the server is down, the
-/// slip says the bank is closed), <c>pending</c> (an online result never came in), <c>invalid</c> (not
-/// sent). <c>Adopted</c>: the receipt went to the wallet.</summary>
+/// <summary>A receipt or refusal. Adopted means the wallet callback was dispatched.</summary>
 public sealed record SparklesClaimOutcome(SparklesReceipt? Receipt, string? Reason, bool Adopted = false)
 {
     public bool Ok => Receipt != null;
     public static SparklesClaimOutcome Refused(string reason) => new(null, reason);
 }
 
-/// <summary>
-/// SPARKLES BY PLACE (B1), client half: <c>POST /v2/sparkles/claim</c> through the stakes door
-/// (identity, base url, reply reading). A 202 pending is asked again with the SAME claimId (the
-/// server replays the same receipt), at most <see cref="MaxAttempts"/> sends; 401 = signed out.
-/// WALLET RULE: only <c>credited &gt; 0</c> and not <c>shadow</c> is adopted, and only ever RAISES
-/// the wallet (<see cref="V2WalletAdoption.Decide"/> <c>fromBuy: false</c>: a credit is not a debited
-/// receipt), account re-checked in the write.
-/// </summary>
+/// <summary>B1 claim wire: bounded same-id retries; 401 means signed out.
+/// Paying, non-shadow receipts only raise the wallet; the head rechecks the account.</summary>
 public sealed class SparklesClaimService
 {
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(8);
@@ -60,16 +51,11 @@ public sealed class SparklesClaimService
         _delay = delay ?? ((t, c) => Task.Delay(t, c));
     }
 
-    // ------------------------------------------------------------------ pure rules
-
     /// <summary>May this receipt move the wallet at all.</summary>
     public static bool ShouldAdopt(SparklesReceipt? r) =>
         r != null && !r.Shadow && r.Credited > 0 && r.Sp is int sp && sp >= 0;
 
-    /// <summary>The whole wallet decision for one receipt: <see cref="ShouldAdopt"/>, then RAISE
-    /// ONLY. A place receipt is a credit, never a debit, and only a debited receipt may lower the
-    /// wallet (AGENTS.md wallet rule), so unsynced local level-up points are never wiped.
-    /// <paramref name="next"/> is only meaningful when this answers true.</summary>
+    /// <summary>Eligible receipts only raise the same account's balance, preserving local credits.</summary>
     public static bool DecideWallet(bool sameAccount, SparklesReceipt? r, int localSp, out int next)
     {
         next = localSp;
@@ -85,12 +71,7 @@ public sealed class SparklesClaimService
         return wait < MinRetryWait ? MinRetryWait : wait > MaxRetryWait ? MaxRetryWait : wait;
     }
 
-    // ------------------------------------------------------------------ the claim
-
-    /// <summary>
-    /// Post one claim and settle what came back. Never throws. Retries the SAME claimId on a
-    /// pending answer, a <c>busy</c> refusal or no answer, up to <see cref="MaxAttempts"/> sends.
-    /// </summary>
+    /// <summary>Retry the same claimId on pending, busy or no answer, up to MaxAttempts sends.</summary>
     public async Task<SparklesClaimOutcome> ClaimAsync(SparklesClaim claim, CancellationToken ct = default)
     {
         if (claim == null || !claim.IsWellFormed) return SparklesClaimOutcome.Refused("invalid");
