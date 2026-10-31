@@ -3,7 +3,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Controls;
-using Avalonia.Media;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -32,6 +32,9 @@ public sealed class SubliminalSilentHintTests
             ["voiced"] = true, ["silent"] = false, [" "] = true,
         });
         editor.MarkSilentLines(t => t == "voiced");
+        editor.Show(); editor.UpdateLayout();
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("tooltip_silent_line"), ToolTip.GetTip(editor.GetVisualDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>().First(g => g.Kind.ToString() == "SpeakerMute")));
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("hint_silent_lines"), editor.FindControl<TextBlock>("TxtSilentHint")!.Text);
         var items = editor.FindControl<ItemsControl>("ItemList")!.Items.Cast<TextItem>().ToList();
         Assert.True(items.Single(x => x.Text == "silent").IsSilent);
         Assert.False(items.Single(x => x.Text == "silent").IsEnabled);

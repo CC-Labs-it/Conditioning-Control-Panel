@@ -109,7 +109,7 @@
                                                VerticalAlignment="Center"/>
                                     <fx:IconGlyph Grid.Column="2" Kind="SpeakerMute" Size="14" Margin="6,0"
                                                   Foreground="{DynamicResource TextMutedBrush}" IsVisible="{Binding IsSilent}"
-                                                  ToolTip.Tip="{loc:Str hint_silent_lines}"/>
+                                                  ToolTip.Tip="{loc:Str tooltip_silent_line}"/>
                                     <fx:IconGlyph x:Name="BtnRemove" Grid.Column="3" Kind="Dismiss" Foreground="{DynamicResource TextMutedBrush}"
                                                Size="14" VerticalAlignment="Center"
                                                Cursor="Hand"

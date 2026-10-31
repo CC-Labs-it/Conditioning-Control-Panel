@@ -330,7 +330,8 @@ namespace ConditioningControlPanel.Services
             // WPF: no Freeze while attention or the bubble-count game needs alert input.
             var freeze = !CoreSettings.Current.AttentionChecksEnabled &&
                 !(CoreEngine.BubbleCount?.IsBusy ?? false) && CoreSubliminal.VideoFreezeProvider != null;
-            if (freeze) CoreSubliminal.VideoFreezeProvider?.Invoke();
+            if (freeze) try { CoreSubliminal.VideoFreezeProvider?.Invoke(); }
+                catch (Exception ex) { Log.Warning(ex, "VideoService: Freeze callback failed"); }
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
             _playing = true;
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
@@ -367,7 +368,8 @@ namespace ConditioningControlPanel.Services
         public void End()
         {
             if (!Finish()) return;
-            CoreSubliminal.DeferredResetProvider?.Invoke(true); // WPF VideoService.cs:7937, normal Cleanup only
+            try { CoreSubliminal.DeferredResetProvider?.Invoke(true); } // WPF VideoService.cs:7937, normal Cleanup only
+            catch (Exception ex) { Log.Warning(ex, "VideoService: Reset callback failed"); }
             AfterEnd();
         }
 

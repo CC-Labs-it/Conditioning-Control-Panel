@@ -42,7 +42,8 @@ public sealed class SubliminalSolidHostTests
         try
         {
             var lease = SharedOverlayHost.Acquire(new PixelRect(0, 0, 300, 200))!;
-            Assert.False(stage!.ShowActivated);
+            Assert.EndsWith(".Overlays", stage!.GetType().Namespace); // PanicCheck must count the live stage.
+            Assert.False(stage.ShowActivated);
             Assert.False(stage.IsHitTestVisible);
             Assert.True(stage.IsVisible);
             lease.Dispose(); lease.Dispose();

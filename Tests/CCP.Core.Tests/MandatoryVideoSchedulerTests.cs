@@ -26,11 +26,13 @@ public sealed class MandatoryVideoSchedulerTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public void Video_freeze_has_800ms_head_start_and_reset_on_cleanup(bool attention, bool forced)
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    public void Video_freeze_has_800ms_head_start_and_reset_on_cleanup(bool attention, bool forced, bool throwing)
     {
         var freeze = CoreSubliminal.VideoFreezeProvider;
         var reset = CoreSubliminal.DeferredResetProvider;
@@ -39,8 +41,8 @@ public sealed class MandatoryVideoSchedulerTests
         var clock = new FakeClock();
         var host = new Host();
         var video = new MandatoryVideoScheduler(host, clock, () => Clips);
-        CoreSubliminal.VideoFreezeProvider = () => calls.Add("freeze");
-        CoreSubliminal.DeferredResetProvider = completed => calls.Add(completed ? "reset" : "cancel");
+        CoreSubliminal.VideoFreezeProvider = () => { calls.Add("freeze"); if (throwing) throw new InvalidOperationException("Freeze probe"); };
+        CoreSubliminal.DeferredResetProvider = completed => { calls.Add(completed ? "reset" : "cancel"); if (throwing) throw new InvalidOperationException("Reset probe"); };
         CoreSettings.Current.AttentionChecksEnabled = attention;
         try
         {

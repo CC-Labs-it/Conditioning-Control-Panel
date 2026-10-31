@@ -29,7 +29,7 @@ internal static class SharedOverlayHost
     internal static Lease? Acquire(PixelRect bounds)
     {
         var canvas = new Grid { IsHitTestVisible = false };
-        var window = new Window
+        var window = new SharedOverlayStageWindow
         {
             WindowDecorations = WindowDecorations.None,
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
@@ -46,3 +46,4 @@ internal static class SharedOverlayHost
         return new Lease(window, canvas);
     }
 }
+internal sealed class SharedOverlayStageWindow : Window { }
