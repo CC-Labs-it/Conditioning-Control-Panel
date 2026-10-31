@@ -1,4 +1,5 @@
 using System;
+using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
@@ -84,7 +85,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Glyph = "🎟️",
                     Title = title,
                     Summary = action,
-                    Open = () => BuildNudge().Show(this),
+                    Open = () =>
+                    {
+                        // WPF Marquee.cs:1079 keeps an owner even while hidden; Avalonia refuses
+                        // hidden owners. Match the existing NavSearch.cs:67 fallback at open time.
+                        Window? owner = IsVisible ? this
+                            : LauncherWindow.Instance is { IsVisible: true } launcher ? launcher : null;
+                        var popup = BuildNudge();
+                        if (owner != null) popup.Show(owner); else popup.Show();
+                    },
                     Dismiss = RecordDismissed,
                 });
 

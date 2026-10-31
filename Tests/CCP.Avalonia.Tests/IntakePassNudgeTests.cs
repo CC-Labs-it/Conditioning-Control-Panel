@@ -44,6 +44,7 @@ public sealed class IntakePassNudgeTests
         var s = CoreSettings.Current;
         var old = (s.IntakeNudgeEnabled, s.IntakeNudgeDismissedWeek, s.IntakePassSpentWeek, s.IntakePassSpentUtc,
                    s.UserDisplayName, s.OfflineMode, s.UnifiedId, s.DismissedAnnouncementId);
+        var oldAiAvailable = CoreAi.IsAvailableProvider;
         var (oldLogged, oldPremium) = (CoreAccount.IsLoggedInProvider, CoreAccount.HasPremiumAccessProvider);
         (s.IntakeNudgeEnabled, s.IntakeNudgeDismissedWeek, s.IntakePassSpentWeek, s.IntakePassSpentUtc) = (true, "", "", null);
         CoreAccount.IsLoggedInProvider = () => true;
@@ -52,6 +53,7 @@ public sealed class IntakePassNudgeTests
         try { await body(); }
         finally
         {
+            CoreAi.IsAvailableProvider = oldAiAvailable;
             MainShellWindow.AnnouncementClient = null;
             StartupLadder.ResetForTests();
             (CoreAccount.IsLoggedInProvider, CoreAccount.HasPremiumAccessProvider) = (oldLogged, oldPremium);
@@ -187,6 +189,43 @@ public sealed class IntakePassNudgeTests
             Assert.False(popup.IsVisible);
         }
         finally { shell.Close(); foreach (var popup in opened) popup.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public Task HiddenPanelStillOffersTheReminder(bool fromInbox, bool withLauncher) => Run(() =>
+    {
+        if (fromInbox) StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var opened = new List<AnnouncementPopup>();
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) =>
+        {
+            if (w is AnnouncementPopup popup) opened.Add(popup);
+        });
+        var shell = new MainShellWindow();
+        LauncherWindow? launcher = null;
+        try
+        {
+            shell.Show();
+            shell.Hide(); // launcher-first and tray boots start the timer, then hide the panel
+            if (withLauncher) launcher = LauncherWindow.OpenFor(shell);
+            shell.CheckIntakePassNudge();
+            if (fromInbox) Assert.Single(StartupLadder.Inbox.Items).Open!();
+            Dispatcher.UIThread.RunJobs();
+            var popup = Assert.Single(opened);
+            Assert.True(popup.IsVisible);
+            Assert.Same(launcher, popup.Owner); // a visible launcher, otherwise no owner
+            Assert.False(shell.IsVisible);
+        }
+        finally
+        {
+            foreach (var popup in opened) popup.Close();
+            launcher?.Close();
+            shell.Close();
+        }
         return Task.CompletedTask;
     });
 

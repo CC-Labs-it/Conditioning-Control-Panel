@@ -1,7 +1,6 @@
 # Weekly intake reminder recut
 
-Base: 74ac6ce3d5e0ae082c2871c00e864943e15aa2ad. Worktree: /tmp/ccp.
-Initial snapshot aa9918833 was clean, restored to the required base before the isolated clone.
+Base: 74ac6ce3d5e0ae082c2871c00e864943e15aa2ad.
 Read the own-work diffs from 7f07005f935f to fin2 608f09dc52c5, fin4 75bfcb6b1ec2 and wire-b 6de330ff7830.
 Reuse: fin2/wire-b reminder and tests; base card-art helper and intake Start handler; Core eligibility rule.
 No WPF or safety code changed. No new localization keys; all four reminder keys exist in all ten languages.
@@ -31,10 +30,10 @@ The GitHub GraphQL PR listing returned Forbidden; coverage was read directly fro
 
 ## Validation
 
-SDK: dotnet-install --channel 10.0 installed 10.0.403 under /tmp/dotnet. The initial CI endpoint returned 403; the installer completed from builds.dotnet.microsoft.com.
+SDK: .NET 10.0.403, installed with dotnet-install --channel 10.0.
 Existing tests and skip conditions were not weakened. The new fixture uses bundled Inter and app font mappings on Linux, and follows TestIsolationTests.cs (suite dispatcher, Skia headless drawing, process isolation).
 
-Commands and result tails (dotnet below is /tmp/dotnet/dotnet):
+Commands and result tails:
 
 - `dotnet build CCP.Core`: 50 existing warnings, 0 errors.
 - `dotnet build CCP.Avalonia --no-restore`: 201 existing warnings, 0 errors.
@@ -57,18 +56,17 @@ Production-only mutation fail-proofs, with restoration in finally:
 
 A combined reminder/isolation/notification run remains font-order dependent on this worker: if an existing fixture initializes Avalonia first without portable font options, the four reminder and two notification cases fail in font construction before behavior assertions, while 12 isolation cases pass. The isolated reminder filter initializes bundled fonts and runs all four behavior cases. No existing fixture or assertion was changed to hide this limitation.
 
-The first dismissal/slot mutation attempt hit the 8.8 GB worker disk limit during DLL copy, so its failure is not counted as a fail-proof. Disk recovery verified the duplicate clone pack against the original snapshot before replacing it with a local object alternate; no working source or original Git object was removed. The subsequent result is recorded below.
-- Dismissal/slot retry after disk recovery: 3 failed, 0 passed. The popup and Inbox tests saw an empty dismissed week; the announcement-priority test saw two rows instead of the sole server announcement. Sources were restored before the final run.
+- Dismissal/slot mutation: 3 failed, 0 passed. The popup and Inbox tests saw an empty dismissed week; the announcement-priority test saw two rows instead of the sole server announcement. Sources were restored before the final run.
 
 Final restored isolated reminder run: Failed 0, Passed 4, Skipped 0, Total 4. The final Core guard and docs checks passed; git diff --check was clean. No interactive WPF comparison or native Windows browser launch was run.
 
-## Ownership review follow-up
+## Ownership review follow-up at 70c525550
 
 P2 accepted. WPF MainWindow/MainWindow.Marquee.cs:1079 sets Owner to the shell. MainShellWindow.IntakeNudge.cs:87 now opens with Show(this), including when the Inbox row runs the callback. IntakePassNudgeTests.ReminderBelongsToTheShellAndClosesWithIt tests both immediate and Inbox paths: the owner is the shell, the popup receives Closed when the shell closes, and the popup becomes invisible.
 
 Fail-proof: added the regression test before the product fix. Both cases compiled and failed with Assert.Same, expected MainShellWindow, actual null (2 failed, 0 passed). Assertions and existing tests were retained for the fixed run. No localization key or WPF source changed; all four reminder keys remain present in all ten language files. The parity row stays partial.
 
-Follow-up validation (dotnet is /tmp/dotnet/dotnet):
+Follow-up validation:
 
 ```text
 dotnet build CCP.Core --no-restore: 0 warnings, 0 errors.
@@ -76,6 +74,23 @@ dotnet build CCP.Avalonia --no-restore: 201 existing warnings, 0 errors.
 dotnet build Tests/CCP.Avalonia.Tests --no-restore: 145 existing warnings, 0 errors.
 dotnet test Tests/CCP.Core.Tests --no-build --no-restore: Failed 0, Passed 4644, Skipped 6, Total 4650.
 dotnet test Tests/CCP.Avalonia.Tests --no-build --no-restore --filter FullyQualifiedName~IntakePassNudgeTests: Failed 0, Passed 6, Skipped 0, Total 6.
+bash .github/scripts/core-guards.sh: All Core guards passed.
+python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
+git diff --check: clean.
+```
+
+## Hidden-panel review follow-up
+
+P2 accepted. WPF MainWindow/MainWindow.Marquee.cs:1079 owns the popup even when the panel is hidden. Avalonia rejects that owner state, so MainShellWindow.IntakeNudge.cs:92 follows MainShellWindow.NavSearch.cs:67: use the visible panel, otherwise the visible launcher, otherwise no owner. Owner selection happens when the callback runs, including Inbox replay. Visible-panel ownership and owner-close behavior remain covered by the earlier tests.
+
+IntakePassNudgeTests.HiddenPanelStillOffersTheReminder (:200) covers immediate and Inbox opening, each with and without a visible launcher. Fail-proof on the reviewed forced-hidden-owner code: 4 failed, 0 passed, with non-visible-owner exceptions or no opened popup. After the fix: all 10 reminder cases passed. The fixture also restores CoreAi.IsAvailableProvider in finally (:47,56). Runtime scratch notes were archived outside the repository; this report keeps behavior references and validation results. No WPF, safety code, localization keys or existing assertions changed. The existing ledger notes were preserved and the row remains stub.
+
+```text
+dotnet build CCP.Core --no-restore: 0 warnings, 0 errors.
+dotnet build CCP.Avalonia --no-restore: 201 existing warnings, 0 errors.
+dotnet build Tests/CCP.Avalonia.Tests --no-restore: 145 existing warnings, 0 errors.
+dotnet test Tests/CCP.Core.Tests: Failed 0, Passed 4644, Skipped 6, Total 4650.
+dotnet test Tests/CCP.Avalonia.Tests --no-build --no-restore --filter FullyQualifiedName~IntakePassNudgeTests: Failed 0, Passed 10, Skipped 0, Total 10.
 bash .github/scripts/core-guards.sh: All Core guards passed.
 python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
 git diff --check: clean.
