@@ -37,23 +37,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ["breakoutdemo"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
                 // WPF PieceByPieceHostService.Launch: free, no account (LauncherCards RequiresAccount: false).
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
-                // WPF LauncherCatalogue :234: never locked; GameWindow.Launch refuses on RacingAccess.
-                ["race"] = (() => false, _ => Games.GameWindow.Launch("race")),
+                // WPF 7.2: Racing Thoughts 3D, always revealed; locked below Prime.
+                ["race"] = (Games.GameWindow.GlassroadLocked, _ => Games.GameWindow.Launch("race")),
                 // WPF LauncherCatalogue :241: Lab tier (or the daily-free drop); GameWindow.Launch runs DemandLab.
                 [Games.GameWindow.DtrhId] = (Games.GameWindow.DtrhLocked, _ => Games.GameWindow.Launch(Games.GameWindow.DtrhId)),
             };
-
-        /// <summary>WPF LauncherEntry.IsRevealed: a race without a track is WPF's mystery card pointing at the
-        /// Back Room counter. Neither exists on this head, so the unrevealed tile is left out.</summary>
-        private static bool Revealed(string id) =>
-            !string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) || Services.Race.RacingAccess.CanLaunch
-            || Games.GameWindow.GlassroadDoorOpen();   // WPF revealed: GlassroadRules.DoorOpenNow() || CanLaunch
 
         /// <summary>WPF LauncherCatalogue.Find(id)?.Available: a game.* palette row is listed only
         /// when this head can start it (seeded as SettingsPaletteIndex.GameAvailableProvider).</summary>
         internal static bool CanStartGame(string id) => Destinations.ContainsKey(id);
 
-        internal static IEnumerable<LauncherCard> VisibleCards => LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id) && Revealed(c.Id));
+        internal static IEnumerable<LauncherCard> VisibleCards => LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id));
 
         private static LauncherWindow? _window;
 

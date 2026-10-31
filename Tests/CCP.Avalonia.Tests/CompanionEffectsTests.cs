@@ -2,6 +2,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Headless;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Platform;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -41,16 +42,25 @@ public sealed class CompanionEffectsTests
             CoreEntitlement.HasLabProvider = () => true;
             CoreAccount.IsLoggedInProvider = () => true;
             var all = CompanionEffects.Activities();
-            Assert.Equal(new[] { "game.breakoutdemo", "game.piecebypiece", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
+            Assert.Equal(new[] { "game.breakoutdemo", "game.piecebypiece", "game.race", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
                 all.Select(a => a.Id));
-            Assert.True(all[3].Allowed);
+            var byId = all.ToDictionary(a => a.Id);
+            Assert.True(byId["game.intake"].Allowed);
+            Assert.True(byId["game.race"].Allowed);
+            CoreEntitlement.HasLabProvider = () => false;
+            Assert.False(byId["game.race"].Allowed);              // visible to everyone, offered only to Prime
+            Assert.False(byId["game.race"].TryOpen());
+            CoreEntitlement.HasLabProvider = () => true;
+            Assert.True(byId["game.race"].Allowed);               // access is read live, not cached in the list
             CoreAccount.IsLoggedInProvider = () => false;          // the tile would ask to sign in
-            Assert.False(all[3].Allowed);
-            Assert.True(all[0].Allowed && all[1].Allowed);          // the free demo and the free board need no account
-            Assert.False(all[2].Allowed);                            // Down the Rabbit Hole asks to sign in too
+            Assert.False(byId["game.intake"].Allowed);
+            Assert.True(byId["game.breakoutdemo"].Allowed && byId["game.piecebypiece"].Allowed);
+            Assert.False(byId["game.dtrh"].Allowed);
+            Assert.False(byId["game.race"].Allowed);
             CoreAccount.IsLoggedInProvider = () => true;
             service.Current.AudioOnlySession = true;
-            Assert.False(all[3].Allowed);
+            Assert.False(byId["game.intake"].Allowed);
+            Assert.False(byId["game.race"].Allowed);
         }
         finally
         {
@@ -99,6 +109,7 @@ public sealed class CompanionEffectsTests
         {
             if (global::Avalonia.Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
