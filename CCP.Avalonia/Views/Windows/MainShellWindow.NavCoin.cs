@@ -1,5 +1,4 @@
-// PORTED from ConditioningControlPanel/MainWindow/MainWindow.NavRail.cs:67-497.
-// Coin depth, press spring and pointer tilt use Core DepthLaw and Theme/Depth.xaml.
+// PORTED from ConditioningControlPanel/MainWindow/MainWindow.NavRail.cs:67-497; Core DepthLaw, Theme/Depth.xaml.
 
 using System;
 using Avalonia;
@@ -135,9 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return new CombinedGeometry(GeometryCombineMode.Intersect, sliver, corner);
         }
 
-        /// <summary>WPF HookNavPress (:221): press travels down in PressMs and drops the shadow;
-        /// release (handled events too, after Click navigated) springs to wherever the state now
-        /// puts the coin over ReleaseMs.</summary>
+        /// <summary>WPF NavRail.cs:221: press travels; handled release springs after navigation.</summary>
         private static void HookNavPress(NavSectionRow row)
         {
             var btn = row.Button;
@@ -170,9 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug("PaintNavCoin: {E}", ex.Message); }
         }
 
-        /// <summary>WPF ApplyNavCoinState (:402): light swaps at once (a seated coin wears the pressed
-        /// lip and the socket shade); motion eases - the face to TravelFor, the disc to ShadowFor,
-        /// fading out when the coin sits down. <paramref name="ms"/> 0 sets without animating.</summary>
+        /// <summary>WPF NavRail.cs:402: swap seated lighting, ease travel and shadow; ms 0 snaps.</summary>
         internal static void ApplyNavCoinState(NavCoinParts coin, TranslateTransform lift,
             bool pressed, bool active, bool hovered, int ms, bool spring)
         {
@@ -267,6 +262,5 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             transition.Duration = duration;
             transition.Easing = ease;
         }
-
     }
 }
