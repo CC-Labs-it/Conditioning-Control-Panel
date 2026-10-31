@@ -22,13 +22,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>A new whisper cuts the previous one, and <see cref="StopAll"/> (Stop, tray Stop everything)
     /// silences one mid-play and drops a card still waiting behind it (WPF StopAudio + the
     /// ShowSubliminalVisuals arrival guard). ponytail: no MarkWhisperAudio (no bark engine on this
-    /// head); no deferred Reset (only mandatory video defers).</para>
+    /// head).</para>
+    /// <para>Before a mandatory video the Freeze holds its Reset (<see cref="FreezeBeforeVideo"/>) until
+    /// the video ends (<see cref="DeferredReset"/>), as WPF TriggerBambiFreeze(deferReset: true).</para>
     /// </summary>
     internal static class SubliminalWhisperShow
     {
         private static readonly Random Rng = new();
         private static Action? _stopWhisper;
         private static int _gen;   // bumped by StopAll: anything scheduled before it is stale
+        private static int _deferredResetPending;   // WPF _deferredResetPending: 1 = a video holds a Reset
 
         /// <summary>WPF <c>_audioPath</c>: BaseDirectory/Resources/sub_audio.</summary>
         internal static string SubAudioDir => Path.Combine(AppContext.BaseDirectory, "Resources", "sub_audio");
@@ -46,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void StopAll()
         {
             Interlocked.Increment(ref _gen);
+            Interlocked.Exchange(ref _deferredResetPending, 0);
             Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();
         }
 
@@ -61,7 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (Whisper(text))
             {
-                if (SubliminalWhisper.IsFreezePhrase(text)) ScheduleReset();
+                if (SubliminalWhisper.IsFreezePhrase(text)) ScheduleReset(SubliminalWhisper.ResetDelayMs);
                 CoreProgression.AddXP(20, "Subliminal");
             }
             else
@@ -72,13 +76,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>WPF TriggerBambiFreeze(deferReset: false): the mod's Freeze text, even with subliminals off.</summary>
-        public static void Freeze()
+        public static void Freeze() => Freeze(deferReset: false);
+
+        /// <summary>WPF TriggerBambiFreeze(deferReset: true), before a mandatory video.</summary>
+        public static void FreezeBeforeVideo() => Freeze(deferReset: true);
+
+        private static void Freeze(bool deferReset)
         {
             var text = App.Mods?.GetFreezeTriggerText() ?? "Freeze";
             if (Whisper(text))
             {
-                ScheduleReset();
-                Log.Information("Bambi Freeze triggered with audio");
+                if (deferReset)
+                {
+                    Interlocked.Exchange(ref _deferredResetPending, 1);
+                    Log.Information("Bambi Freeze triggered with audio (reset deferred until video ends)");
+                }
+                else
+                {
+                    ScheduleReset(SubliminalWhisper.ResetDelayMs);
+                    Log.Information("Bambi Freeze triggered with audio");
+                }
             }
             else
             {
@@ -87,7 +104,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
         }
 
-        private static void ScheduleReset()
+        /// <summary>WPF TriggerDeferredBambiReset: the held Reset, 1-2 s after the video ends.</summary>
+        public static void DeferredReset()
+        {
+            if (Interlocked.CompareExchange(ref _deferredResetPending, 0, 1) == 1)
+                ScheduleReset(SubliminalWhisper.DeferredResetDelayMs);
+        }
+
+        private static void ScheduleReset(Func<Random, int> delayMs)
         {
             if (!SubliminalWhisper.ResetFollows(Roll()))
             {
@@ -95,7 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             int delay;
-            lock (Rng) delay = SubliminalWhisper.ResetDelayMs(Rng);
+            lock (Rng) delay = delayMs(Rng);
             Later(delay, () =>
             {
                 var text = App.Mods?.GetResetTriggerText() ?? "Reset";

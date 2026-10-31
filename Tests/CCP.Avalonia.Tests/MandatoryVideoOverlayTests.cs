@@ -97,6 +97,9 @@ public sealed class MandatoryVideoOverlayTests
             int ducks = 0, unducks = 0;
             var (duck, unduck) = (CoreAudio.DuckProvider, CoreAudio.UnduckProvider);
             (CoreAudio.DuckProvider, CoreAudio.UnduckProvider) = (_ => ducks++, _ => unducks++);
+            // The pre-video Bambi Freeze/Reset whisper ducks too; this test counts the video's own ducks.
+            var freeze = (CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider);
+            (CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider) = (null, null);
             var xp = 0.0;
             CoreProgression.AddXPProvider = (x, _) => xp += x;
             var o = MandatoryVideoOverlay.Instance;
@@ -357,6 +360,7 @@ public sealed class MandatoryVideoOverlayTests
                 CoreProgression.TrackVideoWatchedProvider = null;
                 CoreProgression.AddXPProvider = null;
                 (CoreAudio.DuckProvider, CoreAudio.UnduckProvider) = (duck, unduck);
+                (CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider) = freeze;
                 (s.AudioDuckingEnabled, s.VideoBlurredBackgroundEnabled, s.AttentionChecksEnabled) = saved;
                 (s.PanicKeyEnabled, s.PanicKey) = panic;
                 s.VideoMaxDurationSeconds = maxLen;

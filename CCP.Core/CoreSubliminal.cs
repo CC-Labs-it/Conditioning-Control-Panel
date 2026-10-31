@@ -68,6 +68,25 @@ namespace ConditioningControlPanel
             catch (Exception ex) { Log.Debug("BambiFreeze: {E}", ex.Message); }
         }
 
+        /// <summary>WPF <c>TriggerBambiFreeze(deferReset: true)</c> (VideoService.cs:2485/2590): the Freeze before
+        /// a mandatory video, whose Reset waits for <see cref="TriggerDeferredBambiReset"/>. Null without a surface.</summary>
+        public static volatile Action? DeferredBambiFreezeProvider;
+
+        /// <summary>WPF <c>TriggerDeferredBambiReset</c> (VideoService.cs:7937): the held Reset, once the video ends.</summary>
+        public static volatile Action? DeferredBambiResetProvider;
+
+        public static void TriggerDeferredBambiFreeze()
+        {
+            try { DeferredBambiFreezeProvider?.Invoke(); }
+            catch (Exception ex) { Log.Debug("BambiFreeze (deferred): {E}", ex.Message); }
+        }
+
+        public static void TriggerDeferredBambiReset()
+        {
+            try { DeferredBambiResetProvider?.Invoke(); }
+            catch (Exception ex) { Log.Debug("BambiReset (deferred): {E}", ex.Message); }
+        }
+
         private static readonly object Gate = new();
         private static readonly Random Rng = new();
         private static Timer? _timer;
