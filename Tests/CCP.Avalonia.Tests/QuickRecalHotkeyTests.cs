@@ -420,19 +420,22 @@ public sealed class QuickRecalHotkeyTests
         }
     });
 
-    [Fact]
-    public void QuickRecalHint_NamesBothChords_OnlyWhileBothAreArmed() => AvaloniaTestDispatcher.Run(() =>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("wayland-0")]
+    public void QuickRecalHint_NamesBothChords_OnlyWhileBothAreArmed(string? waylandDisplay) => AvaloniaTestDispatcher.Run(() =>
     {
         Init();
         var s = CoreSettings.Current;
+        var oldWayland = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
         var old = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
         var shell = new MainShellWindow();
         shell.RegisterQuickRecal = (_, _) => new Registration();
-        IDisposable? camera = null;
-        shell.RegisterCameraHotkey = (_, _, _, _) => camera;
+        shell.RegisterCameraHotkey = (_, _, _, _) => null;
         static TextBlock Hint() => new WebcamQuickRecalWindow().FindControl<TextBlock>("TxtHotkeyHint")!;
         try
         {
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", waylandDisplay);
             (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = (true, true, "Escape", "");
             shell.QuickRecalPlatformSupported = true;
             shell.StartQuickRecalHotkey();
@@ -446,15 +449,19 @@ public sealed class QuickRecalHotkeyTests
             {
                 shell2.StartQuickRecalHotkey();
                 var hint = Hint();
-                Assert.True(hint.IsVisible);
-                Assert.Contains("Ctrl+Alt+G", hint.Text);
-                Assert.Contains(MainShellWindow.CameraShortcutChord, hint.Text);
+                Assert.Equal(!OperatingSystem.IsLinux() || waylandDisplay == null, hint.IsVisible);
+                if (hint.IsVisible)
+                {
+                    Assert.Contains("Ctrl+Alt+G", hint.Text);
+                    Assert.Contains(MainShellWindow.CameraShortcutChord, hint.Text);
+                }
             }
             finally { shell2.StopQuickRecalHotkey(); shell2.Close(); }
             Assert.False(Hint().IsVisible);
         }
         finally
         {
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", oldWayland);
             shell.StopQuickRecalHotkey();
             shell.Close();
             (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = old;

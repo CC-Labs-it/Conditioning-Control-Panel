@@ -48,14 +48,11 @@ public partial class MainShellWindow
         HookCameraShortcutKey();
         ApplyQuickRecalHotkey();
         ApplyCameraHotkey();
-        // WPF QuickRecalHotkeyHint names both chords; taught only while both actually fire here.
+        // WPF MainWindow.xaml.cs:1262: teach both global chords only with desktop-wide reach.
         WebcamQuickRecalWindow.HotkeyHint = () =>
-        {
-            var quick = "Ctrl+Alt+G";
-            var camera = CameraShortcutChord;
-            return QuickRecalHotkeyArmed && CameraHotkeyArmed && quick.Length > 0 && camera.Length > 0
-                ? Loc.GetF("webcam_quick_recal_hotkey_hint", quick, camera) : null;
-        };
+            QuickRecalHotkeyArmed && CameraHotkeyArmed
+            && (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
+                ? Loc.GetF("webcam_quick_recal_hotkey_hint", "Ctrl+Alt+G", CameraShortcutChord) : null;
         // ponytail: observe preset/remote binding changes on one slow timer instead of adding
         // callbacks to every setting writer. Invocation rechecks immediately, including during this gap.
         _quickRecalBindingWatch = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background,

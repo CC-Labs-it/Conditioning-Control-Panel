@@ -12,7 +12,6 @@ using ConditioningControlPanel.Services.Webcam;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows;
-
 /// <summary>The camera start/stop chord (default Ctrl+Alt+K): WPF ApplyGlobalCameraHotkey and
 /// ApplyCameraShortcutTo (MainWindow.SessionIO.cs:1274-1345) plus ToggleWebcamFromHotkey /
 /// ToggleWebcamTrackingAsync(announce: true) (MainWindow.BlinkTrainer.cs:310-373).</summary>
@@ -21,7 +20,6 @@ public partial class MainShellWindow
     private IDisposable? _cameraHotkeyRegistration;
     private (bool Global, ChordMods Mods, string Key)? _cameraHotkeyBinding;
     private bool _cameraHotkeyBusy, _cameraKeyHooked;
-
     // Native seam: headless tests never grab a key on the real desktop.
     internal Func<Window, ChordMods, string, Action, IDisposable?> RegisterCameraHotkey = RegisterCameraHotkeyNative;
     // WPF MainWindow.BlinkTrainer.cs:337-338: persisted consent alone does not finish the dialog.
@@ -31,7 +29,6 @@ public partial class MainShellWindow
         return await dialog.ShowDialogSafe<bool?>(owner) == true && dialog.ConsentGiven;
     };
     internal bool CameraHotkeyArmed => _cameraHotkeyRegistration != null;
-
     private static IDisposable? RegisterCameraHotkeyNative(Window owner, ChordMods mods, string key, Action pressed)
         => OperatingSystem.IsWindows() ? Win32QuickRecalHotkey.RegisterCamera(owner, mods, key, pressed)
             : X11SummonChord.Register("camera", mods, key, pressed);
@@ -47,7 +44,6 @@ public partial class MainShellWindow
             mods |= EmiDeskChord.Parse(part + "+X")?.Mods ?? ChordMods.None;
         return (mods == ChordMods.None ? ChordMods.Ctrl | ChordMods.Alt : mods, key.ToString());
     }
-
     /// <summary>"Ctrl+Alt+K" - WPF MainWindow.CameraShortcutChord.</summary>
     internal static string CameraShortcutChord { get { var (m, k) = CameraChord(); return EmiDeskChord.Format(m, k); } }
 
