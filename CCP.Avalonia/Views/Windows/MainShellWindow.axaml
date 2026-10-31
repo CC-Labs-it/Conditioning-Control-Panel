@@ -652,6 +652,11 @@
             </Grid>
         </Border>
 
+        <!-- WPF MainWindow.xaml:818-822: rail shade lies over the page and never takes input. -->
+        <Rectangle x:Name="NavRailShadow" Grid.Row="1" Grid.RowSpan="5" Grid.Column="1"
+                   Width="6" HorizontalAlignment="Left" ZIndex="59"
+                   Fill="{DynamicResource DepthRailShadow}" IsHitTestVisible="False"/>
+
         <!-- THE HUD BAND (WPF MainWindow.xaml:805, nav polish wave 2): the header row and the XP row
              read as one zone - 20% black over the window ground and a 1px TextMuted divider at 30%
              under the XP row. Drawn before the header so its controls sit on it; never hit-testable.
