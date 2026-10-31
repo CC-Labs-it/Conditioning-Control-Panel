@@ -47,8 +47,7 @@ internal sealed class FriendNotices : Window
         PointerEntered += (_, _) => Stack.Paused = true;
         PointerExited += (_, _) => Stack.Paused = false;
         SizeChanged += (_, _) => Place();
-        Opened += (_, _) =>
-        {
+        Opened += (_, _) => {
             if (TryGetPlatformHandle() is { } handle)
                 Win32Overlay.SetOverrideRedirect(this, handle.Handle, passive: true);
         };
@@ -57,8 +56,7 @@ internal sealed class FriendNotices : Window
         Closed += (_, _) => { _beat.Stop(); if (ReferenceEquals(Current, this)) Current = null; };
     }
     internal static void Present(Window? anchor, FriendNotice notice, NoticeLook look) {
-        try
-        {
+        try {
             var w = Current ??= new FriendNotices();
             w._anchor = anchor ?? w._anchor;
             var (up, _) = w.Stack.Add(notice);
@@ -101,8 +99,7 @@ internal sealed class FriendNotices : Window
     private void AfterRemoval() { if (Stack.All.Count == 0) Close(); else Rebuild(); }
     private void Place() {
         // WPF Windows/Friends/FriendNotices.cs:204-225: closed anchors fall back; placement never escapes.
-        try
-        {
+        try {
             if (!IsVisible) return;
             var screen = (_anchor is { PlatformImpl: not null } anchor ? Screens.ScreenFromWindow(anchor) : null) ?? Screens.Primary;
             if (screen == null) return;
@@ -118,8 +115,7 @@ internal sealed class FriendNotices : Window
     private void Rebuild() {
         _column.Children.Clear();
         _drawn.Clear();
-        foreach (var n in Stack.Visible)
-        {
+        foreach (var n in Stack.Visible) {
             var look = _looks[n];
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
             // ponytail: initials reuse the drawer avatar; proxy pictures and arrival/fade motion remain unported.

@@ -30,8 +30,7 @@ public sealed class FriendNoticesTests
         Platform();
         object? acted = null;
         int missed = 0;
-        try
-        {
+        try {
             var at = DateTimeOffset.UtcNow;
             FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "f", "Friend", at, 6000, "old"), new NoticeLook());
             FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "f", "Friend", at.AddSeconds(1), 6000, "new"),
@@ -54,8 +53,7 @@ public sealed class FriendNoticesTests
     public Task HoverPausesAndOnlyUnseenDeparturesFileInbox(bool hold) => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
         int missed = 0, left = 0;
-        try
-        {
+        try {
             FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "f", "Friend", DateTimeOffset.UtcNow, 6000),
                 new NoticeLook { Missed = _ => missed++, Left = _ => left++ });
             var w = FriendNotices.Current!;
@@ -76,8 +74,7 @@ public sealed class FriendNoticesTests
     public Task CloseAndBodyClickAreSeenDepartures() => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
         int opened = 0, missed = 0;
-        try
-        {
+        try {
             FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "f", "Friend", DateTimeOffset.UtcNow, 6000),
                 new NoticeLook { Open = _ => opened++, Missed = _ => missed++ });
             var w = FriendNotices.Current!;
@@ -92,8 +89,7 @@ public sealed class FriendNoticesTests
     public Task OverflowFilesTheOldestAndOnlyThreeTimersRun() => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
         int missed = 0;
-        try
-        {
+        try {
             for (int i = 0; i < 13; i++) FriendNotices.Present(null,
                 new FriendNotice(NoticeKind.Poke, i.ToString(), "Friend", DateTimeOffset.UtcNow, 6000),
                 new NoticeLook { Missed = _ => missed++ });
@@ -113,8 +109,7 @@ public sealed class FriendNoticesTests
     public Task RequestBellAndWaitingSummaryFollowWpf() => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
         var bell = CoreSettings.Current.FriendNotificationsEnabled;
-        try
-        {
+        try {
             var request = new FriendRequest("request", "Friend", null, null, DateTimeOffset.UtcNow);
             CoreSettings.Current.FriendNotificationsEnabled = false;
             FriendsLanding.FileRequest(request);
@@ -135,8 +130,7 @@ public sealed class FriendNoticesTests
             FriendsLanding.Waiting(Array.Empty<FriendRequest>(), false, false);
             Assert.False(StartupLadder.Inbox.Contains("friends-requests-waiting"));
         }
-        finally
-        {
+        finally {
             CoreSettings.Current.FriendNotificationsEnabled = bell;
             StartupLadder.Inbox.Remove("friends-request:request");
             StartupLadder.Inbox.Remove("friends-requests-waiting");
@@ -161,8 +155,7 @@ public sealed class FriendNoticesTests
     public Task RealInputActsOpensOnLeftOnlyAndHoverPauses() => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
         int acted = 0, opened = 0;
-        try
-        {
+        try {
             NoticeLook Look() => new() { Line = "poked you:", ActionLabel = "Poke back", Act = _ => acted++, Open = _ => opened++ };
             FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "a", "Friend", DateTimeOffset.UtcNow, 6000), Look());
             var w = FriendNotices.Current!;
@@ -197,8 +190,7 @@ public sealed class FriendNoticesTests
         var (svc, wire) = FriendsDrawerTests.Service();
         var bell = CoreSettings.Current.FriendNotificationsEnabled;
         var panel = new Window();
-        try
-        {
+        try {
             panel.Show();
             await svc.RefreshAsync();
             FriendsLanding.Service = () => svc;
@@ -237,8 +229,7 @@ public sealed class FriendNoticesTests
         Platform();
         var (motion, performance) = (CoreSettings.Current.MotionLevel, CoreSettings.Current.PerformanceMode);
         var shell = new MainShellWindow();
-        try
-        {
+        try {
             CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
             CoreSettings.Current.PerformanceMode = false;
             shell.Show();
@@ -248,8 +239,7 @@ public sealed class FriendNoticesTests
             FriendsLanding.OpenDrawerIn(shell, "u_on");
             Dispatcher.UIThread.RunJobs();
             var chip = shell.FindControl<FriendsRailChip>("FriendsChip")!;
-            if (launcher != null)
-            {
+            if (launcher != null) {
                 Assert.True(launcher.IsVisible); Assert.False(shell.IsVisible);
                 Assert.False(chip.IsOpen);
                 for (int i = 0; i < 30; i++) launcher.StepFx(0.02);
@@ -267,8 +257,7 @@ public sealed class FriendNoticesTests
     [Fact]
     public Task AClosedAnchorFallsBackWhenANoticeLeaves() => AvaloniaTestDispatcher.RunAsync(() => {
         Platform(); var anchor = new Window(); anchor.Show();
-        try
-        {
+        try {
             for (int i = 0; i < 2; i++) FriendNotices.Present(anchor,
                 new FriendNotice(NoticeKind.Request, i.ToString(), "Friend", DateTimeOffset.UtcNow, 8000), new NoticeLook());
             var notice = FriendNotices.Current!; notice.Stack.Paused = true; Dispatcher.UIThread.RunJobs(); var height = notice.Bounds.Height;
@@ -280,5 +269,19 @@ public sealed class FriendNoticesTests
         }
         finally { FriendNotices.CloseAll(); anchor.Close(); }
         return Task.CompletedTask;
+    });
+    [Fact]
+    public Task ClosingTheShellStopsLandingImmediately() => AvaloniaTestDispatcher.RunAsync(async () => {
+        Platform(); var (svc, _) = FriendsDrawerTests.Service(); var bell = CoreSettings.Current.FriendNotificationsEnabled;
+        var shell = new MainShellWindow { TrayHostPresent = () => false }; try {
+            CoreSettings.Current.FriendNotificationsEnabled = true; shell.Show(); await svc.RefreshAsync();
+            FriendsLanding.Service = () => svc; FriendsLanding.Anchor = () => shell;
+            FriendsLanding.World = () => new LandingWorld(false, false, false, true, false, false, false);
+            FriendsLanding.Start(); Assert.NotNull(FriendsLanding.Router); FriendNotices.CloseAll();
+            FriendsLanding.Router!.OnRequestArrived(new FriendRequest("closing", "Friend", null, null, DateTimeOffset.UtcNow));
+            Assert.True(FriendNotices.Current?.IsVisible == true); FriendNotices.Current!.Stack.Paused = true; shell.Close();
+            Assert.False(shell.IsVisible); Assert.Null(FriendNotices.Current); Assert.Null(FriendsLanding.Router);
+        }
+        finally { CoreSettings.Current.FriendNotificationsEnabled = bell; FriendsLanding.Stop(); shell.Close(); }
     });
 }
