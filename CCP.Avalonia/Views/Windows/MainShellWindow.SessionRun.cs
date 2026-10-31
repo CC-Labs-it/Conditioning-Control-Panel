@@ -7,8 +7,7 @@
 // BtnPauseSession_Click (:2021) too.
 // ponytail: dropped, each with no service on this head: remote gates, program/punch-card/Bark/profile-sync hooks, the
 // Withdraw summary suppression and the video-teardown wait before the recap (no video service yet).
-// ponytail: both confirms use MessageDialog, so the buttons read OK/Cancel rather than WPF's
-// "▶ Start Session"/"Not yet" and "Yes, stop"/"Keep going"; the text above them is WPF's.
+// ponytail: the start confirm still uses OK/Cancel rather than WPF's "▶ Start Session"/"Not yet".
 
 using System;
 using System.Threading.Tasks;
@@ -84,11 +83,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var elapsed = runner.Elapsed;
             var remaining = runner.Remaining;
             var potentialXP = (int)Math.Round(session.BonusXP * SessionXp.Multiplier(CoreSettings.Current.PlayerLevel));
-            var confirmed = await MessageDialog.ConfirmAsync(this, Loc.Get(titleKey),
+            // WPF MainWindow.StartStop.cs:76-85 supplies these labels; ShowStyledDialog
+            // (MainWindow.Presets.cs:773-813) has no default/cancel and focuses its first (yes) button.
+            var dialog = new MessageDialog(Loc.Get(titleKey),
                 Loc.GetF(bodyKey, session.Icon ?? "", session.Name ?? "",
                     $"{(int)elapsed.TotalMinutes:D2}:{elapsed.Seconds:D2}",
                     $"{(int)remaining.TotalMinutes:D2}:{remaining.Seconds:D2}",
-                    potentialXP, runner.PauseCount > 0 ? Loc.GetF("msg_plus_pause_penalty_0", runner.XPPenalty) : ""));
+                    potentialXP, runner.PauseCount > 0 ? Loc.GetF("msg_plus_pause_penalty_0", runner.XPPenalty) : ""),
+                showCancel: true, okText: Loc.Get("btn_stop_session_yes"), cancelText: Loc.Get("btn_stop_session_no"));
+            var yes = dialog.FindControl<Button>("BtnOk")!;
+            yes.IsDefault = false;
+            dialog.Opened += (_, _) => yes.Focus();
+            var confirmed = await dialog.ShowDialogSafe<bool?>(this) == true;
             if (!confirmed || !ReferenceEquals(runner.CurrentSession, session)) return;
             Log.Information("Session stop confirmed by the user");
             runner.Stop(completed: false);

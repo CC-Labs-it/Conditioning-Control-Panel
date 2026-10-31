@@ -1,4 +1,7 @@
+using System;
 using System.Linq;
+using Avalonia.Input;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -23,12 +26,68 @@ namespace CCP.Avalonia.Tests;
 public sealed class SessionRunWireTests
 {
     [Fact]
+    public async Task StopConfirmUsesWpfCopyAndNoKeepsTheSessionRunning()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            try
+            {
+                shell.Show();
+                var session = new Session { Id = "stop_copy", Name = "Stop copy", DurationMinutes = 60 };
+                runner.Start(session);
+                foreach (var answer in new[] { "no", "enter-no", "close", "yes" })
+                {
+                    var pending = shell.ConfirmStopSession("title_stop_session_confirm", "msg_stop_session_body");
+                    var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+                    var no = dialog.FindControl<Button>("BtnCancel")!;
+                    var yes = dialog.FindControl<Button>("BtnOk")!;
+                    Assert.Equal("Keep going", Assert.IsType<TextBlock>(no.Content).Text);
+                    Assert.Equal("Stop the session", Assert.IsType<TextBlock>(yes.Content).Text);
+                    Assert.False(no.IsDefault || yes.IsDefault || no.IsCancel || yes.IsCancel);
+                    Assert.Same(yes, dialog.FocusManager!.GetFocusedElement());
+                    dialog.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+                    Assert.False(pending.IsCompleted);
+                    if (answer == "enter-no")
+                    {
+                        no.Focus();
+                        dialog.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                    }
+                    else if (answer == "close") dialog.Close();
+                    else (answer == "no" ? no : yes).RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                    await pending.WaitAsync(TimeSpan.FromSeconds(5));
+                    Assert.Equal(answer != "yes", runner.IsRunning);
+                    if (answer != "yes")
+                    {
+                        Assert.Same(session, runner.CurrentSession);
+                        Assert.False(runner.IsPaused);
+                    }
+                }
+            }
+            finally
+            {
+                foreach (var dialog in shell.OwnedWindows.ToArray()) dialog.Close();
+                runner.Stop();
+                CoreEngine.Stop();
+                AvApp.Sessions = null;
+                CoreSession.IsSessionRunningProvider = null;
+                shell.Close();
+            }
+        });
+    }
+
+    [Fact]
     public async Task StartLocksAndLabelsTrayStopPausesResumeRestartsStopOpensTheRecap()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
