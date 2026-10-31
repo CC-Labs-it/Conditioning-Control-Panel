@@ -491,6 +491,8 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        // Frame() may take longer than the entire 600 ms flash on a loaded runner.
+        shell.LockdownFlashClock = new SteppedTime();
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -589,4 +591,37 @@ public sealed class LockdownVeilTests
         }
         finally { s.BubbleCountStrictLock = false; }
     });
+
+    [Fact]
+    public void ActivationFlash_UsesElapsedClockTime_AndExpiresAt600Ms() => Run((shell, ld) =>
+    {
+        var time = new SteppedTime { Now = TimeSpan.FromSeconds(10).Ticks };
+        shell.LockdownFlashClock = time;
+        ld.Activate(TimeSpan.FromMinutes(30));
+        Frame();
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
+        var root = shell.Named<Grid>("RootGrid")!;
+        Assert.Equal(1, flash.Opacity);
+
+        time.Now += TimeSpan.FromMilliseconds(300).Ticks;
+        shell.TickLockdownFlash();
+        Assert.Equal(0.25, flash.Opacity, 3);
+        time.Now += TimeSpan.FromMilliseconds(299).Ticks;
+        shell.TickLockdownFlash();
+        Assert.Same(flash, shell.LockdownFlash);
+        Assert.Contains(flash, root.Children);
+        Assert.True(flash.Opacity > 0);
+        time.Now += TimeSpan.FromMilliseconds(1).Ticks;
+        shell.TickLockdownFlash();
+        Assert.Null(shell.LockdownFlash);
+        Assert.DoesNotContain(flash, root.Children);
+    });
+
+    private sealed class SteppedTime : TimeProvider
+    {
+        public long Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Now;
+    }
+
 }
