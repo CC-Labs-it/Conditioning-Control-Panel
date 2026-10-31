@@ -103,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The global panic listener can stop the game right now (as MandatoryVideoOverlay). Tests swap it.</summary>
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
         internal static VlcFrameSink? Sink => _sink;
+        internal static MediaPlayer? Player => _player;
 
         // Multi-monitor support - static shared state
         private static readonly object _cleanupLock = new();
