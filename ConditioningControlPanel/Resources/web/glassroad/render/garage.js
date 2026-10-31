@@ -12,6 +12,7 @@ import {dressKart,riderOnly,VEHICLE_MECHANISMS} from './wardrobe.js';
 import {createEmiSkin} from './emiSkin.js';
 import {garageArrows} from './garageArrows.js';
 import {garageUi} from '../hud/garage.js';
+import {createGarageBubbles} from '../hud/garageBubbles.js';
 import {createGarageNav} from '../hud/garageNav.js';
 import {KARTS,OUTFITS,STORAGE,loadGarage,cleanGarage,stepKart,routeTo,raceLook,lockedKarts,ownedKarts,ownedLooks,wearPick} from '../hud/garageState.js';
 import {loadRecord} from '../meta/record.js';
@@ -32,10 +33,10 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   let layout=garageLayout(canvas.clientWidth,canvas.clientHeight);
   const darkNow=()=>lockedKarts(unlockedSet(loadRecord(storage)),ownedKarts(ownedGrants()));let locked=darkNow(),owns=ownedLooks(ownedGrants());
   const state=loadGarage(storage,locked,owns),scene=new T.Scene(),camera=new T.PerspectiveCamera(33,1,.03,40);
-  scene.background=new T.Color('#ffe3ec');scene.fog=new T.Fog('#f8d2e1',18,35);
+  scene.background=new T.Color('#121220');scene.fog=new T.Fog('#1e1530',18,35);
   const backdrop=createGarageBackdrop(scene);
   const style=createGarageStyle();
-  scene.add(new T.HemisphereLight(0xf5fff0,0x27566b,.95));
+  scene.add(new T.HemisphereLight(0xf5f0ff,0x2e2e4a,.95));
   const key=new T.DirectionalLight(0xfff2d9,2.4);key.position.set(-3,6,-4);scene.add(key);
   const fill=new T.DirectionalLight(0xffc7e7,.55);fill.position.set(4,2,1);scene.add(fill);
   const env=new T.Scene();env.background=new T.Color('#777078');
@@ -54,7 +55,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   const emiLife=createEmiLife(model),lifeSignals={},vehicleLives=[];
   const contactGeo=new T.PlaneGeometry(2.2,2.2),contactMat=new T.MeshBasicNodeMaterial({color:0x100a0e,transparent:true,depthWrite:false});
   contactMat.opacityNode=float(.32).mul(float(1).sub(smoothstep(.05,.5,uv().sub(.5).length())));
-  const dark=new T.MeshBasicNodeMaterial({color:0x211e24});owned.push(dark);
+  const dark=new T.MeshBasicNodeMaterial({color:0x0d0d18});owned.push(dark);
   const collection=KARTS.map(([id],index)=>{
     const holder=new T.Group(),asset=clone(art.model('emi-vehicle-'+id).scene);holder.add(asset);holder.userData.kartIndex=index;
     const meshes=[];asset.traverse(m=>{if(m.isSkinnedMesh){m.material=racerFinish(m.material);meshes.push(m);}});
@@ -67,6 +68,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   const particleGeo=new T.OctahedronGeometry(.014),particleMaterial=new T.MeshBasicNodeMaterial({color:0xffd4ae});
   for(const arrow of arrows.arrows)style.apply(arrow.root);
   const ui=garageUi({change,select,customize,trackId,online,counter,deny:()=>sound('menu-deny'),changeTrack:id=>changeTrack?.(id),action:name=>{if(!moving&&!viewBusy){sound('menu-ok');action(name);}},hover:(dir,on)=>arrows.hover(dir,on)});ui.track(track,laps);
+  const bubbles=createGarageBubbles({root:ui.root,pop:opts=>sound('menu-bubble-pop',opts),leftEdge:()=>innerWidth<700?0:parseFloat(getComputedStyle(ui.root).getPropertyValue('--g-menu'))||0,floor:()=>innerWidth<700?ui.root.querySelector('.g-menu').getBoundingClientRect().top:innerHeight});
   function save(){try{storage?.setItem(STORAGE,JSON.stringify(state));}catch{}}
   function paint(){skin.set(state);ui.paint(state,{custom:custom||view>0,busy:!!moving||viewBusy,locked,owned:owns});save();}
   // A kart earned in the logbook or bought in the Prize Counter since the last look gets its own paint back; nothing re-darkens until the next page.
@@ -125,6 +127,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   let motion='full';const entrance=()=>motion==='off'?'off':reduced&&motion==='full'?'less':motion;
   function update(dt,motionReduced,gentle=false){dt=Math.max(0,Math.min(.05,Number.isFinite(dt)?dt:0));reduced=motionReduced||gentle;ui.root.classList.toggle('g-calm',reduced);time+=dt;emiLife.beforePose();dress?.glideUmbrella?.(true,dt,gentle);
     backdrop.update(dt,{reducedMotion:motionReduced,gentle});
+    if(visible)bubbles.update(dt,{spawn:!custom&&!viewBusy,gentle,off:motionReduced||motion==='off'});
     const screen=advanceGarageView(view,custom,dt,reduced),sceneProgress=screen.framing,wasBusy=viewBusy;view=screen.value;viewBusy=screen.busy;
     ui.root.style.setProperty('--g-custom-progress',String(screen.progress));ui.root.classList.toggle('g-scene-transition',viewBusy);
     canvas.style.opacity=screen.fade===1?'':String(screen.fade);frameView(screen.framing);if(wasBusy&&!viewBusy)paint();
@@ -165,7 +168,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   const observer=new ResizeObserver(resize);observer.observe(canvas);
   redress();paint();resize();update(0,true);
   // The full wardrobe warms before the loading card lifts; no shader compile on an outfit click.
-  dress?.dispose();dress=null;
+  bubbles.dispose();dress?.dispose();dress=null;
   wardrobeBounds=await warmGarageWardrobe({
     outfits:OUTFITS.filter(([id])=>id!=='none').map(([id])=>id),
     attach:id=>dressKart(art,model,{outfit:raceLook({...state,outfit:id}).outfit,vehicle:null}),
