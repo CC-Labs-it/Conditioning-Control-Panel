@@ -1,4 +1,4 @@
-import { Group, Mesh, BoxGeometry, SphereGeometry, CircleGeometry, TorusGeometry, Shape, Vector2, ExtrudeGeometry, Float32BufferAttribute, Color } from 'three/webgpu';
+import { Group, Mesh, BoxGeometry, BufferGeometry, CircleGeometry, TorusGeometry, Shape, Vector2, ExtrudeGeometry, Float32BufferAttribute, Color } from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { placeOnFrame, fadeSet, ease, easeIn, unit } from './cueKit.js';
 
@@ -65,20 +65,81 @@ function slab0(geo, colour) {
   geo.setAttribute('color', new Float32BufferAttribute(out, 3)); geo.deleteAttribute('normal'); geo.deleteAttribute('uv');
   return geo;
 }
-function foot(set) {
-  const g = new Group(), skin = set.make({ color: '#f6b9c8' }), sole = set.make({ color: '#e7899f' }), nail = set.make({ color: '#e0115f' });
-  const sph = new SphereGeometry(1, 20, 14); set.owned.push(sph);
-  const add = (m, p, s) => { const x = new Mesh(sph, m); x.position.set(...p); x.scale.set(...s); g.add(x); return x; };
-  add(skin, [0, 2.2, 3.2], [2.4, 2.1, 2.6]);      // heel
-  add(skin, [0, 1.8, -.6], [3.0, 1.6, 4.0]);      // arch to ball
-  add(sole, [0, .35, 2.8], [2.2, .45, 2.3]);      // the pressed heel pad
-  add(sole, [0, .35, -2.2], [2.9, .45, 2.0]);     // the pressed ball
+/** Smooth cross sections join the heel, raised instep and ball without intersecting blobs. */
+function footLoft(sections, rings = 48, sides = 32, archLift = .55) {
+  const positions = [], indices = [], count = sections.length - 1;
+  const sample = (t, k) => {
+    const i = Math.min(count - 1, Math.floor(t)), u = t - i;
+    const a = sections[Math.max(0, i - 1)][k], b = sections[i][k];
+    const c = sections[i + 1][k], d = sections[Math.min(count, i + 2)][k];
+    return .5 * (2 * b + (c - a) * u + (2 * a - 5 * b + 4 * c - d) * u * u + (3 * b - a - 3 * c + d) * u * u * u);
+  };
+  for (let r = 0; r <= rings; r++) {
+    const t = r / rings * count, z = sample(t, 0), w = Math.max(.002, sample(t, 1));
+    const low = Math.max(.04, sample(t, 2)), high = Math.max(low + .002, sample(t, 3));
+    for (let j = 0; j <= sides; j++) {
+      const a = j / sides * Math.PI * 2, x = Math.cos(a) * w;
+      // The inner edge lifts into an arch. Heel and ball retain their broad contact patches.
+      const arch = Math.exp(-(((z - .2) / 1.9) ** 2)) * unit(-x / 2) * unit(-Math.sin(a));
+      positions.push(x, low + (high - low) * (Math.sin(a) + 1) / 2 + arch * archLift, z);
+      if (r < rings && j < sides) {
+        const n = r * (sides + 1) + j, next = n + sides + 1;
+        indices.push(n, next, n + 1, next, next + 1, n + 1);
+      }
+    }
+  }
+  const geometry = new BufferGeometry(); geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices); geometry.computeVertexNormals();
+  return footFinish(geometry, '#efbcae', archLift > 0);
+}
+/** Soft broad light and warm sole colour keep their form in the unlit cue pass. */
+function footFinish(geometry, colour, soleDetail = false) {
+  const p = geometry.attributes.position, n = geometry.attributes.normal, colours = [];
+  const base = new Color(colour), warmth = new Color('#d68a87'), light = new Color('#fff0df'), c = new Color();
+  for (let i = 0; i < p.count; i++) {
+    const ny = n.getY(i), lamp = unit(ny * .72 - n.getX(i) * .32 + n.getZ(i) * .2);
+    c.copy(base).lerp(warmth, unit(-ny) * .3).multiplyScalar(.72 + lamp * .27);
+    if (soleDetail) {
+      const x = p.getX(i), z = p.getZ(i), underside = unit(-ny * 1.8);
+      const heel = Math.exp(-((x / 1.8) ** 2 + ((z - 3.5) / 1.5) ** 2));
+      const ball = Math.exp(-((x / 2.7) ** 2 + ((z + 2.7) / 1.05) ** 2));
+      const crease = Math.exp(-(((z + 3.45 - .1 * x - .055 * x * x) / .17) ** 2));
+      c.lerp(warmth, underside * (.16 * heel + .2 * ball));
+      c.multiplyScalar(1 - underside * crease * .16);
+    }
+    c.lerp(light, Math.pow(lamp, 8) * .12); colours.push(c.r, c.g, c.b);
+  }
+  geometry.setAttribute('color', new Float32BufferAttribute(colours, 3));
+  return geometry;
+}
+function footGeometry() {
+  const body = footLoft([[5.75, .002, 1.6, 1.61], [5.1, 1.55, .38, 3.1], [3.55, 2.2, .12, 4.15],
+    [1.9, 2.05, .35, 3.95], [.2, 1.85, .82, 3.3], [-1.7, 2.65, .25, 2.7],
+    [-3.1, 2.95, .12, 2.4], [-4.1, 2.5, .35, 1.8], [-4.65, .002, .9, .91]]);
+  const toe = footLoft([[.6, .002, .55, .56], [.28, .66, .08, 1.14], [-.55, .68, .04, 1.16],
+    [-1.25, .6, .1, 1.07], [-1.8, .3, .24, .83], [-1.94, .002, .52, .53]], 20, 20, 0);
+  const outline = new Shape(); outline.moveTo(-.3, -.48); outline.lineTo(.3, -.48);
+  outline.quadraticCurveTo(.42, -.48, .42, -.34); outline.lineTo(.42, .34);
+  outline.quadraticCurveTo(.42, .48, .25, .48); outline.lineTo(-.25, .48);
+  outline.quadraticCurveTo(-.42, .48, -.42, .34); outline.lineTo(-.42, -.34);
+  outline.quadraticCurveTo(-.42, -.48, -.3, -.48); outline.closePath();
+  const nail = new ExtrudeGeometry(outline, { depth: .035, steps: 1, bevelEnabled: true,
+    bevelThickness: .04, bevelSize: .04, bevelSegments: 2, curveSegments: 5 });
+  nail.rotateX(-Math.PI / 2); footFinish(nail, '#c51d54');
+  return { body, toe, nail };
+}
+function foot(set, geometry) {
+  const g = new Group(), material = set.make({ color: '#ffffff', vertexColors: true, depthWrite: true });
+  g.name = 'cue-foot';
+  const body = new Mesh(geometry.body, material); body.name = 'cue-foot-body'; g.add(body);
   const toes = [];
-  for (let i = 0; i < 5; i++) {
-    const t = new Group(), r = 1.15 - i * .14; t.position.set(-2.2 + i * 1.1, 1.0, -4.6 + Math.abs(i - 1) * .35); g.add(t);
-    const tip = new Mesh(sph, skin); tip.scale.set(r * .55, r * .5, r * .7); tip.position.set(0, 0, -r * .5); t.add(tip);
-    const n = new Mesh(sph, nail); n.scale.set(r * .35, r * .12, r * .35); n.position.set(0, r * .45, -r * .7); t.add(n);
-    toes.push(t);
+  const layout = [[-2.05, -3.8, 1.15, 1.05], [-.65, -4.1, .92, 1], [.53, -4.02, .8, .91],
+    [1.56, -3.73, .7, .8], [2.34, -3.26, .59, .67]];
+  for (const [x, z, width, length] of layout) {
+    const t = new Group(); t.name = 'cue-foot-toe'; t.position.set(x, .43, z); t.scale.set(width, width, length); g.add(t);
+    const tip = new Mesh(geometry.toe, material); t.add(tip);
+    const nail = new Mesh(geometry.nail, material); nail.name = 'cue-foot-nail'; nail.position.set(0, 1.1, -.92);
+    nail.rotation.x = -.1; t.add(nail); toes.push(t);
   }
   g.userData.toes = toes;
   return g;
@@ -88,7 +149,8 @@ export function createCueGiants(scene) {
   const object = new Group(); object.name = 'cue-giants'; scene.add(object);
   const heels = [], feet = [];
   // One pump geometry, one wave ring and one ground shadow are shared by the whole pool; each heel keeps its own fading materials.
-  const heelGeo = stilettoGeometry(), waveGeo = new TorusGeometry(1, .18, 6, 40), shadowGeo = new CircleGeometry(1, 40), shared = [heelGeo, waveGeo, shadowGeo];
+  const heelGeo = stilettoGeometry(), waveGeo = new TorusGeometry(1, .18, 6, 40), shadowGeo = new CircleGeometry(1, 40);
+  const footGeo = footGeometry(), shared = [heelGeo, waveGeo, shadowGeo, ...Object.values(footGeo)];
   for (let i = 0; i < HEELS; i++) {
     const set = fadeSet(); set.owned = [];
     const root = new Group(), shoe = new Mesh(heelGeo, set.make({ color: '#ffffff', vertexColors: true, depthWrite: true }));
@@ -98,7 +160,7 @@ export function createCueGiants(scene) {
   }
   for (let i = 0; i < FEET; i++) {
     const set = fadeSet(); set.owned = [];
-    const root = new Group(), glass = new Mesh(new BoxGeometry(1, 1, 1), set.make({ color: '#ffc6e4' })), sole = foot(set);
+    const root = new Group(), glass = new Mesh(new BoxGeometry(1, 1, 1), set.make({ color: '#ffc6e4' })), sole = foot(set, footGeo);
     set.owned.push(glass.geometry); root.add(glass, sole); root.visible = false; object.add(root);
     feet.push({ root, glass, sole, set, glassMat: set.mats[0], id: null });
   }
@@ -134,7 +196,8 @@ export function createCueGiants(scene) {
       s.glass.scale.set(w, .5, 14); s.glass.position.set(0, 9, 0); s.glassMat.opacity = unit(row.alpha) * .42;
       const press = age < 0 ? 18 * (1 - easeIn(unit((age + .45) / .45))) : 0;
       s.sole.position.set(side * row.frame.w * .2, 9.3 + press, side * 1.5); s.sole.scale.setScalar(1.35);
-      s.sole.rotation.y = side * .12;
+      // Present the toes and inner arch to the approaching driver rather than the heel alone.
+      s.sole.rotation.y = Math.PI + .28 + side * .12;
       // Curl on each jolt: toes fold down then relax.
       let curl = 0;
       for (const t of row.joltTimes || []) { const d = songS - t; if (d >= 0 && d < .9) curl = Math.max(curl, Math.sin(unit(d / .9) * Math.PI)); }
