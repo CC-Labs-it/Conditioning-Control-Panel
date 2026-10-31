@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 using Serilog;
 // Aliased for the same reason the WPF original aliases it: the parent namespace has its own
 // AwarenessIntensity (Z5's 3-stop dial, AwarenessPrivacyView.axaml.cs) and wins name resolution
@@ -86,7 +87,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 // would offer two pacing controls, one of which does nothing.
                 bool v2 = s.UseAwarenessV2;
                 AwarenessIntensityPanel.IsVisible = v2;
-                AwarenessSettingsPanel.IsVisible = !v2 && s.AwarenessModeEnabled; // WPF MainWindow.CompanionRoom.cs:233-234
+                // WPF MainWindow.Patreon.cs:1318,1330-1332: controls must match the observer gate.
+                AwarenessSettingsPanel.IsVisible = !v2 && s.AwarenessModeEnabled
+                    && s.AwarenessConsentGiven && WindowAwarenessService.HasEntitlement;
 
                 bool eyesOpen = s.AwarenessModeEnabled && s.AwarenessConsentGiven;
                 TxtIntensityEyesClosed.IsVisible = v2 && !eyesOpen;

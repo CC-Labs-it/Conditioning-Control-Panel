@@ -1,6 +1,7 @@
 // Ported write surface: WPF MainWindow/MainWindow.CompanionRoom.cs.
 // Awareness refreshes follow the controls after the v2 tab reparenting.
 // Part B: secure BYO key writer/reader and full v2 observer integration.
+// SetCustomApiKey blocked: no DPAPI twin; writing OpenAiCompatibleApiKey here stores the key in the clear.
 
 using System;
 using System.Linq;

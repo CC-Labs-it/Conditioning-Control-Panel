@@ -69,19 +69,37 @@ public class CompanionRoomAwarenessWritesTests
     });
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public void LegacySlidersRequireEnabledLegacyPipeline(bool v2, bool enabled) => AvaloniaTestDispatcher.Run(() =>
+    [InlineData(false, false, true, true)]
+    [InlineData(false, true, true, true)]
+    [InlineData(true, false, true, true)]
+    [InlineData(true, true, true, true)]
+    [InlineData(false, true, false, true)]
+    [InlineData(false, true, true, false)]
+    public void LegacySlidersRequireEnabledLegacyPipeline(bool v2, bool enabled, bool consent, bool premium) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null) AvAppBuilder();
-        var settings = new SettingsService();
-        CoreSettings.ServiceProvider = () => settings;
-        settings.Current.UseAwarenessV2 = v2;
-        settings.Current.AwarenessModeEnabled = enabled;
-        var cell = new WorkshopAwarenessCell();
-        Assert.Equal(!v2 && enabled, cell.FindControl<Border>("AwarenessSettingsPanel")!.IsVisible);
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        var oldFreeToday = CoreEntitlement.IsFreeTodayProvider;
+        try
+        {
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            CoreEntitlement.HasPremiumProvider = () => premium;
+            CoreEntitlement.IsFreeTodayProvider = _ => false;
+            settings.Current.UseAwarenessV2 = v2;
+            settings.Current.AwarenessModeEnabled = enabled;
+            settings.Current.AwarenessConsentGiven = consent;
+            var cell = new WorkshopAwarenessCell();
+            Assert.Equal(!v2 && enabled && consent && premium,
+                cell.FindControl<Border>("AwarenessSettingsPanel")!.IsVisible);
+        }
+        finally
+        {
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+            CoreEntitlement.IsFreeTodayProvider = oldFreeToday;
+        }
     });
 
     [Fact]
