@@ -66,6 +66,37 @@ public class FunnelBeaconTests
         finally { FunnelBeacon.BaseUrlOverride = null; FunnelBeacon.SendOverride = null; }
     }
 
+    [Theory]
+    [InlineData("gate_shown")]
+    [InlineData("cta_clicked")]
+    public async Task OfflineModeSuppressesRequestsAndOnlineModeStillSends(string evt)
+    {
+        var settings = CoreSettings.Current;
+        var wasOffline = settings.OfflineMode;
+        var oldRoot = FunnelBeacon.BaseUrlOverride;
+        var oldSend = FunnelBeacon.SendOverride;
+        var sent = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            FunnelBeacon.BaseUrlOverride = "https://proxy.test";
+            FunnelBeacon.SendOverride = (_, body) => { sent.TrySetResult(body); return Task.CompletedTask; };
+            settings.OfflineMode = true;
+            FunnelBeacon.Post(evt, "vault", "basic");
+            Assert.NotSame(sent.Task, await Task.WhenAny(sent.Task, Task.Delay(300)));
+
+            settings.OfflineMode = false;
+            FunnelBeacon.Post(evt, "vault", "basic");
+            Assert.Same(sent.Task, await Task.WhenAny(sent.Task, Task.Delay(5000)));
+            Assert.Equal(evt + "|panel|vault|basic", await sent.Task);
+        }
+        finally
+        {
+            settings.OfflineMode = wasOffline;
+            FunnelBeacon.BaseUrlOverride = oldRoot;
+            FunnelBeacon.SendOverride = oldSend;
+        }
+    }
+
     [Fact]
     public async Task QuietWithoutAProxyAndNeverThrows()
     {
