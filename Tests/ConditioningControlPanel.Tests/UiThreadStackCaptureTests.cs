@@ -74,9 +74,16 @@ public class UiThreadStackCaptureTests
         }
     }
 
-    // NoInlining: the assertion names this frame, so the JIT must not fold it into the lambda.
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void ParkedInAKnownFrame(ManualResetEvent release) => release.WaitOne();
+    // This frame is the assertion target. Keep it unoptimized as well as uninlined: a Release
+    // JIT can inline WaitOne into this wrapper, leaving the DAC at an InlinedCallFrame without
+    // the named managed frame. Keep the wait in its own callee and require a return here.
+    // The snapshot and its assertions stay unchanged.
+    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+    private static void ParkedInAKnownFrame(ManualResetEvent release)
+    {
+        release.WaitOne();
+        GC.KeepAlive(release);
+    }
 
     [Fact]
     public void AnUnknownThreadIdDegradesInsteadOfThrowing()
