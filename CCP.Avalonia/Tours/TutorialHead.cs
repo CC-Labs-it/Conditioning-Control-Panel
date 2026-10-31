@@ -97,8 +97,10 @@ namespace ConditioningControlPanel.Avalonia.Tours
                 showDeeper: () => shell.ShowTab("deeper"),
                 showTab: key => shell.ShowTab(key));
 
+            // WPF MainWindow/MainWindow.Settings.cs:570-577: attach before Start, detach on close.
+            EmiTourPresence.Attach(Service);
             Service.Start(type);
-            if (!Service.IsActive) return;
+            if (!Service.IsActive) { EmiTourPresence.Detach(); return; }
 
             var browser = shell.Named<Views.Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer;
             if (browser != null) browser.IsVisible = false;
@@ -107,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
             overlay.Closed += (_, _) =>
             {
                 if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null;
+                EmiTourPresence.Detach();
                 if (browser != null) browser.IsVisible = true;
             };
             overlay.Show();
@@ -159,6 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
         {
             try { if (Service.IsActive) Service.Skip(); } catch { }
             _shellOverlay = null;
+            EmiTourPresence.Detach();
         }
     }
 }

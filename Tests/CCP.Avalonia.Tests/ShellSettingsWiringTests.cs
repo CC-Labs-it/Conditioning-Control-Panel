@@ -51,6 +51,33 @@ public sealed class ShellSettingsWiringTests
         (await Dialog<MessageDialog>(shell)).Close();
     });
 
+    // WPF EmiTourNarrator.cs:133-136 and MainWindow.Settings.cs:570-577.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task HelpTourSummonsOnlyEnabledEmiAndDetachesOnClose(bool enabled) => Run(async (shell, service) =>
+    {
+        var desk = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+        desk.Window?.ShutDown();
+        service.Current.EmiDeskEnabled = enabled;
+        service.Current.EmiDeskMuteAvatar = false;
+        try
+        {
+            Click(shell.Named<Button>("BtnMainHelp")!);
+            Click(shell.Named<Button>("BtnTutorialGettingStarted")!);
+            Assert.True(CoreTutorial.IsActive);
+            Assert.NotNull(EmiTourPresence.Active);
+            Assert.Equal(enabled, desk.IsOut);
+            if (enabled) Assert.True(desk.Window!.IsVisible);
+            PanicSurfaces.All.Single(s => s.Id == "tour").Stop(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(EmiTourPresence.Active);
+            Assert.False(CoreTutorial.IsActive);
+        }
+        finally { desk.Window?.ShutDown(); }
+        await Task.CompletedTask;
+    });
+
     [Fact]
     public Task HelpRowsStartTheirTourAndPanicRestoresTheBrowser() => Run(async (shell, _) =>
     {
@@ -272,6 +299,8 @@ public sealed class ShellSettingsWiringTests
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         service.Current.PerformanceMode = true;
+        // Unrelated shell tests keep the desk away; the presence theory opts in explicitly.
+        service.Current.EmiDeskEnabled = false;
         service.Current.UserPresets.Clear();
         service.Current.CurrentPresetName = "";
         TutorialService.CompletionStore = new Store();
