@@ -197,6 +197,51 @@ public sealed class HeroXpFxTests
         }
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task PanicQuietSuppressesNoticesAndSoundButPreservesLevelVisuals() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = service.Current;
+        (s.PlayerLevel, s.PlayerXP, s.MotionLevel, s.PerformanceMode) = (10, 20, MotionLevel.Full, false);
+        s.OfflineMode = true;
+        s.OfflineUsername = "hero-quiet-test";
+        int notices = 0, sounds = 0;
+        ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => notices++;
+        CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { sounds++; return () => { }; };
+        var oldTime = BeatLoop.Time;
+        BeatLoop.Time = new SteppedTime();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.Activate();
+            Dispatcher.UIThread.RunJobs();
+            notices = sounds = 0;
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            ProgressionBank.Add(XpCurve.GetXPForLevel(10, XpCurve.EpochOf(s)), "Quest");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+            Assert.Equal(11, s.PlayerLevel);
+            Assert.True(shell.LevelChipPopping);
+            Assert.StartsWith("0 / ", shell.FindControl<TextBlock>("TxtXP")!.Text);
+            Assert.Equal(0, notices);
+            Assert.Equal(0, sounds);
+        }
+        finally
+        {
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            BeatLoop.Time = oldTime;
+        }
+        return Task.CompletedTask;
+    });
+
     private static void SaveFrame(MainShellWindow shell, string name)
     {
         // Proof frames are opt-in: a normal run writes nothing.

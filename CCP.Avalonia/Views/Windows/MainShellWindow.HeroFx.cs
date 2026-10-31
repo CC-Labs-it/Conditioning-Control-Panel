@@ -45,11 +45,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void HookLevelDisplay()
         {
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(UpdateLevelDisplay);
-            Action<int> levelUp = level => PostLevelNotice(() =>
+            Action<int> levelUp = level =>
             {
-                FlashLevelUp(); PopLevelChip(); UpdateLevelDisplay();
-                NotifyPlayerLevelUp(level);
-            });
+                // WPF MainWindow.xaml.cs:762: repaint independently of notice/audio admission.
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_heroClosed) return;
+                    FlashLevelUp(); PopLevelChip(); UpdateLevelDisplay();
+                });
+                PostLevelNotice(() => NotifyPlayerLevelUp(level));
+            };
             Action<Models.CompanionId, int> companionLevelUp = (id, level) => PostLevelNotice(() =>
             {
                 NotifyCompanionLevelUp(id, level);
