@@ -14,9 +14,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class BrowserInitialHomeTests
 {
     private static Task Run(Action<MainShellWindow, SettingsTabView, WebHost, ModBrowser> check) =>
@@ -59,7 +57,6 @@ public sealed class BrowserInitialHomeTests
             }
             return Task.CompletedTask;
         });
-
     [Fact]
     public Task FirstPromptUsesTheModsExactDefaultWhileReloadUsesTheSelectedSiteHome() => Run((shell, page, host, mod) =>
     {
@@ -71,7 +68,6 @@ public sealed class BrowserInitialHomeTests
         Assert.Equal("https://hypnotube.com/", host.Source!.AbsoluteUri);
         Assert.Equal(requests + 1, host.NavigationRequests);
     });
-
     [Fact]
     public Task FirstPopoutUsesTheModsExactDefaultWithoutASecondNavigation() => Run((shell, page, host, mod) =>
     {
@@ -79,7 +75,6 @@ public sealed class BrowserInitialHomeTests
         Assert.Equal(mod.DefaultUrl, host.Source!.AbsoluteUri);
         Assert.Equal(1, host.NavigationRequests);
     });
-
     [Fact]
     public Task OfflineFirstPromptKeepsTheHostUnloaded() => Run((shell, page, host, mod) =>
     {
@@ -88,5 +83,4 @@ public sealed class BrowserInitialHomeTests
         Assert.Null(host.Source);
         Assert.Equal(0, host.NavigationRequests);
     });
-
 }

@@ -1,12 +1,6 @@
 # shell-browser, row2
 
-Base: a58c5d0d1fab4bc93bb21d2eb45da41180ddd148.
-WPF references below use `ConditioningControlPanel/`. Avalonia references use `CCP.Avalonia/`.
-
-## Base audit and part B
-
-The old row notes are partly stale. This audit reads the base, not the other open lanes.
-
+Base audit: a58c5d0d1fab4bc93bb21d2eb45da41180ddd148. WPF paths below start at ConditioningControlPanel; Avalonia paths at CCP.Avalonia. The table records base line numbers; later comment-only formatting can shift them.
 | Item in missing notes | Base evidence and remaining work | WPF specification |
 | --- | --- | --- |
 | Fullscreen, Escape, topmost rental, overlay reassertion | Missing from the Home browser. `Views/Windows/MainShellWindow.Browser.cs:127` explicitly accepts but ignores fullscreen; `Views/Controls/WebHost.axaml.cs:34` documents the absent fullscreen-element signal. Other video windows do not implement this browser path. | `MainWindow/MainWindow.Browser.cs:2818`, `:2863`, `:2939`, `:2953`; `Services/Notifications/OverlayService.cs:121`, `:3104` |
@@ -21,53 +15,6 @@ The old row notes are partly stale. This audit reads the base, not the other ope
 | Native crash and readiness retry | Missing retry: `Views/Controls/WebHost.axaml.cs:310` catches constructor failure into a fallback, but does not rebuild a crashed adapter. | `MainWindow/MainWindow.Browser.cs:178`, `:202` |
 | Document-created and iframe mute/fullscreen | Partial mute already exists: `Views/Controls/WebHostMedia.cs:21` traverses same-origin frames, and `Views/Tabs/SettingsTabView.BrowserCard.cs:35` reapplies after completion. Parse-time and cross-origin coverage remain missing; `Views/Controls/WebHost.axaml.cs:257` explains the absent document-created seam. | `Services/Browser/BrowserService.cs:259`; `MainWindow/MainWindow.Browser.cs:793` |
 | Request ad blocking and ad CSS | Missing: `Views/Controls/WebHost.axaml.cs:113` stamps request headers only. Popup policy does not claim to filter subresources or hide page elements. | `Services/Browser/BrowserService.cs:580`, `:711`, `:1452` |
-
-Already on base: initial mod URL `Views/Windows/MainShellWindow.Browser.cs:94`,
-site/reload/offline gate `:108`, `:117`, popout/focus/reparent/return
-`Views/Windows/MainShellWindow.BrowserPopout.cs:19`, and document mute
-`Views/Tabs/SettingsTabView.BrowserCard.cs:75`.
-WPF: `MainWindow/MainWindow.Browser.cs:225`, `:589`, `:3264`, `:2704`, `:2603`.
-
-## Delivered part
-
-`CCP.Core/Services/Browser/BrowserPopupRule.cs:54` copies WPF's domain list,
-host-boundary matching, URL patterns and HypnoTube document bypass.
-Source: `ConditioningControlPanel/Services/Browser/BrowserService.cs:31`, `:538`, `:627`.
-No WPF code is changed.
-
-`CCP.Avalonia/Views/Controls/WebHost.axaml.cs:329` handles native new-window events
-through `:370`. `Views/Tabs/SettingsTabView.BrowserCard.cs:35` opts in only the Home
-browser. Allowed targets navigate the same host, blocked targets leave it alone,
-and both are handled so neither creates an OS window. The live completed URL wins
-over the originally requested URL when deciding the partner bypass.
-WPF: `Services/Browser/BrowserService.cs:538-562`, `:665-675`.
-
-The full row needs the independent work above and remains stub. Native desktop
-popup delivery is not proven by headless tests; the native event hookup is compiled.
-No new copy or localization keys.
-
-## Validation
-
-SDK: .NET 10.0.403, installed with dotnet-install channel 10.0 using the release feed
-(the default CI feed returned 403).
-
-| Command (dotnet at /tmp/dotnet/dotnet) | Result tail |
-| --- | --- |
-| `dotnet build CCP.Core --no-restore` | 0 warnings, 0 errors |
-| `dotnet build CCP.Avalonia --no-restore` | 201 warnings, 0 errors |
-| `dotnet build Tests/CCP.Avalonia.Tests --no-restore` | 144 warnings, 0 errors |
-| `dotnet test Tests/CCP.Core.Tests --no-restore` | 4651 passed, 6 existing skips, 0 failed |
-| `dotnet test Tests/CCP.Avalonia.Tests --no-build --filter 'FullyQualifiedName~BrowserPopupTests\|FullyQualifiedName~TestIsolationTests'` | 15 passed, 0 failed |
-| `dotnet test Tests/CCP.Avalonia.Tests --no-build --filter 'FullyQualifiedName~Browser\|FullyQualifiedName~TestIsolationTests'` | 20 passed; 19 stopped at missing Segoe UI Black glyphTypeface |
-| `bash .github/scripts/core-guards.sh` | All Core guards passed |
-| `python3 .github/scripts/avalonia_docs.py` | avalonia_docs self-check OK |
-
-Fail-proofs: invert the Core popup decision, run `BrowserPopupRuleTests`: all 16
-cases fail assertion checks. Restore. Disable the Home card's RouteBrowserPopups
-hook, run `BrowserPopupTests`: all 3 fail Assert.True. Restore. Final runs above
-use restored production code. New tests: `Tests/CCP.Core.Tests/BrowserPopupRuleTests.cs:8`
-and `Tests/CCP.Avalonia.Tests/BrowserPopupTests.cs:29`. No existing tests changed.
-
-The 19 font-blocked shell tests were compiled, not successfully run through their
-behavior assertions. The new card tests and isolation tests ran successfully.
-Native desktop popup delivery remains unproven.
+Already on base: initial mod URL MainShellWindow.Browser.cs:94; site/reload/offline :108, :117; popout BrowserPopout.cs:19; mute SettingsTabView.BrowserCard.cs:75. WPF MainWindow/MainWindow.Browser.cs:225, :589, :3264, :2704, :2603.
+Delivered: WPF's 78 popup domains, URL patterns and partner bypass (Services/Browser/BrowserService.cs:31, :538-562, :627-707) through Core BrowserPopupRule, WebHost.OnBrowserPopup and SettingsTabView.HookBrowserCard. P2 fix reads the native document at popup time through existing ScrolllerWebHostGate.CurrentDocumentUrl (Platform/ScrolllerWebHostGate.cs:87; ScrolllerWebKitFilter.cs:193; ScrolllerWebView2Gate.cs:21), not completed navigation or requested Source (WPF :665-675). Avalonia NativeWebView.Source also caches until completion. Missing native URL gives no partner exemption, as WPF. Row remains stub for part B above. No new copy or localization keys. Native desktop delivery remains unproven.
+Original validation: .NET 10.0.403; all three builds zero errors; Core 4651 passed, 6 existing skips; popup+isolation 15 passed; broader browser 20 passed and 19 blocked at Segoe UI Black glyphTypeface. Guards and docs passed. Fail-proofs: inverted Core decision failed all 16 cases; disabled Home hookup failed all 3 Avalonia tests, then restored. Review fix: both P2 transition cases failed with the old completed-URL decision and passed after restoration. All three builds: 0 errors. Full Core: 4651 passed, 6 existing skips. Popup plus isolation: 17 passed. Broader browser: 41 passed. Affected browser/native-host plus isolation: 65 passed. Guards and docs passed. Total versus 74ac6ce3d: +579/-20 (599 changed lines); formatting retains all existing assertions. Native desktop popup delivery remains unproven.

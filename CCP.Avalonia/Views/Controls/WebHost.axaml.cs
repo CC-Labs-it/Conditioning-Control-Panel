@@ -366,13 +366,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // Only the Home browser opts in. Other embeds keep their existing popup policy.
         public bool RouteBrowserPopups { get; set; }
 
+        // Native URL boundary, like ScriptInvoker. No cached URL fallback: unknown pages get no exemption.
+        internal Func<string?>? DocumentUrlReader { get; set; }
+
         // WPF BrowserService.cs:538-562: handled even when blocked, never a second OS window.
         internal bool OnBrowserPopup(Uri? target)
         {
             if (!RouteBrowserPopups) return false;
             if (target is not { IsAbsoluteUri: true }) return true;
             if (ConditioningControlPanel.Services.Browser.BrowserPopupRule.ShouldBlock(
-                    Absolute(CurrentUrl ?? Source), target.AbsoluteUri)) return true;
+                    (DocumentUrlReader ?? (() => Platform.ScrolllerWebHostGate.CurrentDocumentUrl(_web?.TryGetPlatformHandle())))(), target.AbsoluteUri)) return true;
             Navigate(target);
             return true;
         }
