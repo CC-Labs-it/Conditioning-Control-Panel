@@ -561,7 +561,7 @@ public sealed partial class FriendsDrawer : Border
             ContextMenu = menu,
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
-            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto,Auto"), Children = { Avatar(r.Name, 38, null), mid, buttons } },
+            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null), mid, buttons } },
         };
     }
 
@@ -578,10 +578,11 @@ public sealed partial class FriendsDrawer : Border
         try { result = await _svc.BlockAsync(request.Id); } catch { result = ActResult.TryLater; }
         if (result == ActResult.Done)
         {
+            FriendsLanding.SfxDismiss();
             RememberBlock(request.Id, request.Name);
             Say(Loc.GetF("friends_blocked_done", request.Name), true);
         }
-        else ShowTimed("in:" + request.Id, Loc.Get(FriendsDrawerRules.ActResultKey(result)), false);
+        else { FriendsLanding.SfxDenied(); ShowTimed("in:" + request.Id, Loc.Get(FriendsDrawerRules.ActResultKey(result)), false); }
         await SafeRefreshAsync();
         Render();
         return result;

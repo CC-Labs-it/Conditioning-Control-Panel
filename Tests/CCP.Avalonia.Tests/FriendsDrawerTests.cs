@@ -257,6 +257,8 @@ public sealed class FriendsDrawerTests
 
     // WPF FriendsDrawer.Honesty.cs:16-148, FriendsDrawer.cs:686,980,1123-1129,
     // FriendsDrawer.Blocked.cs:240-253 and Services/Friends/FriendsSfx.cs:26-30.
+    // Request Block: WPF FriendsDrawer.Blocked.cs:143 and FriendsDrawer.Honesty.cs:121.
+    // Feed input: WPF FriendsDrawer.Feed.cs:178,184,313.
     [Theory]
     [InlineData("accept", true, "friends-click,friends-accepted")]
     [InlineData("accept", false, "friends-click,friends-denied")]
@@ -266,6 +268,13 @@ public sealed class FriendsDrawerTests
     [InlineData("unblock", false, "friends-click,friends-denied")]
     [InlineData("remove", true, "friends-sink")]
     [InlineData("block", true, "friends-sink")]
+    [InlineData("block-requester", true, "friends-sink")]
+    [InlineData("block-requester", false, "friends-denied")]
+    [InlineData("feed-more", true, "friends-click")]
+    [InlineData("feed-less", true, "friends-click")]
+    [InlineData("feed-pointer", true, "friends-click")]
+    [InlineData("feed-enter", true, "friends-click")]
+    [InlineData("feed-space", true, "friends-click")]
     [InlineData("remove", false, "friends-denied")]
     [InlineData("report", true, "friends-click")]
     [InlineData("report", false, "friends-click,friends-denied")]
@@ -302,6 +311,15 @@ public sealed class FriendsDrawerTests
             if (action == "add") wire.RequestBody = success ? """{"ok":true,"status":"sent"}""" : """{"ok":false,"reason":"try_later"}""";
             using var d = new DrawerLifetime(new FriendsDrawer(svc));
             await svc.RefreshAsync();
+            if (action.StartsWith("feed-", StringComparison.Ordinal))
+            {
+                var feed = new FriendsFeed(() => "u_me");
+                for (int i = 0; i < 4; i++)
+                    feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "u_on", "Mia",
+                        DateTime.UtcNow.AddMinutes(i - 10), "cue" + i, Detail: PokeSet.Shipped[0]));
+                feed.MarkAllRead();
+                d.Drawer.FeedSource = () => feed;
+            }
             d.Drawer.OnOpened();
             var friend = svc.Snapshot.Friends.First();
             switch (action)
@@ -310,6 +328,23 @@ public sealed class FriendsDrawerTests
                     await d.Drawer.AnswerRequestAsync(svc.Snapshot.Incoming.First(), action); break;
                 case "unblock": await d.Drawer.UnblockAsync(svc.Snapshot.Blocked!.First()); break;
                 case "remove": case "block": await d.Drawer.ConfirmAsync(friend.Id, friend.Name, action); break;
+                case "block-requester":
+                    await d.Drawer.BlockRequesterAsync(svc.Snapshot.Incoming.First()); break;
+                case "feed-more": Click(d.Drawer, "friends-feed-more"); break;
+                case "feed-less":
+                    d.Drawer.ShowMoreFeed();
+                    Click(d.Drawer, "friends-feed-less"); break;
+                case "feed-pointer": case "feed-enter": case "feed-space":
+                    var row = Tagged<Border>(d.Drawer, "friends-feed-line:cue3")!;
+                    if (action == "feed-pointer")
+                        row.RaiseEvent(new PointerReleasedEventArgs(row, new Pointer(1, PointerType.Mouse, true),
+                            row, new Point(), 0, new PointerPointProperties(RawInputModifiers.None,
+                                PointerUpdateKind.LeftButtonReleased), KeyModifiers.None, MouseButton.Left));
+                    else
+                        row.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent,
+                            Key = action == "feed-enter" ? Key.Enter : Key.Space });
+                    Assert.NotNull(Tagged<Button>(d.Drawer, "friends-action:poke"));
+                    break;
                 case "report": await d.Drawer.ReportAsync(friend.Id, "spam"); break;
                 case "squelch": await d.Drawer.RunMenuAsync(friend, action); break;
                 case "menu-remove": await d.Drawer.RunMenuAsync(friend, "remove"); break;
