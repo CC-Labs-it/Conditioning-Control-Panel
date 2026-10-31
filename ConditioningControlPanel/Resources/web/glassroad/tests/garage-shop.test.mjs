@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { DEFAULT, OUTFITS, PAINTS, ownedLooks, wearable, cleanGarage, raceLook, shopLockLine, COUNTER_LINE } from '../hud/garageState.js';
+import { DEFAULT, OUTFITS, PAINTS, ownedLooks, wearable, cleanGarage, raceLook, shopLockLine, COUNTER_LINE, whereSold } from '../hud/garageState.js';
 import { cleanGrants } from '../meta/owned.js';
 import { normLook, roomLook, botLook, TYPES, C2R, LOOK_OUTFITS, SHOP_LOOK_OUTFITS, LOOK_PAINTS, LOOK_UMBRELLAS, LOOK_TRAILS } from '../net/protocol.js';
 import { catalogFrom, lookForSeat, lookForTier, SHOP_PIECES, shopExtras } from '../render/wardrobeMath.js';
@@ -29,6 +29,13 @@ test('grants open the shop looks; retired v1 paints keep what their owners bough
   assert.equal(ownedLooks(['cos.kart.paint.pink-checker']).paints.size, 0, 'checks is a free native pattern already');
   // the owned snapshot keeps the two kart Prime families and nothing else outside cos.kart.*
   assert.deepEqual(cleanGrants([...ALL, 'cos.prime.frame.room-host', 'cos.prime.banner.arena', 'cos.rain.dress.x']), [...ALL].sort());
+});
+
+test('a page with no counter door names the desktop app; a page with one keeps the short line', () => {
+  assert.equal(whereSold(COUNTER_LINE, true), COUNTER_LINE);
+  assert.equal(whereSold(COUNTER_LINE, false), "In the desktop app's Prize Counter");
+  assert.equal(whereSold(shopLockLine('podium'), false), "Prime, in the desktop app's Prize Counter");
+  assert.equal(whereSold(null, false), null);
 });
 
 test('free outfits and native patterns stay free; shop ones are dark with the counter line until owned', () => {
