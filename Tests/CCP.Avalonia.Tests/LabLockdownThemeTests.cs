@@ -53,6 +53,73 @@ public sealed class LabLockdownThemeTests
         }
     });
 
+    // WPF Lab.cs:884-987,1035-1051: live director -> label/pips, restart -> Settle,
+    // exit -> blank/dim, a second activation -> a visible Settle again.
+    [Fact]
+    public void PossessionReadoutFollowsTheLiveLadderAndRestart() => Run((shell, ld) =>
+    {
+        var now = DateTime.UtcNow;
+        typeof(LockdownService).GetProperty("UtcNow", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(ld, (Func<DateTime>)(() => now));
+        CoreSettings.Current.LockdownPossessionEnabled = true;
+        CoreSettings.Current.LockdownPossessionIntensity = 2;
+        shell.ShowTab("lockdown");
+        var tab = shell.Named<LockdownTabView>("LockdownTab")!;
+        var label = tab.FindControl<TextBlock>("TxtPossessionRung")!;
+        var pips = tab.FindControl<StackPanel>("PossessionPips")!;
+        void AssertRung(int? rung)
+        {
+            Assert.Equal(rung.HasValue, label.IsVisible);
+            Assert.Equal(rung.HasValue, pips.IsVisible);
+            Assert.Equal(rung.HasValue ? ConditioningControlPanel.Localization.Loc.GetF("lockdown_poss_readout_fmt",
+                ConditioningControlPanel.Localization.Loc.Get("lockdown_poss_rung_" + rung)) : "", label.Text);
+            for (var i = 0; i < pips.Children.Count; i++)
+                Assert.Equal(Color.Parse(rung.HasValue && i <= rung.Value ? "#FF8A5C" : "#33FF8A5C"),
+                    Assert.IsType<SolidColorBrush>(((Border)pips.Children[i]).Background).Color);
+        }
+        ld.Activate(TimeSpan.FromMinutes(30));
+        Dispatcher.UIThread.RunJobs();
+        AssertRung(0);
+        now += TimeSpan.FromMinutes(27);
+        typeof(LockdownService).GetMethod("OnCountdownTick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(ld, new object?[] { null, EventArgs.Empty });
+        Dispatcher.UIThread.RunJobs();
+        AssertRung(4);
+        ld.RestartTimer("password");
+        Dispatcher.UIThread.RunJobs();
+        AssertRung(0);
+        Assert.Equal("30:00", tab.FindControl<TextBlock>("TxtLockdownTimer")!.Text);
+        ld.Deactivate();
+        Dispatcher.UIThread.RunJobs();
+        AssertRung(null);
+        ld.Activate(TimeSpan.FromMinutes(30));
+        Dispatcher.UIThread.RunJobs();
+        AssertRung(0);
+    });
+
+    [Fact]
+    public void PossessionOffKeepsTheReadoutHidden() => Run((shell, ld) =>
+    {
+        ld.Activate(TimeSpan.FromMinutes(30));
+        Dispatcher.UIThread.RunJobs();
+        var tab = shell.Named<LockdownTabView>("LockdownTab")!;
+        Assert.False(tab.FindControl<TextBlock>("TxtPossessionRung")!.IsVisible);
+        Assert.False(tab.FindControl<StackPanel>("PossessionPips")!.IsVisible);
+    });
+
+    [Fact]
+    public void QueuedPossessionPaintCannotSurviveShellClose() => Run((shell, ld) =>
+    {
+        CoreSettings.Current.LockdownPossessionEnabled = true;
+        ld.Activate(TimeSpan.FromMinutes(30));
+        shell.MarkExitRequestedForTest();
+        shell.Close();
+        Dispatcher.UIThread.RunJobs();
+        var tab = shell.Named<LockdownTabView>("LockdownTab")!;
+        Assert.False(tab.FindControl<TextBlock>("TxtPossessionRung")!.IsVisible);
+        Assert.Equal("", tab.FindControl<TextBlock>("TxtPossessionRung")!.Text);
+    });
+
     [Fact]
     public void ActivationPaintsTheCardAndLevelGlow_ExitRestoresTheirOriginalBindings() => Run((shell, ld) =>
     {

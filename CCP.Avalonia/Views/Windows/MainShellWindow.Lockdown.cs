@@ -108,6 +108,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Refresh();
         }
 
+        // Readout slice only. The director owns the ladder and restart reset, as on WPF;
+        // shell targets, effects, attribution and warden integration remain part B.
+        private void InitializePossessionReadout()
+        {
+            if (LockdownService.Current is not { } ld) return;
+            var closed = false;
+            var director = new PossessionDirector(ld, System.Array.Empty<IPossessionEffect>(), new PossessionDirectorHead
+            {
+                UiAlive = () => !closed,
+                OnUi = action =>
+                {
+                    if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { if (!closed) action(); }
+                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (!closed) action(); });
+                },
+            });
+            // WPF Lab.cs:884-933 seeds Settle because activation does not emit RungChanged.
+            void Paint(PossessionRung? rung) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (!closed) Named<Tabs.LockdownTabView>("LockdownTab")?.UpdatePossessionReadout(rung);
+            });
+            void Activated() => Paint(PossessionRung.Settle);
+            void Deactivated() => Paint(null);
+            void RungChanged(PossessionRung rung) => Paint(rung);
+            // WPF Lab.cs:1035-1051 repaints Settle in the same turn as the two clocks.
+            void Restarted(string _) => Paint(PossessionRung.Settle);
+            ld.LockdownActivated += Activated;
+            ld.LockdownDeactivated += Deactivated;
+            ld.TimerRestarted += Restarted;
+            director.RungChanged += RungChanged;
+            Closed += (_, _) =>
+            {
+                closed = true;
+                ld.LockdownActivated -= Activated;
+                ld.LockdownDeactivated -= Deactivated;
+                ld.TimerRestarted -= Restarted;
+                director.RungChanged -= RungChanged;
+                director.Dispose();
+                Named<Tabs.LockdownTabView>("LockdownTab")?.UpdatePossessionReadout(null);
+            };
+        }
+
         // --- WPF ApplyLockdownTheme / RestoreLockdownTheme (Lab.cs:1147/1203) ----------------
         // Window, title bar and the title glow are overridden at Animation priority, so disposing the
         // override hands each back to its XAML DynamicResource (a mod switch mid-run still lands);

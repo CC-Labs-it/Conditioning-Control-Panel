@@ -257,8 +257,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ponytail: ported: premium gate, double warning, Activate, panel swap, clock, the secret
         // phrase, the Emergency Exit breath; the title-bar badge, blood-red theme and activation flash
         // are MainShellWindow.Lockdown.cs; the Strict toggles grey themselves (HoldWhileLockdown).
-        // Not on this head: the Possession haunt/readout (no director yet), the Dose keeper and
-        // the system-key hook (Linux has none, so the warning does not promise it).
+        // Possession's ladder/readout is wired by MainShellWindow.Lockdown.cs. Its effect host
+        // and the Dose keeper remain absent; the system-key seam is Windows only.
 
         /// <summary>The head's live Lockdown (null in renders and tests that set none).</summary>
         internal static LockdownService? Lockdown => LockdownService.Current;
@@ -281,10 +281,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtLockdownExit.IsVisible = false;
             TxtLockdownExit.Text = "";
             TxtEmergencyExitNotice.IsVisible = false;
-            // Readout is Possession's; with no director on this head it stays collapsed (WPF hides it
-            // too whenever Possession is off).
-            TxtPossessionRung.IsVisible = false;
-            PossessionPips.IsVisible = false;
+            UpdatePossessionReadout(null);
             UpdateEmergencyExitPulse();
             // WPF ApplyLockdownTheme / RestoreLockdownTheme (Lab.cs:1188/1211): the card goes crimson
             // on #1A0A0A; the override is dropped on exit, which leaves the XAML gradients (the values
@@ -301,6 +298,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 foreach (var d in _cardHolds) d.Dispose();
                 _cardHolds.Clear();
             }
+        }
+
+        // WPF MainWindow.Lab.cs:940-987: clearing also resets all pip colours; painting shows
+        // both controls and lights every pip up to and including the current rung.
+        internal void UpdatePossessionReadout(PossessionRung? rung)
+        {
+            var on = rung.HasValue && Lockdown?.IsActive == true && CoreSettings.Current.LockdownPossessionEnabled;
+            TxtPossessionRung.IsVisible = PossessionPips.IsVisible = on;
+            TxtPossessionRung.Text = on
+                ? Loc.GetF("lockdown_poss_readout_fmt", Loc.Get("lockdown_poss_rung_" + (int)rung!.Value)) : "";
+            for (var i = 0; i < PossessionPips.Children.Count; i++)
+                if (PossessionPips.Children[i] is Border pip)
+                    pip.Background = new SolidColorBrush(Color.Parse(on && i <= (int)rung!.Value ? "#FF8A5C" : "#33FF8A5C"));
         }
 
         private readonly List<IDisposable> _cardHolds = new();
