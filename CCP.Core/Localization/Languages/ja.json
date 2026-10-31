@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "プレーヤーを開けませんでした",
+  "media_drop_editor_error_title": "エディターを開けませんでした",
+  "media_drop_player_error_fmt": "Deeper Player を開けませんでした: {0}: {1}",
+  "media_drop_editor_error_fmt": "Deeper Editor を開けませんでした: {0}: {1}",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

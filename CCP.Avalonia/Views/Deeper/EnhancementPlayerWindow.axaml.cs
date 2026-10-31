@@ -302,6 +302,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _btnUnloadEnhancement.Click += (_, _) => Unload();
             this.FindControl<Button>("BtnEyeTracking")!.Click += (_, _) => BtnEyeTracking_Click();
             _btnPictureInPicture.Click += (_, _) => BtnPictureInPicture_Click();
+            _sliderVolume.Value = Math.Clamp(CoreSettings.Current.DeeperPlayerVolume, 0, 100); // WPF :105
             _sliderVolume.PropertyChanged += SliderVolume_PropertyChanged;
 
             foreach (var pill in new[] { _pillAll, _pillActions, _pillEngine, _pillErrors })
@@ -651,16 +652,64 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // Media loading
         // ====================================================================================
 
-        private void LoadAudio(string path)
+        // WPF EnhancementPlayerWindow.xaml.cs:616-668. Parsing may finish after a swap or close.
+        private static readonly HashSet<EnhancementPlayerWindow> AudioPlayers = new();
+        internal static void CloseAudioForPanic()
+        { foreach (var player in AudioPlayers.ToArray()) player.Close(); }
+        private IDeeperLocalAudio? _audio;
+        private string? _lastAudioPath;
+        private int? _loadingAudio;
+        private int _audioLoad;
+        private bool _audioClosed;
+        private void ReleaseAudio()
         {
-            // ponytail: needs EnhancementAudioPlayer (NAudio) + AudioWaveformCache, wired when they
-            // move to Core. The WPF path stopped playback, decoded peaks, called Play, then set
-            // TxtTotal / the play glyph / deeper_player_status_playing. Only the UI half runs here.
+            ++_audioLoad;
+            var audio = _audio; _audio = null;
+            if (audio != null) { try { audio.Pause(); } finally { audio.Dispose(); } }
+            _isPlaying = false;
+        }
+        private async void LoadAudio(string path)
+        {
+            AudioPlayers.Add(this);
+            ReleaseAudio();
+            var load = _audioLoad;
+            _loadingAudio = load;
+            _lastAudioPath = path; // WPF EnhancementPlayerWindow.xaml.cs:634,730
+            _durationSec = _currentSec = 0;
+            _videoNavigated = false;
+            _videoBrowser.Source = null; // WPF TearDownVideoForAudio, no hidden audible video.
             _txtAudioPath.Text = path;
             _txtStatus.Text = Loc.Get("deeper_player_status_loading_audio");
             ShowMediaPaneFor(MediaTypes.Audio);
-            _peaks = null;
-            _waveformPath.Data = null;
+            _peaks = null; _waveformPath.Data = null;
+            try
+            {
+                var audio = await DeeperLocalAudio.Open(path);
+                if (_audioClosed || load != _audioLoad) { audio?.Dispose(); return; }
+                if (audio == null) { _txtStatus.Text = Loc.Get("deeper_player_status_audio_failed"); return; }
+                _audio = audio;
+                audio.Ended += () => Dispatcher.UIThread.Post(() =>
+                {
+                    if (_audio != audio) return;
+                    _isPlaying = false; _currentSec = 0;
+                    _txtPlayPauseGlyph.Kind = IconKind.Play;
+                    _txtStatus.Text = Loc.Get("deeper_player_status_stopped");
+                    UpdateStatusPill();
+                });
+                audio.Volume = _sliderVolume.Value / 100.0; // WPF :105, apply before Play
+                audio.Play();
+                _durationSec = audio.DurationSeconds;
+                _isPlaying = true;
+                _txtPlayPauseGlyph.Kind = IconKind.Pause;
+                _txtStatus.Text = Loc.Get("deeper_player_status_playing");
+                UpdateStatusPill();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Deeper player audio load failed");
+                if (!_audioClosed && load == _audioLoad) { ReleaseAudio(); _txtStatus.Text = Loc.Get("deeper_player_status_audio_failed"); }
+            }
+            finally { if (_loadingAudio == load) _loadingAudio = null; }
         }
 
         /// <summary>
@@ -672,6 +721,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// </summary>
         private void LoadLocalVideo(string path)
         {
+            ReleaseAudio();
             try
             {
                 ShowMediaPaneFor(MediaTypes.Video);
@@ -716,6 +766,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void LoadVideoUrl(string url)
         {
+            ReleaseAudio();
             try
             {
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_loading");
@@ -768,21 +819,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// glyph, the status line, the pill and the playhead all describe something that is
         /// actually happening.
         ///
-        /// Audio deliberately does NOT flip the state. Before this layer the media pickers could
-        /// not load anything, so the "nothing to play" branch caught every press; now they can, and
-        /// a press with no audio engine would have shown ⏸, the LIVE pill and "Playing" over
-        /// silence. There is no NAudio here, so the honest answer is to refuse and say so in the
-        /// event log rather than to draw a transport that is running.
-        ///
-        /// ponytail: needs EnhancementAudioPlayer for the audio play/pause/resume/replay ladder,
-        /// and MaybePromptForWebcamBeforePlay for the consent gate — which is a second reason not
-        /// to make Play do more than this: skipping a consent prompt is worse than not playing.
+        /// Local audio uses the shared LibVLC transport. Enhancement rules still need engine
+        /// binding and webcam consent before this surface can run those effects.
         /// Note that even in video mode the enhancement's RULES do not fire: that needs
         /// an IPlaybackTimeSource over the web pane and a seeded DispatcherFactory for
         /// EnhancementHostService.Bind (host and engine are in Core; this head supplies neither).
         /// </summary>
         private async void BtnPlayPause_Click()
         {
+            if (!_isVideoMode && _audio != null)
+            {
+                if (_isPlaying) _audio.Pause(); else _audio.Play();
+                _isPlaying = !_isPlaying;
+                _txtPlayPauseGlyph.Kind = _isPlaying ? IconKind.Pause : IconKind.Play;
+                _txtStatus.Text = Loc.Get(_isPlaying ? "deeper_player_status_playing" : "deeper_player_status_stopped");
+                UpdateStatusPill();
+                return;
+            }
+            // WPF :727-732: Stop can clear the transport while keeping the selected file.
+            if (!_isVideoMode && !_audioClosed && !string.IsNullOrEmpty(_lastAudioPath))
+            {
+                if (_loadingAudio != _audioLoad) LoadAudio(_lastAudioPath);
+                return;
+            }
             if (_loadedEnhancement == null && _durationSec <= 0)
             {
                 _txtStatus.Text = Loc.Get("deeper_player_status_pick_first");
@@ -812,6 +871,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void BtnStop_Click()
         {
+            if (_audio != null) { _audio.Pause(); _audio.PositionSeconds = 0; }
+            else ++_audioLoad; // Stop while parsing must not start playback later.
             if (_isVideoMode && _videoNavigated)
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.pause(); l.currentTime=0;"));
             _isPlaying = false;
@@ -885,11 +946,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void SliderVolume_PropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
         {
             if (e.Property != RangeBase.ValueProperty) return;
-            // ponytail: needs EnhancementAudioPlayer.Volume, wired when it moves to Core — both
-            // directions: the write on drag, and UpdateVolumeFromPlayer's read-back on open, which
-            // is why the WPF handler carried a _suppressVolumeSync re-entrancy flag. Not routed to
-            // the video's volume instead: this panel is hidden in video mode (ShowMediaPaneFor), so
-            // a viewer never sees it while a video is what is playing.
+            // WPF EnhancementPlayerWindow.xaml.cs:1017-1029, manual gain persists including zero.
+            if (_audio != null) _audio.Volume = _sliderVolume.Value / 100.0;
+            CoreSettings.Current.DeeperPlayerVolume = (int)Math.Round(_sliderVolume.Value);
+            CoreSettings.Save();
         }
 
         // ====================================================================================
@@ -901,6 +961,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (_miniScrubbing) return;
 
             if (_isVideoMode) _ = PollVideoTimeAsync();
+            else if (_audio != null) { _currentSec = _audio.PositionSeconds; _durationSec = _audio.DurationSeconds; }
 
             _txtCurrent.Text = FormatTime(_currentSec);
             if (_durationSec > 0) _txtTotal.Text = FormatTime(_durationSec);
@@ -1023,7 +1084,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             var w = _waveformCanvas.Bounds.Width;
             if (w <= 0 || _durationSec <= 0) return;
             var frac = Math.Clamp(e.GetPosition(_waveformCanvas).X / w, 0, 1);
-            // ponytail: needs EnhancementAudioPlayer.Seek, wired when it moves to Core.
+            if (_audio != null) _audio.PositionSeconds = frac * _durationSec; // WPF :1180
             _currentSec = frac * _durationSec;
             UpdatePlayhead(frac);
         }
@@ -1618,10 +1679,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             var frac = Math.Clamp(xInCanvas / w, 0, 1);
             _currentSec = frac * _miniTotalSeconds;
             UpdateMiniPlayheadX();
+            if (_audio != null) _audio.PositionSeconds = _currentSec; // WPF :2855
             // Video seeks for real; the next poll reads the page's clock back, so a seek the engine
             // clamps or refuses corrects itself rather than leaving the playhead somewhere the video
-            // is not. ponytail: audio still needs EnhancementAudioPlayer.Seek, so in audio mode the
-            // playhead moves and nothing else does.
+            // is not. Audio seeks through the shared local transport.
             if (_isVideoMode && _videoNavigated)
             {
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke(
@@ -1686,6 +1747,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void Window_Closing()
         {
+            _audioClosed = true;
+            AudioPlayers.Remove(this);
+            ReleaseAudio(); // WPF :2693; also invalidates a pending asynchronous parse.
             // Stop the tick timer first so no UI work is queued onto a dying window — and because
             // --render-all opens and closes every view in one process, a timer left running would
             // accumulate one live 100ms tick per view.

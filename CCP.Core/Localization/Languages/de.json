@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "Player konnte nicht geöffnet werden",
+  "media_drop_editor_error_title": "Editor konnte nicht geöffnet werden",
+  "media_drop_player_error_fmt": "Deeper Player konnte nicht geöffnet werden: {0}: {1}",
+  "media_drop_editor_error_fmt": "Deeper Editor konnte nicht geöffnet werden: {0}: {1}",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",

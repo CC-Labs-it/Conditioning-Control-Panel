@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "Не удалось открыть проигрыватель",
+  "media_drop_editor_error_title": "Не удалось открыть редактор",
+  "media_drop_player_error_fmt": "Не удалось открыть Deeper Player: {0}: {1}",
+  "media_drop_editor_error_fmt": "Не удалось открыть Deeper Editor: {0}: {1}",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",

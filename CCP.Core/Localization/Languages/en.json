@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "Open Player failed",
+  "media_drop_editor_error_title": "Open Editor failed",
+  "media_drop_player_error_fmt": "Could not open Deeper Player: {0}: {1}",
+  "media_drop_editor_error_fmt": "Could not open Deeper Editor: {0}: {1}",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",

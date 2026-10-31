@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "无法打开播放器",
+  "media_drop_editor_error_title": "无法打开编辑器",
+  "media_drop_player_error_fmt": "无法打开 Deeper Player: {0}: {1}",
+  "media_drop_editor_error_fmt": "无法打开 Deeper Editor: {0}: {1}",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",

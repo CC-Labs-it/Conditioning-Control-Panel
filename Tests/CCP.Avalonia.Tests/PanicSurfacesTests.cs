@@ -24,7 +24,7 @@ public sealed class PanicSurfacesTests
             // Use the shipped bootstrap, including Inter and AppFonts: the first app setup
             // decides process-wide fonts, including the subliminal card closed by panic.
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
         var (enabled, key) = (s.PanicKeyEnabled, s.PanicKey);
@@ -131,7 +131,7 @@ public sealed class PanicSurfacesTests
         "possession",
         "attention-test",
         "descent-fuse",
-        "deeper-editor-audio",
+        "deeper-editor-audio", "media-drop", "deeper-drop-player",
         "knock-cards",
         "quick-recal",
         "asset-preview",
