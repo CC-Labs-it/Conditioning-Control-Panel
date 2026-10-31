@@ -47,6 +47,19 @@ public sealed class TakeawayDrawerTests : IDisposable
     private static HttpResponseMessage Ok() => new(HttpStatusCode.OK) { Content = new StringContent(Body) };
 
     [Fact]
+    public async Task SandboxRefusesTheRealDrawerEvenWhenACacheWasPrimedByATestClient()
+    {
+        Assert.True(ConditioningControlPanel.Services.SandboxNet.Active);
+        using var feed = new Feed(() => Task.FromResult(Ok()));
+        using var client = new HttpClient(feed);
+        JustDropOrdersService.Http = client;
+        Assert.Single(await JustDropOrdersService.FetchAsync());
+        JustDropOrdersService.Http = _http;
+        Assert.Empty(await JustDropOrdersService.FetchAsync());
+        Assert.Equal(1, feed.Calls);
+    }
+
+    [Fact]
     public async Task DeviceDoorCacheIsBoundToTheSignedInIdentityAndCanBeInvalidated()
     {
         using var feed = new Feed(() => Task.FromResult(Ok()));

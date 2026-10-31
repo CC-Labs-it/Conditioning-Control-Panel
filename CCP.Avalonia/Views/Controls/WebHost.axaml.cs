@@ -58,6 +58,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public Func<Uri, bool>? AllowNavigation { get; set; }
 
+        /// <summary>Per-host WebView2 options, set before attachment. Other adapters ignore these.</summary>
+        public string? WindowsBrowserArguments { get; set; }
+        public string? WindowsUserDataFolder { get; set; }
+
+        // WPF JustDropHostService.cs:111,132-135. Keep custom arguments off shared profiles.
+        internal void ApplyWindowsOptions(object? args)
+        {
+            if (args is not WindowsWebView2EnvironmentRequestedEventArgs windows) return;
+            if (WindowsBrowserArguments is { } arguments) windows.AdditionalBrowserArguments = arguments;
+            if (WindowsUserDataFolder is { } folder) windows.UserDataFolder = folder;
+        }
+
         /// <summary>
         /// The URL the page actually sits on after its last completed navigation: redirects,
         /// in-page links and script hops included, unlike <see cref="Source"/>, which is only
@@ -317,6 +329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                         if (preferGtk && e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
                         // Windows: the WebView2 profile under UserData, never beside the exe (Platform/WebViewProfile).
                         Platform.WebViewProfile.Apply(e);
+                        ApplyWindowsOptions(e);
                     };
                     // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                     // gate has to be live for the FIRST navigation too, and a caller that assigns

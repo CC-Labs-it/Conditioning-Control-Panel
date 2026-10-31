@@ -27,7 +27,7 @@ public sealed class JustDropWindowTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -58,6 +58,39 @@ public sealed class JustDropWindowTests
     }
 
     private static GameWindow? Open() => GameWindow.OpenForTests(GameWindow.JustDropId);
+
+    [Fact]
+    public void ShopAndReplayAreOwnedByThePanel() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("justdrop");
+        var shop = Open()!;
+        Assert.Same(shell, shop.Owner);
+        shop.Close();
+        var replay = GameWindow.LaunchJustDropReplay("kept-order", shell)!;
+        Assert.Same(shell, replay.Owner);
+    });
+
+    [Fact]
+    public void ShopCountsEveryOpenOnceAndUsesItsOwnChromiumProfile() => Run(shell =>
+    {
+        var state = ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
+        state.OpenScore.Remove("justdrop");
+        state.UsageAt.Remove("justdrop");
+        JustDropService.SetServerEnabledForTests(false);
+        shell.ShowTab("justdrop");
+        Assert.False(state.OpenScore.ContainsKey("justdrop"));
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("justdrop");
+        var w = Open()!;
+        double first = state.OpenScore["justdrop"];
+        Assert.Equal(1, first);
+        Assert.Equal(GameWindow.JustDropBrowserArguments, w.Web.WindowsBrowserArguments);
+        Assert.Equal(Path.Combine(CorePaths.UserData, "browser_data_avalonia_justdrop"), w.Web.WindowsUserDataFolder);
+        shell.ShowTab("justdrop");
+        Assert.Same(w, Open());
+        Assert.InRange(state.OpenScore["justdrop"], first + 0.99, first + 1);
+    });
 
     [Fact]
     public void ShowTab_OpensTheShopOnlyWhenTheDoorIsOpen_AndPanicClosesIt() => Run(shell =>

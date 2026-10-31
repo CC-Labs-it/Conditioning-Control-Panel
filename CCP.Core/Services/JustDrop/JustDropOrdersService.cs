@@ -42,7 +42,8 @@ namespace ConditioningControlPanel.Services.JustDrop
         private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(90);
 
         private static readonly SemaphoreSlim _gate = new(1, 1);
-        internal static HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(12) };
+        private static readonly HttpClient DefaultHttp = new() { Timeout = TimeSpan.FromSeconds(12) };
+        internal static HttpClient Http = DefaultHttp;
 
         private static IReadOnlyList<Order> _cached = Array.Empty<Order>();
         private static DateTimeOffset _cachedAt = DateTimeOffset.MinValue;
@@ -92,7 +93,8 @@ namespace ConditioningControlPanel.Services.JustDrop
         {
             var token = SafeAuthToken();
             var unifiedId = SafeUnifiedId();
-            if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(unifiedId))
+            if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(unifiedId)
+                || (ReferenceEquals(Http, DefaultHttp) && !SandboxNet.Allows(new Uri(ProxyBaseUrl))))
             {
                 // Signed out is not an error - it is a user with no drawer.
                 return Array.Empty<Order>();
