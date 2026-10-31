@@ -675,7 +675,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosOverlayWindow.ChaosSfx.Play("dvd_launch", 0.55f);
             ChaosEffectBannerOverlay.Show("dvd", Loc.Get("chaos_dvd_title"), Color.FromRgb(0xFF, 0x69, 0xB4));
             _dvdBannerOn = true;
-            _state.PushEvent(Loc.Get("chaos_dvd_loading"));
+            // WPF ChaosModeService.cs:2733; the HUD draws the catalogue prefix as an IconGlyph.
+            _state.PushEvent($"{toy.Glyph} {Loc.Get("chaos_dvd_loading")}");
             if (!ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play)) ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);
         }
 

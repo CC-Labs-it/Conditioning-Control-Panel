@@ -85,6 +85,9 @@ public sealed class ChaosDvdToyTests
                 }
                 Assert.Contains("dvd_launch", cues);
                 Assert.Contains(loading, state.RecentEvents);
+                var feed = ConditioningControlPanel.Avalonia.Controls.IconText.Split(loading);
+                Assert.Equal(toy.Glyph, Assert.Single(feed.Icons));
+                Assert.Equal(feed.Rest, Loc.Get("chaos_dvd_loading"));
                 Assert.Equal(title, Assert.Single(ChaosEffectBannerOverlay.Active!.Strip.Row).Text);
                 Assert.Equal(60, toy.CooldownRemainingSec);
                 Assert.True(toy.IsEffectActive);
