@@ -34,6 +34,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             // x:Name fields, and the seed below reads them.
             InitializeComponent();
 
+            SliderVoiceLevelCompanion.ValueChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                var value = (int)Math.Round(SliderVoiceLevelCompanion.Value);
+                TxtVoiceLevelCompanion.Text = value.ToString();
+                CoreSettings.Current.CompanionVoiceLevel = value;
+                CoreSettings.Save();
+            };
             SliderIdleIntervalCompanion.ValueChanged += SliderIdleInterval_ValueChanged;
             SliderBubbleDurationCompanion.ValueChanged += SliderBubbleDuration_ValueChanged;
 
@@ -85,6 +93,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 // "Muted" is its own flag, not the inverse of the enable (AppSettings.SubAudioMuted).
                 ChkMuteWhispersCompanion.IsChecked = s.SubAudioMuted;
                 ChkVoiceLinesCompanion.IsChecked = s.CompanionVoiceLinesMuted;
+
+                SliderVoiceLevelCompanion.Value = s.CompanionVoiceLevel;
+                TxtVoiceLevelCompanion.Text = s.CompanionVoiceLevel.ToString();
 
                 // Labels set explicitly rather than left to ValueChanged, which _isLoading blocks.
                 SliderIdleIntervalCompanion.Value = s.IdleGiggleIntervalSeconds;

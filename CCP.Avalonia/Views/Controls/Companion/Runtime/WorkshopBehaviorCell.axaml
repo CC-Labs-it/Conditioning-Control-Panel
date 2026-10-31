@@ -51,6 +51,14 @@
         <TextBlock Text="{loc:Str label_how_often_companion_speaks_when_idle}" Theme="{StaticResource CmpCellHintStyle}"
                    Margin="0,0,0,9"/>
 
+        <Grid>
+            <TextBlock Text="{loc:Str label_companion_voice_level}" Theme="{StaticResource CmpCellLabelStyle}"/>
+            <TextBlock x:Name="TxtVoiceLevelCompanion" Theme="{StaticResource CmpCellValueStyle}"/>
+        </Grid>
+        <Slider x:Name="SliderVoiceLevelCompanion" Theme="{DynamicResource PinkSlider}"
+                Minimum="0" Maximum="100" Value="80" TickFrequency="1" IsSnapToTickEnabled="True"
+                ToolTip.Tip="{loc:Str label_companion_voice_level_hint}"/>
+
         <!-- bubble duration -->
         <Grid>
             <TextBlock Text="{loc:Str label_bubble_duration}" Theme="{StaticResource CmpCellLabelStyle}"/>

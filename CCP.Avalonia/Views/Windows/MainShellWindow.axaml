@@ -1793,10 +1793,11 @@
             </Border>
             <Border x:Name="SectionWashLine" Height="1" VerticalAlignment="Top" Background="#59B79CFF"/>
         </Panel>
-        <Grid Grid.Row="4" Grid.Column="1" RowDefinitions="Auto,*">
+        <Grid Grid.Row="4" Grid.Column="1" RowDefinitions="Auto,*" ColumnDefinitions="*,Auto">
             <!-- Nav rework 2026-10-06 (WPF MainWindow.xaml:2039): row 0 = the section's pill strip +
                  breadcrumb (hidden on Home), row 1 = the one-cell stack of tab views, unchanged. -->
-            <cmp:SectionTabStrip x:Name="SectionStrip" Grid.Row="0" Margin="10,8,10,4" />
+            <fx:PageFavoritesDrawer x:Name="PageFavorites" Grid.Row="1" Grid.Column="1" IsVisible="False" />
+            <cmp:SectionTabStrip x:Name="SectionStrip" Grid.Row="0" Grid.ColumnSpan="2" Margin="10,8,10,4" />
             <Grid Grid.Row="1">
                 <!-- Main Content - Settings Tab -->
                 <views:SettingsTabView x:Name="SettingsTab" Margin="10,5,10,2" />
