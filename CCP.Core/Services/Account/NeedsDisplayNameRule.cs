@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ConditioningControlPanel.Services
+namespace ConditioningControlPanel.Services.Account
 {
     /// <summary>Why a typed name cannot be sent yet. Mirrors the server's own checks.</summary>
     public enum DisplayNameShape { Ok, TooShort, TooLong, BadChars }

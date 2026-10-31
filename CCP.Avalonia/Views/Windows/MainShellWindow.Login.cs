@@ -11,6 +11,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Account;
 using ConditioningControlPanel.Services.Startup;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -73,7 +74,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (await dialog.ShowDialogSafe<bool>(owner ?? this) && dialog.Result is not null)
             {
                 UpdateQuickLoginUI(accountChanged: true);
-                try { await dialog.ProfileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
                 await AskDisplayNameAfterSignIn(owner ?? this, dialog.Result);
                 if (SecretStore.NotRemembered && !_notRememberedShown)
                 {
@@ -85,7 +85,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // The name ask finishes before the sharing question.
                 var offer = AccountSeed.Discord?.IsAuthenticated == true
                     ? OfferAchievementSharingAfterDiscordLink() : Task.CompletedTask;
-                // The loaded profile may adopt a different level.
+                // Profile loading runs beside the question, as in WPF; repaint when it lands.
+                try { await dialog.ProfileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
                 UpdateLevelDisplay();
                 await offer;
             }

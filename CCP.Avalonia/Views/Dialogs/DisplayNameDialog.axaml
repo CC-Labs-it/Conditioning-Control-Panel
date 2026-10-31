@@ -12,6 +12,7 @@
      Buttons carry a TextBlock child rather than Content (CLAUDE.md trap 1). -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.DisplayNameDialog"
         Title="{loc:Str dialog_choose_your_display_name}"
@@ -38,7 +39,7 @@
 
             <Button x:Name="BtnClose" Grid.Row="0" HorizontalAlignment="Right" IsVisible="False"
                     Background="Transparent" AutomationProperties.Name="{loc:Str btn_close}">
-                <TextBlock Text="×"/>
+                <fx:IconGlyph Kind="Dismiss" Size="14"/>
             </Button>
             <!-- Title -->
             <TextBlock x:Name="TxtTitle" Grid.Row="0" Text="{loc:Str label_welcome_choose_your_display_name}"
