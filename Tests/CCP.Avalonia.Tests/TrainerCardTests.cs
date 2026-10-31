@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -150,7 +151,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -164,11 +165,33 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                // Headless helpers render between events. Keep this gesture's timestamps 10ms
+                // apart even when CI takes longer than the system double-click interval to render.
+                var impl = w.PlatformImpl!;
+                // Avalonia 12 hides these raw-input hooks in its reference assembly.
+                const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance
+                    | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+                var inputProperty = impl.GetType().GetProperty("Input", flags)!;
+                var input = (Action<RawInputEventArgs>)inputProperty.GetValue(impl)!;
+                var timestampProperty = typeof(RawInputEventArgs).GetProperty("Timestamp", flags)!;
+                ulong? firstTimestamp = null;
+                ulong elapsed = 0;
+                inputProperty.SetValue(impl, new Action<RawInputEventArgs>(e =>
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    firstTimestamp ??= (ulong)timestampProperty.GetValue(e)!;
+                    timestampProperty.SetValue(e, firstTimestamp.Value + elapsed);
+                    elapsed += 10;
+                    input(e);
+                }));
+                try
+                {
+                    for (var i = 0; i < 2; i++)
+                    {
+                        w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                        w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    }
                 }
+                finally { inputProperty.SetValue(impl, input); }
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
