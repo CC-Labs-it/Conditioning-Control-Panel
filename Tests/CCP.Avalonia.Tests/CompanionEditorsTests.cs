@@ -5,9 +5,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -206,7 +208,13 @@ public sealed class CompanionEditorsTests
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
                 Dispatcher.UIThread.RunJobs();
+                // Headless MouseDown settles pending frames. Settle before measuring its point,
+                // otherwise a tab/scroll layout change moves the target after these coordinates.
+                shell.CaptureRenderedFrame()?.Dispose();
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                var hit = shell.InputHitTest(at) as Visual;
+                Assert.True(hit == button || hit?.GetVisualAncestors().Contains(button) == true,
+                    "The pointer must hit the intended prompt link.");
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
