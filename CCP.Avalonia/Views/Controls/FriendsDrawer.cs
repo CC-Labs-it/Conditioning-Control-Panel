@@ -95,23 +95,28 @@ public sealed partial class FriendsDrawer : Border
         Grid.SetRow(_addBox, 3);
         Grid.SetRow(_foot, 4);
         root.Children.AddRange(new Control[] { _head, _ask, scroll, _addBox, _foot });
-        Child = root;
+        Child = new Grid { Children = { root, _linkFx } };
+        DetachedFromVisualTree += (_, _) => AdvanceLinkFeedback(680);
         // The add box (WPF BuildAddBox): CCP- and five letters from the code alphabet.
-        (_codeBox.MaxLength, _codeBox.FontFamily, _codeBox.Tag) = (9, Mono, "friends-code-box");
+        (_codeBox.MaxLength, _codeBox.FontFamily, _codeBox.Tag) = (64, Mono, "friends-code-box");
         ToolTip.SetTip(_codeBox, Loc.Get("friends_add_hint"));
         _addGo = Pill(Loc.Get("friends_add_go"), Mint, MintInk, "friends-add-go");
         _addGo.IsEnabled = false;
         _addGo.Margin = new Thickness(6, 0, 0, 0);
         _addGo.Click += (_, _) => _ = AddByCodeAsync();
+        var prefix = Label(FriendsDrawerRules.CodePrefix, 14, Dim, Mono);
+        var boxBefore = "";
         _codeBox.TextChanged += (_, _) =>
         {
-            var n = FriendsDrawerRules.NormaliseCode(_codeBox.Text);
+            var raw = _codeBox.Text ?? "";
+            var (n, isToken) = FriendsLinkRules.BoxText(raw, raw.Length == boxBefore.Length + 1);
+            boxBefore = n;
+            prefix.IsVisible = !isToken;
             if (n != _codeBox.Text) { _codeBox.Text = n; _codeBox.CaretIndex = n.Length; }
-            _addGo.IsEnabled = n.Length == FriendsDrawerRules.CodeLength;
+            _addGo.IsEnabled = n.Length == (isToken ? FriendsLinkRules.TokenLength : FriendsDrawerRules.CodeLength);
         };
         _codeBox.KeyDown += (_, e) => { if (e.Key == Key.Enter && _addGo.IsEnabled) { _ = AddByCodeAsync(); e.Handled = true; } };
         var addRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        var prefix = Label(FriendsDrawerRules.CodePrefix, 14, Dim, Mono);
         prefix.Margin = new Thickness(0, 0, 4, 0);
         prefix.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(_codeBox, 1);
@@ -126,7 +131,7 @@ public sealed partial class FriendsDrawer : Border
         inviteLink.Click += (_, _) => InvitesRequested?.Invoke();
         _inviteLine = new WrapPanel { Margin = new Thickness(2, 6, 0, 0), Tag = "friends-invite-line",
             Children = { Label(Loc.Get("friends_invite_line") + " ", 11.5, Muted, Display), inviteLink } };
-        _addBox.Child = new StackPanel { Children = { addRow, _addResult, _inviteLine } };
+        _addBox.Child = new StackPanel { Children = { addRow, _addResult, _inviteLine, NewLinkLine() } };
         // Esc closes the add box, then the drawer (WPF OnKey). A page never claims it.
         KeyDown += (_, e) =>
         {
@@ -339,6 +344,7 @@ public sealed partial class FriendsDrawer : Border
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
         nameLine.Children.Add(Label(f.Name, 14, f.Online ? Text : Muted, Display, FontWeight.Medium));
+        AddPlatformMarks(nameLine, f);
         if (f.Squelched)
         {
             var sq = Tagged(Label(Loc.Get("friends_squelched_tag"), 9, Dim, Mono), "friends-squelched");
@@ -675,17 +681,19 @@ public sealed partial class FriendsDrawer : Border
                 copied.Text = Loc.Get("friends_copied");
                 copied.Foreground = Mint;
             };
-            var mine = new StackPanel { Orientation = Orientation.Horizontal, Children = { Tagged(Label(code, 12, Lilac, Mono, FontWeight.SemiBold), "friends-my-code"), copy } };
+            var mine = new StackPanel { Orientation = Orientation.Horizontal, Children = { Tagged(Label(code, 12, Lilac, Mono, FontWeight.SemiBold), "friends-my-code"), copy, LinkPill() } };
             mine.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(mine, 1);
             foot.Children.Add(new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(8, 0, 2, 4), Children = { copied, mine } });
         }
+        if (_linkNoteText != null) foot.Children.Add(LinkNote());
         foot.Children.Add(buttons);
         _foot.Child = foot;
     }
 
     internal async Task<AddResult> AddByCodeAsync(string? typed = null)
     {
+        if (FriendsLinkRules.ParseToken(typed ?? _codeBox.Text) is { } token) return await ClaimTypedAsync(token);
         var full = FriendsDrawerRules.FullCode(typed ?? _codeBox.Text);
         if (full == null || _svc == null) return AddResult.NotFound;
         _addGo.IsEnabled = false;
