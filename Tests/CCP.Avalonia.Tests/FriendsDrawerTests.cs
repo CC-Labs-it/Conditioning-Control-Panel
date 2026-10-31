@@ -40,6 +40,7 @@ public sealed class FriendsDrawerTests
         public readonly List<string> Ops = new();
         /// <summary>The bodies of every "send" (poke / invite / watch), in order.</summary>
         public readonly List<string> Sends = new();
+        public readonly List<string> Reports = new();
         /// <summary>When set, a "send" waits for it: the answer is still out while the test folds the drawer.</summary>
         public TaskCompletionSource? HoldSends;
         public string StateBody = State;
@@ -48,6 +49,7 @@ public sealed class FriendsDrawerTests
         {
             var op = r.RequestUri!.AbsolutePath.Split('/').Last();
             lock (Ops) Ops.Add(op);
+            if (op == "report") Reports.Add(await r.Content!.ReadAsStringAsync(ct));
             if (op == "send") { Sends.Add(await r.Content!.ReadAsStringAsync(ct)); if (HoldSends != null) await HoldSends.Task; }
             var body = op == "state" ? StateBody : op == "poll" ? """{"ok":true,"online":[],"inbox":[],"receipts":[]}"""
                 : op == "send" ? """{"ok":true,"status":"sent"}""" : ActSucceeds ? """{"ok":true}""" : """{"ok":false,"error":"try_later"}""";
@@ -670,6 +672,7 @@ public sealed class FriendsDrawerTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, _) = Service();
         var feed = new FriendsFeed(() => "u_me");
@@ -755,6 +758,7 @@ public sealed class FriendsDrawerTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, _) = Service();
         var d = new FriendsRailChip(svc).Drawer;
