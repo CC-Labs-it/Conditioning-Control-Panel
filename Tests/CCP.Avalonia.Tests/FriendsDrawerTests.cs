@@ -713,9 +713,15 @@ public sealed class FriendsDrawerTests
             Assert.Equal("d", d.FeedLineKeys[0]);
             Assert.Equal(0, feed.Unread);
             Assert.IsType<global::Avalonia.Media.TranslateTransform>(Tagged<Border>(d, "friends-feed-line:d")!.RenderTransform);
-            var glow = Assert.IsType<global::Avalonia.Media.DropShadowEffect>(Tagged<Control>(d, "friends-feed-new")!.Effect);
-            Assert.Equal(6, glow.BlurRadius);
-            Assert.Equal(0.9, glow.Opacity);
+            var dot = Assert.IsType<Border>(Tagged<Control>(d, "friends-feed-new"));
+            Assert.Null(dot.Effect); // P82: an object initializer must not sneak an Effect into a row.
+            Assert.Equal((6d, 6d, new CornerRadius(3)), (dot.Width, dot.Height, dot.CornerRadius));
+            Assert.Same(FriendsDrawer.Pink, dot.Background);
+            Assert.Equal(1, dot.BoxShadow.Count);
+            var glow = dot.BoxShadow[0];
+            Assert.Equal(6, glow.Blur);
+            Assert.Equal(global::Avalonia.Media.Color.FromArgb(0xE6, 0xFF, 0x5F, 0xB4), glow.Color);
+            Assert.Equal((0d, 0d, 0d), (glow.OffsetX, glow.OffsetY, glow.Spread));
 
             // Folded and reopened: nothing new, so FoldMin lines and "more" for the rest.
             chip.Toggle();
@@ -767,9 +773,15 @@ public sealed class FriendsDrawerTests
             Assert.Null(Tagged<Border>(d, "friends-feed-line:first")!.RenderTransform);
             Assert.True(feed.Add(Ev("second")));
             Assert.IsType<global::Avalonia.Media.TranslateTransform>(Tagged<Border>(d, "friends-feed-line:second")!.RenderTransform);
-            var glow = Assert.IsType<global::Avalonia.Media.DropShadowEffect>(Tagged<Control>(d, "friends-feed-new")!.Effect);
-            Assert.Equal(6, glow.BlurRadius);
-            Assert.Equal(0.9, glow.Opacity);
+            var dot = Assert.IsType<Border>(Tagged<Control>(d, "friends-feed-new"));
+            Assert.Null(dot.Effect); // P82: an object initializer must not sneak an Effect into a row.
+            Assert.Equal((6d, 6d, new CornerRadius(3)), (dot.Width, dot.Height, dot.CornerRadius));
+            Assert.Same(FriendsDrawer.Pink, dot.Background);
+            Assert.Equal(1, dot.BoxShadow.Count);
+            var glow = dot.BoxShadow[0];
+            Assert.Equal(6, glow.Blur);
+            Assert.Equal(global::Avalonia.Media.Color.FromArgb(0xE6, 0xFF, 0x5F, 0xB4), glow.Color);
+            Assert.Equal((0d, 0d, 0d), (glow.OffsetX, glow.OffsetY, glow.Spread));
             Assert.Equal(0, feed.Unread);
             ConditioningControlPanel.CoreSettings.Current.MotionLevel = MotionLevel.Off;
             feed.Add(Ev("still"));

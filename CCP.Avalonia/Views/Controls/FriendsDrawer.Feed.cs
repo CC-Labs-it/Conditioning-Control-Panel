@@ -177,10 +177,12 @@ public sealed partial class FriendsDrawer
             Background = Brushes.Transparent, Tag = "friends-feed-line:" + e.Key, Child = g,
         };
         if (isNew)
-            g.Children.Add(new global::Avalonia.Controls.Shapes.Ellipse
+            g.Children.Add(new Border
             {
-                Effect = new DropShadowEffect { Color = ((SolidColorBrush)Pink).Color, BlurRadius = 6, Opacity = 0.9, OffsetX = 0, OffsetY = 0 },
-                Width = 6, Height = 6, Fill = Pink, HorizontalAlignment = HorizontalAlignment.Left,
+                // WPF FriendsDrawer.Feed.cs:239 glow, using a BoxShadow to keep Effects out of rows (P82).
+                Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Pink,
+                BoxShadow = new BoxShadows(new BoxShadow { Blur = 6, Color = Color.FromArgb(0xE6, 0xFF, 0x5F, 0xB4) }),
+                HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center, Tag = "friends-feed-new",
             });
         var text = new TextBlock
