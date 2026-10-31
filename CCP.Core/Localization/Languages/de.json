@@ -7959,5 +7959,11 @@
   "online_official_plan_prime": "Prime bekommt den größten Tagesanteil. Was du schon gesehen hast, läuft gratis noch mal.",
   "online_official_nice": "Schön",
   "online_official_stamped_line": "Online-Medien kommen von Scrolller. Jedes Bild und jeder Clip trägt einen kleinen \"via Scrolller\"-Vermerk.",
-  "online_cache_day_line": "Online-Medien bleiben einen Tag in einem kleinen Cache auf diesem Computer und werden nie hochgeladen."
+  "online_cache_day_line": "Online-Medien bleiben einen Tag in einem kleinen Cache auf diesem Computer und werden nie hochgeladen.",
+  "remote_directory_private": "Remote: privat",
+  "remote_directory_private_tip": "Deine Remote-Sitzung ist privat: Du bist nicht im Verzeichnis verfügbarer Personen aufgeführt. Für Goon-Tische gibt es einen eigenen Schalter, wer den Tisch sieht.",
+  "remote_directory_listed": "Remote: gelistet",
+  "remote_directory_listed_tip": "Deine Remote-Sitzung ist im Verzeichnis verfügbarer Personen gelistet und wartet darauf, beansprucht zu werden.",
+  "remote_directory_claimed": "Remote: beansprucht",
+  "remote_directory_claimed_tip": "Eine steuernde Person hat deinen Remote-Eintrag beansprucht."
 }

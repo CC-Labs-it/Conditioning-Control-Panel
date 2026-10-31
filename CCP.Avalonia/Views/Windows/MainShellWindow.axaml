@@ -313,7 +313,7 @@
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="DirectoryStatusDot" Width="8" Height="8"
                                      Fill="#B47BFF" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TxtDirectoryStatus" Text="Remote: private"
+                            <TextBlock x:Name="TxtDirectoryStatus" Text="{loc:Str remote_directory_private}"
                                        Foreground="White" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
