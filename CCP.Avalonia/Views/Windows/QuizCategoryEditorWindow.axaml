@@ -101,7 +101,9 @@
                     <!-- Template dropdown -->
                     <TextBlock Text="{loc:Str label_start_from_template}" Foreground="#808090" FontSize="11" FontWeight="Bold"
                                Margin="0,14,0,4"/>
+                    <!-- WPF Windows/QuizCategoryEditorWindow.xaml:97 replaces implicit combo rows. -->
                     <ComboBox x:Name="CboTemplate" FontSize="13" Foreground="White"
+                              ItemContainerTheme="{StaticResource {x:Type ComboBoxItem}}"
                               Background="#20FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1"
                               Padding="8,6" SelectedIndex="0" HorizontalAlignment="Stretch">
                         <ComboBox.Styles>

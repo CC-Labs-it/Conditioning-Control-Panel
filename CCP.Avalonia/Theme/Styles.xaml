@@ -1019,4 +1019,109 @@
     <Style Selector="^:pointerover /template/ Border#bd"><Setter Property="Opacity" Value="0.85"/></Style>
   </ControlTheme>
 
+  <!-- WPF Resources/Theme/Inputs.xaml:42-208. Keyed themes retain local precedence. -->
+  <ControlTheme x:Key="InputComboBoxItemTheme" TargetType="ComboBoxItem">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Padding" Value="8,6"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="HorizontalContentAlignment" Value="{ReflectionBinding HorizontalContentAlignment, RelativeSource={RelativeSource AncestorType=ComboBox, Tree=Logical}}"/>
+    <Setter Property="VerticalContentAlignment" Value="{ReflectionBinding VerticalContentAlignment, RelativeSource={RelativeSource AncestorType=ComboBox, Tree=Logical}}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ComboBoxItem">
+        <Border x:Name="Bd" CornerRadius="6" Margin="0,1" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+          <Grid ColumnDefinitions="5,*">
+            <Ellipse x:Name="SelDot" Width="5" Height="5" Fill="{DynamicResource PinkBrush}" Opacity="0" VerticalAlignment="Center"/>
+            <ContentPresenter x:Name="PART_ContentPresenter" Grid.Column="1" Margin="7,0,0,0"
+                              Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#Bd, ^:focus /template/ Border#Bd">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:pointerover, ^:focus">
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:selected /template/ Border#Bd">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
+    </Style>
+    <Style Selector="^:selected /template/ Ellipse#SelDot">
+      <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="^:selected">
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+      <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="InputComboBoxTheme" TargetType="ComboBox">
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBgBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentHoverBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="MinHeight" Value="28"/>
+    <Setter Property="Padding" Value="10,0"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="ItemContainerTheme" Value="{StaticResource InputComboBoxItemTheme}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ComboBox">
+        <Grid ColumnDefinitions="*,22">
+          <Border x:Name="Chrome" Grid.ColumnSpan="2" CornerRadius="8"
+                  Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  fx:InputFx.GlowColor="{DynamicResource PinkColor}" fx:InputFx.GlowBlur="10"/>
+          <!-- ComboBox handles pointer and keyboard opening; no second toggle/focus owner. -->
+          <fx:IconGlyph x:Name="Arrow" Grid.Column="1" Kind="ChevronDown" Size="12"
+                        Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Left" VerticalAlignment="Center"
+                        IsHitTestVisible="False"/>
+          <ContentPresenter x:Name="ContentSite" Margin="{TemplateBinding Padding}" IsHitTestVisible="False"
+                            Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          <Popup x:Name="PART_Popup" Grid.ColumnSpan="2" IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                 Placement="Bottom" IsLightDismissEnabled="True" fx:InputPopupFx.Slide="True">
+            <Border x:Name="DropDownBorder" Margin="0,4,0,0" CornerRadius="10" Padding="4"
+                    MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                    Background="{DynamicResource ElevatedSurfaceBrush}" BorderBrush="{DynamicResource TransparentPink20Brush}" BorderThickness="1">
+              <ScrollViewer MaxHeight="{TemplateBinding MaxDropDownHeight}" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <ItemsPresenter x:Name="PART_ItemsPresenter"/>
+              </ScrollViewer>
+            </Border>
+          </Popup>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#Chrome">
+      <Setter Property="BorderBrush" Value="{DynamicResource InputHoverBorderBrush}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ fx|IconGlyph#Arrow">
+      <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
+    </Style>
+    <Style Selector="^:dropdownopen /template/ Border#Chrome">
+      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+      <Setter Property="fx:InputFx.GlowOpacity" Value="0.35"/>
+    </Style>
+    <Style Selector="^:dropdownopen /template/ fx|IconGlyph#Arrow">
+      <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
+    </Style>
+    <Style Selector="^:empty /template/ Border#DropDownBorder">
+      <Setter Property="MinHeight" Value="28"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+      <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
+  </ControlTheme>
+
 </ResourceDictionary>

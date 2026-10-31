@@ -102,6 +102,8 @@
              moment Loopback mode enables the box. Not worth chasing a template part name for a
              dev-only cockpit. -->
         <Style Selector="ComboBox">
+            <!-- WPF GoonTestWindow.xaml:86 replaces the global implicit combo style. -->
+            <Setter Property="Theme" Value="{StaticResource {x:Type ComboBox}}"/>
             <Setter Property="Foreground" Value="#FF101024" />
             <Setter Property="Background" Value="#FFD8D8EC" />
             <Setter Property="Margin" Value="2" />
