@@ -20,8 +20,7 @@ public sealed class OnlineMeterRing : Control
     internal static Color ColorFor(OnlineMeterTone tone) => tone == OnlineMeterTone.Amber ? Amber : tone == OnlineMeterTone.Spent ? Grey : Pink;
     public override void Render(DrawingContext dc)
     {
-        var w = Bounds.Width;
-        var h = Bounds.Height;
+        var (w, h) = (Bounds.Width, Bounds.Height);
         var size = Math.Min(w, h);
         if (size <= 0) return;
         var thick = Math.Max(2, size * 5 / 36);   // the mockup's 5 of 36

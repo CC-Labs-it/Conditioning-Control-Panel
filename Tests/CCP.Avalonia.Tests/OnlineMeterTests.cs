@@ -203,17 +203,21 @@ public sealed class OnlineMeterTests
         var replacement = host.Children.Last();
         Assert.NotSame(original, replacement);
         Assert.True(shell.OnlineSpentPolling);
+        ((SteppedTime)global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time).Advance(TimeSpan.FromSeconds(20));
         shell.WindowState = WindowState.Normal;
         Assert.Contains(beats, b => ReferenceEquals(b.Owner, replacement) && b.IsTicking);
-    });
+        global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+        Assert.Contains(replacement, host.Children.Where(c => c.IsHitTestVisible));
+    }, stepBeatTime: true);
     private static void Platform()
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
-    private static void Run(Action<MainShellWindow, AppSettings> body) => AvaloniaTestDispatcher.Run(() =>
+    private static void Run(Action<MainShellWindow, AppSettings> body, bool stepBeatTime = false) => AvaloniaTestDispatcher.Run(() =>
     {
+        if (stepBeatTime) global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = new SteppedTime();
         Platform();
         LocalizationManager.Instance.SetLanguage("en");
         var oldSettings = ConditioningControlPanel.CoreSettings.ServiceProvider;

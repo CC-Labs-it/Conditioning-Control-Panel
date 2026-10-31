@@ -179,8 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     Content = new TextBlock { Text = Loc.Get("online_see_plans") },
                     HorizontalAlignment = HorizontalAlignment.Left,
-                    Padding = new Thickness(12, 5, 12, 5),
-                    FontSize = 12,
+                    Padding = new Thickness(12, 5, 12, 5), FontSize = 12,
                     Margin = new Thickness(0, 10, 0, 0),
                 };
                 if (this.TryFindResource("SmallPinkButton", out var theme) && theme is global::Avalonia.Styling.ControlTheme ct) btn.Theme = ct;
@@ -192,8 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Background = new SolidColorBrush(Color.FromRgb(0x18, 0x18, 0x30)),
                 BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x5C)),
                 BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(16, 14, 16, 14),
-                Child = body,
+                Padding = new Thickness(16, 14, 16, 14), Child = body,
             };
         }
         internal void OpenOnlinePlans(int tier)

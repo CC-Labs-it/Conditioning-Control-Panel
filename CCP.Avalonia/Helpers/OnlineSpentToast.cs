@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using Avalonia.Controls;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Fyp.Online;
@@ -8,7 +7,7 @@ internal sealed class OnlineSpentToast : IDisposable
 {
     private readonly FriendNoticeStack _stack = new();
     private readonly BeatLoop _beat;
-    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private long _last = BeatLoop.Time.GetTimestamp();
     private readonly NotificationService _service;
     private readonly Func<bool> _holding;
     private readonly Action _fold;
@@ -21,9 +20,9 @@ internal sealed class OnlineSpentToast : IDisposable
         host.Children.Add(Border);
         Border.Opacity = 1;
         _stack.Add(new FriendNotice(NoticeKind.Watch, "ccp:online-media", "", DateTimeOffset.UtcNow, OnlineMeterRules.NoticeLifetimeMs));
-        Border.PointerEntered += (_, _) => { _stack.Paused = true; _clock.Restart(); };
-        Border.PointerExited += (_, _) => { _stack.Paused = false; _clock.Restart(); };
-        _beat = new BeatLoop(Border, t => { if (t == 0) return; var elapsed = _clock.Elapsed.TotalMilliseconds; _clock.Restart(); Tick(elapsed); });
+        Border.PointerEntered += (_, _) => { _stack.Paused = true; _last = BeatLoop.Time.GetTimestamp(); };
+        Border.PointerExited += (_, _) => { _stack.Paused = false; _last = BeatLoop.Time.GetTimestamp(); };
+        _beat = new BeatLoop(Border, t => { if (t == 0) return; var elapsed = Math.Min(BeatLoop.Time.GetElapsedTime(_last).TotalMilliseconds, 250); _last = BeatLoop.Time.GetTimestamp(); Tick(elapsed); });
         Border.DetachedFromVisualTree += (_, _) => _beat.Stop();
         _beat.Start();
     }
