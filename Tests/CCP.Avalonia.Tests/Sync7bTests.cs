@@ -18,7 +18,7 @@ using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
-using AvApp = ConditioningControlPanel.Avalonia.App;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 public class Sync7bTests
@@ -27,7 +27,7 @@ public class Sync7bTests
     {
         var settings = new ConditioningControlPanel.Services.SettingsService();
         CoreSettings.ServiceProvider = () => settings;
-        if (Application.Current is null) AppBuilder.Configure<AvApp>().UseSkia()
+        if (Application.Current is null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
     [Fact]
@@ -39,8 +39,10 @@ public class Sync7bTests
         Assert.True(drawer.IsVisible);
         drawer.Handle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.True(drawer.IsOpen); Assert.Equal(92, drawer.Body.Width);
+        Assert.Equal(IconKind.ChevronRight, drawer.Chevron.Kind);
         drawer.OnNavigated(ConditioningControlPanel.Services.UI.NavSections.Studio);
         Assert.False(drawer.IsOpen); Assert.Equal(0, drawer.Body.Width);
+        Assert.Equal(IconKind.ChevronLeft, drawer.Chevron.Kind);
         drawer.OnNavigated(ConditioningControlPanel.Services.UI.NavSections.Home);
         Assert.False(drawer.IsVisible);
         return Task.CompletedTask;
@@ -60,12 +62,11 @@ public class Sync7bTests
         {
             host.Show(); drawer.Measure(new Size(22,400)); drawer.Arrange(new Rect(0,0,22,400));
             Assert.Equal(new Size(18,390), drawer.Handle.Bounds.Size);
+            Assert.Contains(drawer.GetLogicalDescendants().OfType<IconGlyph>(), g => g.Kind == IconKind.Star);
             var presenter = Assert.IsType<global::Avalonia.Controls.Presenters.ContentPresenter>(Assert.Single(drawer.Handle.GetVisualChildren()));
-            void AssertNoChrome()
-            {
-                Assert.True(presenter.Background is null || presenter.Background is ISolidColorBrush { Color.A: 0 });
-                Assert.Equal(Matrix.Identity, drawer.Handle.RenderTransform?.Value ?? Matrix.Identity);
-            }
+            void AssertNoChrome() => Assert.Multiple(
+                () => Assert.True(presenter.Background is null || presenter.Background is ISolidColorBrush { Color.A: 0 }),
+                () => Assert.Equal(Matrix.Identity, drawer.Handle.RenderTransform?.Value ?? Matrix.Identity));
             AssertNoChrome();
             Assert.Equal(drawer.Handle.Bounds.Size, Assert.IsType<Border>(presenter.Content).Bounds.Size);
             Assert.Equal(8, drawer.FavoritesEmpty.FontSize); Assert.Equal(0.85, drawer.FavoritesEmpty.Opacity); Assert.Same(Brushes.Blue, drawer.FavoritesEmpty.Foreground);

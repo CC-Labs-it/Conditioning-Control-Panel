@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Controls;
 public sealed class PageFavoritesDrawer : Grid
 {
     internal readonly Button Handle;
-    internal readonly TextBlock Chevron = new() { Text = "‹", FontSize = 16, FontWeight = FontWeight.Bold, Margin = new Thickness(0,0,0,7), HorizontalAlignment = HorizontalAlignment.Center };
+    internal readonly IconGlyph Chevron = new() { Kind = IconKind.ChevronLeft, Size = 16, Margin = new Thickness(0,0,0,7), HorizontalAlignment = HorizontalAlignment.Center };
     internal readonly Grid Body = new() { Width = 0, ClipToBounds = true };
     internal readonly StackPanel FavoritesList = new(), RecentList = new();
     internal readonly TextBlock FavoritesEmpty = Caption("rail_favorites_empty"), RecentEmpty = Caption("rail_recent_empty");
@@ -33,7 +33,7 @@ public sealed class PageFavoritesDrawer : Grid
         word.Bind(TextBlock.TextProperty, Text("rail_favorites_drawer"));
         var rotated = new LayoutTransformControl { LayoutTransform = new RotateTransform(-90), Child = word };
         var face = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
-        face.Children.Add(new TextBlock { Text = "★", FontSize = 13, Margin = new Thickness(0,7,0,0), HorizontalAlignment = HorizontalAlignment.Center });
+        face.Children.Add(new IconGlyph { Kind = IconKind.Star, Variant = IconVariant.Filled, Size = 13, Margin = new Thickness(0,7,0,0), HorizontalAlignment = HorizontalAlignment.Center });
         SetRow(rotated, 1); face.Children.Add(rotated);
         SetRow(Chevron, 2); face.Children.Add(Chevron);
         _face = new Border { CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1.5), Child = face };
@@ -81,12 +81,12 @@ public sealed class PageFavoritesDrawer : Grid
         _face.BorderBrush = new SolidColorBrush(Color.FromArgb(lit ? (byte)0xFF : (byte)0x80, hue.R, hue.G, hue.B));
         var ink = new SolidColorBrush(Views.Tabs.SettingsTabView.Lighten(hue, lit ? 0.55 : 0.18));
         foreach (var child in ((Grid)_face.Child!).Children)
-            if (child is TextBlock t) t.Foreground = ink;
+            if (child is IconGlyph icon) icon.Foreground = ink;
             else if (child is LayoutTransformControl rotated && rotated.Child is TextBlock word) word.Foreground = ink;
     }
     internal void SetOpen(bool open, bool animate)
     {
-        IsOpen = open; Chevron.Text = open ? "›" : "‹";
+        IsOpen = open; Chevron.Kind = open ? IconKind.ChevronRight : IconKind.ChevronLeft;
         Body.Transitions = animate && AmbientFxCanvas.Env.AllowTransitions
             ? new Transitions { new DoubleTransition { Property = WidthProperty, Duration = TimeSpan.FromMilliseconds(200), Easing = new CubicEaseOut() } } : null;
         Body.Width = open ? 92 : 0;

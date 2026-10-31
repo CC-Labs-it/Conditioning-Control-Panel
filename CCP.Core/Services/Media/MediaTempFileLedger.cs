@@ -4,8 +4,6 @@ using System.IO;
 
 namespace ConditioningControlPanel.Services.MediaFiles;
 
-/// <summary>Tracks capped temp files, retaining refused deletes until players release handles.
-/// Retries visit tracked paths, without directory scans.</summary>
 public sealed class MediaTempFileLedger
 {
     private readonly object _gate = new();
@@ -13,15 +11,11 @@ public sealed class MediaTempFileLedger
     private readonly List<string> _held = new();
     private readonly int _cap;
     private readonly Func<string, bool> _delete;
-
-    /// <param name="cap">Tracked files above which the oldest are deleted.</param>
-    /// <param name="delete">Returns true when the file is gone. Defaults to <see cref="TryDeleteFile"/>.</param>
     public MediaTempFileLedger(int cap, Func<string, bool>? delete = null)
     {
         _cap = Math.Max(0, cap);
         _delete = delete ?? TryDeleteFile;
     }
-
     public int HeldCount { get { lock (_gate) return _held.Count; } }
     public int LiveCount { get { lock (_gate) return _live.Count; } }
 

@@ -37,7 +37,7 @@ public sealed class MantraWindowSessionTests
     public Task TypedMantraCompletesTheSessionWithTonesDroneAndMemorySignal() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -51,8 +51,10 @@ public sealed class MantraWindowSessionTests
         MantraWindow.DroneOpener = p => { Assert.True(File.Exists(p)); return drone; };
         CoreProgression.AddXPProvider = (a, _) => xp.Add(a);
         MantraWindow? win = null;
+        var settings = CoreSettings.Current; var master = settings.MasterVolume;
         try
         {
+            settings.MasterVolume = 100; // This scenario asserts full-scale drone and tone gains.
             AvApp.SeedMemorySignals();
             using var store = new MemoryStore(Path.Combine(dir, "memory.json"));
             using var writer = MemoryStore.SignalMirrorFactory!(store)!;
@@ -94,6 +96,7 @@ public sealed class MantraWindowSessionTests
         finally
         {
             win?.Close();
+            settings.MasterVolume = master;
             (CoreAudio.PlayOneShotProvider, MantraWindow.DroneOpener, CoreProgression.AddXPProvider) = (play, opener, xp0);
             (MemoryStore.SignalMirrorFactory, MemorySignalWriter.SourcesHook, CompanionBrain.UserMessageSent) = (factory, sources, sent);
             AvApp.StopMantra(Array.Empty<Window>());   // deletes ToneWav's temp folder
