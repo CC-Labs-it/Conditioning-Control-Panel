@@ -7,6 +7,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
+using ConditioningControlPanel.Localization;
 
 namespace CCP.Avalonia.Tests;
 
@@ -70,7 +71,8 @@ public sealed class ChaosEffectBannerOverlayTests
                 });
                 var banner = Assert.Single(ChaosEffectBannerOverlay.Active!.Strip.Row);
                 Assert.Equal("dvd", banner.Id);
-                Assert.Equal("Porn DVD", banner.Text);
+                Assert.Equal(Loc.Get("chaos_dvd_banner"), banner.Text);
+                Assert.Equal(Loc.Get("chaos_dvd_loading"), state.RecentEvents[0]);
                 Assert.Equal("dvd", banner.ArtKey);
                 Assert.True(banner.IsLive);
                 ChaosRunHost.UseToyById(toy.Id); // cooldown cannot stack logos or labels

@@ -8,6 +8,7 @@ using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
@@ -672,9 +673,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosDvdOverlay.Launch(_overlay, Math.Max(5, power), speed, scale,
                 count: _state.MaxedBoons.Contains(toy.Id) ? 2 : 1, splitBounces: _state.DvdSplitBounces);
             ChaosOverlayWindow.ChaosSfx.Play("dvd_launch", 0.55f);
-            ChaosEffectBannerOverlay.Show("dvd", "Porn DVD", Color.FromRgb(0xFF, 0x69, 0xB4));
+            ChaosEffectBannerOverlay.Show("dvd", Loc.Get("chaos_dvd_banner"), Color.FromRgb(0xFF, 0x69, 0xB4));
             _dvdBannerOn = true;
-            _state.PushEvent("📀 now loading");
+            _state.PushEvent(Loc.Get("chaos_dvd_loading"));
         }
 
         private static void RunAgain()
