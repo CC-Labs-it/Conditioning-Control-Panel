@@ -92,11 +92,11 @@ namespace ConditioningControlPanel
                 LockCardScheduler.Instance.Stop();
                 PopQuiz?.Stop();   // closes an open quiz (WPF StartStop.cs:492)
                 CoreMindWipe.Stop();   // WPF StartStop.cs:489, also ends the loop
-                CoreIntensityRamp.Stop(); // WPF StartStop.cs:578
                 _running = false;
                 StartedUtc = null;
                 try { StoppedHook?.Invoke(); }
                 catch (Exception ex) { Log.Warning(ex, "Engine stop hook failed"); }
+                CoreIntensityRamp.Stop(); // WPF StartStop.cs:526 cancels pulses before :578 restores ramp
                 Log.Information("Engine stopped");
             }
             finally { _stopInProgress = false; }
