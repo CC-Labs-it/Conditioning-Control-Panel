@@ -17,9 +17,11 @@
     <IsPublishable>false</IsPublishable>
     <AssemblyName>CCP.Core.Tests</AssemblyName>
     <RootNamespace>CCP.Core.Tests</RootNamespace>
+    <DefineConstants>$(DefineConstants);CCP_PRIZE_FEED_CORE_TESTS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\ConditioningControlPanel.Tests\ProfileSyncPrizesFeedTests.cs" Link="PrizesFeedTests.cs" />
     <!-- The ledger is now shared Core logic: run its existing WPF-source boundary tests on Linux too. -->
     <Compile Include="..\ConditioningControlPanel.Tests\AwarenessLedgerTests.cs" Link="AwarenessLedgerTests.cs" />
   </ItemGroup>

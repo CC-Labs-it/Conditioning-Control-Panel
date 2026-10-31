@@ -68,7 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF _statusTimer: the status line and the stats, every second while shown.</summary>
         private readonly DispatcherTimer _statusTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
-        /// <summary>Each tile's reveal as drawn (WPF _revealedAtBuild); every card here is revealed.</summary>
+        /// <summary>Each available tile's reveal state at build (WPF LauncherWindow.xaml.cs:524).</summary>
         private readonly Dictionary<string, bool> _revealedAtBuild = new(StringComparer.OrdinalIgnoreCase);
 
         public LauncherWindow()

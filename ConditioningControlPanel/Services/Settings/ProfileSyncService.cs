@@ -571,7 +571,7 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>The one prize feed for this process, bound to <c>App.Ownership</c>.</summary>
-        private static readonly PrizesFeed PrizeFeed = new(() => App.Ownership, () => App.UnifiedUserId, PostPrizeWork);
+        private static readonly ConditioningControlPanel.Services.Prizes.PrizesFeed PrizeFeed = new(() => App.Ownership, () => App.UnifiedUserId, PostPrizeWork);
 
         /// <summary>
         /// Apply the <c>prizes</c> block of a provider validate response (Patreon, Discord,
@@ -607,95 +607,6 @@ namespace ConditioningControlPanel.Services
             {
                 App.Logger?.Debug("[Prizes] could not queue an ownership update: {Error}", ex.Message);
             }
-        }
-
-        /// <summary>
-        /// Back Room prize ownership feed 1 (backroom CONTRACT 10.17.E): hands the server's
-        /// <c>prizes</c> block to <see cref="OwnershipService"/> for the account the request
-        /// was made for, and clears it on logout or when the account in play changes. Grants are
-        /// never persisted and never uploaded; the service itself drops stale revisions and any
-        /// snapshot for an account other than the one signed in. Every change goes through one
-        /// ordered queue, and a late call for an account that is no longer signed in is dropped
-        /// there, so it can neither apply nor clear the current account's grants.
-        /// </summary>
-        internal sealed class PrizesFeed
-        {
-            private readonly Func<OwnershipService?> _ownership;
-            private readonly Func<string?> _currentAccount;
-            private readonly Action<Action> _post;
-            private readonly object _gate = new();
-            private string? _accountId;
-
-            internal PrizesFeed(Func<OwnershipService?> ownership, Func<string?> currentAccount, Action<Action> post)
-            {
-                _ownership = ownership ?? throw new ArgumentNullException(nameof(ownership));
-                _currentAccount = currentAccount ?? throw new ArgumentNullException(nameof(currentAccount));
-                _post = post ?? throw new ArgumentNullException(nameof(post));
-            }
-
-            /// <summary>Record the account a request is about to be made for; a different account than last time clears what is held.</summary>
-            internal void NoteAccount(string? accountId)
-            {
-                if (string.IsNullOrEmpty(accountId)) return;
-                _post(() => NoteAccountNow(accountId));
-            }
-
-            // Runs from the queue. False when accountId is no longer the signed-in account.
-            private bool NoteAccountNow(string accountId)
-            {
-                if (!string.Equals(_currentAccount(), accountId, StringComparison.Ordinal))
-                {
-                    App.Logger?.Debug("[Prizes] late call for an account no longer signed in, ignored");
-                    return false;
-                }
-                bool switched;
-                lock (_gate)
-                {
-                    switched = _accountId != null && !string.Equals(_accountId, accountId, StringComparison.Ordinal);
-                    _accountId = accountId;
-                }
-                if (switched)
-                {
-                    App.Logger?.Information("[Prizes] account changed, clearing held ownership");
-                    _ownership()?.Clear();
-                }
-                return true;
-            }
-
-            /// <summary>
-            /// Apply one response's block. Returns true when a snapshot was queued for the account.
-            /// A missing block leaves the held state alone; a block answered for another record is
-            /// ignored.
-            /// </summary>
-            internal bool Apply(string? requestedFor, string? answeredFor, PrizesBlock? prizes, string source)
-            {
-                if (string.IsNullOrEmpty(requestedFor)) return false;
-                string[]? grants = null;
-                if (prizes?.Grants != null)
-                {
-                    if (string.Equals(requestedFor, answeredFor, StringComparison.Ordinal))
-                        grants = prizes.Grants.ToArray();
-                    else
-                        App.Logger?.Debug("[Prizes] {Source} answered for another account, block ignored", source);
-                }
-                var revision = prizes?.Revision ?? 0;
-                _post(() =>
-                {
-                    if (!NoteAccountNow(requestedFor) || grants == null) return;
-                    var ownership = _ownership();
-                    if (ownership == null) return;
-                    ownership.ApplySnapshot(requestedFor, revision, grants);
-                    App.Logger?.Debug("[Prizes] {Source} snapshot rev {Revision}, {Count} grants", source, revision, grants.Length);
-                });
-                return grants != null;
-            }
-
-            /// <summary>Logout: forget the account and drop every held grant.</summary>
-            internal void Clear() => _post(() =>
-            {
-                lock (_gate) _accountId = null;
-                _ownership()?.Clear();
-            });
         }
 
         /// <summary>
