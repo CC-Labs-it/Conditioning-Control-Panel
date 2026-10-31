@@ -84,12 +84,15 @@ internal static class BarkHead
         CoreSettingsHooks.SettingChangedSink = name => OnSettingChanged(e, name);
     }
 
+    // Desktop-lifetime seam: headless tests provide their tube without a real desktop lifetime.
+    internal static Func<Views.AvatarTube.AvatarTubeWindow?> FindTube = () => Views.AvatarTube.AvatarTubeWindow.Live;
+
     /// <summary>WPF Speak (:1985): preempting barks through GigglePriority, the clip as her voice.
     /// ponytail: an ordinary VOICED bark goes the same way (this tube's Giggle takes no clip); the gate has
     /// already dropped it if she was speaking, so it never cuts a line off.</summary>
     internal static void Speak(BarkSpeech s)
     {
-        var tube = Views.AvatarTube.AvatarTubeWindow.Live;
+        var tube = FindTube();
         if (tube == null) return;
         if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
