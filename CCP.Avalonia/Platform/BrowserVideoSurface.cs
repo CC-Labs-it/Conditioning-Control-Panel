@@ -12,8 +12,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     internal static bool StoodDown;
     internal static bool SessionActive => _owner != null;
     internal static Func<BrowserVideoSurface?> Create = () => {
-        try
-        {
+        try {
             var surface = new BrowserVideoSurface();
             if (surface.View.HasEngine) return surface;
             surface.Dispose();
@@ -24,8 +23,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     internal static void Seed() => BrowserVideoGate.EngineAccepts = (path, key) =>
         !StoodDown && WebHost.IsAvailable && !BrowserUnsafeVideoCache.Contains(path, key) && Map(path) != null;
     internal static string? Map(string path) {
-        try
-        {
+        try {
             var server = WebAssetServer.Shared;
             var root = server.AssetsRoot?.Invoke();
             if (string.IsNullOrEmpty(root)) return null;
@@ -53,15 +51,13 @@ internal sealed class BrowserVideoSurface : IDisposable
     private DispatcherTimer? _startup;
     private bool _closed, _loaded;
     private string _url = "";
-    internal BrowserVideoSurface(Func<string, Task<string?>>? execute = null)
-    {
+    internal BrowserVideoSurface(Func<string, Task<string?>>? execute = null) {
         _execute = execute ?? View.InvokeScriptAsync;
         View.AllowNavigation = uri => uri.ToString() == "about:blank";
         View.NavigationCompleted += Navigated;
         View.WebMessage += Receive;
     }
-    internal void Start(string url, bool primary, int masterVolume)
-    {
+    internal void Start(string url, bool primary, int masterVolume) {
         _url = url;
         Volume = primary ? Math.Clamp(masterVolume / 100.0, 0, 1) : 0;
         _startup = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
@@ -73,8 +69,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     {
         if (_closed || _loaded || uri.ToString() != "about:blank") return;
         _loaded = true;
-        try
-        {
+        try {
             var result = await _execute(BuildScript(_url, Volume, _id));
             if (_closed) return;
             if (result != "true") { Fail(); return; }
@@ -84,8 +79,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     internal void Receive(string body)
     {
         if (_closed || !_loaded) return;
-        try
-        {
+        try {
             using var json = JsonDocument.Parse(body);
             var message = json.RootElement;
             if (message.GetProperty("session").GetString() != _id) return;

@@ -13,8 +13,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using Xunit;
 namespace CCP.Avalonia.Tests;
-public sealed class BubbleCountBrowserTests
-{
+public sealed class BubbleCountBrowserTests {
     [Fact]
     public Task Browser_gate_rejects_competing_owner_unmapped_file_and_missing_provider() => AvaloniaTestDispatcher.RunAsync(() => {
         EnsureApp();
@@ -157,8 +156,7 @@ public sealed class BubbleCountBrowserTests
         var shared = typeof(LibVlcAudio).GetProperty("Shared", BindingFlags.Static | BindingFlags.NonPublic)!;
         var (previous, scheduler) = (shared.GetValue(null), new BubbleCountScheduler(host, library: () => new[] { game.Clip }));
         shared.SetValue(null, null);
-        try
-        {
+        try {
             (game.Settings.Current.BubbleCountStrictLock, game.Settings.Current.MercySystemEnabled) = (true, false);
             BrowserVideoSurface.Create = () => null;
             Assert.True(host.CanPlayPath(game.Clip));
@@ -183,8 +181,7 @@ public sealed class BubbleCountBrowserTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
-    private sealed class BrowserGame : IDisposable
-    {
+    private sealed class BrowserGame : IDisposable {
         private readonly Func<string>? _assets = CorePaths.EffectiveAssetsProvider;
         private readonly Func<SettingsService?>? _settings = CoreSettings.ServiceProvider;
         private readonly Func<string, string?, bool>? _gate = BrowserVideoGate.EngineAccepts;
