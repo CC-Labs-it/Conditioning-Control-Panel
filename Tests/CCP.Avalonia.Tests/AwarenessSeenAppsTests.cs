@@ -4,6 +4,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -60,16 +62,16 @@ public sealed class AwarenessSeenAppsTests
     }
 
     [Theory]
-    [InlineData("en", "Add 'discord' to the list")]
-    [InlineData("de", "'discord' zur Liste hinzufügen")]
-    [InlineData("es", "Añadir 'discord' a la lista")]
-    [InlineData("fr", "Ajouter 'discord' à la liste")]
-    [InlineData("it", "Aggiungi 'discord' all'elenco")]
-    [InlineData("pt-BR", "Adicionar 'discord' à lista")]
-    [InlineData("ru", "Добавить 'discord' в список")]
-    [InlineData("ja", "'discord' をリストに追加")]
-    [InlineData("ko", "'discord'을 목록에 추가")]
-    [InlineData("zh-CN", "将“discord”添加到列表")]
+    [InlineData("en", "Add 'bg3_dx11' to the list")]
+    [InlineData("de", "'bg3_dx11' zur Liste hinzufügen")]
+    [InlineData("es", "Añadir 'bg3_dx11' a la lista")]
+    [InlineData("fr", "Ajouter 'bg3_dx11' à la liste")]
+    [InlineData("it", "Aggiungi 'bg3_dx11' all'elenco")]
+    [InlineData("pt-BR", "Adicionar 'bg3_dx11' à lista")]
+    [InlineData("ru", "Добавить 'bg3_dx11' в список")]
+    [InlineData("ja", "'bg3_dx11' をリストに追加")]
+    [InlineData("ko", "'bg3_dx11'을 목록에 추가")]
+    [InlineData("zh-CN", "将“bg3_dx11”添加到列表")]
     public void ChipAddsAndSavesWithoutRearmingKeyboardAndUsesLocalizedTooltip(string language, string tooltip) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
@@ -88,10 +90,11 @@ public sealed class AwarenessSeenAppsTests
         var before = ring.ToArray();
         ring.Clear();
         engine.Start();
+        Window? chipHost = null;
         try
         {
             engine.Key(KeywordInputKey.None, "chrome");
-            engine.Key(KeywordInputKey.None, "discord");
+            engine.Key(KeywordInputKey.None, "bg3_dx11");
             LocalizationManager.Instance.SetLanguage(language);
             var view = new AwarenessTabView();
             var master = view.FindControl<CheckBox>("ChkAwarenessMaster")!;
@@ -104,7 +107,16 @@ public sealed class AwarenessSeenAppsTests
             var label = view.FindControl<TextBlock>("TxtAwarenessSeenAppsLabel")!;
             Assert.True(label.IsVisible);
             var chip = Assert.Single(chips.Children.OfType<Button>());
-            Assert.Equal("+ discord", chip.Content);
+            // Mount under Fluent and render the chip, where string content would parse '_' as a mnemonic.
+            chips.Children.Remove(chip);
+            chipHost = new Window { Content = chip, Width = 240, Height = 48 };
+            chipHost.Show();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            using (var rendered = new RenderTargetBitmap(new PixelSize(240, 48))) rendered.Render(chip);
+            Assert.Equal("+ bg3_dx11", Assert.IsType<TextBlock>(chip.Content).Text);
+            Assert.DoesNotContain(chip.GetVisualDescendants(), c => c is global::Avalonia.Controls.Primitives.AccessText);
+            chipHost.Content = null;
+            chips.Children.Add(chip);
             Assert.Equal(tooltip, ToolTip.GetTip(chip));
             service.SaveImmediate();
             Assert.False(service.HasPendingSave);
@@ -112,20 +124,21 @@ public sealed class AwarenessSeenAppsTests
             Assert.False(keyboard.IsChecked);
             Assert.True(master.IsChecked);
             Assert.True(service.Current.KeywordTriggersEnabled);
-            Assert.Equal(new[] { "CHROME.exe", "discord" }, service.Current.KeywordTriggerApps);
+            Assert.Equal(new[] { "CHROME.exe", "bg3_dx11" }, service.Current.KeywordTriggerApps);
             Assert.True(service.HasPendingSave);
             service.SaveImmediate();
             Assert.Equal(service.Current.KeywordTriggerApps, new SettingsService().Current.KeywordTriggerApps);
             Assert.Empty(chips.Children);
             Assert.False(label.IsVisible);
             var box = view.FindControl<TextBox>("TxtAwarenessAppList")!;
-            Assert.Equal("CHROME.exe, discord", box.Text);
+            Assert.Equal("CHROME.exe, bg3_dx11", box.Text);
             box.Text = "chrome";
             box.RaiseEvent(new RoutedEventArgs(global::Avalonia.Input.InputElement.LostFocusEvent));
-            Assert.Equal("+ discord", Assert.Single(chips.Children.OfType<Button>()).Content);
+            Assert.Equal("+ bg3_dx11", Assert.IsType<TextBlock>(Assert.Single(chips.Children.OfType<Button>()).Content).Text);
         }
         finally
         {
+            chipHost?.Close();
             engine.Stop(); ring.Clear(); foreach (var app in before) ring.AddLast(app);
             LocalizationManager.Instance.SetLanguage(previousLanguage);
         }

@@ -342,7 +342,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 var chip = new Button
                 {
-                    Content = "+ " + app, Tag = app, FontSize = 10,
+                    Content = new TextBlock { Text = "+ " + app }, Tag = app, FontSize = 10,
                     Padding = new Thickness(7, 3), Margin = new Thickness(0, 0, 5, 5),
                     Cursor = new Cursor(StandardCursorType.Hand), Foreground = Brushes.White,
                     Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x44)),
