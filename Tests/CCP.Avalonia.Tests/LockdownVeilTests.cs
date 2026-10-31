@@ -491,6 +491,10 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        // Dispatcher/render work can exceed 600 ms on a loaded CI worker. Keep the real
+        // timer attached, but step its elapsed time rather than racing the wall clock.
+        var clock = new FlashClock();
+        shell.LockdownFlashClock = clock;
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -510,12 +514,19 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        Assert.Equal(1, flash.Opacity);
+        clock.Advance(300);
+        shell.TickLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Advance(299);
+        shell.TickLockdownFlash();
+        Assert.Same(flash, shell.LockdownFlash);
+        Assert.True(flash.Opacity > 0);
+        clock.Advance(1);
+        shell.TickLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 
@@ -589,4 +600,13 @@ public sealed class LockdownVeilTests
         }
         finally { s.BubbleCountStrictLock = false; }
     });
+
+    private sealed class FlashClock : TimeProvider
+    {
+        private long _now = TimeSpan.FromHours(1).Ticks;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _now;
+        public void Advance(int milliseconds) => _now += TimeSpan.FromMilliseconds(milliseconds).Ticks;
+    }
+
 }
