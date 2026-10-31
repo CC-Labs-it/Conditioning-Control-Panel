@@ -72,6 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public void OnTabShown()
         {
             Refresh();
+            TrailerWeb.Start(); // WPF ChasterTabView.xaml.cs:126, prewarm before a hover.
             LadderOnShown();
             RefreshHeroSheen();
             // WPF FxOnShown (Fx.cs:159-160): the word lands, then idles.

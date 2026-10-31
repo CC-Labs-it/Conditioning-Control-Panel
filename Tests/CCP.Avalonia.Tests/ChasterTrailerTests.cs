@@ -38,7 +38,7 @@ public sealed class ChasterTrailerTests {
                 Content = new StringContent(r.RequestUri!.AbsolutePath switch { "/auth/profile" => "{\"username\":\"kitten\"}", "/locks" => Locks, _ => "{}" }),
             });
     }
-    private static async Task WithTab(Func<ChasterTabView, Window, Task> body) {
+    private static async Task WithTab(Func<ChasterTabView, Window, Task> body, Action<ChasterTabView>? beforeShow = null) {
         App();
         var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
@@ -59,7 +59,12 @@ public sealed class ChasterTrailerTests {
         var w = new Window { Width = 1200, Height = 3000, Content = tab };
         try {
             w.Show(); await chaster.RefreshLockAsync();
-            tab.OnTabShown(); Dispatcher.UIThread.RunJobs();
+            // WPF BrowserEnabled seam: existing card tests opt out of eager native startup.
+            beforeShow?.Invoke(tab);
+            var enabled = ChasterTrailerView.BrowserEnabled;
+            try { ChasterTrailerView.BrowserEnabled = beforeShow != null; tab.OnTabShown(); }
+            finally { ChasterTrailerView.BrowserEnabled = enabled; }
+            Dispatcher.UIThread.RunJobs();
             await body(tab, w);
         }
         finally {
@@ -71,6 +76,28 @@ public sealed class ChasterTrailerTests {
             service.SaveImmediate(); CoreSettings.ServiceProvider = null;
         }
     }
+    // WPF ChasterTabView.xaml.cs:126,1420-1423; xaml:1073-1075.
+    [Fact]
+    public Task TabVisitPrewarmsOneHiddenPlayerAndFirstHoverMovesIt() => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) => {
+        var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!;
+        var host = view.Browser;
+        var warm = tab.FindControl<Grid>("TrailerWarmHost")!;
+        Assert.Same(warm, view.Parent);
+        Assert.False(warm.IsVisible); Assert.False(warm.IsHitTestVisible);
+        Assert.NotNull(view.Page); Assert.Equal(view.Page, host!.Source);
+        Assert.Single(view.Children);
+        var page = view.Page;
+        await view.NavigationFinished(page, true);
+        Assert.True(view.IsReady); Assert.False(view.IsVisible);
+        tab.OnTabShown(); Assert.Same(host, view.Browser); Assert.Equal(page, view.Page);
+        tab.OpenTrailer(tab.PriceRows["typo"]);
+        Assert.Same(tab.FindControl<Grid>("TrailerPlate"), view.Parent);
+        Assert.Empty(warm.Children); Assert.Same(host, view.Browser);
+        Assert.True(view.IsVisible);
+        tab.HideTrailer(); tab.OpenTrailer(tab.PriceRows["session"]);
+        Assert.Same(host, view.Browser); Assert.Single(view.Children);
+    }, tab => tab.FindControl<ChasterTrailerView>("TrailerWeb")!.Browser =
+        new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = _ => Task.FromResult<string?>("true") }));
     [Fact]
     public Task HoverWaitsThenRetargetsImmediatelyAndClosesAfterTheGrace() => AvaloniaTestDispatcher.RunAsync(() => WithTab((tab, w) => {
         void Hover(Control row) => w.MouseMove(row.TranslatePoint(new Point(20, row.Bounds.Height / 2), w)!.Value);

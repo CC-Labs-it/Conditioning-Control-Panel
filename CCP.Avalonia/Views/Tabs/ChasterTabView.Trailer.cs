@@ -79,6 +79,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs {
             row ??= _trailerRow;
             if (row?.Tag is not string id || TabPrices.Find(id) is not { } price) return;
             _trailerRow = row;
+            // WPF ChasterTabView.xaml.cs:1420-1423. Keep the existing adapter through the move.
+            using var warmMove = TrailerWeb.Parent == TrailerWarmHost ? TrailerWeb.PreserveForMove() : null;
+            if (TrailerWeb.Parent == TrailerWarmHost) {
+                TrailerWarmHost.Children.Remove(TrailerWeb);
+                TrailerPlate.Children.Add(TrailerWeb);
+            }
             using var reparent = _trailerPark;
             _trailerPark = null;
             try {
