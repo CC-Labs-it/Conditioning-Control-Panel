@@ -134,6 +134,7 @@ public sealed class PanicSurfacesTests
         "deeper-editor-audio",
         "knock-cards",
         "quick-recal",
+        "mod-creator-preview",
         "asset-preview",
         "camera",
     };
