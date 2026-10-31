@@ -125,7 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _activeGlow = this.FindControl<Border>("GlowLayer")!;
 
             _depth = new DashboardCardDepth(this, this.FindControl<Panel>("PressFace")!, this.FindControl<Border>("DepthBevel")!,
-                () => DashboardDepth, () => DimWhenInactive && (IsActive || TutorialPreview) && !IsLocked,
+                () => DashboardDepth, () => DimWhenInactive && IsActive && !IsLocked,
                 e => !IsLocked && !IsInHelp(e.Source));
 
             // Hover lift (WPF: MotionFx.HoverLift) as a transition on the root scale (the art pop is

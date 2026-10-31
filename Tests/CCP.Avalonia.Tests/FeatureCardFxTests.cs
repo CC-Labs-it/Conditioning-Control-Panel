@@ -157,10 +157,14 @@ public sealed class FeatureCardFxTests
         Hover(card, window, true);
         Assert.Equal(1, mute.Opacity);
         Assert.Equal(0.62, content.Opacity);
+        Hover(card, window, false);
         card.SetTutorialPreview(true);
+        Assert.Equal(-DashboardCardDepth.RestLiftPx, card.Depth.Travel);
+        Assert.Equal(0.9, card.FindControl<Border>("DepthBevel")!.Opacity);
         Assert.Equal(0, mute.Opacity);
         Assert.Equal(1, content.Opacity);
         card.SetTutorialPreview(false);
+        Assert.Equal(-DashboardCardDepth.RestLiftPx, card.Depth.Travel);
         card.TeaseTier = 1;
         Assert.Equal(0, mute.Opacity);
         card.TeaseTier = 0;
