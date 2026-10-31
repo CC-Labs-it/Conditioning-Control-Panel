@@ -239,8 +239,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Decoding = DecodeThenRefresh(host, path);
         }
 
+        // Tests hold decode completion across pause without relying on worker timing.
+        internal static Func<Task>? BeforeDecodeForTests;
+
         private static async Task DecodeThenRefresh(Visual host, string path)
         {
+            if (BeforeDecodeForTests is { } beforeDecode) await beforeDecode();
             var (frames, delay) = await Task.Run(() => Decode(path));
             if (frames.Count == 0) Log.Warning("Spiral: no frames decoded from {Path}; spiral not shown", path);
             foreach (var old in _frames) old.Dispose();

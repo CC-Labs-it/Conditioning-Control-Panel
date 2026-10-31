@@ -312,6 +312,59 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
             Assert.False(s.SpiralEnabled);
         });
 
+    // WPF Services/Session/SessionEngine.cs:530 stops overlays and clears sustained holds.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Pause_clears_voice_hold_including_pending_decode_and_resume_does_not_restore_it(bool pendingDecode)
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+            var decoded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            try
+            {
+                s.SkipPauseXpWarning = true;
+                var session = new Session { Id = "voice_spiral_pause", Name = "Voice Spiral Pause", DurationMinutes = 1 };
+                session.Settings.SpiralEnabled = false;
+                shell.StartSession(session);
+                SpeakSpiral(shell, "spiral on");
+                await Settle();
+                Assert.True(SpiralOverlay.IsShowing, Why());
+                if (pendingDecode)
+                {
+                    var other = Path.Combine(Path.GetDirectoryName(gif)!, "pending.gif");
+                    File.WriteAllBytes(other, Convert.FromBase64String(TinyGif));
+                    SpiralOverlay.BeforeDecodeForTests = () => decoded.Task;
+                    s.SpiralPath = other;
+                    SpiralOverlay.Refresh(shell);
+                    Assert.NotNull(SpiralOverlay.Decoding);
+                    Assert.False(SpiralOverlay.Decoding!.IsCompleted);
+                }
+
+                var pause = shell.Named<Button>("BtnPauseSession")!;
+                pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.True(runner.IsPaused);
+                Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.IsAnimating);
+                decoded.TrySetResult();
+                await Settle();
+                Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.IsAnimating);
+                pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.False(runner.IsPaused);
+                await Settle();
+                Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.IsAnimating);
+                Assert.False(s.SpiralEnabled);
+            }
+            finally
+            {
+                decoded.TrySetResult();
+                await Settle();
+                SpiralOverlay.BeforeDecodeForTests = null;
+                runner.Stop();
+                CoreSession.IsSessionRunningProvider = null;
+                global::ConditioningControlPanel.Avalonia.App.Sessions = null;
+            }
+        });
+
     private static void SpeakSpiral(MainShellWindow shell, string phrase)
     {
         Assert.True(shell.VoiceCmds.TryHandleInlineCommand("hey bambi " + phrase, new[] { "hey bambi" }));
