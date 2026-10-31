@@ -895,6 +895,7 @@ public sealed partial class GameWindowTests
     {
         var (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider,
             CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
+        var (oldFavorites, oldMerge) = (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats);
         var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
         var lib = Directory.CreateTempSubdirectory("dtrh-lib-").FullName;
         var xp = new List<double>();
@@ -902,6 +903,8 @@ public sealed partial class GameWindowTests
         var denied = new List<string>();
         try
         {
+            GameWindow.DtrhFavorites = _ => new List<string>();
+            GameWindow.DtrhMergeAssetStats = _ => { };
             CoreAccount.IsLoggedInProvider = () => true;
             CoreEntitlement.HasLabProvider = () => lab;
             CoreEntitlement.IsFreeTodayProvider = _ => false;
@@ -921,6 +924,7 @@ public sealed partial class GameWindowTests
         {
             (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks,
                 CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
+            (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats) = (oldFavorites, oldMerge);
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
             GameWindow.CloseAllForPanic();
             Directory.Delete(lib, true);
@@ -993,6 +997,87 @@ public sealed partial class GameWindowTests
             Assert.Equal(250.0 * 95 / 60, xp[1], 6);
             Assert.Equal(new[] { true, true }, runs);
         });
+    }
+
+    /// <summary>WPF DtrhHostService.cs:309-318,400-404: page deltas reach the store;
+    /// the next ready seeds the page with twelve ranked names, only when history exists.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_EngagementDeltas_AndFavorites(bool hasHistory) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var expected = hasHistory ? new List<string> { "grabbed.gif", "watched.png" } : new List<string>();
+        var merged = new List<JObject>();
+        GameWindow.DtrhMergeAssetStats = o => merged.Add(o);
+        GameWindow.DtrhFavorites = count => { Assert.Equal(12, count); return expected; };
+        var w = GameWindow.Launch("dtrh")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.Web.OnNavigationCompleted(w.PageUrl!);
+        w.Web.OnWebMessage("{\"type\":\"asset-stats\",\"stats\":[{\"name\":\"grabbed.gif\",\"grabs\":3}]}");
+        Assert.Equal(3, (int)Assert.Single(merged)["stats"]![0]!["grabs"]!);
+        Assert.Empty(sent);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal(new[] { "init", "manifest" }, sent.Take(2).Select(o => (string?)o["type"]));
+        var favorites = sent.Where(o => (string?)o["type"] == "favorites").ToList();
+        if (hasHistory)
+            Assert.Equal(expected, Assert.Single(favorites)["names"]!.Values<string>());
+        else Assert.Empty(favorites);
+        w.Close();
+    });
+
+    /// <summary>WPF DtrhHostService.cs:318,403: telemetry failures do not block the game bridge.</summary>
+    [Fact]
+    public void Dtrh_EngagementStoreFailure_DoesNotBlockPlay() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        GameWindow.DtrhFavorites = _ => throw new IOException("read failed");
+        GameWindow.DtrhMergeAssetStats = _ => throw new IOException("write failed");
+        var w = GameWindow.Launch("dtrh")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"asset-stats\",\"stats\":[]}");
+        w.HandleMessage("{\"type\":\"request-run\"}");
+        Assert.True(w.DtrhReady);
+        Assert.Equal(new[] { "init", "manifest", "run-config" }, sent.Select(o => (string?)o["type"]));
+        w.Close();
+    });
+
+    // Exercise ordered calls inside one test so the assembly isolation hook cannot hide a leak.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_EngagementTests_RestoreDelegatesBeforeTheNextRun(bool storeFails)
+    {
+        var (favorites, merge) = (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats);
+        try
+        {
+            // A populated or broken ambient store must not affect unrelated lifecycle tests.
+            GameWindow.DtrhFavorites = _ => new List<string> { "prior-history.gif" };
+            GameWindow.DtrhMergeAssetStats = _ => throw new IOException("ambient store");
+            var expectedFavorites = GameWindow.DtrhFavorites;
+            var expectedMerge = GameWindow.DtrhMergeAssetStats;
+            if (storeFails) Dtrh_EngagementStoreFailure_DoesNotBlockPlay();
+            else Dtrh_EngagementDeltas_AndFavorites(true);
+            Assert.Same(expectedFavorites, GameWindow.DtrhFavorites);
+            Assert.Same(expectedMerge, GameWindow.DtrhMergeAssetStats);
+            Dtrh_LabDoor_BootRunLifecycle_AndCloseBanks();
+
+            Assert.Throws<InvalidOperationException>(() => RunDtrh(true, (_, _, _, _) =>
+            {
+                Assert.Empty(GameWindow.DtrhFavorites(12));
+                GameWindow.DtrhMergeAssetStats(new JObject());
+                GameWindow.DtrhFavorites = _ => throw new IOException("test read");
+                GameWindow.DtrhMergeAssetStats = _ => throw new IOException("test write");
+                throw new InvalidOperationException("test body failed");
+            }));
+            Assert.Same(expectedFavorites, GameWindow.DtrhFavorites);
+            Assert.Same(expectedMerge, GameWindow.DtrhMergeAssetStats);
+        }
+        finally
+        {
+            (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats) = (favorites, merge);
+        }
     }
 
     /// <summary>WPF DtrhHostService.PostManifest / OnRemoteCopiesReady (724ac82bc): the manifest's urls are root-relative
