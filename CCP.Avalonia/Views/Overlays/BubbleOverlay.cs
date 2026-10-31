@@ -243,7 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
-            Field.HoldChaos = false;
+            Field.HoldChaos = Field.FreezeChaos = false;
             _chaosPopped = null;
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
