@@ -122,3 +122,4 @@ P2 validation builds: Core, Avalonia and Avalonia.Tests each had 0 errors.
 Full Core tests: Failed 0, Passed 4644, Skipped 6, Total 4650 (43 s).
 P2 restored head tests: Failed 0, Passed 17, Skipped 0 (8 s). P1 races still pass.
 P2 guards: All Core guards passed; avalonia_docs self-check OK. Ledger remains stub.
+Local P1: SessionRunner.cs:117,264 stops global audio on start/pause (WPF SessionEngine.cs:1492-1496,529); separate stop-removal fail-proofs failed, restored Core subset 31 passed, full Core 4645 passed/6 existing skips, Avalonia 17 passed, builds and guards passed. Session timeline remains unported; panic comments corrected.

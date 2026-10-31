@@ -34,4 +34,25 @@ public class BrainDrainEngineTests
             s.BrainDrainEnabled = oldEnabled; s.AudioOnlySession = oldAudio;
         }
     }
+    [Fact]
+    public void SessionsStopGlobalBrainDrainOnStartAndPause()
+    {
+        var oldStart = CoreEngine.StartBrainDrain; var oldStop = CoreEngine.StopBrainDrain; var oldSession = CoreSession.IsSessionRunningProvider;
+        var s = CoreSettings.Current; var enabled = s.BrainDrainEnabled; var audioOnly = s.AudioOnlySession;
+        var runner = new ConditioningControlPanel.Services.SessionRunner(new ConditioningControlPanel.Services.SessionLogService());
+        int starts = 0, stops = 0;
+        CoreEngine.Stop();
+        try
+        {
+            CoreEngine.StartBrainDrain = () => starts++; CoreEngine.StopBrainDrain = () => stops++;
+            s.BrainDrainEnabled = true; s.AudioOnlySession = false;
+            runner.Start(new ConditioningControlPanel.Models.Session()); Assert.Equal((1, 1), (starts, stops));
+            runner.Pause(); Assert.Equal(2, stops);
+        }
+        finally
+        {
+            runner.Stop(); CoreEngine.Stop(); CoreEngine.StartBrainDrain = oldStart; CoreEngine.StopBrainDrain = oldStop;
+            s.BrainDrainEnabled = enabled; s.AudioOnlySession = audioOnly; CoreSession.IsSessionRunningProvider = oldSession;
+        }
+    }
 }
