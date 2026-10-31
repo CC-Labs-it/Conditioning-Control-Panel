@@ -178,6 +178,76 @@
       "id": "jump",
       "name": "Jump",
       "clip": "jump"
+    },
+    {
+      "id": "talk_a",
+      "name": "Talk_A",
+      "clip": "talk_a"
+    },
+    {
+      "id": "talk_b",
+      "name": "Talk_B",
+      "clip": "talk_b"
+    },
+    {
+      "id": "talk_c",
+      "name": "Talk_C",
+      "clip": "talk_c"
+    },
+    {
+      "id": "giggle",
+      "name": "Giggle",
+      "clip": "giggle"
+    },
+    {
+      "id": "smirk",
+      "name": "Smirk",
+      "clip": "smirk"
+    },
+    {
+      "id": "shy_glance",
+      "name": "Shy_Glance",
+      "clip": "shy_glance"
+    },
+    {
+      "id": "shy_sway",
+      "name": "Shy_Sway",
+      "clip": "shy_sway"
+    },
+    {
+      "id": "shy_hold",
+      "name": "Shy_Hold",
+      "clip": "shy_hold"
+    },
+    {
+      "id": "listening",
+      "name": "Listening",
+      "clip": "listening"
+    },
+    {
+      "id": "joy",
+      "name": "Joy",
+      "clip": "joy"
+    },
+    {
+      "id": "surprise",
+      "name": "Surprise",
+      "clip": "surprise"
+    },
+    {
+      "id": "affection",
+      "name": "Affection",
+      "clip": "affection"
+    },
+    {
+      "id": "confidence",
+      "name": "Confidence",
+      "clip": "confidence"
+    },
+    {
+      "id": "disappointment",
+      "name": "Disappointment",
+      "clip": "disappointment"
     }
   ],
   "camera": {
@@ -220,8 +290,8 @@
     "Garment and accessory fit requires front/quarter motion review in the viewer."
   ],
   "limitations": [
-    "Prototype evaluated-mesh animation bridge; production deform rig optimization remains.",
-    "Native 25 fps animation samples interpolate live; three accepted clips included.",
-    "Material reconstruction is a runtime approximation of the Blender illustration shader."
-  ]
+    "Evaluated-mesh animation bridge; all 17 tube actions sampled at 15 fps.",
+    "Material reconstruction approximates the accepted Blender illustration shader."
+  ],
+  "clipSetVersion": "rain-v2-17-20261030"
 }

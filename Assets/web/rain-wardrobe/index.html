@@ -23,6 +23,7 @@
       <div class="stage-caption"><span id="lookCaption">The original</span><span class="drag-hint">Drag to turn · Scroll to zoom</span></div>
       <div class="camera-controls" aria-label="Camera angle"><button data-view="front">Front</button><button data-view="quarter" class="active">¾</button><button data-view="side">Side</button><button data-view="back">Back</button><button id="headView">Head</button><button id="handsView">Hands</button><button id="feetView">Feet</button><button id="outfitView">Outfit</button><button id="fullView">Full</button><button id="tube" aria-pressed="false" title="Show at companion size">Tube size</button></div>
       <div class="tube-label" id="tubeLabel" hidden>190 px</div>
+      <div class="tryon-ribbon" id="tryonRibbon" role="status" aria-hidden="true"></div>
       <div class="animation-strip"><button id="pause" class="round" aria-label="Pause animation" title="Pause animation">Ⅱ</button><div class="animation-options" id="animations" aria-label="Animation"></div></div>
     </section>
     <aside class="wardrobe">
@@ -53,6 +54,11 @@
       <div class="wardrobe-foot"><span class="small-star">✳</span><p>Your look. Same Rain.</p><span class="prototype">FITTING PROTOTYPE</span></div>
     </aside>
   </main>
+  <footer class="look-bar" id="lookBar" hidden>
+    <div class="look-text"><p class="look-now"><span id="lookNowLabel">Wearing now:</span> <span id="lookNow"></span></p>
+    <p class="look-blocker" id="lookBlocker" role="status"><span id="lookBlockerText"></span><button class="link" id="openCounter" hidden>Open counter</button></p></div>
+    <div class="look-actions"><button class="quiet" id="discardLook" disabled>Discard</button><button class="ink" id="applyLook" disabled>Apply look</button></div>
+  </footer>
   <script type="module" src="./viewer.js"></script>
 </body>
 </html>
