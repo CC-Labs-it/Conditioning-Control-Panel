@@ -76,8 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         folder, so the preview shares a cookie jar with every other WebHost. Stubbed because NativeWebView has no counterpart at
     ///         all: ZoomFactor, ContainsFullScreenElementChanged (and the fullscreen reparent it
     ///         drove), and AddScriptToExecuteOnDocumentCreatedAsync.</item>
-    ///   <item><b>Win32.</b> <c>WindowChromeHelper.ApplyDarkTitleBar</c> (DwmSetWindowAttribute),
-    ///         <c>RestoreOwnerOnClose</c>, <c>System.Windows.Forms.Screen.FromHandle</c> +
+    ///   <item><b>Win32.</b> <c>RestoreOwnerOnClose</c>, <c>System.Windows.Forms.Screen.FromHandle</c> +
     ///         <c>WindowInteropHelper</c> (the borderless-fullscreen preview window).
     ///         <c>VisualTreeHelper.GetDpi</c> is NOT one of these any more: TopLevel.RenderScaling
     ///         is its twin and the gaze picker uses it - see BeginGazePick in the RuleEditor
@@ -225,10 +224,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
 
-            // ponytail: needs WindowChromeHelper.ApplyDarkTitleBar (DwmSetWindowAttribute) and
-            // RestoreOwnerOnClose. The title-bar tint has no Linux equivalent short of
-            // SystemDecorations="None" plus a hand-drawn bar, which would cost this resizable
-            // window its native move/resize/maximize for a colour. Left native and untinted.
+            // Windows title bars are tinted globally by Win32Window; Linux keeps native decoration.
+            // RestoreOwnerOnClose:
             Closed += (_, _) => { try { (Owner as Window)?.Activate(); } catch { } };
             Opened += (_, _) => s_open.Add(this);
             Closed += (_, _) => s_open.Remove(this);

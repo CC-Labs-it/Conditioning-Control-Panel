@@ -212,6 +212,7 @@ namespace ConditioningControlPanel.Avalonia
             Mods = new ModService();
             CoreMods.Attach(Mods);
             Mods.Initialize(CoreSettings.Current.ActiveModId);
+            Platform.Win32Window.RegisterDarkTitleBars();
         }
 
         /// <summary>The cclabs catalogue client (WPF App.Catalogue): the same Core client and inputs as WPF's
