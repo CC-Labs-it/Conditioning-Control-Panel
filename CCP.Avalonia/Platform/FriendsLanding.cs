@@ -145,6 +145,8 @@ internal static class FriendsLanding
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
+        InviteDestination.Breakout => Str("friends_land_dest_breakout", "Breakout"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
 
@@ -264,7 +266,7 @@ internal static class FriendsLanding
 
     /// <summary>Destinations this head can open. ponytail: Back Room / Goon / chess hosts are not on this head
     /// (GameWindow has the Breakout demo only), so their cards carry Not now and the x only.</summary>
-    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp;
+    internal static bool CanJoin(InboxItem item) => item.Destination is InviteDestination.Ramp or InviteDestination.Race;
 
     /// <summary>WPF LauncherHost.OpenPanelTab: the panel up (it may be hidden behind the launcher), then the tab.
     /// Tests replace it.</summary>
@@ -276,11 +278,24 @@ internal static class FriendsLanding
     };
 
     /// <summary>WPF Join :522. Ramp: link to Ramp lives on the Ramp card in the Studio tab.</summary>
-    private static void Join(InboxItem item)
+    internal static void Join(InboxItem item)
     {
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
+        else if (item.Destination == InviteDestination.Race) OpenRace();
     }
+
+    internal static Action OpenRace { get; set; } = async () =>
+    {
+        try
+        {
+            var owner = Anchor();
+            if (!await ExternalOpener.OpenAsync(owner, InviteDestination.RaceWebUrl) && owner != null)
+                await Views.Dialogs.MessageDialog.ShowLinkCopiedAsync(owner, InviteDestination.RaceWebUrl,
+                    Str("friends_land_dest_race", "Racing Thoughts"));
+        }
+        catch (Exception ex) { Log.Warning(ex, "[Friends] race launch failed"); }
+    };
 
     private static readonly FriendsSfxGate SfxGate = new();
 
