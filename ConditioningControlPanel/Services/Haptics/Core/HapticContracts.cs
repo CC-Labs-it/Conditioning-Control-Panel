@@ -153,7 +153,9 @@ namespace ConditioningControlPanel.Services.Haptics.Core
         /// i.e. HapticService.SetSyncPatternAsync). Added in Phase A — see
         /// docs/HAPTICS_OVERHAUL_PLAN.md "Contract extensions". It needs its own layer so a
         /// Deeper pattern cannot stomp the AudioSync or Manual layer.</summary>
-        Pattern
+        Pattern,
+        /// <summary>Racing Thoughts 3D's steady buzz (RaceHapticDirector). Keep new layers last: the mixer indexes by value.</summary>
+        Race
     }
 
     /// <summary>Semantic transient events; the routing matrix maps each to enabled +
