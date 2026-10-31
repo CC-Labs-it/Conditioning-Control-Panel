@@ -24,8 +24,6 @@ namespace ConditioningControlPanel.Services
         private bool _isProcessing;
         private bool _isPaused;
         private bool _isWaitingForChunk;
-        private TimeSpan _lastPlaybackPosition;
-        private DateTime _lastSyncTime;
         private DateTime _lastResyncTime;
         private const int RESYNC_INTERVAL_MS = 5000; // Force resync every 5 seconds
 
@@ -95,8 +93,6 @@ namespace ConditioningControlPanel.Services
             var generation = _generation;
             var session = new CancellationTokenSource();
             _session = session;
-            using var preparation = CancellationTokenSource.CreateLinkedTokenSource(session.Token);
-            preparation.CancelAfter(TimeSpan.FromMinutes(2));
             try
             {
                 _isProcessing = true;
@@ -110,9 +106,9 @@ namespace ConditioningControlPanel.Services
                 manager.ChunkLoadingStarted += OnChunkLoadingStarted;
 
                 manager.Initialize(videoUrl, duration);
-                await (_pending = manager.StartFirstChunkAsync(preparation.Token));
+                await (_pending = manager.StartFirstChunkAsync(session.Token));
 
-                if (!manager.IsFirstChunkReady && !preparation.IsCancellationRequested)
+                if (!manager.IsFirstChunkReady && !session.IsCancellationRequested)
                 {
                     throw new AudioSyncException("Timeout waiting for first chunk to process");
                 }
@@ -161,9 +157,6 @@ namespace ConditioningControlPanel.Services
 
             if (paused || _isWaitingForChunk)
                 return;
-
-            _lastPlaybackPosition = currentTime;
-            _lastSyncTime = DateTime.UtcNow;
 
             _chunkManager.CheckBufferAndProcess(currentTime);
 
@@ -219,7 +212,6 @@ namespace ConditioningControlPanel.Services
             var newTime = TimeSpan.FromSeconds(newTimeSeconds);
             Log.Information("BrowserAudioSyncService: User seeked to {Time}", newTime);
 
-            _lastPlaybackPosition = newTime;
             _lastResyncTime = DateTime.UtcNow; // Reset resync timer on seek
 
             var chunkIndex = _chunkManager.GetChunkIndexForTime(newTime);

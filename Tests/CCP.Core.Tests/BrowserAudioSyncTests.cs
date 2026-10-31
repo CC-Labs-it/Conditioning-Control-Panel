@@ -72,11 +72,12 @@ public sealed class BrowserAudioSyncTests
     }
 
     [Theory]
-    [InlineData(false, false, 0)]
-    [InlineData(true, false, 1)]
-    [InlineData(false, false, 2)]
-    [InlineData(false, true, 0)]
-    public async Task FirstChunkBecomesReadyAndResetSuppressesPendingCompletion(bool bands, bool fail, int shutdown)
+    [InlineData(false, 0, 0)]
+    [InlineData(true, 0, 1)]
+    [InlineData(false, 0, 2)]
+    [InlineData(false, 1, 0)]
+    [InlineData(false, 2, 0)]
+    public async Task FirstChunkBecomesReadyAndResetSuppressesPendingCompletion(bool bands, int failure, int shutdown)
     {
         var settings = new HapticSettings { Enabled = true };
         settings.EnsureV2Migrated();
@@ -100,16 +101,18 @@ public sealed class BrowserAudioSyncTests
             entered.Set();
             try { release.Wait(ct); }
             catch (OperationCanceledException) { cancelled.TrySetResult(); release.Wait(TimeSpan.FromSeconds(15)); throw; }
-            if (fail) return Array.Empty<float>();
+            if (failure == 1) return Array.Empty<float>();
+            if (failure == 2) throw new TimeoutException("Decoder timed out");
             return Enumerable.Range(0, 44100).Select(i => (float)Math.Sin(i * .1)).ToArray();
         });
         var completed = 0;
         var started = 0;
         var progress = 0;
         var errors = 0;
+        string? lastError = null;
         sync.ProcessingStarted += (_, _) => started++;
         sync.ProcessingProgress += (_, _) => progress++;
-        sync.Error += (_, _) => errors++;
+        sync.Error += (_, error) => { errors++; lastError = error; };
         sync.ProcessingCompleted += (_, _) => completed++;
         async Task Serve()
         {
@@ -129,14 +132,21 @@ public sealed class BrowserAudioSyncTests
             var serve = Serve();
             var pending = Task.Run(() => sync.OnVideoDetectedAsync($"http://127.0.0.1:{port}/video.mp4", TimeSpan.FromSeconds(1)));
             Assert.True(entered.Wait(TimeSpan.FromSeconds(15)));
+            await Task.Delay(100); // Past the shortened cutoff used by the mutation fail-proof.
+            Assert.False(pending.IsCompleted);
+            Assert.False(decodingToken.IsCancellationRequested);
+            var session = (CancellationTokenSource)typeof(BrowserAudioSyncService).GetField("_session",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(sync)!;
+            Assert.Equal(session.Token, decodingToken); // No earlier preparation deadline may wrap it.
             release.Set();
             await pending.WaitAsync(TimeSpan.FromSeconds(15));
             await serve;
             Assert.Equal(1, started);
             Assert.True(progress > 0);
-            if (fail)
+            if (failure != 0)
             {
                 Assert.True(errors > 0);
+                Assert.EndsWith("Timeout waiting for first chunk to process", lastError);
                 Assert.Equal(1, completed);
                 Assert.False(sync.IsReadyToPlay);
                 Assert.False(sync.IsProcessing);
