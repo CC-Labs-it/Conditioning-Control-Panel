@@ -9,7 +9,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// WPF MainWindow.xaml.cs:546-553); panic ("first-show") and the shell's close stop it. New rule: a stage that cannot be
 /// click-through would eat every desktop click (native Wayland), so the show refuses there before EMI is borrowed.
 /// Help replay (WPF MainWindow/MainWindow.xaml.cs:1488) and book replay (Windows/EmiDesk/EmiBookWindow.xaml.cs:234)
-/// use this host. The WPF DEBUG --first-show-preview launch is not ported.</summary>
+/// use this host. DEBUG preview enters through App.TryStartFirstShowPreview (WPF App.xaml.cs:1996).</summary>
 internal static class FirstShowService
 {
     private static FirstShowStageWindow? _window;
@@ -18,7 +18,7 @@ internal static class FirstShowService
     /// <summary>Test seam: headless has no native window to make click-through.</summary>
     internal static bool RequireClickThrough = true;
     /// <summary>Open the show. False when it is refused or could not start.</summary>
-    public static bool Open(MainShellWindow? owner = null)
+    public static bool Open(MainShellWindow? owner = null, bool preview = false)
     {
         if (_window != null) { _window.Activate(); return true; }
         FirstShowStageWindow? window = null;
@@ -38,7 +38,12 @@ internal static class FirstShowService
             _window = window;
             var shown = window;
             window.Closing += (_, _) => desk.EndPresentation();
-            window.Closed += (_, _) => { if (ReferenceEquals(_window, shown)) _window = null; };
+            window.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_window, shown)) _window = null;
+                // WPF FirstShowService.cs:21: preview owns EMI rather than returning her to the desk.
+                if (preview) desk.ShutDown();
+            };
             desk.BeginPresentation(() => Stop());
             window.BeginEntrance(desk);
             return true;

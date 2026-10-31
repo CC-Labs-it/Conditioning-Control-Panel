@@ -422,6 +422,15 @@ namespace ConditioningControlPanel.Avalonia
 
         public override void OnFrameworkInitializationCompleted()
         {
+#if DEBUG
+            // WPF App.xaml.cs:1996-2004: preview bypasses splash and normal service startup.
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime previewDesktop &&
+                TryStartFirstShowPreview(previewDesktop))
+            {
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
+#endif
             // "[SANDBOX] " on every window title of a CCP_USERDATA_DIR run. Desktop only: offscreen renders/snapshots
             // reach this callback too and must keep the real titles.
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime) Platform.SandboxMarker.Install();
@@ -440,6 +449,20 @@ namespace ConditioningControlPanel.Avalonia
                 TaskContinuationOptions.OnlyOnFaulted);
             base.OnFrameworkInitializationCompleted();
         }
+
+#if DEBUG
+        internal static bool TryStartFirstShowPreview(IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            if (desktop.Args?.Contains("--first-show-preview", StringComparer.Ordinal) != true) return false;
+            // WPF FirstShowService.cs:18: closing the preview ends this isolated app lifetime.
+            desktop.ShutdownMode = global::Avalonia.Controls.ShutdownMode.OnMainWindowClose;
+            if (Views.Windows.WelcomeShow.FirstShowService.Open(preview: true))
+                desktop.MainWindow = Views.Windows.WelcomeShow.FirstShowService.Window;
+            else
+                desktop.Shutdown(1);
+            return true;
+        }
+#endif
 
         /// <summary>Runs <paramref name="start"/>, painting each step on the splash; then shows the
         /// shell (the lifetime found no MainWindow to show yet) and fades the splash out (WPF
