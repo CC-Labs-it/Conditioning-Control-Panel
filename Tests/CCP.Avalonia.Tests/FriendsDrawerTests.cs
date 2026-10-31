@@ -28,6 +28,65 @@ namespace CCP.Avalonia.Tests;
 /// process (never a server), and the service's timer seam.</summary>
 public sealed class FriendsDrawerTests
 {
+    /// <summary>WPF FriendsSfx on the card: an action button clicks (FriendsDrawer.cs:714), a sent poke pops and a
+    /// refused one is denied (ShowResult, :1144), through the landing's Sfx (same files, levels and tags).</summary>
+    [Theory]
+    [InlineData("click")]
+    [InlineData("sent")]
+    [InlineData("denied")]
+    public Task TheCardsActionsAndSendResultsSoundLikeWpf(string cue) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var d = new FriendsRailChip(svc).Drawer;
+        await svc.RefreshAsync();
+        d.Toggle("u_on");
+        var cues = new List<string>();
+        var (oldAudio, oldGate, oldVolume) = (ConditioningControlPanel.CoreAudio.PlayOneShotProvider, FriendsLanding.SfxGate, ConditioningControlPanel.CoreSettings.Current.MasterVolume);
+        ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => cues.Add(tag);
+        ConditioningControlPanel.CoreSettings.Current.MasterVolume = 50;
+        try
+        {
+            FriendsLanding.SfxGate = new();
+            if (cue == "click") Click(d, "friends-action:poke");
+            else
+            {
+                Assert.Equal(SendResult.Sent, await d.PokeAsync("u_on", PokeSet.Shipped[0]));
+                if (cue == "denied")
+                {
+                    cues.Clear();
+                    FriendsLanding.SfxGate = new();
+                    Assert.Equal(SendResult.TooFast, await d.PokeAsync("u_on", PokeSet.Shipped[1]));
+                }
+            }
+            Assert.Equal(new[] { "friends-" + cue }, cues);
+        }
+        finally
+        {
+            ConditioningControlPanel.CoreAudio.PlayOneShotProvider = oldAudio;
+            FriendsLanding.SfxGate = oldGate;
+            ConditioningControlPanel.CoreSettings.Current.MasterVolume = oldVolume;
+        }
+    });
+
+    /// <summary>WPF FriendsDrawer.Platforms + :558: an online row wears one mark per platform, desktop / phone / web
+    /// order whatever the wire said, each with its tooltip; an offline row wears none.</summary>
+    [Fact]
+    public Task AnOnlineRowWearsItsPlatformMarksWithTooltips() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        wire.StateBody = State.Replace("\"squelched\":false}", "\"squelched\":false,\"platforms\":[\"web\",\"phone\",\"desktop\"]}");
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        d.Render();
+        var marks = Tagged<StackPanel>(Tagged<Border>(d, "friends-row:u_on")!, "friends-platforms")!;
+        Assert.Equal(new[] { "friends-platform:desktop", "friends-platform:phone", "friends-platform:web" }, marks.Children.Select(c => c.Tag as string));
+        Assert.Equal(new[] { IconKind.Desktop, IconKind.Phone, IconKind.Globe },
+            marks.Children.Select(c => c.GetLogicalDescendants().OfType<IconGlyph>().Single().Kind));
+        Assert.Equal(new object?[] { Loc.Get("friends_platform_desktop"), Loc.Get("friends_platform_phone"), Loc.Get("friends_platform_web") },
+            marks.Children.Select(c => ToolTip.GetTip(c)));
+        Assert.Null(Tagged<StackPanel>(Tagged<Border>(d, "friends-row:u_off")!, "friends-platforms"));
+    });
+
     private const string State = """
         {"ok":true,"code":"CCP-ABCDE","me":{"activity":"panel","lock_day":null,"shared":false},
          "friends":[{"id":"u_on","name":"Mia","tier":0,"online":true,"activity":"session","lock_day":3,"last_seen":null,"squelched":false},
