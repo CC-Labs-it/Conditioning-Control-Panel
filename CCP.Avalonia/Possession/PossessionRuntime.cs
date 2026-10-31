@@ -171,7 +171,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             {
                 ghost.Start = null;
                 ghost.ForcedHoldMs = 0;
-                ghost.ReturnDurationMs = duration.TotalMilliseconds;
+                ghost.ReturnDurationMs = Math.Clamp(duration.TotalMilliseconds, effect is NudgeHeadEffect ? 220 : 250, effect is NudgeHeadEffect ? 600 : 700);
                 ghost.Returning = false;
             }
             return ghost.Done.Task;
