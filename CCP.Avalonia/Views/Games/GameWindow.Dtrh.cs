@@ -68,6 +68,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             switch ((string?)o["type"])
             {
+                case "boot-error":
+                    // WPF DtrhHostService.cs:923-935: tear down before the queued native fallback.
+                    if (_closing || _dtrhExiting) return true;
+                    _dtrhExiting = true;
+                    Log.Warning("DtrhHost: page boot-error: {Msg}", (string?)o["msg"]);
+                    Close();
+                    Dispatcher.UIThread.Post(LaunchDtrhLegacyFallback);
+                    return true;
                 case "ready":
                     IsReady = true;
                     OnDtrhPageReady();
@@ -97,6 +105,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 default:
                     return false;
             }
+        }
+
+        /// <summary>WPF DtrhHostService.cs:939-954: first descent when fresh, otherwise the hub.</summary>
+        private static void LaunchDtrhLegacyFallback()
+        {
+            try
+            {
+                if (Chaos.ChaosRunHost.IsActive) return;
+                // WPF App.xaml.cs:2746 loads the active save before creating its run service.
+                ChaosMeta.Init();
+                if (ChaosMeta.State.RunsCompleted == 0)
+                    Chaos.ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
+                else Chaos.ChaosHubWindow.OpenAt();
+            }
+            catch (Exception ex) { Log.Error(ex, "DtrhHost: legacy fallback failed"); }
         }
 
         /// <summary>WPF OnPageReady (:271): init, then the manifest.</summary>
