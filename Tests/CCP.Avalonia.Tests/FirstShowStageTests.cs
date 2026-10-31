@@ -44,7 +44,7 @@ public sealed class FirstShowStageTests
         Assert.DoesNotContain(played, p => p.Tag == "first-show-voice");
         t += .2; stage.Frame();
         var voice = Assert.Single(played.Where(p => p.Tag == "first-show-voice"));
-        Assert.Equal(EmiVoxScore.WriteWav(EmiVoxScore.RenderBurst(EmiVoxScore.MakeScore(stage.SpeechText, "celebration"))), File.ReadAllBytes(voice.Path));
+        Assert.Equal(EmiVox.WriteWav(EmiVox.RenderBurst(EmiVox.MakeScore(stage.SpeechText, "celebration"))), File.ReadAllBytes(voice.Path));
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
         t += .2; stage.Frame();
         Assert.Single(played.Where(p => p.Tag == "first-show-voice"));

@@ -25,7 +25,7 @@ public class FirstShowAudioTests
             var first = Assert.Single(played);
             Assert.Equal(.5f, first.Volume);
             Assert.Equal("first-show-voice", first.Tag);
-            Assert.Equal(EmiVoxScore.WriteWav(EmiVoxScore.RenderBurst(EmiVoxScore.MakeScore("hi again", "idle"))), File.ReadAllBytes(first.Path));
+            Assert.Equal(EmiVox.WriteWav(EmiVox.RenderBurst(EmiVox.MakeScore("hi again", "idle"))), File.ReadAllBytes(first.Path));
             audio.Cue("pop");
             Assert.Empty(stopped); // a cue must not cut the voice
             Assert.Equal("first-show-cue", played[1].Tag);

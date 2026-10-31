@@ -29,7 +29,7 @@ internal sealed class FirstShowAudio : IDisposable
         {
             Directory.CreateDirectory(_cache);
             var path = Path.Combine(_cache, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text + mood))) + ".wav");
-            if (!File.Exists(path)) File.WriteAllBytes(path, EmiVoxScore.WriteWav(EmiVoxScore.RenderBurst(EmiVoxScore.MakeScore(text, mood))));
+            if (!File.Exists(path)) File.WriteAllBytes(path, EmiVox.WriteWav(EmiVox.RenderBurst(EmiVox.MakeScore(text, mood))));
             Stop(ref _stopVoice);
             _stopVoice = Play(path, (float)Volume, "first-show-voice");
         }
