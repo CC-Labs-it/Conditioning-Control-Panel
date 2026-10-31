@@ -1,5 +1,9 @@
 using System;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -32,6 +36,79 @@ public sealed class InboxNoticeCardTests
     private static Button FindButton(string name) => InboxNoticeCard.Current!.GetVisualDescendants()
         .OfType<Button>().Single(b => b.Name == name);
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    private sealed class TierReply(string body, HttpStatusCode status) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConfirmedDropRearmsNoticeButCachedDropDoesNot(bool profile) => Run(() =>
+    {
+        var s = CoreSettings.Current;
+        string? token = "notice-token";
+        CoreSecrets.RetrieveProvider = _ => token;
+        CoreSecrets.StoreProvider = (_, value) => token = value;
+        s.UnifiedId = Guid.NewGuid().ToString();
+        s.OfflineMode = false;
+        AccountSeed.Sync = null;
+        CoreAccount.IsLoggedInProvider = () => true;
+        bool premium = false;
+        CoreAccount.HasPremiumAccessProvider = CoreAccount.HasLabAccessProvider = () => premium;
+        s.LastKnownEffectiveTier = 2;
+        s.PatreonTier = 2;
+        s.PatreonLabValidUntil = s.PatreonPremiumValidUntil = DateTime.UtcNow.AddDays(-1);
+        var grace = s.PatreonLabValidUntil;
+        s.SeenFeatureIntros.Add(TierCelebration.KeyT2);
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.TierOnNoticePass(true);
+            Assert.False(AccountSeed.ServerTierAnsweredThisRun);
+            Assert.Equal(2, s.LastKnownEffectiveTier); // cached drop is not authoritative
+            foreach (var body in new[] { "{}", "{\"effective_tier\":\"0\"}", "{\"effective_tier\":9}", "bad json" })
+            {
+                Read(body, HttpStatusCode.OK);
+                Assert.False(AccountSeed.ServerTierAnsweredThisRun);
+            }
+            Read("{\"effective_tier\":0}", HttpStatusCode.InternalServerError);
+            Assert.False(AccountSeed.ServerTierAnsweredThisRun);
+            Read("{\"effective_tier\":0}", HttpStatusCode.OK);
+            Assert.True(AccountSeed.ServerTierAnsweredThisRun);
+            shell.TierOnNoticePass(true);
+            Assert.Equal(0, s.LastKnownEffectiveTier);
+            Assert.Equal(2, s.PatreonTier);
+            Assert.Equal(grace, s.PatreonLabValidUntil);
+            premium = true;
+            shell.TierOnNoticePass(true);
+            shell.TierOnNoticePass(true);
+            Assert.Single(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2");
+            Assert.Equal(2, s.LastKnownEffectiveTier);
+            token = "rotated";
+            Assert.False(AccountSeed.ServerTierAnsweredThisRun);
+            AccountSeed.NoteTierReading(0, s.UnifiedId, "notice-token"); // late response from old token
+            Assert.False(AccountSeed.ServerTierAnsweredThisRun);
+            s.UnifiedId = "another-account";
+            Assert.False(AccountSeed.ServerTierAnsweredThisRun);
+            token = null;
+            Read("{\"effective_tier\":0}", HttpStatusCode.OK);
+            Assert.False(AccountSeed.ServerTierAnsweredThisRun);
+        }
+        finally { shell.Close(); }
+
+        void Read(string body, HttpStatusCode status)
+        {
+            var wire = new TierReply(profile ? "{\"user\":" + body + "}" : body, status);
+            if (profile) AccountSeed.LoadProfileAsync(new V2AuthService(() => s, wire)).GetAwaiter().GetResult();
+            else new SyncPush(() => null, () => false, wire) { TierReceived = AccountSeed.NoteTierReading }
+                .HeartbeatAsync().GetAwaiter().GetResult();
+        }
+    });
 
     [Fact]
     public void VisibleOwnerIsUsedAndHiddenOwnerFallsBack() => Run(() =>

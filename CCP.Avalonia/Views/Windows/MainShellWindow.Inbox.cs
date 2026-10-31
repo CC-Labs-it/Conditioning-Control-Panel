@@ -96,8 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF EntitlementTierSync.EffectiveTierNow: an invite week is not a plan.
                 var current = CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess
                     && !global::ConditioningControlPanel.Services.ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, settings) ? 1 : 0;
-                // ponytail: no authoritative server-answered signal on this head yet. Never record a cached drop.
-                var verdict = Services.TierOnNoticeRule.Decide(settings.LastKnownEffectiveTier, current, mayRecordDrop: false);
+                var verdict = Services.TierOnNoticeRule.Decide(settings.LastKnownEffectiveTier, current, mayRecordDrop: Platform.AccountSeed.ServerTierAnsweredThisRun);
                 if (verdict.Record != settings.LastKnownEffectiveTier)
                 {
                     // Unlike WPF MainWindow.Patreon.cs:1209, keep the first reading in memory
