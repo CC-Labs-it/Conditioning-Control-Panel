@@ -106,6 +106,7 @@ import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
 import { createLoading, LOAD_STALL_MS } from './hud/loading.js';
 import { createRaceToys } from './host/raceToys.js';
+import { noteCompatLoss } from './render/compatAdapter.js';
 import { describeFailure, rememberFailure, failureLine, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS, earlierLine, rebuildAllowed } from './core/failure.js';
 import { ORDER as TIER_ORDER } from './render/quality.js';
 import { dismantleScene } from './render/sceneResources.js';
@@ -559,10 +560,13 @@ async function boot(course, options, lifetime, isCurrent) {
     calm: (hud.options?.motion || 'full') !== 'full',
     results: state === 'results' || (state === 'race' && !!race && race.phase === 'finished') });
   lifetime.defer(renderer.onLost((lost) => {
+    // a hidden page's loss is the phone tidying up, not the route failing
+    if (renderer.compatOnly && !document.hidden) noteCompatLoss(renderer.backend);
     if (isCurrent()) void recover('lost', new Error((lost.api ? lost.api + ' ' : '') + (lost.message || 'device lost') + (lost.reason ? ' (' + lost.reason + ')' : '')), { race: racing() });
   }));
   // a compat device refusing every frame is a black world with no throw: end on the reason and Retry, never on black
   lifetime.defer(renderer.onCompatDead((message) => {
+    noteCompatLoss('webgpu');
     if (isCurrent()) fail(new Error('this phone\'s graphics could not draw the course: ' + message));
   }));
   shared.counts.courses++;

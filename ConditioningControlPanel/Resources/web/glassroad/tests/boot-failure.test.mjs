@@ -121,7 +121,7 @@ test('boot.js: a failure is recorded with the stage and shown on the cover with 
 
 test('boot.js: device loss, a stalled loop and a loop that keeps throwing all rebuild behind the cover, back into the race', () => {
   const b = src('boot.js');
-  assert.match(b, /lifetime\.defer\(renderer\.onLost\(\(lost\) => \{\s*if \(isCurrent\(\)\) void recover\('lost'/);
+  assert.match(b, /lifetime\.defer\(renderer\.onLost\(\(lost\) => \{[\s\S]{0,200}?if \(isCurrent\(\)\) void recover\('lost'/);
   const rec = b.slice(b.indexOf('async function recover('), b.indexOf('shared.recover = recover'));
   assert.match(rec, /if \(shared\.closed \|\| shared\.recovering\) return false;/);
   assert.match(rec, /teardownGpu\(\{ lowerTier: kind === 'lost' \}\)/, 'a lost device rebuilds one tier lower');
