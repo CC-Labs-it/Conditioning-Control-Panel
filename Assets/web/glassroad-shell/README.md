@@ -7,7 +7,7 @@ the shell; closing stdin also destroys the window. stdout carries page frames
 and `{"type":"escape"}` for each non-repeated keydown. CCP owns the two-Escape
 panic policy and sends `{"type":"kept-escape"}` when the page should pause.
 No diagnostics or token belong on stdout. The shell queues host frames until
-page load, with a bounded queue and line size. One shell owns one window.
+the page bridge installs its message listener, with a bounded queue and line size. One shell owns one window.
 
 The preload's `ccpHost` is the additive WebView bridge. Audio stays muted until
 the page reports its own running AudioContext. Navigation, new windows, webview

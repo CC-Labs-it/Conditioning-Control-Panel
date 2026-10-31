@@ -37,7 +37,7 @@ function allowedPermission(permission, origin, requestingUrl) {
 }
 
 function start({ app, BrowserWindow, ipcMain, session }, io = process) {
-  let win = null, origin = null, launched = false, loaded = false, ended = false;
+  let win = null, origin = null, launched = false, bridgeReady = false, ended = false;
   let pending = [], buffer = '';
   const send = message => {
     if (!ended && message && typeof message === 'object' && !Array.isArray(message)) {
@@ -53,6 +53,13 @@ function start({ app, BrowserWindow, ipcMain, session }, io = process) {
   const fromPage = e => win && !win.isDestroyed() && e.sender === win.webContents &&
     e.senderFrame === win.webContents.mainFrame;
   ipcMain.on('ccp:message', (e, message) => { if (fromPage(e)) send(message); });
+  ipcMain.on('ccp:bridge-ready', e => {
+    if (!fromPage(e) || bridgeReady) return;
+    bridgeReady = true;
+    try { for (const message of pending) win.webContents.send('ccp:host-message', message); }
+    catch { stop(); }
+    pending = [];
+  });
   ipcMain.on('ccp:audio-unlocked', e => { if (fromPage(e)) win.webContents.setAudioMuted(false); });
   io.stdin.setEncoding('utf8');
   io.stdin.on('error', stop);
@@ -87,11 +94,6 @@ function start({ app, BrowserWindow, ipcMain, session }, io = process) {
       e.preventDefault();
       if (input.type === 'keyDown' && !input.isAutoRepeat) send({ type: 'escape' });
     });
-    web.on('did-finish-load', () => {
-      loaded = true;
-      for (const message of pending) web.send('ccp:host-message', message);
-      pending = [];
-    });
     win.on('closed', stop);
     try { await win.loadURL(url.href); } catch { stop(); }
   }
@@ -107,7 +109,7 @@ function start({ app, BrowserWindow, ipcMain, session }, io = process) {
       open(url).catch(stop);
     } else if (message.type === 'shell-close') stop();
     else if (typeof message.type === 'string') {
-      if (loaded && win && !win.isDestroyed()) win.webContents.send('ccp:host-message', message);
+      if (bridgeReady && win && !win.isDestroyed()) win.webContents.send('ccp:host-message', message);
       else if (pending.length < 256) pending.push(message);
       else stop();
     }

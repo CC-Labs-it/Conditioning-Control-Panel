@@ -81,6 +81,8 @@ test('one window, locked navigation, IPC, Escape and mute follow the real handle
   f.ses.permit(web, 'media', result => { permission = result; }, { requestingUrl: url }); assert.equal(permission, false);
   assert.equal(f.ses.check(web, 'fullscreen', origin), true); assert.equal(f.ses.check({}, 'fullscreen', origin), false);
   assert.deepEqual(w.sent, []); web.emit('did-finish-load');
+  f.ipcMain.emit('ccp:bridge-ready', { ...event, senderFrame: {} }); assert.deepEqual(w.sent, []);
+  f.ipcMain.emit('ccp:bridge-ready', event); f.ipcMain.emit('ccp:bridge-ready', event);
   assert.deepEqual(w.sent, [['ccp:host-message', { type: 'init', v: 2 }]]);
   f.input({ type: 'ping', t: 1 }); assert.deepEqual(w.sent.at(-1), ['ccp:host-message', { type: 'ping', t: 1 }]);
   f.ipcMain.emit('ccp:message', event, { type: 'ready' });
@@ -122,7 +124,7 @@ test('preload exposes only the page bridge and forwards host frames', () => {
   bridge.removeEventListener('message', listener); ipc.emit('ccp:host-message', {}, { type: 'other' });
   assert.deepEqual(received, { type: 'init' });
   bridge.postMessage({ type: 'ready' }); bridge.audioUnlocked();
-  assert.deepEqual(sent, [['ccp:message', { type: 'ready' }], ['ccp:audio-unlocked']]);
+  assert.deepEqual(sent, [['ccp:bridge-ready'], ['ccp:message', { type: 'ready' }], ['ccp:audio-unlocked']]);
 });
 
 
@@ -137,4 +139,43 @@ test('host loss before startup, failed load, output failure and a full queue can
   f = fixture(); f.input({ type: 'launch', url }); await turn();
   for (let i = 0; i < 257; i++) f.input({ type: 'ping', i });
   assert.equal(f.windows[0].dead, true); assert.equal(f.app.quits, 1);
+});
+
+test('init reaches the real bridge before its timeout even when document load is delayed', async () => {
+  const vm = require('node:vm'), fs = require('node:fs'), path = require('node:path');
+  const { createBridge } = await import('../../glassroad/host/bridge.js');
+  const f = fixture();
+  f.input({ type: 'launch', url });
+  f.input({ type: 'init', caps: { net: true }, identity: { unifiedId: 'player' } });
+  await turn();
+  const w = f.windows[0], web = w.webContents, event = { sender: web, senderFrame: web.mainFrame };
+  const ipc = new EventEmitter();
+  ipc.send = (channel, message) => setImmediate(() => f.ipcMain.emit(channel, event, message));
+  web.send = (channel, message) => { w.sent.push([channel, message]); ipc.emit(channel, {}, message); };
+  let host, timeout;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../preload.js'), 'utf8'), {
+    require: () => ({ ipcRenderer: ipc, contextBridge: { exposeInMainWorld: (_name, bridge) => { host = bridge; } } }),
+  });
+  const win = { chrome: {}, ccpHost: host, location: { search: '' },
+    setInterval: () => 1, clearInterval() {},
+    setTimeout: fn => { timeout = fn; return 1; }, clearTimeout: () => { timeout = null; } };
+  const bridge = createBridge({ win });
+  await turn();
+  // No did-finish-load: a pending image can outlast the page's 3 s init deadline.
+  if (timeout) timeout();
+  const init = await bridge.init;
+  assert.equal(init.caps.net, true);
+  assert.deepEqual(init.identity, { unifiedId: 'player' });
+  let reply; bridge.on('net-reply', message => { reply = message; });
+  f.input({ type: 'net-reply', id: '1' });
+  assert.equal(reply.id, '1');
+  bridge.dispose(); f.input({ type: 'shell-close' });
+});
+
+test('a failed queued delivery closes the shell', async () => {
+  const f = fixture(); f.input({ type: 'launch', url }); f.input({ type: 'init' }); await turn();
+  const w = f.windows[0], web = w.webContents;
+  web.send = () => { throw new Error('renderer gone'); };
+  f.ipcMain.emit('ccp:bridge-ready', { sender: web, senderFrame: web.mainFrame });
+  assert.equal(w.dead, true); assert.equal(f.app.quits, 1);
 });

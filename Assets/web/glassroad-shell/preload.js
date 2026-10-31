@@ -8,7 +8,9 @@ ipcRenderer.on('ccp:host-message', (_event, data) => {
 });
 contextBridge.exposeInMainWorld('ccpHost', {
   postMessage: message => ipcRenderer.send('ccp:message', message),
-  addEventListener: (type, listener) => { if (type === 'message' && typeof listener === 'function') listeners.add(listener); },
+  addEventListener: (type, listener) => {
+    if (type === 'message' && typeof listener === 'function') { listeners.add(listener); ipcRenderer.send('ccp:bridge-ready'); }
+  },
   removeEventListener: (type, listener) => { if (type === 'message') listeners.delete(listener); },
   audioUnlocked: () => ipcRenderer.send('ccp:audio-unlocked'),
 });
