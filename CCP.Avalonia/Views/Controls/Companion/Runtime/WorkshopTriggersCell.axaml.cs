@@ -11,8 +11,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     ///
     /// WPF forwards the controls to MainWindow. This head keeps the toggle's local visibility
     /// and interval label here, and hoists phrase-preset selection/save/delete to the Workshop host.
-    /// Manage Phrases forwards to the owning shell. Edit Phrases and the live avatar trigger timer
-    /// still await their runtime.
+    /// Manage Phrases forwards to the owning shell and refreshes the active count on close.
+    /// Edit Phrases and settings persistence are covered by PR 3351.
     /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
@@ -39,6 +39,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             // WPF wired Checked/Unchecked separately; Avalonia has one event for both.
             toggle.IsCheckedChanged += (_, _) => panel.IsVisible = toggle.IsChecked == true;
             slider.ValueChanged += (_, _) => intervalText.Text = $"{(int)slider.Value}s";
+            AttachedToVisualTree += (_, _) => RefreshPhraseCount();
+        }
+
+        // WPF MainWindow.Patreon.cs:1403-1406. Uses the editor pool, including voice and bark rows.
+        internal void RefreshPhraseCount()
+        {
+            this.FindControl<TextBlock>("TxtPhraseCount")!.Text = Loc.GetF("label_active_phrase_count",
+                Dialogs.CompanionPhraseEditorDialog.ActivePhraseCount());
         }
     }
 
@@ -53,10 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         public string LocRandomPhrasesHint => Loc.Get("label_random_conditioning_phrases_with_audio");
         public string LocInterval => Loc.Get("label_interval");
 
-        // Both of these are STATIC keys holding the at-rest value, not formatted strings: the WPF
-        // head overwrites them with plain interpolation once real data arrives
-        // ($"{value}s" at MainWindow.Patreon.cs:1235, $"{count} active" at :1132). No Loc.GetF
-        // anywhere on this cell, so there is no format key to look up.
+        // Static initial labels. Interval updates locally; active count is formatted above.
         public string LocIntervalValue => Loc.Get("label_60s");
         public string LocPhraseCount => Loc.Get("label_0_active");
 

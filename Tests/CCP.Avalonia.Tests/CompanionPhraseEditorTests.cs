@@ -16,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Bark;
 using Xunit;
@@ -24,6 +25,21 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class CompanionPhraseEditorTests
 {
+    [Fact]
+    public void ActiveCountUsesEnabledRowsFromTheRealPhrasePool()
+    {
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var before = CompanionPhraseEditorDialog.ActivePhraseCount();
+        var probe = new CustomCompanionPhrase { Id = "active-count-probe", Text = "Probe", Enabled = true };
+        service.Current.CustomCompanionPhrases.Add(probe);
+        Assert.Equal(before + 1, CompanionPhraseEditorDialog.ActivePhraseCount());
+        probe.Enabled = false;
+        Assert.Equal(before, CompanionPhraseEditorDialog.ActivePhraseCount());
+        service.Current.CustomCompanionPhrases.Remove(probe);
+        Assert.Equal(before, CompanionPhraseEditorDialog.ActivePhraseCount());
+    }
+
     [Fact]
     public void RealVoiceAndBarkRowsFilterAndPersistThroughTheToolbar() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -110,7 +126,20 @@ public sealed class CompanionPhraseEditorTests
             Assert.True(room.IsVisualAncestorOf(cell));
             cell.FindControl<Button>("BtnManagePhrases")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
-            Assert.Single(shell.OwnedWindows.OfType<CompanionPhraseEditorDialog>());
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<CompanionPhraseEditorDialog>());
+            var count = cell.FindControl<TextBlock>("TxtPhraseCount")!;
+            var before = Rows(dialog).Count(p => p.IsEnabled);
+            // Include enabled and disabled custom rows; the manager and cell must agree.
+            settings.CustomCompanionPhrases.Add(new CustomCompanionPhrase
+            {
+                Id = "count-probe", Text = "Count probe", Category = "General", Enabled = true
+            });
+            dialog.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Loc.GetF("label_active_phrase_count", before + 1), count.Text);
+            settings.CustomCompanionPhrases[^1].Enabled = false;
+            cell.RefreshPhraseCount();
+            Assert.Equal(Loc.GetF("label_active_phrase_count", before), count.Text);
         }
         finally
         {
