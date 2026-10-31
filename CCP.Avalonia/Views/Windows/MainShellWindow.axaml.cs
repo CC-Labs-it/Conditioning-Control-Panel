@@ -159,6 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             App.CatalogueLookup.SetOpener(OpenCatalogueEnhancement);
             Closed += (_, _) =>
             {
+                StopEngineRamp();
                 StopLockdownPulse();
                 App.CatalogueLookup.ClearOpener(OpenCatalogueEnhancement);
                 if (Platform.X11PanicKey.PushToTalk == OnPushToTalkKey)
