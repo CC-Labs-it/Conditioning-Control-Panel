@@ -189,7 +189,12 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        var shell = new MainShellWindow();
+        // Exercise the links as a returning user, independently of onboarding and intro cards.
+        var settings = CoreSettings.Current;
+        settings.Welcomed = settings.HasAcceptedAgeVerification = true;
+        settings.WhatMovedCardShown = 1;
+        settings.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        var shell = new MainShellWindow { TabClock = new SteppedClock() };
         try
         {
             shell.Show();
@@ -197,7 +202,9 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            shell.CompleteTabTransition(); // settle the actual entrance before reading pointer geometry
             Dispatcher.UIThread.RunJobs();
+            Assert.Null(shell.EnteringTab); // hit geometry must be settled even with a frozen clock
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
@@ -206,6 +213,8 @@ public sealed class CompanionEditorsTests
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
                 Dispatcher.UIThread.RunJobs();
+                Assert.True(shell.IsEnabled);
+                Assert.True(button.IsEffectivelyVisible);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
@@ -213,7 +222,7 @@ public sealed class CompanionEditorsTests
                 await Until(() => shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Any());
                 var editor = shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Single();
                 Click(editor.FindControl<Button>("BtnCancel")!);
-                await Until(() => !editor.IsVisible);
+                await Until(() => !editor.IsVisible && shell.IsEnabled);
             }
         }
         finally { shell.Close(); CoreSettings.ServiceProvider = null; }
