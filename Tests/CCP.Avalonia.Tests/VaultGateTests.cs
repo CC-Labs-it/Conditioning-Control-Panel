@@ -285,6 +285,8 @@ public sealed class VaultGateTests
         EnsureAvalonia();
         // The pass reads CoreSettings.Service (not CoreSettings.Current), so a service of our own is seeded
         // around each click only.
+        var oldLockdown = LockdownService.Current;
+        var lockdown = LockdownService.Current = new LockdownService();
         var prevSettings = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         var login = CoreAccount.IsLoggedInProvider;
@@ -302,18 +304,25 @@ public sealed class VaultGateTests
         shell.Show();
         var host = new StackPanel();
         global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(host);
-        void ClickSpentCta()
+        void ClickSpentCta(Action? beforeClick = null)
         {
             host.Children.Clear();
             CoreSettings.ServiceProvider = () => service;
             try { shell.Named<GradedIntakeTabView>("GradedIntakeTab")!.BtnStartIntake_Click(null, new RoutedEventArgs()); }
             finally { CoreSettings.ServiceProvider = prevSettings; }
+            beforeClick?.Invoke();
             Click(host, Loc.Get("intake_gate_spent_cta"));
         }
         try
         {
             service.Current.IntakePassSpentWeek = IntakePassService.CurrentWeekKey();
             service.Current.IntakePassSpentUtc = DateTime.UtcNow;
+
+            // A toast raised before Lockdown must refuse a later click, including Reconnect.
+            ClickSpentCta(() => lockdown.Activate(TimeSpan.FromMinutes(30)));
+            Assert.Equal(0, reconnects);
+            Assert.Null(VaultGateDialog.Open);
+            lockdown.Deactivate();
 
             ClickSpentCta();   // lapsed patron: Reconnect, no price card
             Assert.Equal(1, reconnects);
@@ -327,6 +336,8 @@ public sealed class VaultGateTests
         }
         finally
         {
+            lockdown.Deactivate();
+            LockdownService.Current = oldLockdown;
             VaultGateDialog.Open?.Close();
             shell.Close();
             CoreSettings.ServiceProvider = prevSettings;

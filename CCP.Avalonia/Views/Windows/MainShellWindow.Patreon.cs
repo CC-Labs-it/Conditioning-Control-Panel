@@ -192,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// to Reconnect instead of the price card.</summary>
         internal void OpenPricedCard(string featureKey, int tier)
         {
+            if (LockdownActive) return;
             if (TierGate.ReconnectIsTheAnswer()) { _ = ReconnectFromGate(); return; }
             ShowVaultGate(featureKey, tier);
         }
