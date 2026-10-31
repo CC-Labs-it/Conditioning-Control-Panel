@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Input.Platform;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
@@ -69,14 +70,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             InitializeComponent();
             PrivacyPanel = new ProfilePrivacyPanel();
+            PrivacyPanel.PrivacyChanged += RefreshPrivacyActions;
+            AttachedToVisualTree += (_, _) => RefreshPrivacyActions();
         }
 
         // ------------------------------------------------------------------
         // The card (read-only): WPF MainWindow.Browser.cs BtnViewMyProfile_Click, SearchAndDisplayProfile,
         // DisplayOwnProfile, DisplayProfileEntry and RefreshProfileViewerAsync, on the tab itself.
         // ponytail: no avatar picture (no Discord avatar URL or remote image load on this head), no Patreon
-        // badge/banner art, no edit-name/delete/Discord-DM buttons (writes, unit 7), no cosmetics, no staff
-        // flag for your own card (no Discord service): each stays hidden rather than drawn wrong.
+        // badge/banner art, no staff
+        // flag for your own card: each stays hidden rather than drawn wrong.
         // ------------------------------------------------------------------
 
         private LeaderboardPage<LeaderboardRow>? _board;
@@ -198,7 +201,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var isOwn = string.Equals(entry.DisplayName, s.UserDisplayName, StringComparison.OrdinalIgnoreCase);
             ApplyIdentityBadges(false, null, isOwn && CoreAccount.IsWhitelisted);
             TxtProfileViewerName.Text = entry.DisplayName;
-            ShowOwnActions(isOwn);
+            ShowOwnActions(isOwn, entry);
+            // WPF MainWindow.Browser.cs:2263 uses the server identity for every leaderboard card.
+            ShowDiscordAction(entry.DiscordId, entry.DisplayName);
             SetOnline(entry.IsOnline, entry.IsOnline ? "Online" : "Offline"); // WPF's literals
             TxtProfileViewerLevel.Text = entry.Level.ToString();
             TxtProfileViewerRank.Text = TrainerCardText.Rank(entry.Rank);
@@ -337,20 +342,70 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF Browser.cs:1934-1942 / 2215-2223: rename and delete show on your own card only, and only
         /// with a unified id to act on.</summary>
-        private void ShowOwnActions(bool own)
+        private void ShowOwnActions(bool own, LeaderboardRow? entry = null)
         {
+            _viewingOwn = own;
+            _profileEntry = entry;
+            ShowDiscordAction(null, null);
+            RefreshPrivacyActions();
             var show = own && !string.IsNullOrEmpty(CoreSettings.Current.UnifiedId);
             BtnChangeDisplayName.IsVisible = show;
             BtnDeleteProfile.IsVisible = show;
         }
-        private void BtnProfileDiscord_Click(object? sender, RoutedEventArgs e) { }
+        private async void BtnProfileDiscord_Click(object? sender, RoutedEventArgs e) => await OpenProfileDiscordAsync();
+
+        // WPF MainWindow.Browser.cs:1709,1735: failed launch copies the id, then restores the label after 1500 ms.
+        internal async Task OpenProfileDiscordAsync()
+        {
+            if (BtnProfileDiscord.Tag is not string { Length: > 0 } id) return;
+            try
+            {
+                if (await OpenDiscordProfile($"https://discord.com/users/{id}")) return;
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to open Discord profile"); }
+            try
+            {
+                if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
+                await clipboard.SetTextAsync(id);
+                var original = TxtProfileDiscordId.Text;
+                TxtProfileDiscordId.Text = Loc.Get("label_id_copied");
+                await Task.Delay(1500);
+                // A different card or a consent repaint must keep its own label.
+                if (Equals(BtnProfileDiscord.Tag, id) && TxtProfileDiscordId.Text == Loc.Get("label_id_copied"))
+                    TxtProfileDiscordId.Text = original;
+            }
+            catch (Exception ex) { Log.Debug(ex, "Discord id clipboard fallback failed"); }
+        }
+
+        internal Func<string, Task<bool>> OpenDiscordProfile = url => Platform.ExternalOpener.OpenAsync(null, url);
+        private bool _viewingOwn;
+        private LeaderboardRow? _profileEntry;
+
+        // WPF MainWindow.Browser.cs:1552,2041 and MainWindow.Patreon.cs:935.
+        internal void RefreshPrivacyActions()
+        {
+            ProfileLinkNotice.IsVisible = !CoreSettings.Current.HasLinkedDiscord;
+            if (_viewingOwn)
+                ShowDiscordAction(CoreSettings.Current.AllowDiscordDm
+                    ? (_profileEntry != null ? _profileEntry.DiscordId : Platform.AccountSeed.Discord?.UserId) : null,
+                    _profileEntry != null ? _profileEntry.DisplayName
+                        : CoreSettings.Current.UserDisplayName ?? Platform.AccountSeed.Discord?.CustomDisplayName);
+        }
+
+        private void ShowDiscordAction(string? id, string? label)
+        {
+            BtnProfileDiscord.IsVisible = !string.IsNullOrEmpty(id);
+            BtnProfileDiscord.Tag = id;
+            // WPF MainWindow.Browser.cs:2268: a card without a display name says "Message on Discord", never the raw id.
+            TxtProfileDiscordId.Text = string.IsNullOrEmpty(label) ? ConditioningControlPanel.Localization.Loc.Get("label_message_on_discord") : label;
+        }
 
         private void BtnProfileSearch_Click(object? sender, RoutedEventArgs e) => _ = SearchAsync(TxtProfileSearch.Text);
         private void BtnViewMyProfile_Click(object? sender, RoutedEventArgs e) => _ = ViewMyProfileAsync();
 
         /// <summary>The link-notice button reuses the Privacy panel's login/link flow verbatim on
         /// WPF — that handler drives BtnDiscordTabLogin on the long-lived panel instance.</summary>
-        private void BtnDiscordTabLogin_Click(object? sender, RoutedEventArgs e) { }
+        private async void BtnDiscordTabLogin_Click(object? sender, RoutedEventArgs e) => await PrivacyPanel.LoginAsync(Host);
 
         /// <summary>Opens the relocated sharing controls, exactly as the WPF handler does
         /// (<c>mw.OpenProfilePrivacyDialog()</c>). The dialog borrows <see cref="PrivacyPanel"/>,

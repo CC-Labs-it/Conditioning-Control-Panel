@@ -132,6 +132,7 @@ public sealed class PanicSurfacesTests
         "attention-test",
         "descent-fuse",
         "deeper-editor-audio",
+        "discord-share-prompt",
         "knock-cards",
         "quick-recal",
         "asset-preview",
