@@ -57,6 +57,25 @@ public sealed class ListeningPauseTests
         finally { runner.Stop(); AvApp.Sessions = null; CoreEngine.Stop(); }
     });
 
+    // WPF MainWindow.Leash.cs:307 -> MainWindow.xaml.cs:1898: the gate is a local panic.
+    [Fact]
+    public void SessionGrammarCannotUndoLeashGatePanic() => Run(shell =>
+    {
+        var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+        try
+        {
+            shell.StartSession(new Session { Id = "voice_leash_panic", Name = "Leash panic", DurationMinutes = 5 });
+            Assert.True(runner.IsRunning && !runner.IsPaused);
+            shell.PanicFromLeashGate();
+            Assert.True(runner.IsPaused);
+            Assert.True(MainShellWindow.LocalPanicHoldsSession);
+            Command(shell, "resume the session");
+            Assert.True(runner.IsPaused);
+            Assert.False(shell.ResumeSessionByVoice());
+        }
+        finally { runner.Stop(); AvApp.Sessions = null; CoreEngine.Stop(); }
+    });
+
     [Fact]
     public void LockdownRefusesSessionPause() => Run(shell =>
     {
@@ -82,7 +101,7 @@ public sealed class ListeningPauseTests
     private static void Run(Action<MainShellWindow> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var shell = new MainShellWindow();
         shell.Show();
