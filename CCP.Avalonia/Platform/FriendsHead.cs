@@ -11,6 +11,10 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// with none the service is not built and the drawer reads signed out.</summary>
 internal static class FriendsHead
 {
+    // WPF Services/Session/SessionEngine.cs:396: all session exits restore the activity beneath it.
+    internal static void WatchSessionStop(SessionRunner runner) =>
+        runner.Stopped += (_, _) => Service?.LeaveActivity(PresenceActivity.Session);
+
     internal const string EnvVar = "CCP_FRIENDS_API_URL";
 
     /// <summary>WPF App.Friends. Null until startup built it.</summary>

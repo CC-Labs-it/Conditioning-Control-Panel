@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
             // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
-            ["breakoutdemo"] = new("breakoutdemo", "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
+            [BreakoutDemoId] = new(BreakoutDemoId, "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
             // WPF FypHostService.cs:94 StartUrl, behind OpenFypFeed's premium gate (MainWindow.Lab.cs:246).
             [FypId] = new(FypId, "tab_fyp", "fyp/index.html", FypGate),
             // WPF JustDropHostService: the live shop at app.cclabs.app, not a page off disk (GameWindow.JustDrop.cs).
@@ -57,6 +57,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF GlassroadHostService (feat/glassroad-a): the 3D race behind CCP_GLASSROAD=1 (GameWindow.Glassroad.cs).
             [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
         };
+
+        internal const string BreakoutDemoId = "breakoutdemo";
 
         private static readonly List<GameWindow> Open = new();
 
@@ -87,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         /// <summary>--render-all's sample: the Breakout demo's frame with no page loaded.</summary>
-        internal GameWindow() : this(Games["breakoutdemo"]) { }
+        internal GameWindow() : this(Games[BreakoutDemoId]) { }
 
         internal GameWindow(Game spec)
         {
@@ -104,6 +106,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
             Closing += (_, _) => _closing = true;
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
+            // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
+            if (spec.Id == BreakoutDemoId)
+            {
+                Opened += (_, _) => FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
+                Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
+            }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
