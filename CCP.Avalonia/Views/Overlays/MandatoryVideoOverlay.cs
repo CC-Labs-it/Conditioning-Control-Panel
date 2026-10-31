@@ -334,14 +334,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
-            RestoreChaosLayer();
+            RestoreChaosLayerAfterStart(w);
             return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
         }
 
         // WPF ChaosModeService.cs:735-762: starting or clicking a video can cover keep-alive FX.
         internal static void RestoreChaosLayer() => Chaos.ChaosRunHost.RaiseEStimAboveVideo();
+        // WPF ChaosModeService.cs:816: repeat after fullscreen/activation has settled.
+        internal static void RestoreChaosLayerAfterStart(Window w)
+        {
+            RestoreChaosLayer();
+            ScheduleChaosRestore(w, 60);
+        }
+
+        // DispatcherTimer keeps the delayed raise on the UI thread. Tests step these callbacks.
+        internal static Action<TimeSpan, Action> ScheduleChaosRaise = (delay, callback) => DispatcherTimer.RunOnce(callback, delay);
+        private static void ScheduleChaosRestore(Window w, int delayMs)
+        {
+            var run = Chaos.ChaosRunHost.State;
+            if (run == null) return;
+            ScheduleChaosRaise(TimeSpan.FromMilliseconds(delayMs), () =>
+            {
+                // A stopped/closed video or replaced run must not raise a later gameplay layer.
+                if (w.IsVisible && ReferenceEquals(run, Chaos.ChaosRunHost.State)) RestoreChaosLayer();
+            });
+        }
+
+        // WPF Services/Video/VideoService.cs:5809: a handled click still activates the native video.
         internal static void WireChaosRestacking(Window w) => w.AddHandler(InputElement.PointerPressedEvent,
-            (_, _) => RestoreChaosLayer(), global::Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
+            (_, _) => ScheduleChaosRestore(w, 50), global::Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
 
         /// <summary>WPF GracePauseOverlayWindow's card: 360x200, centred, #1A1A2E with a 2 px pink edge,
         /// the pause glyph, "Paused", a pink Resume pill (0.85 on hover, 0.7 pressed) and the countdown.</summary>

@@ -164,6 +164,9 @@ public sealed class ChaosEStimOverlayTests
         ChaosEStimOverlay.CanShow = () => true;
         ChaosEStimOverlay.RaiseWindow = raised.Add;
         var video = new Window();
+        var schedule = MandatoryVideoOverlay.ScheduleChaosRaise;
+        var pending = new List<(TimeSpan Delay, Action Run)>();
+        MandatoryVideoOverlay.ScheduleChaosRaise = (delay, callback) => pending.Add((delay, callback));
         try
         {
             ChaosRunHost.ForceShutdown();
@@ -185,11 +188,16 @@ public sealed class ChaosEStimOverlayTests
             MandatoryVideoOverlay.RestoreChaosLayer();
             Assert.Equal(pinned ? new Window[] { bolt, halo } : Array.Empty<Window>(), raised);
             raised.Clear();
+            video.Show();
             MandatoryVideoOverlay.WireChaosRestacking(video);
             var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
             video.RaiseEvent(new PointerPressedEventArgs(video, pointer, video, new Point(1, 1), 0,
                 new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
                 KeyModifiers.None, 1) { Handled = true });
+            Assert.Empty(raised); // click raise must wait for native activation
+            var click = Assert.Single(pending);
+            Assert.Equal(TimeSpan.FromMilliseconds(50), click.Delay);
+            click.Run();
             Assert.Equal(pinned ? new Window[] { bolt, halo } : Array.Empty<Window>(), raised);
             ChaosEStimOverlay.Disarm();
             raised.Clear();
@@ -202,12 +210,97 @@ public sealed class ChaosEStimOverlayTests
         }
         finally
         {
+            MandatoryVideoOverlay.ScheduleChaosRaise = schedule;
             video.Close();
             ChaosRunHost.ForceShutdown();
             ChaosEStimOverlay.CloseActive();
             settings.ChaosPinOnTop = previousPin;
             ChaosEStimOverlay.CanShow = canShow;
             ChaosEStimOverlay.RaiseWindow = raise;
+            ChaosEStimOverlay.SkipPlatformChecksForTests = false;
+        }
+    });
+
+    // WPF ChaosModeService.cs:816 and Services/Video/VideoService.cs:5809.
+    [Theory]
+    [InlineData("video")]
+    [InlineData("run")]
+    [InlineData("replacement")]
+    public void Delayed_raise_follows_activation_and_ignores_teardown(string stop) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var schedule = MandatoryVideoOverlay.ScheduleChaosRaise;
+        var raise = ChaosEStimOverlay.RaiseWindow;
+        var canShow = ChaosEStimOverlay.CanShow;
+        var pending = new List<(TimeSpan Delay, Action Run)>();
+        var stack = new List<Window>();
+        var video = new Window();
+        bool pinned = CoreSettings.Current.ChaosPinOnTop;
+        MandatoryVideoOverlay.ScheduleChaosRaise = (delay, callback) => pending.Add((delay, callback));
+        ChaosEStimOverlay.RaiseWindow = w => { stack.Remove(w); stack.Add(w); };
+        ChaosEStimOverlay.CanShow = () => true;
+        ChaosEStimOverlay.SkipPlatformChecksForTests = true;
+        try
+        {
+            ChaosRunHost.ForceShutdown();
+            CoreSettings.Current.ChaosPinOnTop = true;
+            void Start()
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosEStimOverlay.Arm();
+            }
+            Start();
+            video.Show();
+            var halo = ChaosEStimGlow.Active!;
+            stack.Clear();
+            MandatoryVideoOverlay.RestoreChaosLayerAfterStart(video);
+            Assert.Equal(new Window[] { halo }, stack); // initial raise retained
+            var startup = Assert.Single(pending);
+            Assert.Equal(TimeSpan.FromMilliseconds(60), startup.Delay);
+            stack.Add(video); // delayed fullscreen activation covers the initial raise
+            startup.Run();
+            Assert.Equal(new Window[] { video, halo }, stack);
+            pending.Clear();
+            MandatoryVideoOverlay.WireChaosRestacking(video);
+            var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+            void Click() => video.RaiseEvent(new PointerPressedEventArgs(video, pointer, video, new Point(1, 1), 0,
+                new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
+                KeyModifiers.None, 1) { Handled = true });
+            stack.Clear();
+            Click();
+            Assert.Empty(stack); // routed click finishes before native activation
+            var click = Assert.Single(pending);
+            Assert.Equal(TimeSpan.FromMilliseconds(50), click.Delay);
+            stack.Add(video);
+            click.Run();
+            Assert.Equal(new Window[] { video, halo }, stack);
+
+            pending.Clear();
+            MandatoryVideoOverlay.RestoreChaosLayerAfterStart(video);
+            Click(); // both delayed paths must refuse teardown
+            Assert.Equal(2, pending.Count);
+            if (stop == "video") video.Close();
+            else if (stop == "run") ChaosRunHost.RequestStop();
+            else
+            {
+                ChaosRunHost.ForceShutdown();
+                Start();
+            }
+            stack.Clear();
+            foreach (var callback in pending) callback.Run();
+            Assert.Empty(stack);
+        }
+        finally
+        {
+            video.Close();
+            ChaosRunHost.ForceShutdown();
+            ChaosEStimOverlay.CloseActive();
+            CoreSettings.Current.ChaosPinOnTop = pinned;
+            MandatoryVideoOverlay.ScheduleChaosRaise = schedule;
+            ChaosEStimOverlay.RaiseWindow = raise;
+            ChaosEStimOverlay.CanShow = canShow;
             ChaosEStimOverlay.SkipPlatformChecksForTests = false;
         }
     });
@@ -254,7 +347,7 @@ public sealed class ChaosEStimOverlayTests
             root = Directory.GetParent(root)?.FullName ?? throw new InvalidOperationException("repository root missing");
         var source = File.ReadAllText(Path.Combine(root, "CCP.Avalonia/Views/Overlays/MandatoryVideoOverlay.cs"));
         Assert.Contains("WireChaosRestacking(w);", source);
-        Assert.Contains("RestoreChaosLayer();\n            return new Surface", source);
+        Assert.Contains("RestoreChaosLayerAfterStart(w);\n            return new Surface", source);
     }
 
     private static void Setup()
