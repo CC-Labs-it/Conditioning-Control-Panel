@@ -9,7 +9,9 @@ using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
+
 namespace CCP.Avalonia.Tests;
+
 public sealed class BrowserPopupTests
 {
     private static Task Run(Action<SettingsTabView, WebHost> check) =>
@@ -23,6 +25,7 @@ public sealed class BrowserPopupTests
             check(page, page.FindControl<WebHost>("BrowserWebHost")!);
             return Task.CompletedTask;
         });
+
     [Fact]
     public Task PopupUsesTheExistingHostAndItsLivePartnerDocument() => Run((page, host) =>
     {
@@ -35,6 +38,7 @@ public sealed class BrowserPopupTests
         Assert.Equal(before + 1, host.NavigationRequests);
         Assert.Equal("https://doubleclick.net/ads/popup", host.Source!.AbsoluteUri);
     });
+
     [Fact]
     public Task AdPopupIsHandledWithoutChangingThePage() => Run((page, host) =>
     {
@@ -46,6 +50,7 @@ public sealed class BrowserPopupTests
         Assert.Equal(before, host.NavigationRequests);
         Assert.Equal("https://hypnotube.com/", host.Source!.AbsoluteUri);
     });
+
     [Theory]
     [InlineData("https://hypnotube.com/watch", "https://bambicloud.com/loading", false)]
     [InlineData("https://bambicloud.com/watch", "https://hypnotube.com/loading", true)]
@@ -60,6 +65,7 @@ public sealed class BrowserPopupTests
         Assert.Equal(allowed ? "https://doubleclick.net/ads/popup" : completed, host.Source!.AbsoluteUri);
         Assert.Equal(completed, host.CurrentUrl!.AbsoluteUri); // No completion was reported.
     });
+
     [Fact]
     public Task OrdinaryPopupNavigatesInPlaceWhileOtherEmbedsDoNotOptIn() => Run((page, host) =>
     {
@@ -70,4 +76,5 @@ public sealed class BrowserPopupTests
         Assert.Null(other.Source);
         Assert.Equal(0, other.NavigationRequests);
     });
+
 }

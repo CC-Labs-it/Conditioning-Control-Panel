@@ -15,7 +15,9 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using Xunit;
+
 namespace CCP.Avalonia.Tests;
+
 public sealed class BrowserPopoutTests
 {
     private static Task WithShell(Action<MainShellWindow, SettingsTabView, WebHost> check) =>
@@ -45,8 +47,10 @@ public sealed class BrowserPopoutTests
             }
             return Task.CompletedTask;
         });
+
     private static void Click(Control root, string name) =>
         root.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
     [Fact]
     public Task PopoutMovesTheSameHostFocusesItAndReturnsItOnClose() => WithShell((shell, page, host) =>
     {
@@ -73,6 +77,7 @@ public sealed class BrowserPopoutTests
         page.OnBrowserPromptClick();
         Assert.Same(popout, shell.BrowserPopoutWindow);
         Assert.Equal(requests, host.NavigationRequests);
+
         popout.Close();
         Assert.Null(popout.Content);
         Assert.Contains(host, page.FindControl<Grid>("BrowserContainer")!.Children);
@@ -81,6 +86,7 @@ public sealed class BrowserPopoutTests
         Assert.Equal(requests, host.NavigationRequests);
         Assert.False(host.ScrolllerGate);
     });
+
     [Fact]
     public Task OfflinePopoutDoesNotCreateAWindowOrNavigateAndFirstOnlinePopoutLoadsHome() => WithShell((shell, page, host) =>
     {
@@ -96,6 +102,7 @@ public sealed class BrowserPopoutTests
         Assert.Equal(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked == true
             ? "hypnotube.com" : "bambicloud.com", host.Source!.Host);
     });
+
     [Fact]
     public Task LinkNavigationKeepsUsingThePoppedOutHost() => WithShell((shell, page, host) =>
     {
@@ -108,6 +115,7 @@ public sealed class BrowserPopoutTests
         Assert.Equal("/next", host.Source!.AbsolutePath);
         Assert.Same(popout, shell.BrowserPopoutWindow);
     });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -120,6 +128,7 @@ public sealed class BrowserPopoutTests
         Assert.Equal(WindowState.Normal, shell.WindowState);
         Assert.Equal("/visible", host.Source!.AbsolutePath);
     });
+
     [Fact]
     public Task PanicLeavesTheUsersOwnPageAndPopoutAlone() => WithShell((shell, page, host) =>
     {
@@ -132,6 +141,7 @@ public sealed class BrowserPopoutTests
         Assert.Same(host, popout.Content);
         Assert.Equal(source, host.Source);
     });
+
     [Fact]
     public Task ClosingShellClosesItsPopoutAndUnloadsThePage() => WithShell((shell, page, host) =>
     {

@@ -1,6 +1,8 @@
 using ConditioningControlPanel.Services.Browser;
 using Xunit;
+
 namespace CCP.Core.Tests;
+
 public class BrowserPopupRuleTests
 {
     [Theory]
@@ -15,16 +17,19 @@ public class BrowserPopupRuleTests
     [InlineData("https://example.com/googlesyndication")]
     public void BlocksWpfAdDomainsAndPatterns(string target) =>
         Assert.True(BrowserPopupRule.ShouldBlock("https://bambicloud.com/", target));
+
     [Theory]
     [InlineData("https://hypnotube.com/")]
     [InlineData("https://WWW.HYPNOTUBE.COM/watch")]
     public void PartnerDocumentBypassesAdPolicy(string page) =>
         Assert.False(BrowserPopupRule.ShouldBlock(page, "https://doubleclick.net/ads/popup"));
+
     [Theory]
     [InlineData("https://nothypnotube.com/")]
     [InlineData("https://hypnotube.com.example.org/")]
     public void PartnerNameMustMatchHostBoundary(string page) =>
         Assert.True(BrowserPopupRule.ShouldBlock(page, "https://doubleclick.net/"));
+
     [Theory]
     [InlineData("https://notexoclick.com.example/watch")]
     [InlineData("https://example.org/watch")]
