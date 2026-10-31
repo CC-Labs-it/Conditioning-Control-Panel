@@ -265,7 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return targets;
         }
 
-        private Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
+        internal Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
         {
             var fill = new Image { Stretch = Stretch.UniformToFill, IsVisible = false };
             RenderOptions.SetBitmapInterpolationMode(fill, BitmapInterpolationMode.HighQuality);
@@ -327,6 +327,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF: strict vetoes a user close while playing; a non-strict close is a dismiss.
             w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
+            WireChaosTimerStacking(w);
             w.Show();
             if (!floating)
             {
@@ -334,6 +335,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Activate();
             }
             return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
+        }
+
+        /// <summary>WPF ChaosModeService.cs:816-828 and VideoService.cs:5810-5822:
+        /// lift the Pocket Watch after video activation settles, without taking keyboard focus.</summary>
+        private static void WireChaosTimerStacking(Window video)
+        {
+            void Raise()
+            {
+                // Capture the watch so a delayed kick cannot affect a later run.
+                var watch = Chaos.ChaosWaveTimerWindow.Active;
+                if (watch == null) return;
+                void Kick()
+                {
+                    if (video.IsVisible && ReferenceEquals(watch, Chaos.ChaosWaveTimerWindow.Active))
+                        Chaos.ChaosWaveTimerWindow.RaiseActive();
+                }
+                Dispatcher.UIThread.Post(Kick);
+                DispatcherTimer.RunOnce(Kick, TimeSpan.FromMilliseconds(60));
+            }
+            video.Opened += (_, _) => Raise();
+            video.Activated += (_, _) => Raise();
+            video.AddHandler(InputElement.PointerPressedEvent, (_, _) => Raise(),
+                global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
         }
 
         /// <summary>WPF GracePauseOverlayWindow's card: 360x200, centred, #1A1A2E with a 2 px pink edge,
