@@ -136,8 +136,12 @@ public class SyncSevenTests
         return Task.CompletedTask;
     });
 
-    [Fact]
-    public Task SpentIntakeToastOpensBasicPricedCard() => AvaloniaTestDispatcher.RunAsync(() =>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public Task SpentIntakeToastOpensBasicPricedCard(bool reconnect, bool locked) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         CoreAccount.IsLoggedInProvider = () => true;
@@ -147,19 +151,29 @@ public class SyncSevenTests
         CoreSettings.Current.IntakePassSpentWeek = IntakePassService.CurrentWeekKey();
         CoreSettings.Current.IntakePassSpentUtc = DateTime.UtcNow;
         var shell = new MainShellWindow();
+        var reconnects = 0;
+        TierGate.ReconnectIsTheAnswerProvider = () => reconnect;
+        shell.ReconnectFromGateOverride = () => { reconnects++; return Task.CompletedTask; };
+        var lockdown = LockdownService.Current = new LockdownService();
         try
         {
             shell.Show();
+            if (locked) lockdown.Activate(TimeSpan.FromMinutes(30));
             ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(shell.FindControl<StackPanel>("NotificationHost")!);
             var view = shell.FindControl<GradedIntakeTabView>("GradedIntakeTab")!;
             view.BtnStartIntake_Click(null, new RoutedEventArgs());
             Dispatcher.UIThread.RunJobs();
             var action = shell.GetVisualDescendants().OfType<Button>().Last(b => b.Name == "ToastAction");
             action.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.NotNull(VaultGateDialog.Open);
-            Assert.Equal(1, (int)typeof(VaultGateDialog).GetField("_tier", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(VaultGateDialog.Open)!);
+            if (locked || reconnect) Assert.Null(VaultGateDialog.Open);
+            else
+            {
+                Assert.NotNull(VaultGateDialog.Open);
+                Assert.Equal(1, (int)typeof(VaultGateDialog).GetField("_tier", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(VaultGateDialog.Open)!);
+            }
+            Assert.Equal(reconnect && !locked ? 1 : 0, reconnects);
         }
-        finally { VaultGateDialog.Open?.Close(); shell.Close(); }
+        finally { lockdown.Deactivate(); VaultGateDialog.Open?.Close(); shell.Close(); }
         return Task.CompletedTask;
     });
 }

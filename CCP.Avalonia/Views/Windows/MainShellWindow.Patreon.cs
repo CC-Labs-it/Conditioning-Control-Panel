@@ -219,6 +219,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Loc.Get("tiergate_see_tiers"), () => ShowVaultGate(null, verdict.Required >= Models.PatreonTier.Level2 ? 2 : 1));
         }
 
+        /// <summary>WPF QuestsTab.cs:94: a priced offer repairs a dead grant before selling a tier.</summary>
+        internal void OpenPricedCard(string featureKey, int tier)
+        {
+            if (TierGate.ReconnectIsTheAnswer())
+            {
+                if (!LockdownActive) _ = ReconnectFromGate();
+                return;
+            }
+            ShowVaultGate(featureKey, tier);
+        }
+
         /// <summary>WPF ShowVaultGate. Null feature = the tier as a whole (the TierGate toast's "See tiers").</summary>
         internal void ShowVaultGate(string? featureKey, int tier)
         {
