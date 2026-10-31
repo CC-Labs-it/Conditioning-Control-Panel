@@ -321,7 +321,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF's consent text, minus the lines this head would be lying about (Dose keeper,
-        /// Possession: none run here; system keys off Windows, where nothing blocks them) and with the
+        /// system keys off Windows, where nothing blocks them) and with the
         /// platform's safety valve.</summary>
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg) => LockdownWarning(minutes, cfg, OperatingSystem.IsWindows());
 
@@ -338,6 +338,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             warn.Append(windows
                 ? "  (or Ctrl+Alt+Del → Task Manager as a safety valve)"   // WPF's line verbatim
                 : "  (or ending the app from a system monitor / terminal as a safety valve)");
+            if (cfg.LockdownPossessionEnabled) // WPF MainWindow.Lab.cs:94-104, only the four ported effects
+                warn.Append("\n- Possession is ON: the app UI will move. Ember glow marks it. Nothing you see is real damage.");
             return warn.ToString();
         }
 
