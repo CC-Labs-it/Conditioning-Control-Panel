@@ -294,6 +294,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         public WebHost()
         {
+            TrackScrolllerHost();
             AvaloniaXamlLoader.Load(this);
             _webSlot = this.FindControl<Panel>("WebSlot")!;
             _fallback = this.FindControl<Border>("Fallback")!;
@@ -366,6 +367,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
             var target = e.Request;
+            _scrolllerPanicTarget = target;
             if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
