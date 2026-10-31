@@ -160,7 +160,8 @@ public partial class SettingsTabView
             if (scale >= 1 && (!closing || t >= closeSeconds))
             {
                 SetGiftFace(reveal);
-                if (_giftPointer is { } point && MysteryFlipHost.Bounds.Contains(point) != _giftWanted)
+                // WPF MainWindow/MainWindow.DashboardFx.cs:635: settle over the inset face, not the layout slot.
+                if (_giftPointer is { } point && MysteryFlipHost.Bounds.Deflate(new Thickness(6)).Contains(point) != _giftWanted)
                     RequestGiftFace(!_giftWanted);
             }
         });

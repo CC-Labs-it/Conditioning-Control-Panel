@@ -187,6 +187,37 @@ public sealed class DashboardGiftPresentationTests
         }
     });
 
+    // WPF MainWindow/MainWindow.DashboardFx.cs:635-644 excludes the gutter after settling.
+    [Theory]
+    [InlineData(3)]
+    [InlineData(-3)]
+    public Task RestingInTheGutterKeepsTheOfferFace(int edge) => WithView((window, view) =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = false;
+        var oldTime = BeatLoop.Time;
+        var time = new SteppedTime();
+        try
+        {
+            BeatLoop.Time = time;
+            var host = view.MysteryFlipHost;
+            var pointer = new Pointer(6, PointerType.Mouse, true);
+            var inside = host.TranslatePoint(new Point(host.Bounds.Width / 2, host.Bounds.Height / 2), window)!.Value;
+            void Step() { time.Advance(TimeSpan.FromMilliseconds(150)); BeatLoop.StepAll(); }
+            host.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, host,
+                pointer, window, inside, 0, new PointerPointProperties(), KeyModifiers.None));
+            Step(); Step();
+            Assert.True(view.MysteryRevealFace.IsVisible);
+            var gutter = host.TranslatePoint(new Point(edge > 0 ? edge : host.Bounds.Width + edge, host.Bounds.Height / 2), window)!.Value;
+            host.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, host,
+                pointer, window, gutter, 0, new PointerPointProperties(), KeyModifiers.None));
+            for (var i = 0; i < 8; i++) Step();
+            Assert.True(view.CardMystery.IsVisible);
+            Assert.False(view.MysteryRevealFace.IsVisible);
+        }
+        finally { view.ResetGift(); BeatLoop.Time = oldTime; }
+    });
+
     [Fact]
     public Task UnopenedBreathUsesSharedTimeAndParksOnMotionGateAndDetach() => WithView((window, view) =>
     {
