@@ -103,7 +103,7 @@ public sealed class RequiredDisplayNameTests
     }
 
     [Fact]
-    public async Task Replay_switch_loads_and_saves_the_setting()
+    public async Task Replay_switch_loads_saves_and_follows_session_lock()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -114,6 +114,15 @@ public sealed class RequiredDisplayNameTests
             Assert.False(toggle.IsChecked);
             toggle.IsChecked = true;
             Assert.True(CoreSettings.Current.MandatoryVideoReplayAfterFailedCheck);
+            var paint = typeof(MainShellWindow).GetMethod("SetToggleLock",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            Assert.True(toggle.IsEnabled);
+            foreach (var locked in new[] { true, false })
+            {
+                foreach (var owned in SessionLock.FindOwnedControls(view))
+                    paint.Invoke(null, new object?[] { owned, locked, "Session owns this setting" });
+                Assert.Equal(!locked, toggle.IsEnabled);
+            }
             return Task.CompletedTask;
         });
     }
