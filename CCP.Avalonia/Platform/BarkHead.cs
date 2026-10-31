@@ -4,6 +4,7 @@ using System.Reflection;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Bark;
+using ConditioningControlPanel.Services.Companion.Brain;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -23,6 +24,7 @@ internal static class BarkHead
         var e = Engine = new BarkEngine();
         Seed(e);
         e.Start();
+        CompanionBrain.IdleLineVoiced = t => !(string.Equals(t, "Idle", StringComparison.OrdinalIgnoreCase) && HoldIdleVoice());
         App.Brain?.AttachBarkSource(h => e.BarkSpoken += h, h => e.BarkSpoken -= h);   // App.xaml.cs:2826, the echo
         // The two WireSubscriptions the engine's own state needs: chat suppression (:806) and, on a mod switch,
         // the switch bark off the OLD set then the new mod's manifest (:903).
@@ -43,6 +45,7 @@ internal static class BarkHead
     /// <summary>Drops the engine and the two subscriptions Start made (tests; the seams are the caller's to restore).</summary>
     internal static void Stop()
     {
+        CompanionBrain.IdleLineVoiced = null;
         App.UserMessageSent -= _onUserMessage;
         if (_mods != null) _mods.ModChanged -= _onModChanged;
         (_onUserMessage, _onModChanged, _mods, Engine) = (null, null, null, null);

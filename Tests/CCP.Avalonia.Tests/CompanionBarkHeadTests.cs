@@ -11,6 +11,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Bark;
+using ConditioningControlPanel.Services.Companion.Brain;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -51,6 +52,8 @@ public sealed class CompanionBarkHeadTests
     public void IdleMouthKeepsPresetRoutingAndRecoversAfterPanicQuiet() => WithSeamsRestored(s =>
     {
         var old = (BarkHead.Engine, s.MasterVolume, s.IdleGiggleIntervalSeconds, s.BarkIdleRotation);
+        var providers = (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider, CoreAudio.PlayStoppableProvider, CoreModArt.OverridePathProvider);
+        var voice = (s.CompanionSpeaksIdleWhenEngineOff, s.AvatarMuted, CompanionBrain.IdleLineVoiced);
         var lifetime = Application.Current!.ApplicationLifetime;
         // SetupWithoutStarting seals the public setter; supply the lifetime only for this live-window lookup.
         var lifetimeField = typeof(Application).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
@@ -64,10 +67,15 @@ public sealed class CompanionBarkHeadTests
             s.MasterVolume = 50;
             s.IdleGiggleIntervalSeconds = 120;
             s.BarkIdleRotation = new();
+            BarkHead.Start(); // production voice-memory seam is set before attaching a deterministic source
             var rule = Rule("Idle", "idle hello");
             rule.Priority = 50; rule.VariantPool![0] = new BarkVariant("idle hello", "idle_hum_1.mp3");
             var e = Seeded(rule, out var spoken);
             e.ResolveAudio = _ => typeof(BarkHead).Assembly.Location;
+            using var transport = new ConditioningControlPanel.Services.AiService("http://127.0.0.1:1");
+            using var memory = new MemoryStore(Path.Combine(TestUserDataProfile.Root, "bark-memory.json"));
+            using var brain = new CompanionBrain(transport, memory: memory, store: new CompanionSessionStore(Path.Combine(TestUserDataProfile.Root, "bark-session.json")));
+            brain.AttachBarkSource(h => e.BarkSpoken += h, h => e.BarkSpoken -= h);
             var clock = new BarkClock();
             e.Clock = clock;
             CoreSession.IsEngineRunningProvider = () => false;
@@ -92,6 +100,7 @@ public sealed class CompanionBarkHeadTests
             tube.OnIdleTick();
             Assert.True(tube.IsSpeaking);
             Assert.Equal("idle hello", spoken());
+            Assert.False(Assert.Single(brain.Session.Turns).Voiced);
             Assert.Empty(tube.ChatHistory);
             Assert.Equal(false, tube.GetType().GetField("_isShowingAiBubble", flags)!.GetValue(tube));
             Assert.Equal(0, audio);
@@ -116,6 +125,7 @@ public sealed class CompanionBarkHeadTests
             CoreSession.IsEngineRunningProvider = () => true;
             clock.Advance(60);
             Assert.True(e.DispatchIdle()); // shipped shape: priority 50, clip present, voice not held
+            Assert.True(brain.Session.Turns.Last().Voiced);
             Assert.Empty(tube.ChatHistory);
             Assert.Equal(false, tube.GetType().GetField("_isShowingAiBubble", flags)!.GetValue(tube));
             Assert.Equal(1, audio);
@@ -163,7 +173,11 @@ public sealed class CompanionBarkHeadTests
             shell.Close();
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             lifetimeField.SetValue(Application.Current, lifetime);
+            BarkHead.Stop(); var stoppedVoice = CompanionBrain.IdleLineVoiced;
+            (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider, CoreAudio.PlayStoppableProvider, CoreModArt.OverridePathProvider) = providers;
+            (s.CompanionSpeaksIdleWhenEngineOff, s.AvatarMuted, CompanionBrain.IdleLineVoiced) = voice;
             (BarkHead.Engine, s.MasterVolume, s.IdleGiggleIntervalSeconds, s.BarkIdleRotation) = old;
+            Assert.Null(stoppedVoice);
         }
     });
     private sealed class BarkClock : System.TimeProvider {
