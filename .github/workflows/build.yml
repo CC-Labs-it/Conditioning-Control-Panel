@@ -230,6 +230,7 @@ jobs:
         with:
           node-version: 22
 
+      - run: node --test Tests/CCP.Avalonia.Tests/BrowserVideoScript.test.mjs
       - name: Check shared Loom renderer exports
         run: node --test Assets/web/dtrh/tests/loom-renderer-exports.test.mjs
 
