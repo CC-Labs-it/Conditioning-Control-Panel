@@ -530,6 +530,10 @@ async function boot(course, options, lifetime, isCurrent) {
   lifetime.defer(renderer.onLost((lost) => {
     if (isCurrent()) void recover('lost', new Error((lost.api ? lost.api + ' ' : '') + (lost.message || 'device lost') + (lost.reason ? ' (' + lost.reason + ')' : '')), { race: racing() });
   }));
+  // a compat device refusing every frame is a black world with no throw: end on the reason and Retry, never on black
+  lifetime.defer(renderer.onCompatDead((message) => {
+    if (isCurrent()) fail(new Error('this phone\'s graphics could not draw the course: ' + message));
+  }));
   shared.counts.courses++;
   if (!shared.artLibrary && qs.get('art') !== '0') {
     shared.artLibrary = createArtLibrary(renderer);
