@@ -12,6 +12,7 @@ using Avalonia.Media.Immutable;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -195,7 +196,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_chaosPopped == null || Field.HoldChaos) return;
             var center = CenterPx(b);
             ChaosRipples.Add((center, 0));
-            ChaosFieldFxOverlay.Ripple(center, 430, 550);
+            if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.Ripple(center, 430, 550, strong: false);
+            else ChaosFieldFxOverlay.Ripple(center, 430, 550);
             RequestFrame();
         }
 

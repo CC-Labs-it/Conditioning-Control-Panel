@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
@@ -16,8 +17,10 @@ namespace CCP.Avalonia.Tests;
 public sealed class ChaosSizeQueenTests
 {
     // WPF ChaosModeService.cs:2035-2036; BubbleService.cs:1704-1719.
-    [Fact]
-    public async Task Snap_draws_a_ring_and_sweeps_only_treats_at_the_expanding_front()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Snap_draws_a_ring_and_sweeps_only_treats_at_the_expanding_front(bool useSkia)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -28,11 +31,18 @@ public sealed class ChaosSizeQueenTests
             var stateField = typeof(ChaosRunHost).GetField("_state", BindingFlags.NonPublic | BindingFlags.Static)!;
             var savedState = stateField.GetValue(null);
             var now = ChaosFieldFxOverlay.NowMs;
+            var settings = CoreSettings.Current;
+            var enabled = settings.ChaosSkiaFxEnabled;
+            var skiaChecks = ChaosSkiaFxOverlay.SkipPlatformChecksForTests;
+            var composited = ChaosSkiaFxOverlay.Composited;
             int paid = 0;
             try
             {
                 var state = new ChaosRunState(new ChaosRunConfig()) { RippleEnabled = true };
                 stateField.SetValue(null, state);
+                settings.ChaosSkiaFxEnabled = useSkia;
+                ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+                ChaosSkiaFxOverlay.Composited = () => true;
                 ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
                 ChaosFieldFxOverlay.NowMs = () => 0;
                 BubbleOverlay.BeginChaos(new Border(), _ => paid++, ChaosRunHost.OnDefused);
@@ -55,8 +65,21 @@ public sealed class ChaosSizeQueenTests
                 var brittle = Add(10, new EffectBubbleSpec { IsBrittle = true });
                 Assert.True(snap.Snap());
                 BubbleOverlay.Field.ChaosDefused!(snap);
-                var fx = Assert.IsType<ChaosFieldFxOverlay>(ChaosFieldFxOverlay.Active);
-                Assert.True(fx.IsVisible && fx.Clock.IsEnabled);
+                // WPF BubbleService.cs:1676-1677 selects exactly one renderer.
+                if (useSkia)
+                {
+                    var fx = Assert.IsType<ChaosSkiaFxOverlay>(ChaosSkiaFxOverlay.Active);
+                    Assert.True(fx.IsVisible && fx.IsRendering);
+                    Assert.Equal(1, fx.Fx.RippleCount);
+                    Assert.Equal(7, fx.Fx.ParticleCount); // ordinary ripple, not the strong cast
+                    Assert.Null(ChaosFieldFxOverlay.Active);
+                }
+                else
+                {
+                    var fx = Assert.IsType<ChaosFieldFxOverlay>(ChaosFieldFxOverlay.Active);
+                    Assert.True(fx.IsVisible && fx.Clock.IsEnabled);
+                    Assert.Null(ChaosSkiaFxOverlay.Active);
+                }
                 Assert.Equal(0, paid);
                 BubbleOverlay.Field.HoldChaos = true;
                 for (int i = 0; i < 20; i++) BubbleOverlay.TickChaosRipples();
@@ -80,12 +103,15 @@ public sealed class ChaosSizeQueenTests
                 Assert.False(nextRun.Popping); // teardown cleared the wave
                 BubbleOverlay.EndChaos();
                 ChaosFieldFxOverlay.CloseActive();
+                ChaosSkiaFxOverlay.CloseActive();
                 BubbleOverlay.TriggerChaosRipple(snap);
                 Assert.Null(ChaosFieldFxOverlay.Active); // no producer outside a run
+                Assert.Null(ChaosSkiaFxOverlay.Active);
                 state.RippleEnabled = false;
                 BubbleOverlay.BeginChaos(new Border(), _ => paid++, ChaosRunHost.OnDefused);
                 ChaosRunHost.OnDefused(snap);
                 Assert.Null(ChaosFieldFxOverlay.Active); // boon gate
+                Assert.Null(ChaosSkiaFxOverlay.Active);
             }
             finally
             {
@@ -94,6 +120,10 @@ public sealed class ChaosSizeQueenTests
                 ChaosFieldFxOverlay.CloseActive();
                 ChaosFieldFxOverlay.SkipPlatformChecksForTests = false;
                 ChaosFieldFxOverlay.NowMs = now;
+                ChaosSkiaFxOverlay.CloseActive();
+                ChaosSkiaFxOverlay.SkipPlatformChecksForTests = skiaChecks;
+                ChaosSkiaFxOverlay.Composited = composited;
+                settings.ChaosSkiaFxEnabled = enabled;
                 stateField.SetValue(null, savedState);
             }
             return Task.CompletedTask;
