@@ -46,6 +46,7 @@ public sealed class ChaosGifCascadeOverlayTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var clock = new SteppedClock();
+            var motion = CoreSettings.Current.MotionLevel;
             try
             {
                 ChaosGifCascadeOverlay.CloseActive();
@@ -103,6 +104,7 @@ public sealed class ChaosGifCascadeOverlayTests
                 ChaosGifCascadeOverlay.Clock = TimeProvider.System;
                 ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
                 ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                CoreSettings.Current.MotionLevel = motion;
             }
         });
         try { Directory.Delete(dir, true); } catch { }
@@ -114,6 +116,8 @@ public sealed class ChaosGifCascadeOverlayTests
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var skip = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+        var manual = ChaosGifCascadeOverlay.ManualFramesForTests;
         var broken = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".gif");
         File.WriteAllText(broken, "not a gif");
         try
@@ -128,8 +132,42 @@ public sealed class ChaosGifCascadeOverlayTests
             Assert.Equal(0, w.Cascade.AnimatedAlive);
             Assert.True(w.Cascade.CanAnimate(true, 1));
         }
-        finally { ChaosGifCascadeOverlay.CloseActive(); File.Delete(broken); }
+        finally
+        {
+            ChaosGifCascadeOverlay.CloseActive();
+            ChaosGifCascadeOverlay.SkipPlatformChecksForTests = skip;
+            ChaosGifCascadeOverlay.ManualFramesForTests = manual;
+            File.Delete(broken);
+        }
     });
+
+    [Fact]
+    public async Task CascadeTestsRestoreStateBeforeTheNextTest()
+    {
+        var skip = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+        var manual = ChaosGifCascadeOverlay.ManualFramesForTests;
+        var motion = CoreSettings.Current.MotionLevel;
+        try
+        {
+            ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
+            ChaosGifCascadeOverlay.ManualFramesForTests = false;
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            // Direct calls keep both cases inside one isolation hook, exposing order-dependent leaks.
+            await AFailedAnimatedDecodeGivesItsSlotBack();
+            Assert.False(ChaosGifCascadeOverlay.SkipPlatformChecksForTests);
+            Assert.False(ChaosGifCascadeOverlay.ManualFramesForTests);
+            await RainsSpawnsAnimatesDrainsAndPanicClosesIt();
+            Assert.False(ChaosGifCascadeOverlay.SkipPlatformChecksForTests);
+            Assert.False(ChaosGifCascadeOverlay.ManualFramesForTests);
+            Assert.Equal(MotionLevel.Reduced, CoreSettings.Current.MotionLevel);
+        }
+        finally
+        {
+            ChaosGifCascadeOverlay.SkipPlatformChecksForTests = skip;
+            ChaosGifCascadeOverlay.ManualFramesForTests = manual;
+            CoreSettings.Current.MotionLevel = motion;
+        }
+    }
 
     private static void Show(string gif) => ChaosGifCascadeOverlay.ShowWithFiles(new() { gif },
         GifCascade.PayloadSpawnRatePerSec, GifCascade.PayloadDurationSec, GifCascade.PayloadGifSize,
