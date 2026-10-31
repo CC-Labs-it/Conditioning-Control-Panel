@@ -156,6 +156,7 @@ public sealed partial class FriendsDrawerTests
         var (first, _) = Service(); var (second, wire) = Service("u_second");
         wire.StateBody = State.Replace("\"online\":false", "\"online\":true");
         await first.RefreshAsync(); await second.RefreshAsync();
+        var oldHead = FriendsHead.Service;
         FriendsHead.Service = first;
         var firstFeed = new FriendsFeed(() => "u_first"); var secondFeed = new FriendsFeed(() => "u_second");
         var feed = firstFeed;
@@ -178,7 +179,8 @@ public sealed partial class FriendsDrawerTests
             secondFeed.Add(Ev("new")); Assert.Equal(2, chip.UnreadBadge);
             window.Content = null; Assert.False(Wired(first)); Assert.False(Wired(second));
         }
-        finally { window.Close(); first.Dispose(); second.Dispose(); }
+        finally { FriendsHead.Service = oldHead; window.Close(); first.Dispose(); second.Dispose(); }
+        Assert.Same(oldHead, FriendsHead.Service);
     });
 
     [Theory]

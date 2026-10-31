@@ -1,3 +1,4 @@
+// ponytail: no inactive-owner code-box activation or face/pill border/glow; light-dismiss replaces WPF outside-click and host-move watchers.
 using System;
 using Avalonia;
 using Avalonia.Controls;
