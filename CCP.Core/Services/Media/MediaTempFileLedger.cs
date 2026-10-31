@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace ConditioningControlPanel.Services;
+namespace ConditioningControlPanel.Services.MediaFiles;
 
 /// <summary>
 /// Bookkeeping for decrypted / downloaded temp files that are swept above a cap.

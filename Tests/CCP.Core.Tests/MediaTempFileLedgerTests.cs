@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.MediaFiles;
 using Xunit;
 
 namespace CCP.Core.Tests;
