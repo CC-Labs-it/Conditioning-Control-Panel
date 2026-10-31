@@ -66,8 +66,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>
         private bool HandleDtrh(JObject o)
         {
+            if (_closing) return true;
             switch ((string?)o["type"])
             {
+                // WPF DtrhHostService.cs:923-953: recover a failed web boot through
+                // the classic first descent or Dollhouse. Queue once; panic can cancel it.
+                case "boot-error":
+                    if (_dtrhExiting) return true;
+                    _dtrhExiting = true;
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (_closing) return;
+                        Close();
+                        LaunchDtrhLegacyFallback();
+                    });
+                    return true;
                 case "ready":
                     IsReady = true;
                     OnDtrhPageReady();
@@ -97,6 +110,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 default:
                     return false;
             }
+        }
+
+        // WPF DtrhHostService.cs:939-955. Entitlement was checked at the launcher door.
+        private static void LaunchDtrhLegacyFallback()
+        {
+            try
+            {
+                if (Chaos.ChaosRunHost.IsActive) return;
+                // WPF App.xaml.cs:2746 loads this before creating the run service.
+                ChaosMeta.Init();
+                if (ChaosMeta.State.RunsCompleted == 0)
+                    Chaos.ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
+                else Chaos.ChaosHubWindow.OpenAt();
+            }
+            catch (Exception ex) { Log.Error(ex, "DtrhHost: legacy fallback failed"); }
         }
 
         /// <summary>WPF OnPageReady (:271): init, then the manifest.</summary>
