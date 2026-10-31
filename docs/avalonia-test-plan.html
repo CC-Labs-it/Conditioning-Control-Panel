@@ -34,8 +34,9 @@ the shared engine). Line numbers are the ones recorded in the ledger and may dri
 <li><strong>Screenshot or short screen recording</strong> of the Linux app (and of Windows when they differ).</li>
 <li>Your distro, desktop (KDE, GNOME, ...), X11 or Wayland, and the app version (Settings -&gt; Updates).</li>
 </ul>
-<p>A tester report is evidence that a developer adds to the ledger row, next to the automated test and the
-developers' own check of the running app; together they move a row to <code>verified</code>.</p>
+<p>Only a tester report can move a row to <code>verified</code>. A developer attaches that report to the ledger
+row alongside automated evidence and the developers' own running-app check. Adding steps or passing a
+coverage check does not verify a row.</p>
 <h2 id="before-you-start">Before you start</h2>
 <ul>
 <li>Back up your settings folder first (<code>~/.local/share/ConditioningControlPanel</code>), or use a spare Linux user.</li>
@@ -668,6 +669,10 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 <li>Master volume 0: text only. Companion muted: text, no voice. WPF <code>Services/Companion/BarkService.cs</code>. Rows: <code>feat-companion-barks</code>.</li>
 <li><strong>[SAFETY] developers re-check this before release.</strong> Press panic while she speaks. Expect the voice cut at once. WPF <code>Services/Companion/BarkService.cs</code>. Rows: <code>feat-companion-barks</code>.</li>
 </ol>
+<p>WPF bark decision lane:</p>
+<ul>
+<li>Companion on, engine running: open Phrase Manager, disable all lines for one repeatable bark and trigger its event (for example a flash). WPF keeps that bark silent; re-enable its lines and repeat after the cooldown. Enabled variants rotate before reuse. Compare heard lines and bubble text on both heads; section 7 steps 6-8 cover volume and panic. This observes the decision lane through its output; internal WPF delegation still needs automated evidence. WPF <code>Services/Companion/BarkService.cs:1522</code>, <code>:1793</code>. Rows: <code>barks-wpf-b</code>.</li>
+</ul>
 <h3 id="other">Other</h3>
 <ol start="9">
 <li>Friends drawer: feed, trail, blocked list, presence setting (feed and trail are not on this build yet: <code>feat-friends-feed</code> is missing). WPF <code>Services/Friends/FriendsLanding.cs</code>. Rows: <code>feat-friends-feed</code>, <code>feat-friends-blocked-presence</code>, <code>feat-friends-landing</code>.</li>
@@ -888,6 +893,12 @@ not correctness or a test pass; wildcards and checkbox inventories do not count.
 <li>Friends drawer: have a friend host a table, open/close/reopen drawer and inspect notices/launcher tables. WPF polls while open every 30 s, stops on fold and floats hosting friends first. Compare join/empty/error states side by side; report stale host order, missing invites or polling visible after fold. WPF <code>Controls/Friends/FriendsDrawer.Tables.cs</code>. Rows: <code>feat-friends-open-tables</code>.</li>
 <li>In a supported multiplayer game with test points, offer a stake, reject/cancel it, then accept and finish a test round. WPF's bridge settles only agreed stakes under its rules. Compare side by side for insufficient balance, disconnect and settlement; report displayed and final test balances, never spend a real balance to prove the UI. WPF <code>Services/Stakes/**</code>. Rows: <code>feat-stakes</code>.</li>
 </ol>
+<p>Piece by Piece media and friends:</p>
+<ul>
+<li>Play -&gt; Piece by Piece -&gt; Distraction: on a fresh test profile choose own pictures only at first Start, close and reopen. WPF remembers the choice without asking again. In Options choose an online flavour, reopen and compare the saved selection and mixed pictures; choosing online here does not grant app-wide consent. If the Linux picker is absent, report the missing path. WPF <code>Services/PieceByPiece/PieceByPieceHostService.Media.cs</code>, <code>Services/PieceByPiece/PbpMediaRules.cs</code>. Rows: <code>feat-pbp-media-friends</code>.</li>
+<li>In Distraction, use a disposable library with one audio clip in its braindrain folder, then repeat with that folder empty. WPF prefers your clips; otherwise it uses permitted mod whisper clips, then neutral words. With no eligible audio it stays silent. Compare sound and mod choice. WPF <code>Services/PieceByPiece/PieceByPieceHostService.cs:663</code>, <code>CCP.Core/Services/PieceByPiece/PbpWhisperClips.cs</code>. Rows: <code>feat-pbp-media-friends</code>.</li>
+<li>Friends drawer -&gt; challenge a mutual test friend to chess; accept on the friend's app. Repeat with the board already open. WPF opens the invited board once and routes acceptance to that challenge. Lobby -&gt; Watch a public match opens as spectator. Report missing invite actions or a wrong board on Linux. WPF <code>Services/PieceByPiece/PieceByPieceHostService.Friends.cs</code>. Rows: <code>feat-pbp-media-friends</code>.</li>
+</ul>
 <h3 id="reusable-controls-in-their-live-hosts">Reusable controls in their live hosts</h3>
 <ol start="16">
 <li>Click EMI then Friends in the rail. WPF toggles her through its desk service and shows avatar-muted status; Friends displays name/online/tier and opens a light-dismiss drawer. Close by click-away, reopen and use friend actions. Compare side by side for live tier/presence/chips; report focus theft, stale identity or missing drawer actions. WPF <code>Controls/EmiDock.xaml</code>, <code>Controls/Friends/FriendsRailChip.cs</code>, <code>Controls/Friends/FriendsDrawer.cs</code>. Rows: <code>ctrl-emi-dock</code>, <code>ctrl-friends-rail-chip</code>, <code>ctrl-friends-drawer</code>.</li>
@@ -903,6 +914,10 @@ not correctness or a test pass; wildcards and checkbox inventories do not count.
 <li>Profile vat: observe fill changes, resize, switch tab and return; test Motion Off. WPF seeds/snaps or eases its fill and applies lip/accent without changing the underlying percentage. Compare side by side; report percentage/painter disagreement, clipping or hidden animation. WPF <code>Controls/VatGlassCanvas.cs</code>. Rows: <code>ctrl-vat-glass-canvas</code>.</li>
 <li>Studio -&gt; Flash (and Bubble Pop) -&gt; the &quot;Get it&quot; row of a prize you do not own, on a test account. Signed out it says &quot;Sign in to buy this.&quot; and the button opens sign-in; with too few points it shows &quot;N short.&quot; and the button is dead. With enough points press Get it: WPF asks &quot;Spend {price} Sparkle Points on {name}?&quot; (No spends nothing), then shows &quot;{name} unlocked. The options are here, off until you pick them.&quot;, the wallet drops by the price and the row hides. Sign out/in and reopen: the row re-reads the counter. Report a charge without the question, a price that differs from the confirmed one or a row that stays after the unlock. WPF <code>Controls/V2GetItRow.xaml.cs:93-158</code>, <code>Features/FlashFeatureControl.xaml:312</code>, <code>MainWindow/MainWindow.Login.cs:128</code>. Rows: <code>feat-backroom-counter-buy</code>.</li>
 </ol>
+<p>Chaster price-row trailer:</p>
+<ul>
+<li>Chaster -&gt; price menu: hover a row, move to another row, then move away. WPF opens a looping scene for the hovered price, updates its displayed seconds and closes the popup after leaving. With the web runtime unavailable it keeps a still-picture fallback. Compare two rows without clicking a purchase. Linux has no price-menu trailer path yet; record that absence and any broken popup, then retest when available. WPF <code>Controls/ChasterTrailerView.cs</code>, <code>Views/Tabs/ChasterTabView.xaml.cs</code> (OpenTrailer). Rows: <code>ctrl-chaster-trailer-view</code>.</li>
+</ul>
 <h2 id="15-remaining-area-prefixes-services-games-lab-packaging-and-themes">15. Remaining area prefixes: services, games, Lab, packaging and themes</h2>
 <h3 id="services-svc--and-sync-core-">Services (<code>svc-</code>) and sync (<code>core-</code>)</h3>
 <ol>
@@ -910,6 +925,10 @@ not correctness or a test pass; wildcards and checkbox inventories do not count.
 <li>Settings -&gt; Account/Profile Privacy: toggle Rich Presence without linked Discord, then with a linked test account and Discord running; change feature/tab and sign out. WPF refuses the unlinked toggle, synchronizes both checkboxes and publishes presence only when enabled. Compare copy/activity side by side; report presence that survives sign-out/disable. WPF <code>CCP.Core/Services/Account/DiscordRichPresenceService.cs</code>. Rows: <code>svc-discord-rich-presence</code>.</li>
 <li>Signed-in test profile: observe a successful sync, temporarily lose network, wait/reconnect, then sign out/in. WPF re-signs once on clock_skew, backs failed pushes off from 30 s doubling to 15 min and does not retry a rejected refresh token again until a new sign-in token exists. Fault details require a developer-controlled fake endpoint; compare side by side if not observable in UI. Report sanitized timing/errors and lost profile changes, never credentials or auth headers. WPF <code>Services/Settings/ProfileSyncService.cs</code>, <code>Services/Account/DiscordService.cs</code>. Rows: <code>core-sync-server-clock</code>, <code>core-sync-failure-backoff</code>, <code>core-dead-refresh-tokens</code>.</li>
 </ol>
+<p>Server profile contract:</p>
+<ul>
+<li>Use a test account with saved XP, achievements and profile decoration. On a fresh disposable Linux profile open Settings -&gt; Account, sign in, open Profile and wait for sync; reopen on Windows after quitting Linux. WPF merges achievements and adopts cloud cosmetics into an empty loadout. Existing progress and decoration must survive a fresh client. Profile -&gt; Customize: save a decoration, reopen, then explicitly unequip it and Save; the next sign-in must show that clear. Compare both heads; omitted-field wire semantics need a developer-controlled fake endpoint, not a tester reading tokens or traffic. WPF <code>Services/Settings/ProfileSyncService.cs:2099</code>, <code>:2729</code>, <code>CCP.Core/Services/Account/SyncPush.cs</code>. Rows: <code>server-sync-contract</code>.</li>
+</ul>
 <h3 id="chaos-chaos-">Chaos (<code>chaos-</code>)</h3>
 <ol start="4">
 <li>Rabbit Hole -&gt; Choose your save: select each available slot, inspect locked slots/rank/progress, Cancel then Descend; use Erase only on a disposable save. WPF says &quot;Choose your save&quot; and &quot;Erase Save N? This permanently deletes this local save. It can't be undone.&quot;, with OK/Cancel defaulting to Cancel. Reopen to check each slot keeps separate progress. Report wrong active slot, missing lock, accidental erase or a dead Open folder. WPF <code>Chaos/ChaosSlotPickerWindow.xaml</code>, <code>Chaos/ChaosSlotPickerWindow.xaml.cs:284</code>. Rows: <code>chaos-slot-picker</code>.</li>
@@ -926,6 +945,11 @@ not correctness or a test pass; wildcards and checkbox inventories do not count.
 <li>Install/extract the CI linux-x64 tarball in a disposable prefix, launch via its desktop entry, inspect icon/version and use She's Listening with its bundled small English model; test --smoke with the model required. WPF has installer content/shortcuts; compare user-visible launch/model readiness side by side, not package format. Report distro/session, launch/dependency error and missing Resources/Models/vosk files; Flatpak/AUR need their own installed-run reports. WPF <code>installer.iss</code> (Windows); Linux <code>packaging/linux/</code>. Rows: <code>linux-package</code>, <code>linux-package-vosk-model</code>.</li>
 <li>Copy a backed-up WPF user-data profile into a disposable CCP_USERDATA_DIR (never point either app at the original). Start/quit Avalonia, compare toggles, lists, folders, active mod and logs to WPF, then reopen. WPF settings/defaults and unknown extension fields must survive. Report only key names and changed values with personal data removed; Windows encrypted secrets are not portable proof. WPF <code>CCP.Core/Models/AppSettings.cs</code> (shared WPF settings contract). Rows: <code>settings-migration-test</code>.</li>
 </ol>
+<p>Installer and Flatpak checks:</p>
+<ul>
+<li>General check G for installed launch: in a disposable Windows install run Setup, leave Desktop shortcut off and Start Menu shortcut on, finish, and launch from Start Menu. WPF installs the app and selected shortcuts; an upgrade reuses the existing location. Compare Linux desktop-entry name, icon, version and launch with the tarball install above. Linux does not run Inno Setup; report its missing installer route separately from launch failures. WPF <code>installer.iss:52</code>, <code>:115</code>, <code>:214</code> (repo root). Rows: <code>shell-installer</code>.</li>
+<li>Flatpak is blocked until a built test artifact is supplied. Record unavailable if none is supplied. With one, install in a disposable user account, click its desktop entry, open a local video, open Graded Intake, show the tray menu, quit and relaunch. Compare launch, media, web controls and tray actions to WPF installed by Setup. Record runtime/version and each missing dependency; do not count a manifest parse or a tarball run as a Flatpak pass. WPF <code>installer.iss</code>, <code>Services/Video/VideoService.cs</code>, <code>Services/Notifications/TrayIconService.cs</code>; Linux <code>packaging/flatpak/io.github.CodeBambi.ConditioningControlPanel.yml</code>. Rows: <code>linux-package-flatpak</code>.</li>
+</ul>
 <h3 id="themes-theme--and-behaviour-behavior-">Themes (<code>theme-</code>) and behaviour (<code>behavior-</code>)</h3>
 <ol start="11">
 <li>Open Home, rail, Settings and a modal in the same mod/theme on both heads; hover/press/disable controls and resize. WPF uses the shared colour/brush dictionaries for shell panels, text and accents. Compare side by side; report the exact control/state, contrast, clipping and unexpected colour (Fluent icon substitutions are intentional). WPF <code>Resources/Theme/Brushes.xaml</code>, <code>Resources/Theme/Colors.xaml</code>, <code>Resources/Theme/MainWindow.xaml</code>. Rows: <code>theme-brushes</code>, <code>theme-colors</code>, <code>theme-main-window</code>.</li>
@@ -1003,10 +1027,6 @@ changes served unchanged from <code>Assets/web/dtrh</code> (automated-only: byte
 <ol>
 <li><code>blocked-migration-input</code> is resolved: test it through the profile migration step (section 15 step 10, row <code>settings-migration-test</code>). The real-profile run itself is automated-only and local (<code>Tests/CCP.Avalonia.Migration.Tests</code>). WPF <code>CCP.Core/Models/AppSettings.cs</code>. Rows: <code>blocked-migration-input</code>, <code>settings-migration-test</code>.</li>
 </ol>
-<h2 id="rows-with-no-manual-check">Rows with no manual check</h2>
-<ul>
-<li>Automated-only: <code>barks-wpf-b</code> (status missing) - WPF's bark engine handing its decisions to the shared engine; nothing on screen changes. Test companion voice lines through section 7 steps 6-8.</li>
-</ul>
 
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
