@@ -161,24 +161,28 @@ public sealed class SectionStripWindowTests
     [Theory]
     [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Reduced)]
-    public Task MovedNoteHidesAfterTheFadeTimer(MotionLevel level) => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task MovedNoteHidesAfterRealHoldAndFadeTimers(MotionLevel level) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         SetUp();
-        var strip = new SectionTabStrip { MotionOverride = level };
+        var strip = new SectionTabStrip { MotionOverride = level, MovedNoteTimerIntervalOverride = TimeSpan.FromMilliseconds(1) };
         var host = new Window { Content = strip };
         try
         {
             host.Show();
             strip.Show(NavSections.Studio, "presets");
-            strip.ShowMovedNote("Moved");
             Assert.Equal(TimeSpan.FromSeconds(3.2), SectionTabStrip.MovedNoteHold);
             Assert.Equal(TimeSpan.FromMilliseconds(300), SectionTabStrip.MovedNoteFade);
-            strip.ExpireMovedNote();
+            strip.ShowMovedNote("Moved");
             Assert.True(strip.MovedNoteShown);
-            Assert.True(strip.FireMovedNoteFade());
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            while (strip.MovedNoteShown && deadline.Elapsed < TimeSpan.FromSeconds(5))
+            {
+                Dispatcher.UIThread.RunJobs();
+                await Task.Yield();
+            }
             Assert.False(strip.MovedNoteShown);
+            Assert.Equal(0, strip.MovedNoteOpacity);
         }
         finally { host.Close(); }
-        return Task.CompletedTask;
     });
 }

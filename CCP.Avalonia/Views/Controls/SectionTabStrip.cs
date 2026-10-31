@@ -73,6 +73,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>WPF :516: the note stays 3.2 s, then fades out over 300 ms.</summary>
         internal static readonly TimeSpan MovedNoteHold = TimeSpan.FromSeconds(3.2), MovedNoteFade = TimeSpan.FromMilliseconds(300);
 
+        // P08: shorten both real dispatcher timers in tests; production keeps WPF :516-528 timings.
+        internal TimeSpan? MovedNoteTimerIntervalOverride { get; set; }
+
         internal bool MovedNoteShown => _movedNote.IsVisible;
         internal string? MovedNoteTextForTests => _movedNoteText.Text;
         internal IBrush? MovedNoteBrush => _movedNoteText.Foreground;
@@ -203,7 +206,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _movedNote.Opacity = 1;
 
             _noteTimer?.Stop();
-            _noteTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = MovedNoteHold };
+            _noteTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = MovedNoteTimerIntervalOverride ?? MovedNoteHold };
             _noteTimer.Tick += (_, _) => ExpireMovedNote();
             _noteTimer.Start();
         }
@@ -219,17 +222,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             };
             _movedNote.Opacity = 0;
             _noteFadeTimer?.Stop();
-            _noteFadeTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = MovedNoteFade };
+            _noteFadeTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = MovedNoteTimerIntervalOverride ?? MovedNoteFade };
             _noteFadeTimer.Tick += (_, _) => HideNote();
             _noteFadeTimer.Start();
-        }
-
-        /// <summary>Test seam (P08): fires the pending 300 ms fade timer's tick without waiting.</summary>
-        internal bool FireMovedNoteFade()
-        {
-            if (_noteFadeTimer?.IsEnabled != true) return false;
-            HideNote();
-            return true;
         }
 
         internal void HideNote()
