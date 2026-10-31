@@ -140,6 +140,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // The native adapter asks at first attachment, before navigation. Keep OS setup in the caller.
         internal event Action<WebViewEnvironmentRequestedEventArgs>? EnvironmentRequested;
 
+        // Same callback for the native adapter and headless environment-policy tests.
+        internal void OnEnvironmentRequested(WebViewEnvironmentRequestedEventArgs args) =>
+            EnvironmentRequested?.Invoke(args);
+
         /// <summary>
         /// One extra request header for a url, or null (the usual answer). The stand-in for WPF's
         /// <c>AddWebResourceRequestedFilter</c> + <c>Request.Headers.SetHeader</c> (JustDropHostService.AttachAuthHeader):
@@ -481,7 +485,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                 // gate has to be live for the FIRST navigation too, and a caller that assigns
                 // the predicate and the Source in that order would otherwise race the engine.
-                native.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
+                native.EnvironmentRequested += (_, e) => OnEnvironmentRequested(e);
                 native.AdapterDestroyed += (_, _) => { if (ReferenceEquals(_web, native)) { BrowserZoomAdapterDestroyed(); ClearNativeWatches(); } };
                 native.AdapterCreated += (_, e) =>
                 {
