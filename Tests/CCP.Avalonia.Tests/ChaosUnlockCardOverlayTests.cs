@@ -262,6 +262,74 @@ public sealed class ChaosUnlockCardOverlayTests
         finally { ChaosRunHost.ForceShutdown(); ChaosFxWindow.Clock = time; ChaosFxWindow.Accept = accept; }
     });
 
+    [Fact]
+    public async Task Card_art_uses_explicit_and_convention_paths_with_glyph_fallback() => await Run(_ =>
+    {
+        string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "boons"));
+        try
+        {
+            ChaosArt.RootsOverride = () => new[] { root };
+            var info = ChaosUnlockCardRules.ForLesson("taking_chances")! with { IconFolder = "boons", IconId = "test" };
+            global::Avalonia.Controls.Image[] Images(ChaosUnlockCardInfo card) =>
+                global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(ChaosUnlockCardLayer.Build(card, 420).Root)
+                    .OfType<global::Avalonia.Controls.Image>().ToArray();
+            Assert.Empty(Images(info with { IconId = "missing" }));
+            string file = System.IO.Path.Combine(root, "boons", "test.png");
+            using (var bitmap = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96)))
+                bitmap.Save(file);
+            Assert.Single(Images(info));
+            Assert.Single(Images(info with { IconPath = file }));
+            Assert.Same(ChaosArt.TryLoad(file), ChaosArt.TryLoad(file));
+            Assert.Null(ChaosArt.FilePath("../test.png"));
+        }
+        finally { ChaosArt.ResetForTest(); System.IO.Directory.Delete(root, true); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Production_art_roots_preserve_Wpf_library_path_and_precedence(bool customLibrary) => await Run(_ =>
+    {
+        // WPF App.xaml.cs:192 and Services/Chaos/ChaosArt.cs:64,142-147.
+        // Use production roots and the suite's isolated UserData, not RootsOverride.
+        string kind = "art-review-" + Guid.NewGuid().ToString("N");
+        string library = System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, "assets", "assets", "Chaos", kind);
+        string shipped = System.IO.Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", kind);
+        string effective = customLibrary
+            ? System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, kind)
+            : System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, "assets");
+        string wrong = System.IO.Path.Combine(effective, "Chaos", kind);
+        var provider = ConditioningControlPanel.CorePaths.EffectiveAssetsProvider;
+        try
+        {
+            ChaosArt.ResetForTest();
+            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = () => effective;
+            foreach (string folder in new[] { library, shipped, wrong })
+            {
+                System.IO.Directory.CreateDirectory(folder);
+                using var bitmap = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96));
+                bitmap.Save(System.IO.Path.Combine(folder, "probe.png"));
+            }
+            string expected = System.IO.Path.Combine(library, "probe.png");
+            Assert.Same(ChaosArt.TryLoad(expected), ChaosArt.Resolve(kind, "probe"));
+            Assert.Equal(expected, ChaosArt.PathFor(kind, "probe"));
+            Assert.Equal(expected, ChaosArt.FilePath(System.IO.Path.Combine(kind, "probe.png")));
+            // An unreadable override must fall through to shipped art, like WPF :65-66.
+            System.IO.File.WriteAllText(expected, "invalid image");
+            ChaosArt.ResetForTest();
+            Assert.Same(ChaosArt.TryLoad(System.IO.Path.Combine(shipped, "probe.png")), ChaosArt.Resolve(kind, "probe"));
+        }
+        finally
+        {
+            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = provider;
+            ChaosArt.ResetForTest();
+            foreach (string folder in new[] { library, shipped, wrong })
+                if (System.IO.Directory.Exists(folder)) System.IO.Directory.Delete(folder, true);
+            if (customLibrary && System.IO.Directory.Exists(effective)) System.IO.Directory.Delete(effective, true);
+        }
+    });
+
     private sealed class SteppedClock : TimeProvider
     {
         public long Ticks;
