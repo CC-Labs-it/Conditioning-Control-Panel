@@ -20,6 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\ConditioningControlPanel.Tests\OnlineMeterRulesTests.cs" Link="OnlineMeterRulesTests.cs" />
     <!-- The ledger is now shared Core logic: run its existing WPF-source boundary tests on Linux too. -->
     <Compile Include="..\ConditioningControlPanel.Tests\AwarenessLedgerTests.cs" Link="AwarenessLedgerTests.cs" />
   </ItemGroup>

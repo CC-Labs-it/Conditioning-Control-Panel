@@ -72,8 +72,11 @@ public sealed class OnlineMeterSurfaceTests
             shell.PaintOnlineMeterPill(State(42));
             Assert.True(shell.OnlinePill!.IsVisible);
             Assert.Equal(string.Format(Loc.Get("online_pill"), 42), shell.OnlinePillText!.Text);
+            Assert.Equal(42, shell.OnlinePillRing!.Percent);
+            Assert.Equal(OnlineMeterTone.Pink, shell.OnlinePillRing.Tone);
             shell.PaintOnlineMeterPill(State(100, spent: true));
             Assert.Equal(Loc.Get("online_pill_done"), shell.OnlinePillText!.Text);
+            Assert.Equal(OnlineMeterTone.Spent, shell.OnlinePillRing!.Tone);
             shell.PaintOnlineMeterPill(State(42, source: "local"));
             Assert.False(shell.OnlinePill!.IsVisible);
         }
@@ -107,11 +110,30 @@ public sealed class OnlineMeterSurfaceTests
         Assert.Contains("OnlineMeterHead.Poke()", picker);
     }
 
+    [Fact]
+    public Task Language_changes_repaint_the_live_meter() => Run(() =>
+    {
+        OnlineMeterHead.Start();
+        var count = 0;
+        void Refreshed() => count++;
+        OnlineMeterHead.Refresh += Refreshed;
+        try
+        {
+            LocalizationManager.Instance.SetLanguage("de");
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.True(count > 0);
+        }
+        finally
+        {
+            OnlineMeterHead.Refresh -= Refreshed;
+            LocalizationManager.Instance.SetLanguage("en");
+        }
+        return Task.CompletedTask;
+    });
+
     private static Task Run(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        OnlineMeterTestPlatform.EnsureApplication();
         LocalizationManager.Instance.SetLanguage("en");
         await body();
     });
