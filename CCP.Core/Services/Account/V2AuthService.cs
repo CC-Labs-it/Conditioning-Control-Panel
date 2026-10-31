@@ -757,6 +757,17 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        // WPF Services/Settings/ProfileSyncService.cs:4130-4144.
+        public async Task<bool?> IsDisplayNameAvailableAsync(string name)
+        {
+            try
+            {
+                var json = await _http.GetStringAsync($"{SERVER_URL}/v2/auth/check-name?name={Uri.EscapeDataString(name)}");
+                return (bool?)JObject.Parse(json)["available"];
+            }
+            catch { return null; }
+        }
+
         /// <summary>
         /// Rename the account (WPF ProfileSyncService.ChangeDisplayNameAsync): the server checks uniqueness
         /// and answers with the name it settled on. Errors carry the server's own text, as WPF showed it.

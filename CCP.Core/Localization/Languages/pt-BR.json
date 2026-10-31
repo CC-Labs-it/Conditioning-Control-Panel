@@ -7959,5 +7959,11 @@
   "online_official_plan_prime": "O Prime recebe a maior cota diária. O que você já viu repete de graça.",
   "online_official_nice": "Legal",
   "online_official_stamped_line": "A mídia online vem do Scrolller. Cada imagem e clipe leva uma pequena marca \"via Scrolller\".",
-  "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada."
+  "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada.",
+  "remote_directory_private": "Remote: privada",
+  "remote_directory_listed": "Remote: listada",
+  "remote_directory_claimed": "Remote: assumida",
+  "remote_directory_private_tip": "Sua sessão Remote é privada: você não está no diretório de sujeitos disponíveis. As mesas Goon têm seu próprio controle de visibilidade.",
+  "remote_directory_listed_tip": "Sua sessão Remote está no diretório de sujeitos disponíveis e aguarda um controlador.",
+  "remote_directory_claimed_tip": "Um controlador assumiu sua entrada Remote."
 }
