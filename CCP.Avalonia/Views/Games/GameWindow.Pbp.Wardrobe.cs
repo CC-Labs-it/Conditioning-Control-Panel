@@ -12,24 +12,71 @@ using ConditioningControlPanel.Services.PieceByPiece.Wardrobe;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
-
 namespace ConditioningControlPanel.Avalonia.Views.Games;
-
 internal sealed partial class GameWindow
 {
     // WPF PieceByPieceHostService.Wardrobe.cs:61-78, 154-208. The counter door is excluded by B3.
     private readonly CancellationTokenSource _pbpEquipLifetime = new();
     private readonly SemaphoreSlim _pbpEquipWrites = new(1, 1);
     internal Task PbpEquipPending { get; private set; } = Task.CompletedTask;
-
+    private CancellationTokenSource? _pbpOwnershipLifetime;
+    private DateTime _pbpOwnershipDue;
+    internal Task PbpOwnershipPending { get; private set; } = Task.CompletedTask;
+    private void CancelPbpOwnership()
+    { try { _pbpOwnershipLifetime?.Cancel(); } catch (ObjectDisposedException) { } }
+    private void OnPbpIdentityChanged(object? sender, EventArgs e)
+    {
+        CancelPbpOwnership();
+        PrizeOwnership.ResetHeld();
+        OnPbpGrantsChanged();
+        _pbpOwnershipDue = DateTime.MinValue;
+        Dispatcher.UIThread.Post(RefreshPbpOwnership);
+    }
+    private void RefreshPbpOwnership()
+    {
+        if (_closing || !_pbpOpen || !IsReady || DateTime.UtcNow < _pbpOwnershipDue) return;
+        _pbpOwnershipDue = DateTime.UtcNow.AddMinutes(10);
+        PbpOwnershipPending = ReadPbpOwnership();
+    }
+    // WPF PrizeCounterHostService.RefreshWalletInBackground: read grants without opening a shop.
+    private async Task ReadPbpOwnership()
+    {
+        var id = FriendsHead.Identity();
+        var url = PbpServerBase()?.TrimEnd('/');
+        if (id == null || id.Value.UnifiedId != CoreAccount.UnifiedUserId || string.IsNullOrEmpty(url)) return;
+        CancelPbpOwnership();
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(_pbpEquipLifetime.Token);
+        _pbpOwnershipLifetime = lifetime;
+        lifetime.CancelAfter(TimeSpan.FromSeconds(12));
+        var ct = lifetime.Token;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url + "/v2/shop/state?unified_id=" + Uri.EscapeDataString(id.Value.UnifiedId));
+            request.Headers.Add(PbpNetRelay.TokenHeader, id.Value.Token);
+            using var response = await PbpHttpClient().SendAsync(request, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) { if (!ct.IsCancellationRequested && CoreAccount.UnifiedUserId == id.Value.UnifiedId) _pbpOwnershipDue = DateTime.UtcNow.AddSeconds(30); return; }
+            var body = JObject.Parse(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (ct.IsCancellationRequested || _closing || CoreAccount.UnifiedUserId != id.Value.UnifiedId) return;
+                _pbpOwnershipDue = DateTime.UtcNow.AddSeconds(30);
+                if (body["ok"]?.Type != JTokenType.Boolean || !(bool)body["ok"]!
+                    || body["prizes"] is not JObject prizes || prizes["revision"]?.Type != JTokenType.Integer
+                    || prizes["grants"] is not JArray grants) return;
+                PrizeOwnership.ApplySnapshot(id.Value.UnifiedId, (long)prizes["revision"]!,
+                    grants.Where(g => g.Type == JTokenType.String).Values<string>().Select(g => g!).ToArray());
+                _pbpOwnershipDue = DateTime.UtcNow.AddMinutes(10);
+            });
+        }
+        catch (Exception ex) { Log.Debug("PieceByPiece: ownership read failed: {E}", ex.Message); if (!_pbpEquipLifetime.IsCancellationRequested && CoreAccount.UnifiedUserId == id.Value.UnifiedId && ReferenceEquals(_pbpOwnershipLifetime, lifetime)) _pbpOwnershipDue = DateTime.UtcNow.AddSeconds(30); }
+        finally { if (ReferenceEquals(_pbpOwnershipLifetime, lifetime)) _pbpOwnershipLifetime = null; }
+    }
     private static string[] PbpChessGrants() => PbpLookRules.Catalog.Values.SelectMany(v => v)
         .Select(PbpLookRules.GrantOf).Where(PrizeOwnership.IsGranted).ToArray();
-
     private void OnPbpGrantsChanged() => Dispatcher.UIThread.Post(() =>
     {
         if (!_closing && _pbpOpen && IsReady) PostPbpWardrobe();
     });
-
     private void PostPbpWardrobe()
     {
         if (_closing || !_pbpOpen) return;
@@ -37,7 +84,6 @@ internal sealed partial class GameWindow
         Post(PbpLookRules.OwnedFrame(grants));
         Post(PbpLookRules.LookFrame(PbpLookRules.Clamp(PbpLookRules.Read(CoreSettings.Current.ChessLook).Look, grants)));
     }
-
     private void PickPbpLook(JObject message)
     {
         var s = CoreSettings.Current;
@@ -47,7 +93,6 @@ internal sealed partial class GameWindow
         try { CoreSettings.Service?.Save(); } catch (Exception ex) { Diag.Swallowed(ex); }
         PbpEquipPending = PutPbpEquip(look);
     }
-
     private HttpRequestMessage PbpEquipRequest(HttpMethod method, string url, string uid, string token, ChessLook look)
     {
         var request = new HttpRequestMessage(method, url + "/v2/equip" +
@@ -58,7 +103,6 @@ internal sealed partial class GameWindow
             request.Content = new StringContent(PbpLookRules.EquipBody(uid, look).ToString(Formatting.None), Encoding.UTF8, "application/json");
         return request;
     }
-
     private async Task PullPbpEquip()
     {
         var uid = CoreAccount.UnifiedUserId;
@@ -87,11 +131,10 @@ internal sealed partial class GameWindow
                 }
                 else if (shouldPush) push = look;
             });
-            if (push is {} value) await PutPbpEquip(value).ConfigureAwait(false);
+            if (push is {} value && CoreAccount.UnifiedUserId == uid) await PutPbpEquip(value).ConfigureAwait(false);
         }
         catch (Exception ex) { Log.Debug("PieceByPiece: equip pull kept local look: {E}", ex.Message); }
     }
-
     private async Task PutPbpEquip(ChessLook look)
     {
         var sent = CoreSettings.Current.ChessLook;

@@ -13,9 +13,7 @@ using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.PieceByPiece.Wardrobe;
 using Newtonsoft.Json.Linq;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed partial class GameWindowTests
 {
     private sealed class EquipHttp : HttpMessageHandler
@@ -23,6 +21,8 @@ public sealed partial class GameWindowTests
         internal readonly List<(string Method, string Path, string Body)> Calls = new();
         internal string Reply = "{}";
         internal HttpStatusCode Status = HttpStatusCode.OK;
+        internal string[] Grants = Array.Empty<string>();
+        internal bool BlockOwnership;
         internal bool Block;
         internal bool Cancelled;
         internal Action? Delivered;
@@ -31,17 +31,19 @@ public sealed partial class GameWindowTests
             Calls.Add((request.Method.Method, request.RequestUri!.PathAndQuery,
                 request.Content == null ? "" : await request.Content.ReadAsStringAsync(ct)));
             Assert.Equal("test-token", request.Headers.GetValues(PbpNetRelay.TokenHeader).Single());
-            Assert.Single(request.Headers.GetValues(PbpNetRelay.VersionHeader));
-            if (Block)
+            var ownership = request.RequestUri.AbsolutePath == "/v2/shop/state";
+            if (!ownership) Assert.Single(request.Headers.GetValues(PbpNetRelay.VersionHeader));
+            if (Block || (ownership && BlockOwnership))
             {
                 try { await Task.Delay(Timeout.Infinite, ct); }
                 catch (OperationCanceledException) { Cancelled = true; throw; }
             }
+            if (ownership) return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(new JObject
+                { ["ok"] = true, ["prizes"] = new JObject { ["revision"] = 1, ["grants"] = new JArray(Grants) } }.ToString()) };
             Delivered?.Invoke();
             return new HttpResponseMessage(Status) { Content = new StringContent(Reply) };
         }
     }
-
     private static void FinishEquip(Task task)
     {
         var end = DateTime.UtcNow.AddSeconds(5);
@@ -49,7 +51,56 @@ public sealed partial class GameWindowTests
         Assert.True(task.IsCompletedSuccessfully);
         Dispatcher.UIThread.RunJobs();
     }
-
+    [Fact]
+    public void ChessWardrobe_StartupReadsGrants_AndIdentityChangesClearThem() => RunBoard(() =>
+    {
+        var old = (GameWindow.PbpHttpClient, GameWindow.PbpServerBase, CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider);
+        using var transport = new EquipHttp { Grants = new[] { "cos.chess.set.royal-capes" } };
+        using var http = new HttpClient(transport);
+        try
+        {
+            PrizeOwnership.ResetHeld();
+            GameWindow.PbpHttpClient = () => http;
+            GameWindow.PbpServerBase = () => "http://equip.test";
+            CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "test-token" : null;
+            CoreSettings.Current.OfflineMode = false;
+            CoreSettings.Current.UnifiedId = CoreAccount.UnifiedUserId = "first";
+            CoreSettings.Current.ChessLook = PbpLookRules.Write(new ChessLook("chess.set.royal-capes", null, null), 0);
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            w.PbpOsAnimations = () => Task.FromResult(true);
+            var frames = new List<JObject>();
+            w.Posted += json => frames.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            FinishEquip(w.PbpOwnershipPending);
+            Assert.True(PrizeOwnership.IsGranted("cos.chess.set.royal-capes"));
+            Assert.Equal("chess.set.royal-capes", (string?)frames.Last(f => (string?)f["type"] == "pbp:look")["look"]!["set"]);
+            Assert.Contains(transport.Calls, c => c.Method == "GET" && c.Path == "/v2/shop/state?unified_id=first");
+            transport.Grants = Array.Empty<string>();
+            CoreSettings.Current.UnifiedId = CoreAccount.UnifiedUserId = "second";
+            Dispatcher.UIThread.RunJobs();
+            FinishEquip(w.PbpOwnershipPending);
+            Assert.False(PrizeOwnership.IsGranted("cos.chess.set.royal-capes"));
+            Assert.Empty(frames.Last(f => (string?)f["type"] == "owned")["grants"]!);
+            Assert.Equal(JTokenType.Null, frames.Last(f => (string?)f["type"] == "pbp:look")["look"]!["set"]!.Type);
+            transport.BlockOwnership = true;
+            CoreSettings.Current.UnifiedId = CoreAccount.UnifiedUserId = "third";
+            Dispatcher.UIThread.RunJobs();
+            var pending = w.PbpOwnershipPending;
+            CoreAccount.UnifiedUserId = CoreSettings.Current.UnifiedId = null;
+            Dispatcher.UIThread.RunJobs();
+            FinishEquip(pending);
+            Assert.True(transport.Cancelled);
+            Assert.Empty(frames.Last(f => (string?)f["type"] == "owned")["grants"]!);
+            w.Close();
+            var observers = (Delegate?)typeof(CoreAccount).GetField("UnifiedIdentityChanged", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
+            Assert.DoesNotContain(observers?.GetInvocationList() ?? Array.Empty<Delegate>(), d => ReferenceEquals(d.Target, w));
+            var count = (transport.Calls.Count, frames.Count);
+            CoreSettings.Current.UnifiedId = CoreAccount.UnifiedUserId = "closed";
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(count, (transport.Calls.Count, frames.Count));
+        }
+        finally { GameWindow.CloseAllForPanic(); PrizeOwnership.ResetHeld(); (GameWindow.PbpHttpClient, GameWindow.PbpServerBase, CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider) = old; }
+    });
     [Theory]
     [InlineData(200, "{bad")]
     [InlineData(404, "{}")]

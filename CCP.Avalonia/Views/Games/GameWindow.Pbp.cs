@@ -89,10 +89,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (_pbpOpen) return;
             _pbpOpen = true;
             PrizeOwnership.GrantsChanged += OnPbpGrantsChanged;
+            CoreAccount.UnifiedIdentityChanged += OnPbpIdentityChanged;
             _pbpLastBeatUtc = _pbpLastProgressUtc = DateTime.UtcNow;
             Closed += (_, _) => ClosePbp();
             _pbpWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-            _pbpWatch.Tick += (_, _) => CheckPbpWatch(DateTime.UtcNow);
+            _pbpWatch.Tick += (_, _) => { CheckPbpWatch(DateTime.UtcNow); RefreshPbpOwnership(); };
             _pbpWatch.Start();
             try { FriendsHead.Service?.EnterActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("PieceByPieceHost: launched");
@@ -105,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (!_pbpOpen) return;
             _pbpOpen = false;
             PrizeOwnership.GrantsChanged -= OnPbpGrantsChanged;
+            CoreAccount.UnifiedIdentityChanged -= OnPbpIdentityChanged;
             _pbpEquipLifetime.Cancel();
             try { _pbpWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _pbpWatch = null;
@@ -212,6 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 s.UserDisplayName, CoreReleaseContent.AppVersion));
             PostPbpWardrobe();
             PbpEquipPending = PullPbpEquip();
+            RefreshPbpOwnership();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>
