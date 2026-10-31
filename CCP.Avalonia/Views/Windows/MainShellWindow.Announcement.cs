@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
@@ -17,7 +18,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The Core client; seeded by the app at startup only. Unseeded (every test that does not set it) = no check.</summary>
         internal static Func<V2AuthService>? AnnouncementClient;
 
+        internal static readonly TimeSpan AnnouncementDelay = TimeSpan.FromSeconds(7);
+        internal TimeProvider AnnouncementTime { get; set; } = TimeProvider.System;
+
         private bool _announcementArmed;
+        private bool _announcementClosed;
+        private ITimer? _announcementTimer;
 
         private void InitializeServerAnnouncement()
         {
@@ -25,7 +31,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (_announcementArmed || AnnouncementClient == null) return;
                 _announcementArmed = true;
-                DispatcherTimer.RunOnce(() => _ = CheckServerAnnouncementAsync(), TimeSpan.FromSeconds(7));
+                _announcementTimer = AnnouncementTime.CreateTimer(_ =>
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        _announcementTimer?.Dispose();
+                        _announcementTimer = null;
+                        if (!_announcementClosed) _ = CheckServerAnnouncementAsync();
+                    }), null, AnnouncementDelay, Timeout.InfiniteTimeSpan);
+            };
+            Closed += (_, _) =>
+            {
+                // A closed shell must not post news into its replacement's shared Inbox.
+                // Also guard queued callbacks and responses already in flight below.
+                _announcementClosed = true;
+                _announcementTimer?.Dispose();
+                _announcementTimer = null;
             };
         }
 
@@ -35,9 +55,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var make = AnnouncementClient;
-                if (make == null) return;
+                if (_announcementClosed || make == null) return;
                 var a = await make().GetAnnouncementAsync(CoreSettings.Current.UnifiedId);
-                if (a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
+                if (_announcementClosed || a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
                 Log.Information("Server announcement received: id={Id}, title={Title}", a.Id, a.Title);
 
                 string id = a.Id!, title = a.Title!, message = a.Message ?? "";
