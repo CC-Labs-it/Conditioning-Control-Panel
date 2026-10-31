@@ -30,6 +30,13 @@
     <Style Selector="TextBox">
       <Setter Property="Theme" Value="{StaticResource InputTextBoxTheme}"/>
     </Style>
+    <!-- Inputs.xaml:218 and 394. Local Theme and ItemContainerTheme still win. -->
+    <Style Selector="CheckBox">
+      <Setter Property="Theme" Value="{StaticResource InputCheckBoxTheme}"/>
+    </Style>
+    <Style Selector="ListBox">
+      <Setter Property="ItemContainerTheme" Value="{StaticResource InputListBoxItemTheme}"/>
+    </Style>
     <!-- Icon size ramp + semantic icon brushes (Controls/Icons, fluent icons 2026-10-10). -->
     <StyleInclude Source="avares://CCP.Avalonia/Theme/Icons.axaml"/>
   </Application.Styles>
