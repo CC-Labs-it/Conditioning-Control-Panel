@@ -78,7 +78,6 @@ public sealed partial class FriendsDrawer
         }
         catch { return false; }
     }
-
     internal async Task<bool> NewLinkAsync()
     {
         if (_svc == null || _linkBusy) return false;
@@ -95,7 +94,6 @@ public sealed partial class FriendsDrawer
         }
         finally { _linkBusy = false; }
     }
-
     private async Task<AddResult> ClaimTypedAsync(string token)
     {
         if (_svc == null) return AddResult.TryLater;
@@ -161,10 +159,9 @@ public sealed partial class FriendsDrawer
         if (k == 0) return;
         var fx = new LinkBurst(from, wave, k, from.TranslatePoint(new Point(from.Bounds.Width / 2, from.Bounds.Height / 2), _linkFx) ?? default);
         _linkFx.Children.Add(fx);
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-        timer.Tick += (_, _) => { fx.Step(watch.Elapsed.TotalMilliseconds); if (fx.Done) { timer.Stop(); _linkFx.Children.Remove(fx); } };
-        timer.Start();
+        global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop? beat = null;
+        beat = new(fx, seconds => { fx.Step(seconds * 1000); if (fx.Done) { beat!.Stop(); _linkFx.Children.Remove(fx); } });
+        fx.DetachedFromVisualTree += (_, _) => { fx.Step(double.MaxValue); beat.Stop(); }; beat.OnParked = () => { fx.Step(double.MaxValue); beat.Stop(); _linkFx.Children.Remove(fx); }; beat.Start();
     }
     // WPF FriendsDrawer.Juice.cs: Pop 380/110 ms, 12 sparks; Shockwave two rings 120 ms apart, 14 sparks.
     internal sealed class LinkBurst : Control

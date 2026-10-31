@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Helpers;
 
 namespace CCP.Avalonia.Tests;
 
@@ -28,7 +29,7 @@ public sealed partial class FriendsDrawerTests
     [Fact]
     public Task Sync7LinksCopyRenewClaimAndFallback() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        SetupSync7();
+        SetupSync7(); var time = new SteppedTime(); BeatLoop.Time = time;
         var (svc, wire) = Service();
         using (svc)
         {
@@ -46,11 +47,12 @@ public sealed partial class FriendsDrawerTests
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.IsType<global::Avalonia.Media.ScaleTransform>(Tagged<Button>(d, "friends-copy-link")!.RenderTransform);
             var pop = Tagged<FriendsDrawer.LinkBurst>(d, "friends-link-pop")!;
-            Assert.Equal(12, pop.Sparks); pop.Step(110);
+            Assert.Equal(12, pop.Sparks); time.Advance(TimeSpan.FromMilliseconds(110)); BeatLoop.StepAll();
             Assert.Equal(1.22, ((global::Avalonia.Media.ScaleTransform)Tagged<Button>(d, "friends-copy-link")!.RenderTransform!).ScaleX, 5);
-            pop.Step(380); Assert.Equal(1, ((global::Avalonia.Media.ScaleTransform)Tagged<Button>(d, "friends-copy-link")!.RenderTransform!).ScaleX);
+            time.Advance(TimeSpan.FromMilliseconds(270)); BeatLoop.StepAll(); Assert.Equal(1, ((global::Avalonia.Media.ScaleTransform)Tagged<Button>(d, "friends-copy-link")!.RenderTransform!).ScaleX);
             Assert.Equal(TimeSpan.FromMilliseconds(ConditioningControlPanel.Services.Safety.GentleVisuals.RiseMs(180)),
                 ((global::Avalonia.Animation.DoubleTransition)Tagged<TextBlock>(d, "friends-link-note")!.Transitions![0]).Duration);
+            time.Advance(TimeSpan.FromMilliseconds(300)); BeatLoop.StepAll(); Assert.DoesNotContain(BeatLoop.Running, b => ReferenceEquals(b.Owner, pop));
             Assert.Equal("click", sounds.Last());
             Assert.NotEmpty(Tagged<TextBlock>(d, "friends-link-note")!.Transitions!);
             Assert.Equal("https://app.cclabs.app/f/7K2Q9ABCDEFG", copied);
@@ -101,6 +103,7 @@ public sealed partial class FriendsDrawerTests
             offlineWire.ClaimBody = """{"ok":true,"status":"unusable"}""";
             Assert.Equal(AddResult.NotFound, await d.AddByCodeAsync("ABCDEFGHJKLM")); Assert.Equal("denied", sounds.Last());
         }
+        time.Advance(TimeSpan.FromSeconds(2)); BeatLoop.StepAll();
     });
 
     [Fact]
@@ -161,7 +164,7 @@ public sealed partial class FriendsDrawerTests
     [InlineData(false, false)]
     public Task LinkMotionUsesGentleAndOsCaps(bool gentle, bool os) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        SetupSync7(); var probe = UiMotionPreference.OsProbe;
+        SetupSync7(); var probe = UiMotionPreference.OsProbe; var time = new SteppedTime(); BeatLoop.Time = time;
         try
         {
             CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full; CoreSettings.Current.GentleVisuals = gentle;
@@ -169,7 +172,7 @@ public sealed partial class FriendsDrawerTests
             var d = new FriendsDrawer(); d.PlayLinkFx(new Border(), false);
             Assert.Equal(6, Tagged<FriendsDrawer.LinkBurst>(d, "friends-link-pop")!.Sparks);
         }
-        finally { UiMotionPreference.OsProbe = probe; UiMotionPreference.CacheStamp = long.MinValue; }
+        finally { UiMotionPreference.OsProbe = probe; UiMotionPreference.CacheStamp = long.MinValue; time.Advance(TimeSpan.FromSeconds(2)); BeatLoop.StepAll(); }
         return Task.CompletedTask;
     });
 }
