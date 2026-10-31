@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
@@ -78,8 +79,10 @@ public sealed class ChaosFlashOverlayTests
     }
 
     [Fact]
-    public void DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation()
+    public void DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation() => AvaloniaTestDispatcher.Run(() =>
     {
+        // Decode creates Avalonia bitmaps; do not depend on another test initializing the platform.
+        Setup();
         var gif = WriteGif(out var dir);
         try
         {
@@ -89,7 +92,7 @@ public sealed class ChaosFlashOverlayTests
             foreach (var f in frames) f.Dispose();
         }
         finally { Directory.Delete(dir, true); }
-    }
+    });
 
     [Fact]
     public async Task APlatformWithoutClickThroughShowsNothing()
@@ -127,6 +130,7 @@ public sealed class ChaosFlashOverlayTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
