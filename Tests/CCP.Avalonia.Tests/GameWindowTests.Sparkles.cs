@@ -31,11 +31,19 @@ public sealed partial class GameWindowTests
         }
     }
     [Theory]
-    [InlineData(0)] // Paid receipt.
-    [InlineData(1)] // Shadow receipt.
-    [InlineData(2)] // Host closes before the receipt.
-    [InlineData(3)] // Sandbox with settings, but no loopback override.
-    public void ChessSlipReachesOnlyItsOpenHostAndSandboxCannotClaim(int scenario)
+    [InlineData("piecebypiece", 0)] // Paid receipt.
+    [InlineData("piecebypiece", 1)] // Shadow receipt.
+    [InlineData("piecebypiece", 2)] // Host closes before the receipt.
+    [InlineData("piecebypiece", 3)] // Sandbox with settings, but no loopback override.
+    [InlineData("breakoutdemo", 0)]
+    [InlineData("breakoutdemo", 1)]
+    [InlineData("breakoutdemo", 2)]
+    [InlineData("breakoutdemo", 3)]
+    [InlineData("glassroad", 0)]
+    [InlineData("glassroad", 1)]
+    [InlineData("glassroad", 2)]
+    [InlineData("glassroad", 3)]
+    public void SlipReachesOnlyItsOpenHostAndSandboxCannotClaim(string id, int scenario)
     {
         var previousHooks = (SparklesHead.MakeService, CoreSecrets.RetrieveProvider);
         Run((_, _) =>
@@ -54,16 +62,22 @@ public sealed partial class GameWindowTests
             s.GentleVisuals = true;
             SparklesHead.MakeService = () => scenario == 3 ? SparklesHead.Create("sandbox", null, http)
                 : new SparklesClaimService(http, () => ("account", "test-token"), "http://localhost");
-            var host = GameWindow.Launch(GameWindow.PbpId)!;
+            var host = new GameWindow(GameWindow.Games[id]);
+            host.Load(GameWindow.Server());
+            host.Show();
             host.Web.OnNavigationCompleted(host.PageUrl!);
+            if (id == GameWindow.GlassroadId) host.Web.OnWebMessage("{type:'ready'}");
             var posted = new List<JObject>();
             host.Posted += json => { Assert.True(Dispatcher.UIThread.CheckAccess()); posted.Add(JObject.Parse(json)); };
-            host.Web.OnWebMessage("{type:'pbp:game-over',mode:'solo',outcome:'win',plies:44,durationMs:600000}");
+            host.Web.OnWebMessage(id switch {
+                "glassroad" => "{type:'race-result',finished:true,laps:3,fullLaps:3,place:1,of:8,timeS:600}",
+                "breakoutdemo" => "{type:'breakout-wall',ballsLost:0,wallMs:600000}",
+                _ => "{type:'pbp:game-over',mode:'solo',outcome:'win',plies:44,durationMs:600000}" });
             if (scenario == 2) host.Close();
             wire.Reply.SetResult(new(HttpStatusCode.OK) { Content = new StringContent(
                 "{ok:true,receipt:{paid:8,credited:8,sp:80,result:{kind:'duel',outcome:'win'},shadow:" + (scenario == 1 ? "true" : "false") + "}}") });
             var deadline = DateTime.UtcNow.AddSeconds(10);
-            while (!host.SparklesPending.IsCompleted && DateTime.UtcNow < deadline)
+            while ((!host.SparklesPending.IsCompleted || (scenario != 3 && wire.Calls == 0)) && DateTime.UtcNow < deadline)
             { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
             Assert.True(host.SparklesPending.IsCompletedSuccessfully);
             Assert.Equal(scenario == 3 ? 0 : 1, wire.Calls);

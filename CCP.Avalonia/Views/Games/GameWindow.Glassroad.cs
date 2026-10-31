@@ -131,8 +131,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "race-result":
                         var reward = ConditioningControlPanel.Services.GameRewards.GlassroadRewards.SparklesClaimFor(o);
                         if (reward != null)
-                            _ = ConditioningControlPanel.Services.Sparkles.SparklesGameEnd.Claim("rt3d", reward.Mode,
-                                reward.Result, reward.Duration, reward.Detail, reward.Proof, Platform.SparklesHead.Service);
+                            SparklesPending = DeliverSparkles(ConditioningControlPanel.Services.Sparkles.SparklesGameEnd.Claim("rt3d", reward.Mode,
+                                reward.Result, reward.Duration, reward.Detail, reward.Proof, Platform.SparklesHead.Service));
                         return true;
                     case "net":
                         OnGlassroadNet(o);
