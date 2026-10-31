@@ -26,22 +26,21 @@ public sealed class StartStopScheduleTests
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var s = service.Current;
-        var (oldNow, oldInterval) = (CoreIntensityRamp.Now, CoreIntensityRamp.Interval);
+        var (oldNow, oldInterval, oldSink) = (CoreIntensityRamp.Now, CoreIntensityRamp.Interval, OsNotify.Sink);
         s.FlashEnabled = s.SubliminalEnabled = s.BouncingTextEnabled = s.BubblesEnabled = s.LockCardEnabled = false;
         s.MandatoryVideosEnabled = s.BubbleCountEnabled = s.PopQuizEnabled = s.MindWipeEnabled = false;
         s.IntensityRampEnabled = true;
         s.SchedulerEnabled = true;
         var now = DateTime.Now;
-        s.SchedulerStartTime = now.AddHours(-1).ToString("HH:mm");
-        s.SchedulerEndTime = now.AddHours(1).ToString("HH:mm");
+        s.SchedulerStartTime = now.AddHours(-1).ToString("HH:mm"); s.SchedulerEndTime = now.AddHours(1).ToString("HH:mm");
         s.SchedulerMonday = s.SchedulerTuesday = s.SchedulerWednesday = s.SchedulerThursday = true;
         s.SchedulerFriday = s.SchedulerSaturday = s.SchedulerSunday = true;
         var notices = new List<string>();
-        OsNotify.Sink = (title, body) => notices.Add(title);
         var shell = new MainShellWindow { TrayHostPresent = () => false };
         Window? audioWindow = null;
         try
         {
+            OsNotify.Sink = (title, body) => notices.Add(title);
             shell.Show();
             var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
             var graceField = typeof(MainShellWindow).GetField("_schedulerGrace", flags)!;
@@ -110,9 +109,10 @@ public sealed class StartStopScheduleTests
         }
         finally
         {
-            CoreEngine.Stop(); audioWindow?.Close(); shell.Close();
-            CoreIntensityRamp.Now = oldNow; CoreIntensityRamp.Interval = oldInterval;
+            try { CoreEngine.Stop(); }
+            finally { CoreEngine.StoppedHook = null; OsNotify.Sink = oldSink; audioWindow?.Close(); shell.Close(); CoreIntensityRamp.Now = oldNow; CoreIntensityRamp.Interval = oldInterval; }
         }
+        Assert.Null(CoreEngine.StoppedHook); Assert.Same(oldSink, OsNotify.Sink);
     });
     [Fact]
     public System.Threading.Tasks.Task RampReachesNativeVideoWithoutAnAudioPage() => AvaloniaTestDispatcher.RunAsync(async () =>
