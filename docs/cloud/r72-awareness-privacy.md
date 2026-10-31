@@ -134,3 +134,35 @@ Core guards passed; avalonia_docs self-check passed; git diff --check passed.
 Shuffled-order validation (`CCP_TEST_ORDER_SEED=17`) expanded that filter with
 ChasterRaffleCardLayout, BlinkTrainerSession and EmiBookDemo: 39 passed,
 0 failed, 0 skipped. The test-project rebuild completed with 0 errors.
+
+## Windows CI follow-up: prompt-editor pointer synchronization
+
+Run 41102166225, avalonia-windows (0), job 124221070555, failed only
+CompanionEditorsTests.PromptEditor_is_reachable_from_make_her_yours_links:
+Until at line 48 timed out after the pointer press at line 213. The shard
+reported 537 passed, 1 failed, 2 skipped. All Linux shards and the other Windows
+shards passed. The artifact-upload tail was successful and was not the cause.
+
+The pointer test sampled geometry immediately after navigation and scrolling.
+RunJobs drains dispatcher work but does not prove the tab entrance has finished
+or that the compositor has rendered the new hit-test tree. Both preconditions
+already have suite contracts: MainShellWindow.TabTransitions.cs:62 documents
+CompleteTabTransition for pointer tests; ContentHitTestTests.cs:90 waits for an
+actual composition batch, and StudioRackWireTests.cs:104 asserts the hit target.
+
+The existing test now pins Full motion on its existing stepped clock, settles
+the real entrance before reading coordinates, and waits for a rendered batch
+after BringIntoView. It asserts the intended button is the input hit target,
+then sends the same MouseDown/MouseUp and checks both real prompt-editor dialogs
+open and close. No command invocation replaces pointer input. The existing
+10-second dialog bound is unchanged. No product behavior or test skip changed.
+The unmodified test passed alone on Linux, consistent with the scheduling race
+seen on Windows rather than an always-broken editor command.
+
+Validation (SDK 10.0.403, Linux):
+- `dotnet test Tests/CCP.Avalonia.Tests --no-build --filter FullyQualifiedName~PromptEditor_is_reachable_from_make_her_yours_links`: 1 passed, 0 failed, 0 skipped after the fix.
+- `dotnet test Tests/CCP.Avalonia.Tests --filter 'FullyQualifiedName~CompanionEditorsTests|FullyQualifiedName~TabTransitionsTests|FullyQualifiedName~ContentHitTestTests|FullyQualifiedName~TestIsolationTests|FullyQualifiedName~AwarenessPrivacyCandidatesTests'`: rebuild succeeded, 33 passed, 0 failed, 0 skipped.
+- `bash .github/scripts/core-guards.sh`: All Core guards passed.
+- `python3 .github/scripts/avalonia_docs.py`: avalonia_docs self-check OK.
+- `git diff --check`: passed.
+Windows execution is delegated to the PR CI rerun; it was not run in this Linux environment.
