@@ -93,6 +93,33 @@ public sealed class CloudSettingsBackupTests : IDisposable
         return JObject.Parse(reader.ReadToEnd());
     }
 
+    // WPF App.xaml.cs:5249-5305: startup-only preservation on top of the shared restore rules.
+    [Fact]
+    public void WelcomeBackRestoreKeepsInstallChoicesAndTheHigherHistory()
+    {
+        var local = Signed();
+        local.Welcomed = local.FirstRunAssetsPromptShown = true;
+        local.PlayerLevel = 24;
+        local.TotalConditioningMinutes = 100;
+        local.CompanionProgressData[1] = new CompanionProgress { Level = 5, TotalXPEarned = 50 };
+        local.CompanionProgressData[2] = new CompanionProgress { Level = 3, TotalXPEarned = 60 };
+        local.CompanionProgressData[3] = new CompanionProgress { Level = 2, TotalXPEarned = 20 };
+        var backup = new AppSettings { PlayerLevel = 99, TotalConditioningMinutes = 150 };
+        backup.CompanionProgressData[2] = new CompanionProgress { Level = 3, TotalXPEarned = 40 };
+        backup.CompanionProgressData[3] = new CompanionProgress { Level = 4, TotalXPEarned = 80 };
+        CloudSettingsBackup.PrepareWelcomeBackRestore(local, backup);
+        Assert.True(backup.Welcomed && backup.FirstRunAssetsPromptShown);
+        Assert.Equal(local.SpiralPath, backup.SpiralPath);
+        Assert.Equal(24, backup.PlayerLevel);
+        Assert.Equal(150, backup.TotalConditioningMinutes);
+        Assert.Equal(5, backup.CompanionProgressData[1].Level);
+        Assert.Equal(60, backup.CompanionProgressData[2].TotalXPEarned);
+        Assert.Equal(4, backup.CompanionProgressData[3].Level);
+        backup.TotalConditioningMinutes = 50;
+        CloudSettingsBackup.PrepareWelcomeBackRestore(local, backup);
+        Assert.Equal(100, backup.TotalConditioningMinutes);
+    }
+
     [Fact]
     public async Task BackupUploadsNoAbsolutePathNoExcludedPropertyAndKeepsTheAssetLists()
     {
