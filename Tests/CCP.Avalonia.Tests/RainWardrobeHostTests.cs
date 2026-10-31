@@ -44,7 +44,7 @@ public sealed class RainWardrobeHostTests
         try
         {
             tube = new AvatarTubeWindow(); CoreMods.ActiveModIdProvider = () => "builtin-ccp-default"; CoreSettings.Current.AvatarGeneration = "v2"; tube.UpdateQuickMenuState();
-            var door = tube.FindControl<MenuItem>("MenuItemRainWardrobe")!; Assert.True(door.IsVisible);
+            var door = tube.FindControl<MenuItem>("MenuItemRainWardrobe")!; Assert.True(door.IsVisible); Assert.Equal("section_rain_wardrobe", Assert.IsType<ConditioningControlPanel.Avalonia.Controls.IconLabel>(door.Header).Key);
             door.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); var host = RainWardrobeHost.Active; Assert.NotNull(host);
             door.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Assert.Same(host, RainWardrobeHost.Active);
             Assert.Contains("host=ccp", host.Web.Source!.Query);
