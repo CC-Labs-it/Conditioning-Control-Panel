@@ -46,6 +46,50 @@ internal static class X11PanicKey
     [DllImport(LibXi)] private static extern int XIQueryVersion(IntPtr display, ref int major, ref int minor);
     [DllImport(LibXi)] private static extern int XISelectEvents(IntPtr display, IntPtr window, ref XIEventMask mask, int count);
 
+    [DllImport(LibX11)] private static extern IntPtr XkbGetMap(IntPtr display, uint which, uint device);
+    [DllImport(LibX11)] private static extern int XkbGetNames(IntPtr display, uint which, IntPtr keyboard);
+    [DllImport(LibX11)] private static extern void XkbFreeKeyboard(IntPtr keyboard, uint which, bool freeAll);
+
+    // XKBstr.h XkbDescRec. Keep native pointer alignment on both 32 and 64 bit.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct XkbDesc
+    {
+        public IntPtr Display;
+        public ushort Flags, Device;
+        public byte MinKeycode, MaxKeycode;
+        public IntPtr Controls, Server, Map, Indicators, Names, Compat, Geometry;
+    }
+
+    private static bool IsOem102(string? name) =>
+        string.Equals(name?.Trim(), "OemBackslash", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name?.Trim(), "Oem102", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>WPF GlobalKeyboardHook.cs:115 uses VK_OEM_102, not the symbol it produces.
+    /// Resolve that key by its active XKB name, LSGT; on UK layouts "less" belongs to comma.</summary>
+    internal static int KeycodeOf(IntPtr display, string? name)
+    {
+        if (!IsOem102(name))
+        {
+            var sym = KeysymOf(name);
+            return sym == 0 ? 0 : XKeysymToKeycode(display, sym);
+        }
+        var keyboard = XkbGetMap(display, 0, 0x0100); // XkbUseCoreKbd, descriptor only
+        if (keyboard == IntPtr.Zero) return 0;
+        try
+        {
+            if (XkbGetNames(display, 1u << 9, keyboard) != 0) return 0; // XkbKeyNamesMask
+            var desc = Marshal.PtrToStructure<XkbDesc>(keyboard);
+            if (desc.Names == IntPtr.Zero) return 0;
+            // XkbNamesRec: 5 atoms, 16 virtual modifiers, 32 indicators, 4 groups, then keys.
+            var keys = Marshal.ReadIntPtr(desc.Names, 57 * IntPtr.Size);
+            if (keys == IntPtr.Zero) return 0;
+            for (int code = desc.MinKeycode; code <= desc.MaxKeycode; code++)
+                if (Marshal.PtrToStringAnsi(IntPtr.Add(keys, code * 4), 4) == "LSGT") return code;
+            return 0; // No ISO key: never arm a different key as a fallback.
+        }
+        finally { XkbFreeKeyboard(keyboard, 0, true); }
+    }
+
     private static int _started;
 
     /// <summary>True once the listener is up: a panic press can actually arrive (LockCardWindow's
@@ -161,8 +205,7 @@ internal static class X11PanicKey
             var name = currentKey();
             if (name == boundName) return;
             boundName = name;
-            var sym = KeysymOf(name);
-            _boundCode = sym == 0 ? 0 : XKeysymToKeycode(display, sym);
+            _boundCode = KeycodeOf(display, name);
             if (_boundCode == 0) Log.Warning("Panic key: '{Key}' has no X keycode; only the tray can panic", name);
         }
         Resolve();
@@ -192,11 +235,11 @@ internal static class X11PanicKey
                 if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
                 Route(true, keycode, onPress);
                 // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).
-                if (PushToTalk is { } ptt && KeysymOf(PushToTalkKey?.Invoke()) is var ps and not 0
-                    && keycode == XKeysymToKeycode(display, ps)) ptt();
+                if (PushToTalk is { } ptt && KeycodeOf(display, PushToTalkKey?.Invoke()) is var pc and not 0
+                    && keycode == pc) ptt();
                 if (ToyKey is { } toy && ToyKeys?.Invoke() is { } toyKeys)
                     foreach (var k in toyKeys)
-                        if (KeysymOf(k) is var ts and not 0 && keycode == XKeysymToKeycode(display, ts)) { toy(k); break; }
+                        if (KeycodeOf(display, k) is var tc and not 0 && keycode == tc) { toy(k); break; }
             }
             catch (Exception ex)
             {
@@ -206,7 +249,7 @@ internal static class X11PanicKey
     }
 
     // WPF/Avalonia Key names (the setting stores Key.ToString()) whose X keysym name differs.
-    // ponytail: common keys only; anything else is tried verbatim, and an unknown one logs a warning.
+    // Other names pass through to Xlib; an unknown one logs a warning.
     private static readonly Dictionary<string, string> XNames = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Space"] = "space", ["Back"] = "BackSpace", ["Enter"] = "Return", ["PageUp"] = "Prior", ["PageDown"] = "Next",
@@ -219,6 +262,15 @@ internal static class X11PanicKey
         ["Oem4"] = "bracketleft", ["OemCloseBrackets"] = "bracketright", ["Oem6"] = "bracketright",
         ["OemPipe"] = "backslash", ["Oem5"] = "backslash", ["LeftCtrl"] = "Control_L", ["RightCtrl"] = "Control_R",
         ["LeftShift"] = "Shift_L", ["RightShift"] = "Shift_R", ["LeftAlt"] = "Alt_L", ["RightAlt"] = "Alt_R",
+        ["Apps"] = "Menu", ["LWin"] = "Super_L", ["RWin"] = "Super_R",
+        ["Cancel"] = "Break", ["Separator"] = "KP_Separator", ["Oem8"] = "grave",
+        ["VolumeMute"] = "XF86AudioMute", ["VolumeDown"] = "XF86AudioLowerVolume", ["VolumeUp"] = "XF86AudioRaiseVolume",
+        ["MediaNextTrack"] = "XF86AudioNext", ["MediaPreviousTrack"] = "XF86AudioPrev", ["MediaStop"] = "XF86AudioStop",
+        ["MediaPlayPause"] = "XF86AudioPlay", ["Sleep"] = "XF86Sleep",
+        ["BrowserBack"] = "XF86Back", ["BrowserForward"] = "XF86Forward", ["BrowserRefresh"] = "XF86Refresh",
+        ["BrowserStop"] = "XF86Stop", ["BrowserSearch"] = "XF86Search", ["BrowserFavorites"] = "XF86Favorites",
+        ["BrowserHome"] = "XF86HomePage", ["LaunchMail"] = "XF86Mail", ["SelectMedia"] = "XF86AudioMedia",
+        ["LaunchApplication1"] = "XF86MyComputer", ["LaunchApplication2"] = "XF86Calculator",
     };
 
     /// <summary>The X keysym for a stored key name ("Escape", "F8", "A", "D1", "NumPad0", "OemTilde"); 0 when unknown.</summary>
@@ -228,6 +280,8 @@ internal static class X11PanicKey
     internal static string XKeyName(string name)
     {
         name = name.Trim();
+        // No portable keysym for OEM102. The portal must ask the user to choose its trigger.
+        if (IsOem102(name)) return "";
         if (XNames.TryGetValue(name, out var x)) return x;
         if (name.Length == 1 && char.IsLetter(name[0])) return name.ToLowerInvariant();
         if (name.Length == 2 && name[0] == 'D' && char.IsDigit(name[1])) return name[1..];
