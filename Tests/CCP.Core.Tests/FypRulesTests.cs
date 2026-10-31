@@ -17,6 +17,33 @@ public sealed class FypRulesTests
 {
     private static AppSettings Fresh() => new();
 
+    // WPF FypHostService.cs:73,349-354: the host composes these shared rules per page.
+    [Fact]
+    public void CachedBatchFreshnessPreservesBackoffAndStartsOverForANewPage()
+    {
+        var sent = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+        var ids = new[] { "scrolller/a/1", "scrolller/a/1" };
+        JObject[] Frames() => FypRules.BatchFrames(new FypOnlineCoordinator.FeedBatch(
+            ids.Select(id => new FypAssetManifest.Entry { Id = id, Url = "https://cdn.invalid/clip.mp4" }).ToList(),
+            null, false, 3), ScrolllerReuse.CountNewToPage(sent, ids)).ToArray();
+        var frames = Frames();
+        Assert.Equal(1, (int)frames[1]["fresh"]!); // one post, even if repeated inside a batch
+        frames = Frames();
+        Assert.Equal(new[] { "assets-append", "online-status" }, frames.Select(f => (string?)f["type"]));
+        Assert.Equal(2, frames[0]["assets"]!.Count()); // cached assets are still delivered
+        Assert.Equal(0, (int)frames[1]["fresh"]!);
+        Assert.Equal(0, (int)frames[1]["added"]!);
+        Assert.True((bool)frames[1]["ok"]!);
+        ids = new[] { "scrolller/a/1", "scrolller/a/2" };
+        Assert.Equal(1, (int)Frames()[1]["fresh"]!);
+        ids = Array.Empty<string>();
+        Assert.Equal("online-status", (string?)Assert.Single(Frames())["type"]);
+        sent = new(StringComparer.Ordinal); // WPF Launch clears ids; Avalonia uses a new window
+        ids = new[] { "scrolller/a/1" };
+        Assert.Equal(1, (int)Frames()[1]["fresh"]!);
+    }
+
+
     [Fact]
     public void RemoteNeedsConsentAndANonLibrarySource()
     {
