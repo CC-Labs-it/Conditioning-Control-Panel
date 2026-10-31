@@ -66,12 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             BtnTestVideo.Click += BtnTestVideo_Click;
 
             LoadFromSettings();
-
-            // ponytail: WPF also repaints the hero and side art plates here (ApplyFeatureArt +
-            // App.Mods.ModChanged). The mod-override half of ResolveImageDecoded is portable now
-            // (CoreModArt.OverridePath), but the plate still needs a named ImageBrush in the
-            // .axaml, which Avalonia rejects (x:Name on a brush is AVLN2000); the port draws a
-            // static wash instead, so there is nothing here to repaint.
+            Helpers.ModArt.BindFeaturePlates(this, "features/mandatory_videos.png", HeroArt, SideArt, heroWidth: 480);
         }
 
         // ---- settings instance tracking (WPF: SettingsHook + ISettingsRebindable) --------------
@@ -434,14 +429,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>The last Test click's run, so a test can await it instead of yielding (P57).</summary>
         internal Task TestVideoRun { get; private set; } = Task.CompletedTask;
 
-        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = LogFault(TestVideoAsync());
+        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = ReportFault(TestVideoAsync());
 
-        // The click used to be async void (faults reached the global handler); a stored Task
-        // would swallow them silently, so log here instead.
-        private static async Task LogFault(Task run)
+        // WPF BtnTestVideo_Click's catch: log, then tell the user ("Error triggering video: ...").
+        private async Task ReportFault(Task run)
         {
             try { await run; }
-            catch (Exception ex) { Serilog.Log.Error(ex, "Test video failed"); }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Error in BtnTestVideo_Click");
+                if (TopLevel.GetTopLevel(this) is Window owner)
+                    await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("title_error"), Loc.GetF("msg_error_triggering_video_0", ex.Message));
+            }
         }
 
         private async Task TestVideoAsync()

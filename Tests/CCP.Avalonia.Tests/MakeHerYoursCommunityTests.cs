@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -9,7 +10,10 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
+using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -48,8 +52,14 @@ public sealed class MakeHerYoursCommunityTests
     public Task CommunityLinkFromTheShellBrowsesCancelsInstallsAndReadoutUsesInstalledName() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+        {
+            var fonts = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
+            var mappings = new Dictionary<string, FontFamily>(fonts.FontFamilyMappings!);
+            mappings["Segoe UI"] = mappings["Segoe UI Black"] = new FontFamily(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+            fonts.FontFamilyMappings = mappings;
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(fonts).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        }
         var previous = CoreSettings.ServiceProvider;
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
@@ -85,6 +95,7 @@ public sealed class MakeHerYoursCommunityTests
             // Companion v2 (WPF CompanionTabView.xaml.cs:36-40): Z4 and the Community cell live on
             // Companion > Personality (WPF PersonalityPage.xaml.cs:38-48), adopted out of the collapsed room.
             shell.ShowTab("personality");
+            shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants().OfType<MakeHerYoursView>().Single();
             Assert.NotNull(view.FindAncestorOfType<global::ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages.PersonalityPage>());
@@ -103,9 +114,13 @@ public sealed class MakeHerYoursCommunityTests
             void ClickLink()
             {
                 link.BringIntoView();
-                Dispatcher.UIThread.RunJobs();
+                RenderLiveTree(shell);
                 var at = link.TranslatePoint(new Point(link.Bounds.Width / 2, link.Bounds.Height / 2), shell)!.Value;
+                var hit = shell.InputHitTest(at) as Visual;
+                Assert.True(hit == link || (hit != null && link.IsVisualAncestorOf(hit)),
+                    $"Community link centre hit {hit?.GetType().Name}/{(hit as Control)?.Name}");
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                Assert.True(link.IsPressed, "Community link did not receive the pointer press");
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
             }
@@ -164,4 +179,20 @@ public sealed class MakeHerYoursCommunityTests
             if (Directory.Exists(dir)) Directory.Delete(dir, true);
         }
     });
+
+    // Hit testing reads the compositor's last frame. RunJobs alone can leave the scrolled
+    // Community link absent from that frame; wait for this tree's batch, not just one tick.
+    private static void RenderLiveTree(Visual window)
+    {
+        Dispatcher.UIThread.RunJobs();
+        var batch = ElementComposition.GetElementVisual(window)!.Compositor.RequestCompositionBatchCommitAsync();
+        var deadline = Stopwatch.StartNew();
+        while (!batch.Rendered.IsCompleted)
+        {
+            Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never rendered the Community link");
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
 }
