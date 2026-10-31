@@ -3,14 +3,11 @@ using System.IO;
 using System.Threading;
 using ConditioningControlPanel.Services.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Games;
-
 namespace ConditioningControlPanel.Avalonia.Views.Deeper;
-
 internal static class DeeperWaveform
 {
     internal static Action<string, string> Transcode = (source, dest) =>
         RaceTrackPlayer.TranscodeToWav(source, dest, null, CancellationToken.None, preserveFormat: true);
-    // WPF MediaDurationProbe.cs:37: retain source channels and rate for Core's max-absolute buckets.
     internal static AudioWaveformResult Decode(string path)
     {
         var wav = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
