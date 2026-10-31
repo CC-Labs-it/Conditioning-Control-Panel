@@ -823,4 +823,62 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task IntrusiveThoughtsUseFiveSecondRunClockAndEnabledPoolOrLocalizedFallback(bool custom)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var snapshot = ProcessStateSnapshot.Take();
+            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx);
+            var language = ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage;
+            try
+            {
+                FreshMeta();
+                ChaosMeta.State.ActiveLifetimeBoons.Add("intrusive_thoughts");
+                ChaosMeta.State.LifetimeBoonLevels["intrusive_thoughts"] = custom ? 3 : 2;
+                ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage("fr");
+                CoreSettings.Current.BouncingTextPool = new Dictionary<string, bool> { ["disabled"] = false, ["chosen"] = custom };
+                ChaosDvdOverlay.CanOverlay = () => true;
+                ChaosDvdOverlay.PrepareWindow = (_, _) => true;
+                ChaosDvdOverlay.PlaySfx = (_, _) => { };
+                ChaosRunHost.StartRun(Cfg());
+                Ticks(40);
+                Assert.False(ChaosDvdOverlay.AnyActive);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                Ticks(19);
+                Assert.False(ChaosDvdOverlay.AnyActive);
+                ChaosRunHost.ToggleManualPause(); Ticks(40); ChaosRunHost.ToggleManualPause();
+                ChaosRunHost.Overlay.Hide(); Ticks(40); ChaosRunHost.Overlay.Show();
+                Assert.False(ChaosDvdOverlay.AnyActive);
+                Ticks(1);
+                var logo = Assert.Single(ChaosDvdOverlay.Flock.Active);
+                Assert.Equal(custom ? "chosen" : "CÈDE", logo.Text);
+                Assert.Equal(custom ? 5 : 4, logo.RemainingSec);
+                Assert.Equal(0.8, logo.FontScale);
+                Assert.Equal(230 * 1.3, Math.Sqrt(logo.Vx * logo.Vx + logo.Vy * logo.Vy), 6);
+                Assert.Equal(custom, logo.SplitOnRabbit);
+                Assert.False(ChaosDvdOverlay.AnyToyActive);
+                Ticks(21); // leave a partial interval before shutdown
+                Assert.Equal(2, ChaosDvdOverlay.Flock.Active.Count);
+                ChaosRunHost.ForceShutdown();
+                ChaosMeta.State.LifetimeBoonLevels["intrusive_thoughts"] = 1;
+                ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+                Ticks(19);
+                Assert.False(ChaosDvdOverlay.AnyActive); // accumulator resets between runs
+                Ticks(1);
+                Assert.False(Assert.Single(ChaosDvdOverlay.Flock.Active).SplitOnRabbit);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); FreshMeta(); snapshot.Restore();
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx) = saved;
+                ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage(language);
+            }
+            return Task.CompletedTask;
+        });
+    }
 }

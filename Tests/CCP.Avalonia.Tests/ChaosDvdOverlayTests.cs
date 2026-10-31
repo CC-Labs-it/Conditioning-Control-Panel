@@ -11,6 +11,9 @@ using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaos;
 using IFrameSource = ConditioningControlPanel.Avalonia.Controls.Fx.IFrameSource;
 
 namespace CCP.Avalonia.Tests;
@@ -308,4 +311,69 @@ public sealed class ChaosDvdOverlayTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FlyingThoughtContactsGlobalBubbleBoxesAndSplitsWithoutEatingTheRabbit(bool shared)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor,
+                ChaosDvdOverlay.PlaySfx, ScreenList.QueryOverride, CoreSettings.Current.ChaosDvdSharedHost, CoreSettings.Current.DualMonitorEnabled);
+            var host = new Window();
+            try
+            {
+                ChaosDvdOverlay.CanOverlay = () => true;
+                ChaosDvdOverlay.PrepareWindow = (_, _) => true;
+                ChaosDvdOverlay.FrameSourceFor = _ => new SteppedFrames();
+                var cues = new List<(string, float)>();
+                ChaosDvdOverlay.PlaySfx = (k, v) => cues.Add((k, v));
+                CoreSettings.Current.ChaosDvdSharedHost = shared;
+                CoreSettings.Current.DualMonitorEnabled = false;
+                ScreenList.QueryOverride = _ => new[] { MakeScreen(new PixelRect(-1000, -200, 1920, 1080), new PixelRect(-1000, -200, 1920, 1080), true) };
+                int treats = 0, snaps = 0;
+                BubbleOverlay.BeginChaos(host, _ => treats++, _ => snaps++);
+                ChaosDvdOverlay.Launch(host, 3, 1.3, 0.8, text: "thought", splitOnRabbit: true);
+                var logo = Assert.Single(ChaosDvdOverlay.Flock.Active);
+                (logo.X, logo.Y, logo.Vx, logo.Vy) = (300, 200, 0, 0);
+                // Stage origin / primary scale = (-500, -100), global position = (-200, 100).
+                AmbientBubble Add(EffectBubbleSpec? spec, double x = -200)
+                {
+                    var b = new AmbientBubble { X = x, Y = 100, Size = 40, Spec = spec };
+                    BubbleOverlay.Field.Bubbles.Add(b);
+                    return b;
+                }
+                var treat = Add(new EffectBubbleSpec());
+                var live = Add(new EffectBubbleSpec { IsLive = true });
+                var rabbit = Add(new EffectBubbleSpec { IsDarter = true });
+                var freeze = Add(new EffectBubbleSpec { IsFreeze = true });
+                var ambient = Add(null);
+                var outside = Add(new EffectBubbleSpec(), 1000);
+                BubbleOverlay.HoldChaos(true);
+                ChaosDvdOverlay.Advance(0.1);
+                Assert.False(treat.Popping);
+                Assert.False(live.Popping);
+                BubbleOverlay.HoldChaos(false);
+                // Rabbit splitting is independent of the pop pause lock in WPF.
+                Assert.Equal(2, ChaosDvdOverlay.Flock.Active.Count);
+                Assert.Contains(("dvd_bounce", 0.4f), cues);
+                ChaosDvdOverlay.Advance(0.1);
+                Assert.True(treat.Popping);
+                Assert.True(live.Deflating);
+                Assert.Equal((1, 1), (treats, snaps));
+                Assert.All(new[] { rabbit, freeze, ambient, outside }, b => Assert.False(b.Popping));
+                Assert.Equal(shared ? 1 : 3, ChaosDvdOverlay.Windows.Count); // clone can split next frame
+                ChaosDvdOverlay.Advance(0.1);
+                Assert.Equal((1, 1), (treats, snaps));
+            }
+            finally
+            {
+                ChaosDvdOverlay.CloseActive(); BubbleOverlay.EndChaos(); BubbleOverlay.Field.Bubbles.Clear(); host.Close();
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor,
+                    ChaosDvdOverlay.PlaySfx, ScreenList.QueryOverride, CoreSettings.Current.ChaosDvdSharedHost, CoreSettings.Current.DualMonitorEnabled) = saved;
+            }
+            return Task.CompletedTask;
+        });
+    }
 }

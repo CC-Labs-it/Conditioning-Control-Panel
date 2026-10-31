@@ -77,6 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosFxWindow? _fx;
         private static double _lastHeatTint = -1;
         private static bool _dvdBannerOn;
+        private static double _thoughtAccumSec;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused;
 
         static ChaosRunHost() => ChaosLessons.LessonCompleted += OnLessonCompleted;
@@ -104,6 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state = new ChaosRunState(cfg);
                 _active = true;
                 _lastHeatTint = -1;
+                _thoughtAccumSec = 0;
                 _hud = new ChaosHudWindow(_state);
                 _hud.Show();
                 _overlay = ChaosOverlayWindow.ForRun();
@@ -628,6 +630,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void TickToys()
         {
             if (_state == null) return;
+            // WPF ChaosModeService.cs:3000-3012, :2819-2832. Tick is gated by
+            // countdown, hidden overlay and pause. Freeze pickup is still unported.
+            if (_state.IntrusiveThoughtsSec > 0)
+            {
+                _thoughtAccumSec += ChaosRunEngine.TICK_SEC;
+                if (_thoughtAccumSec >= 5)
+                {
+                    _thoughtAccumSec = 0;
+                    var pool = ConditioningControlPanel.CoreSettings.Current.BouncingTextPool;
+                    var enabled = pool?.Where(kv => kv.Value).Select(kv => kv.Key).ToArray();
+                    var text = enabled is { Length: > 0 } ? enabled[Rng.Next(enabled.Length)]
+                        : ConditioningControlPanel.Localization.Loc.Get("Chaos_Thought_Fallback");
+                    if (_overlay != null) ChaosDvdOverlay.Launch(_overlay, _state.IntrusiveThoughtsSec,
+                        1.3, 0.8, text: text, splitOnRabbit: _state.MaxedBoons.Contains("intrusive_thoughts"));
+                }
+            }
             foreach (var t in ChaosToyRules.Tick(_state.ActiveToys, ChaosRunEngine.TICK_SEC))
                 ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.45f);
             foreach (var t in _state.ActiveToys)

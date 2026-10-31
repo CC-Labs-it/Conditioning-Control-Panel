@@ -21,8 +21,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// shared mode uses a stage canvas; default mode pools one click-through window per logo.
     /// Motion remains in the primary work area. Core ChaosDvdFlock owns motion and fades.
     /// The frame subscription drops when the last logo retires; windows live until CloseActive.
-    /// <para>Missing: Intrusive Thoughts caller, bubble contacts, Spanker input, rabbit splitting,
-    /// and re-stacking above mandatory video.</para>
+    /// <para>Missing: Spanker input and re-stacking above mandatory video. Rabbit splitting
+    /// awaits the live darter lifecycle; the thought freeze gate awaits the freeze pickup.</para>
     /// </summary>
     internal static class ChaosDvdOverlay
     {
@@ -56,12 +56,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>WPF Launch. Refused (logged, no window) where no composited click-through overlay exists.</summary>
         public static void Launch(Visual host, double durationSec, double speedMult, double scale, int count = 1,
-                                  string? text = null, int splitBounces = 0)
+                                  string? text = null, int splitBounces = 0, bool splitOnRabbit = false)
         {
             // WPF Launch (:98) always hands off to the UI thread.
             if (!Dispatcher.UIThread.CheckAccess())
             {
-                Dispatcher.UIThread.Post(() => Launch(host, durationSec, speedMult, scale, count, text, splitBounces));
+                Dispatcher.UIThread.Post(() => Launch(host, durationSec, speedMult, scale, count, text, splitBounces, splitOnRabbit));
                 return;
             }
             try
@@ -72,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     return;
                 }
                 if (!_initialized && !Create(host)) return;
-                foreach (var l in Flock.Launch(durationSec, speedMult, scale, count, text, splitBounces)) AddLabel(l);
+                foreach (var l in Flock.Launch(durationSec, speedMult, scale, count, text, splitBounces, splitOnRabbit)) AddLabel(l);
                 EnsureLoop();
             }
             catch (Exception ex) { Log.Debug("ChaosDvdOverlay.Launch: {E}", ex.Message); }
@@ -95,6 +95,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Flock.Right = (wa.Right - stage.X) / k;
             Flock.Bottom = (wa.Bottom - stage.Y) / k;
             Flock.Measure = Measure;
+            // WPF ChaosDvdOverlay.cs:390, :394: stage-relative DIPs to global DIPs.
+            Flock.Contact = l => BubbleOverlay.ContactChaos(ContactRect(l));
+            Flock.RabbitContact = l => BubbleOverlay.RabbitContact(ContactRect(l));
 
             _stage = stage;
             _scale = k;
@@ -132,6 +135,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 Height = height,
                 Content = content,
             };
+
+        private static Rect ContactRect(ChaosDvdLogo l) => new(
+            l.X + _stage.X / _scale, l.Y + _stage.Y / _scale, l.W, l.H);
 
         private static PixelRect LogoBounds(ChaosDvdLogo l) => new(
             _stage.X + (int)Math.Round(l.X * _scale), _stage.Y + (int)Math.Round(l.Y * _scale),
@@ -216,6 +222,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (LogoWindows.TryGetValue(l, out var w)) w.Position = LogoBounds(l).Position;
             }
             if (f.BounceCue) PlaySfx("dvd_bounce", 0.35f);
+            for (int i = 0; i < f.RabbitCues; i++) PlaySfx("dvd_bounce", 0.4f);
             if (f.LaunchCue) PlaySfx("dvd_launch", 0.35f);
             if (!Flock.AnyActive) StopLoop();
             else EnsureLoop(); // a per-logo driver may have just retired and hidden
@@ -246,6 +253,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(CloseActive); return; }
             StopLoop();
             Flock.Clear();
+            Flock.Contact = null;
+            Flock.RabbitContact = null;
             Labels.Clear();
             foreach (var logoWindow in LogoWindows.Values.Concat(Pool))
                 try { logoWindow.Close(); } catch (Exception ex) { Log.Debug("ChaosDvd close: {E}", ex.Message); }

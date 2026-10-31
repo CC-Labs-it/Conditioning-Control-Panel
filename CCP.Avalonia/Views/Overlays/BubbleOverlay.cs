@@ -271,6 +271,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return b;
         }
 
+        // WPF BubbleService.cs:325-340, :1916-1925. Global DIPs, unscaled body boxes.
+        internal static void ContactChaos(Rect rect)
+        {
+            if (_chaosPopped == null || Field.HoldChaos) return;
+            for (int i = Field.Bubbles.Count - 1; i >= 0; i--)
+            {
+                if (i >= Field.Bubbles.Count) continue;
+                var b = Field.Bubbles[i];
+                if (b.Popping || b.Spec == null || b.Spec.IsDarter || b.Spec.IsFreeze
+                    || !rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
+                if (b.IsLiveThreat)
+                {
+                    if (b.Snap()) Field.ChaosDefused?.Invoke(b);
+                }
+                else PopChaos(b);
+            }
+            RequestFrame();
+        }
+
+        internal static bool RabbitContact(Rect rect) => _chaosPopped != null && Field.Bubbles.Any(b =>
+            !b.Popping && b.Spec is { IsDarter: true }
+            && rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size)));
+
         /// <summary>WPF Bubble.Pop with a spec: anchor the pop point, start the burst, hand it to the run.</summary>
         internal static void PopChaos(AmbientBubble b)
         {
