@@ -1,0 +1,192 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Fyp;
+using ConditioningControlPanel.Services.Fyp.Online;
+using Serilog;
+namespace ConditioningControlPanel.Services.Flash
+{
+    internal readonly record struct RemoteFlashItem(string Url, string PosterPath, string ClipPath);
+    internal static class FlashSourceRules
+    {
+        internal static bool RemoteEnabled(AppSettings? s)
+            => s != null
+               && !string.Equals(s.MediaSource, "local", StringComparison.OrdinalIgnoreCase)
+               && s.HasRemoteMediaConsent;
+        internal static bool ShouldDrawRemote(AppSettings? s, bool haveLocal, Random rng)
+        {
+            if (!RemoteEnabled(s)) return false;
+            if (!haveLocal) return true;
+            if (string.Equals(s!.MediaSource, "online", StringComparison.OrdinalIgnoreCase)) return true;
+            return rng.Next(100) < Math.Clamp(s.RemoteMediaRatio, 0, 100);
+        }
+    }
+    internal static class RemoteFlashSource
+    {
+        private const string ConsumerId = "flashes";
+        private const int ReadyTarget = 12;
+        private const int ReadyMax = 24;
+        private const int PrefetchGapSeconds = 1;
+        internal const int ClipMaxBytes = 40 * 1024 * 1024;
+        internal const int PosterMaxBytes = 8 * 1024 * 1024;
+        private static readonly RemoteFlashPool Pool = new();
+        private static readonly object Lock = new();
+        private static readonly RemoteClipFiles Clips = new();
+        private static CancellationTokenSource Cts = new();
+        private static bool _inFlight;
+        private static DateTime _lastFetchUtc = DateTime.MinValue;
+        private static Task _prefetch = Task.CompletedTask;
+        internal static Task Prefetching { get { lock (Lock) return _prefetch; } }
+        internal static Func<AppSettings?> Settings = () => CoreSettings.Current;
+        internal static Func<CancellationToken, Task<(List<FypAssetManifest.Entry> Entries, string? Error)>> Fetch = DefaultFetch;
+        internal static Func<string, long, CancellationToken, Task<string?>> Download =
+            (url, maxBytes, ct) => ScrolllerDiskCache.GetOrFetchAsync(url, null, maxBytes, ct);
+        private static IReadOnlyList<string> Channels()
+        {
+            var s = Settings();
+            return FypOnlineCoordinator.ResolveChannels(s?.FypOnlineNiches, s?.FypOnlineCustomSubs);
+        }
+        private static Task<(List<FypAssetManifest.Entry> Entries, string? Error)> DefaultFetch(CancellationToken ct)
+            => FypOnlineCoordinator.For(ConsumerId, Channels, FeedMediaKind.GifClip).FetchBatchAsync(ct);
+        private static void RefreshSelection()
+        {
+            lock (Lock)
+                if (Pool.Select(Channels())) _lastFetchUtc = DateTime.MinValue;
+        }
+        internal static int ReadyCount
+        {
+            get { lock (Lock) return Pool.Available; }
+        }
+        internal static void EnsurePrefetch()
+        {
+            RefreshSelection();
+            if (!FlashSourceRules.RemoteEnabled(Settings())) return;
+            lock (Lock)
+            {
+                if (_inFlight || Pool.Count >= ReadyTarget) return;
+                if ((DateTime.UtcNow - _lastFetchUtc).TotalSeconds < PrefetchGapSeconds) return;
+                _inFlight = true;
+                _lastFetchUtc = DateTime.UtcNow;
+                var ct = Cts.Token;
+                var generation = Pool.Generation;
+                _prefetch = Task.Run(() => PrefetchBatchAsync(ct, generation));
+            }
+        }
+        internal static RemoteFlashItem? TryTake(Random rng)
+        {
+            RefreshSelection();
+            if (!FlashSourceRules.RemoteEnabled(Settings())) return null;
+            lock (Lock)
+            {
+                Func<string, bool> usable = url => Clips.TryUse(url, Environment.TickCount64, out var clip, out var poster) && File.Exists(poster) && File.Exists(clip);
+                var url = Pool.Take(rng, usable) ?? Pool.TakeShown(usable);
+                return url != null && Clips.TryUse(url, Environment.TickCount64, out var path, out var posterPath)
+                    ? new RemoteFlashItem(url, posterPath, path) : null;
+            }
+        }
+        internal static string? ClipPath(string url)
+        {
+            lock (Lock) return Clips.TryUse(url, Environment.TickCount64, out var path, out _) && File.Exists(path) ? path : null;
+        }
+        internal static void CleanupCache()
+        {
+            List<string> dropped;
+            lock (Lock)
+            {
+                Cts.Cancel();
+                Cts = new CancellationTokenSource();
+                Pool.Clear();
+                dropped = Clips.TakeAll();
+                _lastFetchUtc = DateTime.MinValue;
+            }
+            foreach (var path in dropped) ReleaseClip(path);
+        }
+        private static string OwnClip(string source)
+        {
+            var folder = CorePaths.MediaTemp();
+            Directory.CreateDirectory(folder);
+            var path = Path.Combine(folder, ScrolllerDiskCache.TempPrefix + Guid.NewGuid().ToString("N") + Path.GetExtension(source));
+            try { File.Copy(source, path); return path; }
+            catch { ReleaseClip(path); throw; }
+        }
+        private static void ReleaseClip(string path)
+        {
+            try { File.Delete(path); }
+            catch (Exception ex) { Log.Debug("Flash: clip release failed: {Error}", ex.Message); }
+        }
+        private static async Task PrefetchBatchAsync(CancellationToken ct, int generation)
+        {
+            try
+            {
+                var entries = new List<FypAssetManifest.Entry>();
+                string? error = null;
+                for (var batch = 0; batch < 3; batch++)
+                {
+                    var result = await Fetch(ct).ConfigureAwait(false);
+                    entries.AddRange(result.Entries.Take(4));
+                    error = result.Error;
+                    if (ct.IsCancellationRequested) return;
+                }
+                if (error != null && entries.Count == 0)
+                {
+                    Log.Debug("Flash: remote fetch failed ({Error}); staying on the local pool", error);
+                    return;
+                }
+                var warmed = 0;
+                foreach (var entry in entries)
+                {
+                    if (ct.IsCancellationRequested) break;
+                    lock (Lock) if (Pool.Count >= ReadyMax) break;
+                    if (!RemoteMediaFormats.Validate(entry, FeedMediaKind.GifClip, out var reason))
+                    {
+                        Log.Debug("Flash: dropped remote entry {Id}: {Reason}", entry?.Id, reason);
+                        continue;
+                    }
+                    if (string.IsNullOrEmpty(entry.PosterUrl)) continue;
+                    var url = entry.SmallUrl ?? entry.Url;
+                    var held = ClipPath(url);
+                    string? path = held;
+                    bool ours = false;
+                    List<string>? dropped = null;
+                    try
+                    {
+                        if (path == null)
+                        {
+                            var cached = await Download(url, ClipMaxBytes, ct).ConfigureAwait(false);
+                            if (cached == null) continue;
+                            path = OwnClip(cached);
+                            ours = true;
+                        }
+                        var poster = await Download(entry.PosterUrl!, PosterMaxBytes, ct).ConfigureAwait(false);
+                        if (poster == null) continue;
+                        RefreshSelection();
+                        lock (Lock)
+                        {
+                            if (ct.IsCancellationRequested || generation != Pool.Generation) return;
+                            dropped = Clips.Put(url, path, poster, Environment.TickCount64);
+                            ours = false;
+                            if (Pool.Add(generation, url)) warmed++;
+                        }
+                    }
+                    finally
+                    {
+                        if (ours && path != null) ReleaseClip(path);
+                        if (dropped != null) foreach (var old in dropped) ReleaseClip(old);
+                    }
+                }
+                if (warmed > 0) Log.Information("Flash: warmed {Warmed} remote clip(s), {Ready} ready", warmed, ReadyCount);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log.Debug("Flash: remote prefetch failed (non-fatal): {Error}", ex.Message); }
+            finally
+            {
+                lock (Lock) _inFlight = false;
+            }
+        }
+    }
+}
