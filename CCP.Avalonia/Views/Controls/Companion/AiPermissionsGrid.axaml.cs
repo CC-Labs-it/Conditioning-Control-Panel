@@ -172,6 +172,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 var verdict = TierGate.RequiresLab(Loc.Get("lab_ai_effects_memory_title"));
                 var allowed = verdict.Allowed;
 
+                // WPF MainWindow.UiUpdates.cs:915-928: paint the effective choice on both
+                // entitlement verdicts without writing the saved permission.
+                SyncFromSettings();
                 EffectsGateHost.IsEnabled = allowed;
                 EffectsGateHost.Opacity = allowed ? 1.0 : LockedOpacity;
                 EffectsLockBand.IsVisible = !allowed;

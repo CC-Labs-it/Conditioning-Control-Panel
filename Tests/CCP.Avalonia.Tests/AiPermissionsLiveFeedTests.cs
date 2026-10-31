@@ -169,6 +169,46 @@ public sealed class AiPermissionsLiveFeedTests
         return Task.CompletedTask;
     });
 
+    // WPF MainWindow.UiUpdates.cs:915-928. A provider event must repaint both verdicts,
+    // preserve the stored choice, and leave per-effect permissions intact.
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public Task EffectiveEffectsChoiceFollowsLiveTierWithoutSaving(bool savedChoice, bool subscribeStar) => Run(_ =>
+    {
+        CoreSecrets.RetrieveProvider = _ => null;
+        CoreSecrets.StoreProvider = (_, _) => { };
+        Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(
+            p => new ProviderSubscription(p, () => new AppSettings())));
+        var lab = true;
+        CoreAccount.HasLabAccessProvider = () => lab;
+        var prompt = CoreSettings.Current.CompanionPrompt;
+        prompt.AllowAiToControlEffects = savedChoice;
+        prompt.AllowAiFlash = true;
+        var grid = new AiPermissionsGrid();
+        var window = new Window { Content = grid };
+        try
+        {
+            window.Show();
+            foreach (var allowed in new[] { false, true, false, true })
+            {
+                lab = allowed;
+                (subscribeStar ? ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar!
+                    : ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon!).NotifyEntitlementRaised(
+                    allowed ? PatreonTier.Level2 : PatreonTier.None);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(savedChoice && allowed, grid.FindControl<CheckBox>("ChkCapEffects")!.IsChecked);
+                Assert.Equal(savedChoice && allowed, grid.FindControl<Border>("EffectPermsPanel")!.IsVisible);
+                Assert.Equal(savedChoice, prompt.AllowAiToControlEffects);
+                Assert.True(prompt.AllowAiFlash);
+            }
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task LockBandCtaOpensSettingsAccountAsWpfDoes() => Run(_ =>
     {
@@ -263,7 +303,8 @@ public sealed class AiPermissionsLiveFeedTests
     private static Task Run(Func<SettingsService, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            AppBuilder.Configure<App>().WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var old = CoreSettings.ServiceProvider;
         var settings = new SettingsService();
