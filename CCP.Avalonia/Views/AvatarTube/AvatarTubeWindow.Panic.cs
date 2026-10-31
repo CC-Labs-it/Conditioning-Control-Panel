@@ -17,6 +17,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// </summary>
         public void PanicSilence() => RunOnAvatar(() =>
         {
+            // WPF Speech.cs:1881 leaves look-picker fades running; only settle pending roster paint.
+            try { if (_rosterAvatarSwitchPending) CancelAvatarSwitch(finishRoster: true); } catch { }
             try { _stopSpoken(); } catch { }
             _stopSpoken = static () => { };
             try { StopThinkingAnimation(); } catch { }

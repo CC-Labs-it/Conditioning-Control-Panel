@@ -1137,7 +1137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// SwitchToAvatarSet (:395): a roster switch puts the companion's set on the tube and saves it,
         /// globally and per mod. The companion itself is already switched by the caller, so the
         /// set->companion coupling is not re-fired. All sets are unlocked (WPF IsAvatarSetUnlocked).
-        /// ponytail: WPF's single-emote-mod pin has nothing to pin here - emote mode did not port.</summary>
+        /// Single-emote mods retain their pinned look (WPF :832).</summary>
         public void SwitchToCompanionAvatar(CompanionId companionId) => RunOnAvatar(() =>
         {
             // WPF GetAvatarSetForCompanion (:525) is the inverse of CompanionForAvatarSet; derive it
@@ -1145,7 +1145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             int set = 1;
             for (int n = 3; n <= 7; n++)
                 if (CompanionForAvatarSet(n) == companionId) { set = n; break; }
-            if (_avatarSetsClosed) return;
+            if (_avatarSetsClosed || SingleEmoteSet() != null) return;
             // A look-picker fade still pending would re-couple its own companion over this one.
             CancelAvatarSwitch();
             _currentAvatarSet = set;
@@ -1154,8 +1154,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             ConditioningControlPanel.Services.Companion.ModAvatarLooks.Store(s.ModAvatarSet, CoreMods.ActiveModId, set);
             CoreSettings.Save();
             _poseTimer.Stop();
-            ApplyAvatarSet();
-            UpdateNavigationArrows();
+            _rosterAvatarSwitchPending = true;
+            FadeAvatarSwitch(() =>
+            {
+                ApplyAvatarSet();
+                UpdateNavigationArrows();
+            });
         });
 
         /// <summary>The persona an avatar set belongs to; null for sets 1-2, which are generic
