@@ -637,7 +637,7 @@ async function boot(course, options, lifetime, isCurrent) {
     garage.setCourse({ trackId: track.id, track: trackName, laps, online: course.online });
     garage.setHandlers({ changeTrack: id => void selectCourse(id, { race: true }),
       action: name => { if (name === 'counter') shared.bridge.send(counterMessage()); else hud.menuAction(name); },
-      sound: name => { audio.start(); audio.cue(name); } });
+      sound: (name, opts) => { audio.start(); audio.cue(name, opts); } });
     const mediaFor = id => {
       const saved = shared.coursePicks[id] || {}, local = shared.courseSongs[id];
       return { source: id === TRACK_ID ? view().source : saved.source || (consentOn() ? 'scrolller' : 'off'),
