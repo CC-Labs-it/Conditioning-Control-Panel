@@ -97,6 +97,7 @@ namespace ConditioningControlPanel.Services
         private Timer? _heartbeat;
         private int _nudgePending;
         private int _sessionVersion;
+        internal int SessionVersion => _sessionVersion;
         private readonly Func<ProfileCosmetics?, ProfileCosmetics>? _sanitizeCosmetics;
         private volatile bool _pendingCosmeticsClear;
         private SyncBody.Field _knownProgress;
@@ -104,6 +105,25 @@ namespace ConditioningControlPanel.Services
         public bool Adopted => _adopted;
         public const SyncBody.Field AfterAdopt = SyncBody.Field.UnlockedSkills | SyncBody.Field.SkillPoints;
         public Action? LifetimeLifted { get; set; }
+        public Action<IEnumerable<string>>? RestoreAchievements { get; set; }
+
+        // WPF ProfileSyncService.cs:2099-2118. Dispatch the store mutation with the head's
+        // other achievement work; a queued response must never restore into another session.
+        private void RestoreCloudAchievements(IEnumerable<string>? ids)
+        {
+            if (ids == null) return;
+            var cloud = ids.ToArray();
+            _serverAchievements = (_serverAchievements ?? Array.Empty<string>()).Union(cloud).ToArray();
+            var s = CoreSettings.Current;
+            var id = s.UnifiedId;
+            var version = _sessionVersion;
+            CoreDispatch.Post(() =>
+            {
+                if (!Loaded || version != _sessionVersion || !ReferenceEquals(s, CoreSettings.Current)
+                    || s.UnifiedId != id || !SignedIn(s)) return;
+                RestoreAchievements?.Invoke(cloud);
+            });
+        }
 
         /// <summary>WPF ProfileSyncService.PendingCosmeticsClear: set by an EMPTY Customize save (unequip everything),
         /// cleared once a sync carrying the clear succeeds. In memory, as WPF.</summary>
@@ -155,6 +175,7 @@ namespace ConditioningControlPanel.Services
         {
             _serverAchievements = serverAchievements?.ToArray();
             Loaded = true;
+            RestoreCloudAchievements(_serverAchievements);
         }
 
         /// <summary>Logout: nothing is pushed until the next load.</summary>
@@ -250,6 +271,7 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 var id = s.UnifiedId!;
+                var sessionVersion = _sessionVersion;
                 if (!Loaded || !SignedIn(s)) return false;   // a logout between the check above and the gate
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
@@ -282,7 +304,7 @@ namespace ConditioningControlPanel.Services
                 }
                 using var _ = response;
                 // Signed out (or into another account) while this was in flight: the answer is not ours to apply.
-                if (!Loaded || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
+                if (!Loaded || sessionVersion != _sessionVersion || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
                 {
                     Log.Information("Profile sync response dropped - the account changed while it was in flight");
                     return false;
@@ -310,6 +332,9 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    if (reply["user"]?["achievements"] is JArray achievements
+                        && achievements.All(a => a.Type == JTokenType.String))
+                        RestoreCloudAchievements(achievements.Values<string>().Select(a => a!));
                     if (AdoptFromResponse(s, reply)) _adopted = true;
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     ClaimWebXp(s, reply);

@@ -23,6 +23,79 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed partial class AccountSeedTests
 {
+    [Fact]
+    public void ProfileLoadAndSyncRestoreHistoricalAchievementsOnTheUiQueue() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1", "from-get"));
+        wire.SyncReply = """{"success":true,"user":{"achievements":["from-post"]}}""";
+        var queue = new Queue<Action>();
+        CoreDispatch.PostProvider = queue.Enqueue;
+        var restored = new HashSet<string>();
+        sync.RestoreAchievements = ids => restored.UnionWith(ids);
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Empty(restored);
+        while (queue.TryDequeue(out var restore)) restore();
+        Assert.True(restored.SetEquals(new[] { "from-get", "from-post" }));
+        sync.UtcNow = () => T0.AddMinutes(1);
+        Assert.True(await sync.PushAsync("union"));
+        Assert.Contains("from-post", wire.Syncs.Last()["achievements"]!.Values<string>());
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void QueuedAchievementRestoreCannotCrossAccountOrSession(bool sameAccount) => WithFreshInstall(async () =>
+    {
+        var (_, sync, _) = SignIn("u1", L40Profile("u1", "old-account"));
+        var queue = new Queue<Action>();
+        CoreDispatch.PostProvider = queue.Enqueue;
+        var restored = new List<string>();
+        sync.RestoreAchievements = ids => restored.AddRange(ids);
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        if (sameAccount) { sync.Reset(); sync.MarkLoaded(null); }
+        else CoreSettings.Current.UnifiedId = "u2";
+        while (queue.TryDequeue(out var restore)) restore();
+        Assert.Empty(restored);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ProfileReadCannotRestoreIntoAnAccountOrSessionThatReplacedItsRequester(bool sameAccount) => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1", "old-account"));
+        wire.ProfileHold = new TaskCompletionSource();
+        var restored = new List<string>();
+        sync.RestoreAchievements = ids => restored.AddRange(ids);
+        var load = AccountSeed.LoadProfileAsync();
+        Assert.False(load.IsCompleted);
+        if (sameAccount) sync.Reset();
+        else CoreSettings.Current.UnifiedId = "u2";
+        wire.ProfileHold.SetResult();
+        Assert.False(await load);
+        Assert.Empty(restored);
+        Assert.False(sync.Loaded);
+        Assert.Empty(wire.Syncs);
+    });
+
+    [Fact]
+    public void InFlightSyncCannotRestoreAfterSameAccountRelogin() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", null);
+        sync.MarkLoaded(null);
+        wire.Hold = new TaskCompletionSource();
+        wire.SyncReply = """{"success":true,"user":{"achievements":["old-session"]}}""";
+        var restored = new List<string>();
+        sync.RestoreAchievements = ids => restored.AddRange(ids);
+        var push = sync.PushAsync("held");
+        Assert.False(push.IsCompleted);
+        sync.Reset();
+        sync.MarkLoaded(null);
+        wire.Hold.SetResult();
+        Assert.False(await push);
+        Assert.Empty(restored);
+    });
+
     private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements" };
 
     /// <summary>Records every request with its body; profile GET answers <see cref="Profile"/> (500 when null).</summary>
@@ -30,6 +103,7 @@ public sealed partial class AccountSeedTests
     {
         public readonly List<(string Path, JObject? Body)> Seen = new();
         public string? Profile;
+        public TaskCompletionSource? ProfileHold;
         public HttpStatusCode SyncStatus = HttpStatusCode.OK;
         public string SyncReply = "{\"success\":true}";
         public TaskCompletionSource? Hold;   // a sync answer that waits until released
@@ -43,8 +117,11 @@ public sealed partial class AccountSeedTests
             var path = $"{r.Method} {r.RequestUri!.AbsolutePath}";
             lock (Seen) Seen.Add((path, body));
             if (path == "GET /v2/user/profile")
+            {
+                if (ProfileHold is { } profileHold) await profileHold.Task;
                 return Profile == null ? new(HttpStatusCode.InternalServerError) { Content = new StringContent("{}") }
                     : new(HttpStatusCode.OK) { Content = new StringContent(Profile) };
+            }
             if (path == "POST /v2/user/sync")
             {
                 var (status, reply) = Next.Count > 0 ? Next.Dequeue() : (SyncStatus, SyncReply);

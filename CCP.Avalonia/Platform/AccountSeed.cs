@@ -161,7 +161,12 @@ internal static class AccountSeed
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
+        var loadingSync = Sync;
+        var version = loadingSync?.SessionVersion;
         var user = await v2.GetUserProfileAsync(id);
+        // The profile and its historical unlocks belong only to the session that requested it.
+        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id
+            || !ReferenceEquals(loadingSync, Sync) || loadingSync?.SessionVersion != version) return false;
         if (user == null)
         {
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
