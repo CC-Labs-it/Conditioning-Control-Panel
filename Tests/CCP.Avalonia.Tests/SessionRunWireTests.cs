@@ -28,7 +28,7 @@ public sealed class SessionRunWireTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
@@ -115,7 +115,7 @@ public sealed class SessionRunWireTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
@@ -147,7 +147,8 @@ public sealed class SessionRunWireTests
                 var recap = Assert.Single(shell.OwnedWindows.OfType<SessionCompleteWindow>());
                 Assert.Equal(!survivesTimeout, recap.Topmost);
                 Assert.Equal(!survivesTimeout, recap.ShowActivated);
-                Assert.Equal(survivesTimeout, shell.IsEnabled);
+                // Avalonia modal ownership disables the backend, not Window.IsEnabled.
+                Assert.Equal(!survivesTimeout, recap.IsDialog);
                 recap.Close();
             }
             finally

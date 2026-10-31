@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -9,7 +8,6 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -31,10 +29,12 @@ public sealed class ContentHitTestTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            ConditioningControlPanel.CoreSettings.Current.PerformanceMode = false;
+            var w = new MainShellWindow { TabClock = new HeadlessPointerFrame.FrozenEntranceClock() };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -49,12 +49,13 @@ public sealed class ContentHitTestTests
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
                 if (tab == "awareness") w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")!.IsVisible = false;
-                RenderLiveTree(w);
+                HeadlessPointerFrame.Render(w);
+                Assert.Equal(1, w.Named<Control>(panelName)!.Opacity); // probe the fully visible destination
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
                     // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
-                    RenderLiveTree(w);
+                    HeadlessPointerFrame.Render(w);
                     // !IsHitTestVisible: inert until hovered by design (the privacy card's chip close, WPF the same).
                     if (!b.IsEffectivelyVisible || !b.IsEffectivelyEnabled || !b.IsHitTestVisible || b.Bounds.Width < 4 || b.TemplatedParent is ScrollBar) continue;
                     // Click-proof on purpose (WPF Hidden): only the Presets rack row actions at rest; their hover path has its own test.
@@ -80,24 +81,6 @@ public sealed class ContentHitTestTests
             Assert.True(misses.Count == 0, string.Join("\n", misses));
             return Task.CompletedTask;
         });
-    }
-
-    /// <summary>Renders a frame holding the live tree. One forced tick is not that: while a batch is in
-    /// flight MediaContext holds the next commit back, so the tick renders the OLDER batch and the layout
-    /// committed after it is missing from the frame. Every tab's first probe ran with one batch pending,
-    /// and on a slow runner the stale frame still had no hero there (Linux CI 38316007639: awareness
-    /// BtnAwarenessTutorial / ChkAwarenessMaster hit ScrollContentPresenter, pressed False).</summary>
-    private static void RenderLiveTree(Visual w)
-    {
-        Dispatcher.UIThread.RunJobs();
-        var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
-        var deadline = Stopwatch.StartNew();
-        while (!batch.Rendered.IsCompleted)
-        {
-            Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never rendered the live tree");
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
-        }
     }
 
     private static bool Inside(Visual v, Point p, Visual root)
