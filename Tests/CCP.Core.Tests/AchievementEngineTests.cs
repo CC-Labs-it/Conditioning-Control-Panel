@@ -85,6 +85,42 @@ public sealed class AchievementEngineTests : IDisposable
         Assert.True(OnDisk(MainPath, "threadbare"));
     }
 
+    [Fact]
+    public async Task LoadingSavedSpiralStartsANewContinuousRun()
+    {
+        var prior = new AchievementEngine(new AchievementStore(MainPath));
+        prior.TrackSpiralMinutes(15);
+        prior.Save();
+        Assert.Equal(15, new AchievementStore(MainPath).Load().ContinuousSpiralMinutes);
+
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        Assert.Equal(0, engine.Progress.ContinuousSpiralMinutes);
+        Assert.True(engine.IsDirty);
+        await engine.SaveIfDirtyAsync();
+        Assert.Equal(0, new AchievementStore(MainPath).Load().ContinuousSpiralMinutes);
+        engine.TrackSpiralMinutes(5);
+        Assert.False(engine.Progress.IsUnlocked("spiral_eyes"));
+        Assert.Equal(20, engine.Progress.TotalSpiralMinutes); // lifetime total survives startup
+        engine.TrackSpiralMinutes(15);
+        Assert.True(OnDisk(MainPath, "spiral_eyes"));
+    }
+
+    [Fact]
+    public async Task ResettingASavedSpiralPersistsWithoutAnotherAchievementEvent()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.TrackSpiralMinutes(15);
+        engine.Save();
+        Assert.False(engine.IsDirty);
+        engine.ResetContinuousSpiral();
+        Assert.True(engine.IsDirty);
+        await engine.SaveIfDirtyAsync();
+        Assert.Equal(0, new AchievementStore(MainPath).Load().ContinuousSpiralMinutes);
+        Assert.False(engine.IsDirty);
+        engine.ResetContinuousSpiral(); // an idle reset need not rewrite the file
+        Assert.False(engine.IsDirty);
+    }
+
     /// <summary>WPF AchievementService.TrackLockCardCompletion :508-544.</summary>
     [Fact]
     public void LockCardCompletionCountsSavesAndUnlocksLikeWpf()

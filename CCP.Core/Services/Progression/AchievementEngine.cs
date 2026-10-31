@@ -23,6 +23,7 @@ internal sealed class AchievementEngine
     {
         _store = store;
         Progress = store.Load();
+        ResetContinuousSpiral(); // WPF AchievementService.cs:85-86: a saved run never resumes.
     }
 
     public AchievementProgress Progress { get; private set; }
@@ -201,7 +202,12 @@ internal sealed class AchievementEngine
     }
 
     /// <summary>WPF TrackTimeBasedProgress :252: the spiral is off, so the continuous run restarts.</summary>
-    public void ResetContinuousSpiral() => Progress.ContinuousSpiralMinutes = 0;
+    public void ResetContinuousSpiral()
+    {
+        if (Progress.ContinuousSpiralMinutes == 0) return;
+        Progress.ContinuousSpiralMinutes = 0;
+        _isDirty = true;
+    }
 
     /// <summary>WPF AchievementService.TrackLockCardCompletion :508-544 minus its quest and Chaster
     /// calls (the head makes those): count + immediate save, word_perfect, typing_tutor, obedience_reflex.</summary>
