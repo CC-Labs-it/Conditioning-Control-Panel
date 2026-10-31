@@ -1,35 +1,22 @@
 using System;
 using System.IO;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Billboard.Board
 {
     /// <summary>
+    /// Head-neutral cache ported from BoardService. Fetch and dispatch are supplied by the head.
     /// Keeps the one live board post (Tonight Board, 2026-10-07). The marquee poll hands it every
     /// response (<see cref="OnMarquee"/>); a new version is fetched ONCE from
     /// <c>/config/board/{v}.png</c> (immutable on the server) and kept on disk under the user data
     /// folder, so a restart or a second poll costs no download. A cleared post drops the picture
     /// and its file; an expiring post raises <see cref="Changed"/> at its time so the deck lets go.
     /// </summary>
-    public sealed partial class BoardService
+    public sealed class BoardCacheService
     {
-        public const string ServerBase = "https://codebambi-proxy.vercel.app";
         public const int MaxPngBytes = 256 * 1024;
-
-        private static readonly Lazy<BoardService> SharedLazy = new(() => new BoardService(
-            Path.Combine(App.UserDataPath, "board"),
-#if DEBUG
-            DemoPath != null ? DemoFetchAsync :
-#endif
-            HttpFetchAsync, PostToUi));
-
-        /// <summary>The app's board. The marquee hook and <see cref="BoardProvider"/> both use it.</summary>
-        public static BoardService Shared => SharedLazy.Value;
-
-        private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
 
         private readonly string _dir;
         private readonly Func<int, CancellationToken, Task<byte[]?>> _fetch;
@@ -46,7 +33,7 @@ namespace ConditioningControlPanel.Services.Billboard.Board
         /// <param name="cacheDir">Where pictures and the seen marker live.</param>
         /// <param name="fetch">Downloads version v's PNG, or null on any failure.</param>
         /// <param name="post">Runs Changed handlers (the UI thread in the app, inline in tests).</param>
-        public BoardService(string cacheDir, Func<int, CancellationToken, Task<byte[]?>> fetch, Action<Action>? post = null)
+        public BoardCacheService(string cacheDir, Func<int, CancellationToken, Task<byte[]?>> fetch, Action<Action>? post = null)
         {
             _dir = cacheDir;
             _fetch = fetch;
@@ -64,12 +51,9 @@ namespace ConditioningControlPanel.Services.Billboard.Board
         {
             try
             {
-#if DEBUG
-                if (DemoPost() is { } demo) { _ = Apply(demo); return; }
-#endif
                 _ = Apply(BoardWire.Parse(marqueeJson));
             }
-            catch (Exception ex) { App.Logger?.Warning("Board: marquee hand-off failed: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Warning("Board: marquee hand-off failed: {Error}", ex.Message); }
         }
 
         /// <summary>Applies a parsed post. Returns when its picture is loaded (or failed). Test seam.</summary>
@@ -124,7 +108,7 @@ namespace ConditioningControlPanel.Services.Billboard.Board
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning("Board: loading post {Version} failed: {Error}", post.Version, ex.Message);
+                Log.Warning("Board: loading post {Version} failed: {Error}", post.Version, ex.Message);
             }
 
             lock (_gate)
@@ -179,7 +163,7 @@ namespace ConditioningControlPanel.Services.Billboard.Board
                 Directory.CreateDirectory(_dir);
                 File.WriteAllText(Path.Combine(_dir, "seen.txt"), version.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
-            catch (Exception ex) { App.Logger?.Debug("Board: could not save the seen marker: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Debug("Board: could not save the seen marker: {Error}", ex.Message); }
         }
 
         private int ReadSeen()
@@ -206,7 +190,7 @@ namespace ConditioningControlPanel.Services.Billboard.Board
                 File.WriteAllBytes(tmp, bytes);
                 File.Move(tmp, path, overwrite: true);
             }
-            catch (Exception ex) { App.Logger?.Debug("Board: could not cache the picture: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Debug("Board: could not cache the picture: {Error}", ex.Message); }
         }
 
         /// <summary>Deletes every cached picture except <paramref name="keepVersion"/>.</summary>
@@ -258,35 +242,9 @@ namespace ConditioningControlPanel.Services.Billboard.Board
             _post(() =>
             {
                 try { handler(this, EventArgs.Empty); }
-                catch (Exception ex) { App.Logger?.Warning("Board: a Changed handler threw: {Error}", ex.Message); }
+                catch (Exception ex) { Log.Warning("Board: a Changed handler threw: {Error}", ex.Message); }
             });
         }
 
-        // ---- the app's plumbing -------------------------------------------------------------
-
-        private static async Task<byte[]?> HttpFetchAsync(int version, CancellationToken ct)
-        {
-            try
-            {
-                using var res = await Http.GetAsync($"{ServerBase}/config/board/{version}.png",
-                    HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-                if (!res.IsSuccessStatusCode) return null;
-                if (res.Content.Headers.ContentLength is long len && len > MaxPngBytes) return null;
-                var bytes = await res.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-                return bytes.Length <= MaxPngBytes ? bytes : null;
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("Board: fetching post {Version} failed: {Error}", version, ex.Message);
-                return null;
-            }
-        }
-
-        private static void PostToUi(Action a)
-        {
-            var d = Application.Current?.Dispatcher;
-            if (d == null || d.HasShutdownStarted) { a(); return; }
-            d.BeginInvoke(a);
-        }
     }
 }
