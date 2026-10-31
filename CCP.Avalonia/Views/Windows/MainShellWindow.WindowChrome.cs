@@ -39,7 +39,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     && Named<Button>("BtnMaximize") is { } button)
                     button.Content = WindowState == WindowState.Maximized ? "❐" : "☐";
             };
-            Closed += (_, _) => _windowClosed = true;
+            Closed += (_, _) =>
+            {
+                _windowClosed = true;
+                // WPF MainWindow.WindowChrome.cs:280: hidden reusable windows must close before desktop exit.
+                Views.Overlays.LuckyToastWindow.CloseToast();
+            };
         }
 
         private void NotifyChromeScalingChanged()

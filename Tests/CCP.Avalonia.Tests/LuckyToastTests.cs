@@ -76,6 +76,49 @@ public sealed class LuckyToastTests
         Assert.Null(LuckyToastWindow.Current);
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Panel_close_releases_hidden_toast_but_tray_hide_keeps_it(bool trayHide) => Ui(() =>
+    {
+        CoreSettings.Current.AvatarEnabled = false; // isolate panel lifetime from the separate avatar window
+        var before = OpenWindows.Count;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            if (trayHide) { shell.CreateTray(); shell.TrayHostPresent = () => true; }
+            var clock = new Clock();
+            LuckyToastWindow.Clock = clock;
+            LuckyToastWindow.ShowProc(true, 10);
+            var toast = LuckyToastWindow.Current!;
+            var toastClosed = false;
+            toast.Closed += (_, _) => toastClosed = true;
+            clock.Now = 3000; toast.Tick();
+            clock.Now = 3300; toast.Tick();
+            Assert.False(toast.IsVisible);
+            Assert.Equal(before + 2, OpenWindows.Count); // a hidden window still prevents OnLastWindowClose
+            if (trayHide)
+            {
+                shell.Close();
+                Assert.False(shell.IsVisible);
+                Assert.False(toastClosed);
+                Assert.Same(toast, LuckyToastWindow.Current);
+                shell.ShowFromTray();
+                Assert.True(shell.IsVisible);
+            }
+            LuckyToastWindow.Post(false, 20); // queued before real closure: must not recreate the toast
+            shell.TrayHostPresent = () => false;
+            shell.Close();
+            Assert.True(toastClosed);
+            Assert.Null(LuckyToastWindow.Current);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LuckyToastWindow.Current);
+            Assert.Equal(before, OpenWindows.Count);
+        }
+        finally { shell.MarkExitRequestedForTest(); shell.Close(); shell.Tray?.Dispose(); }
+    });
+
     private static Task Ui(Action action) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current == null)
