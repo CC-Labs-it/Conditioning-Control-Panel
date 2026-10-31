@@ -289,7 +289,8 @@ namespace ConditioningControlPanel.Services
         public const double StepMs = 30.0;
 
         public readonly List<AmbientBubble> Bubbles = new();
-        public readonly Random Random = new();
+        public readonly Random Random;
+        public AmbientBubbleField(Random? random = null) => Random = random ?? new Random();
         /// <summary>WPF SetChaosFrozen: a held Chaos run's live bubbles do not move (a pop burst still plays).</summary>
         public bool HoldChaos;
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
@@ -319,6 +320,9 @@ namespace ConditioningControlPanel.Services
 
         public bool CanSpawn(AppSettings s) => Bubbles.Count < Cap(s);
 
+        /// <summary>WPF SkillTreeService.cs:222: notify on the roll, even after the daily budget is empty.</summary>
+        public Action<int>? LuckyProc { get; set; }
+
         /// <summary>WPF AwardAmbientPop's pure half: roll lucky (5% for 20x with the lucky_bubbles
         /// skill), draw 5 x multiplier from the daily bucket. A lucky roll that paid nothing gets the
         /// ordinary pop. Returns the XP to award; the head plays the sound and credits it.</summary>
@@ -327,6 +331,8 @@ namespace ConditioningControlPanel.Services
             if (b.Popping) return 0;
             b.Popping = true;
             var multiplier = SkillTreeRules.HasSkill(s, "lucky_bubbles") && Random.NextDouble() < 0.05 ? 20 : 1;
+            // WPF SkillTreeService.cs:222 fires before BubbleService.cs:1099 draws XP.
+            if (multiplier > 1) LuckyProc?.Invoke(multiplier);
             var paid = AmbientBubbleXp.Take(s, 5 * multiplier);
             b.Lucky = multiplier > 1 && paid > 0;
             return paid;
