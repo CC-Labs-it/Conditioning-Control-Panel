@@ -90,6 +90,7 @@ public sealed class PanicSurfacesTests
         "first-show",
         "voice-capture",
         "ai-followups",
+        "billboard-calendar",
         "blink-trainer",
         "camera",
         "chaster-hold",
