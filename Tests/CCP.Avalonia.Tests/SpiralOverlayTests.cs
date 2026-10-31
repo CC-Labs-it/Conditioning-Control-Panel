@@ -253,6 +253,7 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                 Assert.True(SpiralOverlay.IsShowing, Why());
                 Assert.Equal(30, runner.SpiralOpacity!.Value, 2);
                 Assert.Equal(SpiralFrames.Paint(0.30), SpiralOverlay.Shown[0].Spiral.Opacity, 3);
+                SpeakSpiral(shell, "spiral on"); // WPF SessionEngine.cs:814: the next ramp tick replaces this hold.
                 runner.Tick(TimeSpan.FromMinutes((at + 20) / 2 + 1));   // the ramp moved: repainted
                 shell.OnSessionTick();
                 Assert.Equal(SpiralFrames.Paint(runner.SpiralOpacity!.Value / 100), SpiralOverlay.Shown[0].Spiral.Opacity, 3);
@@ -266,6 +267,37 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
             }
             Assert.Null(runner.SpiralOpacity);   // WPF ReleaseOpacityRampHolds
             Assert.Equal(SpiralFrames.Paint(0.40), SpiralOverlay.PaintedOpacity, 3);
+        });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Refused_or_broken_random_spiral_keeps_its_pick_without_redecoding(bool broken)
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var refused = typeof(SpiralOverlay).GetField("_refused", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            var previous = refused.GetValue(null);
+            var randomize = s.SpiralRandomize;
+            try
+            {
+                File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(gif)!, "other.gif"), broken ? Array.Empty<byte>() : Convert.FromBase64String(TinyGif));
+                if (broken) File.WriteAllBytes(gif, Array.Empty<byte>());
+                SpiralOverlay.CloseAll();
+                s.SpiralRandomize = true;
+                SpiralOverlay.SkipPlatformChecksForTests = false;
+                refused.SetValue(null, true); // Exercise the real refusal branch even on composited X11.
+                shell.StartEngine();
+                await Settle();
+                Assert.False(SpiralOverlay.IsShowing);
+                var picked = SpiralOverlay.SourcePath();
+                for (var i = 0; i < 3; i++)
+                {
+                    SpiralOverlay.Refresh(shell);
+                    Assert.Null(SpiralOverlay.Decoding);
+                    Assert.Equal(picked, SpiralOverlay.SourcePath());
+                }
+            }
+            finally { await Settle(); refused.SetValue(null, previous); s.SpiralRandomize = randomize; }
         });
 
     // WPF VoiceCommandHost.cs:84-86; OverlayService.cs:1109-1193, 2151.

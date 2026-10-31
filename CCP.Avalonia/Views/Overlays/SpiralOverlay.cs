@@ -95,10 +95,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
         }
 
-        /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
-        /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
-        internal static double PaintedOpacity => SpiralFrames.Paint(
-            _sustainedOpacity ?? Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+        /// <summary>WPF SessionEngine.cs:814: a live session ramp replaces a voice hold's opacity.
+        /// Otherwise use the hold or saved slider, clamped before WPF's #722 paint curve.</summary>
+        internal static double PaintedOpacity => SpiralFrames.Paint(Math.Clamp(
+            App.Sessions?.SpiralOpacity / 100.0 ?? _sustainedOpacity ?? CoreSettings.Current.SpiralOpacity / 100.0, 0, 1));
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
@@ -124,7 +124,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 // WPF's 500 ms tick re-picks past a broken random file; re-pick once so the run is not blank.
                 if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; Refresh(host); return; }
-                CloseAll();
+                _sustainedOpacity = null;
+                CloseWindows();
                 return;
             }
 
@@ -145,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
             {
                 Log.Debug("Spiral: no composited click-through overlay on this platform, so no spiral");
-                CloseAll();
+                _sustainedOpacity = null; // WPF OverlayService.cs:1154: no window means no hold, but keep the run pick.
                 return;
             }
 
@@ -176,7 +177,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 try { _videoPlayer = VideoStart(path, ShowVideoFrame); }
                 catch (Exception ex) { Log.Warning(ex, "Spiral: video could not start"); }
-                if (_videoPlayer == null) { CloseAll(); return; }
+                if (_videoPlayer == null) { _sustainedOpacity = null; CloseWindows(); return; }
             }
             if (_frames.Count > 1 && Windows.Count > 0)
             {
