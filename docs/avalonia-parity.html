@@ -776,6 +776,13 @@ ported-by-merge, needs-port (with its <code>sync6-*</code> port lane) or n/a wit
 <a href="avalonia-main-sync-20261015.html"><code>avalonia-main-sync-20261015.html</code></a>: one row per non-merge commit (309), each
 ported-by-merge, needs-port (with its <code>sync7-*</code> port lane, 18 lanes) or n/a with a reason. Tick its rows as each lane
 lands.</p>
+<p>Part B audit of main-sync-7 rows 303-305 at <code>4df76fa7a</code>: existing copy expiry, safe source logging,
+Assets credit/day text and conditional wallpaper-card credit have user paths; no additional behavior remains in these rows.
+The ledger row notes cite both heads. Desktop wallpaper expiry/restoration remains n/a: WPF
+<code>ConditioningControlPanel/Services/Video/WallpaperService.cs:673</code> and :240 have no Avalonia service
+(<code>CCP.Avalonia/Platform/ScrolllerHead.cs:17</code>). Core tests passed (4648, 6 skipped); affected Avalonia tests
+passed 7, with the Assets credit-link test compiled but blocked before assertions by Segoe UI Black font creation.
+No live desktop check was performed.</p>
 <h2 id="main-sync-8-oct-22-night-bug-hunt-pin-f81ea01fb">main-sync-8 (Oct 22 night bug hunt, pin <code>f81ea01fb</code>)</h2>
 <p>The delta ledger for the eighth main sync (<code>avalonia-port/main-20261024</code>) is
 <a href="avalonia-main-sync-20261024.html"><code>avalonia-main-sync-20261024.html</code></a>: one row per non-merge commit (32), each
