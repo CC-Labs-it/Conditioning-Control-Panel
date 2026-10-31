@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -10,6 +11,7 @@ namespace CCP.Core.Tests;
 
 /// <summary>PackMediaPool: the content-pack half of the flash, video and bubble pools (WPF FlashService
 /// PackBag/_tempPackFiles, VideoService _packVideoQueue, BubbleCountService _packVideos).</summary>
+[Collection(SessionStatics.Name)]
 public sealed class PackMediaPoolTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "ccp-packpool-" + Guid.NewGuid().ToString("N"));
@@ -26,6 +28,125 @@ public sealed class PackMediaPoolTests : IDisposable
         new(() => _root, () => _settings, () => { }, tempDir: () => Path.Combine(_root, ".temp"));
 
     private static string Plain(string path) => System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(path));
+
+    private sealed class ClosingHost : IBubbleCountHost, IMandatoryVideoHost
+    {
+        public Action Release = () => { };
+        public double LastVideoDurationSeconds => 0;
+        public string? Path;
+        public Action<bool>? Done;
+        public void Show(string path, int difficulty, bool strict, Action<bool> done) { Path = path; Done = done; }
+        public void Show(string path, bool strict) { }
+        public void ShowMessage(string text, int ms, Action then) { }
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }
+        void IBubbleCountHost.CloseAll() => Release();
+        double IMandatoryVideoHost.CloseAll() { Release(); return 0; }
+    }
+
+    [Theory]
+    [InlineData("bubble-stop")]
+    [InlineData("bubble-reload")]
+    [InlineData("bubble-close")]
+    [InlineData("bubble-dispose")]
+    [InlineData("video-stop")]
+    [InlineData("video-reload")]
+    [InlineData("video-close")]
+    [InlineData("video-dispose")]
+    public void LifecycleRetriesRefusedDeletes(string lifecycle)
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+        var path = pool.TryDraw(0)!;
+        File.Delete(path);
+        Directory.CreateDirectory(path); // portable refusal, including when tests run as root
+        var host = new ClosingHost();
+        var b = new BubbleCountScheduler(host) { PackVideos = pool };
+        var v = new MandatoryVideoScheduler(host) { PackVideos = pool };
+        Action sweep = lifecycle switch
+        {
+            "bubble-stop" => b.Stop,
+            "bubble-reload" => b.ReloadAssets,
+            "bubble-close" => b.ForceCleanup,
+            "bubble-dispose" => b.Dispose,
+            "video-stop" => v.Stop,
+            "video-reload" => v.ReloadAssets,
+            "video-dispose" => v.Dispose,
+            _ => v.ForceCleanup,
+        };
+        sweep();
+        Assert.Equal(1, pool.TempCount);
+        Assert.True(store.TryGetSourceKey(path, out _));
+        Directory.Delete(path);
+        File.WriteAllText(path, "released");
+        sweep(); // a second lifecycle event retries without ever reaching the cap
+        Assert.Equal(0, pool.TempCount);
+        Assert.False(File.Exists(path));
+        Assert.False(store.TryGetSourceKey(path, out _));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void TeardownClosesPlayersBeforeDeletingPackFiles(bool video, bool disposing)
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+        var path = pool.TryDraw(0)!;
+        var closed = false;
+        var host = new ClosingHost { Release = () =>
+        {
+            Assert.True(File.Exists(path));
+            closed = true;
+        } };
+        if (video)
+        {
+            var v = new MandatoryVideoScheduler(host, new PopQuizSchedulerTests.FakeClock(), () => new[] { path }) { PackVideos = pool };
+            Assert.True(v.Trigger());
+            if (disposing) v.Dispose(); else v.Stop();
+        }
+        else
+        {
+            var clock = new PopQuizSchedulerTests.FakeClock();
+            var b = new BubbleCountScheduler(host, clock, () => Array.Empty<string>()) { PackVideos = pool };
+            b.Trigger(forceTest: true);
+            clock.Advance(BubbleCountScheduler.LeadIn);
+            Assert.True(b.IsBusy);
+            if (disposing) b.Dispose(); else b.ForceCleanup();
+        }
+        Assert.True(closed);
+        Assert.False(File.Exists(path));
+        Assert.Equal(0, pool.TempCount);
+    }
+
+    [Fact]
+    public void BubbleStopLetsTheGameFinishThenRetriesAfterPlayerRelease()
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("v.mp4", "video"));
+        var store = NewStore();
+        var pool = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+        var host = new ClosingHost();
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        var b = new BubbleCountScheduler(host, clock, () => Array.Empty<string>()) { PackVideos = pool };
+        b.Trigger(forceTest: true);
+        clock.Advance(BubbleCountScheduler.LeadIn);
+        var path = host.Path!;
+        File.Delete(path);
+        Directory.CreateDirectory(path);
+        b.Stop();
+        Assert.True(b.IsBusy); // WPF Stop leaves the live round on screen.
+        Assert.Equal(1, pool.TempCount);
+        Directory.Delete(path);
+        File.WriteAllText(path, "released");
+        host.Done!(true); // The head releases the player before calling completion.
+        Assert.False(b.IsBusy);
+        Assert.False(File.Exists(path));
+        Assert.Equal(0, pool.TempCount);
+        b.Dispose();
+    }
 
     [Theory]
     [InlineData(false)]

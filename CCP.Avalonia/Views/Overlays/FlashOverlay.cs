@@ -328,7 +328,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
+            PackImages.CleanupTemps();
         }
+
+        // WPF FlashService.LoadAssets / RefreshImagesPath: retain refused deletes for the next sweep.
+        internal static void ReloadAssets() => PackImages.CleanupTemps();
 
         /// <summary>The burst a Core provider fires (tests swap it).</summary>
         internal static Action<Visual, bool> Fire = (host, ambient) => TriggerOnce(host, ambient: ambient);
