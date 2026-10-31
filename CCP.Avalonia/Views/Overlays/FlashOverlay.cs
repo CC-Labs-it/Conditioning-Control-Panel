@@ -452,6 +452,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// record, and a failed decrypt falls back to the folder.</summary>
         internal static string? NextFlashPath(IReadOnlyList<string> files) => PackImages.TryDraw(files.Count) ?? NextPath(files);
 
+        internal static bool HasLocalImages(int diskCount) =>
+            diskCount > 0 || ContentPackStore.Current?.GetAllActivePackImages().Count > 0;
+
         private static string ImagesPath() => Path.Combine(CorePaths.EffectiveAssets, "images");
 
         /// <summary>
@@ -477,7 +480,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             for (var tries = Math.Max(count * 5, 20); result.Count < count && tries > 0; tries--)
             {
-                var remote = FlashSourceRules.ShouldDrawRemote(s, files.Count > 0, Rng)
+                var remote = FlashSourceRules.ShouldDrawRemote(s, HasLocalImages(files.Count), Rng)
                     ? RemoteFlashSource.TryTake(Rng) : null;
                 var path = remote?.PosterPath ?? NextFlashPath(files);
                 if (path == null) break;

@@ -8,13 +8,11 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Fyp;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Serilog;
-
 namespace ConditioningControlPanel.Services.Flash
 {
     internal sealed class RemoteFlashPool
     {
         internal const int ShownMax = 256;
-
         private readonly List<string> _ready = new();
         private readonly LinkedList<string> _shown = new();
         private string _selection = "";
@@ -61,7 +59,6 @@ namespace ConditioningControlPanel.Services.Flash
             return null;
         }
         internal void Clear() { Generation++; _ready.Clear(); _shown.Clear(); }
-
         private void Remember(string url)
         {
             _shown.Remove(url);
@@ -69,16 +66,13 @@ namespace ConditioningControlPanel.Services.Flash
             while (_shown.Count > ShownMax) _shown.RemoveFirst();
         }
     }
-
     internal readonly record struct RemoteFlashItem(string Url, string PosterPath, string ClipPath);
-
     internal static class FlashSourceRules
     {
         internal static bool RemoteEnabled(AppSettings? s)
             => s != null
                && !string.Equals(s.MediaSource, "local", StringComparison.OrdinalIgnoreCase)
                && s.HasRemoteMediaConsent;
-
         internal static bool ShouldDrawRemote(AppSettings? s, bool haveLocal, Random rng)
         {
             if (!RemoteEnabled(s)) return false;
@@ -86,9 +80,7 @@ namespace ConditioningControlPanel.Services.Flash
             if (string.Equals(s!.MediaSource, "online", StringComparison.OrdinalIgnoreCase)) return true;
             return rng.Next(100) < Math.Clamp(s.RemoteMediaRatio, 0, 100);
         }
-
     }
-
     internal static class RemoteFlashSource
     {
         private const string ConsumerId = "flashes";
@@ -97,7 +89,6 @@ namespace ConditioningControlPanel.Services.Flash
         private const int PrefetchGapSeconds = 1;
         internal const int ClipMaxBytes = 40 * 1024 * 1024;
         internal const int PosterMaxBytes = 8 * 1024 * 1024;
-
         private static readonly RemoteFlashPool Pool = new();
         private static readonly object Lock = new();
         private static readonly RemoteClipFiles Clips = new();
@@ -105,36 +96,27 @@ namespace ConditioningControlPanel.Services.Flash
         private static bool _inFlight;
         private static DateTime _lastFetchUtc = DateTime.MinValue;
         private static Task _prefetch = Task.CompletedTask;
-
         internal static Task Prefetching { get { lock (Lock) return _prefetch; } }
-
         internal static Func<AppSettings?> Settings = () => CoreSettings.Current;
-
         internal static Func<CancellationToken, Task<(List<FypAssetManifest.Entry> Entries, string? Error)>> Fetch = DefaultFetch;
-
         internal static Func<string, long, CancellationToken, Task<string?>> Download =
             (url, maxBytes, ct) => ScrolllerDiskCache.GetOrFetchAsync(url, null, maxBytes, ct);
-
         private static IReadOnlyList<string> Channels()
         {
             var s = Settings();
             return FypOnlineCoordinator.ResolveChannels(s?.FypOnlineNiches, s?.FypOnlineCustomSubs);
         }
-
         private static Task<(List<FypAssetManifest.Entry> Entries, string? Error)> DefaultFetch(CancellationToken ct)
             => FypOnlineCoordinator.For(ConsumerId, Channels, FeedMediaKind.GifClip).FetchBatchAsync(ct);
-
         private static void RefreshSelection()
         {
             lock (Lock)
                 if (Pool.Select(Channels())) _lastFetchUtc = DateTime.MinValue;
         }
-
         internal static int ReadyCount
         {
             get { lock (Lock) return Pool.Available; }
         }
-
         internal static void EnsurePrefetch()
         {
             RefreshSelection();
@@ -150,7 +132,6 @@ namespace ConditioningControlPanel.Services.Flash
                 _prefetch = Task.Run(() => PrefetchBatchAsync(ct, generation));
             }
         }
-
         internal static RemoteFlashItem? TryTake(Random rng)
         {
             RefreshSelection();
@@ -163,12 +144,10 @@ namespace ConditioningControlPanel.Services.Flash
                     ? new RemoteFlashItem(url, posterPath, path) : null;
             }
         }
-
         internal static string? ClipPath(string url)
         {
             lock (Lock) return Clips.TryUse(url, Environment.TickCount64, out var path, out _) && File.Exists(path) ? path : null;
         }
-
         internal static void CleanupCache()
         {
             List<string> dropped;
@@ -182,7 +161,6 @@ namespace ConditioningControlPanel.Services.Flash
             }
             foreach (var path in dropped) ReleaseClip(path);
         }
-
         private static string OwnClip(string source)
         {
             var folder = CorePaths.MediaTemp();
@@ -191,13 +169,11 @@ namespace ConditioningControlPanel.Services.Flash
             try { File.Copy(source, path); return path; }
             catch { ReleaseClip(path); throw; }
         }
-
         private static void ReleaseClip(string path)
         {
             try { File.Delete(path); }
             catch (Exception ex) { Log.Debug("Flash: clip release failed: {Error}", ex.Message); }
         }
-
         private static async Task PrefetchBatchAsync(CancellationToken ct, int generation)
         {
             try
@@ -216,7 +192,6 @@ namespace ConditioningControlPanel.Services.Flash
                     Log.Debug("Flash: remote fetch failed ({Error}); staying on the local pool", error);
                     return;
                 }
-
                 var warmed = 0;
                 foreach (var entry in entries)
                 {

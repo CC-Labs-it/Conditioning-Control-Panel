@@ -9,9 +9,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Flash;
 using Xunit;
-
 namespace CCP.Core.Tests;
-
 public sealed class RemoteFlashSourceTests
 {
     [Fact]
@@ -31,7 +29,6 @@ public sealed class RemoteFlashSourceTests
         Assert.False(pool.Add(old, "stale"));
         Assert.Null(pool.TakeShown(_ => true));
     }
-
     [Fact]
     public void RemoteSourceRequiresConsentAndFallsBackWhenLocalPoolIsEmpty()
     {
@@ -48,8 +45,6 @@ public sealed class RemoteFlashSourceTests
         Id = "test", Url = "https://example.invalid/clip.mp4?variant=1",
         PosterUrl = "https://example.invalid/poster.jpg", Origin = "online", Type = "video"
     };
-
-    /// <summary>Settings/fetch/download seams restored and the pool emptied after every test (P02).</summary>
     private static async Task WithSource(Func<Task> body)
     {
         var (settings, fetch, download) = (RemoteFlashSource.Settings, RemoteFlashSource.Fetch, RemoteFlashSource.Download);
@@ -66,7 +61,6 @@ public sealed class RemoteFlashSourceTests
             (RemoteFlashSource.Settings, RemoteFlashSource.Fetch, RemoteFlashSource.Download) = (settings, fetch, download);
         }
     }
-
     [Fact]
     public Task OwnedClipSurvivesDeviceCacheEvictionAndIsReleasedByPanic() => WithSource(async () =>
     {
@@ -97,7 +91,6 @@ public sealed class RemoteFlashSourceTests
         }
         finally { Directory.Delete(dir, recursive: true); }
     });
-
     [Theory]
     [InlineData(0)] // poster failed
     [InlineData(1)] // poster threw cancellation
@@ -132,7 +125,6 @@ public sealed class RemoteFlashSourceTests
         }
         finally { Directory.Delete(dir, recursive: true); }
     });
-
     [Fact]
     public void ClipFilesDrawnJustNowSurviveManyMoreWarms()
     {
@@ -141,7 +133,6 @@ public sealed class RemoteFlashSourceTests
         var released = new HashSet<string>();
         for (int i = 0; i < 64; i++) foreach (var p in files.Put("u" + i, "p" + i, "poster", now)) released.Add(p);
         Assert.Empty(released);
-
         // A draw picks the oldest clip, then the next prefetch warms 40 more (the old sweep
         // deleted exactly that file before LibVLC opened it).
         now = 200_000;
@@ -149,7 +140,6 @@ public sealed class RemoteFlashSourceTests
         Assert.Equal("p0", drawn);
         Assert.Equal("poster", poster);
         for (int i = 64; i < 104; i++) foreach (var p in files.Put("u" + i, "p" + i, "poster", now)) released.Add(p);
-
         Assert.DoesNotContain("p0", released);
         Assert.True(files.TryUse("u0", now, out _, out _));
         Assert.Equal(RemoteClipFiles.SoftCap, files.Count);
@@ -159,7 +149,6 @@ public sealed class RemoteFlashSourceTests
         Assert.True(order.TryUse("u0", 1000, out _, out _));
         Assert.Equal(new[] { "p1" }, order.Put("u64", "p64", "poster", 200_000));
     }
-
     [Fact]
     public void ClipFilesReplaceReleasesTheOldFileAndHardCapHolds()
     {
@@ -167,7 +156,6 @@ public sealed class RemoteFlashSourceTests
         Assert.Empty(files.Put("u", "a", "poster", 0));
         Assert.Equal(new[] { "a" }, files.Put("u", "b", "poster", 0));
         Assert.Empty(files.Put("u", "b", "poster", 0));
-
         // Everything recent: the set grows past the soft cap but never past the hard cap.
         var dropped = new List<string>();
         for (int i = 0; i < 300; i++) dropped.AddRange(files.Put("r" + i, "rp" + i, "poster", 1000));
@@ -176,9 +164,6 @@ public sealed class RemoteFlashSourceTests
         Assert.Equal(RemoteClipFiles.HardCap, files.TakeAll().Count);
         Assert.Equal(0, files.Count);
     }
-
-    /// <summary>The licence path: downloads go through ScrolllerDiskCache.GetOrFetchAsync, which asks
-    /// consent (then MayFetchFresh) before any byte; refused, nothing warms.</summary>
     [Fact]
     public Task DownloadsGoThroughTheScrolllerDeviceCacheGate() => WithSource(async () =>
     {
