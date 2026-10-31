@@ -153,4 +153,27 @@ public class AudioWaveformCacheTests : IDisposable
         Assert.Throws<FileNotFoundException>(() => AudioWaveformCache.Load(Path.Combine(_dir, "gone.mp3")));
         Assert.Throws<InvalidOperationException>(() => AudioWaveformCache.Load(Audio("nodecoder.mp3")));
     }
+    /// <summary>The Avalonia head's decoder: the race's LibVLC mono 16 kHz PCM, bucketed by the WPF rule.</summary>
+    [Fact]
+    public void DecodeViaTrackDecoder_buckets_the_mono_16k_pcm()
+    {
+        var saved = ConditioningControlPanel.Services.Race.TrackDecoder.DecodeProvider;
+        var pcm = new float[16000 * 20];            // 20 s -> 120 peaks, ~2667 samples each
+        pcm[5 * 2667 + 10] = -0.75f;                 // loudest sample of bucket 5, negative
+        string? asked = null;
+        ConditioningControlPanel.Services.Race.TrackDecoder.DecodeProvider = (p, _, _) => { asked = p; return pcm; };
+        try
+        {
+            var path = Audio("race.ogg");
+            var r = AudioWaveformCache.DecodeViaTrackDecoder(path);
+            Assert.Equal(path, asked);
+            Assert.Equal(20, r.DurationSeconds, 3);
+            Assert.Equal(120, r.Peaks.Length);
+            Assert.Equal(0.75f, r.Peaks[5]);
+            Assert.Equal(0f, r.Peaks[4]);
+            Assert.Equal(0f, r.Peaks[6]);
+        }
+        finally { ConditioningControlPanel.Services.Race.TrackDecoder.DecodeProvider = saved; }
+    }
+
 }

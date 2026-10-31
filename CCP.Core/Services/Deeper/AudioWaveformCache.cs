@@ -127,6 +127,24 @@ namespace ConditioningControlPanel.Services.Deeper
             return new AudioWaveformResult { Peaks = peaks, DurationSeconds = durationSec };
         }
 
+        /// <summary>A <see cref="Decoder"/> for heads without NAudio (Avalonia: LibVLC): the race's
+        /// mono 16 kHz decode (<see cref="Race.TrackDecoder"/>) through <see cref="BucketPeaks"/>.</summary>
+        public static AudioWaveformResult DecodeViaTrackDecoder(string audioPath) =>
+            FromMono(Race.TrackDecoder.Decode(audioPath, null, System.Threading.CancellationToken.None).Mono16k, Race.TrackPcm.SampleRate);
+
+        /// <summary>Mono float PCM -> peaks, by the same bucket rule as the WPF reader.</summary>
+        public static AudioWaveformResult FromMono(float[] pcm, int sampleRate)
+        {
+            int pos = 0;
+            return BucketPeaks(1, sampleRate, pcm.Length / (double)sampleRate, buf =>
+            {
+                int n = Math.Min(buf.Length, pcm.Length - pos);
+                Array.Copy(pcm, pos, buf, 0, n);
+                pos += n;
+                return n;
+            });
+        }
+
         private static string ComputeCacheKey(string audioPath)
         {
             var info = new FileInfo(audioPath);

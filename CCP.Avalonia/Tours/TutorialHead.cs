@@ -61,6 +61,12 @@ namespace ConditioningControlPanel.Avalonia.Tours
             CoreTutorial.SkipAction = Service.Skip;
             CoreTutorial.StartAction = StartByName;
 
+            // WPF Services/TutorialService.cs:927: one 1600 ms demo flash.
+            TutorialHeadHooks.FlashDemo ??= () =>
+            {
+                if (TutorialHeadHooks.Shell is { } shell) Views.Overlays.FlashOverlay.TriggerOnce(shell, amount: 1, durationMs: 1600);
+            };
+
             if (_seeded) return;      // the seam is re-pointed every call, the events are wired once
             _seeded = true;
 
@@ -115,6 +121,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
         /// <summary>Panic: a tour ends at once, by the abandon route (never latched as walked).</summary>
         internal static void OnPanic()
         {
+            try { Views.Deeper.DeeperEditorWindow.StopTutorialsForPanic(); } catch { /* still skip below */ }
             try { if (Service.IsActive) Service.Skip(); } catch { /* panic never throws */ }
         }
 
