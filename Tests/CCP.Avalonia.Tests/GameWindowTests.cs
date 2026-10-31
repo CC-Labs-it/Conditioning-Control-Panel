@@ -972,8 +972,15 @@ public sealed partial class GameWindowTests
             Assert.Empty(sent);
             w.HandleMessage("{\"type\":\"run-started\",\"difficulty\":\"Easy\"}");
             Assert.True(w.DtrhRunActive);
+            Assert.True(GameWindow.IsDtrhRunning);
+            var opener = global::ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditLine.Opener;
+            global::ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditLine.Opener = _ => true;
+            s.StrictLockEnabled = false;
+            try { Assert.False(global::ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditLine.OpenHome()); }
+            finally { global::ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditLine.Opener = opener; }
             w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
             w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");   // a second end pays nothing
+            Assert.False(GameWindow.IsDtrhRunning);
             var pay = Assert.Single(sent);
             Assert.Equal("payout-result", (string?)pay["type"]);
             Assert.Equal(300, (double)pay["baseXp"]!);
