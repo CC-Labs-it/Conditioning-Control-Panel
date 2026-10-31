@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Localization;
 using LibVLCSharp.Shared;
 using Serilog;
+using ConditioningControlPanel.Services.Audio;
 
 namespace ConditioningControlPanel.Avalonia.Platform
 {
@@ -102,6 +103,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>WPF's linear sample gain (0-1) as LibVLC's cubic 0-100 volume: 0.5 lands at about -6 dB.</summary>
         internal static int VlcVolume(float gain) => (int)Math.Round(Math.Cbrt(Math.Clamp(gain, 0f, 1f)) * 100);
 
+        internal static int VlcVolume(float volume, bool followMaster, int master)
+            => VlcVolume(followMaster ? AudioGain.Sound((int)Math.Round(volume * 100), master) : volume);
+
         /// <summary>Ducking only, with pactl stubbed: for the state-machine test.</summary>
         internal LibVlcAudio(Func<string, string> pactl, string? duckJournal = null) { _vlc = null!; _pactl = pactl; _journal = duckJournal; }
 
@@ -145,7 +149,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             Instance = this;
             LayeredAudio.Instance = new LayeredAudio(path => new LayeredAudio.VlcLayerPlayer(_vlc, path));
             CoreAudio.PlayOneShotProvider = (path, volume, tag, started, finished) => PlayOneShot(path, volume, tag, started, finished);
-            CoreAudio.PlayStoppableProvider = PlayOneShot;
+            CoreAudio.PlayStoppableProvider = (path, volume, tag, started, finished) => PlayOneShot(path, volume, tag, started, finished);
+            CoreAudio.PlaySoundProvider = PlaySound;
             // Windows ducking is seeded by StartDuckJournal (App start-up only): a probe or test must never
             // lower the desk's real apps.
             if (!OperatingSystem.IsLinux()) return;
@@ -154,11 +159,60 @@ namespace ConditioningControlPanel.Avalonia.Platform
             CoreAudio.DuckGenerationProvider = () => { lock (_duckLock) return _duckGeneration; };
         }
 
+        /// <summary>WPF AudioService.cs:897: a sounding clip follows the master until it ends.</summary>
+        internal sealed class SoundMasterBinding : IDisposable
+        {
+            private readonly float _own;
+            private readonly Action<float> _apply;
+            private bool _disposed;
+            internal SoundMasterBinding(float own, Action<float> apply)
+            {
+                _own = own;
+                _apply = apply;
+                CoreMasterVolumeWatch.Shared.Changed += Changed;
+                CoreMasterVolumeWatch.Shared.EnsureHooked();
+            }
+            private void Changed(int _)
+            {
+                if (!_disposed) _apply(AudioGain.Sound((int)Math.Round(_own * 100), CoreSettings.Current.MasterVolume));
+            }
+            public void Dispose()
+            {
+                _disposed = true;
+                CoreMasterVolumeWatch.Shared.Changed -= Changed;
+            }
+        }
+
+        private readonly object _soundGate = new();
+        private readonly HashSet<Action> _sounds = new();
+
+        private void PlaySound(string path, float volume, string tag, Action<TimeSpan>? started, Action? finished)
+        {
+            Action? stop = null;
+            var ended = false;
+            lock (_soundGate)
+            {
+                stop = PlayOneShot(path, volume, tag, started, () =>
+                {
+                    lock (_soundGate) { ended = true; if (stop != null) _sounds.Remove(stop); }
+                    Fire(finished);
+                }, followMaster: true);
+                if (!ended) _sounds.Add(stop);
+            }
+        }
+
+        internal void StopSounds()
+        {
+            Action[] stops;
+            lock (_soundGate) { stops = _sounds.ToArray(); _sounds.Clear(); }
+            foreach (var stop in stops) stop();
+        }
+
         /// <summary>Same contract as WPF's AudioService.PlayOneShot: onStarted gets the clip length
         /// once playing; onFinished fires exactly once - off the UI thread when the clip ends or
         /// errors, synchronously on the caller's thread when it is refused (muted, missing file).
         /// Returns the clip's stop (WPF handle.Stop): it ends the clip early, and onFinished still fires once.</summary>
-        public Action PlayOneShot(string path, float volume, string tag, Action<TimeSpan>? onStarted, Action? onFinished)
+        public Action PlayOneShot(string path, float volume, string tag, Action<TimeSpan>? onStarted, Action? onFinished, bool followMaster = false)
         {
             if (volume <= 0f || string.IsNullOrWhiteSpace(path) || !File.Exists(path)) { Fire(onFinished); return static () => { }; }
 
@@ -166,11 +220,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
             media.AddOption(NoVideo);
             var player = new MediaPlayer(media);
             // WPF's volume is linear sample gain; LibVLC's is cubic, so 0.5 must land at ~-6 dB, not -18.
-            var vol = VlcVolume(volume);
+            int Volume() => VlcVolume(volume, followMaster, CoreSettings.Current.MasterVolume);
             var done = 0;
+            var masterBinding = followMaster ? new SoundMasterBinding(volume, _ =>
+                ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) player.Volume = Volume(); })) : null;
             void Finish()
             {
                 if (Interlocked.Exchange(ref done, 1) != 0) return;
+                masterBinding?.Dispose();
                 // Never dispose a player from inside its own libvlc event: that deadlocks.
                 ThreadPool.QueueUserWorkItem(_ =>
                 {
@@ -182,7 +239,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 // Setting volume before Play, or inside this libvlc event, is lost: the pulse
                 // output only takes it once it exists, from a thread that is not libvlc's own.
-                ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { ApplyPreferredDevice(player); player.Volume = vol; } });
+                ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { ApplyPreferredDevice(player); player.Volume = Volume(); } });
                 if (onStarted is null) return;
                 try { onStarted(TimeSpan.FromMilliseconds(Math.Max(0, player.Length))); }
                 catch (Exception ex) { Log.Debug(ex, "[Audio] {Tag}: onStarted threw", tag); }
@@ -394,6 +451,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>App exit: never leave other apps ducked behind us.</summary>
         internal void Shutdown()
         {
+            StopSounds();
             if (_win != null) { _win.Shutdown(); return; }
             lock (_duckLock) { if (_isDucked) ForceUnduck(); }
             Drain();

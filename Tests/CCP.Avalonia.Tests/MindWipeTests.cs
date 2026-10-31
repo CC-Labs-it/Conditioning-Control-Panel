@@ -69,12 +69,12 @@ public sealed class MindWipeTests
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var s = CoreSettings.Current;
-            var saved = (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency);
+            var saved = (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency, s.MasterVolume);
             var engine = CoreSession.IsEngineRunningProvider;
             var dir = Directory.CreateTempSubdirectory();
             var clip = Path.Combine(dir.FullName, "wipe.mp3");
             File.WriteAllText(clip, "x");
-            (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency) = (false, false, clip, 40, 180);
+            (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency, s.MasterVolume) = (false, false, clip, 40, 180, 100);
             var voices = new List<Voice>();
             var clock = new Clock();
             var player = new MindWipePlayer((path, vol, loop, ended) =>
@@ -94,7 +94,7 @@ public sealed class MindWipeTests
                 CoreMindWipe.IsLoopingProvider = null; CoreMindWipe.UpdateSettingsProvider = null;
                 CoreMindWipe.ReloadClipsProvider = null; CoreMindWipe.ClipCountProvider = null;
                 CoreSession.IsEngineRunningProvider = engine;
-                (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency) = saved;
+                (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency, s.MasterVolume) = saved;
                 dir.Delete(true);
             }
             return Task.CompletedTask;
