@@ -108,6 +108,40 @@ public sealed class AvatarTubeFinishTests
     });
 
     [Fact]
+    public Task PanicLeavesPendingLookPickerFadeAndCompanionCouplingIntact() => Run((_, tube, _) =>
+    {
+        Action? finish = null;
+        int canceled = 0;
+        var switches = new List<CompanionId>();
+        CoreModsHooks.SwitchCompanion = id => switches.Add(id);
+        tube.AvatarSwitchScheduler = (delay, fire) =>
+        {
+            Assert.Equal(TimeSpan.FromMilliseconds(200), delay);
+            finish = fire;
+            return () => canceled++;
+        };
+        var title = tube.FindControl<TextBlock>("TxtAvatarTitle")!;
+        var before = title.Text;
+        Assert.True(tube.SelectAvatarSet(4));
+        Assert.NotNull(finish);
+        var image = tube.FindControl<Image>("ImgAvatar")!;
+        var oldArt = image.Source;
+        Assert.NotNull(oldArt);
+        tube.PanicSilence();
+        Assert.Equal(0, canceled); // fail-proof: unconditional panic cancellation drops the picker paint
+        Assert.Empty(switches);
+        Assert.Equal(before, title.Text);
+        finish!(); // WPF's existing fade still completes after panic
+        Assert.Equal(new[] { CompanionId.CultBunny }, switches);
+        Assert.Equal(4, tube.CurrentAvatarSet);
+        Assert.Equal(4, CoreSettings.Current.SelectedAvatarSet);
+        Assert.Equal(4, CoreSettings.Current.ModAvatarSet["tube-test"]);
+        Assert.Equal(AvatarTubeWindow.AvatarSetTitle(4).ToUpperInvariant(), title.Text);
+        Assert.NotSame(oldArt, image.Source);
+        Assert.Equal(1, tube.FindControl<Border>("AvatarBorder")!.GetBaseValue(Visual.OpacityProperty).Value);
+    });
+
+    [Fact]
     public Task TitleArrowAcceptsOnlyLeftClicksAndUsesTheSameSelector() => Run((_, tube, _) =>
     {
         tube.AvatarSwitchScheduler = (_, _) => () => { };
