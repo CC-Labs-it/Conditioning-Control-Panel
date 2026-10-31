@@ -6,26 +6,7 @@ using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 {
-    /// <summary>
-    /// Brain Drain panel, ported from the WPF head.
-    ///
-    /// What is real here: both slider read-outs, the clip-library readout's format string and the
-    /// empty-state banner it drives.
-    ///
-    /// What is not, and WHY - the settings are the interesting case. BrainDrainEnabled, Intensity,
-    /// HighRefresh, BlurStrength, MeltEnabled and AllowOverlayCapture are all on
-    /// <c>CoreSettings.Current</c> today, so "needs App.Settings" would be a stale reading. They
-    /// stay unwired here on purpose: on WPF each of these writes is followed by a call into
-    /// App.BrainDrain (Start/Stop, ReloadAudioFiles, the overlay-capture re-arm), so a control
-    /// that wrote the setting alone would show BRAIN DRAIN as ON with nothing draining. The
-    /// genuinely absent pieces are App.BrainDrain, BrainDrainService's folder paths,
-    /// OverlayService.BrainDrainWithheld and the shell folder-open - all WPF-head services with
-    /// no seam. Mod art is NOT a blocker any more (CoreModArt plus Helpers.ModArt), but there is
-    /// no art in this panel's markup to write into.
-    ///
-    /// The clip count is a placeholder 0, which is also the honest default for a fresh install and
-    /// is what puts the empty-state banner on screen in the render.
-    /// </summary>
+    // Audio path: WPF BrainDrainFeatureControl.xaml.cs:211-297. Visual blur remains unported.
     public partial class BrainDrainFeatureControl : UserControl
     {
         public BrainDrainFeatureControl()
@@ -37,13 +18,48 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 
             RefreshClipCount();
 
-            // ponytail: needs App.BrainDrain, Services.BrainDrainService and OverlayService -
-            // NOT App.Settings, which is CoreSettings.Current today. See the class summary for
-            // why the settings writes are still deliberately absent. ChkEnable, ChkMelt,
-            // ChkHighRefresh, ChkAllowCapture, both sliders' setting writes, BtnOpenAudioFolder
-            // (Empty) and BtnRefreshAudio are inert until the service lands, and WithheldNotice
-            // stays hidden (OverlayService.BrainDrainWithheld is false anyway).
+            var enable = this.FindControl<CheckBox>("ChkEnable")!;
+            var intensity = this.FindControl<Slider>("SliderIntensity")!;
+            var refresh = this.FindControl<CheckBox>("ChkHighRefresh")!;
+            void LoadAudio()
+            {
+                _loading = true;
+                enable.IsChecked = CoreSettings.Current.BrainDrainEnabled;
+                intensity.Value = CoreSettings.Current.BrainDrainIntensity;
+                refresh.IsChecked = CoreSettings.Current.BrainDrainHighRefresh;
+                _loading = false;
+            }
+            _loadAudio = LoadAudio;
+            LoadAudio();
+            enable.IsCheckedChanged += (_, _) =>
+            {
+                if (_loading) return;
+                CoreSettings.Current.BrainDrainEnabled = enable.IsChecked == true;
+                CoreEngine.ApplyLive("braindrain", enable.IsChecked == true);
+                CoreSettings.Save();
+            };
+            intensity.PropertyChanged += (_, e) =>
+            {
+                if (_loading || e.Property != Slider.ValueProperty) return;
+                CoreSettings.Current.BrainDrainIntensity = (int)intensity.Value;
+                CoreSettings.Save();
+            };
+            refresh.IsCheckedChanged += (_, _) =>
+            {
+                if (_loading) return;
+                CoreSettings.Current.BrainDrainHighRefresh = refresh.IsChecked == true;
+                // WPF BrainDrainFeatureControl.xaml.cs:369-377: changing cadence stops the clip too.
+                if (CoreEngine.IsRunning && Platform.BrainDrainPlayer.Instance is { IsRunning: true } player)
+                { player.Stop(); player.Start(); }
+                CoreSettings.Save();
+            };
             this.FindControl<Button>("BtnRefreshAudio")!.Click += (_, _) => RefreshClipCount();
+            foreach (var name in new[] { "BtnOpenAudioFolder", "BtnOpenAudioFolderEmpty" })
+                this.FindControl<Button>(name)!.Click += (_, _) =>
+                {
+                    try { Platform.ExternalOpener.Open(Platform.BrainDrainPlayer.EnsureFolder()); }
+                    catch { }
+                };
 
             // Keep pictures clear is a pure preference (WPF ChkKeepClear_Changed writes and saves;
             // OverlayService re-sorts on the settings hook), so unlike the rows above it shows no
@@ -61,6 +77,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         }
 
         private readonly CheckBox _keepClear;
+        private bool _loading;
+        private readonly System.Action _loadAudio;
 
         // WPF re-reads on Loaded and on its settings rebind hook; the Studio tab keeps this control
         // alive, so a Reset or cloud restore (CurrentReplaced) must repaint the toggle.
@@ -69,6 +87,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += LoadKeepClear;
             LoadKeepClear();
+            _loadAudio();
+            RefreshClipCount();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -77,18 +97,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             base.OnDetachedFromVisualTree(e);
         }
 
-        private void LoadKeepClear() => _keepClear.IsChecked = CoreSettings.Current.BrainDrainKeepPicturesClear;
+        private void LoadKeepClear()
+        {
+            _keepClear.IsChecked = CoreSettings.Current.BrainDrainKeepPicturesClear;
+            _loadAudio?.Invoke();
+        }
 
-        /// <summary>
-        /// Repaint the clip-library readout. An empty pool makes the whole audio half a silent
-        /// no-op, so the count is shown even when it is fine - "0 clips" is the answer to "why is
-        /// nothing happening?". The resolved folder path is the service's to give; until then the
-        /// line stays empty rather than printing a folder that may not exist.
-        /// </summary>
         private void RefreshClipCount()
         {
-            // ponytail: needs BrainDrainService.AudioFileCount, wired when it moves to Core.
-            const int clips = 0;
+            Platform.BrainDrainPlayer.Instance?.Reload();
+            var clips = Platform.BrainDrainPlayer.Instance?.ClipCount ?? 0;
+            this.FindControl<TextBlock>("TxtAudioFolderPath")!.Text = Platform.BrainDrainPlayer.Folder;
             this.FindControl<TextBlock>("TxtClipCount")!.Text = Loc.GetF("st4_braindrain_clips_loaded_0", clips);
             this.FindControl<Border>("NoAudioHint")!.IsVisible = clips == 0;
         }

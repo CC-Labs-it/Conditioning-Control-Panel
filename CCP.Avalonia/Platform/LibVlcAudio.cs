@@ -201,25 +201,29 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// at every restart.</summary>
         internal MindWipePlayer.IVoice? PlayVoice(string path, double volume, bool loop, Action onEnded)
         {
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
-            if (loop)
-            {
-                var l = new LoopVoice(this, path, onEnded) { Volume = volume };
-                return l.Start() ? l : null;
-            }
-            var voice = NewVoice(path, onEnded);
-            voice.Volume = volume;
-            return voice.Play() ? voice : null;
+            var voice = CreateVoice(path, volume, loop, onEnded);
+            return voice?.Play() == true ? voice : null;
         }
+
+        // WPF BrainDrainService.cs:345-387: creation is silent; Play belongs to the stop arbitration.
+        internal MindWipePlayer.IVoice? CreateVoice(string path, double volume, bool loop, Action onEnded)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
+            MindWipePlayer.IVoice voice = loop ? new LoopVoice(this, path, onEnded) : NewVoice(path, onEnded);
+            voice.Volume = volume;
+            return voice;
+        }
+
+        internal Action<MediaPlayer> RouteVoice = ApplyPreferredDevice; // WPF BrainDrainService.cs:351
 
         private Voice NewVoice(string path, Action onEnded)
         {
             var media = new Media(_vlc, path, FromType.FromPath);
             media.AddOption(NoVideo);
-            return new Voice(new MediaPlayer(media), media, onEnded);
+            return new Voice(new MediaPlayer(media), media, onEnded, RouteVoice);
         }
 
-        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : MindWipePlayer.IVoice
+        private sealed class Voice(MediaPlayer player, Media media, Action onEnded, Action<MediaPlayer> route) : MindWipePlayer.IVoice
         {
             private int _vol, _done;
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
@@ -230,13 +234,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 // Cubic like PlayOneShot; applied off libvlc's thread once the output exists.
                 set { _vol = (int)Math.Round(Math.Cbrt(Math.Clamp(value, 0, 1)) * 100); Apply(); }
             }
-            private void Apply() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) player.Volume = _vol; });
+            private void Apply(bool routing = false) => ThreadPool.QueueUserWorkItem(_ =>
+            { lock (player) if (_done == 0 && player.IsPlaying) { if (routing) route(player); player.Volume = _vol; } });
             public bool Play()
             {
                 var started = 0;
                 player.Playing += (_, _) =>
                 {
-                    Apply();
+                    Apply(routing: true); // The output/device list exists only once Playing arrives.
                     if (Interlocked.Exchange(ref started, 1) == 0) Fire(() => Started?.Invoke(Math.Max(0, player.Length)));
                 };
                 player.EndReached += (_, _) => Dispose();
@@ -272,6 +277,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
             public double Volume { set { lock (_gate) { _vol = value; foreach (var v in _live) v.Volume = value; } } }
 
+            public bool Play() => Start();
             public bool Start()
             {
                 Voice v;

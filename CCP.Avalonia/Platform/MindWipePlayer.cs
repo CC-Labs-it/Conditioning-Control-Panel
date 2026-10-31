@@ -16,8 +16,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// </summary>
     internal sealed class MindWipePlayer
     {
-        /// <summary>One playing clip; volume is 0..1 and can change while it plays.</summary>
-        internal interface IVoice : IDisposable { double Volume { set; } }
+        /// <summary>A prepared or playing clip; Play starts it, volume is 0..1.</summary>
+        internal interface IVoice : IDisposable { double Volume { set; } bool Play(); }
 
         private readonly Func<string, double, bool, Action, IVoice?> _play;
         private readonly TimeProvider _time;
