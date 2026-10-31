@@ -7,7 +7,7 @@ const script = source.slice(source.indexOf('"""') + 3, source.lastIndexOf('"""')
 
 function page(play = () => Promise.resolve()) {
   let now = 0, nextId = 0;
-  const timers = new Map(), messages = [];
+  const timers = new Map(), messages = [], listeners = new Map();
   const video = { paused: false, ended: false, currentTime: 0, play };
   const schedule = (f, ms, repeat) => {
     const id = ++nextId;
@@ -17,9 +17,9 @@ function page(play = () => Promise.resolve()) {
   new Function('c', 'document', 'window', 'performance', 'setTimeout', 'setInterval', 'clearInterval', script)(
     { url: 'http://localhost/video.mp4', volume: 0.5, id: 'test' },
     { body: { replaceChildren() {} }, createElement: () => video },
-    { invokeCSharpAction: s => messages.push(JSON.parse(s)), addEventListener() {} },
+    { invokeCSharpAction: s => messages.push(JSON.parse(s)), addEventListener: (type, listener) => listeners.set(type, listener) },
     { now: () => now }, (f, ms) => schedule(f, ms, false), (f, ms) => schedule(f, ms, true), id => timers.delete(id));
-  return { video, messages, advance(ms) {
+  return { video, messages, listeners, advance(ms) {
     const end = now + ms;
     for (;;) {
       const due = [...timers].filter(([, t]) => t.due <= end).sort((a, b) => a[1].due - b[1].due)[0];
@@ -80,4 +80,11 @@ test('media errors retain their code; a rejected start without MediaError stays 
   const rejected = page(() => Promise.reject(new Error('environmental failure')));
   await Promise.resolve();
   assert.equal(rejected.messages.at(-1).code, 0);
+});
+
+test('context menu is cancelled before native playback controls appear', () => {
+  const p = page();
+  let cancelled = false;
+  p.listeners.get('contextmenu')({ preventDefault() { cancelled = true; } });
+  assert.equal(cancelled, true);
 });

@@ -70,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// </summary>
     public partial class BubbleCountWindow : Window
     {
-        private bool _closed, _useBrowser;
+        private bool _closed, _useBrowser, _browserFailed;
         private BrowserVideoSurface? _browser;
         private static BubbleCountWindow? _browserOwner;
         internal BrowserVideoSurface? Browser => _browser;
@@ -434,21 +434,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _videoImage.IsVisible = false;
             _videoContainer.Children.Add(_browser.View);
             _browser.Message += OnBrowserMessage;
-            _browser.Failed += () => Dispatcher.UIThread.Post(() =>
-            {
-                if (!_closed && !_gameCompleted && !_videoEnded && _isPrimary)
-                {
-                    if (_browser?.Playing == true) OnVideoEnded(); else CloseAllWindows(false);
-                }
-            });
+            _browser.Failed += OnBrowserFailure;
             if (_isPrimary) InitializePlaybackClock(); else _targetBubbleCount = _sharedTargetCount;
             _browser.Start(url, _isPrimary, CoreSettings.Current.MasterVolume);
             return true;
         }
 
+        // WPF BubbleCountWindow.xaml.cs:1053-1065: latch and snapshot before posting.
+        private void OnBrowserFailure()
+        {
+            if (!_isPrimary || _closed || _gameCompleted || _videoEnded || _browserFailed) return;
+            _browserFailed = true;
+            var played = _browser?.Playing == true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_closed || _gameCompleted || _videoEnded) return;
+                if (played) OnVideoEnded(); else CloseAllWindows(false);
+            });
+        }
+
         private void OnBrowserMessage(JsonElement message)
         {
-            if (!_isPrimary || _closed || _gameCompleted || _videoEnded) return;
+            if (!_isPrimary || _closed || _gameCompleted || _videoEnded || _browserFailed) return;
             switch (message.GetProperty("type").GetString())
             {
                 case "error":

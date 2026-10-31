@@ -1,16 +1,13 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
-using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Video.Browser;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Input;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -93,7 +90,8 @@ public sealed class BubbleCountBrowserTests
         Assert.False(BrowserUnsafeVideoCache.Contains(game.Clip));
         Assert.True(primary.IsVisible);
         Send(browser, "error", code: code);
-        Send(browser, "error", code: code); // duplicate terminal reports still resolve just once
+        Send(browser, "playing"); Send(browser, "ended");
+        Send(browser, "error", code: 4); // first failure wins before dispatcher drain
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Assert.Equal(unsafeFile, BrowserUnsafeVideoCache.Contains(game.Clip));
         Assert.Equal(!unsafeFile, BrowserVideoGate.ShouldUseBrowser(game.Clip));

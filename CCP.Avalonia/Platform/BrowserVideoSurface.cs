@@ -7,9 +7,6 @@ using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Services.Video.Browser;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
-
-/// <summary>One owned browser-video session, using the same GTK/XWayland capability as WebHost.
-/// No native provider, unmapped file, pinned audio sink or competing session means LibVLC.</summary>
 internal sealed class BrowserVideoSurface : IDisposable
 {
     private static object? _owner;
@@ -55,7 +52,6 @@ internal sealed class BrowserVideoSurface : IDisposable
     {
         if (ReferenceEquals(_owner, owner)) _owner = null;
     }
-
     internal WebHost View { get; } = new();
     internal event Action<JsonElement>? Message;
     internal event Action? Failed;
@@ -63,12 +59,10 @@ internal sealed class BrowserVideoSurface : IDisposable
     internal double Volume { get; private set; }
     private readonly Func<string, Task<string?>> _execute;
     private readonly string _id = Guid.NewGuid().ToString("N");
-    // ponytail: WebHost has no process-exit event; startup and game safety deadlines bound a silent renderer failure.
     private DispatcherTimer? _startup;
     private bool _closed, _loaded;
     private string _url = "";
 
-    // The script seam lets headless tests delay a real async completion without constructing a native adapter.
     internal BrowserVideoSurface(Func<string, Task<string?>>? execute = null)
     {
         _execute = execute ?? View.InvokeScriptAsync;
@@ -93,7 +87,6 @@ internal sealed class BrowserVideoSurface : IDisposable
         _loaded = true;
         try
         {
-            // Install after navigation: WebHost's string carrier exists then on both GTK and WebView2.
             var result = await _execute(BuildScript(_url, Volume, _id));
             if (_closed) return;
             if (result != "true") { Fail(); return; }
@@ -120,7 +113,6 @@ internal sealed class BrowserVideoSurface : IDisposable
         catch (InvalidOperationException) { }
         catch (System.Collections.Generic.KeyNotFoundException) { }
     }
-
     internal string SessionId => _id;
     private void Fail()
     {
@@ -128,14 +120,12 @@ internal sealed class BrowserVideoSurface : IDisposable
         _startup?.Stop();
         Failed?.Invoke();
     }
-
     internal async void Pause()
     {
         if (_closed) return;
         try { await _execute("document.querySelector('video')?.pause();"); }
         catch { /* Teardown still detaches the adapter if its script channel has died. */ }
     }
-
     public void Dispose()
     {
         if (_closed) return;
@@ -147,10 +137,8 @@ internal sealed class BrowserVideoSurface : IDisposable
         View.WebMessage -= Receive;
         Message = null;
         Failed = null;
-        // Detaching the native control releases its adapter; callbacks already in flight are fenced above.
         View.Content = null;
     }
-
     internal static string BuildScript(string url, double volume, string id) =>
         "(function(c){" + """
         const send=m=>{m.session=c.id; const s=JSON.stringify(m);
@@ -172,6 +160,7 @@ internal sealed class BrowserVideoSurface : IDisposable
           if(v.currentTime!==lastTime){lastTime=v.currentTime; lastAdvance=performance.now();}
           else if(performance.now()-lastAdvance>=10000){clearInterval(watchdog); send({type:'error',code:100});}
         },1000);
+        window.addEventListener('contextmenu',e=>e.preventDefault());
         window.addEventListener('keydown',e=>{e.preventDefault(); if(!e.repeat)
           send({type:'key',key:e.key,alt:e.altKey});},true);
         v.src=c.url; v.play().catch(()=>send({type:'error',code:v.error?.code||0})); return true;
