@@ -55,7 +55,7 @@ public sealed class DeeperHubTests
             };
             var model = new DeeperTabViewModel();
             model.SetSearch("HubTest duration-");
-            model.ReloadLibrary();
+            model.ReloadLibrary(probeDurations: true);
             Assert.All(model.FilteredEntries, row => Assert.False(row.ShowDuration));
             answer.SetResult(125);
             await model.DurationBackfill.WaitAsync(TimeSpan.FromSeconds(10));
@@ -63,13 +63,13 @@ public sealed class DeeperHubTests
             Assert.All(model.FilteredEntries, row => Assert.Equal("2:05", row.DurationDisplay));
             Assert.True(MediaDurationCache.TryGetCached(media, out var seconds));
             Assert.Equal(125, seconds);
-            model.ReloadLibrary();
+            model.ReloadLibrary(probeDurations: true);
             Assert.All(model.FilteredEntries, row => Assert.True(row.ShowDuration));
             Assert.Equal(1, calls);
             var authored = EnhancementSerializer.LoadFromFile(a);
             authored.Metadata.MediaDurationSeconds = 30;
             File.WriteAllText(a, EnhancementSerializer.Save(authored));
-            model.ReloadLibrary();
+            model.ReloadLibrary(probeDurations: true);
             model.SetSort("duration");
             Assert.Equal(new[] { 125.0, 30.0 }, model.FilteredEntries.Select(r => r.Entry.DurationSeconds));
             model.ToggleSortDirection();
@@ -86,8 +86,8 @@ public sealed class DeeperHubTests
         var folder = Directory.CreateTempSubdirectory("hub-batches-");
         var paths = new System.Collections.Generic.List<string>();
         var old = DeeperTabViewModel.DurationProbe;
-        var answers = Enumerable.Range(0, 6).Select(_ => new TaskCompletionSource<double?>()).ToArray();
-        var entered = Enumerable.Range(0, 6).Select(_ => new TaskCompletionSource()).ToArray();
+        var answers = Enumerable.Range(0, 7).Select(_ => new TaskCompletionSource<double?>()).ToArray();
+        var entered = Enumerable.Range(0, 7).Select(_ => new TaskCompletionSource()).ToArray();
         var calls = 0;
         try
         {
@@ -109,7 +109,7 @@ public sealed class DeeperHubTests
             };
             var model = new DeeperTabViewModel();
             model.SetSearch("HubTest batch-");
-            model.ReloadLibrary();
+            model.ReloadLibrary(probeDurations: true);
             for (var i = 0; i < 5; i++)
             {
                 await entered[i].Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -119,11 +119,19 @@ public sealed class DeeperHubTests
             }
             await entered[5].Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal(5, model.FilteredEntries.Count(r => r.ShowDuration));
-            // Reload during the last parse preserves cached results and the in-flight operation.
+            // A new row on a hidden reload must join the already running probe's next sweep.
+            var addedMedia = Path.Combine(folder.FullName, "added.mp3");
+            File.WriteAllText(addedMedia, "test media");
+            var addedPath = WriteEnhancement("batch-added");
+            paths.Add(addedPath);
+            var added = EnhancementSerializer.LoadFromFile(addedPath);
+            added.MediaSource = addedMedia;
+            File.WriteAllText(addedPath, EnhancementSerializer.Save(added));
             model.ReloadLibrary();
             answers[5].SetResult(65);
+            answers[6].SetResult(66);
             await model.DurationBackfill.WaitAsync(TimeSpan.FromSeconds(10));
-            Assert.Equal(6, calls);
+            Assert.Equal(7, calls);
             Assert.All(model.FilteredEntries, r => Assert.True(r.ShowDuration));
         }
         finally
@@ -132,6 +140,50 @@ public sealed class DeeperHubTests
             DeeperTabViewModel.DurationProbe = old;
             foreach (var path in paths) File.Delete(path);
             folder.Delete(true);
+        }
+    });
+
+    [Fact]
+    public Task HiddenShellDefersDurationProbesUntilDeeperOpens() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var media = Path.GetTempFileName();
+        var path = WriteEnhancement("visible-duration");
+        var old = DeeperTabViewModel.DurationProbe;
+        var answer = new TaskCompletionSource<double?>();
+        var probed = new System.Collections.Generic.List<string>();
+        MainShellWindow? shell = null;
+        try
+        {
+            var enhancement = EnhancementSerializer.LoadFromFile(path);
+            enhancement.MediaSource = media;
+            File.WriteAllText(path, EnhancementSerializer.Save(enhancement));
+            DeeperTabViewModel.DurationProbe = source => { probed.Add(source); return answer.Task; };
+            shell = new MainShellWindow();
+            shell.Show();
+            var view = shell.Named<DeeperTabView>("DeeperTab")!;
+            var model = (DeeperTabViewModel)view.DataContext!;
+            Assert.False(view.IsVisible);
+            Assert.Contains(model.FilteredEntries, r => r.Entry.FilePath == path);
+            Assert.Empty(probed); // hidden visual-tree attachment scans without parsing
+            shell.InitializeDeeperHub();
+            Assert.Empty(probed); // other hidden reloads cannot start it either
+            shell.ShowTab("deeper");
+            Assert.Equal(new[] { media }, probed);
+            answer.SetResult(125);
+            await model.DurationBackfill.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal("2:05", model.FilteredEntries.Single(r => r.Entry.FilePath == path).DurationDisplay);
+            shell.ShowTab("settings");
+            shell.ShowTab("deeper");
+            Assert.Equal(new[] { media }, probed); // cached duration on later doors
+        }
+        finally
+        {
+            answer.TrySetResult(null);
+            shell?.Close();
+            DeeperTabViewModel.DurationProbe = old;
+            File.Delete(path);
+            File.Delete(media);
         }
     });
 
@@ -267,7 +319,7 @@ public sealed class DeeperHubTests
             };
             var model = new DeeperTabViewModel();
             model.SetSearch("HubTest");
-            model.ReloadLibrary(); model.ReloadLibrary();
+            model.ReloadLibrary(probeDurations: true); model.ReloadLibrary(probeDurations: true);
             Assert.Equal(new[] { media }, probed);
             Assert.False(model.FilteredEntries.Single(r => r.Entry.FilePath == local).ShowDuration);
             Assert.False(model.FilteredEntries.Single(r => r.Entry.FilePath == remote).ShowDuration);

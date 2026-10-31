@@ -73,7 +73,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void OnDeeperLibraryChanged(object? sender, EventArgs e)
             => Dispatcher.UIThread.Post(() => { if (!_deeperHubClosed && Named<DeeperTabView>("DeeperTab") is { IsVisible: true }) ReloadDeeperLibraryFromDisk(); });
 
-        private void ReloadDeeperLibraryFromDisk() => DeeperModel?.ReloadLibrary();
+        private void ReloadDeeperLibraryFromDisk()
+        {
+            if (Named<DeeperTabView>("DeeperTab") is { DataContext: DeeperTabViewModel model } view)
+                model.ReloadLibrary(probeDurations: view.IsVisible);
+        }
 
         /// <summary>WPF ApplyDeeperFilterAndSort after a submission record changed: repaint badges.</summary>
         internal void RefreshDeeperLibraryRows() => DeeperModel?.Refresh();

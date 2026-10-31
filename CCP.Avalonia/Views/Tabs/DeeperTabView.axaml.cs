@@ -58,7 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RefreshWebcamColumn();
             ApplyFeatureArt();
             if (Owner is { } shell) shell.InitializeDeeperHub();
-            else ViewModel?.ReloadLibrary();
+            else ViewModel?.ReloadLibrary(probeDurations: IsVisible);
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -389,7 +389,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private DeeperFilter.PillCounts CurrentPillCounts
             => DeeperFilter.CountPills(_allEntries, CurrentCriteria());
 
-        public void ReloadLibrary()
+        public void ReloadLibrary(bool probeDurations = false)
         {
             var result = DeeperLocalLibrary.Scan();
             _allEntries.Clear();
@@ -398,7 +398,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _allEntries.AddRange(result.Entries.Where(e => !PendingDeletes.ContainsKey(FullPath(e.FilePath))));
             _libraryError = result.HasError;
             ApplyFilter();
-            if (!_probingDurations) DurationBackfill = ProbeDurationsAsync();
+            // WPF MainWindow.TabNavigation.cs:480 and MainWindow.DeeperHub.cs:741: only a
+            // visible door starts parsing. Hidden attachment/imports still rebuild the index.
+            if (probeDurations && !_probingDurations) DurationBackfill = ProbeDurationsAsync();
         }
 
         /// <summary>The running duration backfill, so tests await it instead of sleeping.</summary>
