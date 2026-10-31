@@ -36,6 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 
             SliderIdleIntervalCompanion.ValueChanged += SliderIdleInterval_ValueChanged;
             SliderBubbleDurationCompanion.ValueChanged += SliderBubbleDuration_ValueChanged;
+            SliderVoiceLevelCompanion.ValueChanged += SliderVoiceLevel_ValueChanged;
 
             BtnChatShortcut.Click += (_, _) => ChatShortcutRequested?.Invoke(this, EventArgs.Empty);
             BtnCameraShortcut.Click += (_, _) => CameraShortcutRequested?.Invoke(this, EventArgs.Empty);
@@ -91,6 +92,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 TxtIdleIntervalCompanion.Text = $"{s.IdleGiggleIntervalSeconds}s";
                 SliderBubbleDurationCompanion.Value = s.BubbleDurationSeconds;
                 TxtBubbleDurationCompanion.Text = $"{(int)s.BubbleDurationSeconds}s";
+                SliderVoiceLevelCompanion.Value = s.CompanionVoiceLevel;
+                TxtVoiceLevelCompanion.Text = s.CompanionVoiceLevel.ToString();
 
                 // The chat pill's label. WPF's RefreshChatShortcutLabel writes THIS TextBlock and
                 // the Devices one from the same combo (MainWindow.SessionIO.cs:1326/1332); the
@@ -151,6 +154,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             var value = SliderBubbleDurationCompanion.Value;
             TxtBubbleDurationCompanion.Text = $"{(int)value}s";
             CoreSettings.Current.BubbleDurationSeconds = value;
+            CoreSettings.Save();
+        }
+
+        private void SliderVoiceLevel_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)
+        {
+            if (_isLoading) return;
+            var value = (int)Math.Round(SliderVoiceLevelCompanion.Value);
+            TxtVoiceLevelCompanion.Text = value.ToString();
+            CoreSettings.Current.CompanionVoiceLevel = value;
             CoreSettings.Save();
         }
 
