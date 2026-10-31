@@ -117,7 +117,8 @@ forward; Again and Menu stay on every page. Gentle visuals: fades only, no stamp
 
 `kart:velvet-lock`, `kart:undertow`, `hat:umbrella` (the per-course umbrella glide art replaces the
 beanie when picked). The garage reads `unlockedSet(record)`; `LOCKED` minus the unlocked karts is what
-stays dark. No reward is ever a stat, a feature or Sparkles.
+stays dark. Unlocks stay cosmetic only: never a stat, a feature or Sparkles. Sparkles come from
+finishing, paid by place (B1): the host claims them from `race-result` and the server prices the claim.
 
 ## 7. Modes
 

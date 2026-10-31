@@ -412,6 +412,10 @@ html.pad-nav #card button:focus, html.pad-nav #card input:focus, html.pad-nav #c
 @media (max-width: 420px) { #card.kit-doors .c-doors { grid-template-columns: 1fr; } #card.kit-doors .c-door b { font-size: 17px; } #card.kit-doors .c-door em { font-size: 12px; } }
 
 #card[data-kind="results"] .card-title { margin-bottom: 0; }
+/* The Sparkles slip (sparkles-slip.js, shared byte for byte with the other trees) sits bottom centre, where it
+ * would cover the results card's buttons: here it moves to the bottom left corner. Its animations translate it
+ * by -50% of its own width, so `left` is its centre: a 16px gutter plus half of min(300px, 86vw). */
+body .sps-slip { left: calc(16px + min(150px, 43vw)); bottom: 16px; }
 .c-place { font-size: 64px; font-weight: 900; line-height: 1; }
 .c-place sup { font-size: 24px; color: var(--paper-pink); margin-left: 2px; }
 .c-rows { list-style: none; margin: 0; padding: 0; text-align: left; }
