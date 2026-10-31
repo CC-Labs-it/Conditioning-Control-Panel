@@ -13,9 +13,20 @@ public partial class App
         CoreQuests.CheckPerfectWeekBonusProvider = () =>
         {
             if (CoreSettings.Service?.Current is not { } settings) return 0;
-            var xp = SkillTreeRules.ClaimPerfectWeekBonus(settings,
-                amount => (CoreProgression.AddXPProvider ?? throw new System.InvalidOperationException("XP service unavailable"))(amount, "Other"),
-                () => CoreSettings.Save());
+            // WPF SkillTreeService.cs:519 tolerates an unavailable progression service.
+            // A failed bonus must leave the latch unpaid and let CompleteQuest finish its pass.
+            if (CoreProgression.AddXPProvider is not { } grant) return 0;
+            int xp;
+            try
+            {
+                xp = SkillTreeRules.ClaimPerfectWeekBonus(settings,
+                    amount => grant(amount, "Other"), () => CoreSettings.Save());
+            }
+            catch (System.Exception ex)
+            {
+                Serilog.Log.Warning(ex, "Perfect week bonus grant failed");
+                return 0;
+            }
             if (xp > 0)
             {
                 var streak = settings.DailyQuestStreak;

@@ -68,18 +68,60 @@ public sealed class QuestRewardWireTests
         Assert.Empty((System.Collections.IEnumerable)popups.GetValue(null)!);
     });
 
-    [Fact]
-    public void FailedHeadGrantLeavesMilestoneAvailable()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FailedHeadGrantLeavesMilestoneAvailable(bool missingProvider)
     {
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         settings.Current.UnlockedSkills.Add("perfect_bimbo_week");
         settings.Current.DailyQuestStreak = 7;
         settings.Current.LastPerfectWeekStreakAwarded = 0;
-        CoreProgression.AddXPProvider = (_, _) => throw new InvalidOperationException("Failed grant");
+        CoreProgression.AddXPProvider = missingProvider ? null : (_, _) => throw new InvalidOperationException("Failed grant");
         AvApp.WireQuestRewards(null);
-        Assert.Throws<InvalidOperationException>(() => CoreQuests.CheckPerfectWeekBonusProvider!());
+        Assert.Equal(0, CoreQuests.CheckPerfectWeekBonusProvider!());
         Assert.Equal(0, settings.Current.LastPerfectWeekStreakAwarded);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FailedBonusDoesNotInterruptCompletionOrTheRemainingBoard(bool missingProvider)
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-quest-bonus-failure-").FullName;
+        try
+        {
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            using var quests = new QuestService(null, dir);
+            settings.Current.UnlockedSkills.Add("perfect_bimbo_week");
+            settings.Current.DailyQuestStreak = 7;
+            settings.Current.LastPerfectWeekStreakAwarded = 0;
+            quests.Progress.DailyQuestCompletionDates.Clear();
+            for (int day = 0; day < 7; day++)
+                quests.Progress.DailyQuestCompletionDates.Add(DateTime.Today.AddDays(-day));
+            // Two matching seats prove a failed bonus cannot unwind the per-seat pass.
+            quests.Progress.DailyQuests = new List<ActiveQuest> { new("pop_parade_d"), new("pop_parade_d") };
+            quests.Progress.WeeklyQuest = new ActiveQuest("bubble_storm_w");
+            CoreProgression.AddXPProvider = missingProvider ? null : (_, source) =>
+            {
+                if (source == "Other") throw new InvalidOperationException("Failed bonus grant");
+            };
+            int completed = 0, effects = 0;
+            quests.QuestCompleted += (_, _) => completed++;
+            CoreQuests.PlayCompletionEffectsProvider = () => effects++;
+            AvApp.WireQuestRewards(null);
+
+            quests.TrackBubblesPopped(40);
+
+            Assert.All(quests.Progress.DailyQuests, quest => Assert.True(quest.IsCompleted));
+            Assert.Equal(2, completed);
+            Assert.Equal(2, effects);
+            Assert.Equal(40, quests.Progress.WeeklyQuest.CurrentProgress);
+            Assert.Equal(0, settings.Current.LastPerfectWeekStreakAwarded);
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     [Fact]
