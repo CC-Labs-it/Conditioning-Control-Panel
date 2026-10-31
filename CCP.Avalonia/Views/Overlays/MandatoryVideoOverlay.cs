@@ -18,6 +18,7 @@ using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using LibVLCSharp.Shared;
+using ConditioningControlPanel.Services.Video;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -63,26 +64,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private WriteableBitmap? _fill;
         private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed;
         private long _watchedMs;
-        private global::ConditioningControlPanel.Services.Video.VideoCutPlayback? _cutClock;
+        private VideoPlaybackClock? _cutClock;
+        private IMandatoryPlayback? _playback;
+        private readonly Func<IMandatoryPlayback>? _playbackFactory;
+        internal Random CutRandom { get; set; } = Random.Shared;
         private bool _cutStartChosen;
 
         // UI thread only. Poll the native position after choosing the slice, never credit the seek.
         private void SampleCutPlayback()
         {
-            if (_cutClock == null || _player == null || _gracePaused) return;
-            if (!_cutStartChosen && _player.IsPlaying && _player.IsSeekable && _player.Length > 0)
+            if (_cutClock == null || _playback == null || _gracePaused) return;
+            if (!_cutStartChosen && _playback.IsPlaying && _playback.IsSeekable && _playback.Length > 0)
             {
                 _cutStartChosen = true;
                 var start = CoreSettings.Current.VideoCutRandomStart
-                    ? global::ConditioningControlPanel.Services.Video.VideoCutPlayback.StartOffsetMs(CoreSettings.Current.VideoMaxDurationSeconds, _player.Length, _random) : 0;
+                    ? VideoLengthCapRules.StartOffsetMs(CoreSettings.Current.VideoMaxDurationSeconds, _playback.Length, CutRandom) : 0;
                 if (start > 0)
                 {
-                    _player.Time = start;
+                    _playback.Time = start;
                     _cutClock.ResetPosition();
                     return; // wait for the native seek before taking a baseline
                 }
             }
-            _cutClock.Observe(_player.Time, Environment.TickCount64);
+            _cutClock.Observe(_playback.Time, (long)Time.GetElapsedTime(0).TotalMilliseconds);
         }
         /// <summary>Stopwatch timestamp of the last frame shown (tests age it to fake a lost output).</summary>
         internal long FrameTs;
@@ -100,12 +104,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private DispatcherTimer? _graceTimer, _guard;
         private readonly Stopwatch _sinceShow = new();
 
-        private MandatoryVideoOverlay() => Scheduler = new MandatoryVideoScheduler(this)
+        internal MandatoryVideoOverlay(Func<IMandatoryPlayback>? playbackFactory = null)
         {
-            DurationOf = LengthOf,
-            // WPF VideoService _packVideoQueue: active content-pack clips join the pick.
-            PackVideos = new ConditioningControlPanel.Services.PackMediaPool(ConditioningControlPanel.Services.ContentPackStore.VideoType),
-        };
+            _playbackFactory = playbackFactory;
+            Scheduler = new MandatoryVideoScheduler(this)
+            {
+                DurationOf = LengthOf,
+                // WPF VideoService _packVideoQueue: active content-pack clips join the pick.
+                PackVideos = new ConditioningControlPanel.Services.PackMediaPool(ConditioningControlPanel.Services.ContentPackStore.VideoType),
+            };
+        }
 
         /// <summary>WPF VideoService.MetadataCache: created on first use on the shared LibVLC; a miss starts
         /// a background parse and the clip is kept this refill.</summary>
@@ -146,7 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private void Play(string path, bool strict)
         {
             var muted = _userMuted;
-            if (_surfaces.Count > 0) CloseAll();
+            if (_playback != null || _surfaces.Count > 0) CloseAll();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
@@ -154,11 +162,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             PlayedSkew = 0;
             FirstFrameMs = -1;
             _watchedMs = 0;
-            _cutClock = CoreSettings.Current.VideoMaxDurationSeconds > 0 ? new global::ConditioningControlPanel.Services.Video.VideoCutPlayback() : null;
+            _cutClock = CoreSettings.Current.VideoMaxDurationSeconds > 0 ? new VideoPlaybackClock() : null;
             _cutStartChosen = false;
             FillMs = FillCount = 0;
             _graceConsumed = false;   // WPF PlayVideo: one grace pause per clip, replays included
 
+            // The injected decoder omits native allocation and windows; lifecycle methods stay shared.
+            if (_playbackFactory != null)
+            {
+                _playback = _playbackFactory();
+                FirstFrameMs = 0;
+                FrameTs = Stopwatch.GetTimestamp();
+                return;
+            }
             var s = CoreSettings.Current;
             var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             // WPF DecidePresentation: full screen or ONE floating window, on a random targeted screen.
@@ -182,6 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
+            _playback = new NativeMandatoryPlayback(_player);
             ApplyVolume(_player);
             var blur = s.VideoBlurredBackgroundEnabled;
             _sink = new VlcFrameSink(_player, () => _media, bmp =>
@@ -454,12 +471,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     ConditioningControlPanel.Services.Safety.PanicPolicy.OverrideEnabled(CoreSettings.Current))) return false;
             var now = Now;
             var since = _lastGraceUtc == default ? double.MaxValue : (now - _lastGraceUtc).TotalMilliseconds;
-            var d = MandatoryVideoScheduler.EvaluateGrace(Scheduler.IsPlaying && _player != null, _closing, _gracePaused, _graceConsumed, since);
+            var d = MandatoryVideoScheduler.EvaluateGrace(Scheduler.IsPlaying && _playback != null, _closing, _gracePaused, _graceConsumed, since);
             if (d == GraceDecision.ConsumedDedup) return true;
             if (d != GraceDecision.Pause) return false;
+            SampleCutPlayback();
             _gracePaused = true;
             _lastGraceUtc = _gracePausedAt = now;
-            _player?.SetPause(true);
+            _playback?.SetPause(true);
             _sinceShow.Stop();
             _sinceFrame.Stop();   // freezes the attention clock and the clip guards (WPF re-phases both)
             foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; }
@@ -497,7 +515,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (FirstFrameMs >= 0) _sinceFrame.Start();
             FrameTs = Stopwatch.GetTimestamp();
             _cutClock?.ResetPosition();
-            _player?.SetPause(false);
+            _playback?.SetPause(false);
             Log.Information("VideoService: grace pause released ({Reason}) after {Sec:F1}s", reason, (Now - _gracePausedAt).TotalSeconds);
         }
 
@@ -505,12 +523,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// that shows no frame, stalls, overruns or passes the user's max ends like a dismiss.</summary>
         internal void GuardTick()
         {
-            if (_gracePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
+            if (_gracePaused || _playback == null || !Scheduler.IsPlaying) return;
             SampleCutPlayback();
             var framed = FirstFrameMs >= 0;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
-                (_player?.VideoTrackCount ?? -1) != 0, (_player?.Length ?? 0) / 1000.0,
+                _playback.HasVideo, _playback.Length / 1000.0,
                 Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent,
                 _cutClock == null ? null : _cutClock.PlayedMs / 1000.0 + PlayedSkew);
             if (why == null) return;
@@ -520,6 +538,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - replaying the clip once", why, Elapsed);
                 Scheduler.NoteReplay();
                 var spent = _capSpent + (_cutClock == null ? played : _cutClock.PlayedMs / 1000.0 + PlayedSkew);
+                // WPF DispatchVoutHeal -> CloseAll -> FinalizeWatchCredit credits each attempt.
+                var muted = _userMuted;
+                var watched = CloseAll();
+                if (watched >= 1) CoreProgression.TrackVideoWatched(watched);
+                _userMuted = muted;
                 Play(_path, _strict);
                 _capSpent = spent;   // the replay continues the clip's max-length cap (BUG-7NAKK79CZ2)
                 _healUsed = true;
@@ -922,11 +945,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _targets.Clear();
                 ReleaseToyBatches();
                 // Stop joins the decoder thread, so after it no callback touches the frame buffer.
-                if (_player != null)
+                if (_playback != null)
                 {
-                    try { _player.Stop(); } catch { }
-                    try { _player.Dispose(); } catch { }
+                    try { _playback.Stop(); } catch { }
+                    try { _playback.Dispose(); } catch { }
                 }
+                _playback = null;
                 _player = null;
                 try { _media?.Dispose(); } catch { }
                 _media = null;

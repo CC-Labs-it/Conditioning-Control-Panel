@@ -21,13 +21,15 @@ public class VideoCutSettingsTests
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var s = CoreSettings.Current;
-            s.VideoMaxDurationSeconds = 0;
-            s.VideoCutRandomStart = true;
-            var card = new VideoFeatureControl();
-            var host = new Window { Content = card };
-            host.Show();
+            var saved = (s.VideoMaxDurationSeconds, s.VideoCutRandomStart);
+            Window? host = null;
             try
             {
+                s.VideoMaxDurationSeconds = 0;
+                s.VideoCutRandomStart = true;
+                var card = new VideoFeatureControl();
+                host = new Window { Content = card };
+                host.Show();
                 var toggle = card.FindControl<CheckBox>("ChkVideoCutRandomStart")!;
                 Assert.True(toggle.IsChecked);
                 Assert.False(toggle.IsEnabled);
@@ -40,7 +42,11 @@ public class VideoCutSettingsTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(toggle.IsChecked);
             }
-            finally { host.Close(); }
+            finally
+            {
+                try { host?.Close(); }
+                finally { (s.VideoMaxDurationSeconds, s.VideoCutRandomStart) = saved; }
+            }
             return Task.CompletedTask;
         });
     }

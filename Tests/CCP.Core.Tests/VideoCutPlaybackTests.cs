@@ -13,7 +13,7 @@ public class VideoCutPlaybackTests
     [InlineData(30, 20000)]
     [InlineData(30, 30000)]
     public void Unknown_short_and_uncapped_clips_start_at_zero(int cap, long length)
-        => Assert.Equal(0, VideoCutPlayback.StartOffsetMs(cap, length, new Random(1)));
+        => Assert.Equal(0, VideoLengthCapRules.StartOffsetMs(cap, length, new Random(1)));
 
     [Fact]
     public void Random_slice_leaves_the_whole_cap_and_varies()
@@ -22,7 +22,7 @@ public class VideoCutPlaybackTests
         var offsets = new System.Collections.Generic.HashSet<long>();
         for (var i = 0; i < 100; i++)
         {
-            var offset = VideoCutPlayback.StartOffsetMs(30, 120000, rng);
+            var offset = VideoLengthCapRules.StartOffsetMs(30, 120000, rng);
             Assert.InRange(offset, 0, 90000);
             offsets.Add(offset);
         }
@@ -32,7 +32,7 @@ public class VideoCutPlaybackTests
     [Fact]
     public void Seeking_pausing_and_buffering_do_not_consume_the_cap_or_watch_credit()
     {
-        var clock = new VideoCutPlayback();
+        var clock = new VideoPlaybackClock();
         clock.Observe(60000, 0); // initial random seek
         clock.Observe(61000, 1000);
         clock.Observe(61000, 20000); // buffering
