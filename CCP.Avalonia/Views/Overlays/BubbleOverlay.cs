@@ -42,7 +42,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal static class BubbleOverlay
     {
-        internal static readonly AmbientBubbleField Field = new();
+        internal static readonly AmbientBubbleField Field = new()
+        {
+            LuckyProc = multiplier => FlashOverlay.LuckyProc(App.Mods?.GetLuckyBubbleLabel()
+                ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_bubble"), multiplier),
+        };
         private static readonly List<BubbleOverlayWindow> Windows = new();
         private static readonly List<Screen> Targets = new();
         private static DispatcherTimer? _spawnTimer;

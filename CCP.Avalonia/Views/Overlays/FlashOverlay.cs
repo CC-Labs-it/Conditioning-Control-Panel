@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
     /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
-    /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
+    /// the lucky glow pulse, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
     /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), content-pack and remote pools, avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private const int StaggerMs = 300;
 
         internal static readonly List<(FlashOverlayWindow Window, PixelRect Rect)> Active = new();
-        private static readonly Random Rng = new();
+        internal static Random Rng = new();
         // #627: one shuffled walk of the folder (WPF FlashService DiskBag), so every image comes up
         // before any repeats. Not thread-safe: LoadPictures draws under the bag's own lock.
         internal static readonly ShuffleBag<string> DiskBag = new(p => p, Rng);
@@ -94,13 +94,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
                 var clickable = s.FlashClickable;
                 var lifetime = Lifetime(s, ambient, durationMs);
-                var cap = Cap(s, ambient);
                 var fade = TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent);
                 var alpha = Math.Clamp(s.FlashOpacity / 100.0, 0, 1);
 
                 // WPF waits 1 s after FlashAboutToDisplay so the avatar's line lands first, then
                 // staggers 300 ms per image.
-                Schedule(flashes, 1000, StaggerMs, generation, cap, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
+                Schedule(flashes, 1000, StaggerMs, generation, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
                     done: () => _busy = false);
                 scheduled = true;
             }
@@ -111,8 +110,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Spawn each placed picture on its own dispatcher timer: Task.Delay continuations
         /// were measured landing 1.7 s late here (thread-pool timer), dispatcher timers stayed on time.
         /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
-        private static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
-            int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
+        internal static Action<Action, TimeSpan> RunLater = (a, t) => DispatcherTimer.RunOnce(a, t);
+
+        internal static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
+            int generation, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
             FlashMotionStyle? inheritMotion = null)
         {
             var refused = false;
@@ -120,11 +121,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var (bmp, rect, path, screen) = flashes[i];
                 var last = i == flashes.Count - 1;
-                DispatcherTimer.RunOnce(() =>
+                RunLater(() =>
                 {
                     try
                     {
-                        if (refused || _closed || generation != _generation || Active.Count >= cap) { bmp.Dispose(); return; }
+                        // WPF FlashService.cs:1705-1711 reads the current cap at each spawn.
+                        if (refused || _closed || generation != _generation || Active.Count >= Cap(CoreSettings.Current, ambient)) { bmp.Dispose(); return; }
                         refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion);
                     }
                     catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
@@ -140,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var s = CoreSettings.Current;
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
+            if (multiplier > 1) LuckyProc(App.Mods?.GetLuckyFlashLabel() ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_flash"), multiplier);
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
                 multiplier > 1, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
             var w = new FlashOverlayWindow(bmp)
@@ -168,6 +171,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 App.Quests?.TrackFlashImage();         // ...which credits the quest (:399)
             }
         }
+
+        internal static Action<string, int> LuckyProc = LuckyFlashToast.ShowLucky;
 
         /// <summary>The chime a lucky flash plays (tests swap it).</summary>
         internal static Action<AppSettings> LuckyChime = s =>
@@ -324,6 +329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// re-enabled flash can show again.</summary>
         public static void CloseAll(bool final = true)
         {
+            LuckyFlashToast.CloseActive();
             _generation++;
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
@@ -426,7 +432,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var occupied = Active.Select(a => a.Rect).ToList();
                 var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null));
                 if (generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
-                Schedule(flashes, 0, 100, generation, Cap(s, parent.Ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
+                Schedule(flashes, 0, 100, generation, Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
                     TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), lifetime, s.FlashClickable,
                     parent.Ambient, hydraGeneration, done: null, parent.MotionStyle);
             }
