@@ -60,7 +60,9 @@ public sealed class EngineEmptyLibraryTests
             Assert.Equal(TimeSpan.FromSeconds(18), Assert.IsType<DispatcherTimer>(toast.Tag).Interval);
             var buttons = toast.GetVisualDescendants().OfType<Button>().ToArray();
             var packs = buttons.Single(b => b.Name == "ToastSecondaryAction");
-            Assert.Equal(Loc.Get("btn_get_packs"), Assert.IsType<TextBlock>(packs.Content).Text);
+            var packsText = Assert.IsType<TextBlock>(packs.Content).Text;
+            Assert.Equal(ConditioningControlPanel.Avalonia.Controls.IconText.Bare(Loc.Get("btn_get_packs")), packsText);
+            Assert.Empty(ConditioningControlPanel.Avalonia.Controls.IconText.Split(packsText).Icons);
             buttons.Single(b => b.Name == "ToastAction").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal("assets", shell.CurrentTab);
             Assert.False(((DispatcherTimer)toast.Tag!).IsEnabled);

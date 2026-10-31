@@ -9,6 +9,7 @@
 
 using System;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services;
 using Avalonia.Controls;
 using Avalonia.Data;
@@ -107,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     string.Format(Loc.Get("msg_no_flash_images"), Loc.Get("nav_door_library"), Loc.Get("tab_assets")),
                     Helpers.NotificationType.Warning, TimeSpan.FromSeconds(18),
                     actionLabel: Loc.Get("btn_open_media_manager"), action: () => ShowTab("assets"),
-                    secondaryActionLabel: Loc.Get("btn_get_packs"),
+                    secondaryActionLabel: IconText.BareLoc("btn_get_packs"),
                     secondaryAction: () => Platform.ExternalOpener.Open(DiscordLinks.PackCatalogue));
                 Serilog.Log.Information("[empty-state] Flashes started with an empty local image library");
             }
