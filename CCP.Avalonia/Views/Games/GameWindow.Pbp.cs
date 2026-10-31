@@ -17,6 +17,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services.PieceByPiece.Wardrobe;
 using ConditioningControlPanel.Services.Quiz;
 using ConditioningControlPanel.Services.Stakes;
 using Newtonsoft.Json.Linq;
@@ -87,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_pbpOpen) return;
             _pbpOpen = true;
+            PrizeOwnership.GrantsChanged += OnPbpGrantsChanged;
             _pbpLastBeatUtc = _pbpLastProgressUtc = DateTime.UtcNow;
             Closed += (_, _) => ClosePbp();
             _pbpWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -102,6 +104,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_pbpOpen) return;
             _pbpOpen = false;
+            PrizeOwnership.GrantsChanged -= OnPbpGrantsChanged;
+            _pbpEquipLifetime.Cancel();
             try { _pbpWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _pbpWatch = null;
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -142,6 +146,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         return true;
                     case "pbp:media-request":
                         OnPbpMediaRequest(o);
+                        return true;
+                    case PbpLookRules.LookType:
+                        PickPbpLook(o);
+                        return true;
+                    case PbpLookRules.CounterType:
+                        // B3: the Prize Counter is WPF desktop only in 7.2.
                         return true;
                     case "pbp:net":
                         OnPbpNetRequest(o);
@@ -200,6 +210,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Post(frame);
             Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                 s.UserDisplayName, CoreReleaseContent.AppVersion));
+            PostPbpWardrobe();
+            PbpEquipPending = PullPbpEquip();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>
