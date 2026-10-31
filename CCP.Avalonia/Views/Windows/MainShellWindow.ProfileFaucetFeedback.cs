@@ -1,17 +1,15 @@
 using System;
-using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Haptics.Core;
 namespace ConditioningControlPanel.Avalonia.Views.Windows;
 public partial class MainShellWindow
 {
-    private readonly Stopwatch _faucetFeedbackClock = new();
-    private DispatcherTimer? _faucetFeedbackTimer;
+    private BeatLoop? _faucetFeedbackBeat;
     private readonly ScaleTransform _faucetStamp = new();
     private readonly RotateTransform _faucetLean = new();
     private readonly TranslateTransform _faucetShake = new(), _faucetDropFall = new();
@@ -34,13 +32,8 @@ public partial class MainShellWindow
                 var mote = new Ellipse { Width = size, Height = size, Fill = tap.TryFindResource("PinkBrush", out var brush) && brush is IBrush pink ? pink : Brushes.HotPink, IsHitTestVisible = false, RenderTransform = new TranslateTransform(), Tag = (Math.Cos(a) * dist, Math.Sin(a) * dist + 6, 420.0 + Random.Shared.Next(200)) };
                 Canvas.SetLeft(mote, tap.Margin.Left + 27 - size / 2); Canvas.SetTop(mote, tap.Margin.Top + 22 - size / 2); host.Children.Add(mote);
             }
-        _faucetFeedbackClock.Restart(); UpdateFaucetFeedback(0);
-        if (_faucetFeedbackTimer == null)
-        {
-            _faucetFeedbackTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
-            _faucetFeedbackTimer.Tick += (_, _) => UpdateFaucetFeedback(_faucetFeedbackClock.Elapsed.TotalMilliseconds);
-        }
-        _faucetFeedbackTimer.Start();
+        _faucetFeedbackBeat ??= new BeatLoop(tap, seconds => UpdateFaucetFeedback(seconds * 1000)) { OnParked = StopFaucetFeedback };
+        _faucetFeedbackBeat.Start();
     }
     private void UpdateFaucetFeedback(double ms)
     {
@@ -75,7 +68,7 @@ public partial class MainShellWindow
     }
     private void StopFaucetFeedback()
     {
-        _faucetFeedbackTimer?.Stop(); _faucetFeedbackClock.Stop(); _faucetStamp.ScaleX = _faucetStamp.ScaleY = 1; _faucetLean.Angle = _faucetShake.X = _faucetDropFall.Y = 0;
+        _faucetFeedbackBeat?.Stop(); _faucetStamp.ScaleX = _faucetStamp.ScaleY = 1; _faucetLean.Angle = _faucetShake.X = _faucetDropFall.Y = 0;
         if (FaucetControl<Ellipse>("ProfileVatFaucetDrop") is { } drop) drop.Opacity = 0;
         FaucetControl<Canvas>("ProfileVatSparks")?.Children.Clear();
     }

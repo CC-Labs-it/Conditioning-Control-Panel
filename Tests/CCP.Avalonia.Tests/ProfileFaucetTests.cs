@@ -8,6 +8,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
 using ConditioningControlPanel.Services.Haptics.Core;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -37,6 +38,7 @@ public sealed class ProfileFaucetTests
     [InlineData("enter")]
     [InlineData("repeat")]
     [InlineData("off")]
+    [InlineData("minimize")]
     public Task TrainerCardHoldsUntilACompletedKeyboardCharge(string action) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
@@ -69,7 +71,7 @@ public sealed class ProfileFaucetTests
             try
             {
                 var page = shell!.ProfilePage!; var sparks = page.FindControl<Canvas>("ProfileVatSparks")!;
-                if (action == "off") { Assert.Empty(sparks.Children); Assert.Equal(1, (page.FindControl<Grid>("ProfileVatHandle")!.RenderTransform as ScaleTransform)?.ScaleX ?? 1); Assert.False((typeof(MainShellWindow).GetField("_faucetFeedbackTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell) as DispatcherTimer)?.IsEnabled ?? false); return; }
+                if (action == "off") { Assert.Empty(sparks.Children); Assert.Equal(1, (page.FindControl<Grid>("ProfileVatHandle")!.RenderTransform as ScaleTransform)?.ScaleX ?? 1); Assert.False((typeof(MainShellWindow).GetField("_faucetFeedbackBeat", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell) as BeatLoop)?.IsRunning ?? false); return; }
                 var transforms = (TransformGroup)page.FindControl<Grid>("ProfileVatFaucet")!.RenderTransform!;
                 if (file == "faucet_pour.wav")
                 {
@@ -115,6 +117,7 @@ public sealed class ProfileFaucetTests
             if (action == "pointer") shell.MouseDown(tap.TranslatePoint(new Point(15, 18), shell)!.Value, MouseButton.Left);
             else tap.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = action == "enter" ? Key.Enter : Key.Space });
             Assert.True(ring.IsVisible);
+            Assert.True((typeof(MainShellWindow).GetField("_faucetChargeBeat", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell) as BeatLoop)!.OnFrameBeat);
             if (action == "reduced") Assert.IsType<global::Avalonia.Media.EllipseGeometry>(page.FindControl<global::Avalonia.Controls.Shapes.Path>("ProfileVatChargeArc")!.Data);
             Assert.Equal(action != "muted", sounds.Contains("faucet_charge_1.wav"));
             var budget = (double)typeof(MainShellWindow).GetField("_faucetBudget", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell)!;
@@ -124,6 +127,7 @@ public sealed class ProfileFaucetTests
             if (action == "pointer") shell.MouseUp(tap.TranslatePoint(new Point(15, 18), shell)!.Value, MouseButton.Left);
             if (action == "focus") tap.RaiseEvent(new FocusChangedEventArgs(InputElement.LostFocusEvent));
             if (action == "tab") shell.ShowTab("settings");
+            if (action == "minimize") { shell.WindowState = WindowState.Minimized; Assert.False((typeof(MainShellWindow).GetField("_faucetChargeBeat", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell) as BeatLoop)!.IsRunning); }
             if (action == "logout") { s.OfflineMode = true; service.Reset(); Dispatcher.UIThread.RunJobs(); }
             await Task.Delay(1600);
             Dispatcher.UIThread.RunJobs();
@@ -155,8 +159,8 @@ public sealed class ProfileFaucetTests
             if (action == "logout") { Assert.False(glass.IsVisible); Assert.False(tap.IsVisible); }
             else
             {
-                if (action == "enter") { typeof(MainShellWindow).GetMethod("StartFaucetFeedback", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(shell, new object[] { true }); Assert.True((typeof(MainShellWindow).GetField("_faucetFeedbackTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell) as DispatcherTimer)!.IsEnabled); }
-                shell.Close(); Assert.False((typeof(MainShellWindow).GetField("_faucetFeedbackTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell) as DispatcherTimer)?.IsEnabled ?? false);
+                if (action == "enter") { typeof(MainShellWindow).GetMethod("StartFaucetFeedback", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(shell, new object[] { true }); Assert.True((typeof(MainShellWindow).GetField("_faucetFeedbackBeat", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell) as BeatLoop)!.OnFrameBeat); }
+                shell.Close(); Assert.False((typeof(MainShellWindow).GetField("_faucetFeedbackBeat", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shell) as BeatLoop)?.IsRunning ?? false);
                 shell = new MainShellWindow(); shell.Show(); shell.ShowTab("discord");
                 glass = shell.ProfilePage!.FindControl<VatGlassCanvas>("ProfileVatGlass")!;
                 Assert.Equal(completed ? action == "brim" ? 1.22 : .25 : 0, glass.Fill, 3);

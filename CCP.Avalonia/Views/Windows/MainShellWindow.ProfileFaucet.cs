@@ -1,10 +1,9 @@
 using System;
-using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -17,8 +16,7 @@ public partial class MainShellWindow
 {
     private readonly VatFaucetHold _faucetHold = new(new AppSettingsVatPourLedger());
     private readonly VatFillCoordinator _faucetCoordinator = new();
-    private readonly Stopwatch _faucetClock = new();
-    private DispatcherTimer? _faucetChargeTimer;
+    private BeatLoop? _faucetChargeBeat;
     private bool _faucetWired, _faucetCharging, _faucetKeyHeld;
     private double _faucetBudget;
     private int _faucetPours, _faucetRungs;
@@ -92,8 +90,7 @@ public partial class MainShellWindow
             if (e.Key is not (Key.Space or Key.Enter)) return;
             e.Handled = true; _faucetKeyHeld = false; CancelFaucetCharge(true);
         };
-        _faucetChargeTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
-        _faucetChargeTimer.Tick += (_, _) => AdvanceFaucetCharge();
+        _faucetChargeBeat = new BeatLoop(tap, seconds => AdvanceFaucetCharge(seconds * 1000)) { OnParked = () => CancelFaucetCharge() };
     }
 
     // WPF MainWindow.ProfileFaucet.cs:296-361. Existing localized copy, still waiting badge.
@@ -122,21 +119,20 @@ public partial class MainShellWindow
         if (_faucetPours >= 3) _faucetBudget *= .6;
         _faucetCharging = true;
         _faucetRungs = 1;
-        _faucetClock.Restart();
         PlayFaucetSfx("faucet_charge_1.wav", .15f);
         DrawFaucetRing(0);
-        _faucetChargeTimer?.Start();
+        _faucetChargeBeat?.Start();
         UpdateFaucetPresentation();
     }
 
-    private void AdvanceFaucetCharge()
+    private void AdvanceFaucetCharge(double ms)
     {
         if (!_faucetCharging)
         {
-            if (VatGlass?.IsPouring != true) { _faucetChargeTimer?.Stop(); UpdateFaucetPresentation(); }
+            if (VatGlass?.IsPouring != true) { _faucetChargeBeat?.Stop(); UpdateFaucetPresentation(); }
             return;
         }
-        double t = Math.Clamp(_faucetClock.Elapsed.TotalMilliseconds / _faucetBudget, 0, 1);
+        double t = Math.Clamp(ms / _faucetBudget, 0, 1);
         DrawFaucetRing(t);
         int want = Math.Min(6, (int)(t * 6) + 1);
         while (_faucetRungs < want) PlayFaucetSfx($"faucet_charge_{++_faucetRungs}.wav", .15f);
@@ -151,7 +147,7 @@ public partial class MainShellWindow
         glass.PourTo(step.Fill, userGesture: true); FireFaucetPourHaptic();
         if (!wasOver && glass.IsPastBrim(step.Fill)) { glass.PulseOverflow(); PlayFaucetSfx("faucet_brim.wav", .30f); }
         _faucetPours++;
-        _faucetChargeTimer?.Start();
+        if (glass.IsPouring) _faucetChargeBeat?.Start();
         UpdateFaucetPresentation();
     }
 
@@ -160,8 +156,7 @@ public partial class MainShellWindow
     {
         bool charging = _faucetCharging;
         _faucetCharging = false;
-        _faucetClock.Stop();
-        _faucetChargeTimer?.Stop();
+        _faucetChargeBeat?.Stop();
         if (FaucetControl<Grid>("ProfileVatChargeRing") is { } ring) { ring.IsVisible = false; ring.Opacity = 0; }
         if (!feedback && (charging || !_vatOnScreen || !_vatArmed || !IsActive || !IsVisible)) StopFaucetFeedback();
         if (charging && feedback) { StartFaucetFeedback(false); PlayFaucetSfx("faucet_charge_drop.wav", .15f); }
