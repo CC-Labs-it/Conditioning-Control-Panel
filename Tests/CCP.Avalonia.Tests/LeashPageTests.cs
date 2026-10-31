@@ -53,6 +53,37 @@ public sealed class LeashPageTests
         });
 
     [Fact]
+    public void OwnCardLevelGuideOpensFromThePageAndSurvivesLevelChanges() =>
+        Run(true, (shell, _, svc) =>
+        {
+            var wasOpen = LeashLevelHelp.Open;
+            LeashLevelHelp.Open = false;
+            try
+            {
+                shell.ShowTab("leash");
+                var page = shell.Named<LeashTabView>("LeashTab")!;
+                LeashLevelHelp Guide() => Assert.Single(page.GetLogicalDescendants().OfType<LeashLevelHelp>());
+                var guide = Guide();
+                Assert.False(guide.TableShown);
+                foreach (var level in LeashLevelGuide.Levels)
+                    Assert.Contains(guide.GetLogicalDescendants().OfType<TextBlock>(),
+                        t => t.Text == LeashLevelGuide.Summary(level, ConditioningControlPanel.Localization.Loc.Get));
+                LeashGateCardTests.Click(Find(page, "leash-guide-toggle"));
+                Assert.True(guide.TableShown);
+                Assert.Contains(guide.GetLogicalDescendants().OfType<TextBlock>(),
+                    t => t.Tag as string == "leash-guide-limits");
+                LeashGateCardTests.Click(Find(page, "leash-level:0"));
+                guide = Guide();
+                Assert.True(guide.TableShown);
+                Assert.Contains(guide.GetLogicalDescendants().OfType<Control>(),
+                    c => c.Tag as string == "leash-guide-line:soft:on");
+                LeashGateCardTests.Click(Find(page, "leash-guide-toggle"));
+                Assert.False(guide.TableShown);
+            }
+            finally { LeashLevelHelp.Open = wasOpen; }
+        });
+
+    [Fact]
     public void VisiblePageRebindsWhenServiceArrivesAndIsDropped() =>
         Run(true, (shell, _, svc) =>
         {

@@ -18,7 +18,7 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>sync7-leash-a (WPF a12bb6c53, LeashLevelHelp.cs; WPF LeashLevelGuideTests' two UI facts): what
 /// Soft, Standard and Strict allow, under the level switch, with the table one click away. The control is
-/// drawn on its own: its WPF hosts (LeashSelfCard, LeashAskCard) are not on this head yet.</summary>
+/// drawn on its own; LeashPageTests covers the own-card host. The ask-card host remains missing.</summary>
 public sealed class LeashLevelHelpTests
 {
     private static List<Control> Tagged(ILogical root, string prefix)

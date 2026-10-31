@@ -2,8 +2,7 @@
 // What Soft, Standard and Strict allow, right under the level switch: one line per level (the leashed
 // card) or the picked level's tagline (the ask card), and the full table one click away. Every row and
 // figure comes from Core LeashLevelGuide, which reads the grammar. Flat: no Effect, no animation.
-// ponytail: no host yet - WPF puts this on LeashSelfCard and LeashAskCard, neither of which this head
-// has (parity feat-leash); it is built and tested here so those cards only have to add it.
+// Hosted by LeashSelfCard. The ask-card host remains in the drawer lane.
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
