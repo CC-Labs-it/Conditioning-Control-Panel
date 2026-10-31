@@ -3,14 +3,11 @@ using System.Linq;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
-
 namespace ConditioningControlPanel.Services;
-
 /// <summary>WPF BubbleService.RollTriggerSpec / BuildTriggerSpec, ambient only.</summary>
 public static class AmbientBubblePayloads
 {
     public const int MaxTriggers = 4;
-
     public static EffectBubbleSpec? Roll(AppSettings s, Random random, int activeTriggers)
     {
         if (!s.BubbleTriggersEnabled || activeTriggers >= MaxTriggers) return null;
@@ -21,7 +18,6 @@ public static class AmbientBubblePayloads
         ChaosMotion? motion = Enum.TryParse<ChaosMotion>(s.ChaosMotionMode, out var m) ? m : null;
         return Build(ids[random.Next(ids.Length)], motion);
     }
-
     public static EffectBubbleSpec? Build(string id, ChaosMotion? motion = null)
     {
         if (id == "glitch") return new EffectBubbleSpec
@@ -37,14 +33,12 @@ public static class AmbientBubblePayloads
         return spec;
     }
 }
-
 /// <summary>UI-independent ambient payload delivery: heavy takeovers yield the input handler,
 /// wait for rain, and recheck both stop and video gates before opening.</summary>
 public sealed class AmbientPayloadRunner
 {
     private int _generation;
     public void Stop() => _generation++;
-
     public void Run(EffectPayload payload, Func<bool> running, Func<bool> videoPlaying,
         Func<bool> raining, Action<Action> post, Action<Action> whenClear, Action<EffectPayload> fire)
     {

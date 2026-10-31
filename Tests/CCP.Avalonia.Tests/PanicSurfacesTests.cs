@@ -120,6 +120,7 @@ public sealed class PanicSurfacesTests
         "takeover",
         "program-session",
         "engine",
+        "bubble-host",
         "flash",
         "pink-rush",
         "corner-gif",

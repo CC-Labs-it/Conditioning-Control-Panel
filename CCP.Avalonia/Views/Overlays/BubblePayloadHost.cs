@@ -64,7 +64,7 @@ internal static class BubblePayloadHost
                 if (p.OverlayKind == "pink_filter") PinkFilterOverlay.ShowTimed(host!, ms, p.ScaleD(0.25, 0.70));
                 else if (p.OverlayKind == "spiral") SpiralOverlay.ShowTimed(host!, ms, p.ScaleD(0.25, 0.70));
                 break;
-            case VideoPayload: CoreEngine.Video?.Trigger(); break;
+            case VideoPayload: CoreEngine.Video?.Trigger(silentIfEmpty: true); break;
             case GifCascadePayload:
                 Chaos.ChaosGifCascadeOverlay.Show(GifCascadePayload.SPAWN_RATE_PER_SEC,
                     GifCascadePayload.DURATION_SEC * EffectPayload.GlobalDurationMult,

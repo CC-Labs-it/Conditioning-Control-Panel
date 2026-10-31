@@ -316,7 +316,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
         /// pre-roll. False when nothing was started (no clip, or one is already playing).
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
-        public bool Trigger(bool? strictOverride = null, string? path = null)
+        /// <param name="silentIfEmpty">Log an empty pool without prompting, as WPF TriggerVideo does for bubble pops.</param>
+        public bool Trigger(bool? strictOverride = null, string? path = null, bool silentIfEmpty = false)
         {
             if (_playing) return false;
             path ??= PickNext();
@@ -324,7 +325,7 @@ namespace ConditioningControlPanel.Services
             {
                 Log.Warning("VideoService: no videos found in the library");
                 // WPF #1124: the guidance dialog once per launch, never per tick.
-                if (Interlocked.Exchange(ref _noVideosShown, 1) == 0) NoVideos?.Invoke();
+                if (!silentIfEmpty && Interlocked.Exchange(ref _noVideosShown, 1) == 0) NoVideos?.Invoke();
                 return false;
             }
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
