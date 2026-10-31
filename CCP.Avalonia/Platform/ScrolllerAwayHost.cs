@@ -48,6 +48,19 @@ internal static class ScrolllerAwayHost
         Tracker.Reset();
     }
 
+    // Share the existing OS hooks with mandatory video. Display-off alone is not a WPF cleanup signal.
+    internal static void SetLocked(bool locked)
+    {
+        Tracker.SetLocked(locked);
+        if (locked) Views.Overlays.MandatoryVideoOverlay.Instance.SystemUnavailable();
+    }
+
+    internal static void SetSleeping(bool sleeping)
+    {
+        Tracker.SetSleeping(sleeping);
+        if (sleeping) Views.Overlays.MandatoryVideoOverlay.Instance.SystemUnavailable();
+    }
+
     // ---- Windows -------------------------------------------------------------------------
 
     internal static class Win32
@@ -113,16 +126,16 @@ internal static class ScrolllerAwayHost
             if (msg == WM_WTSSESSION_CHANGE)
             {
                 var reason = wParam.ToInt64();
-                if (reason == WTS_SESSION_LOCK) Tracker.SetLocked(true);
-                else if (reason == WTS_SESSION_UNLOCK) Tracker.SetLocked(false);
+                if (reason == WTS_SESSION_LOCK) SetLocked(true);
+                else if (reason == WTS_SESSION_UNLOCK) SetLocked(false);
                 return;
             }
             if (msg != WM_POWERBROADCAST) return;
             switch (wParam.ToInt64())
             {
-                case PBT_APMSUSPEND: Tracker.SetSleeping(true); break;
+                case PBT_APMSUSPEND: SetSleeping(true); break;
                 case PBT_APMRESUMESUSPEND:
-                case PBT_APMRESUMEAUTOMATIC: Tracker.SetSleeping(false); break;
+                case PBT_APMRESUMEAUTOMATIC: SetSleeping(false); break;
                 case PBT_POWERSETTINGCHANGE when lParam != IntPtr.Zero:
                     var setting = Marshal.PtrToStructure<Guid>(lParam);
                     if (setting == ConsoleDisplayState && Marshal.ReadInt32(lParam, 16) >= 4)
@@ -198,7 +211,7 @@ internal static class ScrolllerAwayHost
                 await bus.AddMatchAsync(
                     new MatchRule { Type = MessageType.Signal, Interface = ManagerIface, Member = "PrepareForSleep", Path = ManagerPath },
                     (Message m, object? _) => m.GetBodyReader().ReadBool(),
-                    (Exception? ex, bool sleeping, object? _, object? _) => { if (ex == null) Tracker.SetSleeping(sleeping); },
+                    (Exception? ex, bool sleeping, object? _, object? _) => { if (ex == null) SetSleeping(sleeping); },
                     null, null, false, ObserverFlags.None);
 
                 var session = await SessionPathAsync(bus);
@@ -207,19 +220,19 @@ internal static class ScrolllerAwayHost
                     await bus.AddMatchAsync(
                         new MatchRule { Type = MessageType.Signal, Interface = SessionIface, Member = member, Path = session },
                         (Message _, object? _) => locked,
-                        (Exception? ex, bool l, object? _, object? _) => { if (ex == null) Tracker.SetLocked(l); },
+                        (Exception? ex, bool l, object? _, object? _) => { if (ex == null) SetLocked(l); },
                         null, null, false, ObserverFlags.None);
                 await bus.AddMatchAsync(
                     new MatchRule { Type = MessageType.Signal, Interface = PropsIface, Member = "PropertiesChanged", Path = session, Arg0 = SessionIface },
                     (Message m, object? _) => LockedHintIn(m),
-                    (Exception? ex, bool? hint, object? _, object? _) => { if (ex == null && hint is bool l) Tracker.SetLocked(l); },
+                    (Exception? ex, bool? hint, object? _, object? _) => { if (ex == null && hint is bool l) SetLocked(l); },
                     null, null, false, ObserverFlags.None);
 
                 // Started while the lock screen is already up (autostart behind a locked session).
                 var start = await bus.CallMethodAsync(Call(bus, session, PropsIface, "Get", "ss", (ref MessageWriter w) =>
                     { w.WriteString(SessionIface); w.WriteString("LockedHint"); }),
                     (Message m, object? _) => Unwrap(m.GetBodyReader().ReadVariantValue()).GetBool(), null);
-                Tracker.SetLocked(start);
+                SetLocked(start);
                 Log.Information("ScrolllerAway: watching logind session {Session}", session);
             }
             catch (Exception ex) { Log.Information("ScrolllerAway: logind unavailable ({E}); no away state on this desktop", ex.Message); }
