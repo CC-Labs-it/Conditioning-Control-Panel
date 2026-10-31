@@ -7,8 +7,7 @@
 // AppSettings.RailFavorites / RailRecent. Lock truth is IsNavEntryLocked (NavPremiumTags.cs), so the
 // chip's padlock and the rail's gold star cannot disagree.
 //
-// ponytail: not on this head yet - the champagne v2 pill (Services/Prizes/V2Badges + PrizeGrants are
-// WPF-only) and a mod's own art framing (WPF ActiveModFraming); mod art is centre-cropped instead.
+// WPF references below cover the ownership pill and author-supplied railChip framing.
 
 using System;
 using System.Collections.Generic;
@@ -23,6 +22,10 @@ using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Serilog;
+using Avalonia.Threading;
+using ConditioningControlPanel.Services.Prizes;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Features;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -54,7 +57,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 WireFavoritePinMenus();
                 EventHandler onLanguage = (_, _) => RefreshFavoritesRail();
                 LocalizationManager.Instance.LanguageChanged += onLanguage;
-                Closed += (_, _) => LocalizationManager.Instance.LanguageChanged -= onLanguage;
+                // WPF MainWindow.FavoritesRail.cs:92-93: grants repaint existing chips.
+                Action onGrants = () => Dispatcher.UIThread.Post(RefreshFavoritesRail);
+                EventHandler onIdentity = (_, _) => Dispatcher.UIThread.Post(RefreshFavoritesRail);
+                PrizeGrants.GrantsChanged += onGrants;
+                CoreAccount.UnifiedIdentityChanged += onIdentity;
+                Closed += (_, _) =>
+                {
+                    LocalizationManager.Instance.LanguageChanged -= onLanguage;
+                    PrizeGrants.GrantsChanged -= onGrants;
+                    CoreAccount.UnifiedIdentityChanged -= onIdentity;
+                };
             }
             RefreshFavoritesRail();
             SettingsPage?.ApplyFavoritesDrawerSetting();
@@ -120,6 +133,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 });
             }
 
+            // WPF MainWindow.FavoritesRail.cs:256-265: share the badge rule and keep the lock clear.
+            if (V2Badges.ChipWearsV2Pill(entry.Id, PrizeOwnership.FlashV2Owned(), PrizeOwnership.BubbleV2Owned()))
+            {
+                var pill = FlashFeatureControl.NewV2Badge(
+                    locked ? new Thickness(3, 2, 0, 0) : new Thickness(0, 2, 3, 0), compact: true);
+                pill.HorizontalAlignment = locked ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+                pill.VerticalAlignment = VerticalAlignment.Top;
+                grid.Children.Add(pill);
+            }
+
             var chip = new Button { Content = grid, Tag = entry.Id };
             if (dash.FavoritesRail.TryFindResource("RailChipStyle", out var theme) && theme is global::Avalonia.Styling.ControlTheme ct)
                 chip.Theme = ct;
@@ -160,7 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (probe == null) continue;
                 bool modArt = CoreModArt.HasOverride(path);
                 double aspect = probe.Size.Height > 0 ? probe.Size.Width / probe.Size.Height : 0;
-                var vb = ModArtFramingRegistry.ResolveViewbox(basePath, ModArtFramingRegistry.SurfaceRailChip, modArt, aspect, null);
+                var vb = ModArtFramingRegistry.ResolveViewbox(basePath, ModArtFramingRegistry.SurfaceRailChip, modArt, aspect, modArt ? ActiveModFraming(basePath) : null);
                 var width = FavoritesRailArt.DecodeWidthFor(vb.Width);
                 var bitmap = width > FavoritesRailArt.BaseDecodeWidth ? RailArt(path, width) ?? probe : probe;
                 grid.Children.Add(RailChipScrim(dash));
@@ -170,6 +193,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Stretch = Stretch.UniformToFill,
                     SourceRect = new RelativeRect(vb.X, vb.Y, vb.Width, vb.Height, RelativeUnit.Relative),
                 };
+            }
+            return null;
+        }
+
+        // WPF MainWindow.xaml.cs:3064-3082: path separators and case are author-independent.
+        private static ModArtFraming? ActiveModFraming(string resourcePath)
+        {
+            var map = CoreMods.ActiveModPackage?.Manifest.ArtFraming;
+            if (map == null) return null;
+            foreach (var entry in map)
+            {
+                if (entry.Value == null || !string.Equals(entry.Key.Replace('\\', '/'), resourcePath,
+                        StringComparison.OrdinalIgnoreCase)) continue;
+                foreach (var surface in entry.Value)
+                    if (string.Equals(surface.Key, ModArtFramingRegistry.SurfaceRailChip, StringComparison.OrdinalIgnoreCase))
+                        return surface.Value;
+                return null;
             }
             return null;
         }
