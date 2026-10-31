@@ -391,7 +391,23 @@ jobs:
         # scope=windows (hybrid rgate): the Linux shards ran locally, so only the Windows total is checked here.
         os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.scope == 'windows' && '["windows"]' || '["linux", "windows"]') }}
     steps:
+      # Artifact blob transfers can exhaust the action's internal retries even after every
+      # shard passed. Retry the whole action for fresh download URLs; the final failure is fatal.
       - uses: actions/download-artifact@v4
+        id: download_shards
+        continue-on-error: true
+        with:
+          pattern: avalonia-${{ matrix.os }}-shard-*
+          path: shards
+      - uses: actions/download-artifact@v4
+        id: retry_shards
+        if: steps.download_shards.outcome == 'failure'
+        continue-on-error: true
+        with:
+          pattern: avalonia-${{ matrix.os }}-shard-*
+          path: shards
+      - uses: actions/download-artifact@v4
+        if: steps.retry_shards.outcome == 'failure'
         with:
           pattern: avalonia-${{ matrix.os }}-shard-*
           path: shards
@@ -422,6 +438,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash .github/scripts/core-guards.sh
+      - run: python3 .github/scripts/test_avalonia_coverage.py
       # The port docs parse: every ledger table row on one line, main-sync meta totals match, the dashboard builds
       # (shallow checkout, so its over-time chart has one point here; that is fine for a build check).
       - run: |

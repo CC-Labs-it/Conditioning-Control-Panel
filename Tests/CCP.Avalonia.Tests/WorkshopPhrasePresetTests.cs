@@ -20,6 +20,29 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class WorkshopPhrasePresetTests
 {
+    // WPF Assets.cs:1790, Patreon.cs:1403-1406: the saved count and badge use enabled rows.
+    [Fact]
+    public Task CountTracksEnabledRowsOnRefreshSaveAndApply() => Run(async (drawer, parts, owner, s) =>
+    {
+        s.CustomCompanionPhrases.Clear(); s.RemovedPhraseIds.Clear();
+        CoreMods.ActiveModIdProvider = () => "shell-assets-test";
+        CoreMods.ActiveModPackageProvider = () => null;
+        CoreMods.PhrasesProvider = category => category == "Greeting" ? new[] { "a", "b", "c" } : Array.Empty<string>();
+        CoreBark.AllLinesProvider = () => Array.Empty<ConditioningControlPanel.Services.Bark.BarkLineInfo>();
+        s.DisabledPhraseIds.Add("Greeting:0"); s.RemovedPhraseIds.Add("Greeting:2");
+        drawer.RefreshPhrasePresets();
+        var count = parts.Triggers.FindControl<TextBlock>("TxtPhraseCount")!;
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("label_0_active_2", 1), count.Text);
+        Click(CellButton(parts.Triggers, "Save")); Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.Single(owner.OwnedWindows);
+        Click(CellButton(dialog, "Save")); await Task.Yield(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, Assert.Single(s.PhrasePresets).ActivePhraseCount);
+        var other = new PhrasePreset { Name = "All", DisabledPhraseIds = new(), RemovedPhraseIds = new() };
+        s.PhrasePresets.Add(other); drawer.RefreshPhrasePresets();
+        parts.Triggers.FindControl<ComboBox>("CmbPhrasePresets")!.SelectedItem = other;
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("label_0_active_2", 3), count.Text);
+    });
+
     [Fact]
     public Task SaveButtonOpensTheWpfNamePromptAndStoresAnIndependentSnapshot() => Run(async (drawer, parts, owner, s) =>
     {

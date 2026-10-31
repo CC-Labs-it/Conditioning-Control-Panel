@@ -7,8 +7,7 @@
        Panel.ZIndex                 ->  ZIndex
        ToolTip="..."                ->  ToolTip.Tip="..."
        ValueChanged= / Click= etc.  ->  handlers attached in code-behind (porting convention)
-       PreviewMouseWheel            ->  dropped; Avalonia's ScrollViewer already hands an
-                                        exhausted wheel to its ancestor
+       PreviewMouseWheel            ->  Helpers.ParentWheel always forwards to the outer viewer
        Button Content="{loc:Str}"   ->  a TextBlock child (Trap 1: '_' is an access key)
        Slider Style (none in WPF)   ->  Theme="{StaticResource PinkSlider}"; the WPF head styles
                                         Slider implicitly, this head has no implicit Slider theme
@@ -213,7 +212,7 @@
                  detail dialogs on the PRESETS row above. -->
             <fx:IconLabel Key="label_keyword_triggers" TextElement.Foreground="#8A8AA0" TextElement.FontSize="10"
                           TextElement.FontWeight="Bold" Margin="0,2,0,6"/>
-            <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
+            <ScrollViewer x:Name="ParentWheelScroll" MaxHeight="300" VerticalScrollBarVisibility="Auto">
                 <StackPanel x:Name="KeywordTriggerListPanel"/>
             </ScrollViewer>
 
