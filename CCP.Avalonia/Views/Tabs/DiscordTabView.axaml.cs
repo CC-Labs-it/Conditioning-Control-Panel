@@ -372,13 +372,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (e.Key == Key.Enter) _ = SearchAsync(TxtProfileSearch.Text);
         }
 
-        /// <summary>The Trainer Card's spiral plate. WPF MainWindow.ProfileSpiral.cs:203-206.</summary>
-        private void ProfileSpiralPlate_Click(object? sender, PointerReleasedEventArgs e)
-        {
-            // WPF DiscordTabView.xaml:763 binds MouseLeftButtonUp.
-            if (e.InitialPressMouseButton != MouseButton.Left) return;
-            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenSpiralMapFromProfile();
-        }
+        /// <summary>The Trainer Card's spiral plate. Opens the expanded map window — the same door
+        /// the nav rail's miniature uses (MainWindow.ProfileSpiral.cs).</summary>
+        private void ProfileSpiralPlate_Click(object? sender, PointerReleasedEventArgs e) { }
 
         /// <summary>Left-click on a badge pins or unpins it (own card only). The tile is reached
         /// through the sender's DataContext exactly as the WPF handler reads it.</summary>

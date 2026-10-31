@@ -43,8 +43,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// <list type="bullet">
     ///   <item><c>SpiralRoom.StateFor</c> (Core) reads the real settings and fuse. The withhold
     ///     reads the persisted migration gates through the shared <c>SpiralRoom.SpiralWithheldFor</c>,
-    ///     and the shared DescentService supplies the live block. This head uses silent migration
-    ///     acknowledgement, with no live ceremony.</item>
+    ///     but its live inputs (an offer in hand, an open ceremony) and <c>App.Descent</c> (the block)
+    ///     are WPF-head services, so <see cref="Refresh"/> passes false for those and Spiral is
+    ///     unreachable — see the placeholder there.</item>
     ///   <item>The first-light canvas supplies the fog; the one-shot reveal still needs the
     ///     ceremony director and block-service handoff, timeout and cancellation integration.</item>
     ///   <item><c>SpiralEmbedView</c> now carries the Core ready/state protocol over WebHost;
@@ -309,24 +310,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void OnTabShown() => Refresh();
 
-        // WPF Views/Tabs/SpiralTabView.xaml.cs:249, :268, :307-321, :420, :892.
-        private DescentService? _wiredDescent;
-        private void OnBlockChanged(object? sender, EventArgs e)
-        {
-            if (!IsVisible) return;
-            Refresh();
-            _embed?.PostState(App.Descent?.Current);
-        }
-
+        /// <summary>WPF Wire: the fuse's phase and tick drive the fog. BlockChanged has no twin
+        /// (DescentService is WPF-only).</summary>
         private void Wire()
         {
             WireMigrationGate();
-            if (!ReferenceEquals(_wiredDescent, App.Descent))
-            {
-                if (_wiredDescent != null) _wiredDescent.BlockChanged -= OnBlockChanged;
-                _wiredDescent = App.Descent;
-                if (_wiredDescent != null) _wiredDescent.BlockChanged += OnBlockChanged;
-            }
             if (_wiredFuse != null || App.DescentCountdown is not { } fuse) return;
             _wiredFuse = fuse;
             fuse.PhaseChanged += OnPhaseChanged;
@@ -337,8 +325,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void Unwire()
         {
             UnwireMigrationGate();
-            if (_wiredDescent != null) _wiredDescent.BlockChanged -= OnBlockChanged;
-            _wiredDescent = null;
             if (_wiredFuse is not { } fuse) return;
             _wiredFuse = null;
             fuse.PhaseChanged -= OnPhaseChanged;
@@ -392,8 +378,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     CoreSettings.Current,
                     fuse?.LastAnnouncedPhase ?? DescentFusePhase.Dark,
                     fuse?.IsArmed == true,
+                    // ponytail: the persisted unanswered-offer gate is shared with WPF. Live offers,
+                    // ceremony ownership and server blocks still need the Descent service lane.
                     spiralWithheld: SpiralRoom.SpiralWithheldFor(CoreSettings.Current, false, false),
-                    hasBlock: App.Descent?.Current != null));
+                    hasBlock: false));
             }
             catch (Exception ex)
             {
@@ -636,7 +624,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ============================== the embed ==============================
 
-        // Shared block seeds the embed before its ready handshake.
+        // ponytail: bridge wired here; the account descent feed still has no Avalonia publisher.
         private void EnsureEmbed()
         {
             if (_embedGaveUp) { ShowWaitingUnderSpiral(); return; }
@@ -663,8 +651,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     TeardownEmbed();
                     ShowWaitingUnderSpiral();
                 };
-                // WPF SpiralTabView.xaml.cs:892: seed from server truth, never local XP.
-                embed.PostState(App.Descent?.Current);
+                // No server block exists on this head yet: never fabricate one from local XP.
+                embed.PostState(null);
                 StartEmbed(embed);
             }
             catch (Exception ex)
