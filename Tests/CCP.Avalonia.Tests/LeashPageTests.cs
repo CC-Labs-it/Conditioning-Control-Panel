@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,13 +25,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class LeashPageTests
 {
     private static void Run(bool punished, Action<MainShellWindow, LauncherWindow, LeashService> body) =>
-        AvaloniaTestDispatcher.Run(() =>
-        {
-            if (Application.Current is null)
-                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-            LeashGateCardTests.Run(punished, body);
-        });
+        LeashGateCardTests.Run(punished, body);
 
     private static Button Find(Control page, string tag) =>
         page.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag as string == tag);
@@ -49,6 +44,59 @@ public sealed class LeashPageTests
             Assert.Null(svc.Snapshot.Me);
             Assert.True(page.ShowingEmpty);
         });
+
+    [Fact]
+    public void OpenPageRebindsWhenServiceIsBuiltReplacedOrDropped() => Run(false, (shell, _, original) =>
+    {
+        LeashHead.Service = null;
+        shell.Show();
+        shell.ShowTab("leash");
+        Dispatcher.UIThread.RunJobs();
+        var page = shell.Named<LeashTabView>("LeashTab")!;
+        Assert.True(page.ShowingEmpty);
+        var next = new LeashService(new Wire(), () => "u_me", cutSafety: () => { });
+        next.ApplyBlock(LeashHeadTests.BlockWithPunishment());
+        LeashHead.Service = next;
+        Assert.False(page.ShowingEmpty);
+        original.ApplyBlock(LeashHeadTests.BlockWithPunishment());
+        Assert.False(page.ShowingEmpty);
+        LeashHead.Service = original;
+        next.ApplyBlock(null);
+        Assert.False(page.ShowingEmpty); // Old service is no longer subscribed.
+        shell.Hide();
+        LeashHead.Service = null;
+        Assert.True(page.ShowingEmpty); // The selected page stays current while the shell is hidden.
+        shell.Show();
+    });
+
+    [Fact]
+    public void OwnCardShowsTheBoundHoldToCutKey() => Run(true, (shell, _, _) =>
+    {
+        shell.ShowTab("leash");
+        var card = shell.Named<LeashTabView>("LeashTab")!.SelfCard!;
+        var hint = card.GetLogicalDescendants().OfType<TextBlock>().Single(t => (string?)t.Tag == "leash-self-hold");
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("leash_self_hold_hint",
+            LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey)), hint.Text);
+    });
+
+    [Fact]
+    public void OwnCardShowsNewestFourteenStickerRecords() => Run(true, (shell, _, svc) =>
+    {
+        shell.ShowTab("leash");
+        var card = shell.Named<LeashTabView>("LeashTab")!.SelfCard!;
+        var me = svc.Snapshot.Me!;
+        var stickers = Enumerable.Range(0, 16)
+            .Select(i => new Sticker("star", new LeashPerson(i.ToString(), "Sender" + i, null), DateTimeOffset.UtcNow))
+            .ToArray();
+        card.Update(me with { Stickers = stickers });
+        var records = card.GetLogicalDescendants().OfType<TextBlock>().Where(t => (string?)t.Tag == "leash-sticker").ToArray();
+        Assert.Equal(14, records.Length);
+        Assert.Contains("Sender15", records[0].Text);
+        Assert.Contains("Sender2", records[13].Text);
+        Assert.Contains(card.GetLogicalDescendants().OfType<TextBlock>(), t => (string?)t.Tag == "leash-shelf" && t.Text!.Contains("16"));
+        card.Update(me with { Stickers = Array.Empty<Sticker>() });
+        Assert.DoesNotContain(card.GetLogicalDescendants().OfType<TextBlock>(), t => (string?)t.Tag == "leash-shelf");
+    });
 
     private sealed class Wire : ILeashApi
     {
@@ -153,9 +201,7 @@ public sealed class LeashPageTests
     [Fact]
     public void VideoCapMouseRequiresLeftButtonAndCommitsWhenReleased() => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        LeashGateCardTests.EnsureHeadless();
         var cap = new LeashCapSlider("cap", 30, "test");
         var committed = new List<int>();
         cap.Committed += committed.Add;

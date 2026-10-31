@@ -20,6 +20,7 @@ public partial class LeashTabView : UserControl
         _resolve = service;
         InitializeComponent();
         EmptyButton.Click += (_, _) => (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("friends");
+        AttachedToVisualTree += (_, _) => { if (IsVisible) OnShown(); };
         DetachedFromVisualTree += (_, _) => Unsubscribe();
         PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) Unsubscribe(); };
     }
@@ -30,6 +31,7 @@ public partial class LeashTabView : UserControl
     internal void OnShown()
     {
         Unsubscribe();
+        LeashHead.ServiceChanged += OnServiceChanged;
         try { _service = _resolve(); } catch { _service = null; }
         if (_service != null) _service.SnapshotChanged += OnSnapshot;
         Render();
@@ -37,7 +39,14 @@ public partial class LeashTabView : UserControl
 
     private void Unsubscribe()
     {
+        LeashHead.ServiceChanged -= OnServiceChanged;
         if (_service != null) _service.SnapshotChanged -= OnSnapshot;
+    }
+    private void OnServiceChanged()
+    {
+        void Rebind() { if (VisualRoot != null && IsVisible) OnShown(); }
+        if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Rebind();
+        else global::Avalonia.Threading.Dispatcher.UIThread.Post(Rebind);
     }
     private void OnSnapshot(LeashSnapshot _) => Render();
 

@@ -37,12 +37,21 @@ public sealed class LeashGateCardTests
         public bool DropUnpushedLeashBookings() => false;
     }
 
+    internal static void EnsureHeadless()
+    {
+        if (Application.Current is not null) return;
+        var fonts = AppFonts.Options();
+        var mappings = new Dictionary<string, global::Avalonia.Media.FontFamily>(fonts.FontFamilyMappings!);
+        mappings["Segoe UI"] = mappings["Segoe UI Black"] = new global::Avalonia.Media.FontFamily(AppFonts.Inter);
+        fonts.FontFamilyMappings = mappings;
+        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(fonts)
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            .SetupWithoutStarting();
+    }
+
     internal static void Run(bool punished, Action<MainShellWindow, LauncherWindow, LeashService> body) => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureHeadless();
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         var s = CoreSettings.Current;
@@ -93,6 +102,38 @@ public sealed class LeashGateCardTests
         b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
     }
+
+    [Fact]
+    public void GateWaitsForTutorialAndStartupDialogs() => Run(true, (shell, launcher, _) =>
+    {
+        var oldTutorial = CoreTutorial.IsActiveProvider;
+        var oldModal = MainShellWindow.IsStartupDialogShowing;
+        var offering = typeof(AppUpdater).GetField("_offering", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var oldOffering = offering.GetValue(null);
+        try
+        {
+            CoreTutorial.IsActiveProvider = () => true;
+            PressTile(launcher);
+            Assert.False(shell.LeashGate!.IsUp);
+            CoreTutorial.IsActiveProvider = () => false;
+            MainShellWindow.IsStartupDialogShowing = true;
+            shell.CheckLeashGate();
+            Assert.False(shell.LeashGate.IsUp);
+            MainShellWindow.IsStartupDialogShowing = false;
+            offering.SetValue(null, true);
+            shell.CheckLeashGate();
+            Assert.False(shell.LeashGate.IsUp);
+            offering.SetValue(null, false);
+            shell.CheckLeashGate();
+            Assert.True(shell.LeashGate.IsUp);
+        }
+        finally
+        {
+            CoreTutorial.IsActiveProvider = oldTutorial;
+            MainShellWindow.IsStartupDialogShowing = oldModal;
+            offering.SetValue(null, oldOffering);
+        }
+    });
 
     [Fact]
     public void PendingPunishment_TileShowsTheGateCard_WithPanicAndCut() => Run(punished: true, (shell, launcher, _) =>
