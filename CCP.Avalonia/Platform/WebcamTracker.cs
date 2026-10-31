@@ -376,6 +376,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     opened = false;
                 }
                 catch (Exception ex) { Log.Warning(ex, "[Webcam] open threw"); opened = false; }
+                // WPF Stop leaves Stopped (:991); cancellation is not a camera denial.
+                if (gen != Volatile.Read(ref _gen))
+                {
+                    LastError = "Webcam tracking was stopped before the camera finished opening.";
+                    StartWasStopped = true;
+                    run.Release();
+                    return false;
+                }
                 if (!opened)
                 {
                     LastError = "No camera could be opened. Check that a webcam is connected, camera access is allowed, and it is not in use by another app.";
