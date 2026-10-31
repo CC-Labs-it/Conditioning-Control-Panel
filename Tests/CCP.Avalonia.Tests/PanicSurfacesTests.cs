@@ -119,6 +119,7 @@ public sealed class PanicSurfacesTests
         "remote-haptics",
         "takeover",
         "program-session",
+        "scheduler",
         "engine",
         "flash",
         "pink-rush",
@@ -227,6 +228,7 @@ public sealed class PanicSurfacesTests
         "leash-task>lock-cards",
         "mantra>engine",
         "remote-haptics>engine",
+        "scheduler>engine",
         "takeover>engine",
         "voice-capture>ai-followups",
     };
