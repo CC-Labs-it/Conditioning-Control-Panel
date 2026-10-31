@@ -76,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Action<double, int>? ShakeFx;
         private static ChaosFxWindow? _fx;
         private static double _lastHeatTint = -1;
+        private static bool _dvdBannerOn;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused;
 
         static ChaosRunHost() => ChaosLessons.LessonCompleted += OnLessonCompleted;
@@ -567,6 +568,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosUnlockCardOverlay.CloseActive();
             _lessonCardPaused = false;
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3230
+            _dvdBannerOn = false;
             ChaosDvdOverlay.CloseActive();   // WPF EndRun (:3232)
             ChaosEffectBannerOverlay.CloseActive();   // WPF EndRun :3233
             ChaosWaveTimerWindow.CloseActive();   // WPF EndRun :3234
@@ -622,14 +624,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _toyButtons.Clear();
         }
 
-        /// <summary>WPF TickActiveToys' toy loop. ponytail: no toy effect runs on this head yet (they
-        /// live with the bubble field), so the glow state drops on the next tick.</summary>
+        /// <summary>WPF TickActiveToys :3020-3027: DVD glow and banner follow the live logos.</summary>
         private static void TickToys()
         {
             if (_state == null) return;
             foreach (var t in ChaosToyRules.Tick(_state.ActiveToys, ChaosRunEngine.TICK_SEC))
                 ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.45f);
-            foreach (var t in _state.ActiveToys) t.IsEffectActive = false;
+            foreach (var t in _state.ActiveToys)
+                t.IsEffectActive = t.Id == "porn_dvd" && ChaosDvdOverlay.AnyToyActive;
+            if (_dvdBannerOn && !ChaosDvdOverlay.AnyToyActive)
+            {
+                ChaosEffectBannerOverlay.End("dvd");
+                _dvdBannerOn = false;
+            }
         }
 
         /// <summary>WPF OnToyKey (UI thread): a toy keybind press. The panic key never fires a toy.</summary>
@@ -650,12 +657,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF UseToy, the gate + cooldown half. ponytail: the effect itself (vibe sweep,
-        /// freeze, DVD, snap, rabbits, e-stim) and the first_play Spark award are not wired yet.</summary>
+        /// freeze, snap, rabbits, e-stim) and the first_play Spark award are not wired yet.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused);
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
+            // WPF ChaosModeService :2722-2734. Existing Core rules own gates and cooldown.
+            if (r == ChaosToyRules.UseResult.Fired && toy.Id == "porn_dvd" && _overlay != null)
+            {
+                int level = ChaosMeta.BoonLevel(toy.Id);
+                double speed = level switch { 1 => 0.7, 2 => 0.85, _ => 1.0 };
+                double scale = level switch { 1 => 0.8, 2 => 0.9, _ => 1.0 };
+                double power = _state.ToyPower.TryGetValue(toy.Id, out var p) ? p : 0;
+                ChaosDvdOverlay.Launch(_overlay, Math.Max(5, power), speed, scale,
+                    count: _state.MaxedBoons.Contains(toy.Id) ? 2 : 1, splitBounces: _state.DvdSplitBounces);
+                ChaosOverlayWindow.ChaosSfx.Play("dvd_launch", 0.55f);
+                ChaosEffectBannerOverlay.Show("dvd", ConditioningControlPanel.Localization.Loc.Get("Chaos_Dvd_Banner"), Color.FromRgb(0xFF, 0x69, 0xB4));
+                _dvdBannerOn = true;
+                _state.PushEvent(ConditioningControlPanel.Avalonia.Controls.IconLabel.ForKey("Chaos_Dvd_Loading").Source);
+            }
         }
 
         private static void RunAgain()
@@ -687,6 +708,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _lessonCardPaused = false;
             StopToys();
             Overlays.ChaosFlashOverlay.CloseActive();   // WPF ForceShutdown :3175
+            _dvdBannerOn = false;
             ChaosDvdOverlay.CloseActive();   // WPF CleanupAfterRun (:3319), ForceShutdown (:3179)
             try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF :3188/:3330
             ChaosEffectBannerOverlay.CloseActive();   // WPF ForceShutdown :3180 / CleanupAfterRun :3320
