@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace ConditioningControlPanel.Services.Quiz
+namespace ConditioningControlPanel.Services.Quiz.Microphone
 {
     /// <summary>
     /// Graded Intake BORROWS THE MIC (owner, 2026-10-13). The mic has one owner at a time. While the

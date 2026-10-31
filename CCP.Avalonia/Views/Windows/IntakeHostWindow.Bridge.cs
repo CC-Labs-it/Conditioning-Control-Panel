@@ -8,6 +8,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Content;
 using ConditioningControlPanel.Services.Quiz;
+using ConditioningControlPanel.Services.Quiz.Microphone;
 using ConditioningControlPanel.Services.Speech;
 using Newtonsoft.Json.Linq;
 using Serilog;

@@ -47,7 +47,7 @@ public sealed class IntakeBridgeTests
     {
         Setup();
         int returned = 0;
-        var mic = new ConditioningControlPanel.Services.Quiz.IntakeMicBorrow(
+        var mic = new ConditioningControlPanel.Services.Quiz.Microphone.IntakeMicBorrow(
             () => true, () => { }, () => returned++);
         var host = new IntakeHostWindow { MicBorrow = mic };
         host.Show();

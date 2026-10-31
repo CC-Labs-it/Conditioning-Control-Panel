@@ -1,9 +1,16 @@
 using System;
-using ConditioningControlPanel.Services.Quiz;
+using ConditioningControlPanel.Services.Quiz.Microphone;
 using Xunit;
 namespace CCP.Core.Tests;
 public class IntakeMicBorrowTests
 {
+    [Fact]
+    public void SharedBorrowDoesNotExportTheWpfTypeIdentity()
+    {
+        Assert.Null(typeof(IntakeMicBorrow).Assembly.GetType("ConditioningControlPanel.Services.Quiz.IntakeMicBorrow"));
+        Assert.Equal("ConditioningControlPanel.Services.Quiz.Microphone", typeof(IntakeMicBorrow).Namespace);
+    }
+
     private sealed class FakeWake
     {
         public bool Armed = true;
