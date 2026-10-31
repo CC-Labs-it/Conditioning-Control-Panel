@@ -548,7 +548,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreSettings.Save();
             PanelWallpaperDuration.IsVisible = !keep;
             if (keep) Shell?.WarnIfWallpaperLibraryEmpty(); // WPF MainWindow.Autonomy.cs:435
-            // Original wallpaper restoration still needs the platform wallpaper service.
+            // ponytail: WPF MainWindow.Autonomy.cs:430-431 restores the original wallpaper on uncheck; needs a platform wallpaper service.
         }
 
         /// <summary>WPF MainWindow.Autonomy.cs:329. The folder is saved for Takeover's wallpaper

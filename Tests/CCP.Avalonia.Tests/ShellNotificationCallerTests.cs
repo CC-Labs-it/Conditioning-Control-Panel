@@ -141,11 +141,19 @@ public sealed class ShellNotificationCallerTests
                 var latest = host.Children.Last();
                 string? opened = null;
                 ExternalOpener.Shell = target => { opened = target; return true; };
-                Click(latest.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "ToastSecondaryAction"));
-                Assert.Null(opened); // The suite sandbox refuses remote browser launches.
-                var source = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(TestSource())!, "..", "..",
-                    "CCP.Avalonia", "Views", "Windows", "MainShellWindow.Notifications.cs"));
-                Assert.Contains("ExternalOpener.Open(DiscordLinks.PackCatalogue)", File.ReadAllText(source));
+                var sink = new RefusedOpenSink();
+                var previousLog = Serilog.Log.Logger;
+                using (var logger = new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger())
+                {
+                    try
+                    {
+                        Serilog.Log.Logger = logger;
+                        Click(latest.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "ToastSecondaryAction"));
+                    }
+                    finally { Serilog.Log.Logger = previousLog; }
+                }
+                Assert.Equal(new[] { new Uri(DiscordLinks.PackCatalogue).Host }, sink.Hosts);
+                Assert.Null(opened); // The suite sandbox still refuses remote browser launches.
             }
             finally
             {
@@ -204,7 +212,16 @@ public sealed class ShellNotificationCallerTests
         });
     }
 
-    private static string TestSource([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+    private sealed class RefusedOpenSink : Serilog.Core.ILogEventSink
+    {
+        public readonly List<string> Hosts = new();
+        public void Emit(Serilog.Events.LogEvent e)
+        {
+            if (e.MessageTemplate.Text == "Sandbox: refused to open {Host}"
+                && e.Properties.TryGetValue("Host", out var value)
+                && value is Serilog.Events.ScalarValue { Value: string host }) Hosts.Add(host);
+        }
+    }
 
     private static void Click(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
