@@ -227,6 +227,8 @@ namespace ConditioningControlPanel.Avalonia
                 return 0;
             }
 
+            // WPF App.xaml.cs:4069: end protection after initialization, not an intermediate splash frame.
+            App.DesktopStartupCompleted = instance.EndStartupPhase;
             var app = BuildAvaloniaApp();
 #if DEBUG
             // Keincheck MCP server on http://127.0.0.1:3001, Debug builds only. Kept out of

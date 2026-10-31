@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using ConditioningControlPanel.Avalonia.Platform;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -75,15 +77,86 @@ public sealed class SplashStartupTests
         finally { splash.CloseImmediate(); shell.Close(); Dispatcher.UIThread.RunJobs(); }
     });
 
+    // WPF App.xaml.cs:2182,4069: intermediate dispatcher pumps do not end startup protection.
+    [Fact]
+    public Task StartupThatPumpsThenBlocksStillAcknowledgesRelaunches() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var savedAck = SingleInstance.ShowAckTimeoutMs;
+        var savedWait = SingleInstance.StaleTakeoverWait;
+        var savedKill = SingleInstance.KillStale;
+        using var blocked = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var suffix = "_test_" + Guid.NewGuid().ToString("N");
+        using var primary = SingleInstance.Claim(suffix, _ => Dispatcher.UIThread.InvokeAsync(() => { }).GetTask());
+        Task<bool>? relaunch = null;
+        try
+        {
+            int kills = 0;
+            SingleInstance.ShowAckTimeoutMs = 100;
+            SingleInstance.StaleTakeoverWait = TimeSpan.FromMilliseconds(10);
+            SingleInstance.KillStale = () => { Interlocked.Increment(ref kills); return 0; };
+            bool pumped = false, completed = false;
+            Dispatcher.UIThread.Post(() => pumped = true);
+            relaunch = Task.Run(() =>
+            {
+                try
+                {
+                    Assert.True(blocked.Wait(TimeSpan.FromSeconds(10)));
+                    using var second = SingleInstance.Claim(suffix, _ => Task.CompletedTask);
+                    Thread.Sleep(300); // Keep the UI blocked beyond the 100 ms acknowledgement timeout.
+                    return second is null;
+                }
+                finally { release.Set(); }
+            });
+            var start = App.StartBehindSplash(null, async step =>
+            {
+                await step(0.2, "Loading settings...");
+                await Dispatcher.Yield(DispatcherPriority.Background); // Model a splash frame without creating fonts.
+                Assert.True(pumped);
+                blocked.Set();
+                Assert.True(release.Wait(TimeSpan.FromSeconds(10)));
+            }, () => null, () => { completed = true; primary!.EndStartupPhase(); });
+            Dispatcher.UIThread.RunJobs();
+            await start;
+            Assert.True(await relaunch);
+            Assert.True(completed);
+            Assert.Equal(0, Volatile.Read(ref kills));
+        }
+        finally
+        {
+            release.Set();
+            try { if (relaunch != null) await relaunch; }
+            finally
+            {
+                SingleInstance.ShowAckTimeoutMs = savedAck;
+                SingleInstance.StaleTakeoverWait = savedWait;
+                SingleInstance.KillStale = savedKill;
+                Dispatcher.UIThread.RunJobs();
+            }
+        }
+    });
+
     [Fact]
     public Task WithoutASplashStartupRunsInline() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
-        bool done = false;
-        var start = App.StartBehindSplash(null, async step => { await step(0.2, "x"); done = true; }, () => null);
+        bool done = false, completed = false;
+        var start = App.StartBehindSplash(null, async step => { await step(0.2, "x"); done = true; }, () => null, () => completed = true);
         Assert.True(start.IsCompletedSuccessfully);   // tests and checks still get a synchronous start
         Assert.True(done);
+        Assert.True(completed);
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FailedStartupNeverSignalsCompletion() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        bool completed = false;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => App.StartBehindSplash(null,
+            _ => Task.FromException(new InvalidOperationException("boom")), () => null, () => completed = true));
+        Assert.False(completed);
     });
 
     [Fact]
@@ -91,17 +164,19 @@ public sealed class SplashStartupTests
     {
         Setup();
         var splash = SplashScreen.ShowOnOwnThread()!;
+        bool completed = false;
         var start = App.StartBehindSplash(splash, async step =>
         {
             await step(0.2, "Loading settings...");
             throw new InvalidOperationException("boom");
-        }, () => null);
+        }, () => null, () => completed = true);
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         Dispatcher.UIThread.RunJobs();
         try
         {
             await Assert.ThrowsAsync<InvalidOperationException>(() => start);
             Assert.False(splash.IsVisible);
+            Assert.False(completed);
             // Recorded for Program.Main to rethrow once the loop ends (closing the splash ends it with 0).
             Assert.Equal("boom", Assert.Throws<InvalidOperationException>(() => App.StartupFailure!.Throw()).Message);
         }
