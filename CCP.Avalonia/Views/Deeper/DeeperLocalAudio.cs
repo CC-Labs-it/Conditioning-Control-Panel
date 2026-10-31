@@ -86,7 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             internal bool IsDisposed => _disposed != 0;
 
             private int _volume = 100;
-            public int Volume { get => _volume; set { _volume = Math.Clamp(value, 0, 100); player.Volume = LibVlcAudio.VlcVolume(_volume / 100f); } }
+            public int Volume { get => _volume; set { lock (Gate) { _volume = Math.Clamp(value, 0, 100); if (Live) player.Volume = LibVlcAudio.VlcVolume(_volume / 100f); } } }
             public event Action? Ended;
             public event Action? Failed;
 
@@ -149,7 +149,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 lock (Gate)
                 {
-                    if (IsDisposed || _pendingMs <= 0) return;
+                    if (IsDisposed) return;
+                    player.Volume = LibVlcAudio.VlcVolume(_volume / 100f); if (_pendingMs <= 0) return;
                     player.Time = _pendingMs;
                     _pendingMs = 0;
                 }

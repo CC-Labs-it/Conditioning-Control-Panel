@@ -40,8 +40,7 @@
 //   Drag and drop - PORTED below: Window_DragEnter/Over/Leave/Drop, ImportDroppedFilesAsync,
 //   UpdateDropOverlay, HandleAssetDropAsync, over Core DropRules (the DetectDropType lift both
 //   heads call). Session/preset drops go to PresetsTabView; .ccpmod to HandleModDropAsync
-//   (MainShellWindow.ModCatalogue.cs). Single-media Play/Edit/Library choices reuse the existing
-//   Deeper player/editor; enhancement imports use MainShellWindow.DeeperImport.cs.
+//   (MainShellWindow.ModCatalogue.cs). Play/Edit reuse Deeper; enhancements use MainShellWindow.DeeperImport.cs.
 //
 //   The two global hotkeys - ApplyGlobalChatHotkey, ApplyGlobalCameraHotkey, ApplyCameraShortcutTo,
 //   ParseModifiers, FormatCameraShortcut, RefreshChatShortcutLabel, RefreshCameraShortcutLabel,
@@ -136,13 +135,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                             break;
                         case Dialogs.MediaDropChoice.Edit:
                             // WPF MainWindow.DeeperTab.cs:649-660: blank project, no saved file path.
-                            using (var library = new ConditioningControlPanel.Services.Deeper.EnhancementLibrary())
-                            {
-                                var type = DropRules.AssetVideoExtensions.Contains(Path.GetExtension(files[0]))
-                                    ? ConditioningControlPanel.Models.Deeper.MediaTypes.Video
-                                    : ConditioningControlPanel.Models.Deeper.MediaTypes.Audio;
-                                OpenDeeperEditor(library.CreateBlank(type, files[0]), null);
-                            }
+                            var type = DropRules.AssetVideoExtensions.Contains(Path.GetExtension(files[0])) ? ConditioningControlPanel.Models.Deeper.MediaTypes.Video : ConditioningControlPanel.Models.Deeper.MediaTypes.Audio;
+                            OpenDeeperEditor(new ConditioningControlPanel.Models.Deeper.Enhancement { MediaType = type, MediaSource = files[0] }, null);
                             break;
                         case Dialogs.MediaDropChoice.Library:
                             await HandleAssetDropAsync(files);

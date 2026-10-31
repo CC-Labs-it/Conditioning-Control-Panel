@@ -148,7 +148,7 @@ public sealed class DeeperRowsTests
         public long Length => 6000;
         public int Stops;
         public bool Starts = true;
-        public bool Play() { State = LibVLCSharp.Shared.VLCState.Opening; return Starts; }
+        public bool Play() { Volume = 100; State = LibVLCSharp.Shared.VLCState.Opening; return Starts; }
         public void SetPause(bool pause) => State = pause ? LibVLCSharp.Shared.VLCState.Paused : LibVLCSharp.Shared.VLCState.Playing;
         public void Stop() { Stops++; State = LibVLCSharp.Shared.VLCState.Stopped; }
     }
@@ -158,10 +158,11 @@ public sealed class DeeperRowsTests
     {
         var e = new FakeEngine();
         var t = new DeeperLocalAudio.Transport(e, 12000, () => { });
-        t.Volume = 135; Assert.Equal(100, e.Volume);
+        e.State = LibVLCSharp.Shared.VLCState.Playing; t.Volume = 135; Assert.Equal(100, e.Volume);
         t.Volume = -1; Assert.Equal(0, e.Volume);
-        foreach (var (linear, native) in new[] { (25, 63), (50, 79), (75, 91) })
+        foreach (var (linear, native) in new[] { (25, 63), (50, 79), (75, 91), (80, 93) })
         { t.Volume = linear; Assert.Equal(native, e.Volume); Assert.Equal(linear, t.Volume); }
+        e.State = LibVLCSharp.Shared.VLCState.NothingSpecial;
         Assert.Equal(12, t.DurationSeconds);              // header estimate until playing
 
         // Seek before playback: taken by the first Playing, never again.
@@ -169,12 +170,15 @@ public sealed class DeeperRowsTests
         t.Play();
         e.State = LibVLCSharp.Shared.VLCState.Playing;
         t.OnPlaying();
+        Assert.Equal(93, e.Volume);
         Assert.Equal(3000, e.Time);
         Assert.Equal(6, t.DurationSeconds);               // exact length once playing
         e.Time = 4000;
         t.Pause();
         t.Play();
+        e.Volume = 100; // The new output on resume also loses the earlier native level.
         t.OnPlaying();
+        Assert.Equal(93, e.Volume);
         Assert.Equal(4000, e.Time);
 
         // Seek while playing, play on, pause, resume: resume must not jump back to the seek.
