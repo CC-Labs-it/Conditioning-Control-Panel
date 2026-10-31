@@ -100,6 +100,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var cfg = config ?? ChaosRunConfig.FromSettings();
             try
             {
+                // WPF ChaosArt.cs:58-69: resolve optional art in the head.
+                ChaosRunState.IconResolver = (folder, id) => ChaosEffectBannerOverlay.ResolveArt(id, folder);
                 _state = new ChaosRunState(cfg);
                 _active = true;
                 _lastHeatTint = -1;
@@ -124,15 +126,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void BeginRun()
         {
             if (!_active || _state == null || _spawning) return;
-            ChaosRunEffects.ApplyLifetimeBoons(_state);
-            _hud?.SetPreRunExpanded(false);
-            _hud?.SetClockVisible(_state.ShowWaveTimer);
             // WPF BeginRun :417-420: the run-pick ribbon, rebuilt live on every drafted pick.
             var picks = _state.RunPickTiles;
             _boonBar = ChaosBoonBarOverlay.ForRun();
             _boonBar.SetPicks(picks);
             _boonBar.Show();
             picks.CollectionChanged += (_, _) => _boonBar?.SetPicks(picks);
+            // WPF ChaosModeService.cs:422-435: the loadout pick enters before wave 1.
+            // Scripted first descents ignore even a stale equipped id.
+            var equipped = _state.Config.ScriptedFirstRun ? null : ChaosMeta.State.EquippedStartBoon;
+            var boon = ChaosBoonPool.All.FirstOrDefault(b => b.Id == equipped);
+            if (boon != null)
+            {
+                _state.ApplyBoon(boon);
+                ChaosMeta.MarkDiscovered("boon:" + boon.Id);
+                ChaosAnnouncerOverlay.Announce($"◈ {boon.Name}", ChaosAnnounceKind.Mantra, artKey: boon.Id);
+            }
+            ChaosRunEffects.ApplyLifetimeBoons(_state);
+            _hud?.SetPreRunExpanded(false);
+            _hud?.SetClockVisible(_state.ShowWaveTimer);
             // WPF :450 Pocket Watch: birth the wave-countdown window now (keep-alive contract).
             if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
             _state.StartShields = _state.Shields;

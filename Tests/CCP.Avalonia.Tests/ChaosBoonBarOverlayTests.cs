@@ -17,12 +17,124 @@ public sealed class ChaosBoonBarOverlayTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
 
     private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3 };
+
+    [Fact]
+    public async Task Hub_only_equips_discovered_mantras_and_can_unequip_them()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var hub = new ChaosHubWindow();
+            var host = new Window { Width = 500, Height = 150 };
+            Assert.Equal(ChaosBoonPool.All.Count, hub.FindControl<StackPanel>("MantrasHost")!.Children.Count);
+            var boon = ChaosBoonPool.All.First(b => !b.IsCurse);
+            var curse = ChaosBoonPool.All.First(b => b.IsCurse);
+            var meta = ChaosMeta.State;
+            var equipped = meta.EquippedStartBoon;
+            var discovered = meta.DiscoveredCodexIds.ToArray();
+            void Click(ChaosBoon b)
+            {
+                host.Content = hub.MantraRow(b);
+                host.Show();
+                host.UpdateLayout();
+                host.MouseDown(new Point(30, 30), global::Avalonia.Input.MouseButton.Left);
+                host.MouseUp(new Point(30, 30), global::Avalonia.Input.MouseButton.Left);
+            }
+            try
+            {
+                meta.EquippedStartBoon = null;
+                meta.DiscoveredCodexIds.Remove("boon:" + boon.Id);
+                Click(boon);
+                Assert.Null(meta.EquippedStartBoon);
+                ChaosMeta.MarkDiscovered("boon:" + boon.Id);
+                Click(boon);
+                Assert.Equal(boon.Id, meta.EquippedStartBoon);
+                Assert.Equal(boon.Id, ChaosMetaStore.Load().EquippedStartBoon);
+                ChaosMeta.MarkDiscovered("boon:" + curse.Id);
+                Click(curse);
+                Assert.Equal(boon.Id, meta.EquippedStartBoon);
+                Click(boon);
+                Assert.Null(meta.EquippedStartBoon);
+                Assert.Null(ChaosMetaStore.Load().EquippedStartBoon);
+            }
+            finally
+            {
+                host.Close();
+                hub.Close();
+                meta.EquippedStartBoon = equipped;
+                meta.DiscoveredCodexIds.Clear();
+                meta.DiscoveredCodexIds.UnionWith(discovered);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF ChaosModeService.cs:422-435, ChaosBoonBarOverlay.cs:179-192, ChaosArt.cs:58-69.
+    [Fact]
+    public async Task Equipped_boon_lands_with_cached_art_and_scripted_or_invalid_loadouts_stay_empty()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            ChaosRunState.IconResolver = null; // included in the suite's static seam restore
+            var boon = ChaosBoonPool.All.Last(b => !b.IsCurse);
+            var meta = ChaosMeta.State;
+            var equipped = meta.EquippedStartBoon;
+            var path = System.IO.Path.Combine(global::ConditioningControlPanel.CorePaths.UserData,
+                "assets", "assets", "Chaos", "boons", boon.Id + ".png");
+            var prior = System.IO.File.Exists(path) ? System.IO.File.ReadAllBytes(path) : null;
+            try
+            {
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+                using (var bitmap = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(2, 2),
+                    new Vector(96, 96), global::Avalonia.Platform.PixelFormat.Bgra8888, global::Avalonia.Platform.AlphaFormat.Premul))
+                    bitmap.Save(path);
+                meta.EquippedStartBoon = boon.Id;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var pick = Assert.Single(ChaosRunHost.State!.RunPickTiles);
+                Assert.Equal(boon.Id, pick.Id);
+                Assert.Contains(ChaosRunHost.State.ActiveBoons, b => b.Id == boon.Id);
+                var tile = (Border)Assert.Single(ChaosRunHost.BoonBar!.Row.Children);
+                var image = Assert.IsType<Image>(((Panel)tile.Child!).Children[0]);
+                Assert.Same(pick.Icon, image.Source);
+                Assert.NotNull(image.Source);
+                Assert.Same(image.Source, ChaosEffectBannerOverlay.ResolveArt(boon.Id, "boons"));
+                Assert.Contains("boon:" + boon.Id, meta.DiscoveredCodexIds);
+                ChaosRunHost.ForceShutdown();
+
+                var scripted = Cfg();
+                scripted.ScriptedFirstRun = true;
+                ChaosRunHost.StartRun(scripted);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.Empty(ChaosRunHost.State!.RunPickTiles);
+                Assert.False(ChaosRunHost.BoonBar!.Pill.IsVisible);
+                ChaosRunHost.ForceShutdown();
+
+                meta.EquippedStartBoon = "unknown-boon";
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.Empty(ChaosRunHost.State!.RunPickTiles);
+                Assert.Null(ChaosEffectBannerOverlay.ResolveArt("unknown-boon", "boons"));
+                ChaosRunHost.State.ApplyBoon(ChaosBoonPool.All.First(b => b.IsCurse));
+                var fallback = (Border)Assert.Single(ChaosRunHost.BoonBar!.Row.Children);
+                Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.IconGlyph>(((Panel)fallback.Child!).Children[0]);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                meta.EquippedStartBoon = equipped;
+                if (prior == null) System.IO.File.Delete(path); else System.IO.File.WriteAllBytes(path, prior);
+            }
+            return Task.CompletedTask;
+        });
+    }
 
     [Fact]
     public async Task Picks_land_live_in_order_and_panic_closes_the_ribbon()
