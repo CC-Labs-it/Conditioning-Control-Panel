@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -36,7 +37,8 @@ public sealed class LockdownVeilTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<AvApp>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .UseSkia().WithInterFont().With(AppFonts.Options(systemEmoji: false))
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
@@ -483,6 +485,13 @@ public sealed class LockdownVeilTests
         finally { CoreSettings.Current.HideLockdownTimer = false; }
     });
 
+    private sealed class FlashClock : TimeProvider
+    {
+        public long Milliseconds;
+        public override long TimestampFrequency => 1000;
+        public override long GetTimestamp() => Milliseconds;
+    }
+
     private static string? Hex(object? brush) => (brush as global::Avalonia.Media.ISolidColorBrush)?.Color.ToUInt32().ToString("x8");
 
     /// <summary>WPF ApplyLockdownTheme / RestoreLockdownTheme / PlayLockdownActivationAnimation
@@ -491,6 +500,10 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        // Frame() drains real dispatcher timers. Under CI load it can take longer than the
+        // whole 600 ms flash, so its elapsed time must share the clock we step below.
+        var clock = new FlashClock { Milliseconds = 10000 };
+        shell.LockdownFlashTime = clock;
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -510,12 +523,15 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
+        Assert.Equal(1, flash.Opacity);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        clock.Milliseconds += 300;
+        shell.TickLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Milliseconds += 300;
+        shell.TickLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 
