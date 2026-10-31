@@ -36,6 +36,25 @@ public sealed class SessionSurfacesTests
         },
     };
 
+    [Theory]
+    [InlineData(true, true, false, true)]
+    [InlineData(false, true, false, false)]
+    [InlineData(true, false, false, false)]
+    [InlineData(true, true, true, false)]
+    public Task TasteLineFollowsLiveCompletionAndTier(bool completed, bool live, bool premium, bool expected) => Run(() =>
+    {
+        var old = ConditioningControlPanel.CoreEntitlement.HasPremiumProvider;
+        ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => premium;
+        try
+        {
+            var window = new SessionCompleteWindow(Log("Run", completed), playSound: live);
+            Assert.Equal(expected, window.FindControl<TextBlock>("TxtTasteLine")!.IsVisible);
+            Assert.Equal(Loc.Get("conv_session_taste"), Text(window, "TxtTasteLine"));
+            window.Close();
+        }
+        finally { ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = old; }
+    });
+
     [Fact]
     public Task SessionCompleteWindowShowsCoreSessionLog() => Run(() =>
     {
