@@ -1,6 +1,11 @@
 using System;
 using ConditioningControlPanel;
 using System.Linq;
+using System.Collections.Generic;
+using System.IO;
+using Avalonia.Controls.Documents;
+using Avalonia.Controls.Shapes;
+using Avalonia.Media;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
@@ -148,6 +153,82 @@ public sealed class FriendNoticesTests
             StartupLadder.Inbox.Remove("friends-requests-waiting");
             FriendNotices.CloseAll();
         }
+        return Task.CompletedTask;
+    });
+    // WPF FriendNotices.cs:278; LandingChrome.cs:35-77. Exercise the request delivery path.
+    [Theory]
+    [InlineData("/friends/avatar/u_req.png", true)]
+    [InlineData("https://elsewhere.example/a.png", false)]
+    [InlineData(null, false)]
+    [InlineData("/friends/avatar/broken.png", false)]
+    public Task RequestNoticeUsesOnlyProxyPicturesAndKeepsInitials(string? path, bool loads) =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var panel = new Window();
+        var urls = new List<string>();
+        byte[] png;
+        using (var stream = global::Avalonia.Platform.AssetLoader.Open(new Uri(
+            "avares://CCP.Avalonia/Resources/" + LandingRules.KnockArt(new InboxItem(
+                "x", SendKind.Invite, "f", "Friend", null, null, InviteDestination.Ramp, null, null,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5))))))
+        using (var ms = new MemoryStream()) { stream.CopyTo(ms); png = ms.ToArray(); }
+        KnockCard.FetchPicture = url =>
+        {
+            urls.Add(url);
+            return path?.Contains("broken") == true
+                ? Task.FromException<byte[]>(new IOException("unavailable")) : Task.FromResult(png);
+        };
+        try
+        {
+            panel.Show();
+            FriendsLanding.Anchor = () => panel;
+            CoreSettings.Current.FriendNotificationsEnabled = true;
+            FriendsLanding.AnnounceRequest(new FriendRequest("req", "Friend", path, null, DateTimeOffset.UtcNow), false);
+            var w = Assert.IsType<FriendNotices>(FriendNotices.Current);
+            Assert.Contains(w.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "F");
+            var face = w.GetVisualDescendants().OfType<Ellipse>().SingleOrDefault(e => e.Fill is ImageBrush);
+            Assert.Equal(loads, face != null);
+            if (face != null) { Assert.Equal(1, face.Opacity); Assert.Equal(34, face.Width); }
+            Assert.Equal(path?.StartsWith('/') == true ? 1 : 0, urls.Count);
+            if (urls.Count > 0) Assert.Equal("https://codebambi-proxy.vercel.app" + path, urls[0]);
+        }
+        finally { FriendNotices.CloseAll(); panel.Close(); }
+        return Task.CompletedTask;
+    });
+
+    // WPF FriendNotices.cs:283-325: a repeat keeps its time in the heading and accents the count.
+    [Fact]
+    public Task NoticeTimeSharesTheHeadingAndOnlyWordAndCountAreAccented() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        try
+        {
+            var at = DateTimeOffset.UtcNow.AddMinutes(-2);
+            for (int i = 0; i < 2; i++)
+                FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "f", "Friend", at, 6000),
+                    new NoticeLook { Line = "poked you:", Word = "hello", Pink = true });
+            var w = FriendNotices.Current!;
+            var name = w.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "Friend");
+            var heading = Assert.IsType<DockPanel>(name.Parent);
+            Assert.Equal(FontWeight.SemiBold, name.FontWeight);
+            var ago = Assert.IsType<TextBlock>(heading.Children[0]);
+            Assert.Equal(Dock.Right, DockPanel.GetDock(ago));
+            Assert.Equal(10.5, ago.FontSize);
+            Assert.Equal(new Thickness(6, 0, 0, 0), ago.Margin);
+            var line = w.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Inlines?.OfType<Run>().Any() == true);
+            var runs = line.Inlines!.OfType<Run>().ToArray();
+            Assert.Equal(3, runs.Length);
+            Assert.Equal("poked you:", runs[0].Text);
+            Assert.Equal(FriendsDrawer.Muted, line.Foreground);
+            Assert.Equal(" hello", runs[1].Text);
+            Assert.Equal(FriendsDrawer.Pink, runs[1].Foreground);
+            Assert.Equal(FontWeight.SemiBold, runs[1].FontWeight);
+            Assert.Equal(FriendNoticeRules.CountSuffix(2), runs[2].Text);
+            Assert.Equal(FriendsDrawer.Gold, runs[2].Foreground);
+            Assert.Equal(FontWeight.SemiBold, runs[2].FontWeight);
+        }
+        finally { FriendNotices.CloseAll(); }
         return Task.CompletedTask;
     });
     private static Point Centre(Control c, Window w) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), w)!.Value;
