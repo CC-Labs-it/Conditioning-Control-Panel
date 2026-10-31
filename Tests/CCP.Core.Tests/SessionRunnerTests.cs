@@ -147,14 +147,14 @@ public sealed class SessionRunnerTests : IDisposable
         _runner.Pause();
         _runner.Resume();
         Assert.Equal(new[] { true, false }, paused);
-        Assert.Equal(" [PAUSED]", SessionClockRules.PauseMark(true, "PAUSED"));
-        Assert.False(SessionClockRules.ResumeStartsEngine(false, true));
+        Assert.Equal(" [PAUSED]", SessionClockSafety.PauseMark(true, "PAUSED"));
+        Assert.False(SessionClockSafety.ResumeStartsEngine(false, true));
     }
 
     [Fact]
     public void StepFailuresReportOncePerStepAndResetForTheNextSession()
     {
-        var failures = new SessionClockRules.StepFailures();
+        var failures = new SessionClockSafety.StepFailures();
         Assert.True(failures.Note("tick:ramp"));
         Assert.False(failures.Note("tick:ramp"));
         Assert.True(failures.Note("stop"));

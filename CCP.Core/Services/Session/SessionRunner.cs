@@ -30,8 +30,8 @@ namespace ConditioningControlPanel.Services
     /// </summary>
     public sealed class SessionRunner
     {
-        private readonly SessionClockRules.StepFailures _stepFailures = new();
-        private void Step(string name, Action action) => SessionClockRules.RunStep(action, ex =>
+        private readonly SessionClockSafety.StepFailures _stepFailures = new();
+        private void Step(string name, Action action) => SessionClockSafety.RunStep(action, ex =>
         {
             if (_stepFailures.Note(name)) Log.Error(ex, "Session step failed: {Step}", name);
         });
@@ -299,7 +299,7 @@ namespace ConditioningControlPanel.Services
         // lock-card window. This runner has no session Mind Wipe, so the global one stays off.
         public void ResumeAfterEngineStart()
         {
-            if (!SessionClockRules.StartResumesParkedSession(CoreEngine.IsRunning, IsRunning, IsPaused)) return;
+            if (!SessionClockSafety.StartResumesParkedSession(CoreEngine.IsRunning, IsRunning, IsPaused)) return;
             Step("resume:features", Resume);
             foreach (var name in _deferred.PendingNames.Distinct().ToList())
                 Step("resume:" + name, () =>

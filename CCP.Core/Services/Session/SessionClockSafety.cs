@@ -3,7 +3,7 @@ using System;
 namespace ConditioningControlPanel.Services
 {
     /// <summary>Clock faces, user resume policy and guarded session steps.</summary>
-    public static class SessionClockRules
+    public static class SessionClockSafety
     {
         /// <summary>What a session clock is doing right now.</summary>
         public enum ClockFace

@@ -113,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 StartEffect(() =>   // effects come back, so the portal panic bind comes first
                 {
                     if (App.Sessions is not { IsPaused: true } r) return;
-                    if (SessionClockRules.ResumeStartsEngine(CoreEngine.IsRunning, RemoteControllerConnected)) StartEngineFromUser();
+                    if (SessionClockSafety.ResumeStartsEngine(CoreEngine.IsRunning, RemoteControllerConnected)) StartEngineFromUser();
                     else r.Resume();
                     PinkFilterOverlay.Refresh(this);
                     SpiralOverlay.Refresh(this);
@@ -162,7 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (spiralKey != _spiralTickKey) { _spiralTickKey = spiralKey; SpiralOverlay.Refresh(this); }
             if (Named<Button>("BtnPauseSession") is { IsVisible: false }) SetPauseButton(false);   // WPF OnSessionStarted
             SetPauseButton(runner.IsPaused);
-            var pauseMark = SessionClockRules.PauseMark(runner.IsPaused, Loc.Get("label_paused"));
+            var pauseMark = SessionClockSafety.PauseMark(runner.IsPaused, Loc.Get("label_paused"));
             var remaining = runner.Remaining;
             var showCountdown = CoreSettings.Current.ShowSessionCountdown != false;
             Named<Tabs.PresetsTabView>("PresetsTab")?.SetSessionButtonLabel(SessionClockLabel.StopButton(
