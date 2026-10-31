@@ -5,7 +5,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
-using Avalonia.Media.Transformation;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -36,8 +38,13 @@ public sealed class DashboardLogoClickTests
     public Task DeeperHomeDoorNavigatesWithoutOpeningAnEditor() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        AvApp.StartMods();
+        var dir = Directory.CreateTempSubdirectory("ccp-deeper-art-");
+        var png = Path.Combine(dir.FullName, "mod.png");
+        using (var bmp = new WriteableBitmap(new PixelSize(2, 1), new Vector(96, 96))) bmp.Save(png);
+        var previousArt = CoreModArt.OverridePathProvider;
         var shell = new MainShellWindow();
         try
         {
@@ -46,6 +53,14 @@ public sealed class DashboardLogoClickTests
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("dash_deeper_editor_title"), card.Title);
             Assert.False(card.DimWhenInactive);
             Assert.Null(card.TierBadge);
+            var bundled = Assert.IsType<Bitmap>(card.Icon).PixelSize;
+            void Activate() { CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false)); Dispatcher.UIThread.RunJobs(); }
+            CoreModArt.OverridePathProvider = p => p == "features/deeper_editor.png" ? png : null;
+            Activate();
+            Assert.Equal(new PixelSize(768, 384), Assert.IsType<Bitmap>(card.Icon).PixelSize);
+            CoreModArt.OverridePathProvider = _ => null;
+            Activate();
+            Assert.Equal(bundled, Assert.IsType<Bitmap>(card.Icon).PixelSize);
             var windows = Application.Current!.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life
                 ? life.Windows.Count : 0;
             card.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(
@@ -54,7 +69,7 @@ public sealed class DashboardLogoClickTests
             if (Application.Current.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime after)
                 Assert.Equal(windows, after.Windows.Count);
         }
-        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        finally { shell.Close(); CoreModArt.OverridePathProvider = previousArt; dir.Delete(true); Dispatcher.UIThread.RunJobs(); }
         return Task.CompletedTask;
     });
 
@@ -62,8 +77,9 @@ public sealed class DashboardLogoClickTests
     public Task WordmarkClicksTrackPulseAndReachTheEasterEgg() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var clockWas = BeatLoop.Time; var clock = new SteppedTime();
         var s = CoreSettings.Current;
         var (motionWas, achWas, readersWas) = (s.MotionLevel, AchievementsProp.GetValue(null), SettingsTabView.EasterEggReaders);
         var dir = Directory.CreateTempSubdirectory("ccp-logo-click-").FullName;
@@ -88,9 +104,15 @@ public sealed class DashboardLogoClickTests
             Click();
             Assert.Equal(1, engine.Progress.AvatarClickCount);
             Assert.Null(logo.RenderTransform);   // no pulse with motion off, as WPF's AllowTransitions gate
-            s.MotionLevel = MotionLevel.Full;
-            Click();   // the pulse: scale(1.05), back to scale(1) 80 ms later (either may be current under CI load)
-            Assert.IsType<TransformOperations>(logo.GetBaseValue(Visual.RenderTransformProperty).Value);
+            s.MotionLevel = MotionLevel.Full; BeatLoop.Time = clock;
+            void Step(int ms) { clock.Advance(TimeSpan.FromMilliseconds(ms)); BeatLoop.StepAll(); }
+            double Scale() => Assert.IsType<ScaleTransform>(logo.RenderTransform).ScaleX;
+            Click(); Step(60); Assert.Equal(1.0375, Scale(), 4);
+            Click(); Assert.Equal(1, Scale()); // restart, replacing the first pulse
+            Step(20); Assert.Equal(1.0125, Scale(), 4); // first click's old reset time
+            Step(60); Assert.Equal(1.05, Scale(), 4);
+            Step(20); Assert.Equal(1.0375, Scale(), 4); // first pulse would now finish
+            Step(60); Assert.Equal(1, Scale());
             // Clicks through the shell take seconds each on a loaded runner, so the windows are primed rather
             // than clicked out (thresholds: AchievementEngineTests.AvatarClicksUnlockAtWpfThresholds).
             (engine.Progress.AvatarClickStartTime, engine.Progress.AvatarClickCount) = (DateTime.Now, 19);
@@ -109,7 +131,7 @@ public sealed class DashboardLogoClickTests
         finally
         {
             shell.Close(); Dispatcher.UIThread.RunJobs();
-            s.MotionLevel = motionWas;
+            BeatLoop.Time = clockWas; s.MotionLevel = motionWas;
             AchievementsProp.SetValue(null, achWas);
             SettingsTabView.EasterEggReaders = readersWas;
             try { Directory.Delete(dir, true); } catch { }

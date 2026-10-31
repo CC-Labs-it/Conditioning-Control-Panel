@@ -327,22 +327,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PulseLogo();
         }
 
-        /// <summary>WPF's quick pulse: ImgLogo scales 1.0 -> 1.05 over 80 ms and back (AutoReverse),
-        /// about its centre. A transition on RenderTransform, never an Animation on a Transform (P82).</summary>
+        private Helpers.BeatLoop? _logoPulse;
+        // WPF MainWindow.UiUpdates.cs:1229-1248: replace the pulse, starting at 1 each click.
         private void PulseLogo()
         {
+            _logoPulse?.Stop();
             ImgLogo.RenderTransformOrigin = RelativePoint.Center;
-            ImgLogo.Transitions ??= new global::Avalonia.Animation.Transitions
+            var scale = new ScaleTransform(1, 1);
+            ImgLogo.RenderTransform = scale;
+            _logoPulse = new Helpers.BeatLoop(ImgLogo, t =>
             {
-                new global::Avalonia.Animation.TransformOperationsTransition
-                {
-                    Property = Visual.RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(80),
-                },
-            };
-            ImgLogo.RenderTransform = global::Avalonia.Media.Transformation.TransformOperations.Parse("scale(1.05)");
-            global::Avalonia.Threading.DispatcherTimer.RunOnce(
-                () => ImgLogo.RenderTransform = global::Avalonia.Media.Transformation.TransformOperations.Parse("scale(1)"),
-                TimeSpan.FromMilliseconds(80));
+                var k = Math.Clamp(t / 0.08, 0, 2);
+                scale.ScaleX = scale.ScaleY = 1 + 0.05 * (k <= 1 ? k : 2 - k);
+                if (k >= 2) _logoPulse?.Stop();
+            });
+            _logoPulse.OnParked = () => { _logoPulse.Stop(); scale.ScaleX = scale.ScaleY = 1; };
+            _logoPulse.Start();
         }
 
         /// <summary>WPF ShowEasterEgg (MainWindow.UiUpdates.cs:1919): the server counts this reader
