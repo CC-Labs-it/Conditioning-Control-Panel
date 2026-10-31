@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -40,7 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
-    /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
+    /// freeze hold and the perf backoff on the cadence; only the GIF cascade payload firer is wired; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off);
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
@@ -63,6 +64,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosBoonBarOverlay? _boonBar;
         private static DispatcherTimer? _runTimer, _spawnTimer;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
+        private static DateTime _heavyUntilUtc = DateTime.MinValue;
+        // WPF ChaosModeService.cs:2155-2156: reality plus a floor for pending selection.
+        internal static bool HeavyEffectActive => CoreEngine.Video?.IsPlaying == true
+            || ChaosGifCascadeOverlay.IsRaining || BubbleOverlay.Field.Clock() < _heavyUntilUtc;
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
         internal static Random Rng = new();
@@ -139,6 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             StartToys();
             _waveDetonatedAt = _state.Detonated;
             _invulnUntilUtc = DateTime.MinValue;
+            _heavyUntilUtc = DateTime.MinValue; // WPF ChaosModeService.cs:405
             ChaosRunLessons.OnRunStarted();   // WPF :399
             // ponytail: NotifyChaosRunStarted bark (WPF :389) -> chaos-payout-barks.
             _spawning = true;
@@ -281,10 +287,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 case "click": _state.PushEvent("💥 a tap isn't a hold"); break;
                 case "release": _state.PushEvent("💥 you let go"); break;
             }
-            // ponytail: WPF FirePayloadForDetonation's ambient remap and one-heavy-at-a-time gate
-            // land with the real payload firer (the Avalonia firer is a logging no-op).
+            // Ambient intrusive-payload remapping remains unported.
             EffectLabel(b);   // WPF Detonate :4862
-            FireScaledPayload(spec.Payload);
+            FirePayloadForDetonation(spec.Payload);
             ChaosRunLessons.OnDetonation();   // silk_touch: the loop is no longer clean
             string name = spec.Payload.DisplayName;
             double s = spec.Strength / 100.0;
@@ -358,6 +363,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!ChaosFieldMath.ShowsPopScore(_state?.ShowPopScores == true, pts)) return;
             PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
                 "+" + ((long)pts).ToString("N0"), Color.FromRgb(0xFF, 0xE9, 0xA0));
+        }
+
+        // WPF ChaosModeService.cs:2295-2322. Drop only the effect, retaining the
+        // detonation's shield/streak consequences. Reserve BEFORE the asynchronous pool pick.
+        private static void FirePayloadForDetonation(EffectPayload payload)
+        {
+            bool heavy = payload.Kind is EffectBubblePayloadKind.Video or EffectBubblePayloadKind.GifCascade;
+            if (heavy && HeavyEffectActive)
+            {
+                Log.Information("Chaos: dropped {Kind} detonation: a heavy effect is already running", payload.Kind);
+                _state?.PushEvent(Loc.GetF("chaos_heavy_fizzle", payload.DisplayName));
+                return;
+            }
+            if (heavy)
+                _heavyUntilUtc = BubbleOverlay.Field.Clock().AddSeconds(
+                    payload.Kind == EffectBubblePayloadKind.GifCascade
+                        ? GifCascadePayload.DURATION_SEC + 5 : VideoPayload.SEGMENT_SEC + 3);
+            FireScaledPayload(payload);
         }
 
         /// <summary>WPF FireScaledPayload (:2267) minus the lesson hook.</summary>
@@ -485,6 +508,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            _heavyUntilUtc = DateTime.MinValue; // also reset when already idle
             ChaosUnlockCardOverlay.CloseActive();
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
@@ -542,6 +566,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // WPF :3211: final-loop + end-of-descent lessons (a quit didn't run the full course).
             ChaosRunLessons.OnRunCompleted(_state.Shields, _state.Config.Difficulty, ranFullCourse);
             _spawning = false;
+            _heavyUntilUtc = DateTime.MinValue;
             _runTimer?.Stop();
             EndField();
             StopToys();
@@ -683,6 +708,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF CleanupAfterRun :3322 (also reached by ForceShutdown / panic).</summary>
         private static void CleanupAfterRun()
         {
+            _heavyUntilUtc = DateTime.MinValue;
             ChaosUnlockCardOverlay.CloseActive();
             _lessonCardPaused = false;
             StopToys();

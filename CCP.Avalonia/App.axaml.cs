@@ -394,6 +394,25 @@ namespace ConditioningControlPanel.Avalonia
             catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] {Id} hook", id); }
         }
 
+        // WPF Services/Chaos/EffectPayloadFiring.cs:26,225-237. Keep other payloads logged
+        // until their runners land; the existing bubble pop/fuse path calls EffectPayload.Fire.
+        internal static void StartChaosPayloads()
+        {
+            Services.Chaos.EffectPayload.Firer = p =>
+            {
+                if (p is Services.Chaos.GifCascadePayload)
+                    Views.Chaos.ChaosGifCascadeOverlay.Show(
+                        Services.Chaos.GifCascadePayload.SPAWN_RATE_PER_SEC,
+                        Services.Chaos.GifCascadePayload.DURATION_SEC * Services.Chaos.EffectPayload.GlobalDurationMult,
+                        Services.Chaos.GifCascadePayload.GIF_SIZE,
+                        Services.Chaos.GifCascadePayload.FALL_SPEED,
+                        Services.Chaos.GifCascadePayload.OPACITY,
+                        Services.Chaos.GifCascadePayload.START_SCALE);
+                else
+                    Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", p.DisplayName);
+            };
+        }
+
         public override void Initialize()
         {
             AvaloniaXamlLoader.Load(this);
@@ -517,10 +536,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
-                // P31: WPF seeds EffectPayloadFiring. ponytail: no chaos payload effects on this head yet
-                // (next lane chaos-bubble-field-b); log so a fired payload is never silently dropped.
-                Services.Chaos.EffectPayload.Firer = p =>
-                    Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", p.DisplayName);
+                StartChaosPayloads();
                 LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
