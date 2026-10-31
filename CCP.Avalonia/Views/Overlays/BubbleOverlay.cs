@@ -283,6 +283,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        /// <summary>WPF BubbleService.cs:295-324, :4645-4668: toys snap lives, and the
+        /// capstone also pays treats. Pickups and instant-pop immune bubbles are never swept.</summary>
+        internal static void SnapChaosField(bool includeTreats)
+        {
+            if (_chaosPopped == null || Field.HoldChaos) return;
+            foreach (var b in Field.Bubbles.ToArray())
+            {
+                var spec = b.Spec;
+                if (b.Popping || spec == null || spec.IsDarter || spec.IsFreeze
+                    || spec.IsTease || spec.IsBrittle || spec.IsChaperoneLive) continue;
+                if (b.IsLiveThreat)
+                {
+                    if (b.Snap()) Field.ChaosDefused?.Invoke(b);
+                }
+                else if (includeTreats) PopChaos(b);
+            }
+            RequestFrame();
+        }
+
         private static string ChaosCuePath(string name) =>
             ContentLocator.Resolve(Path.Combine("Resources", "sounds", "chaos", name + ".mp3"));   // as ChaosSfx
 

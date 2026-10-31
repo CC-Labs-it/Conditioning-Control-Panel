@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosBoonBarOverlay? _boonBar;
         private static DispatcherTimer? _runTimer, _spawnTimer;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
+        private static double _snapFlashRemainingSec;
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
         internal static Random Rng = new();
@@ -622,14 +623,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _toyButtons.Clear();
         }
 
-        /// <summary>WPF TickActiveToys' toy loop. ponytail: no toy effect runs on this head yet (they
-        /// live with the bubble field), so the glow state drops on the next tick.</summary>
+        /// <summary>WPF TickActiveToys (:2948, :3021): Snap Field glows for one run-clock second.</summary>
         private static void TickToys()
         {
             if (_state == null) return;
             foreach (var t in ChaosToyRules.Tick(_state.ActiveToys, ChaosRunEngine.TICK_SEC))
                 ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.45f);
-            foreach (var t in _state.ActiveToys) t.IsEffectActive = false;
+            _snapFlashRemainingSec = Math.Max(0, _snapFlashRemainingSec - ChaosRunEngine.TICK_SEC);
+            foreach (var t in _state.ActiveToys)
+                t.IsEffectActive = t.Id == "snap_field" && _snapFlashRemainingSec > 0;
         }
 
         /// <summary>WPF OnToyKey (UI thread): a toy keybind press. The panic key never fires a toy.</summary>
@@ -649,13 +651,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (t.Id == id) { UseToy(t); return; }
         }
 
-        /// <summary>WPF UseToy, the gate + cooldown half. ponytail: the effect itself (vibe sweep,
-        /// freeze, DVD, snap, rabbits, e-stim) and the first_play Spark award are not wired yet.</summary>
+        /// <summary>WPF UseToy (:2735-2750, :2780): Snap Field and its first-play award.
+        /// Part B: vibe sweep, freeze, DVD, rabbits and e-stim effects.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused);
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
+            if (r != ChaosToyRules.UseResult.Fired || toy.Id != "snap_field") return;
+            bool maxed = _state.MaxedBoons.Contains(toy.Id);
+            BubbleOverlay.SnapChaosField(maxed);
+            ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.5f);
+            _snapFlashRemainingSec = 1.0;
+            Pulse(Color.FromRgb(150, 220, 255), 0.35);
+            _state.PushEvent(maxed ? "✋ snapped. all of it." : "✋ snapped. every live one let go");
+            if (!ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play)) ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);
         }
 
         private static void RunAgain()
@@ -686,6 +696,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosUnlockCardOverlay.CloseActive();
             _lessonCardPaused = false;
             StopToys();
+            _snapFlashRemainingSec = 0;
             Overlays.ChaosFlashOverlay.CloseActive();   // WPF ForceShutdown :3175
             ChaosDvdOverlay.CloseActive();   // WPF CleanupAfterRun (:3319), ForceShutdown (:3179)
             try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF :3188/:3330
