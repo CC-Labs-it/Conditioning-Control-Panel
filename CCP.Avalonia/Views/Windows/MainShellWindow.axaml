@@ -619,22 +619,6 @@
                     <fx:ChasterRailChip x:Name="ChasterRail"/>
                     <Border Height="1" Background="{DynamicResource PanelAccentBrush}" Margin="10,4,10,4"/>
                     <fx:DescentFuseRailChip x:Name="FuseRailChip"/>
-                    <!-- The Web App launcher. WPF moved it to a Play Games card (7e50c9381), which this
-                         head does not have yet (sync6-nav-rail-c), so it stays here as a slim pill. -->
-                    <Button x:Name="DoorWebApp" Height="26" Margin="6,2,7,2" Cursor="Hand"
-                            Click="DoorWebApp_Click" ToolTip.Tip="{loc:Str tooltip_nav_door_webapp}">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border CornerRadius="14" Background="#14FFFFFF" BorderBrush="#5EC8F2" BorderThickness="1">
-                                    <ContentPresenter Content="{TemplateBinding Content}"
-                                                      ContentTemplate="{TemplateBinding ContentTemplate}"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                        <TextBlock x:Name="TxtNavWebAppLabel" Text="{loc:Str nav_door_webapp}" FontSize="11" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextLightBrush}" HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                    </Button>
                     <!-- THE GEAR. Tag "appsettings" (the tab key "settings" is the dashboard). -->
                     <Button x:Name="DoorSettings" Tag="appsettings" Theme="{StaticResource NavSectionButton}"
                             Click="NavDoor_Click" ToolTip.Tip="{loc:Str nav_door_settings}" AutomationProperties.Name="{loc:Str nav_door_settings}">

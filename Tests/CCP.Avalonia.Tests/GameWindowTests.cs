@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -994,6 +995,31 @@ public sealed partial class GameWindowTests
             Assert.Equal(new[] { true, true }, runs);
         });
     }
+
+    /// <summary>WPF LauncherCatalogue.cs:243-248: the Play door asks DtRH's gate before Launch, so lapsed access with
+    /// a descent still open is refused instead of refocusing it.</summary>
+    [Fact]
+    public void Dtrh_PlayDoor_LapsedAccessRefusesBeforeFocusingTheLiveHost() => RunDtrh(lab: true, (shell, _, _, denied) =>
+    {
+        var live = GameWindow.Launch("dtrh")!;
+        var oldLaunch = global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame;
+        var launches = new List<string>();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame = launches.Add;
+            CoreEntitlement.HasLabProvider = () => false;   // RunDtrh restores it
+            shell.ShowTab("play");
+            Dispatcher.UIThread.RunJobs();
+            shell.Named<global::Avalonia.Controls.Control>("PlayTab")!
+                .FindControl<global::Avalonia.Controls.Button>("BtnPlayDtrh")!
+                .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(launches);
+            Assert.Single(denied);
+            Assert.Same(live, Assert.Single(GameWindow.OpenWindowsForTests()));
+        }
+        finally { global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame = oldLaunch; }
+    });
 
     /// <summary>WPF DtrhHostService.PostManifest / OnRemoteCopiesReady (724ac82bc): the manifest's urls are root-relative
     /// (hostMedia.js counts only those, not 127.0.0.1, as local); with online media on, copies landing in

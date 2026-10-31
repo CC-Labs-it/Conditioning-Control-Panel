@@ -8,6 +8,9 @@
 //   LaunchPlayBreakoutDemo / LaunchPlayChess reuse the launcher's existing GameWindow hosts.
 //   LaunchPlayBreakout / LaunchPlayGoon remain unported; their buttons refuse honestly.
 
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
+
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
@@ -16,6 +19,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void LaunchPlayBreakoutDemo() => Games.GameWindow.Launch("breakoutdemo");
 
         internal void LaunchPlayChess() => Games.GameWindow.Launch("piecebypiece");
+
+        // WPF MainWindow.Exclusives.cs:217-222: sign-in precedes the game's own gate.
+        internal void LaunchPlayLauncherGame(string id)
+        {
+            if (!CoreAccount.IsLoggedIn) { _ = OpenUnifiedLoginDialog(); return; }
+            // WPF GlassroadHostService.cs:82 checks even before focusing an existing host.
+            if (id == "race" && !TierGate.DemandLab(Loc.Get("launcher_game_race_title"))) return;
+            // WPF LauncherCatalogue.cs:243-248: DtRH's gate runs before Launch can focus a live host.
+            if (id == Games.GameWindow.DtrhId && !Games.GameWindow.DtrhGate()) return;
+            // WPF LauncherCatalogue.cs:235-238: Racing Thoughts is now Glassroad.
+            Tabs.PlayTabView.LaunchGame(id == "race" ? Games.GameWindow.GlassroadId : id);
+        }
 
         /// <summary>Builds the Mantra Lab. Tests swap it to make the open fail.</summary>
         internal static System.Func<MantraWindow> NewMantraWindow = () => new MantraWindow();
