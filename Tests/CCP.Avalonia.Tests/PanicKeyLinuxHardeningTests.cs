@@ -160,4 +160,95 @@ public sealed class PanicKeyLinuxHardeningTests
             host.SetValue(notices, oldHost);
         }
     });
+    [Fact]
+    public Task StopDuringReplacementBindDrainsCleanupBeforeRestart() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var scope = new PortalScope();
+        var oldReply = new TaskCompletionSource();
+        var keys = new List<string>();
+        bool newSession = false, closedNewSession = false;
+        MainShellWindow.PortalUnbind = () => { closedNewSession |= newSession; return Task.CompletedTask; };
+        MainShellWindow.PortalBind = async (key, _, _, _) =>
+        {
+            keys.Add(key);
+            if (keys.Count == 2)
+            {
+                await oldReply.Task;
+                await MainShellWindow.PortalUnbind(); // backend failure cleanup uses shared portal state
+                return null;
+            }
+            if (keys.Count == 3) newSession = true;
+            return key;
+        };
+        try
+        {
+            CoreSettings.Current.PanicKey = "Escape";
+            await MainShellWindow.BindPortalAsync();
+            Dispatcher.UIThread.RunJobs();
+            CoreSettings.Current.PanicKey = "F8";
+            MainShellWindow.PortalWatchTick(true, false); // replacement bind waits for the portal
+            Assert.Equal(new[] { "Escape", "F8" }, keys);
+            MainShellWindow.PortalWatchTick(false, false);
+            CoreSettings.Current.PanicKey = "F9";
+            var restart = MainShellWindow.BindPortalAsync();
+            Assert.Equal(2, keys.Count); // newer session must wait for old failure cleanup
+            oldReply.SetResult();
+            await restart.WaitAsync(TimeSpan.FromSeconds(5));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "Escape", "F8", "F9" }, keys);
+            Assert.False(MainShellWindow.PortalFailed);
+            Assert.False(closedNewSession);
+        }
+        finally { oldReply.TrySetResult(); Dispatcher.UIThread.RunJobs(); }
+    });
+
+    [Fact]
+    public void StopBeforePostedBindFailureDoesNotPoisonRestart() => AvaloniaTestDispatcher.Run(() =>
+    {
+        using var scope = new PortalScope();
+        MainShellWindow.PortalUnbind = () => Task.CompletedTask;
+        MainShellWindow.PortalBind = (_, _, _, _) => Task.FromResult<string?>(null);
+        Assert.True(MainShellWindow.BindPortalAsync().IsCompletedSuccessfully); // failure posted, not applied
+        MainShellWindow.PortalWatchTick(false, false);
+        MainShellWindow.PortalBind = (key, _, _, _) => Task.FromResult<string?>(key);
+        Assert.True(MainShellWindow.BindPortalAsync().IsCompletedSuccessfully);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(MainShellWindow.PortalFailed);
+    });
+
+    // These tests exercise real notices but must restore their shared queue and host (TestIsolationTests).
+    private sealed class PortalScope : IDisposable
+    {
+        private readonly Func<string, string, Action, Action, Task<string?>> _bind = MainShellWindow.PortalBind;
+        private readonly Func<Task> _unbind = MainShellWindow.PortalUnbind;
+        private readonly global::ConditioningControlPanel.Avalonia.Helpers.NotificationService _notices =
+            global::ConditioningControlPanel.Avalonia.App.Notifications;
+        private readonly System.Reflection.FieldInfo _host;
+        private readonly object? _oldHost;
+        private readonly System.Collections.IList _pending;
+        private readonly int _count;
+        public PortalScope()
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            _host = _notices.GetType().GetField("_host", flags)!;
+            _oldHost = _host.GetValue(_notices);
+            _pending = (System.Collections.IList)_notices.GetType().GetField("_pending", flags)!.GetValue(_notices)!;
+            _count = _pending.Count;
+            _host.SetValue(_notices, null);
+            MainShellWindow.ResetPortalForTest();
+        }
+        public void Dispose()
+        {
+            MainShellWindow.ResetPortalForTest();
+            MainShellWindow.PortalBind = _bind;
+            MainShellWindow.PortalUnbind = _unbind;
+            while (_pending.Count > _count) _pending.RemoveAt(_pending.Count - 1);
+            _host.SetValue(_notices, _oldHost);
+        }
+    }
+
 }

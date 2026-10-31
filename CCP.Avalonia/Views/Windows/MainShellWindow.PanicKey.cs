@@ -229,6 +229,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static DispatcherTimer? _portalWatch;
         private static bool _portalRebinding;
         private static int _portalEpoch;
+        // The portal backend cleans up through shared state. Drain old bind/close work before
+        // starting another session, so cancelled work cannot close its replacement.
+        private static Task _portalDrain = Task.CompletedTask, _portalClose = Task.CompletedTask;
         private static string? _portalKey;   // the key the open (or opening) portal session was asked for
 
         /// <summary>Test seams: the portal round trips.</summary>
@@ -241,6 +244,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _portalWatch?.Stop();
             (_portalWatch, _portalBind, _portalFailed, _portalKey) = (null, null, false, null);
             _portalRebinding = false;
+            _portalDrain = _portalClose = Task.CompletedTask;
             _portalEpoch++;
         }
 
@@ -281,33 +285,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal static async Task BindPortalAsync()
         {
-            var key = _portalKey = CoreSettings.Current.PanicKey;
-            var trigger = await PortalBind(key, Loc.Get("panic_portal_description"),
-                () =>
-                {
-                    Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
-                    Dispatcher.UIThread.Post(() => Current?.OnPortalPanicPressed());
-                },
-                () => Dispatcher.UIThread.Post(() => Current?.OnPortalPanicReleased()));
-            Dispatcher.UIThread.Post(() =>
+            var epoch = _portalEpoch;
+            var previous = _portalDrain;
+            var drained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _portalDrain = drained.Task;
+            try
             {
-                if (trigger == null)
+                await previous;
+                await _portalClose;
+                if (epoch != _portalEpoch) return;
+                var key = _portalKey = CoreSettings.Current.PanicKey;
+                var trigger = await PortalBind(key, Loc.Get("panic_portal_description"),
+                    () =>
+                    {
+                        Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
+                        Dispatcher.UIThread.Post(() => { if (epoch == _portalEpoch) Current?.OnPortalPanicPressed(); });
+                    },
+                    () => Dispatcher.UIThread.Post(() => { if (epoch == _portalEpoch) Current?.OnPortalPanicReleased(); }));
+                if (epoch != _portalEpoch) return;
+                Dispatcher.UIThread.Post(() =>
                 {
-                    _portalFailed = true;
-                    App.Notifications.Show(Loc.Get("panic_portal_unavailable"), Helpers.NotificationType.Warning, TimeSpan.FromSeconds(10));
-                    return;
-                }
-                // trigger_description: what the compositor really bound, which the user may have changed.
-                // Empty = the compositor assigned no key, so never claim the configured one.
-                if (trigger.Length > 0)
-                    App.Notifications.Show(Loc.GetF("panic_portal_bound", trigger), Helpers.NotificationType.Info, TimeSpan.FromSeconds(6));
-                else
-                    App.Notifications.Show(Loc.Get("panic_portal_unavailable"), Helpers.NotificationType.Warning, TimeSpan.FromSeconds(10));
-                // ponytail: 2 s poll for "last effect stopped" rather than a hook in every stop path.
-                _portalWatch ??= new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background,
-                    (_, _) => PortalWatchTick(KeepPortalBound, PortalHoldLive));
-                _portalWatch.Start();
-            });
+                    if (epoch != _portalEpoch) return;
+                    if (trigger == null)
+                    {
+                        _portalFailed = true;
+                        App.Notifications.Show(Loc.Get("panic_portal_unavailable"), Helpers.NotificationType.Warning, TimeSpan.FromSeconds(10));
+                        return;
+                    }
+                    // trigger_description: what the compositor really bound, which the user may have changed.
+                    // Empty = the compositor assigned no key, so never claim the configured one.
+                    if (trigger.Length > 0)
+                        App.Notifications.Show(Loc.GetF("panic_portal_bound", trigger), Helpers.NotificationType.Info, TimeSpan.FromSeconds(6));
+                    else
+                        App.Notifications.Show(Loc.Get("panic_portal_unavailable"), Helpers.NotificationType.Warning, TimeSpan.FromSeconds(10));
+                    // ponytail: 2 s poll for "last effect stopped" rather than a hook in every stop path.
+                    _portalWatch ??= new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background,
+                        (_, _) => PortalWatchTick(KeepPortalBound, PortalHoldLive));
+                    _portalWatch.Start();
+                });
+            }
+            finally { drained.TrySetResult(); }
         }
 
         /// <summary>The 2 s portal watch. Nothing keeps the grab: release it. The panic key was rebound (capture
@@ -321,7 +338,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _portalWatch?.Stop();
                 _portalWatch = null;
                 _portalBind = null;
-                _ = PortalUnbind();
+                _portalRebinding = false;
+                _portalClose = Task.WhenAll(_portalClose, PortalUnbind());
                 return;
             }
             if (_portalFailed || _portalRebinding || holdLive || CapturingPanicKey || _portalKey == CoreSettings.Current.PanicKey) return;
@@ -336,10 +354,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var epoch = _portalEpoch;
             try
             {
-                await PortalUnbind();
+                _portalClose = Task.WhenAll(_portalClose, PortalUnbind());
+                await _portalClose;
                 if (epoch == _portalEpoch) await BindPortalAsync();
             }
-            finally { _portalRebinding = false; }
+            finally { if (epoch == _portalEpoch) _portalRebinding = false; }
         }
 
         /// <summary>WPF LockCardService.Stop(dismissOpenCards: true).</summary>
