@@ -214,7 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var mediaMs = Interlocked.Read(ref _watchedMs);
                     if (_firstPaintMedia < 0) _firstPaintMedia = mediaMs;
-                    var painted = FloatingFirstFrame.Painted(++_paintedFrames, _firstPaintMedia, mediaMs, _surfaces[0].Window.IsVisible);
+                    var painted = FloatingRevealGate.Painted(++_paintedFrames, _firstPaintMedia, mediaMs, _surfaces[0].Window.IsVisible);
                     var player = _player;
                     // Let the compositor present the submitted bitmap before opening the veil.
                     _surfaces[0].Window.RequestAnimationFrame(_ =>
@@ -543,11 +543,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_closing || _gracePaused || _surfaces.Count == 0) return false;
             var at = Interlocked.Read(ref _watchedMs);
             if (_floatingPlaying.IsRunning && _firstPlayedMs < 0) _firstPlayedMs = at;
-            var verdict = FloatingFirstFrame.Decide(painted,
+            var verdict = FloatingRevealGate.Decide(painted,
                 _floatingPlaying.IsRunning ? _floatingPlaying.ElapsedMilliseconds : null,
                 _firstPlayedMs < 0 || FirstFrameMs < 0 ? 0 : at - _firstPlayedMs, _sinceShow.ElapsedMilliseconds);
-            if (verdict == FloatingFirstFrame.Verdict.Skip) { Scheduler.End(); return false; }
-            if (verdict != FloatingFirstFrame.Verdict.Reveal) return true;
+            if (verdict == FloatingRevealGate.Verdict.Skip) { Scheduler.End(); return false; }
+            if (verdict != FloatingRevealGate.Verdict.Reveal) return true;
             _floatingRevealed = true;
             foreach (var x in _surfaces) { x.Window.Opacity = 1; x.Window.IsHitTestVisible = true; }
             UpdateVolume();

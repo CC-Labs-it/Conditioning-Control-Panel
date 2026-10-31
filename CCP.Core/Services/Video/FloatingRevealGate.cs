@@ -1,7 +1,7 @@
 namespace ConditioningControlPanel.Services.Video;
 
 /// <summary>Floating reveal admission, shared with hosts that report painted frames or played time.</summary>
-public static class FloatingFirstFrame
+public static class FloatingRevealGate
 {
     public const int ReadyBudgetMs = 4000;
     public const int PlayingGraceMs = 1000;
