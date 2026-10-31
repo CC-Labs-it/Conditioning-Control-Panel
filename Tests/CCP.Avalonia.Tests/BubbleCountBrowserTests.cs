@@ -1,0 +1,197 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Text.Json;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services.Video.Browser;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
+using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services;
+using Xunit;
+namespace CCP.Avalonia.Tests;
+public sealed class BubbleCountBrowserTests
+{
+    [Fact]
+    public Task Browser_gate_rejects_competing_owner_unmapped_file_and_missing_provider() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        Assert.True(BubbleCountHost.Instance.CanPlayPath(game.Clip));
+        var owner = new object();
+        Assert.True(BrowserVideoSurface.TryAcquire(owner, game.Clip));
+        var competing = new object();
+        Assert.False(BrowserVideoSurface.TryAcquire(competing, game.Clip));
+        BrowserVideoSurface.Release(competing);
+        Assert.True(BrowserVideoSurface.SessionActive);
+        BrowserVideoSurface.Release(owner);
+        Assert.False(BrowserVideoSurface.SessionActive);
+        Assert.Null(BrowserVideoSurface.Map(Path.Combine(Path.GetTempPath(), "outside.mp4")));
+        game.Settings.Current.AudioOutputDeviceId = "headphones";
+        Assert.False(BrowserVideoSurface.TryAcquire(owner, game.Clip));
+        game.Settings.Current.AudioOutputDeviceId = "";
+        BrowserVideoSurface.Seed(); // headless never offers a native browser, even if packages exist
+        Assert.False(BrowserVideoGate.ShouldUseBrowser(game.Clip));
+        return Task.CompletedTask;
+    });
+    [Theory]
+    [InlineData("ended")]
+    [InlineData("error")]
+    public Task PlayedTerminalOpensOneAnswerAndLateCallbacksDoNothing(string terminal) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true, _ => game.Completed++);
+        var w = Assert.Single(BubbleCountWindow.OpenWindows);
+        var browser = w.Browser!;
+        browser.View.OnNavigationCompleted(new Uri("about:blank"));
+        Assert.Equal(0.75, browser.Volume);
+        Send(browser, "playing"); Send(browser, terminal); Send(browser, terminal);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Single(BubbleCountResultWindow.OpenWindows);
+        BubbleCountWindow.ForceCloseAll(); BubbleCountResultWindow.ForceCloseAll();
+        Send(browser, "playing"); Send(browser, "ended");
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.False(BrowserVideoSurface.SessionActive);
+        Assert.Empty(BubbleCountResultWindow.OpenWindows);
+        Assert.Equal(0, game.Completed);
+        return Task.CompletedTask;
+    });
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(4, true)]
+    [InlineData(100, true)]
+    [InlineData(101, true)]
+    [InlineData(102, false)]
+    [InlineData(103, false)]
+    [InlineData(0, false)]
+    public Task Browser_only_primary_media_failures_make_the_file_unsafe(int code, bool unsafeFile) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+            ok => { Assert.False(ok); game.Completed++; });
+        var primary = Assert.Single(BubbleCountWindow.OpenWindows);
+        var browser = primary.Browser!;
+        browser.View.OnNavigationCompleted(new Uri("about:blank"));
+        var secondary = new BubbleCountWindow(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+            _ => game.Completed++, isPrimary: false);
+        typeof(BubbleCountWindow).GetField("_useBrowser", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(secondary, true);
+        secondary.Show();
+        secondary.Browser!.View.OnNavigationCompleted(new Uri("about:blank"));
+        Assert.Equal(0, secondary.Browser!.Volume);
+        Send(secondary.Browser, "error", code: code);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.False(BrowserUnsafeVideoCache.Contains(game.Clip));
+        Assert.True(primary.IsVisible);
+        Send(browser, "error", code: code);
+        Send(browser, "error", code: code); // duplicate terminal reports still resolve just once
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(unsafeFile, BrowserUnsafeVideoCache.Contains(game.Clip));
+        Assert.Equal(!unsafeFile, BrowserVideoGate.ShouldUseBrowser(game.Clip));
+        Assert.Equal(1, game.Completed);
+        Assert.Equal(0, game.Skipped);
+        Assert.Empty(BubbleCountResultWindow.OpenWindows);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task FailedInitializationAndNativeCloseResolveOnce(bool nativeClose) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        var pending = new TaskCompletionSource<string?>();
+        BrowserVideoSurface.Create = () => new BrowserVideoSurface(_ => pending.Task);
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+            ok => { Assert.False(ok); game.Completed++; });
+        var w = Assert.Single(BubbleCountWindow.OpenWindows);
+        var browser = w.Browser!;
+        browser.View.OnNavigationCompleted(new Uri("about:blank"));
+        if (nativeClose) w.Close();
+        pending.SetResult(null);
+        for (var i = 0; i < 100 && game.Completed == 0; i++) await Task.Delay(10);
+        Send(browser, "error", code: 4); Send(browser, "ended");
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, game.Completed);
+        Assert.False(BrowserVideoSurface.SessionActive);
+        Assert.Empty(BubbleCountWindow.OpenWindows);
+        Assert.Empty(BubbleCountResultWindow.OpenWindows);
+        Assert.False(BrowserUnsafeVideoCache.Contains(game.Clip));
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task BrowserEscapeUsesTheStrictPolicy(bool strict) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        game.Settings.Current.PanicKeyEnabled = true;
+        BubbleCountWindow.PanicListenerLive = () => true;
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, strict, _ => game.Completed++);
+        var browser = Assert.Single(BubbleCountWindow.OpenWindows).Browser!;
+        browser.View.OnNavigationCompleted(new Uri("about:blank"));
+        browser.View.OnWebMessage(JsonSerializer.Serialize(new { session = browser.SessionId, type = "key", key = "Escape" }));
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(strict ? 0 : 1, game.Completed);
+        Assert.Equal(strict, BubbleCountWindow.IsAnyOpen());
+        return Task.CompletedTask;
+    });
+
+    private static void Send(BrowserVideoSurface surface, string type, double durationMs = 0, int code = 0) =>
+        surface.View.OnWebMessage(JsonSerializer.Serialize(new { session = surface.SessionId, type, durationMs, code }));
+
+    private static void EnsureApp()
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+    }
+
+    private sealed class BrowserGame : IDisposable
+    {
+        private readonly Func<string>? _assets = CorePaths.EffectiveAssetsProvider;
+        private readonly Func<SettingsService?>? _settings = CoreSettings.ServiceProvider;
+        private readonly Func<string, string?, bool>? _gate = BrowserVideoGate.EngineAccepts;
+        private readonly Func<BrowserVideoSurface?> _create = BrowserVideoSurface.Create;
+        private readonly string _dir = Directory.CreateTempSubdirectory("ccp-bcount-browser-").FullName;
+        internal readonly SettingsService Settings = new();
+        internal readonly List<BrowserVideoSurface> Surfaces = new();
+        internal int Completed, Skipped;
+        internal string Clip { get; }
+        internal BrowserGame()
+        {
+            Clip = Path.Combine(_dir, "clip.mp4");
+            File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4"), Clip);
+            CorePaths.EffectiveAssetsProvider = () => _dir;
+            CoreSettings.ServiceProvider = () => Settings;
+            Settings.Current.BrowserVideoEngineEnabled = true;
+            Settings.Current.AudioOutputDeviceId = "";
+            Settings.Current.DualMonitorEnabled = false;
+            Settings.Current.MasterVolume = 75;
+            BrowserVideoGate.EngineAccepts = (p, k) => !BrowserUnsafeVideoCache.Contains(p, k) && BrowserVideoSurface.Map(p) != null;
+            BrowserVideoSurface.Create = () => { var s = new BrowserVideoSurface(_ => Task.FromResult<string?>("true")); Surfaces.Add(s); return s; };
+        }
+        public void Dispose()
+        {
+            BubbleCountWindow.ForceCloseAll();
+            BubbleCountResultWindow.ForceCloseAll();
+            BrowserVideoSurface.Create = _create;
+            BrowserVideoGate.EngineAccepts = _gate;
+            CorePaths.EffectiveAssetsProvider = _assets;
+            CoreSettings.ServiceProvider = _settings;
+            Directory.Delete(_dir, true);
+        }
+    }
+
+}

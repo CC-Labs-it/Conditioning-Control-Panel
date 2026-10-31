@@ -54,6 +54,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF skips the game outright when the shared LibVLC is unusable (BubbleCountService.cs:373):
         // opening it would end as a failed count and, in strict mode, retry forever.
         public bool CanPlay => Platform.LibVlcAudio.Shared != null;
+        public bool CanPlayPath(string path) => CanPlay ||
+            (!Platform.BrowserVideoSurface.SessionActive && Services.Video.Browser.BrowserVideoGate.ShouldUseBrowser(path));
 
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Dispatcher.UIThread.Invoke(() =>
             BubbleCountWindow.ShowOnAllMonitors(path, (BubbleCountScheduler.Difficulty)difficulty, strict, onComplete));
