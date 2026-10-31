@@ -86,7 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>Raised by the toggle gesture (right-click by default; inverted on dashboard toggle tiles).</summary>
         public event EventHandler<RoutedEventArgs> ToggleRequested { add => AddHandler(ToggleRequestedEvent, value); remove => RemoveHandler(ToggleRequestedEvent, value); }
 
-        private readonly Border _rootBorder, _imgIconHost, _glyphHost, _rimLight, _activeBorder, _lockedOverlay, _tierBadgeHost;
+        private readonly Border _rootBorder, _imgIconMute, _depthSocket, _imgIconHost, _glyphHost, _rimLight, _activeBorder, _lockedOverlay, _tierBadgeHost;
         private readonly Grid _contentRoot, _teaseHost;
         private readonly TextBlock _txtTitle, _txtGlyph, _txtTeaseGlyph, _txtLockLabel, _txtTierBadge;
         private readonly Button _btnHelp;
@@ -99,12 +99,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private IDisposable? _visibilityWatch;
         private Window? _hostWindow;
         private bool _hovered;
+        private readonly DashboardCardDepth _depth;
+        internal DashboardCardDepth Depth => _depth;
 
         public FeatureCard()
         {
             AvaloniaXamlLoader.Load(this);
             _rootBorder = this.FindControl<Border>("RootBorder")!;
             _imgIconHost = this.FindControl<Border>("ImgIconHost")!;
+            _imgIconMute = this.FindControl<Border>("ImgIconMute")!;
+            _depthSocket = this.FindControl<Border>("DepthSocket")!;
             _glyphHost = this.FindControl<Border>("GlyphHost")!;
             _rimLight = this.FindControl<Border>("RimLight")!;
             _activeBorder = this.FindControl<Border>("ActiveBorder")!;
@@ -119,6 +123,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _txtTierBadge = this.FindControl<TextBlock>("TxtTierBadge")!;
             _btnHelp = this.FindControl<Button>("BtnHelp")!;
             _activeGlow = this.FindControl<Border>("GlowLayer")!;
+
+            _depth = new DashboardCardDepth(this, this.FindControl<Panel>("PressFace")!, this.FindControl<Border>("DepthBevel")!,
+                () => DashboardDepth, () => DimWhenInactive && (IsActive || TutorialPreview) && !IsLocked,
+                e => !IsLocked && !IsInHelp(e.Source));
 
             // Hover lift (WPF: MotionFx.HoverLift) as a transition on the root scale (the art pop is
             // Controls/HoverPop, driven from ApplyHover as WPF does); the 6px margin on RootBorder is the headroom the lift paints into.
@@ -147,6 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             };
             Loaded += (_, _) =>
             {
+                _depthSocket.IsVisible = DashboardDepth;
                 HookWindow(TopLevel.GetTopLevel(this) as Window);
                 Env.MotionGateChanged -= RefreshFx;
                 Env.MotionGateChanged += RefreshFx;
@@ -167,10 +176,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (change.Property == TitleProperty) _txtTitle.Text = Title ?? "";
             else if (change.Property == IconProperty || change.Property == GlyphProperty) ApplyArt();
             else if (change.Property == LockLevelProperty || change.Property == IsLockedProperty) ApplyLockState();
-            else if (change.Property == IsActiveProperty) ApplyActiveState();
+            else if (change.Property == IsActiveProperty || change.Property == DimWhenInactiveProperty) ApplyActiveState();
             else if (change.Property == HelpSectionIdProperty) RefreshHelpTooltip();
             else if (change.Property == TierBadgeProperty) ApplyTierBadge();
-            else if (change.Property == TeaseTierProperty) ApplyTeaseState();
+            else if (change.Property == TeaseTierProperty) { ApplyTeaseState(); ApplyMute(0); }
         }
 
         private void ApplyArt()
@@ -180,6 +189,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _imgIconHost.Background = src is null
                 ? null
                 : new ImageBrush(src) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
+            var grey = Helpers.CardArtDesaturate.Of(src);
+            _imgIconMute.Background = grey is null ? null
+                : new ImageBrush(grey) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
             _imgIconHost.IsVisible = src is not null;
             _glyphHost.IsVisible = src is null && !string.IsNullOrEmpty(Glyph);
         }
@@ -257,12 +269,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             {
                 _lockedOverlay.IsVisible = true;
                 _txtLockLabel.Text = LockLevel > 0 ? $"Lvl {LockLevel}" : "Locked";
-                _contentRoot.Opacity = 0.35;
             }
             else
             {
                 _lockedOverlay.IsVisible = false;
-                _contentRoot.Opacity = 1.0;
             }
             ApplyActiveState();
             RefreshHover();
@@ -273,13 +283,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // A locked feature can't really be "on" even if the underlying setting is true.
             var showActive = (IsActive || TutorialPreview) && !IsLocked;
             _activeBorder.IsVisible = showActive;
+            ApplyRestOpacity();
+            ApplyMute(Services.CardMuteRule.TransitionMs(Env.AllowTransitions, IsLoaded));
             ApplyActiveBreath(showActive);
+        }
+
+        private bool PaintActive => IsActive || TutorialPreview;
+
+        /// <summary>WPF ApplyRestOpacity (:557): the ONE writer for ContentRoot.Opacity - lock, then
+        /// inactive dim (held under the pointer on the dashboard), else full.</summary>
+        private void ApplyRestOpacity()
+        {
+            _depth.Refresh();
+            _contentRoot.Opacity =
+                IsLocked ? 0.35
+                : DimWhenInactive && !PaintActive && (DashboardDepth || !_hovered) ? 0.62
+                : 1.0;
+        }
+
+        /// <summary>WPF ApplyMute (:579): the ONE writer for the grey layer and the title's muted weight.</summary>
+        private void ApplyMute(int ms)
+        {
+            bool mute = Services.CardMuteRule.ShouldMute(DimWhenInactive, PaintActive, IsLocked, _hovered && !DashboardDepth, TeaseTier > 0);
+            _txtTitle.Opacity = mute ? 0.72 : 1.0;
+            _imgIconMute.Transitions = ms > 0
+                ? new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(ms), Easing = new QuadraticEaseOut() } }
+                : null;
+            _imgIconMute.Opacity = mute ? 1.0 : 0.0;
         }
 
         /// <summary>WPF FeatureCard.RefreshFx (:613): re-reads the motion/tier/focus gates. Called by
         /// the shell's ApplyDashboardFxLoops on a motion/performance change and window activation.</summary>
         internal void RefreshFx()
         {
+            if (!IsEffectivelyVisible) _depth.Park();
             ApplyActiveState();
             RefreshHover();
             TierFxBorder.Resume(_rootBorder);
@@ -384,9 +421,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (_hovered == on) return;
             _hovered = on;
             RefreshHover();
+            ApplyRestOpacity();
+            ApplyMute(Services.CardMuteRule.TransitionMs(Env.AllowTransitions, IsLoaded));
             // A locked tile is not an affordance; lighting it up promises a click that does nothing.
             if (IsLocked) on = false;
-            if (on) HoverPop.Enter(_imgIconHost); else HoverPop.Leave(_imgIconHost);
+            if (on && !DashboardDepth) HoverPop.Enter(_imgIconHost); else HoverPop.Leave(_imgIconHost);
         }
 
         private void RefreshHover()
@@ -396,12 +435,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _rootScale.Transitions = Env.AllowTransitions ? _hoverTransitions : null;
             _rimLight.Transitions = Env.AllowTransitions ? _rimTransitions : null;
             bool on = _hovered && !IsLocked;
-            _rootScale.ScaleX = _rootScale.ScaleY = on ? HoverLiftScale : 1;
+            _rootScale.ScaleX = _rootScale.ScaleY = on && !DashboardDepth ? HoverLiftScale : 1;
             _rimLight.Opacity = on ? RimLightOpacity : 0;
         }
 
-        public bool DashboardDepth { get; set; }
-        public bool DimWhenInactive { get; set; }
+        private bool _dashboardDepth;
+        public bool DashboardDepth
+        {
+            get => _dashboardDepth;
+            set
+            {
+                _dashboardDepth = value;
+                if (_depthSocket is null) return;
+                _depthSocket.IsVisible = value;
+                ApplyRestOpacity();
+                ApplyMute(0);
+                RefreshHover();
+            }
+        }
+        public static readonly StyledProperty<bool> DimWhenInactiveProperty =
+            AvaloniaProperty.Register<FeatureCard, bool>(nameof(DimWhenInactive));
+        public bool DimWhenInactive { get => GetValue(DimWhenInactiveProperty); set => SetValue(DimWhenInactiveProperty, value); }
+
+        private bool IsInHelp(object? source) =>
+            source is Visual src && (src == _btnHelp || _btnHelp.IsVisualAncestorOf(src));
 
         private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
         {

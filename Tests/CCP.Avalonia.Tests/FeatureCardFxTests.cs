@@ -24,6 +24,103 @@ namespace CCP.Avalonia.Tests;
 public sealed class FeatureCardFxTests
 {
     [Fact]
+    public void DashboardFaceTravelsAndParksThroughLiveMotionGates() => WithCard((window, host, card) =>
+    {
+        card.DashboardDepth = card.DimWhenInactive = true;
+        card.RefreshFx();
+        var face = card.FindControl<Panel>("PressFace")!;
+        var travel = ((TransformGroup)face.RenderTransform!).Children.OfType<TranslateTransform>().Single();
+        var tilt = ((TransformGroup)face.RenderTransform!).Children.OfType<RotateTransform>().Single();
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        Env.RaiseMotionGateChanged();
+        Assert.Equal(-1, travel.Y);
+        Assert.Null(travel.Transitions);
+        Assert.True(card.FindControl<Border>("DepthSocket")!.IsVisible);
+        Assert.Equal(0, new DashboardCardDepth.ReleaseSpring(0.5).Ease(0));
+        Assert.Equal(1.5, new DashboardCardDepth.ReleaseSpring(0.5).Ease(0.65));
+        Assert.Equal(1, new DashboardCardDepth.ReleaseSpring(0.5).Ease(1));
+        window.UpdateLayout();
+        var at = card.TranslatePoint(new Point(80, 100), window)!.Value;
+        window.MouseMove(at);
+        Assert.Equal(-2, travel.Y);
+        window.MouseDown(at, MouseButton.Left);
+        Assert.True(card.Depth.IsPressed);
+        Assert.Equal(2, travel.Y);
+        window.MouseUp(at, MouseButton.Left);
+        Assert.False(card.Depth.IsPressed);
+        card.IsActive = true;
+        Assert.Equal(1, travel.Y);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        Env.RaiseMotionGateChanged();
+        card.IsActive = false;
+        window.MouseMove(at + new Vector(15, 15));
+        Assert.NotEqual(0, tilt.GetBaseValue(RotateTransform.AngleProperty).Value);
+        CoreSettings.Current.PerformanceMode = true;
+        Env.RaiseMotionGateChanged();
+        Assert.Equal(0, tilt.GetBaseValue(RotateTransform.AngleProperty).Value);
+        window.MouseDown(at, MouseButton.Left);
+        host.IsVisible = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(card.Depth.IsPressed);
+        Assert.Equal(-1, travel.Y);
+        Assert.Null(travel.Transitions);
+        host.IsVisible = true;
+        card.IsLocked = true;
+        window.MouseDown(at, MouseButton.Left);
+        Assert.False(card.Depth.IsPressed);
+    });
+
+    [Fact]
+    public void InactiveArtUsesSharedGreyCacheAndLockTeasePreviewPriorities() => WithCard((window, host, card) =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        Env.RaiseMotionGateChanged();
+        using var art = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(640, 320), new Vector(96, 96),
+            global::Avalonia.Platform.PixelFormat.Bgra8888, global::Avalonia.Platform.AlphaFormat.Premul);
+        card.Icon = art;
+        card.DimWhenInactive = true;
+        var mute = card.FindControl<Border>("ImgIconMute")!;
+        var content = card.FindControl<Grid>("ContentRoot")!;
+        var title = card.FindControl<TextBlock>("TxtTitle")!;
+        Assert.Equal(1, mute.Opacity);
+        Assert.Equal(0.62, content.Opacity);
+        Assert.Equal(0.72, title.Opacity);
+        var grey = (global::Avalonia.Media.Imaging.Bitmap)((ImageBrush)mute.Background!).Source!;
+        Assert.Equal(new PixelSize(320, 160), grey.PixelSize);
+        card.Icon = null;
+        card.Icon = art;
+        Assert.Same(grey, ((ImageBrush)mute.Background!).Source);
+        Hover(card, window, true);
+        Assert.Equal(0, mute.Opacity);
+        Assert.Equal(1, content.Opacity);
+        Hover(card, window, false);
+        card.DashboardDepth = true;
+        Hover(card, window, true);
+        Assert.Equal(1, mute.Opacity);
+        Assert.Equal(0.62, content.Opacity);
+        card.SetTutorialPreview(true);
+        Assert.Equal(0, mute.Opacity);
+        Assert.Equal(1, content.Opacity);
+        card.SetTutorialPreview(false);
+        card.TeaseTier = 1;
+        Assert.Equal(0, mute.Opacity);
+        card.TeaseTier = 0;
+        card.IsLocked = true;
+        Assert.Equal(0, mute.Opacity);
+        Assert.Equal(0.35, content.Opacity);
+        card.IsLocked = false;
+        card.IsActive = true;
+        Assert.Equal(0, mute.Opacity);
+        card.IsActive = false;
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        Env.RaiseMotionGateChanged();
+        Assert.Single(mute.Transitions!);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        Env.RaiseMotionGateChanged();
+        Assert.Null(mute.Transitions);
+    });
+
+    [Fact]
     public void TeaseRimUsesExistingSharedClockAndParksWithoutLosingLivery() => WithCard((window, host, card) =>
     {
         var root = card.FindControl<Border>("RootBorder")!;
