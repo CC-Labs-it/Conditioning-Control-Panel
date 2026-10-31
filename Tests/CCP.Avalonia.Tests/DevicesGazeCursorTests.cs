@@ -10,6 +10,7 @@ using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Webcam;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
@@ -23,6 +24,48 @@ public sealed class DevicesGazeCursorTests
 {
     private static T? Event<T>(string name) where T : Delegate =>
         (T?)typeof(WebcamTracker).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(WebcamTracker.Instance);
+
+    [Fact]
+    public void SharedRevokeClosesCursorUnticksDevicesAndDoesNotResumeAfterConsent() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var make = GazeDebugCursor.MakeClickThrough;
+        var available = CoreWebcam.IsAvailableProvider;
+        var calibration = WebcamTracker.Instance.Calibration;
+        GazeDebugCursor.MakeClickThrough = _ => true;
+        CoreWebcam.IsAvailableProvider = () => true;
+        var section = new DevicesSettingsSection();
+        var window = new Window { Content = section };
+        try
+        {
+            window.Show();
+            var toggle = section.FindControl<CheckBox>("ChkWebcamDebugCursor")!;
+            toggle.IsChecked = true;
+            Assert.NotNull(GazeDebugCursor.Active);
+            // Blink Trainer and Deeper use this shared route, without the Devices revoke handler.
+            WebcamTracker.RevokeConsent();
+            Assert.Null(GazeDebugCursor.Active);
+            Assert.False(toggle.IsChecked);
+            CoreSettings.Current.WebcamConsentGiven = true;
+            CoreSettings.Current.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+            CoreSettings.Current.WebcamCalibrated = true;
+            WebcamTracker.Instance.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord() };
+            Event<Action<Point>>("OnGazeMove")?.Invoke(new Point(30, 40));
+            Assert.Null(GazeDebugCursor.Active);
+            Assert.False(toggle.IsChecked);
+        }
+        finally
+        {
+            GazeDebugCursor.CloseActive();
+            window.Close();
+            GazeDebugCursor.MakeClickThrough = make;
+            CoreWebcam.IsAvailableProvider = available;
+            WebcamTracker.Instance.Calibration = calibration;
+        }
+    });
 
     [Fact]
     public void RenderDiscoveryCanConstructTheCursor() => AvaloniaTestDispatcher.Run(() =>

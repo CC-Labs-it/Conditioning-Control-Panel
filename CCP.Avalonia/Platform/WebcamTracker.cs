@@ -325,6 +325,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static void RevokeConsent()
         {
             Views.Overlays.BlinkTrainerSession.Stop();
+            Views.Overlays.GazeDebugCursor.CloseActive();
             Instance.Stop();
             WebcamCalibrationData.DeleteIfExists();   // WPF ClearCalibration (WebcamTrackingService.cs:1112)
             Instance.Calibration = null;
