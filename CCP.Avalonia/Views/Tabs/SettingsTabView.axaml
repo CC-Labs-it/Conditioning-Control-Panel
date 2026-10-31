@@ -615,12 +615,21 @@
                users ever see. The Ken Burns drift (scale 1.00 -> 1.04 over 40s) lives on THIS
                border and not on ImgLogo or on LogoFlipHost: both of those transforms are owned
                by other animations and would snap the drift back to 1.0. -->
-          <Border x:Name="LogoFaceLogo" CornerRadius="12" ClipToBounds="True"
-                  RenderTransformOrigin="50%,50%">
+          <Border x:Name="LogoFaceLogo" CornerRadius="12" ClipToBounds="True" Margin="24"
+                  RenderTransformOrigin="50%,50%"
+                  Background="{DynamicResource DepthWellFloorBrush}"
+                  BorderBrush="{DynamicResource DepthPressedBevel}" BorderThickness="1">
             <Border.RenderTransform>
               <ScaleTransform ScaleX="1" ScaleY="1"/>
             </Border.RenderTransform>
-            <Grid>
+            <Grid x:Name="LogoFaceClip">
+              <!-- The well shares this face's drift, flip and visibility, as in WPF. -->
+              <Border x:Name="LogoWellTop" Height="14" VerticalAlignment="Top"
+                      Background="{DynamicResource DepthWellTop}" IsHitTestVisible="False"/>
+              <Border x:Name="LogoWellLeft" Width="9" HorizontalAlignment="Left"
+                      Background="{DynamicResource DepthWellLeft}" IsHitTestVisible="False"/>
+              <Border Height="1" VerticalAlignment="Bottom"
+                      Background="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
               <fx:AnimatedLogoImage x:Name="ImgLogo"
                      HorizontalAlignment="Stretch" VerticalAlignment="Center"
                      RenderOptions.BitmapInterpolationMode="HighQuality"/>
@@ -1333,12 +1342,20 @@
       <!-- ============================================================ -->
       <!-- THE TONIGHT BOARD (WPF SettingsTabView.xaml:1807): the deck in the row the folded browser
            gives back. MainShellWindow.DashboardBillboard.cs drops a BillboardCardHost into
-           BillboardHostSlot. A sunken well; the WPF depth-law bands have no Avalonia brushes yet. -->
+           BillboardHostSlot. The well bands lie over the card rim, as in WPF. -->
       <Border x:Name="DashBillboard" Grid.Row="1" IsVisible="False" Margin="0,0,0,5"
               CornerRadius="12" ClipToBounds="True"
-              Background="{DynamicResource ElevatedSurfaceBrush}"
-              BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1">
-        <Grid x:Name="BillboardHostSlot" Margin="8,8,8,4"/>
+              Background="{DynamicResource DepthWellFloorBrush}"
+              BorderBrush="{DynamicResource DepthPressedBevel}" BorderThickness="1">
+        <Grid>
+          <Grid x:Name="BillboardHostSlot" Margin="8,8,8,4"/>
+          <Border Height="9" VerticalAlignment="Top"
+                  Background="{DynamicResource DepthWellTop}" IsHitTestVisible="False"/>
+          <Border Width="6" HorizontalAlignment="Left"
+                  Background="{DynamicResource DepthWellLeft}" IsHitTestVisible="False"/>
+          <Border Height="1" VerticalAlignment="Bottom"
+                  Background="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
+        </Grid>
       </Border>
 
       <!-- ============================================================ -->
