@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -93,6 +94,7 @@ public sealed class PresetsFocalFxTests
     {
         view.IsVisible = false; Settle();
         view.IsVisible = true; Settle();
+        StepClock.Step(view, 0);
         var panel = view.FindControl<WrapPanel>("PresetCardsPanel")!;
         var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
         Assert.Contains(panel.Children.OfType<Border>(), c => c.Opacity < 1);
@@ -160,7 +162,10 @@ public sealed class PresetsFocalFxTests
             var a = Write("sync_a", 30); Write("sync_b", 20);
             var manager = new SessionManager(files); manager.LoadAllSessions();
             var added = 0; manager.SessionAdded += _ => added++;
-            var view = new PresetsTabView(); view.UseSessionManager(manager);
+            var animationClock = new StepClock();
+            var view = new PresetsTabView();
+            view.SetValue(StepClock.Property, animationClock.Instance);
+            view.UseSessionManager(manager);
             host = new Window { Width = 1200, Height = 900, Content = view }; host.Show(); host.Activate(); Settle();
             var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
             string[] Ids() => rack.Children.OfType<Border>().Select(b => ((Session)b.Tag!).Id).Where(id => id.StartsWith("sync_")).ToArray();
@@ -176,12 +181,19 @@ public sealed class PresetsFocalFxTests
             view.IsVisible = false; Settle();
             Write("sync_c", 1);
             view.IsVisible = true; Settle();
+            animationClock.Step(0);
             Assert.Equal(new[] { "sync_c", "sync_a", "sync_b" }, Ids());
             Assert.Contains(manager.AllSessions, s => s.Id == "sync_c");
             Assert.Equal(0, added);
             Assert.Contains(rack.Children.OfType<Border>(), c => c.Opacity < 1);
             Assert.Contains(view.FindControl<StackPanel>("RackSourceChips")!.Children.OfType<ToggleButton>(),
                 chip => chip.Content is TextBlock t && t.Text!.EndsWith("  3"));
+            // Layout and disk sync may take longer than the entire entrance on CI. Only
+            // animation time should decide whether it is in flight or has finished.
+            animationClock.Step(0);
+            animationClock.Step(1000);
+            Settle();
+            Assert.All(rack.Children.OfType<Border>(), c => Assert.Equal(1, c.Opacity));
         }
         finally
         {
@@ -199,7 +211,9 @@ public sealed class PresetsFocalFxTests
         try
         {
             (settings.MotionLevel, settings.PerformanceMode) = (MotionLevel.Full, false);
-            var view = new PresetsTabView(); host = new Window { Width = 1200, Height = 900, Content = view };
+            var view = new PresetsTabView();
+            view.SetValue(StepClock.Property, new StepClock().Instance);
+            host = new Window { Width = 1200, Height = 900, Content = view };
             host.Show(); host.Activate(); Settle(); body(host, view);
         }
         finally { host?.Close(); Settle(); (settings.MotionLevel, settings.PerformanceMode) = old; }
@@ -210,5 +224,18 @@ public sealed class PresetsFocalFxTests
     private static Point Center(Window host, Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), host)!.Value;
     private static void Click(Window host, Control c) { var p = Center(host, c); host.MouseDown(p, MouseButton.Left, RawInputModifiers.None); host.MouseUp(p, MouseButton.Left, RawInputModifiers.None); }
     private static void Settle() { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); }
+    // Same clock seam as SharedDeeperThemeTests: Avalonia 12 keeps IClock internal.
+    // Scope it to this view so layout/render ticks and other tests keep their own clocks.
+    private sealed class StepClock
+    {
+        private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", throwOnError: true)!;
+        private static readonly System.Reflection.MethodInfo Pulse = Base.GetMethod("Pulse", Any | System.Reflection.BindingFlags.Instance)!;
+        public static readonly AvaloniaProperty Property =
+            (AvaloniaProperty)typeof(Animatable).GetField("ClockProperty", Any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        public void Step(double ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
+        public static void Step(Control view, double ms) => Pulse.Invoke(view.GetValue(Property), new object[] { TimeSpan.FromMilliseconds(ms) });
+    }
     private sealed class Clock : TimeProvider { public long Now; public override long TimestampFrequency => TimeSpan.TicksPerSecond; public override long GetTimestamp() => Now; }
 }
