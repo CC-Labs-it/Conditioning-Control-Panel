@@ -29,8 +29,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void BtnAvailableSubjects_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
             => ShowTab("availablesubjects");
 
-        /// <summary>Clock for the toast hold and the fade-out collapse; tests step it.</summary>
         internal static Action<Window> RemoteJoinAttention = Platform.RemoteJoinAttention.Flash;
+        /// <summary>Clock for the toast hold and the fade-out collapse; tests step it.</summary>
         internal static TimeProvider RemoteOverlayTime = TimeProvider.System;
         internal static readonly TimeSpan RemoteToastHold = TimeSpan.FromSeconds(2), RemoteOverlayFadeOut = TimeSpan.FromMilliseconds(200);
         private DispatcherTimer? _remoteOverlayTimer;
