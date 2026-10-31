@@ -123,6 +123,7 @@ public sealed class VaultGateTests
         EnsureAvalonia();
         var shell = new MainShellWindow();
         var old = TierGate.ReconnectIsTheAnswerProvider;
+        var oldLd = LockdownService.Current;
         var reconnects = 0;
         shell.ReconnectFromGateOverride = () => { reconnects++; return Task.CompletedTask; };
         try
@@ -148,7 +149,7 @@ public sealed class VaultGateTests
             shell.OpenPricedCard("quest_reroll", 1);
             Assert.Null(VaultGateDialog.Open);
         }
-        finally { TierGate.ReconnectIsTheAnswerProvider = old; VaultGateDialog.Open?.Close(); shell.Close(); }
+        finally { LockdownService.Current = oldLd; TierGate.ReconnectIsTheAnswerProvider = old; VaultGateDialog.Open?.Close(); shell.Close(); }
         return Task.CompletedTask;
     });
 
