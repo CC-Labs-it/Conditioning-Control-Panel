@@ -120,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         IsReady = true;
                         _grLastBeatUtc = DateTime.UtcNow;
                         _grPinged = false;
-                        PostGlassroadInit();
+                        PostGlassroadInit(); FlushRaceRooms();
                         try { Web.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
                         return true;
                     case "heartbeat":
