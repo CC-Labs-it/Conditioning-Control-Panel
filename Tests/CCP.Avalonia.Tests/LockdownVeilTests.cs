@@ -483,6 +483,13 @@ public sealed class LockdownVeilTests
         finally { CoreSettings.Current.HideLockdownTimer = false; }
     });
 
+    private sealed class FlashClock : TimeProvider
+    {
+        public long Milliseconds = 12345;
+        public override long TimestampFrequency => 1000;
+        public override long GetTimestamp() => Milliseconds;
+    }
+
     private static string? Hex(object? brush) => (brush as global::Avalonia.Media.ISolidColorBrush)?.Color.ToUInt32().ToString("x8");
 
     /// <summary>WPF ApplyLockdownTheme / RestoreLockdownTheme / PlayLockdownActivationAnimation
@@ -491,6 +498,12 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        // Frame can take longer than the entire 600 ms animation on a loaded CI runner.
+        // Keep its clock still during rendering, then drive the actual timer callback below.
+        var clock = new FlashClock();
+        shell.LockdownFlashClock = clock;
+        // As with LeashHoldClockInterval tests, park wall ticks while supplying frames ourselves.
+        shell.LockdownFlashFrameInterval = TimeSpan.FromHours(1);
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -513,9 +526,12 @@ public sealed class LockdownVeilTests
         var flash = shell.LockdownFlash!;
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        Assert.Equal(1, flash.Opacity);
+        clock.Milliseconds += 300;
+        shell.TickLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Milliseconds += 300;
+        shell.TickLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 

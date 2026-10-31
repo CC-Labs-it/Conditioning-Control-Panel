@@ -29,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         // Headless tests exercise exactly the script payload sent to WebHost without a browser.
         internal Func<string, Task>? SendJson { get; set; }
         internal WebHost? Host => _web;
+        internal Func<WebHost>? CreateHost { get; set; }
 
         public SpiralEmbedView(string mode)
         {
@@ -42,7 +43,12 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _started = true;
             try
             {
-                _web = new WebHost { Background = Background, AllowNavigation = SpiralEmbedBridge.AllowsNavigation, InjectCarrier = true };
+                _web = CreateHost?.Invoke() ?? new WebHost();
+                _web.Background = Background;
+                _web.AllowNavigation = SpiralEmbedBridge.AllowsNavigation;
+                _web.InjectCarrier = true;
+                _web.ConfigureWindowsCore = core => Platform.SpiralWebView2Policy.Attach(core, _web.OnBrowserProcessFailed);
+                _web.BrowserProcessFailed += OnBrowserProcessFailed;
                 _web.EnvironmentRequested += OnEnvironmentRequested;
                 _web.WebMessage += Receive;
                 _web.NavigationFinished += OnNavigated;
@@ -88,8 +94,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
                     wpe.CacheDirectory = Path.Combine(folder, "cache");
                     break;
             }
-            // ponytail: 12.1's public adapter API has no context-menu, accelerator, zoom,
-            // status/error-page settings, document-created script or process-failure signal.
+            // Windows settings and process failure use the native core before its first navigation.
+            // WebKit document-created carrier and process failure remain unported.
         }
 
         public void PostState(DescentBlock? block)
@@ -134,6 +140,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
             catch (Exception ex) { Log.Debug("[Spiral] Navigated handler threw: {Error}", ex.Message); }
         }
 
+        internal void OnBrowserProcessFailed(string reason) => Fail("browser process failed: " + reason);
+
         private void Fail(string reason)
         {
             if (_disposed) return;
@@ -151,6 +159,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (_web is { } web)
             {
                 _web = null;
+                web.BrowserProcessFailed -= OnBrowserProcessFailed;
+                web.ConfigureWindowsCore = null;
                 web.EnvironmentRequested -= OnEnvironmentRequested;
                 web.WebMessage -= Receive;
                 web.NavigationFinished -= OnNavigated;
