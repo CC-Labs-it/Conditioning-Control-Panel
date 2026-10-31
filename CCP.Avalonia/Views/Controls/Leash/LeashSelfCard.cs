@@ -41,7 +41,7 @@ public sealed class LeashSelfCard : Border
         Padding = new Thickness(12);
         Margin = new Thickness(0, 4, 0, 6);
         Child = _body;
-        // ponytail: holder preview, sticker artwork, help and LeashFx need the remaining drawer lane.
+        // ponytail: holder preview, help and LeashFx need the remaining drawer lane.
         Render();
     }
 
@@ -101,7 +101,60 @@ public sealed class LeashSelfCard : Border
         ToolTip.SetTip(cap, Loc.Get("leash_video_max_hint"));
         cap.Committed += m => _ = SetVideoMaxAsync(m);
         _body.Children.Add(cap);
+        if (_me.Stickers.Count > 0) _body.Children.Add(Shelf());
         // ponytail: do not advertise WPF's panic-key hold-to-cut until this head owns that route.
+    }
+
+    // WPF LeashSelfCard.cs:248-264: total count, newest first, at most fourteen.
+    private Control Shelf()
+    {
+        var shelf = new StackPanel { Margin = new Thickness(0, 10, 0, 0), Tag = "leash-shelf" };
+        var caption = Caption(Loc.GetF("leash_self_shelf", _me.Stickers.Count));
+        caption.Margin = new Thickness(2, 0, 0, 4);
+        shelf.Children.Add(caption);
+        var wrap = new WrapPanel();
+        var seed = 0;
+        foreach (var sticker in _me.Stickers.Reverse().Take(14))
+        {
+            var disc = StickerDisc(sticker.Id, seed++);
+            disc.Margin = new Thickness(0, 0, 5, 5);
+            ToolTip.SetTip(disc, Loc.GetF("leash_sticker_from", sticker.From.Name));
+            wrap.Children.Add(disc);
+        }
+        shelf.Children.Add(wrap);
+        return shelf;
+    }
+
+    // WPF LeashLook.cs:351-381: id palette, short fallback, seeded tilt and sizing.
+    private static Control StickerDisc(string id, int seed)
+    {
+        var (color, word) = id switch
+        {
+            "good" => (F.Gold, "GOOD"),
+            "star" => (F.Gold, "★"),
+            "pet" => (F.Lilac, "PET"),
+            "heart" => (F.Pink, "♥"),
+            "wow" => (F.Mint, "WOW"),
+            _ => (F.Lilac, (id.Length > 4 ? id.Substring(0, 4) : id).ToUpperInvariant()),
+        };
+        var disc = new Grid
+        {
+            Width = 26, Height = 26, Tag = "leash-sticker:" + id,
+            RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
+            RenderTransform = new RotateTransform(((seed * 37) % 21) - 10),
+        };
+        disc.Children.Add(new Border
+        {
+            Background = color, CornerRadius = new CornerRadius(13),
+            BoxShadow = new BoxShadows(new BoxShadow { Blur = 6, Color = Color.FromArgb(89, ((SolidColorBrush)color).Color.R, ((SolidColorBrush)color).Color.G, ((SolidColorBrush)color).Color.B) }),
+        });
+        disc.Children.Add(new TextBlock
+        {
+            Text = word, FontFamily = F.Mono, FontWeight = FontWeight.Bold,
+            FontSize = word.Length > 1 ? 26 * 0.26 : 26 * 0.5, Foreground = Ink,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        });
+        return disc;
     }
 
     internal async Task CutAsync()
