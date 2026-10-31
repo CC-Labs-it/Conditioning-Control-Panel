@@ -30,7 +30,9 @@ public sealed class SpiralRoomShellTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
+        var oldSettings = CoreSettings.ServiceProvider;
         CoreSettings.ServiceProvider = () => service;
+        var oldAudio = CoreAudio.PlayOneShotProvider;
         var oldEngine = SpiralTabView.EngineAvailable;
         var oldStart = SpiralTabView.StartEmbed;
         var attempts = 0;
@@ -65,10 +67,13 @@ public sealed class SpiralRoomShellTests
         finally
         {
             shell.Close();
+            CoreAudio.PlayOneShotProvider = oldAudio;
             SpiralTabView.EngineAvailable = oldEngine;
             SpiralTabView.StartEmbed = oldStart;
-            CoreSettings.ServiceProvider = null;
+            service.SealForReset();
+            CoreSettings.ServiceProvider = oldSettings;
         }
+        Assert.Same(oldAudio, CoreAudio.PlayOneShotProvider);
         return Task.CompletedTask;
     });
 
