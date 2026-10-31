@@ -1517,6 +1517,7 @@ ends at the cap), each fail-proven. Live tester step: ~/ccp-port/evidence/live-q
 <h2 id="2026-10-30-migration-test-coverage">2026-10-30: Migration test coverage</h2>
 <table><thead><tr><th>Date</th><th>Decision</th><th>Evidence and limits</th></tr></thead><tbody>
 <tr><td>2026-10-30</td><td>Use main's WPF 7.2 model-derived settings sample and in-place handoff coverage; never ship the installer switch in this PR.</td><td>RealProfileMigrationTests compares every WPF key, rejects unknown keys and token-backed tier reset, checks token bytes and SecretStore reads (DPAPI on Windows, isolated Linux store seam), and loads achievements through the default roaming path. CorePaths isolates roaming data only for sandbox runs. No current WPF key loss found; private-profile input remains local-only. Windows execution still requires Windows CI.</td></tr>
+<tr><td>2026-10-31</td><td>Review P2: retain both migration modes in Linux and Windows CI.</td><td>The prior change made copied-profile coverage opt-in but omitted its CI invocation. Both build jobs now run in-place migration and a separate CCP_MIGRATION_COPIED=1 testhost. This restores copying, secret-exclusion and missing-token tier behavior coverage. Linux runs are verified locally; Windows execution remains CI-only. No WPF behavior or localized strings changed.</td></tr>
 </tbody></table>
 <h2 id="2026-10-14-settings-migration-test-input--local-only-avalonia-portsettings-migration-test">2026-10-14: Settings migration test input = local only (avalonia-port/settings-migration-test)</h2>
 <ul>
