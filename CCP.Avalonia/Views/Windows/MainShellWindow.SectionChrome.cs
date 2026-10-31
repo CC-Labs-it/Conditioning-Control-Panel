@@ -111,7 +111,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Deactivated += (_, _) => UpdateSectionEdgeMotion();
             PropertyChanged += (_, e) =>
             {
-                if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) UpdateSectionEdgeMotion();
+                // Avalonia raises Activated before IsActive becomes true. Resume after that change.
+                if (e.Property == IsActiveProperty || e.Property == WindowStateProperty || e.Property == IsVisibleProperty)
+                    UpdateSectionEdgeMotion();
             };
             Opened += (_, _) => { AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome; AmbientFxCanvas.Env.MotionGateChanged += OnMotionChrome; };
             Closed += (_, _) =>

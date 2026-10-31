@@ -1,7 +1,10 @@
+using System;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -80,10 +83,14 @@ public sealed class SectionEdgeLiftTests
             var s = CoreSettings.Current;
             var oldMotion = s.MotionLevel;
             var oldPerformance = s.PerformanceMode;
+            // Keep startup surfaces from owning activation in this shell lifecycle test.
+            (s.Welcomed, s.HasAcceptedAgeVerification, s.WhatMovedCardShown) = (true, true, 1);
+            s.AvatarEnabled = false;
             var w = new MainShellWindow();
             try
             {
                 w.Show();
+                Dispatcher.UIThread.RunJobs();
                 w.ShowTab("presets");
                 var lift = w.Named<SectionEdgeLift>("SectionEdgeLift")!;
                 s.MotionLevel = MotionLevel.Reduced;
@@ -99,8 +106,40 @@ public sealed class SectionEdgeLiftTests
                 AmbientFxCanvas.Env.RaiseMotionGateChanged();
                 Assert.True(lift.IsVisible);
                 Assert.False(lift.IsSpinning);
+                // WPF MainWindow.SectionEdge.cs:165: hiding must stop a lap that was running.
+                s.PerformanceMode = false;
+                w.Activate();
+                Dispatcher.UIThread.RunJobs();
+                AmbientFxCanvas.Env.RaiseMotionGateChanged();
+                Assert.True(w.IsActive);
+                Assert.True(lift.IsSpinning);
                 w.Hide();
+                Dispatcher.UIThread.RunJobs();
                 Assert.False(lift.IsSpinning);
+                w.Show();
+                w.Activate();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(w.IsActive);
+                Assert.True(lift.IsSpinning);
+                w.WindowState = WindowState.Minimized;
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(lift.IsSpinning);
+                w.WindowState = WindowState.Normal;
+                w.Activate();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(lift.IsSpinning);
+                // Headless does not deactivate an existing window when another activates.
+                // Deliver the platform notification through the shell's real event path.
+                var deactivated = typeof(global::Avalonia.Platform.IWindowBaseImpl).GetProperty("Deactivated",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!;
+                Assert.IsType<Action>(deactivated.GetValue(w.PlatformImpl))();
+                Assert.True(w.IsVisible);
+                Assert.False(w.IsActive);
+                Assert.False(lift.IsSpinning);
+                w.Activate();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(w.IsActive);
+                Assert.True(lift.IsSpinning);
             }
             finally { w.Close(); s.MotionLevel = oldMotion; s.PerformanceMode = oldPerformance; }
             return Task.CompletedTask;
@@ -111,6 +150,9 @@ public sealed class SectionEdgeLiftTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
