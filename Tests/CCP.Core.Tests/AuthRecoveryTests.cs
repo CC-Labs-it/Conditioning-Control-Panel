@@ -65,6 +65,34 @@ public sealed class AuthRecoveryTests : IDisposable
     private V2AuthService Client() => new(() => _settings, _http);
     private static HttpResponseMessage Status(HttpStatusCode code) => new(code) { Content = new StringContent("{}") };
 
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    public async Task SkillPurchaseRetriesOnlyAfterGenuineRecovery(bool recovered, bool authorized)
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var oldLanguage = loc.CurrentLanguage;
+        loc.Initialize("en");
+        try
+        {
+            _settings.SkillPoints = 100;
+            _http.Answers.Enqueue((HttpStatusCode.Unauthorized, "{}"));
+            _http.Answers.Enqueue(recovered
+                ? (HttpStatusCode.OK, "{\"auth_token\":\"fresh\"}")
+                : (HttpStatusCode.Unauthorized, "{}"));
+            if (recovered) _http.Answers.Enqueue((authorized ? HttpStatusCode.OK : HttpStatusCode.Unauthorized,
+                "{\"success\":true,\"skill_points\":98,\"unlocked_skills\":[\"pink_hours\"]}"));
+            var result = await Client().PurchaseSkillAsync("pink_hours", () => Task.FromResult(false));
+            Assert.Equal(authorized, result.Success);
+            Assert.Equal(recovered ? 3 : 2, _http.Calls.Count);
+            Assert.Equal(authorized ? 98 : 100, _settings.SkillPoints);
+            if (!authorized) Assert.Equal($"Session expired. Open {ConditioningControlPanel.Localization.Loc.Get("nav_door_settings")} > {ConditioningControlPanel.Localization.Loc.Get("set2_section_account")} and sign in again to buy skills.", result.Error);
+            if (recovered) Assert.Equal(("/v2/user/purchase-skill", "fresh"), _http.Calls.Last());
+        }
+        finally { loc.Initialize(oldLanguage); }
+    }
+
     [Fact]
     public async Task AnythingButA401IsNotRecovered()
     {
