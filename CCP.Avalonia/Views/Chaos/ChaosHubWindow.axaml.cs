@@ -105,6 +105,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private T Part<T>(string name) where T : Control => this.FindControl<T>(name)
             ?? throw new InvalidOperationException($"ChaosHubWindow: no '{name}' in the XAML");
 
+        public static ChaosHubWindow? Current { get; private set; }
+        internal static Func<Window?> HubOwner = () => Windows.MainShellWindow.Current;
+
+        // WPF ChaosOverlayWindow.xaml.cs:867-885 and DtrhHostService.cs:943-952.
+        // Shared by the recovery door and recap; a live run owns the screen.
+        internal static ChaosHubWindow? OpenAt(string? tab = null)
+        {
+            if (ChaosRunHost.IsActive) return null;
+            var hub = Current;
+            if (hub == null)
+            {
+                hub = new ChaosHubWindow();
+                // Avalonia rejects a hidden owner; recovery still needs a visible hub.
+                if (HubOwner() is { IsVisible: true } owner) hub.Show(owner);
+                else hub.Show();
+            }
+            else hub.Activate();
+            if (tab != null) hub.NavigateTo(tab);
+            return hub;
+        }
+
         public ChaosHubWindow()
         {
             // Init runs WPF's on-load refunds/sanitize, which can save. A render draws the
@@ -112,6 +133,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!RenderProof.Rendering) ChaosMeta.Init();
             AvaloniaXamlLoader.Load(this);
 
+            // WPF ChaosHubWindow.xaml.cs:30-47: registry follows the window lifetime.
+            Current = this;
+            Closed += (_, _) => { if (Current == this) Current = null; };
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
             Closed += (_, _) => { UnlockCards.Stop(); StopRevealFlashes(); };
