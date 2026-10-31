@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// and write <c>AppSettings</c> for real and save.</para>
     ///
     /// <para>The master and keyboard switches drive the Windows keyboard/audio runtime.
-    /// ponytail: ScreenOcr, highlight windows, other response actions and recent-app chips remain
+    /// ponytail: ScreenOcr, highlight windows, other response actions remain
     /// wire-shell-keyword-triggers-b; Linux has no keyword source yet.</para>
     /// </summary>
     public partial class AwarenessTabView : UserControl
@@ -148,6 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 UpdateStatusIndicator(masterOn);
                 RefreshAwarenessPresetCards();
+                RefreshSeenApps();
             }
             catch (Exception ex)
             {
@@ -328,9 +329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Log.Warning(ex, "Awareness tab: failed to write KeywordTriggerAppScope");
             }
 
-            // ponytail: WPF also rebuilds the "recently focused" chips from
-            // KeywordTriggerService.GetRecentForegroundApps(). That ring is fed by a foreground-
-            // window poll (Win32) and lives with the service, so the chip row stays empty here.
+            RefreshSeenApps();
         }
 
         private void TxtAwarenessAppList_LostFocus(object? sender, RoutedEventArgs e) => CommitAppList();
@@ -354,6 +353,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 settings.KeywordTriggerApps = parsed;
                 CoreSettings.Save();
                 TxtAwarenessAppList.Text = string.Join(", ", parsed);
+                RefreshSeenApps();
                 Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
                     parsed.Count, settings.KeywordTriggerAppScope);
             }

@@ -18,6 +18,13 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
+    internal static RecentForegroundApps RecentApps { get; } = new();
+    private static readonly DispatcherTimer AppSampler = new() { Interval = TimeSpan.FromSeconds(2) };
+    static KeywordTriggerHead() { AppSampler.Tick += (_, _) => SampleForegroundApp(); }
+    internal static void SampleForegroundApp()
+    {
+        if (Engine.IsActive) RecentApps.Sample();
+    }
     private static bool _subscribed;
     private static int _generation;
     internal static void Sync()
@@ -25,6 +32,7 @@ internal static class KeywordTriggerHead
         if (CoreSettings.Current.KeywordTriggersEnabled)
         {
             Engine.Start();
+            AppSampler.Start();
             if (!_subscribed && OperatingSystem.IsWindows() &&
                 string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
             {
@@ -37,7 +45,7 @@ internal static class KeywordTriggerHead
     }
 
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
-    internal static void Stop() { DetachKeyboard(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
+    internal static void Stop() { AppSampler.Stop(); DetachKeyboard(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
 
     /// <summary>WPF MainWindow.Awareness.cs:493: Keyboard off drops only the key source; the engine and a playing clip stay.</summary>
     internal static void DetachKeyboard()
@@ -77,6 +85,20 @@ internal static class KeywordTriggerHead
             });
         }
         catch (Exception ex) { Log.Debug(ex, "Keyword input failed"); }
+    }
+
+    internal static (string? Process, bool Own) ReadForegroundProcess()
+    {
+        // No titles, command lines or process enumeration. Unknown on native Wayland.
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"))) return (null, false);
+        try
+        {
+            uint id = 0;
+            if (OperatingSystem.IsWindows()) GetWindowThreadProcessId(GetForegroundWindow(), out id);
+            else if (OperatingSystem.IsLinux()) id = X11ActiveWindow.ReadProcessId();
+            return id == 0 ? (null, false) : Foreground(id);
+        }
+        catch { return (null, false); }
     }
 
     private static (string? Process, bool Own) Foreground(uint id)
