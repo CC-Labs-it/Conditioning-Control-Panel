@@ -831,6 +831,37 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>WPF ProfileSyncService.RecordEasterEggReadAsync (:4758): records a signed-in reader on the server
+        /// and returns how many have read the note, or -1 on any failure (signed out reads the count only).</summary>
+        public async Task<int> RecordEasterEggReadAsync()
+        {
+            try
+            {
+                var unifiedId = _settings()?.UnifiedId;
+                using var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/easter-egg");
+                string body = "{}";
+                if (!string.IsNullOrEmpty(unifiedId))
+                {
+                    AddAuthHeader(request);
+                    body = new JObject { ["unified_id"] = unifiedId }.ToString(Formatting.None);
+                }
+                request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+                using var response = await _http.SendAsync(request);
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (await TryHandleMergedAsync(response)) return -1;
+                    Log.Warning("Easter egg endpoint returned {Status}", response.StatusCode);
+                    return -1;
+                }
+                return (int?)JObject.Parse(await response.Content.ReadAsStringAsync())["count"] ?? 0;   // WPF: missing count deserializes to 0
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Easter egg request failed");
+                return -1;
+            }
+        }
+
         /// <summary>
         /// Adds the X-Auth-Token header to a V2 API request if an auth token is available.
         /// </summary>
