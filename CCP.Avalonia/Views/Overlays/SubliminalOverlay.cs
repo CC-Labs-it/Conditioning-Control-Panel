@@ -12,6 +12,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;   // SubliminalCard
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using Serilog;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
@@ -145,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Grid Build(string text, Models.AppSettings s)
         {
             var grid = new Grid { IsHitTestVisible = false };
-            if (!s.SubBackgroundTransparent)
+            if (!s.SubBackgroundTransparent && !s.GentleVisuals)
                 grid.Children.Add(new Rectangle { Fill = new SolidColorBrush(Parse(s.SubBackgroundColor, Colors.Black)) });
 
             var family = new FontFamily(string.IsNullOrWhiteSpace(s.SubliminalFont) ? "Arial" : s.SubliminalFont + ", Arial");
@@ -173,18 +174,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// close. Compositor-side alpha (<see cref="X11Overlay.SetOpacity"/>), so the card renders once.</summary>
         public void Run(double alpha, TimeSpan hold)
         {
-            var fade = TimeSpan.FromMilliseconds(SubliminalCard.DefaultFadeMs);
+            var fade = FadeDuration;
             var closed = false;
             Closed += (_, _) => closed = true;   // a newer card may have closed this one already
             // The envelope starts at the card's first frame, not at Show(): mapping and the first
             // full-screen paint take time a 100 ms hold cannot spare. A backstop from Show() caps the
             // lifetime anyway, so a late first frame shortens the card instead of stranding it.
-            DispatcherTimer.RunOnce(() => { if (!closed) Close(); }, MaxLifetime(hold));
+            DispatcherTimer.RunOnce(() => { if (!closed) Close(); }, MaxLifetime(hold, fade));
             RequestFrame(this, _ =>
             {
                 if (closed) return;
-                Ramp(0, alpha, TimeSpan.Zero, fade);
-                Ramp(alpha, 0, fade + hold, fade);
+                Ramp(0, alpha, TimeSpan.Zero, fade, () => closed);
+                Ramp(alpha, 0, fade + hold, fade, () => closed);
                 DispatcherTimer.RunOnce(() => { if (!closed) Close(); }, fade + hold + fade + TimeSpan.FromMilliseconds(1));
             });
         }
@@ -193,15 +194,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Action<TopLevel, Action<TimeSpan>> RequestFrame = (t, a) => t.RequestAnimationFrame(a);
 
         /// <summary>Show() to forced close: the whole envelope plus 100 ms of first-frame slack.</summary>
-        internal static TimeSpan MaxLifetime(TimeSpan hold) => hold + TimeSpan.FromMilliseconds(4 * SubliminalCard.DefaultFadeMs);
+        internal static TimeSpan FadeDuration => TimeSpan.FromMilliseconds(GentleVisuals.FadeMs(SubliminalCard.DefaultFadeMs));
 
-        private void Ramp(double from, double to, TimeSpan start, TimeSpan span)
+        internal static TimeSpan MaxLifetime(TimeSpan hold) => MaxLifetime(hold, FadeDuration);
+        private static TimeSpan MaxLifetime(TimeSpan hold, TimeSpan fade) => hold + fade * 2 + TimeSpan.FromMilliseconds(100);
+
+        private void Ramp(double from, double to, TimeSpan start, TimeSpan span, Func<bool> closed)
         {
-            const int steps = 3;   // ~one step per 60 Hz frame across 50 ms
+            var steps = Math.Max(3, (int)Math.Ceiling(span.TotalMilliseconds / 17));
             for (var i = 1; i <= steps; i++)
             {
                 var v = from + (to - from) * i / steps;
-                DispatcherTimer.RunOnce(() => X11Overlay.SetOpacity(this, v), start + span * i / steps);
+                DispatcherTimer.RunOnce(() => { if (!closed()) X11Overlay.SetOpacity(this, v); }, start + span * i / steps);
             }
         }
     }

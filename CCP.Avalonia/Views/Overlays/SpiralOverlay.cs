@@ -54,7 +54,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool IsShowing => Windows.Count > 0;
         internal static bool IsAnimating => _timer is { IsEnabled: true };
         internal static int FrameIndex => _index;
-        internal static TimeSpan FrameDelay => _delay;
         internal static IReadOnlyList<SpiralOverlayWindow> Shown => Windows;
 
         private static readonly SpiralPool Pool = new();
@@ -162,7 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             if (_frames.Count > 1 && Windows.Count > 0)
             {
-                _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = _delay };
+                _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = FrameDelay };
                 _timer.Tick += (_, _) => Tick();
                 _timer.Start();
             }
@@ -170,9 +169,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>WPF GifFrameTimer_Tick: next frame on every window. Allocation-free.</summary>
+        internal static TimeSpan FrameDelay => TimeSpan.FromMilliseconds(
+            ConditioningControlPanel.Services.Safety.GentleVisuals.ScaleDelayMs(_delay.TotalMilliseconds));
+
         internal static void Tick()
         {
             if (_frames.Count == 0 || Windows.Count == 0) return;
+            if (_timer != null) _timer.Interval = FrameDelay;
             _index = (_index + 1) % _frames.Count;
             var frame = _frames[_index];
             for (var i = 0; i < Windows.Count; i++) Windows[i].Spiral.Source = frame;
