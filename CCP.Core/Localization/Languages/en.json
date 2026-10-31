@@ -1,8 +1,8 @@
 {
   "deeper_open_player_failed_title": "Open Player failed",
-  "deeper_open_player_failed_fmt": "Could not open Deeper Player:\n\n{0}: {1}",
+  "deeper_open_player_failed_fmt": "Couldn't open Deeper Player:\n\n{0}: {1}",
   "deeper_open_editor_failed_title": "Open Editor failed",
-  "deeper_open_editor_failed_fmt": "Could not open Deeper Editor:\n\n{0}: {1}",
+  "deeper_open_editor_failed_fmt": "Couldn't open Deeper Editor:\n\n{0}: {1}",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",

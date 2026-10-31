@@ -12,7 +12,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// installer's AppMutex and InitializeSetup look for it. WPF's named EventWaitHandles do not exist on Unix,
     /// so the show request and its ack travel over a named pipe (a Unix socket on Linux) instead. The request
     /// carries WPF's surface handoff (LauncherHandoff payload, App.xaml.cs:1951) in place of its handoff file:
-    /// one length byte, then the UTF-8 payload; length 0 is a bare relaunch.
+    /// one length byte (255 introduces a four-byte little-endian length, capped at 65536 bytes),
+    /// then the UTF-8 payload; length 0 is a bare relaunch.
     /// </summary>
     internal sealed class SingleInstance : IDisposable
     {

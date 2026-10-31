@@ -208,11 +208,58 @@ public sealed partial class DeeperFollowupTests
                 var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
                 Assert.Equal(title, dialog.Title);
                 Assert.Equal(Loc.GetF(prefix + "_fmt", "IOException", "test detail"), dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+                if (language == "en") Assert.Equal($"Couldn't open Deeper {surface}:\n\nIOException: test detail", dialog.FindControl<TextBlock>("TxtMessage")!.Text);
                 Assert.Contains("IOException: test detail", dialog.FindControl<TextBlock>("TxtMessage")!.Text);
                 dialog.Close();
             }
         }
         finally { shell.Close(); localization.SetLanguage(previous); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("edit")]
+    [InlineData("play")]
+    public Task FirstLaunchMediaKeepsTheLauncherAndConsumesOnce(string action) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        CoreSettings.Current.PerformanceMode = true;
+        CoreSettings.Current.Welcomed = CoreSettings.Current.HasAcceptedAgeVerification = true;
+        var shell = new MainShellWindow();
+        var media = Path.Combine(TestUserDataProfile.Root, "boot.mp4");
+        File.WriteAllText(media, "test");
+        Window? opened = null;
+        object? Player() => typeof(MainShellWindow).GetField("_deeperPlayer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(shell);
+        try
+        {
+            var args = new[] { "--" + action, media };
+            LauncherWindow.Boot = ConditioningControlPanel.Services.Launcher.LauncherBoot.Decide(args, true, true, false);
+            ConditioningControlPanel.Avalonia.App.QueuePendingDeeperFileOpen(shell, args);
+            Assert.Equal(ConditioningControlPanel.Services.Launcher.BootDecision.LauncherFirst, LauncherWindow.Boot);
+            void Route(object? sender, EventArgs e) { shell.Opened -= Route; LauncherWindow.RouteBoot(shell); }
+            shell.Opened += Route;
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.IsVisible);
+            Assert.True(LauncherWindow.Instance!.IsVisible);
+            opened = action == "edit" ? Assert.Single(DeeperEditorWindow.OpenEditors) : Assert.IsType<EnhancementPlayerWindow>(Player());
+            Assert.True(opened.IsVisible);
+            Assert.Null(opened.Owner);
+            opened.Close();
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(DeeperEditorWindow.OpenEditors);
+            Assert.Null(Player());
+        }
+        finally
+        {
+            opened?.Close();
+            foreach (var editor in DeeperEditorWindow.OpenEditors.ToArray()) editor.Close();
+            (Player() as Window)?.Close();
+            LauncherWindow.Instance?.Close();
+            shell.Close();
+            File.Delete(media);
+        }
         return Task.CompletedTask;
     });
 
