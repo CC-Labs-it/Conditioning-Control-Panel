@@ -1,12 +1,13 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:companion="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages.LinksPage">
     <!-- PORTED from ConditioningControlPanel/Views/Controls/Companion/Pages/LinksPage.xaml (5681c132a):
          Companion > Links, the mod's video pool (the room's live WorkshopLibraryCell). The wheel relay
          (f3a00a9dc) is not needed: Avalonia chains an unusable wheel notch to the page by itself.
-         ponytail: the second card, "Links the companion knows" (KnowledgeLinksEditor, SaveImmediately),
-         waits on companion-v2-pages-c. -->
+         The second card, "Links the companion knows", is KnowledgeLinksEditor with SaveImmediately
+         (companion-v2-pages-c). -->
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
         <StackPanel Margin="24,16,24,24" MaxWidth="980" HorizontalAlignment="Stretch">
             <TextBlock Theme="{StaticResource Type.PageTitle}" Text="{loc:Str nav_tab_companionlinks}"/>
@@ -17,6 +18,14 @@
                     <TextBlock Text="{loc:Str companion_page_links_videos}" FontSize="15" FontWeight="SemiBold" Foreground="#FF69B4"/>
                     <TextBlock x:Name="TxtVideosNote" Text="{loc:Str companion_page_links_videos_note}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,10"/>
                     <ContentControl x:Name="VideosHost" Focusable="False"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="#14FFFFFF" CornerRadius="10" Padding="16">
+                <StackPanel>
+                    <TextBlock Text="{loc:Str companion_page_links_known}" FontSize="15" FontWeight="SemiBold" Foreground="#FF69B4"/>
+                    <TextBlock x:Name="TxtKnownNote" Text="{loc:Str companion_page_links_known_note}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,10"/>
+                    <companion:KnowledgeLinksEditor x:Name="KnowledgeLinks" SaveImmediately="True"/>
                 </StackPanel>
             </Border>
         </StackPanel>
