@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Xml.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -12,6 +14,34 @@ public sealed class InstallerAssetsPathTests
 {
     private static string RepoRoot([CallerFilePath] string here = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
+
+    // Derive build inputs from WPF's project, not a pinned framework or port publish tree.
+    private static string WpfProperty(string name) => XDocument.Load(Path.Combine(RepoRoot(),
+        "ConditioningControlPanel", "ConditioningControlPanel.csproj")).Descendants(name).Single().Value;
+
+    [Fact]
+    public void WpfInstallerPublishDirectoriesMatchTheProjectTarget()
+    {
+        var expected = @"ConditioningControlPanel\bin\Release\" + WpfProperty("TargetFramework") + @"\win-x64\publish";
+        var bat = File.ReadAllText(Path.Combine(RepoRoot(), "build-installer.bat"));
+        var directory = Regex.Match(bat, @"set PROJECT_DIR=([^\r\n]+)").Groups[1].Value;
+        var publish = Regex.Match(bat, @"set PUBLISH_DIR=([^\r\n]+)").Groups[1].Value.Replace("%PROJECT_DIR%", directory);
+        Assert.Equal(expected, publish);
+        var iss = File.ReadAllText(Path.Combine(RepoRoot(), "installer.iss"));
+        Assert.Equal(expected, Regex.Match(iss, "#define PublishDir \"([^\"]+)\"").Groups[1].Value);
+    }
+
+    [Fact]
+    public void WpfInstallerIconMatchesTheExistingProjectIcon()
+    {
+        var expected = Path.GetFullPath(Path.Combine(RepoRoot(), "ConditioningControlPanel",
+            WpfProperty("ApplicationIcon").Replace('\\', Path.DirectorySeparatorChar)));
+        var iss = File.ReadAllText(Path.Combine(RepoRoot(), "installer.iss"));
+        var icon = Regex.Match(iss, @"SetupIconFile=([^\r\n]+)").Groups[1].Value;
+        var actual = Path.GetFullPath(Path.Combine(RepoRoot(), icon.Replace('\\', Path.DirectorySeparatorChar)));
+        Assert.True(File.Exists(actual), "Installer icon must exist");
+        Assert.Equal(expected, actual);
+    }
 
     [Fact]
     public void ReadsTheExactKeyAndValueTheInstallerWrites()
