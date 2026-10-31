@@ -13,6 +13,15 @@ public sealed class NotificationLibraryTests
     [InlineData(".gif", true, false)]
     [InlineData(".webp", false, true)]
     [InlineData(".mp4", false, false)]
+    [InlineData(".jpg", true, true)]
+    [InlineData(".bmp", true, true)]
+    [InlineData(".webp", true, false)]
+    [InlineData(".PNG", false, true)]
+    [InlineData(".jpeg", false, true)]
+    [InlineData(".gif", false, true)]
+    [InlineData(".jpg", false, true)]
+    [InlineData(".bmp", false, true)]
+    [InlineData(".mp4", true, false)]
     public void ProbeRecursesAndUsesWpfExtensions(string extension, bool wallpaper, bool expected)
     {
         var root = Path.Combine(Path.GetTempPath(), "ccp-notification-" + Guid.NewGuid().ToString("N"));
