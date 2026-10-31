@@ -20,7 +20,7 @@ public sealed partial class CalendarArtView : Control, IBillboardArtView
     private BeatLoop? _loop;
     private double _seconds = 1.6, _offset;
     private bool _released;
-    // Cached so a 30 fps tick allocates no brushes and no text layouts (WPF caches its landed cells layer).
+    // Cache static brushes and number layouts; the ring and sheen still allocate per frame, as WPF does.
     private static readonly IBrush Sheet = new ImmutableSolidColorBrush(Color.FromRgb(0x1e, 0x16, 0x30), .92);
     private static readonly IBrush Unlit = new ImmutableSolidColorBrush(Color.FromRgb(46, 42, 82), .92);
     private static readonly IBrush UnlitToday = new ImmutableSolidColorBrush(Color.FromRgb(58, 52, 96));
@@ -38,14 +38,12 @@ public sealed partial class CalendarArtView : Control, IBillboardArtView
     internal bool Running => _loop != null;
     internal BillboardCalendarInfo Data => _data;
     public Color Accent { get; set; } = Color.FromRgb(0xff, 0x4f, 0xa8);
-
     public CalendarArtView(BillboardCalendarInfo data)
     {
         _data = data;
         IsHitTestVisible = false;
         DetachedFromVisualTree += (_, _) => Hold();
     }
-
     public void Run()
     {
         if (_released) return;
@@ -59,7 +57,6 @@ public sealed partial class CalendarArtView : Control, IBillboardArtView
         });
         _loop.Start();
     }
-
     public void Hold()
     {
         // Like WPF Pause: only a running clock moves the offset, so a hold before the first Run keeps the entrance.
@@ -68,7 +65,6 @@ public sealed partial class CalendarArtView : Control, IBillboardArtView
         _loop = null;
         Active.Remove(this);
     }
-
     public void Release()
     {
         Hold();
@@ -94,7 +90,6 @@ public sealed partial class CalendarArtView : Control, IBillboardArtView
         }
         return text;
     }
-
     public override void Render(DrawingContext dc)
     {
         base.Render(dc);
@@ -159,11 +154,9 @@ public sealed partial class CalendarArtView : Control, IBillboardArtView
         }
         PaintParticles(dc, w, h, t, true);
     }
-
     private static double BackOut(double t)
     {
         t = Math.Clamp(t, 0, 1) - 1;
         return 1 + 3 * t * t * t + 2 * t * t;
     }
-
 }

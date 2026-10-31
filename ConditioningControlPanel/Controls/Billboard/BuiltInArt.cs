@@ -79,31 +79,8 @@ namespace ConditioningControlPanel.Controls.Billboard
         /// </summary>
         internal static CalendarInfo CalendarData(object? data, DateTime? nowLocal = null)
         {
-            var now = nowLocal ?? DateTime.Now;
-            int monthDays = DateTime.DaysInMonth(now.Year, now.Month);
-            int counted = 0, needed = 0, days = monthDays, today = now.Day;
-            int? lit = null;
-            if (data is int[] a && a.Length >= 2) { counted = a[0]; needed = a[1]; }
-            else if (Get(data, "day") is int day && Get(data, "counted") == null)
-            {
-                today = day;
-                days = Get(data, "days") ?? Math.Max(day, monthDays);
-                counted = day - 1;
-                needed = days;
-            }
-            else if (data is IReadOnlyDictionary<string, int>)
-            {
-                counted = Get(data, "counted") ?? 0;
-                lit = Get(data, "mask");
-                needed = Get(data, "need") ?? 0;
-                days = Get(data, "days") ?? monthDays;
-                today = Get(data, "today") ?? now.Day;
-            }
-            days = Math.Clamp(days, 1, 31);
-            counted = Math.Clamp(counted, 0, days);
-            int inMonth = (int)((1L << days) - 1);
-            int mask = (lit ?? (int)((1L << counted) - 1)) & inMonth;
-            return new CalendarInfo(counted, Math.Clamp(needed, 0, 31), days, Math.Clamp(today, 1, days), mask);
+            var info = CalendarArtData.Parse(data, nowLocal);
+            return new CalendarInfo(info.Counted, info.Needed, info.Days, info.Today, info.Lit);
         }
     }
 
@@ -111,7 +88,7 @@ namespace ConditioningControlPanel.Controls.Billboard
     /// real dates), the bar from <see cref="Counted"/> toward needed, today ringed.</summary>
     public readonly record struct CalendarInfo(int Counted, int Needed, int Days, int Today, int Lit)
     {
-        public bool IsLit(int day) => day >= 1 && day <= 31 && (Lit & (1 << (day - 1))) != 0;
+        public bool IsLit(int day) => new BillboardCalendarInfo(Counted, Needed, Days, Today, Lit).IsLit(day);
     }
 
     /// <summary>Open tables sliding in one by one, each with a breathing "seat free" ring.</summary>
