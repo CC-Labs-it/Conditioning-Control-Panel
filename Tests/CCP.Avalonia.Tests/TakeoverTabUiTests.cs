@@ -26,10 +26,38 @@ public sealed class TakeoverTabUiTests
     private sealed class ChantVoice : MindWipePlayer.IVoice
     {
         internal double Level;
-        internal bool Disposed;
+        internal volatile bool Disposed;
         public double Volume { set => Level = value; }
         public void Dispose() => Disposed = true;
     }
+
+    [Fact]
+    public Task WatchdogSilencesChantBeforeLoopLockAndKeepsOptIn() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        // The shared dispatcher is enough: no window or audio device is needed.
+        var chant = global::ConditioningControlPanel.Avalonia.App.MantraChant;
+        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        var loop = typeof(MantraChantHost).GetField("_loop", flags)!.GetValue(chant)!;
+        var gate = loop.GetType().GetField("_gate", flags)!.GetValue(loop)!;
+        var old = CoreSettings.Current.MantraChantEnabled;
+        var voice = new ChantVoice();
+        Task? teardown = null;
+        try
+        {
+            CoreSettings.Current.MantraChantEnabled = true;
+            typeof(MantraChantHost).GetField("_voice", flags)!.SetValue(chant, voice);
+            lock (gate)
+            {
+                teardown = Task.Run(PanicWatchdog.Teardown);
+                Assert.True(System.Threading.SpinWait.SpinUntil(() => voice.Disposed, TimeSpan.FromSeconds(2)), "audio stops while the UI owns the loop lock");
+                Assert.False(teardown.IsCompleted);
+            }
+            teardown.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+            Assert.True(CoreSettings.Current.MantraChantEnabled);
+        }
+        finally { teardown?.WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult(); chant.Stop(); CoreSettings.Current.MantraChantEnabled = old; ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task ChantControlsMinimizeRestoreAndPanicFollowSettings() => AvaloniaTestDispatcher.RunAsync(() =>

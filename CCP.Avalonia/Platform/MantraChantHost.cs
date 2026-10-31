@@ -50,6 +50,7 @@ internal sealed class MantraChantHost : IDisposable
         if (Dispatcher.UIThread.CheckAccess()) _watch.Stop();
         else Dispatcher.UIThread.Post(() => { if (!_loop.IsRunning) _watch.Stop(); });
     }
+    internal void StopEmergency() { StopAudio(); Stop(); } // WPF MantraChantService.cs:93-100,125-135: audio first, keep opt-in.
     internal static void StopForPanic() => App.MantraChant.StopAndDisarm();
     internal void StopAndDisarm()
     {
