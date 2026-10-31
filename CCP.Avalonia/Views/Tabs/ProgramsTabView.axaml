@@ -571,9 +571,6 @@
                                                 <ColumnDefinition Width="0*"/>
                                                 <ColumnDefinition Width="1*"/>
                                             </Grid.ColumnDefinitions>
-                                            <!-- The grow-in entrance animation on this transform is
-                                                 dropped with the rest of the storyboards; it rests
-                                                 at 1, which is what it rested at on WPF too. -->
                                             <Border x:Name="RailProgressFill"
                                                     Grid.Column="0" CornerRadius="2.5"
                                                     RenderTransformOrigin="0%,50%">

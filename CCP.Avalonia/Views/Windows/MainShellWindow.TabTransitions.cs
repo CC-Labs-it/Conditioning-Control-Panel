@@ -130,6 +130,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal bool NavDoorHeaderPulsing(string tabKey) => _navHeaderPulses.ContainsKey(tabKey);
 
         private bool _firstVisitPulsesArmed;
+        private IDisposable? _firstVisitDelay;
+
+        internal void StopProgramsAnnouncement()
+        {
+            _firstVisitDelay?.Dispose();
+            _firstVisitDelay = null;
+            StopNavDoorHeaderPulse("programs");
+        }
 
         /// <summary>Stepped-clock seam (P08): tests capture the 1.2 s arming instead of waiting it out.</summary>
         internal Func<Action, TimeSpan, IDisposable> ScheduleOnce { get; set; } =
@@ -139,17 +147,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// rail rows announce a page the user has not opened yet. Opened fires on every Show, so armed once.</summary>
         private void InitializeFirstVisitPulses()
         {
-            IDisposable? delay = null;
+            void MotionChanged()
+            {
+                if (!AmbientFxCanvas.Env.AllowAmbientLoops) StopProgramsAnnouncement();
+            }
+            AmbientFxCanvas.Env.MotionGateChanged += MotionChanged;
+            PropertyChanged += (_, e) =>
+            {
+                if ((e.Property == IsVisibleProperty && !IsVisible) ||
+                    (e.Property == WindowStateProperty && WindowState == WindowState.Minimized)) StopProgramsAnnouncement();
+            };
             Opened += (_, _) =>
             {
                 if (_firstVisitPulsesArmed) return;
                 _firstVisitPulsesArmed = true;
-                delay = ScheduleOnce(StartFirstVisitPulses, TimeSpan.FromMilliseconds(1200));
+                _firstVisitDelay = ScheduleOnce(StartFirstVisitPulses, TimeSpan.FromMilliseconds(1200));
             };
             // Nothing of this window's motion may outlive it (P65): the pending start, the rows, the entrance.
             Closed += (_, _) =>
             {
-                delay?.Dispose();
+                _firstVisitDelay?.Dispose();
+                AmbientFxCanvas.Env.MotionGateChanged -= MotionChanged;
                 foreach (var key in _navHeaderPulses.Keys.ToList()) StopNavDoorHeaderPulse(key);
                 CompleteTabTransition();
             };
@@ -161,7 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var s = CoreSettings.Current;
             if (s.EnableDeeper && !s.HasSeenDeeperTab) StartNavDoorHeaderPulse("deeper");
             // WPF StartProgramsTabPulse (ProgramsTab.cs:54): a decorative loop, so it goes with the ambient clocks.
-            if (!s.HasSeenProgramsTab && AmbientFxCanvas.Env.AllowAmbientLoops) StartNavDoorHeaderPulse("programs");
+            if (IsVisible && WindowState != WindowState.Minimized && !s.HasSeenProgramsTab && AmbientFxCanvas.Env.AllowAmbientLoops) StartNavDoorHeaderPulse("programs");
         }
 
         /// <summary>

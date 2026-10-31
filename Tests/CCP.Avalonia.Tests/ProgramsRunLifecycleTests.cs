@@ -31,6 +31,75 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class ProgramsRunLifecycleTests
 {
+    private sealed class EntranceTime : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
+    }
+
+    [Fact]
+    public Task RunEntranceRevealsReentersAndSettles() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var dir = Directory.CreateTempSubdirectory("ccp-entrance-").FullName;
+        var old = AvApp.Programs;
+        var motion = CoreSettings.Current.MotionLevel;
+        var oldClock = ProgramsTabView.Clock;
+        ProgramsTabView.Clock = new EntranceTime();
+        Window? host = null;
+        try
+        {
+            CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Reduced;
+            var svc = AvApp.Programs = new ProgramService(Path.Combine(dir, "programs.json"), readOnly: false);
+            var tab = new ProgramsTabView();
+            host = new Window { Content = tab };
+            host.Show();
+            Assert.NotNull(svc.Enroll(svc.GetProgram("first_week")!, false));
+            tab.RefreshPrograms();
+            Assert.True(tab.RunEntranceRunning);
+            var header = tab.FindControl<Border>("RunHeaderPanel")!;
+            var today = tab.FindControl<Border>("TodayPanel")!;
+            var scale = (global::Avalonia.Media.ScaleTransform)tab.FindControl<Border>("RailProgressFill")!.RenderTransform!;
+            tab.StepRunEntrance(200);
+            Assert.InRange(header.Opacity, .88, .90);
+            Assert.InRange(today.Opacity, .59, .61);
+            Assert.InRange(((global::Avalonia.Media.TranslateTransform)header.RenderTransform!).Y, 2.37, 2.38);
+            Assert.InRange(((global::Avalonia.Media.TranslateTransform)today.RenderTransform!).Y, 6.40, 6.41);
+            Assert.InRange(scale.ScaleX, .24, .26);
+            tab.RefreshPrograms();
+            Assert.InRange(header.Opacity, .88, .90); // refresh never replays
+            tab.CompleteRunEntrance();
+            Assert.False(tab.RunEntranceRunning);
+            Assert.Equal(1, header.Opacity);
+            Assert.Equal(1, scale.ScaleX);
+            tab.IsVisible = false;
+            tab.IsVisible = true;
+            Assert.True(tab.RunEntranceRunning);
+            host.Content = null;
+            Assert.False(tab.RunEntranceRunning);
+            host.Content = tab;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(tab.RunEntranceRunning);
+            CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+            ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(tab.RunEntranceRunning);
+            Assert.Equal(1, today.Opacity);
+            tab.IsVisible = false;
+            tab.IsVisible = true;
+            Assert.False(tab.RunEntranceRunning);
+        }
+        finally
+        {
+            host?.Close();
+            AvApp.Programs = old;
+            CoreSettings.Current.MotionLevel = motion;
+            ProgramsTabView.Clock = oldClock;
+            Directory.Delete(dir, true);
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task EnrollStartPanicCompleteAndWithdrawFromTheShell() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

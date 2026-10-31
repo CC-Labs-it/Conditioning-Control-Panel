@@ -55,6 +55,27 @@ public sealed class TabTransitionsTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData("hide")]
+    [InlineData("motion")]
+    [InlineData("panic")]
+    public Task ProgramsCueParksOnHideMotionAndPanic(string route) => Run(shell =>
+    {
+        CoreSettings.Current.HasSeenProgramsTab = false;
+        shell.ShowTab("settings");
+        shell.StartFirstVisitPulses();
+        Assert.True(shell.NavDoorHeaderPulsing("programs"));
+        if (route == "hide") shell.Hide();
+        else if (route == "motion")
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        }
+        else PanicSurfaces.All.Single(x => x.Id == "program-cue").Stop(shell);
+        Assert.False(shell.NavDoorHeaderPulsing("programs"));
+        Assert.Equal(1, shell.Named<Button>("DoorYou")!.Opacity);
+    });
+
     [Fact]
     public Task ShowTabFadesTheIncomingTabInUnlessMotionIsOff() => Run(shell =>
     {
