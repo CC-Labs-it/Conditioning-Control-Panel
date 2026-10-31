@@ -372,6 +372,41 @@ public sealed class ShellSettingsWiringTests
         PackEncryptionService.SaveEncryptedManifest(Newtonsoft.Json.JsonConvert.SerializeObject(manifest), Path.Combine(path, ".manifest.enc"));
     }
 
+    [Theory]
+    [InlineData("PetFromClick", 0)]
+    [InlineData("OnPetTick", 0)]
+    [InlineData("UpdateWobbleFace", 0)]
+    [InlineData("PetFromClick", 3)]
+    [InlineData("OnPetTick", 3)]
+    [InlineData("UpdateWobbleFace", 3)]
+    public Task TourSpeechOwnsTheFaceDuringPatsAndDragging(string reaction, int stage) => Run(async (_, _) =>
+    {
+        var desk = new ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskWindow();
+        var state = ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
+        int pets = state.PetsTotal;
+        bool gist = state.PetGistGot;
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        try
+        {
+            desk.Show();
+            desk.SayTourLine("A tour line", "^_~");
+            for (int i = 0; i < stage; i++) desk.AdvanceTourSpeech();
+            var face = desk.Face;
+            var words = desk.TourSpeechText;
+            object?[]? args = reaction == "OnPetTick" ? new object?[] { null, EventArgs.Empty }
+                : reaction == "UpdateWobbleFace" ? new object?[] { 10000d } : null;
+            desk.GetType().GetMethod(reaction, flags)!.Invoke(desk, args);
+            Assert.Equal(face, desk.Face);
+            Assert.Equal(words, desk.TourSpeechText);
+            Assert.Null(desk.GetType().GetField("_patFeedback", flags)!.GetValue(desk));
+            Assert.True(desk.ChainLive);
+            desk.CancelChain();
+            Assert.False(desk.ChainLive);
+        }
+        finally { desk.Close(); state.PetsTotal = pets; state.PetGistGot = gist; }
+        await Task.CompletedTask;
+    });
+
     private sealed class Store : TutorialService.ITourCompletionStore
     {
         private readonly HashSet<string> _walked = new();
