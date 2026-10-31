@@ -10,6 +10,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
+using ConditioningControlPanel.Avalonia.Controls;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
@@ -181,9 +182,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 VerticalAlignment = VerticalAlignment.Top,
             };
             label.Build();
+            Control line = label;
+            // WPF ChaosModeService.cs:1566,1574 prefixes a card mark; use the head's Fluent mapping.
+            if (a.Kind is ChaosAnnounceKind.Mantra or ChaosAnnounceKind.Temptation
+                && ChaosBoonPool.All.Any(b => b.Id == a.ArtKey))
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
+                row.Children.Add(new IconGlyph { Kind = a.Kind == ChaosAnnounceKind.Temptation ? ChaosOverlayWindow.CurseIcon : IconKind.Diamond,
+                    Variant = IconVariant.Filled, Size = FontSizeDip, Foreground = fill, VerticalAlignment = VerticalAlignment.Center });
+                row.Children.Add(label);
+                line = row;
+            }
             _scale = new ScaleTransform(ChaosAnnounceTiming.PopFrom, ChaosAnnounceTiming.PopFrom);
-            label.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-            label.RenderTransform = _scale;
+            line.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+            line.RenderTransform = _scale;
 
             // Anchored just under the effect-banner strip, centred over the primary work area.
             var anchor = new Grid
@@ -194,7 +206,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 IsHitTestVisible = false,
             };
             if (!double.IsNaN(wa.width)) anchor.Width = wa.width;
-            anchor.Children.Add(label);
+            anchor.Children.Add(line);
             _host.Children.Clear();
             _host.Children.Add(anchor);
         }

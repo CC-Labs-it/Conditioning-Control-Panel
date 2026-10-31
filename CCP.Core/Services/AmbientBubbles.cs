@@ -156,7 +156,7 @@ namespace ConditioningControlPanel.Services
             return b;
         }
 
-        /// <summary>WPF Bubble ctor with a Chaos spec, FloatUp only: the spec's size, the chaos
+        /// <summary>WPF Bubble ctor (BubbleService.cs:3338,4095), FloatUp/RainDown: the spec's size, the chaos
         /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
             double scaling, Chaos.EffectBubbleSpec spec)
@@ -170,7 +170,9 @@ namespace ConditioningControlPanel.Services
             b.Angle = r.Next(360);
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
-            b.Y = (areaY + areaH) / scaling;
+            b.Y = spec.Motion == Chaos.ChaosMotion.RainDown
+                ? areaY / scaling - b.Size : (areaY + areaH) / scaling;
+            if (spec.Motion == Chaos.ChaosMotion.RainDown) b._top = (areaY + areaH) / scaling + 50;
             return b;
         }
 
@@ -264,9 +266,10 @@ namespace ConditioningControlPanel.Services
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
-            Y -= _speed;
+            bool raining = Spec?.Motion == Chaos.ChaosMotion.RainDown;
+            Y += raining ? _speed : -_speed;
             X = _startX + offset;
-            if (Y >= _top) return Result.Alive;
+            if (raining ? Y <= _top : Y >= _top) return Result.Alive;
             return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
         }
     }

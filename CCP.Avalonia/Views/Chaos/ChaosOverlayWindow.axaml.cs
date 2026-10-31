@@ -401,6 +401,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _revealTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
             _revealTimer.Tick += (_, _) =>
             {
+                if (_closed) return;
                 if (_revealIndex >= _draftCards.Count)
                 {
                     _revealTimer?.Stop();
@@ -494,6 +495,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _autoResumeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _autoResumeTimer.Tick += (_, _) =>
             {
+                if (_closed) return;
                 _autoResumeRemainingSec--;
                 if (_selectionMade) { _autoResumeTimer?.Stop(); return; }
                 if (_autoResumeRemainingSec <= 0)
@@ -736,6 +738,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _confirmTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
             _confirmTimer.Tick += (_, _) =>
             {
+                if (_closed) return;
                 _confirmTimer?.Stop();
                 _confirmTimer = null;
                 ChooseBoon(_selectedBoon);
@@ -1099,8 +1102,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         protected override void OnClosed(EventArgs e)
         {
-            base.OnClosed(e);
             _closed = true;
+            // Close also owns draft timers; WPF ChaosOverlayWindow.xaml.cs:889 leaks them.
+            _revealTimer?.Stop(); _revealTimer = null;
+            _autoResumeTimer?.Stop(); _autoResumeTimer = null;
+            _confirmTimer?.Stop(); _confirmTimer = null;
+            _onBoonPick = null;
+            base.OnClosed(e);
             // The three forever tweens (the boon pulse, the two ken-burns drifts) would otherwise
             // keep the 16ms pump awake on a dead window for the process's life.
             _tweens.Clear();
@@ -1511,6 +1519,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 rare ? new[] { "chaos/dling.mp3", "chime1.mp3" }
                      : new[] { "chaos/thud.mp3", "bubbles/Pop2.mp3" },
                 rare ? 0.6f : 0.65f);
+
+            // WPF Services/Chaos/ChaosSfx.cs:21: dedicated cue, then bundled level-up fallback.
+            public static void PlayWaveClear() => PlayFirstAvailable(new[] { "chaos/wave_clear.mp3", "lvup.mp3" }, 0.8f);
 
             public static void PlayBoonPicked() => PlayFirstAvailable(new[] { "chaos/boon_pick.mp3", "chime2.mp3" }, 0.7f);
 

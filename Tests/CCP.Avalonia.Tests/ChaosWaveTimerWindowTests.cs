@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
 using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -31,7 +32,21 @@ public sealed class ChaosWaveTimerWindowTests
         public override DateTimeOffset GetUtcNow() => Now;
     }
 
-    private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
+    private static void Ticks(int n)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            var overlay = ChaosRunHost.Overlay;
+            if (overlay?.FindControl<Border>("DraftPanel")?.IsVisible == true)
+            {
+                Assert.False(ChaosWaveTimerWindow.Active!.Pill.IsVisible);
+                typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic
+                    | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { null });
+                overlay.FinishCountdown();
+            }
+            ChaosRunHost.Tick();
+        }
+    }
 
     [Fact]
     public async Task Pocket_watch_counts_the_wave_down_goes_red_blinks_and_panic_closes_it()

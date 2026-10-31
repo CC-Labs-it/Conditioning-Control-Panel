@@ -21,7 +21,7 @@ public sealed class ChaosPopTextTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -158,7 +158,9 @@ public sealed class ChaosPopTextTests
                     var w = new ChaosPopText();
                     Assert.Same(w, ChaosPopText.Pool.Acquire(() => w));
                     if (panic) ChaosRunHost.ForceShutdown();
-                    else for (int i = 0; i < 250; i++) ChaosRunHost.Tick();   // past the 60 s run: EndRun
+                    else for (int i = 0; i < 250; i++) ChaosRunHostTests.TickRun();   // past the 60 s run: EndRun
+                    Assert.False(ChaosRunHost.IsDescending);
+                    if (!panic) Assert.True(ChaosRunHost.State!.ElapsedSec >= 60);
                     Assert.Empty(ChaosPopText.Pool.All);
                     ChaosRunHost.ForceShutdown();
                 }
