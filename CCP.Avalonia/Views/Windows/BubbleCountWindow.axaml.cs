@@ -759,12 +759,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// Individual bubble for the counting game - its own window, so it never shares a visual tree
     /// with the video surface.
     ///
-    /// PORTED from the CountBubble class in the same WPF file. The Win32 in it
-    /// (<c>SetWindowPos(HWND_TOPMOST)</c>) is gone: <c>Topmost</c> is the platform's own answer.
-    /// What DOES need the shim is the pair the original got for free from Windows - being
-    /// transparent to the mouse, and sitting above the game window specifically rather than
-    /// somewhere in the keep-above band. Both are applied after Show(), because both need a
-    /// mapped X11 or Win32 window, and both are no-ops without a native handle.
+    /// WPF Windows/BubbleCountWindow.xaml.cs:1729 raises every new bubble to HWND_TOPMOST,
+    /// above older bubbles and other topmost windows. Windows uses the same native raise here.
+    /// X11 keeps its owner-relative restack. Both backends also make the bubble click-through.
     /// </summary>
     internal class CountBubble : IDisposable
     {
@@ -853,15 +850,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // IsHitTestVisible only silences Avalonia's own hit testing; the compositor would still
             // send the click here. This is the WS_EX_TRANSPARENT the original got implicitly.
             X11Overlay.SetClickThrough(_window, true);
-            // Topmost puts the bubble in the keep-above band; it does not order it against the game
-            // window, which is topmost too. This pins it directly above its owner - the ordering
-            // the original's SetWindowPos(HWND_TOPMOST)-per-bubble was reaching for.
-            X11Overlay.RestackAbove(_window, owner);
+            StackWindow(X11Overlay.BackendOf(_window.TryGetPlatformHandle()),
+                () => X11Overlay.Raise(_window), () => X11Overlay.RestackAbove(_window, owner));
 
             // Lifespan - bubble stays for 1-1.5 seconds then pops. Driven by the owning
             // window's single shared animation timer (see BubbleCountWindow.AnimateAllCountBubbles)
             // rather than per-bubble timers, which previously meant ~2 DispatcherTimers per bubble.
             _lifeRemainingMs = 1000 + random.Next(500);
+        }
+
+        // WPF Windows/BubbleCountWindow.xaml.cs:1729: each new bubble heads the topmost band.
+        internal static void StackWindow(OverlayBackend backend, Action raise, Action restack)
+        {
+            if (backend == OverlayBackend.Win32) raise();
+            else if (backend == OverlayBackend.X11) restack();
         }
 
         /// <summary>

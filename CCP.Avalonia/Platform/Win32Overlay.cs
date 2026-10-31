@@ -53,7 +53,6 @@ internal static class Win32Overlay
     }
 
     // WPF AvatarTubeWindow.Windowing.cs:283-284 keeps the attached tube directly above main;
-    // BubbleCountWindow.xaml.cs:1729 raises each count bubble without activation or geometry changes.
     // Win32 inserts BELOW hWndInsertAfter, so inserting after sibling would reverse RestackAbove.
     // Use the sibling's predecessor, without moving the sibling or its owner. Keep the sibling's topmost band at its boundary.
     internal static bool RestackAbove(IntPtr hwnd, IntPtr sibling, Func<IntPtr, IntPtr> previous,
