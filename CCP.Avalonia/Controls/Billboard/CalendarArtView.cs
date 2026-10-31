@@ -121,6 +121,9 @@ public sealed partial class CalendarArtView : Control, IBillboardArtView
                 rows * pitch - cell * .08 + pad * 2 + (_data.Needed > 0 ? cell * .62 : 0)),
                 cell * .28, Sheet, h * .02, false);
             for (int day = 1; day <= _data.Days; day++)
+                if (day != _data.Today) PaintDay(day);
+            PaintDay(_data.Today); // WPF BuiltInArt.cs:313-327: today sits above the entire grid.
+            void PaintDay(int day)
             {
                 bool today = day == _data.Today, lit = _data.IsLit(day);
                 int i = day - 1;

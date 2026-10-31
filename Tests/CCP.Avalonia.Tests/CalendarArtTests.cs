@@ -78,6 +78,17 @@ public sealed class CalendarArtTests
                 frames.Add(frame.Pixels.Select((c, i) => (long)c.Red * (i + 1)).Sum());
             }
             Assert.Equal(frames.Count, frames.Distinct().Count());
+            // WPF BuiltInArt.cs:313-327: today's shadow and glint cover the next cell.
+            foreach (double t in new[] { 64.48, 1.6 })
+            {
+                var front = new CalendarArtView(new BillboardCalendarInfo(0, 0, 31, 1, 0)) { SecondsForTests = t };
+                var control = new CalendarArtView(new BillboardCalendarInfo(0, 0, 31, 31, 0)) { SecondsForTests = t };
+                foreach (var view in new[] { front, control }) { view.Measure(new Size(800, 300)); view.Arrange(new Rect(0, 0, 800, 300)); }
+                using var top = Draw(front.Render); using var behind = Draw(control.Render);
+                int delta = t > 2 ? top.GetPixel(442, 43).Red - behind.GetPixel(442, 43).Red : behind.GetPixel(439, 60).Red - top.GetPixel(439, 60).Red;
+                Assert.True(delta > 5, $"Today must overlay its neighbour at {t}s: pixel difference {delta}");
+                front.Release(); control.Release();
+            }
             art.SecondsForTests = null;
             CalendarArtView.MotionAllowed = () => true;
             art.Run();
