@@ -14,7 +14,7 @@ public sealed class DeeperOverlayOpacityLabelTests
     public Task OpacityLabelsCarryTheSliderValue() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var editor = new DeeperEditorWindow();
         try
