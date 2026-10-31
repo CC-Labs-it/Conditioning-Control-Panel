@@ -124,7 +124,6 @@
                      click squash and drag wobble instead of fighting them. -->
                 <TextBlock x:Name="FaceView"
                            Text="0_0"
-                           FontFamily="Noto Sans Mono,DejaVu Sans Mono,Consolas,monospace"
                            FontWeight="Bold"
                            Foreground="#FF69B4"
                            TextAlignment="Center"
