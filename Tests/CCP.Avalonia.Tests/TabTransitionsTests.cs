@@ -136,9 +136,34 @@ public sealed class TabTransitionsTests
     });
 
     [Fact]
+    public Task ReducedBeforeStartupCancelsOnlyProgramsDelay()
+    {
+        var pending = new System.Collections.Generic.List<Pending>();
+        return Run(shell =>
+        {
+            var s = CoreSettings.Current;
+            s.HasSeenProgramsTab = s.HasSeenDeeperTab = false;
+            s.EnableDeeper = true;
+            shell.ShowTab("settings");
+            Assert.False(shell.NavDoorHeaderPulsing("deeper"));
+            s.MotionLevel = MotionLevel.Reduced;
+            ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            foreach (var delay in pending) delay.Fire();
+            Assert.True(shell.NavDoorHeaderPulsing("deeper"));
+            Assert.False(shell.NavDoorHeaderPulsing("programs"));
+            Assert.Single(pending.Where(p => p.Disposed));
+        }, shell => shell.ScheduleOnce = (fire, delay) =>
+        {
+            var scheduled = new Pending(fire, delay);
+            pending.Add(scheduled);
+            return scheduled;
+        });
+    }
+
+    [Fact]
     public Task OpeningTheWindowArmsTheFirstVisitPulsesOnceAfterOnePointTwoSeconds()
     {
-        var armed = new System.Collections.Generic.List<(Action Fire, TimeSpan Delay)>();
+        var armed = new System.Collections.Generic.List<Pending>();
         return Run(shell =>
         {
             var s = CoreSettings.Current;
@@ -147,24 +172,23 @@ public sealed class TabTransitionsTests
             s.HasSeenDeeperTab = false;
             shell.ShowTab("settings");
 
-            // WPF xaml.cs:3795: Opened arms one 1.2 s delay; nothing pulses before it elapses.
-            var only = Assert.Single(armed);
-            Assert.Equal(TimeSpan.FromMilliseconds(1200), only.Delay);
+            // WPF xaml.cs:3891,3912: independent 1.2 s delays, armed only once.
+            Assert.Equal(2, armed.Count);
+            Assert.All(armed, p => Assert.Equal(TimeSpan.FromMilliseconds(1200), p.Delay));
             Assert.False(shell.NavDoorHeaderPulsing("deeper"));
+            foreach (var delay in armed) delay.Fire();
+            Assert.True(shell.NavDoorHeaderPulsing("deeper"));
+            Assert.True(shell.NavDoorHeaderPulsing("programs"));
 
-            // Opened fires on every Show; the arming does not repeat.
             shell.Hide();
             shell.Show();
             Dispatcher.UIThread.RunJobs();
-            Assert.Single(armed);
-
-            only.Fire();
-            Assert.True(shell.NavDoorHeaderPulsing("deeper"));
-            Assert.True(shell.NavDoorHeaderPulsing("programs"));
+            Assert.Equal(2, armed.Count);
         }, shell => shell.ScheduleOnce = (fire, delay) =>
         {
-            armed.Add((fire, delay));
-            return new Pending();
+            var scheduled = new Pending(fire, delay);
+            armed.Add(scheduled);
+            return scheduled;
         });
     }
 
@@ -408,5 +432,11 @@ public sealed class TabTransitionsTests
         public override long GetTimestamp() => Now;
     }
 
-    private sealed class Pending : IDisposable { public void Dispose() { } }
+    private sealed class Pending(Action fire, TimeSpan delay) : IDisposable
+    {
+        public TimeSpan Delay => delay;
+        public bool Disposed { get; private set; }
+        public void Fire() { if (!Disposed) fire(); }
+        public void Dispose() => Disposed = true;
+    }
 }

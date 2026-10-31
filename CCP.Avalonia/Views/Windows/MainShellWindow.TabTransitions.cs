@@ -130,12 +130,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal bool NavDoorHeaderPulsing(string tabKey) => _navHeaderPulses.ContainsKey(tabKey);
 
         private bool _firstVisitPulsesArmed;
-        private IDisposable? _firstVisitDelay;
+        private IDisposable? _programsFirstVisitDelay;
+        private IDisposable? _deeperFirstVisitDelay;
 
         internal void StopProgramsAnnouncement()
         {
-            _firstVisitDelay?.Dispose();
-            _firstVisitDelay = null;
+            _programsFirstVisitDelay?.Dispose();
+            _programsFirstVisitDelay = null;
             StopNavDoorHeaderPulse("programs");
         }
 
@@ -143,7 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal Func<Action, TimeSpan, IDisposable> ScheduleOnce { get; set; } =
             (action, delay) => DispatcherTimer.RunOnce(action, delay);
 
-        /// <summary>WPF MainWindow.xaml.cs:3795-3830, on load: 1.2 s later the Deeper and Programs
+        /// <summary>WPF MainWindow.xaml.cs:3882-3918, on load: 1.2 s later the Deeper and Programs
         /// rail rows announce a page the user has not opened yet. Opened fires on every Show, so armed once.</summary>
         private void InitializeFirstVisitPulses()
         {
@@ -161,23 +162,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (_firstVisitPulsesArmed) return;
                 _firstVisitPulsesArmed = true;
-                _firstVisitDelay = ScheduleOnce(StartFirstVisitPulses, TimeSpan.FromMilliseconds(1200));
+                // WPF MainWindow.xaml.cs:3885-3913: independent startup delays.
+                _deeperFirstVisitDelay = ScheduleOnce(StartDeeperFirstVisitPulse, TimeSpan.FromMilliseconds(1200));
+                _programsFirstVisitDelay = ScheduleOnce(StartProgramsFirstVisitPulse, TimeSpan.FromMilliseconds(1200));
             };
             // Nothing of this window's motion may outlive it (P65): the pending start, the rows, the entrance.
             Closed += (_, _) =>
             {
-                _firstVisitDelay?.Dispose();
+                _programsFirstVisitDelay?.Dispose();
+                _deeperFirstVisitDelay?.Dispose();
                 AmbientFxCanvas.Env.MotionGateChanged -= MotionChanged;
                 foreach (var key in _navHeaderPulses.Keys.ToList()) StopNavDoorHeaderPulse(key);
                 CompleteTabTransition();
             };
         }
 
-        /// <summary>The two independent first-visit checks (WPF xaml.cs:3797 Deeper, :3816 Programs).</summary>
+        /// <summary>The two independent first-visit checks (WPF xaml.cs:3885 Deeper, :3906 Programs).</summary>
         internal void StartFirstVisitPulses()
+        {
+            StartDeeperFirstVisitPulse();
+            StartProgramsFirstVisitPulse();
+        }
+
+        private void StartDeeperFirstVisitPulse()
         {
             var s = CoreSettings.Current;
             if (s.EnableDeeper && !s.HasSeenDeeperTab) StartNavDoorHeaderPulse("deeper");
+        }
+
+        private void StartProgramsFirstVisitPulse()
+        {
+            var s = CoreSettings.Current;
             // WPF StartProgramsTabPulse (ProgramsTab.cs:54): a decorative loop, so it goes with the ambient clocks.
             if (IsVisible && WindowState != WindowState.Minimized && !s.HasSeenProgramsTab && AmbientFxCanvas.Env.AllowAmbientLoops) StartNavDoorHeaderPulse("programs");
         }
