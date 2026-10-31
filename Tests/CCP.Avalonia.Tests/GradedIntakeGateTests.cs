@@ -205,7 +205,9 @@ public sealed class GradedIntakeGateTests
     private static void EnsureAvalonia()
     {
         if (Application.Current is not null) return;
-        AppBuilder.Configure<AvApp>()
+        AppBuilder.Configure<AvApp>().WithInterFont()
+            .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+            .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .SetupWithoutStarting();

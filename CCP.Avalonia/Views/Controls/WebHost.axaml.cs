@@ -97,6 +97,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public event Action<string>? WebMessage;
 
+        /// <summary>Native process death, on the UI thread (WPF IntakeHostService.cs:1025).</summary>
+        public event Action<string>? ProcessFailed;
+
+        internal void OnProcessFailed(string reason) => ProcessFailed?.Invoke(reason);
+
         // The native adapter asks at first attachment, before navigation. Keep OS setup in the caller.
         internal event Action<WebViewEnvironmentRequestedEventArgs>? EnvironmentRequested;
 
@@ -309,6 +314,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     _web = new NativeWebView();
                     // A native child does not inherit the parent's brush (Spiral's no-white-flash sink).
                     BindNativeBackground(_web);
+                    Platform.WebProcessWatch.Attach(_web, OnProcessFailed);
                     // WebKitGTK unless WPE was chosen: the package picks WPE first, and on wpewebkit 2.54+ its adapter
                     // throws EntryPointNotFoundException in an async void, which takes the whole app down.
                     var preferGtk = LinuxChoice != "wpe";

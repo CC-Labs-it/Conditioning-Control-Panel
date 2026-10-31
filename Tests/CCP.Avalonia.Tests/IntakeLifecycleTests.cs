@@ -52,6 +52,66 @@ public sealed class IntakeLifecycleTests
     }
 
     [Fact]
+    public Task NativeDeathBeforeReadyRetriesWindowedOnceAndIgnoresClosedEngines() => WithCleanState(() =>
+    {
+        IntakeHostWindow.RelaunchedOnce = false;
+        CoreSettings.Current.IntakeFullscreen = true;
+        var first = GradedIntakeTabView.OpenIntake(null, duckMain: false);
+        first.Web.OnProcessFailed("RenderProcessExited"); // a crash during boot has no heartbeat yet
+        var second = Only();
+        Assert.NotSame(first, second);
+        Assert.NotEqual(WindowState.FullScreen, second.WindowState);
+        Assert.True(CoreSettings.Current.IntakeFullscreen); // recovery does not overwrite the preference
+        first.Web.OnProcessFailed("late");
+        Assert.Same(second, Only());
+        second.Web.OnProcessFailed("RenderProcessExited");
+        Assert.Empty(IntakeHostWindow.Snapshot());
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task NativeRecoveryKeepsDuckChoiceAndRestoresMainOnSecondDeath() => WithCleanState(() =>
+    {
+        IntakeHostWindow.RelaunchedOnce = false;
+        var main = new Window();
+        main.Show();
+        try
+        {
+            var first = GradedIntakeTabView.OpenIntake(main, duckMain: true);
+            first.Web.OnProcessFailed("webkit:0");
+            var second = Only();
+            Assert.NotSame(first, second);
+            Assert.Equal(WindowState.Minimized, main.WindowState);
+            second.Web.OnProcessFailed("webkit:0");
+            Assert.Empty(IntakeHostWindow.Snapshot());
+            Assert.NotEqual(WindowState.Minimized, main.WindowState);
+        }
+        finally { main.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public void NativeSubscriptionQueuesDeathAndDropsStaleCallbacksOnDispose()
+    {
+        var queued = new Queue<Action>();
+        var reasons = new List<string>();
+        Action<string>? native = null;
+        int stops = 0;
+        var watch = new global::ConditioningControlPanel.Avalonia.Platform.WebProcessWatch.Watch(reasons.Add, queued.Enqueue);
+        watch.Listen(cb => { native = cb; return () => stops++; });
+        native!("first");
+        Assert.Empty(reasons); // native event stack must unwind before destroying its engine
+        queued.Dequeue()();
+        Assert.Equal(new[] { "first" }, reasons);
+        native("late");
+        watch.Dispose();
+        watch.Dispose();
+        queued.Dequeue()();
+        Assert.Equal(new[] { "first" }, reasons);
+        Assert.Equal(1, stops);
+    }
+
+    [Fact]
     public Task TheRunDucksTheControlPanelAndEveryCloseGivesItBack() => WithCleanState(() =>
     {
         var main = new Window();

@@ -27,8 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// loom-save, intake-save-image, need-remote, the speech bridge and the audio-web pack request
     /// are in IntakeHostWindow.Bridge.cs; window mode, duck and the heartbeat watchdog in
     /// IntakeHostWindow.Lifecycle.cs.
-    /// ponytail: not ported yet - relaunch on a web-process crash (WebHost raises no process-failed),
-    /// the EmiDesk intakeRunning hold (this head's
+    /// ponytail: not ported yet - the EmiDesk intakeRunning hold (this head's
     /// EmiDeskService has no Fire/ReleaseHold director).
     /// </summary>
     internal sealed partial class IntakeHostWindow : Window
@@ -51,11 +50,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Height = 800;
             Content = Web;
             Web.WebMessage += OnPageMessage;
+            Web.ProcessFailed += OnProcessFailed;
             // WPF DisposeAll: a closed window never leaves the mic open.
             Opened += (_, _) => { lock (OpenWindows) OpenWindows.Add(this); StartLifecycle(); };
             Closed += (_, _) =>
             {
                 _closed = true;
+                Web.ProcessFailed -= OnProcessFailed;
                 lock (OpenWindows) OpenWindows.Remove(this);
                 StopSpeechBridge("closed", notifyPage: false);
                 EndLifecycle();
