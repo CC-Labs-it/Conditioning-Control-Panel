@@ -34,7 +34,12 @@ public class TestIsolationTests
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
     [Fact]
-    public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
+    public void EveryTestRunsInsideTheHook()
+    {
+        Assert.NotNull(IsolateProcessStateAttribute.Current);
+        Assert.NotNull(new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily("Segoe UI Black, Segoe UI"),
+            weight: global::Avalonia.Media.FontWeight.Black).GlyphTypeface);
+    }
 
     [Theory]
     [InlineData(typeof(CoreSettings), nameof(CoreSettings.ServiceProvider))]
