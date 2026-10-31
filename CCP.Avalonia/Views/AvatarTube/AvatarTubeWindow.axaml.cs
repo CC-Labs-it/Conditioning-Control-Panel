@@ -314,8 +314,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
 
             InitTakeoverCountdownBar();
-            // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection;
-            // neither has ported.
+            StartFloatingAnimation(); // WPF xaml.cs:614 and Windowing.cs:1481
+            // Part B: WPF StartFullscreenDetection.
         }
 
         protected override void OnClosed(EventArgs e)
@@ -327,6 +327,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _avatarSetsClosed = true;
             CoreMods.ModChanged -= OnTubeModChanged;
             CancelAvatarSwitch();
+            StopFloatingAnimation(); // WPF Windowing.cs:1507
             ReleaseWindowing();
             DetachAwareness();
             UnwireContentPolicyWarning();
