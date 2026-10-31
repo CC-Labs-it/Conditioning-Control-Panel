@@ -150,7 +150,7 @@ public sealed class TutorialStageTests
         host.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, "");
         Dispatcher.UIThread.RunJobs();
         Assert.False(CoreTutorial.IsActive);
-        Assert.False(overlay.IsOnStage);
+        PumpUntil(() => !overlay.IsOnStage);
         Assert.Same(target, host.FocusManager?.GetFocusedElement()); // Escape reached the host while target kept focus
     });
 
@@ -166,6 +166,91 @@ public sealed class TutorialStageTests
         Assert.True(CoreTutorial.IsActive);
         Assert.True(overlay.IsOnStage);
         Assert.Equal(index, CoreTutorial.CurrentStepIndex);
+    });
+
+    private static void PumpUntil(Func<bool> done)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();   // P73: bounded by time, not turns
+        while (!done() && sw.Elapsed < TimeSpan.FromSeconds(10)) Dispatcher.UIThread.RunJobs();
+        Assert.True(done(), "timed out");
+    }
+
+    private static global::Avalonia.Animation.DoubleTransition OpacityFade(Control stage) =>
+        Assert.Single(stage.Transitions!.OfType<global::Avalonia.Animation.DoubleTransition>(), t => t.Property == Visual.OpacityProperty);
+
+    [Fact]
+    public Task CardFadesIn300AndOut200BeforeLeavingTheHost() => WithHost((host, overlay, _, _, _) =>
+    {
+        // WPF TutorialOverlay.xaml.cs:107 / :1308.
+        var stage = overlay.StageRoot!;
+        Assert.Equal(TimeSpan.FromMilliseconds(300), OpacityFade(stage).Duration);
+        CoreTutorial.Skip();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(overlay.IsOnStage);                  // still fading out
+        Assert.Equal(TimeSpan.FromMilliseconds(200), OpacityFade(stage).Duration);
+        var closed = 0;
+        overlay.Closed += (_, _) => closed++;
+        PumpUntil(() => !overlay.IsOnStage);
+        Assert.Equal(1, closed);
+        Assert.DoesNotContain(host.GetVisualDescendants().OfType<Border>(), b => b.Name == "TextPanel");
+    });
+
+    [Fact]
+    public Task PanicTearsDownWithoutTheFade() => WithHost((_, overlay, _, _, _) =>
+    {
+        CoreTutorial.Skip();
+        Assert.True(overlay.IsOnStage);
+        TutorialHead.OnPanic();
+        Assert.False(CoreTutorial.IsActive);
+        Assert.False(overlay.IsOnStage);
+    });
+
+    [Fact]
+    public Task StepBehindASectionLightsItsRailRowWithoutNavigating() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current == null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldStore = TutorialService.CompletionStore;
+        var oldShell = TutorialHeadHooks.ShellProvider;
+        TutorialService.CompletionStore = new Store();
+        TutorialHeadHooks.ShellProvider = () => null;     // no tab navigation: only the overlay can light a row
+        TutorialHead.Seed();
+        TutorialHead.ResetForTests();
+        var shell = new MainShellWindow();
+        TutorialOverlay? overlay = null;
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            string[] Lit() => shell.NavSectionRowsForTests.Where(r => r.Button.Classes.Contains("active")).Select(r => r.Section).ToArray();
+            var before = Lit();
+            TutorialHead.Service.Start(TutorialType.FullTour);
+            string? want = null;
+            while (TutorialHead.Service.IsActive)
+            {
+                var key = TutorialService.DoorTabKeyFor(TutorialHead.Service.CurrentStep!);
+                want = key == null ? null : ConditioningControlPanel.Services.UI.NavSections.SectionForTab(key);
+                if (want != null && !before.Contains(want)) break;
+                TutorialHead.Service.Next();
+            }
+            Assert.NotNull(want);
+            overlay = new TutorialOverlay(shell);
+            overlay.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { want }, Lit());
+        }
+        finally
+        {
+            overlay?.Close();
+            TutorialHead.ResetForTests();
+            shell.Close();
+            TutorialService.CompletionStore = oldStore;
+            TutorialHeadHooks.ShellProvider = oldShell;
+            Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
     });
 
     private sealed class SecondHost : Window { }
