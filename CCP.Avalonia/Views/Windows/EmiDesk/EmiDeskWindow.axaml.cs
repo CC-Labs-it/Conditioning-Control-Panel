@@ -265,7 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>True while a chain is on screen.</summary>
         // ponytail: the pat faces are the only chain this head plays; the full chain player (EmiChainPlayer, WPF head only;
         // the chain data is in Core as EmiChains) is wire-win-emi-desk-b.
-        public bool ChainLive => _patFeedback is not null;
+        public bool ChainLive => _patFeedback is not null || _speechLive;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -1493,6 +1493,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.Closed += OnBookClosed;
                 _book = win;
                 win.OpenBook(cardId);
+                LayoutSpeech();
             }
             catch (Exception ex)
             {
@@ -1506,6 +1507,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             var win = _book;
             _book = null;
+            LayoutSpeech();
             if (win == null) return;
             try
             {
@@ -1519,6 +1521,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             if (!ReferenceEquals(sender, _book)) return;
             _book = null;
+            LayoutSpeech();
         }
 
         /// <summary>Clear the resize hold, whichever way the drag ended.</summary>

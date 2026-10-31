@@ -12,10 +12,8 @@ public sealed class EmiMomentBusTests
         bus.MomentFired += (_, m) => { Assert.Equal("ringOpen", m.Id); published++; };
         bus.SpeakingRequested += (_, _) => spoken++;
         bus.Fire(" ", null, true);
-        bus.Fire("ringOpen", null, false);
-        Assert.Equal(1, published); Assert.Equal(0, spoken);
-        bus.Fire("ringOpen", null, true);
-        Assert.Equal(2, published); Assert.Equal(1, spoken);
+        bus.Fire("ringOpen", null, false); Assert.Equal(1, published); Assert.Equal(0, spoken);
+        bus.Fire("ringOpen", null, true); Assert.Equal(2, published); Assert.Equal(1, spoken);
     }
     [Fact]
     public void HoldArmsWhileAwayAndReleaseEndsIt()
@@ -24,10 +22,8 @@ public sealed class EmiMomentBusTests
             {"version":1,"moments":{"intakeOpened":{"hold":true,"holdUntilReleased":true,"tailMs":0}},"pools":{}}
             """);
         var bus = new EmiMomentBus(engine);
-        bus.Fire("intakeOpened", null, false);
-        Assert.True(engine.HoldActive);
-        bus.ReleaseHold("intakeOpened");
-        Assert.False(engine.HoldActive);
+        bus.Fire("intakeOpened", null, false); Assert.True(engine.HoldActive);
+        bus.ReleaseHold("intakeOpened"); Assert.False(engine.HoldActive);
     }
     [Fact]
     public void BrokenObserverDoesNotPreventDelivery()
@@ -36,8 +32,7 @@ public sealed class EmiMomentBusTests
         bool delivered = false;
         bus.MomentFired += (_, _) => throw new InvalidOperationException();
         bus.SpeakingRequested += (_, _) => delivered = true;
-        bus.Fire("ringOpen", null, true);
-        Assert.True(delivered);
+        bus.Fire("ringOpen", null, true); Assert.True(delivered);
     }
     [Fact]
     public void PublishPrecedesSpeakingAndCarriesTheSameContext()
@@ -48,10 +43,8 @@ public sealed class EmiMomentBusTests
         bool inOrder = false;
         bus.MomentFired += (_, m) => published = m;
         bus.SpeakingRequested += (_, m) => { inOrder = ReferenceEquals(published, m); delivered = m; };
-        bus.Fire("ringOpen", context, true);
-        Assert.True(inOrder);
-        Assert.Same(published, delivered);
-        Assert.Same(context, delivered!.Context);
+        bus.Fire("ringOpen", context, true); Assert.True(inOrder);
+        Assert.Same(published, delivered); Assert.Same(context, delivered!.Context);
     }
     [Theory]
     [InlineData("dismissed")]
@@ -64,7 +57,6 @@ public sealed class EmiMomentBusTests
             """);
         var bus = new EmiMomentBus(engine);
         var draw = bus.Draw(new EmiMoment(id, null));
-        Assert.Equal(id == "ringOpen", draw.Line != null);
-        Assert.Null(draw.Ask);
+        Assert.Equal(id == "ringOpen", draw.Line != null); Assert.Null(draw.Ask);
     }
 }
