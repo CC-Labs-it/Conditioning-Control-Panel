@@ -34,6 +34,14 @@ public class TestIsolationTests
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
     [Fact]
+    public void EveryTestStartsWithTheProductionFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+        Assert.NotNull(new global::Avalonia.Media.Typeface("fonts:Inter#Inter").GlyphTypeface);
+        Assert.NotNull(new global::Avalonia.Media.Typeface("Segoe UI Black, Segoe UI", weight: global::Avalonia.Media.FontWeight.Black).GlyphTypeface);
+    });
+
+    [Fact]
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]

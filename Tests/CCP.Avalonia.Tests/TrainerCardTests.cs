@@ -8,7 +8,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -161,14 +163,31 @@ public sealed partial class AccountSeedTests
                 Dispatcher.UIThread.RunJobs();
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
+                // Settle layout before measuring the target, as the headless mouse helpers do.
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                w.UpdateLayout();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                // WPF MainWindow.Leaderboard.cs:938: a row double-click opens that trainer's card.
+                // Headless mouse helpers pump renders against a real stopwatch. Explicit pointer
+                // click counts/timestamps keep CI render time out of the gesture, like AssetsTabTests.
+                var target = Assert.IsAssignableFrom<Control>(w.InputHitTest(at));
+                Assert.Same(row, target.FindAncestorOfType<ListBoxItem>(includeSelf: true));
+                var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+                void Click(int count, ulong timestamp)
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    target.RaiseEvent(new PointerPressedEventArgs(target, pointer, w, at, timestamp,
+                        new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, count));
+                    var released = pointer.Captured as Control ?? target;
+                    released.RaiseEvent(new PointerReleasedEventArgs(released, pointer, w, at, timestamp + 1,
+                        new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.LeftButtonReleased), KeyModifiers.None, MouseButton.Left));
+                    pointer.Capture(null);
                 }
+                Click(1, 1000);
+                Assert.Same(row.DataContext, list.SelectedItem);
+                Assert.False(w.ProfilePage!.IsEffectivelyVisible); // a single click only selects
+                Click(2, 1100);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
