@@ -14,6 +14,9 @@
 // debug control. Voice/PTT/wake word: MainShellWindow.VoiceCommands.cs.
 using System;
 using System.Threading.Tasks;
+using System.IO;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services.Companion;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -27,6 +30,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        // WPF MainWindow.StartStop.cs:286-311. Only the user arming Keep earns this notice.
+        internal void WarnIfWallpaperLibraryEmpty()
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                if (!string.Equals(s.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return;
+                var folder = !string.IsNullOrWhiteSpace(s.WallpaperSourceFolder) && Directory.Exists(s.WallpaperSourceFolder)
+                    ? s.WallpaperSourceFolder : Path.Combine(CorePaths.EffectiveAssets, "wallpapers");
+                if (WallpaperFolderHasImage(folder)) return;
+                App.Notifications.Show(
+                    string.Format(Loc.Get("msg_no_wallpaper_images"), Loc.Get("nav_door_library"), Loc.Get("tab_assets")),
+                    NotificationType.Warning, TimeSpan.FromSeconds(18),
+                    actionLabel: Loc.Get("btn_open_media_manager"), action: () => ShowTab("assets"),
+                    secondaryActionLabel: Loc.Get("btn_get_packs"),
+                    secondaryAction: () => { _ = Platform.ExternalOpener.OpenAsync(this, DiscordLinks.PackCatalogue); });
+            }
+            catch (Exception ex) { Log.Debug(ex, "Wallpaper library check failed"); }
+        }
+
+        // WPF MainWindow.StartStop.cs:211-236: recursive, case-insensitive, first hit wins.
+        // An IO failure means do not nag. GIF/WebP are not WPF wallpaper formats.
+        internal static bool WallpaperFolderHasImage(string folder)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return false;
+                foreach (var file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
+                {
+                    var ext = Path.GetExtension(file);
+                    if (ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+                        || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+                        || ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
+                        || ext.Equals(".bmp", StringComparison.OrdinalIgnoreCase)) return true;
+                }
+                return false;
+            }
+            catch { return true; }
+        }
+
         /// <summary>This window's Takeover. Per window so a test's shell never shares one.</summary>
         internal readonly AutonomyScheduler Autonomy = new();
 
