@@ -7,10 +7,10 @@ using Xunit;
 
 namespace CCP.Core.Tests;
 
-public class LiveCardRulesTests
+public class LiveCardsTests
 {
     private static readonly LobbyRow Chess = new() { Game = LobbyGame.Chess, State = LobbyRowState.Open, Key = "p_x", HostName = "A" };
-    private static BillboardCardSpec? Card(LobbySnapshot snapshot) => LiveCardRules.Decide(snapshot, k => k);
+    private static BillboardCardSpec? Card(LobbySnapshot snapshot) => LiveCards.Decide(snapshot, k => k);
 
     [Fact]
     public void Signed_out_and_empty_snapshots_are_silent()
@@ -53,7 +53,7 @@ public class LiveCardRulesTests
     [InlineData(null, false)]
     public void Only_chess_and_goon_callbacks_are_accepted(string? target, bool valid)
     {
-        Assert.Equal(valid, LiveCardRules.TryParseTarget(target, out var game, out var key));
-        if (valid) Assert.Equal(target, LiveCardRules.Target(game, key));
+        Assert.Equal(valid, LiveCards.TryParseTarget(target, out var game, out var key));
+        if (valid) Assert.Equal(target, LiveCards.Target(game, key));
     }
 }

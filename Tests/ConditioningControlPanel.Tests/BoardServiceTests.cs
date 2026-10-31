@@ -23,6 +23,14 @@ public class BoardServiceTests
 {
     public BoardServiceTests() => BoardPng.Install(); // App startup does this in the app
 
+    [Fact]
+    public void Cache_and_live_decisions_are_owned_by_the_shared_engine()
+    {
+        Assert.Equal("CCP.Core", typeof(BoardCacheService).Assembly.GetName().Name);
+        Assert.Equal("CCP.Core", typeof(ConditioningControlPanel.Services.Billboard.Providers.LiveCards).Assembly.GetName().Name);
+        Assert.Equal(typeof(BoardCacheService), typeof(BoardService).GetProperty(nameof(BoardService.Shared))!.PropertyType);
+    }
+
     private static string Loc(string key) => "[" + key + "]";
 
     private static BoardPost Post(int v = 3, string[]? fx = null, DateTime? until = null, string? link = "lobby",
@@ -106,7 +114,7 @@ public class BoardServiceTests
         var dir = TempDir();
         var server = new FakeServer();
         server.Files[3] = Png(8, 4, (x, y) => Argb(255, 255, 0, 0));
-        var svc = new BoardService(dir, server.Fetch);
+        var svc = new BoardCacheService(dir, server.Fetch);
         int changed = 0;
         svc.Changed += (_, _) => changed++;
 
@@ -118,7 +126,7 @@ public class BoardServiceTests
         Assert.True(File.Exists(svc.PathFor(3)));
 
         // A restart reads the cache: no download at all.
-        var again = new BoardService(dir, server.Fetch);
+        var again = new BoardCacheService(dir, server.Fetch);
         await again.Apply(Post(v: 3, w: 8, h: 4));
         Assert.Single(server.Calls);
         Assert.NotNull(again.Current);
@@ -131,7 +139,7 @@ public class BoardServiceTests
         var server = new FakeServer();
         server.Files[3] = Png(4, 4, (x, y) => Argb(255, 0, 255, 0));
         server.Files[4] = Png(4, 4, (x, y) => Argb(255, 0, 0, 255));
-        var svc = new BoardService(dir, server.Fetch);
+        var svc = new BoardCacheService(dir, server.Fetch);
         await svc.Apply(Post(v: 3, w: 4, h: 4));
         await svc.Apply(Post(v: 4, w: 4, h: 4));
         Assert.Equal(4, svc.Current!.Post.Version);
@@ -152,7 +160,7 @@ public class BoardServiceTests
     {
         var dir = TempDir();
         var server = new FakeServer();
-        var svc = new BoardService(dir, server.Fetch);
+        var svc = new BoardCacheService(dir, server.Fetch);
         await svc.Apply(Post(v: 5));
         Assert.Null(svc.Current);
         server.Files[5] = Png(64, 36, (x, y) => Argb(255, 200, 200, 200));
@@ -167,7 +175,7 @@ public class BoardServiceTests
         var dir = TempDir();
         var server = new FakeServer();
         server.Files[6] = Png(4, 4, (x, y) => Argb(255, 9, 9, 200));
-        var svc = new BoardService(dir, server.Fetch);
+        var svc = new BoardCacheService(dir, server.Fetch);
         File.WriteAllBytes(svc.PathFor(6), new byte[] { 1, 2, 3 });
         await svc.Apply(Post(v: 6, w: 4, h: 4));
         Assert.Equal(new[] { 6 }, server.Calls);
@@ -179,7 +187,7 @@ public class BoardServiceTests
     {
         var server = new FakeServer();
         server.Files[7] = System.Text.Encoding.UTF8.GetBytes("<html>not found</html>");
-        var svc = new BoardService(TempDir(), server.Fetch);
+        var svc = new BoardCacheService(TempDir(), server.Fetch);
         await svc.Apply(Post(v: 7));
         Assert.Null(svc.Current);
     }
@@ -188,12 +196,12 @@ public class BoardServiceTests
     public void The_seen_marker_survives_a_restart_and_never_goes_back()
     {
         var dir = TempDir();
-        var svc = new BoardService(dir, new FakeServer().Fetch);
+        var svc = new BoardCacheService(dir, new FakeServer().Fetch);
         Assert.True(svc.IsNew(1));
         svc.MarkShown(4);
         svc.MarkShown(2);
         Assert.Equal(4, svc.SeenVersion);
-        var again = new BoardService(dir, new FakeServer().Fetch);
+        var again = new BoardCacheService(dir, new FakeServer().Fetch);
         Assert.Equal(4, again.SeenVersion);
         Assert.False(again.IsNew(4));
         Assert.True(again.IsNew(5));
@@ -204,7 +212,7 @@ public class BoardServiceTests
     {
         var server = new FakeServer();
         server.Files[11] = Png(4, 4, (x, y) => Argb(255, 1, 200, 1));
-        var svc = new BoardService(TempDir(), server.Fetch);
+        var svc = new BoardCacheService(TempDir(), server.Fetch);
         var tcs = new TaskCompletionSource();
         svc.Changed += (_, _) => tcs.TrySetResult();
         svc.OnMarquee("""{"message":"x","board":{"v":11,"w":4,"h":4,"fx":["shine"]}}""");

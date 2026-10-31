@@ -11,7 +11,7 @@ namespace ConditioningControlPanel.Services.Billboard.Providers
     /// (one table: Join; several: See tables opens the Lobby), then a friend in a game with no
     /// seat open (Lobby). Signed out, the snapshot is empty and so is the card.
     /// </summary>
-    public static class LiveCardRules
+    public static class LiveCards
     {
         public const string CardJoinFriend = "live.friend";
         public const string CardTables = "live.tables";
