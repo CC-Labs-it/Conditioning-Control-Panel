@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -8,6 +9,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Services.Flash;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -124,6 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var k = DesktopScaling > 0 ? DesktopScaling : 1;
                 _card.Width = m.MediaW / k;
                 _card.Height = m.MediaH / k;
+                if (_image.Clip != null) ApplyCorners(true, true, GlowPadPx > 0, _card.Width, _card.Height);
                 e.Pointer.Capture(this);
             };
             PointerMoved += (_, e) =>
@@ -136,6 +139,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var m = FlashOverlay.Drifting.Find(x => x.Window == this).Motion;
                 if (m?.Drag is not { Held: true }) return;
+                // WPF FlashService.cs:2768-2773,2876: final sample and destination work area, in pixels.
+                var p = this.PointToScreen(e.GetPosition(this));
+                FlashDrag.Sample(m.Drag, p.X, p.Y, NowMs());
+                var area = (ScreenList.Enumerate(this).FirstOrDefault(s => s.Bounds.Contains(p)) ?? Screens.ScreenFromPoint(p))?.WorkingArea;
+                if (area is { Width: > 0, Height: > 0 } wa)
+                    (m.BoundsX, m.BoundsY, m.BoundsW, m.BoundsH) = (wa.X, wa.Y, wa.Width, wa.Height);
                 var outcome = FlashDrag.Release(m, NowMs(), CoreSettings.Current.MotionLevel);
                 e.Pointer.Capture(null);
                 e.Handled = true;

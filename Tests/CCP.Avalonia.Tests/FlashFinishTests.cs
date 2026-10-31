@@ -121,12 +121,14 @@ public sealed class FlashFinishTests
         }
     });
 
-    [Fact]
-    public Task Rounded_picture_uses_the_core_radius_and_dragging_moves_it_before_a_tap_can_pop() => OnUi(() =>
+    [Theory]
+    [InlineData(FlashMotionStyle.Still)]
+    [InlineData(FlashMotionStyle.Pendulum)]
+    public Task Rounded_picture_uses_the_core_radius_and_dragging_moves_it_before_a_tap_can_pop(FlashMotionStyle style) => OnUi(() =>
     {
         var s = CoreSettings.Current;
         var saved = (PrizeOwnership.IsGranted, FlashOverlay.Present, FlashOverlay.Clock,
-            s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashDraggable, s.FlashExitStyle, s.CorruptionMode, s.MotionLevel);
+            s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashDraggable, s.FlashExitStyle, s.CorruptionMode, s.MotionLevel, ScreenList.QueryOverride);
         var clock = new Clock();
         try
         {
@@ -134,19 +136,30 @@ public sealed class FlashFinishTests
             FlashOverlay.Present = (_, _, _) => true;
             FlashOverlay.Clock = clock;
             (s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashDraggable, s.FlashExitStyle, s.CorruptionMode, s.MotionLevel) =
-                (FlashMotionStyle.Still, true, true, FlashExitStyle.None, false, MotionLevel.Full);
+                (style, true, true, FlashExitStyle.None, false, MotionLevel.Full);
             var w = ShowOne();
             var image = ((Panel)((Panel)w.Content!).Children[0]).Children.OfType<Image>().Single();
             Assert.Equal(FlashCorners.Resolve(true, true, false, 300, 1), ((RectangleGeometry)image.Clip!).RadiusX);
             w.MouseDown(new Point(50, 50), MouseButton.Left);
             Assert.Contains(FlashOverlay.Active, x => x.Window == w); // a draggable press grabs rather than pops
+            Assert.Equal(new Rect(0, 0, ((Panel)image.Parent!).Width, ((Panel)image.Parent!).Height), ((RectangleGeometry)image.Clip!).Rect);
             clock.Now += TimeSpan.TicksPerSecond / 10;
             w.MouseMove(new Point(100, 80));
             FlashOverlay.DriftTick();
             Assert.NotEqual(new PixelPoint(100, 100), w.Position);
-            w.MouseUp(new Point(100, 80), MouseButton.Left);
+            var destination = (Screen)Activator.CreateInstance(typeof(PlatformScreen), new object[] { new PlatformHandle(new IntPtr(2), "headless-test") })!;
+            typeof(Screen).GetProperty(nameof(Screen.Bounds))!.SetValue(destination, new PixelRect(1900, -200, 2560, 1440));
+            typeof(Screen).GetProperty(nameof(Screen.WorkingArea))!.SetValue(destination, new PixelRect(1900, -160, 2560, 1360));
+            typeof(Screen).GetProperty(nameof(Screen.Scaling))!.SetValue(destination, 2d);
+            ScreenList.QueryOverride = _ => new[] { w.SpawnScreen!, destination };
+            clock.Now += TimeSpan.TicksPerSecond / 10;
+            var drop = w.PointToScreen(new Point(2200, 80));
+            w.MouseUp(new Point(2200, 80), MouseButton.Left);
             var m = FlashOverlay.Drifting.Single(x => x.Window == w).Motion;
             Assert.True(m.Drag?.Flinging);
+            Assert.Equal((double)drop.X, m.Drag!.LastX);
+            Assert.Equal((double)drop.Y, m.Drag.LastY);
+            Assert.Equal((1900d, -160d, 2560d, 1360d), (m.BoundsX, m.BoundsY, m.BoundsW, m.BoundsH));
             w.Close();
             var tap = ShowOne();
             tap.MouseDown(new Point(50, 50), MouseButton.Left);
@@ -157,7 +170,7 @@ public sealed class FlashFinishTests
         {
             FlashOverlay.CloseAll(false);
             (PrizeOwnership.IsGranted, FlashOverlay.Present, FlashOverlay.Clock,
-                s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashDraggable, s.FlashExitStyle, s.CorruptionMode, s.MotionLevel) = saved;
+                s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashDraggable, s.FlashExitStyle, s.CorruptionMode, s.MotionLevel, ScreenList.QueryOverride) = saved;
         }
     });
 
