@@ -1310,8 +1310,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 // The two buttons agree about the entrance: if the left one may cut it, so may this
                 // one, or the ring would open over a chain that is still animating her body.
-                FinishSummon();
-                CancelChain();
+                // WPF EmiDeskWindow.xaml.cs:1629: only a live summon is cut here.
+                if (_summonChainLive) { FinishSummon(); CancelChain(); }
 
                 RaiseActivity();
                 PlayClickSquash();

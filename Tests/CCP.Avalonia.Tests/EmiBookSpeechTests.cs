@@ -1,10 +1,13 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Services.EmiDesk;
@@ -92,6 +95,47 @@ public sealed class EmiBookSpeechTests
             desk.EndPresentation();
         }
         finally { desk.Close(); }
+        return Task.CompletedTask;
+    });
+
+    // WPF EmiDeskWindow.xaml.cs:1629: only a live summon may be cut by a right click.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task RightClickTogglesRingWithoutCuttingSpeech(bool ringOpen) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var desk = Desk();
+        int done = 0;
+        try
+        {
+            desk.Show();
+            Dispatcher.UIThread.RunJobs();
+            if (ringOpen) desk.ToggleRing();
+            Assert.Equal(ringOpen, desk.RingOpen);
+            desk.Say("still reading", "^_^", () => done++);
+            for (int i = 0; i < 3; i++) desk.AdvanceSpeech();
+            var timerField = typeof(EmiDeskWindow).GetField("_speechTimer", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var timer = (DispatcherTimer)timerField.GetValue(desk)!;
+            var hold = desk.SpeechHold;
+            var body = desk.FindControl<Control>("BodyRoot")!;
+            var at = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), desk)!.Value;
+            desk.MouseDown(at, MouseButton.Right);
+            desk.MouseUp(at, MouseButton.Right);
+            Assert.Equal(!ringOpen, desk.RingOpen);
+            Assert.Same(timer, timerField.GetValue(desk));
+            Assert.True(timer.IsEnabled);
+            Assert.True(desk.ChainLive);
+            Assert.Equal("still reading", desk.BubbleText);
+            Assert.Equal(hold, desk.SpeechHold);
+            Assert.Equal(0, done);
+            desk.AdvanceSpeech();
+            desk.AdvanceSpeech();
+            Assert.False(timer.IsEnabled);
+            Assert.Equal(1, done);
+            desk.AdvanceSpeech();
+            Assert.Equal(1, done);
+        }
+        finally { desk.CloseRing(); desk.Close(); }
         return Task.CompletedTask;
     });
 
