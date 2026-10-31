@@ -66,8 +66,10 @@ public sealed class PresetsFocalFxTests
     [Fact]
     public Task PointerLiftAndPrimaryButtonSquishMatchWpfSnapAtOff() => WithPresets((host, view) =>
     {
+        Assert.True(view.PresetEntrancesArmed);
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.False(view.PresetEntrancesArmed); // an arrival must release the row's Y before hover snaps it
         var chip = view.FindControl<WrapPanel>("PresetCardsPanel")!.Children.OfType<Border>().First(b => b.Tag is string);
         host.MouseMove(Center(host, chip)); Settle();
         var scale = Assert.IsType<TransformGroup>(chip.RenderTransform).Children.OfType<ScaleTransform>().Single();
