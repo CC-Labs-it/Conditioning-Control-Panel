@@ -11,6 +11,8 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
+using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 
 namespace CCP.Avalonia.Tests;
 
@@ -186,20 +188,19 @@ public sealed class ChaosFlashOverlayTests
     [Fact]
     public void WashDispatcherIgnoresOtherPayloadsAndAnAbsentShell()
     {
-        var oldFirer = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+        var oldFirer = EffectPayload.Firer;
         var before = ChaosFlashOverlay.LastShow;
         try
         {
             var hostCalls = 0;
-            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosWashPayloads.Seed(
-                () => { hostCalls++; return null; });
-            new ConditioningControlPanel.Services.Chaos.OverlayPayload("spiral").Fire();
+            ChaosWashPayloads.Seed(() => { hostCalls++; return null; });
+            new OverlayPayload("spiral").Fire();
             Assert.Equal(0, hostCalls);
-            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosWashPayloads.Seed(() => null);
-            new ConditioningControlPanel.Services.Chaos.OverlayPayload("braindrain").Fire();
+            ChaosWashPayloads.Seed(() => null);
+            new OverlayPayload("braindrain").Fire();
             Assert.Same(before, ChaosFlashOverlay.LastShow);
         }
-        finally { ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = oldFirer; }
+        finally { EffectPayload.Firer = oldFirer; }
     }
 
     // WPF Services/Chaos/EffectPayloadFiring.cs:50-59. Exercise EffectPayload.Fire, the same
@@ -213,18 +214,15 @@ public sealed class ChaosFlashOverlayTests
         bool custom, int strength, double global, double mult, int endMs, double peak) => WithImage(async (gif, steps) =>
     {
         CoreSettings.Current.DualMonitorEnabled = true;
-        ConditioningControlPanel.Avalonia.Views.Chaos.ChaosWashPayloads.Seed(
-            () => new global::Avalonia.Controls.Border());
-        ConditioningControlPanel.Services.Chaos.EffectPayload.GlobalDurationMult = global;
-        var payload = new ConditioningControlPanel.Services.Chaos.OverlayPayload(
-            "braindrain", custom ? .30 : null) { Strength = strength, DurationMult = mult };
+        ChaosWashPayloads.Seed(() => new global::Avalonia.Controls.Border());
+        EffectPayload.GlobalDurationMult = global;
+        var payload = new OverlayPayload("braindrain", custom ? .30 : null) { Strength = strength, DurationMult = mult };
         payload.Fire();
         await ChaosFlashOverlay.LastShow!;
         Assert.NotNull(Assert.Single(ChaosFlashOverlay.Shown).Spiral.Source);
         Assert.Equal(TimeSpan.FromMilliseconds(endMs), steps[^1].At);
         foreach (var step in steps.Where(s => s.At <= TimeSpan.FromMilliseconds(500))) step.Run();
         Assert.Equal(peak, ChaosFlashOverlay.Alpha, 10);
-        // The live route retains panic teardown, including already scheduled fade callbacks.
         PanicSurfaces.StopAll("payload test");
         foreach (var step in steps.ToArray()) step.Run();
         Assert.Empty(ChaosFlashOverlay.Shown);
@@ -289,7 +287,6 @@ public sealed class ChaosFlashOverlayTests
         });
     }
 
-    // Shared UI-thread setup and teardown. Every behavioral assertion stays in its test.
     private static async Task WithImage(Func<string, List<(Action Run, TimeSpan At)>, Task> test)
     {
         var gif = WriteGif(out var dir);
@@ -301,12 +298,6 @@ public sealed class ChaosFlashOverlayTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 Setup();
-                var oldAssets = CorePaths.EffectiveAssetsProvider;
-                var oldQuery = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
-                var oldFirer = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
-                var oldGlobal = ConditioningControlPanel.Services.Chaos.EffectPayload.GlobalDurationMult;
-                var oldRaise = X11Overlay.RaiseRequestedForTests;
-                var schedule = ChaosFlashOverlay.Schedule;
                 try
                 {
                     CorePaths.EffectiveAssetsProvider = () => dir;
@@ -321,12 +312,6 @@ public sealed class ChaosFlashOverlayTests
                 {
                     ChaosFlashOverlay.CloseActive();
                     ChaosFlashOverlay.SkipPlatformChecksForTests = false;
-                    ChaosFlashOverlay.Schedule = schedule;
-                    CorePaths.EffectiveAssetsProvider = oldAssets;
-                    ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = oldQuery;
-                    ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = oldFirer;
-                    ConditioningControlPanel.Services.Chaos.EffectPayload.GlobalDurationMult = oldGlobal;
-                    X11Overlay.RaiseRequestedForTests = oldRaise;
                 }
             });
         }

@@ -171,6 +171,9 @@ internal sealed class ProcessStateSnapshot
 
     internal void Restore()
     {
+        // Settings notifications can rebuild UI brushes; never repopulate them on a worker.
+        if (!CCP.Avalonia.Testing.AvaloniaTestDispatcher.IsDispatcherThread)
+        { CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(Restore); return; }
         foreach (var (m, value) in _statics)
         {
             var now = Get(m);
