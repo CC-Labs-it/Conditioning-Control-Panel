@@ -144,6 +144,22 @@ public sealed class HelpVideoWindowTests
         finally { File.Delete(clip); }
     }
 
+    [Fact]
+    public Task PanicClosesHelpAndIsSafeWhenIdle() => Run(() =>
+    {
+        HelpVideoWindow.Show(new HelpContent { SectionId = "ClipOnly", Title = "Help", WhatItDoes = "Fallback" }, null);
+        var win = Current()!;
+        try
+        {
+            var stop = PanicSurfaces.All.Single(x => x.Id == "help-video");
+            stop.Stop(null);
+            stop.Stop(null);
+            Assert.False(win.IsVisible);
+            Assert.Null(Current());
+        }
+        finally { win.Close(); }
+    });
+
     private static HelpVideoWindow? Current() =>
         (HelpVideoWindow?)typeof(HelpVideoWindow).GetField("_current", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
 
@@ -152,7 +168,7 @@ public sealed class HelpVideoWindowTests
     private static Task RunAsync(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");

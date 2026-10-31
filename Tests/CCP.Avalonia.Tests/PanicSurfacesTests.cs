@@ -107,6 +107,7 @@ public sealed class PanicSurfacesTests
         "settings-palette",
         "keyword-triggers",
         "haptics",
+        "help-video",
         "intake",
         "knock-cards",
         "leash-task",

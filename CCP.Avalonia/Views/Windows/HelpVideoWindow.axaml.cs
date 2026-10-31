@@ -157,7 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        private static void CloseCurrent()
+        internal static void CloseCurrent()
         {
             var existing = _current;
             _current = null;

@@ -37,6 +37,102 @@ public sealed class MandatoryVideoSchedulerTests
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
     [Fact]
+    public void CascadeHoldsAndCoalescesEarnedClipThenReplaysWithOriginalStrictness() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+        Assert.True(v.Trigger(true, Clips[0]));
+        Assert.True(v.Trigger(false, Clips[1]));
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.False(v.IsPlaying);
+        Assert.Empty(host.Shown);
+        rain = false;
+        clock.Advance(TimeSpan.FromMilliseconds(250));
+        Assert.True(v.IsPlaying);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal((Clips[0], true), Assert.Single(host.Shown));
+        v.Stop();
+    });
+
+    [Fact]
+    public void ScheduledCascadeReplayRechecksFeatureEnabled() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+        v.Start();
+        v.Trigger(userEarned: false);
+        CoreSettings.Current.MandatoryVideosEnabled = false;
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
+    public void ScheduledTickMarksCascadeReplayAsUnearned() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+        try
+        {
+            v.Start();
+            clock.Advance(TimeSpan.FromSeconds(216)); // 180 s +/-20%: first tick fired, earliest deadline is 234 s
+            Assert.False(v.IsPlaying);
+            CoreSettings.Current.MandatoryVideosEnabled = false;
+            rain = false;
+            clock.Advance(TimeSpan.FromSeconds(2));
+            Assert.Empty(host.Shown);
+        }
+        finally { v.Stop(); }
+    });
+
+    [Fact]
+    public void EmptyLibraryAfterCascadeStillRearmsTheSchedule() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var clips = new List<string>();
+        var v = new MandatoryVideoScheduler(host, clock, () => clips) { CascadeIsRaining = () => rain };
+        try
+        {
+            v.Start();
+            clock.Advance(TimeSpan.FromSeconds(216));
+            rain = false;
+            clock.Advance(TimeSpan.FromSeconds(2));
+            Assert.Empty(host.Shown);
+            clips.Add(Clips[0]);
+            clock.Advance(TimeSpan.FromSeconds(218));
+            Assert.Single(host.Shown);
+        }
+        finally { v.Stop(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CascadeDeadlineDoesNotExtendAndCleanupCancelsPendingReplay(bool forceCleanup) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+        v.Trigger();
+        clock.Advance(TimeSpan.FromSeconds(89));
+        v.Trigger();
+        clock.Advance(TimeSpan.FromSeconds(1));
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        rain = true;
+        v.Trigger();
+        if (forceCleanup) v.ForceCleanup(); else v.Stop();
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        v.Trigger(); // a stopped deferred request cannot latch future earned triggers
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host();
@@ -203,6 +299,40 @@ public sealed class MandatoryVideoSchedulerTests
             (s.AttentionChecksEnabled, s.MercySystemEnabled) = (a, m);
             CoreProgression.AddXPProvider = null;
             CoreProgression.TrackAttentionCheckProvider = null;
+            CoreBubbles.PauseAction = CoreBubbles.ResumeAction = null;
+        }
+    });
+
+    [Theory]   // review P2: a verdict replay held behind GIF rain must still run AfterEnd when dropped
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_verdict_replay_dropped_behind_the_cascade_resumes_bubbles(bool forceCleanup) => With(60, true, () =>
+    {
+        var s = CoreSettings.Current;
+        var a = s.AttentionChecksEnabled;
+        s.AttentionChecksEnabled = true;
+        var bubbles = new List<string>();
+        CoreBubbles.PauseAction = () => bubbles.Add("pause");
+        CoreBubbles.ResumeAction = () => bubbles.Add("resume");
+        try
+        {
+            var clock = new FakeClock(); var host = new Host(); var rain = false;
+            var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+            v.Start();
+            v.Trigger(); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            v.NoteSpawn(); v.Ended();                        // missed: verdict message up
+            rain = true;
+            host.Then!();                                    // the replay is held behind the rain
+            Assert.DoesNotContain("resume", bubbles);
+            if (forceCleanup) v.ForceCleanup();
+            else clock.Advance(TimeSpan.FromSeconds(91));   // the 90 s hold expires
+            Assert.Equal("resume", bubbles[^1]);
+            Assert.Single(host.Shown);
+            v.Stop();
+        }
+        finally
+        {
+            s.AttentionChecksEnabled = a;
             CoreBubbles.PauseAction = CoreBubbles.ResumeAction = null;
         }
     });

@@ -40,7 +40,7 @@ public sealed class ChaosGifCascadeOverlayTests
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var clock = new SteppedClock();
@@ -62,6 +62,13 @@ public sealed class ChaosGifCascadeOverlayTests
                 Assert.Equal(w.DesktopScaling, w.Scale);       // the factor SetOverrideRedirect sizes with
                 Assert.True(w.IsVisible);
                 Assert.True(ChaosGifCascadeOverlay.IsRaining);
+                var video = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler;
+                try
+                {
+                    Assert.True(video.Trigger(path: gif));   // WPF VideoService :1916: held behind the rain
+                    Assert.False(video.IsPlaying);           // the head wires CascadeIsRaining (review P2)
+                }
+                finally { video.ForceCleanup(); }
                 var first = Assert.IsType<Image>(Assert.Single(w.Surface.Children));
                 Assert.Equal(0.9, first.Opacity, 3);
                 Assert.Equal(400, first.Width);
