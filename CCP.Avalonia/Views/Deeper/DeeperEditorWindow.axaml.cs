@@ -975,6 +975,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 UpdatePlayheadPosition();
                 PlayPauseGlyph.Kind = IconKind.Play;
             });
+            audio.Failed += () => Dispatcher.UIThread.Post(() =>
+            {
+                if (_localAudio != audio) return;
+                Log.Warning("DeeperEditor: local audio playback failed: {Path}", path);
+                LocalAudioStopped();
+            });
             _totalSeconds = audio.DurationSeconds;
             TxtTotalTime.Text = FormatTime(_totalSeconds);
             UpdateWaveformPath();
@@ -984,6 +990,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             RebuildEffectVisuals();
             RebuildRuleVisuals();
             UpdatePlayheadPosition();
+        }
+
+        /// <summary>A rejected or failed start: the glyph and clock go back to stopped, as a
+        /// pause glyph over silence would lie about state.</summary>
+        private void LocalAudioStopped()
+        {
+            _isPlaying = false;
+            _playheadTimer?.Stop();
+            PlayPauseGlyph.Kind = IconKind.Play;
         }
 
         private void DisposeLocalAudio()
@@ -1106,7 +1121,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // having done nothing, which is what happened.
             if (_localAudio == null || _totalSeconds <= 0) return;
             _isPlaying = !_isPlaying;
-            if (_isPlaying) _localAudio.Play(); else _localAudio.Pause();
+            try { if (_isPlaying) _localAudio.Play(); else _localAudio.Pause(); }
+            catch (Exception ex) { Log.Warning(ex, "DeeperEditor: local audio start failed"); LocalAudioStopped(); return; }
             PlayPauseGlyph.Kind = _isPlaying ? IconKind.Pause : IconKind.Play;
             if (_isPlaying) _playheadTimer?.Start(); else _playheadTimer?.Stop();
         }

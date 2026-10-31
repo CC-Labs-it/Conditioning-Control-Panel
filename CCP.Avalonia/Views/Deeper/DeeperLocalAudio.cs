@@ -11,12 +11,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// drive the editor's play/seek/end path without a sound card.</summary>
     internal interface IDeeperLocalAudio : IDisposable
     {
+        int Volume { get; set; }
         double DurationSeconds { get; }
         double PositionSeconds { get; set; }
         void Play();
         void Pause();
         /// <summary>Raised off the UI thread once the clip has played to its end and rewound.</summary>
         event Action? Ended;
+        event Action? Failed;
     }
 
     internal static class DeeperLocalAudio
@@ -45,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 lock (audio.Gate) if (!audio.IsDisposed) LibVlcAudio.ApplyPreferredDevice(mp);
                 audio.OnPlaying();
             });
+            mp.EncounteredError += (_, _) => ThreadPool.QueueUserWorkItem(_ => audio.OnError());
             mp.EndReached += (_, _) => ThreadPool.QueueUserWorkItem(_ => audio.OnEndReached());
             return audio;
         }
@@ -53,20 +56,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// tested without libvlc or real time.</summary>
         internal interface IEngine
         {
+            int Volume { get; set; }
             VLCState State { get; }
             long Time { get; set; }
             long Length { get; }
-            void Play();
+            bool Play();
             void SetPause(bool pause);
             void Stop();
         }
 
         private sealed class VlcEngine(MediaPlayer p) : IEngine
         {
+            public int Volume { get => p.Volume; set => p.Volume = value; }
             public VLCState State => p.State;
             public long Time { get => p.Time; set => p.Time = value; }
             public long Length => p.Length;
-            public void Play() => p.Play();
+            public bool Play() => p.Play();
             public void SetPause(bool pause) => p.SetPause(pause);
             public void Stop() => p.Stop();
         }
@@ -80,7 +85,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             private int _disposed;
             internal bool IsDisposed => _disposed != 0;
 
+            private int _volume = 100;
+            public int Volume { get => _volume; set { lock (Gate) { _volume = Math.Clamp(value, 0, 100); if (Live) player.Volume = LibVlcAudio.VlcVolume(_volume / 100f); } } }
             public event Action? Ended;
+            public event Action? Failed;
 
             private bool Live => player.State is VLCState.Playing or VLCState.Paused;
 
@@ -121,7 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 lock (Gate)
                 {
                     if (player.State == VLCState.Paused) player.SetPause(false);
-                    else player.Play();
+                    else if (!player.Play()) throw new InvalidOperationException("Audio transport could not start");
                 }
             }
 
@@ -141,7 +149,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 lock (Gate)
                 {
-                    if (IsDisposed || _pendingMs <= 0) return;
+                    if (IsDisposed) return;
+                    player.Volume = LibVlcAudio.VlcVolume(_volume / 100f); if (_pendingMs <= 0) return;
                     player.Time = _pendingMs;
                     _pendingMs = 0;
                 }
@@ -154,10 +163,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 Ended?.Invoke();
             }
 
+            internal void OnError()
+            {
+                lock (Gate) { if (IsDisposed) return; player.Stop(); }
+                Failed?.Invoke();
+            }
+
             public void Dispose()
             {
                 if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-                Ended = null;
+                Ended = null; Failed = null;
                 // Never dispose a player from inside its own libvlc event: that deadlocks.
                 ThreadPool.QueueUserWorkItem(_ => { lock (Gate) release(); });
             }
