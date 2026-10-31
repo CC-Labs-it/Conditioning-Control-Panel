@@ -6,7 +6,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-
 namespace ConditioningControlPanel.Services.EmiDesk;
 public sealed class DeskEquipmentSync : IDisposable
 {
@@ -47,7 +46,6 @@ public sealed class DeskEquipmentSync : IDisposable
         }
         catch { return null; }
     }
-
     public static bool ShouldAdopt(long serverMs, long localMs) => serverMs > 0 && serverMs > localMs;
     public Task SaveAsync(DeskEquipmentLook pick)
     {
@@ -67,7 +65,6 @@ public sealed class DeskEquipmentSync : IDisposable
         }
         catch (Exception ex) { Serilog.Log.Debug("DeskEquipmentSync save failed: {E}", ex.Message); return Task.CompletedTask; }
     }
-
     private async Task PutAsync(DeskEquipmentLook look, long stamp, Action<Action> onUi, CancellationToken ct)
     {
         var id = Identity();
@@ -105,7 +102,6 @@ public sealed class DeskEquipmentSync : IDisposable
         }
         catch (Exception ex) { Serilog.Log.Debug("DeskEquipmentSync PUT failed soft: {E}", ex.Message); }
     }
-
     public async Task PullOnceAsync()
     {
         var ct = _stop.Token;
@@ -123,7 +119,6 @@ public sealed class DeskEquipmentSync : IDisposable
                 await PutAsync(owed, s.EmiDeskEquipUpdatedMs, onUi, ct).ConfigureAwait(false);
                 return;
             }
-
             using var req = new HttpRequestMessage(HttpMethod.Get,
                 $"{BaseUrl}{Path}?unified_id={Uri.EscapeDataString(id.Value.UnifiedId)}");
             req.Headers.Add("X-Auth-Token", id.Value.Token);
@@ -137,7 +132,6 @@ public sealed class DeskEquipmentSync : IDisposable
         }
         catch (Exception ex) { Serilog.Log.Debug("DeskEquipmentSync GET failed soft: {E}", ex.Message); }
     }
-
     private void Adopt(string account, DeskEquipmentLook look, long updatedMs)
     {
         try
@@ -155,9 +149,7 @@ public sealed class DeskEquipmentSync : IDisposable
         }
         catch (Exception ex) { Serilog.Log.Debug("DeskEquipmentSync adopt failed: {E}", ex.Message); }
     }
-
     private static JToken OrNull(string? id) => id == null ? JValue.CreateNull() : new JValue(id);
-
     private static string? Str(JToken? t)
     {
         if (t is not JValue { Type: JTokenType.String } v) return null;
