@@ -85,8 +85,9 @@ public sealed class LockCardVoiceTests
     [InlineData(false, false, CoreSpeechModelStatus.NoModelFound, "No microphone detected.")]
     [InlineData(false, true, CoreSpeechModelStatus.LoadFailed, "would not load. Remove")]
     [InlineData(false, true, CoreSpeechModelStatus.NoModelFound, "not installed yet. Lock")]
-    public void VoiceHintsUseSentences(bool available, bool capture, CoreSpeechModelStatus status, string expected)
+    public void VoiceHintsUseSentences(bool available, bool capture, CoreSpeechModelStatus status, string expected) => AvaloniaTestDispatcher.Run(() =>
     {
+        Dispatcher.UIThread.VerifyAccess();
         var saved = (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider, CoreSpeech.ModelStatusProvider);
         var lang = LocalizationManager.Instance.CurrentLanguage;
         try
@@ -105,7 +106,7 @@ public sealed class LockCardVoiceTests
             (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider, CoreSpeech.ModelStatusProvider) = saved;
             LocalizationManager.Instance.SetLanguage(lang);
         }
-    }
+    });
 
     [Theory]
     [InlineData("en")]
@@ -118,8 +119,9 @@ public sealed class LockCardVoiceTests
     [InlineData("ja")]
     [InlineData("ko")]
     [InlineData("zh-CN")]
-    public void VoiceHintsTranslateEveryStateAndFormatModelPaths(string language)
+    public void VoiceHintsTranslateEveryStateAndFormatModelPaths(string language) => AvaloniaTestDispatcher.Run(() =>
     {
+        Dispatcher.UIThread.VerifyAccess();
         var saved = (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider, CoreSpeech.ModelStatusProvider);
         var loc = LocalizationManager.Instance;
         var lang = loc.CurrentLanguage;
@@ -160,7 +162,7 @@ public sealed class LockCardVoiceTests
             (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider, CoreSpeech.ModelStatusProvider) = saved;
             loc.SetLanguage(lang);
         }
-    }
+    });
 
     private static void ResetSpeech()
     {
