@@ -16,6 +16,52 @@ namespace CCP.Avalonia.Tests;
 /// from the daily bucket; a press beside it pops nothing.</summary>
 public sealed class BubbleOverlayTests
 {
+    [Fact]
+    public void One_shots_obey_cap_and_retire_without_starting_ambient_schedule() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        var oldShared = CoreSettings.Current.BubbleSharedHost;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true;
+            CoreSettings.Current.BubbleSharedHost = false; // legacy cap of three
+            host.Show();
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.NotifyDisplayChange("one-shot test");
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            Assert.Equal(0, BubbleOverlay.WindowCount);
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.ResetForTests();
+            for (var i = 0; i < 5; i++) BubbleOverlay.SpawnOnce(host);
+            Assert.Equal(3, BubbleOverlay.Field.Bubbles.Count);
+            Assert.False(BubbleOverlay.IsRunning);
+            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.OnFrame(System.TimeSpan.FromSeconds(1));
+            BubbleOverlay.OnFrame(System.TimeSpan.FromSeconds(2));
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            Assert.False(BubbleOverlay.IsRunning);
+            Assert.Equal(0, BubbleOverlay.WindowCount);
+            // The retired windows must be reopened for the next reward.
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Single(BubbleOverlay.Field.Bubbles);
+            BubbleOverlay.Start(host);
+            Assert.True(BubbleOverlay.IsRunning); // ambient takes over existing one-shot windows
+            Assert.Equal(2, BubbleOverlay.Field.Bubbles.Count); // immediate first ambient spawn
+        }
+        finally
+        {
+            BubbleOverlay.Stop();
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.ResetForTests();
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks;
+            CoreSettings.Current.BubbleSharedHost = oldShared;
+            host.Close();
+        }
+    });
+
     /// <summary>WPF BubbleService.cs:221 LoadBubbleImage: each Start re-resolves bubble.png through the
     /// active mod, so after a mod switch the next start draws the new mod's sprite, not the cached one.</summary>
     [Fact]

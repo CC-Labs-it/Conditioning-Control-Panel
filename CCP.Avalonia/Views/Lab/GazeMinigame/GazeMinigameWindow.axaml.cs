@@ -1187,16 +1187,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         //  Reward / vibration triggers
         // ─────────────────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// ponytail: reward-effects follow-up. Audio is wired; port the other four together:
-        /// CoreFlash.ShowProvider / CoreMindWipe.TriggerOnce exist, but WPF's five one-shot
-        /// bubbles and pulse of all active overlays still need equivalent head service entry points.
-        /// </summary>
+        // WPF Lab/GazeMinigame/GazeMinigameWindow.xaml.cs:1240-1263.
         private void FireRewardEffect(GazeRewardEffect effect)
         {
-            if (effect == GazeRewardEffect.Audio) { PlayRewardAudio(_settings.RewardAudioFile); return; }
-            if (effect == GazeRewardEffect.None) return;
-            Log.Debug("GazeMinigame: reward effect {Effect} suppressed (reward-effects follow-up)", effect);
+            try
+            {
+                switch (effect)
+                {
+                    case GazeRewardEffect.Flashes: CoreFlash.ShowProvider?.Invoke(); break;
+                    case GazeRewardEffect.Bubbles:
+                        for (var i = 0; i < 5; i++) Overlays.BubbleOverlay.SpawnOnce(this);
+                        break;
+                    case GazeRewardEffect.Audio: PlayRewardAudio(_settings.RewardAudioFile); break;
+                    case GazeRewardEffect.MindWipe: CoreMindWipe.TriggerOnce(); break;
+                    // ponytail: OverlayService.PulseOverlays, including gentle visuals and Brain Drain.
+                    case GazeRewardEffect.OverlayPulse: break;
+                }
+            }
+            catch (Exception ex) { Log.Warning(ex, "GazeMinigame: reward effect {Effect} threw", effect); }
         }
 
         /// <summary>
