@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games;
 
 internal sealed partial class GameWindow
 {
-    // WPF PieceByPieceHostService.Wardrobe.cs:45-74, 118-170. The counter door is excluded by B3.
+    // WPF PieceByPieceHostService.Wardrobe.cs:61-78, 154-208. The counter door is excluded by B3.
     private readonly CancellationTokenSource _pbpEquipLifetime = new();
     private readonly SemaphoreSlim _pbpEquipWrites = new(1, 1);
     internal Task PbpEquipPending { get; private set; } = Task.CompletedTask;
@@ -43,7 +43,7 @@ internal sealed partial class GameWindow
         var s = CoreSettings.Current;
         var look = PbpLookRules.Clamp(PbpLookRules.Normal(message["look"]), PbpChessGrants());
         if (PbpLookRules.Read(s.ChessLook).Look == look && !string.IsNullOrEmpty(s.ChessLook)) return;
-        s.ChessLook = PbpLookRules.Write(look, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        s.ChessLook = PbpLookRules.Write(look, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), owed: true);
         try { CoreSettings.Service?.Save(); } catch (Exception ex) { Diag.Swallowed(ex); }
         PbpEquipPending = PutPbpEquip(look);
     }
@@ -78,14 +78,14 @@ internal sealed partial class GameWindow
                 if (ct.IsCancellationRequested || _closing || CoreAccount.UnifiedUserId != uid) return;
                 var s = CoreSettings.Current;
                 var (local, localAt) = PbpLookRules.Read(s.ChessLook);
-                var (look, _, shouldPush) = PbpLookRules.Reconcile(local, localAt, server, at);
-                if (server != null && at > localAt)
+                var (look, adopt, shouldPush) = PbpLookRules.Reconcile(local, localAt, server, at, PbpLookRules.IsOwed(s.ChessLook));
+                if (adopt)
                 {
                     s.ChessLook = PbpLookRules.Write(look, at);
                     try { CoreSettings.Service?.Save(); } catch (Exception ex) { Diag.Swallowed(ex); }
                     PostPbpWardrobe();
                 }
-                else if (shouldPush) push = PbpLookRules.Clamp(look, PbpChessGrants());
+                else if (shouldPush) push = look;
             });
             if (push is {} value) await PutPbpEquip(value).ConfigureAwait(false);
         }
@@ -94,6 +94,7 @@ internal sealed partial class GameWindow
 
     private async Task PutPbpEquip(ChessLook look)
     {
+        var sent = CoreSettings.Current.ChessLook;
         var uid = CoreAccount.UnifiedUserId;
         var token = PbpAuthToken();
         var url = PbpServerBase()?.TrimEnd('/');
@@ -107,6 +108,17 @@ internal sealed partial class GameWindow
                 if (CoreAccount.UnifiedUserId != uid) return;
                 using var request = PbpEquipRequest(HttpMethod.Put, url, uid, token, look);
                 using var response = await PbpHttpClient().SendAsync(request, ct).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode) return;
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    var s = CoreSettings.Current;
+                    if (ct.IsCancellationRequested || _closing || CoreAccount.UnifiedUserId != uid
+                        || s.ChessLook != sent || !PbpLookRules.IsOwed(sent)) return;
+                    var (now, at) = PbpLookRules.Read(sent);
+                    if (now != look) return;
+                    s.ChessLook = PbpLookRules.Write(now, at);
+                    try { CoreSettings.Service?.Save(); } catch (Exception ex) { Diag.Swallowed(ex); }
+                });
             }
             finally { _pbpEquipWrites.Release(); }
         }

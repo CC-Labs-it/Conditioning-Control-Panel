@@ -98,12 +98,23 @@ internal static class PbpLookRules
         catch (JsonException) { return (ChessLook.Empty, 0); }
     }
 
-    public static string Write(ChessLook look, long at)
+    public static string Write(ChessLook look, long at, bool owed = false)
     {
         var o = look.ToJObject();
         o["at"] = at;
+        if (owed) o["owed"] = true;
         return o.ToString(Formatting.None);
     }
+
+    public static bool IsOwed(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return false;
+        try { return JObject.Parse(json)["owed"] is JValue { Type: JTokenType.Boolean } v && (bool)v; }
+        catch (JsonException) { return false; }
+    }
+
+    public static (ChessLook Look, bool Adopt, bool Push) Reconcile(ChessLook local, long localAt, ChessLook? server, long serverAt, bool owed)
+        => owed ? (local, false, true) : Reconcile(local, localAt, server, serverAt);
 
     /// <summary>
     /// Which copy wins at launch (contract 3): the server's when its <c>updatedAt</c> is newer than

@@ -51,6 +51,8 @@ public class PbpLookRulesTests
         var (back, at) = PbpLookRules.Read(PbpLookRules.Write(look, 1234));
         Assert.Equal(look, back);
         Assert.Equal(1234, at);
+        Assert.True(PbpLookRules.IsOwed(PbpLookRules.Write(look, 1234, owed: true)));
+        Assert.False(PbpLookRules.IsOwed(PbpLookRules.Write(look, 1234)));
         Assert.Equal((ChessLook.Empty, 0L), PbpLookRules.Read(""));
         Assert.Equal((ChessLook.Empty, 0L), PbpLookRules.Read("{not json"));
     }
@@ -61,6 +63,7 @@ public class PbpLookRulesTests
         var local = new ChessLook("chess.set.royal-capes", null, null);
         var server = new ChessLook(null, "chess.banner.crest", null);
         Assert.Equal((server, true, false), PbpLookRules.Reconcile(local, 100, server, 200));
+        Assert.Equal((local, false, true), PbpLookRules.Reconcile(local, 100, server, 200, owed: true));
         Assert.Equal((local, false, true), PbpLookRules.Reconcile(local, 300, server, 200));
         Assert.Equal((local, false, true), PbpLookRules.Reconcile(local, 300, null, 0));
         Assert.Equal((local, false, false), PbpLookRules.Reconcile(local, 300, local, 200));
