@@ -292,7 +292,9 @@ public sealed class InboxNoticeCardTests
         {
             CoreAccount.HasPremiumAccessProvider = () => false;
             CoreAccount.HasLabAccessProvider = () => false;
-            var service = new SettingsService(); // real settings.json in the CCP_USERDATA_DIR sandbox
+            var service = new SettingsService { SaveDebounceDueTimeMilliseconds = Timeout.Infinite }; // observe pending saves before flushing
+            // Returning-install fixture: unrelated feature intros are already spent.
+            service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys.Except(service.Current.SeenFeatureIntros));
             CoreSettings.ServiceProvider = () => service;
             shell = new MainShellWindow();
             shell.Show();
@@ -317,7 +319,7 @@ public sealed class InboxNoticeCardTests
             Assert.False(service.HasPendingSave); // a first reading must not write settings.json
             CoreAccount.HasPremiumAccessProvider = () => true; // a known rise 0 -> 2 is saved at once
             CoreAccount.HasLabAccessProvider = () => true;
-            service.Current.SeenFeatureIntros.Add(TierCelebration.KeyT2);
+            Assert.Contains(TierCelebration.KeyT2, service.Current.SeenFeatureIntros);
             Refocus();
             Assert.Equal(2, service.Current.LastKnownEffectiveTier);
             Assert.True(service.HasPendingSave);
