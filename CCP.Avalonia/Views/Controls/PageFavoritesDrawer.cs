@@ -10,6 +10,7 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Layout;
+using Avalonia.Input;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
@@ -35,7 +36,10 @@ public sealed class PageFavoritesDrawer : Grid
     {
         ColumnDefinitions = new ColumnDefinitions("22,Auto");
         _chevron = new IconGlyph { Kind = IconKind.ChevronLeft, Size = 16, HorizontalAlignment = HorizontalAlignment.Center };
-        var word = Caption("rail_favorites_drawer", 12);
+        // WPF PageFavoritesDrawer.cs:66-72: the handle word inherits its mod ink.
+        var word = new TextBlock { FontSize = 12, FontWeight = FontWeight.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center };
+        Bind(word, TextBlock.TextProperty, "rail_favorites_drawer");
         var rotated = new LayoutTransformControl { LayoutTransform = new RotateTransform(-90), Child = word,
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         var face = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
@@ -43,7 +47,7 @@ public sealed class PageFavoritesDrawer : Grid
         SetRow(rotated, 1); SetRow(_chevron, 2);
         face.Children.Add(rotated); face.Children.Add(_chevron);
         _face = new Border { CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1.5), Child = face };
-        Handle = new Button { Content = _face, Margin = new Thickness(2, 5), Padding = new Thickness(0),
+        Handle = new Button { Cursor = new Cursor(StandardCursorType.Hand), Content = _face, Margin = new Thickness(2, 5), Padding = new Thickness(0),
             HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch,
             Template = new FuncControlTemplate<Button>((b, _) => new ContentPresenter { Content = b.Content }) };
         Bind(Handle, ToolTip.TipProperty, "tooltip_rail_favorites_drawer");
@@ -77,15 +81,18 @@ public sealed class PageFavoritesDrawer : Grid
 
     private static TextBlock Caption(string key, double size)
     {
-        var text = new TextBlock { FontSize = size, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
-            FontWeight = size == 9 ? FontWeight.Bold : FontWeight.Normal };
+        // WPF SettingsTabView.xaml:295-309: Home's caption and empty text styles.
+        var text = new TextBlock { FontSize = size, TextAlignment = TextAlignment.Center,
+            TextWrapping = size == 8 ? TextWrapping.Wrap : TextWrapping.NoWrap,
+            FontWeight = size == 9 ? FontWeight.Bold : FontWeight.Normal,
+            Margin = new Thickness(0, 0, 0, size == 8 ? 6 : 3), Opacity = size == 8 ? .85 : 1 };
         Bind(text, TextBlock.TextProperty, key);
         text.Bind(TextBlock.ForegroundProperty, new global::Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension(
             size == 8 ? "TextMutedBrush" : "SecondaryBrush"));
         return text;
     }
 
-    // WPF PageFavoritesDrawer.cs:159-182: active mod hue, pointer and keyboard focus paint.
+    // WPF PageFavoritesDrawer.cs:141-155: active mod hue, pointer and keyboard focus paint.
     internal void Paint(Color hue)
     {
         _hue = hue;

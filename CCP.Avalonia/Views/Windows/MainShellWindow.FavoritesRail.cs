@@ -108,19 +108,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void RefreshPageDrawer()
         {
             if (PageFavorites is not { } drawer || SettingsPage is not { } dash) return;
-            var s = CoreSettings.Current;
-            var entries = SettingsPaletteIndex.All.Where(e => FavoritesRailRule.IsDestination(e.Id))
-                .ToDictionary(e => e.Id, StringComparer.Ordinal);
-            bool Known(string id) => entries.TryGetValue(id, out var e) && e.Available;
-            drawer.Paint(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.GlowColor);
-            drawer.FavoritesList.Children.Clear();
-            foreach (var id in s.RailFavorites.Where(Known))
-                drawer.FavoritesList.Children.Add(BuildRailChip(dash, entries[id]));
-            drawer.FavoritesEmpty.IsVisible = drawer.FavoritesList.Children.Count == 0;
-            drawer.RecentList.Children.Clear();
-            foreach (var id in FavoritesRailRule.RecentForDisplay(s.RailRecent, s.RailFavorites, Known))
-                drawer.RecentList.Children.Add(BuildRailChip(dash, entries[id]));
-            drawer.RecentEmpty.IsVisible = drawer.RecentList.Children.Count == 0;
+            // WPF MainWindow.FavoritesRail.cs:156-184: a repaint failure stays local.
+            try
+            {
+                var s = CoreSettings.Current;
+                var entries = SettingsPaletteIndex.All.Where(e => FavoritesRailRule.IsDestination(e.Id))
+                    .ToDictionary(e => e.Id, StringComparer.Ordinal);
+                bool Known(string id) => entries.TryGetValue(id, out var e) && e.Available;
+                drawer.Paint(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.GlowColor);
+                drawer.FavoritesList.Children.Clear();
+                foreach (var id in s.RailFavorites.Where(Known))
+                    drawer.FavoritesList.Children.Add(BuildRailChip(dash, entries[id]));
+                drawer.FavoritesEmpty.IsVisible = drawer.FavoritesList.Children.Count == 0;
+                drawer.RecentList.Children.Clear();
+                foreach (var id in FavoritesRailRule.RecentForDisplay(s.RailRecent, s.RailFavorites, Known))
+                    drawer.RecentList.Children.Add(BuildRailChip(dash, entries[id]));
+                drawer.RecentEmpty.IsVisible = drawer.RecentList.Children.Count == 0;
+            }
+            catch (Exception ex) { Log.Debug("RefreshPageDrawer: {E}", ex.Message); }
         }
 
         private Button BuildRailChip(Tabs.SettingsTabView dash, SettingsPaletteEntry entry)

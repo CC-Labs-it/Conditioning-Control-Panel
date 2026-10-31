@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -146,6 +147,79 @@ public class FavoritesRailParityTests
             Assert.False(drawer.IsVisible);
         }
         finally { s.MotionLevel = before; }
+        return Task.CompletedTask;
+    });
+
+    // WPF PageFavoritesDrawer.cs:66-72,88,148-155; SettingsTabView.xaml:295-309.
+    [Fact]
+    public Task PageDrawerHandlePaintAndTextStylesMatchWpf() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var drawer = new global::ConditioningControlPanel.Avalonia.Views.Controls.PageFavoritesDrawer { Height = 240,
+            HorizontalAlignment = HorizontalAlignment.Left };
+        var parking = new Button { Content = "Focus", Width = 50, Height = 24 };
+        var host = new Window { Width = 200, Height = 300, Content = new StackPanel { Children = { parking, drawer } } };
+        try
+        {
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
+            parking.Focus();
+            host.MouseMove(new Point(180, 280));
+            var face = (Grid)((Border)drawer.Handle.Content!).Child!;
+            var word = Assert.IsType<TextBlock>(Assert.Single(face.Children.OfType<LayoutTransformControl>()).Child);
+            Assert.Equal(12, word.FontSize);
+            Assert.Equal(FontWeight.SemiBold, word.FontWeight);
+            Assert.Equal(TextTrimming.CharacterEllipsis, word.TextTrimming);
+            Assert.Equal(TextWrapping.NoWrap, word.TextWrapping);
+            Assert.Equal(new Cursor(StandardCursorType.Hand).ToString(), drawer.Handle.Cursor?.ToString());
+            Color Ink() => Assert.IsType<SolidColorBrush>(word.Foreground).Color;
+            drawer.Paint(Color.FromRgb(10, 20, 30));
+            Assert.Equal(Color.FromRgb(54, 62, 70), Ink());
+            host.MouseMove(drawer.Handle.TranslatePoint(new Point(5, 5), host)!.Value);
+            Assert.True(drawer.Handle.IsPointerOver);
+            Assert.Equal(Color.FromRgb(145, 149, 154), Ink());
+            host.MouseMove(new Point(180, 280));
+            Assert.Equal(Color.FromRgb(54, 62, 70), Ink());
+            Assert.True(drawer.Handle.Focus());
+            Assert.Equal(Color.FromRgb(145, 149, 154), Ink());
+            drawer.Paint(Color.FromRgb(60, 90, 120));
+            Assert.Equal(Color.FromRgb(167, 181, 194), Ink());
+            parking.Focus();
+            Assert.Equal(Color.FromRgb(95, 120, 144), Ink());
+            var stack = (StackPanel)((ScrollViewer)drawer.Rail.Child!).Content!;
+            Assert.Equal(new Thickness(0, 0, 0, 3), ((TextBlock)stack.Children[0]).Margin);
+            Assert.Equal(new Thickness(0, 8, 0, 6), ((TextBlock)stack.Children[3]).Margin);
+            foreach (var empty in new[] { drawer.FavoritesEmpty, drawer.RecentEmpty })
+            {
+                Assert.Equal(.85, empty.Opacity);
+                Assert.Equal(new Thickness(0, 0, 0, 6), empty.Margin);
+                Assert.Equal(TextWrapping.Wrap, empty.TextWrapping);
+            }
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    // WPF MainWindow.FavoritesRail.cs:156-184: both refreshes swallow a bad saved entry.
+    [Fact]
+    public Task PageDrawerRefreshContainsFailureAndRecovers() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var s = CoreSettings.Current;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            s.RailFavorites.Add(null!); // Dictionary lookup throws in both chip-list builders.
+            Assert.Null(Record.Exception(shell.RefreshFavoritesRail));
+            s.RailFavorites.Clear();
+            s.RailFavorites.Add("door.play");
+            shell.RefreshFavoritesRail();
+            Assert.Equal("door.play", Assert.IsType<Button>(Assert.Single(shell.PageFavorites!.FavoritesList.Children)).Tag);
+            Assert.Equal("door.play", Assert.IsType<Button>(Assert.Single(shell.SettingsPage!.FindControl<StackPanel>("FavoritesList")!.Children)).Tag);
+        }
+        finally { s.RailFavorites.Clear(); shell.Close(); }
         return Task.CompletedTask;
     });
 
