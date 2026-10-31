@@ -56,12 +56,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             ChkFlashGazePop.IsCheckedChanged += ChkFlashGazePop_Changed;
             ChkFlashGazeLinger.IsCheckedChanged += ChkFlashGazeLinger_Changed;
             SliderFlashLingerMs.ValueChanged += SliderFlashLingerMs_Changed;
-            ChkFlashRoundedCorners.IsCheckedChanged += (_, _) =>
-            {
-                if (_isLoading) return;
-                CoreSettings.Current.FlashRoundedCorners = ChkFlashRoundedCorners.IsChecked == true;
-                CoreSettings.Save();
-            };
             ChkFlashDraggable.IsCheckedChanged += (_, _) =>
             {
                 if (_isLoading) return;
@@ -146,7 +140,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 ChkHydraLinked.IsChecked = s.HydraLinkedTiming;
                 ChkGlow.IsChecked = s.FlashGlowEnabled;
                 ChkSolidMode.IsChecked = s.FlashSolidMode;
-                ChkFlashRoundedCorners.IsChecked = s.FlashRoundedCorners;
                 ChkFlashDraggable.IsChecked = s.FlashDraggable;
                 ChkFlashGazePop.IsChecked = s.FlashGazePopEnabled;
                 ChkFlashGazeLinger.IsChecked = s.FlashGazeLingerEnabled;
@@ -174,11 +167,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         /// <summary>WPF RefreshV2Box: the box holds the offer while nothing is owned and collapses once
-        /// no motion, Shatter, rounding, drag or Get it row is left.</summary>
+        /// no motion, Shatter, drag or Get it row is left.</summary>
         private void RefreshV2Box()
         {
             var motion = Platform.PrizeOwnership.OwnsFlashV2();
-            RowRoundedCorners.IsVisible = RowDraggable.IsVisible = motion;
+            RowDraggable.IsVisible = motion;
             BoxFlashV2.IsVisible = motion || RowShatter.IsVisible || RowMotion.IsVisible || !RowGetFlashesV2.IsRowHidden;
         }
 
@@ -282,7 +275,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.FlashAvoidCenter) ||
                 e.PropertyName == nameof(AppSettings.FlashMotionStyle) ||
                 e.PropertyName == nameof(AppSettings.FlashDriftSpeed) ||
-                e.PropertyName == nameof(AppSettings.FlashRoundedCorners) ||
                 e.PropertyName == nameof(AppSettings.FlashDraggable) ||
                 e.PropertyName == nameof(AppSettings.FlashCenterExclusionPercent))
             {

@@ -41,24 +41,37 @@ public sealed class FlashV2InteractionTests
     });
 
     [Fact]
-    public Task Motion_grants_expose_rounding_and_dragging_and_toggles_save() => OnUi(() =>
+    public Task Motion_grants_expose_dragging_and_toggle_saves() => OnUi(() =>
     {
         PrizeOwnership.IsGranted = _ => false;
         var unowned = new FlashFeatureControl();
-        Assert.False(unowned.FindControl<Grid>("RowRoundedCorners")!.IsVisible);
         Assert.False(unowned.FindControl<Grid>("RowDraggable")!.IsVisible);
         foreach (var grant in new[] { PrizeOwnership.FlashDriftBounce, PrizeOwnership.FlashPendulum })
         {
             PrizeOwnership.IsGranted = id => id == grant;
             var card = new FlashFeatureControl();
-            Assert.True(card.FindControl<Grid>("RowRoundedCorners")!.IsVisible);
             Assert.True(card.FindControl<Grid>("RowDraggable")!.IsVisible);
-            card.FindControl<CheckBox>("ChkFlashRoundedCorners")!.IsChecked = false;
-            card.FindControl<CheckBox>("ChkFlashRoundedCorners")!.IsChecked = true;
-            Assert.True(CoreSettings.Current.FlashRoundedCorners);
             card.FindControl<CheckBox>("ChkFlashDraggable")!.IsChecked = false;
             card.FindControl<CheckBox>("ChkFlashDraggable")!.IsChecked = true;
             Assert.True(CoreSettings.Current.FlashDraggable);
+        }
+    });
+
+    // WPF FlashService.cs:1963 clips the picture. Until that renderer lands here, no editor
+    // should promise rounding or overwrite a preference restored from the WPF head.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Rounded_editor_waits_for_its_renderer_and_preserves_the_synced_preference(bool rounded) => OnUi(() =>
+    {
+        CoreSettings.Current.FlashRoundedCorners = rounded;
+        foreach (var grant in new[] { PrizeOwnership.FlashDriftBounce, PrizeOwnership.FlashPendulum })
+        {
+            PrizeOwnership.IsGranted = id => id == grant;
+            var card = new FlashFeatureControl();
+            Assert.Null(card.FindControl<Grid>("RowRoundedCorners"));
+            Assert.Null(card.FindControl<CheckBox>("ChkFlashRoundedCorners"));
+            Assert.Equal(rounded, CoreSettings.Current.FlashRoundedCorners);
         }
     });
 
