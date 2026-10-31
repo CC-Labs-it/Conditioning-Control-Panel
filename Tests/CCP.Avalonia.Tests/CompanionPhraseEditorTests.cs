@@ -125,46 +125,52 @@ public sealed class CompanionPhraseEditorTests
     public void TriggerControlsLoadWithoutSavingAndPersistUserChanges() => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
+        var oldProvider = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        service.Current.TriggerModeEnabled = true;
-        service.Current.TriggerIntervalSeconds = 137;
-        var cell = new WorkshopTriggersCell();
-        var toggle = cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
-        var slider = cell.FindControl<Slider>("SliderTriggerIntervalCompanion")!;
-        var panel = cell.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!;
-        var label = cell.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!;
-        Assert.True(toggle.IsChecked);
-        Assert.True(panel.IsVisible);
-        Assert.Equal(137, slider.Value);
-        Assert.Equal("137s", label.Text);
-        Assert.False(service.HasPendingSave);
-        slider.Value = 183.9;
-        Assert.Equal(183, service.Current.TriggerIntervalSeconds);
-        Assert.Equal("183s", label.Text);
-        Assert.False(service.HasPendingSave); // WPF saves the toggle, not each slider tick.
-        toggle.IsChecked = false;
-        Assert.False(panel.IsVisible);
-        Assert.False(service.Current.TriggerModeEnabled);
-        Assert.True(service.HasPendingSave);
-        service.SaveImmediate();
-        var reload = new SettingsService();
-        Assert.False(reload.Current.TriggerModeEnabled);
-        Assert.Equal(183, reload.Current.TriggerIntervalSeconds);
-        // Reopening the page re-reads externally changed state without writing it.
-        service.Current.TriggerModeEnabled = true;
-        service.Current.TriggerIntervalSeconds = 245;
-        cell.SyncSettings();
-        Assert.True(toggle.IsChecked);
-        Assert.True(panel.IsVisible);
-        Assert.Equal("245s", label.Text);
-        Assert.False(service.HasPendingSave);
+        try
+        {
+            service.Current.TriggerModeEnabled = true;
+            service.Current.TriggerIntervalSeconds = 137;
+            var cell = new WorkshopTriggersCell();
+            var toggle = cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
+            var slider = cell.FindControl<Slider>("SliderTriggerIntervalCompanion")!;
+            var panel = cell.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!;
+            var label = cell.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!;
+            Assert.True(toggle.IsChecked);
+            Assert.True(panel.IsVisible);
+            Assert.Equal(137, slider.Value);
+            Assert.Equal("137s", label.Text);
+            Assert.False(service.HasPendingSave);
+            slider.Value = 183.9;
+            Assert.Equal(183, service.Current.TriggerIntervalSeconds);
+            Assert.Equal("183s", label.Text);
+            Assert.False(service.HasPendingSave); // WPF saves the toggle, not each slider tick.
+            toggle.IsChecked = false;
+            Assert.False(panel.IsVisible);
+            Assert.False(service.Current.TriggerModeEnabled);
+            Assert.True(service.HasPendingSave);
+            service.SaveImmediate();
+            var reload = new SettingsService();
+            Assert.False(reload.Current.TriggerModeEnabled);
+            Assert.Equal(183, reload.Current.TriggerIntervalSeconds);
+            // Reopening the page re-reads externally changed state without writing it.
+            service.Current.TriggerModeEnabled = true;
+            service.Current.TriggerIntervalSeconds = 245;
+            cell.SyncSettings();
+            Assert.True(toggle.IsChecked);
+            Assert.True(panel.IsVisible);
+            Assert.Equal("245s", label.Text);
+            Assert.False(service.HasPendingSave);
+        }
+        finally { CoreSettings.ServiceProvider = oldProvider; }
     });
 
     [Fact]
     public void AiPageTriggerEditorNormalizesSavesAndCancelsWithoutRestoringDefaults() => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
+        var oldProvider = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var settings = service.Current;
@@ -258,6 +264,7 @@ public sealed class CompanionPhraseEditorTests
             foreach (var owned in shell.OwnedWindows.ToArray()) owned.Close();
             shell.RequestExit();
             LocalizationManager.Instance.SetLanguage(oldLanguage);
+            CoreSettings.ServiceProvider = oldProvider;
         }
     });
 
