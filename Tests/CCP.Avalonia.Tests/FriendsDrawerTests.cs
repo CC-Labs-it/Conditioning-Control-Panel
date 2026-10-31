@@ -566,6 +566,51 @@ public sealed class FriendsDrawerTests
         global::ConditioningControlPanel.Services.GoonGame.GoonOpenTablesApi.Parse(
             """{"ok":true,"tables":[{"code":"ZEDD42","name":"Zed","friend":true,"friendId":"u_off","cardSec":60}]}""");
 
+    // WPF Controls/Friends/FriendsDrawer.cs:568-592: nullable lock day, independent of
+    // online state and the table Join action. Exercise the actual Social > Friends page body.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task LockDayOnTheFriendsPageKeepsItsOwnColumn(bool hosting) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        using (svc)
+        {
+            wire.StateBody = State.Replace("\"lock_day\":3", "\"lock_day\":0");
+            await svc.RefreshAsync();
+            var page = new global::ConditioningControlPanel.Avalonia.Views.Tabs.FriendsTabView(svc);
+            var d = page.Drawer;
+            if (hosting)
+            {
+                d.Tables = () => global::ConditioningControlPanel.Services.GoonGame.GoonOpenTablesApi.Parse(
+                    """{"ok":true,"tables":[{"code":"MIAT42","name":"Mia","friend":true,"friendId":"u_on","cardSec":60}]}""");
+                d.CanJoinTables = () => true;
+            }
+            d.Render();
+            var row = Tagged<Border>(d, "friends-row:u_on")!;
+            var chip = Tagged<Border>(row, "friends-lock");
+            Assert.NotNull(chip);
+            Assert.Equal("\U0001F512 " + Loc.GetF("friends_lock_day", 0), Assert.IsType<TextBlock>(chip.Child).Text);
+            Assert.Equal(2, Grid.GetColumn(chip));
+            if (hosting)
+            {
+                var join = Tagged<Button>(row, "friends-table-join");
+                Assert.NotNull(join);
+                Assert.Equal(3, Grid.GetColumn(join));
+                Assert.Equal(4, Assert.IsType<Grid>(join.Parent).ColumnDefinitions.Count);
+            }
+            Assert.Null(Tagged<Border>(Tagged<Border>(d, "friends-row:u_off")!, "friends-lock"));
+            // A later snapshot can move the chip to an offline friend and remove the old one.
+            wire.StateBody = State.Replace("\"lock_day\":3", "\"lock_day\":null")
+                .Replace("\"activity\":\"online\",\"lock_day\":null", "\"activity\":\"online\",\"lock_day\":7");
+            await svc.RefreshAsync();
+            d.Render();
+            Assert.Null(Tagged<Border>(Tagged<Border>(d, "friends-row:u_on")!, "friends-lock"));
+            var offline = Tagged<Border>(Tagged<Border>(d, "friends-row:u_off")!, "friends-lock")!;
+            Assert.Equal("\U0001F512 " + Loc.GetF("friends_lock_day", 7), Assert.IsType<TextBlock>(offline.Child).Text);
+        }
+    });
+
     private static string[] RowIds(Control d) => d.GetLogicalDescendants().OfType<Border>()
         .Select(b => b.Tag as string).Where(t => t != null && t.StartsWith("friends-row:")).Select(t => t!.Substring(12)).ToArray();
 
