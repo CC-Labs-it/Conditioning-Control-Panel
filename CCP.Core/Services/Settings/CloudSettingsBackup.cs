@@ -157,24 +157,20 @@ namespace ConditioningControlPanel.Services
 
         // ---- new: absolute paths are machine-local ----
 
-        /// <summary>Settings that hold an absolute path, a list of them, or list items carrying one
-        /// (AudioLayerTrack.Path, CornerGifOverlaySetting.GifPath, PlayAudioAction.FilePath). This machine's values are
-        /// never uploaded: the upload carries the SLOT's values unchanged (<see cref="CarryPathFields"/>), so a Windows
-        /// restore of a backup made here keeps its own paths. A restore keeps this machine's values, whatever the backup
-        /// carries (frozen WPF still uploads its Windows paths). Whole lists, so a restore never drops this machine's file from an item.
-        /// The asset lists are NOT here: they are relative and forward-slashed, so they travel.</summary>
+        /// <summary>Whole machine-local path settings. Portable lists retain their non-path fields;
+        /// rooted item paths stay local on restore and carry existing slot paths on upload; relative paths travel.</summary>
         public static readonly IReadOnlyList<string> AbsolutePathFields = new[]
         {
             nameof(AppSettings.CustomAssetsPath), nameof(AppSettings.StartupVideoPath), nameof(AppSettings.SpiralPath),
             nameof(AppSettings.MindWipeAudioPath), nameof(AppSettings.WallpaperOriginalPath), nameof(AppSettings.WallpaperSourceFolder),
             nameof(AppSettings.BlinkTrainerFolders), nameof(AppSettings.DeeperRecentFiles), nameof(AppSettings.DeeperLastDirectory),
-            nameof(AppSettings.AudioLayers), nameof(AppSettings.CornerGifOverlays), nameof(AppSettings.KeywordTriggers),
         };
 
         private static readonly System.Reflection.PropertyInfo[] PathProperties =
             AbsolutePathFields.Select(n => typeof(AppSettings).GetProperty(n)!).ToArray();
 
-        /// <summary>The upload JSON: the settings minus WPF's exclusions minus <see cref="AbsolutePathFields"/>.</summary>
+        /// <summary>WPF ProfileSyncService.cs:4561-4570 carries portable list fields. Strip rooted item paths here
+        /// for cross-OS use; CarryPathFields restores the slot's paths for frozen WPF.</summary>
         internal static JObject StripForUpload(AppSettings settings)
         {
             var obj = JObject.Parse(JsonConvert.SerializeObject(settings, Formatting.None));
@@ -188,7 +184,49 @@ namespace ConditioningControlPanel.Services
                     || AbsolutePathFields.Contains(name, StringComparer.OrdinalIgnoreCase))
                     obj.Remove(key);
             }
+            foreach (var item in Items(obj, nameof(AppSettings.AudioLayers)))
+            {
+                DropRooted(item, nameof(AudioLayerTrack.Path));
+                Drop(item, nameof(AudioLayerTrack.DisplayName)); // computed from Path, not persisted meaningfully
+            }
+            foreach (var item in Items(obj, nameof(AppSettings.CornerGifOverlays)))
+                DropRooted(item, nameof(CornerGifOverlaySetting.GifPath));
+            var triggers = Items(obj, nameof(AppSettings.KeywordTriggers))
+                .Concat(Items(obj, nameof(AppSettings.KeywordTriggerPresets)).SelectMany(p => Items(p, "triggers")));
+            foreach (var item in triggers)
+            {
+                DropRooted(item, nameof(KeywordTrigger.AudioFilePath)); // legacy dispatch fallback
+                foreach (var action in Items(item, nameof(KeywordTrigger.Actions)))
+                    if (string.Equals((string?)action.GetValue("type", StringComparison.OrdinalIgnoreCase), "PlayAudio", StringComparison.OrdinalIgnoreCase))
+                        DropRooted(action, "filePath");
+            }
             return obj;
+        }
+
+        // Case-insensitive: a serializer naming policy must not let a path slip through.
+        private static IEnumerable<JObject> Items(JObject? o, string list) =>
+            (o?.GetValue(list, StringComparison.OrdinalIgnoreCase) as JArray)?.OfType<JObject>() ?? Enumerable.Empty<JObject>();
+        private static void Drop(JObject o, string name) => o.Property(name, StringComparison.OrdinalIgnoreCase)?.Remove();
+
+
+        // OS-independent: a Windows drive or rooted backslash is local even on Linux.
+        private static bool IsRootedPath(string? path) => !string.IsNullOrEmpty(path)
+            && (path[0] is '/' or '\\' || (path.Length >= 2 && char.IsAsciiLetter(path[0]) && path[1] == ':'));
+
+        private static void DropRooted(JObject item, string name)
+        {
+            if (IsRootedPath((string?)item.GetValue(name, StringComparison.OrdinalIgnoreCase))) Drop(item, name);
+        }
+
+        private static JObject? ItemAt(JObject? parent, string list, int index) =>
+            (parent?.GetValue(list, StringComparison.OrdinalIgnoreCase) as JArray)?.ElementAtOrDefault(index) as JObject;
+
+        // Relative values, including an explicit empty path, travel. A stripped/omitted path
+        // or a foreign rooted path takes the matched local path, or blank when unmatched.
+        private static string KeepPath(JObject? item, string name, string? local)
+        {
+            var path = (string?)item?.GetValue(name, StringComparison.OrdinalIgnoreCase);
+            return path != null && !IsRootedPath(path) ? path : local ?? "";
         }
 
         private static readonly Lazy<Dictionary<string, string>> JsonKeyToProperty = new(() =>
@@ -205,9 +243,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// What a restore keeps from this machine: WPF's manual-restore identity/progression list
         /// (MainWindow.CloudBackup.cs:138-157), <see cref="PreserveLocalOnlyFields"/>, then every
-        /// <see cref="AbsolutePathFields"/> value.
+        /// <see cref="AbsolutePathFields"/> value and matched list-item paths.
         /// </summary>
-        internal static void KeepLocal(AppSettings current, AppSettings restored)
+        internal static void KeepLocal(AppSettings current, AppSettings restored, JObject backup)
         {
             restored.UnifiedId = current.UnifiedId;
             restored.PlayerLevel = current.PlayerLevel;
@@ -232,6 +270,62 @@ namespace ConditioningControlPanel.Services
                 if (v is List<string> list) v = new List<string>(list);
                 p.SetValue(restored, v);
             }
+            KeepListPaths(current, restored, backup);
+        }
+
+        private static void KeepListPaths(AppSettings current, AppSettings restored, JObject backup)
+        {
+            // No stable id/name on tracks or corner slots: their persisted order is the key.
+            // Check JSON presence: a missing old list keeps local items; an explicit [] clears it.
+            bool Missing(string name) => backup.GetValue(name, StringComparison.OrdinalIgnoreCase) == null;
+            if (Missing(nameof(AppSettings.AudioLayers))) restored.AudioLayers = new(current.AudioLayers);
+            else for (var i = 0; i < restored.AudioLayers.Count; i++)
+                restored.AudioLayers[i].Path = KeepPath(ItemAt(backup, nameof(AppSettings.AudioLayers), i),
+                    nameof(AudioLayerTrack.Path), current.AudioLayers.ElementAtOrDefault(i)?.Path);
+            if (Missing(nameof(AppSettings.CornerGifOverlays))) restored.CornerGifOverlays = new(current.CornerGifOverlays);
+            else for (var i = 0; i < restored.CornerGifOverlays.Count; i++)
+                restored.CornerGifOverlays[i].GifPath = KeepPath(ItemAt(backup, nameof(AppSettings.CornerGifOverlays), i),
+                    nameof(CornerGifOverlaySetting.GifPath), current.CornerGifOverlays.ElementAtOrDefault(i)?.GifPath);
+            if (Missing(nameof(AppSettings.KeywordTriggers))) restored.KeywordTriggers = new(current.KeywordTriggers);
+            else RestoreTriggerPaths(restored.KeywordTriggers, current.KeywordTriggers, Items(backup, nameof(AppSettings.KeywordTriggers)).ToList());
+            if (Missing(nameof(AppSettings.KeywordTriggerPresets))) restored.KeywordTriggerPresets = new(current.KeywordTriggerPresets);
+            else for (var i = 0; i < restored.KeywordTriggerPresets.Count; i++)
+                RestoreTriggerPaths(restored.KeywordTriggerPresets[i].Triggers,
+                    ById(restored.KeywordTriggerPresets, i, current.KeywordTriggerPresets, p => p.Id)?.Triggers ?? new(),
+                    Items(ItemAt(backup, nameof(AppSettings.KeywordTriggerPresets), i), "triggers").ToList());
+        }
+
+        private static void RestoreTriggerPaths(List<KeywordTrigger> restored, List<KeywordTrigger> current, List<JObject> json)
+        {
+            for (var i = 0; i < restored.Count; i++)
+            {
+                var trigger = restored[i];
+                var local = ById(restored, i, current, t => t.Id);
+                var source = json.ElementAtOrDefault(i);
+                trigger.AudioFilePath = KeepPath(source, nameof(KeywordTrigger.AudioFilePath), local?.AudioFilePath);
+                // Action ids are not stable (every edit runs RebuildActionsFromFlatFields, which mints new
+                // ones), so a miss falls back to the local PlayAudio at the same position, then AudioFilePath.
+                var localAudio = local?.Actions.OfType<PlayAudioAction>().ToList() ?? new();
+                var restoredAudio = trigger.Actions.OfType<PlayAudioAction>().ToList();
+                var jsonAudio = Items(source, nameof(KeywordTrigger.Actions)).Where(a =>
+                    string.Equals((string?)a.GetValue("type", StringComparison.OrdinalIgnoreCase), "PlayAudio", StringComparison.OrdinalIgnoreCase)).ToList();
+                for (var j = 0; j < restoredAudio.Count; j++)
+                    restoredAudio[j].FilePath = KeepPath(jsonAudio.ElementAtOrDefault(j), "filePath", local == null ? null
+                        : (ById(restoredAudio, j, localAudio, a => a.Id) ?? localAudio.ElementAtOrDefault(j))?.FilePath
+                          ?? local.AudioFilePath);
+            }
+        }
+
+        /// <summary>The local twin of restored[i] by id. A duplicated id is ambiguous on either side, so it
+        /// only matches the local item at the same position carrying the same id.</summary>
+        private static T? ById<T>(IList<T> restored, int i, IList<T> local, Func<T, string?> id) where T : class
+        {
+            var key = id(restored[i]);
+            if (string.IsNullOrEmpty(key)) return null;
+            if (restored.Count(x => id(x) == key) == 1 && local.Count(x => id(x) == key) == 1)
+                return local.First(x => id(x) == key);
+            var same = local.ElementAtOrDefault(i);
+            return same != null && id(same) == key ? same : null;
         }
 
         // ---- the server (WPF BackupSettingsAsync / GetSettingsBackupInfoAsync / RestoreSettingsFromCloudAsync) ----
@@ -314,7 +408,7 @@ namespace ConditioningControlPanel.Services
                 var restored = JsonConvert.DeserializeObject<AppSettings>(json,
                     new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
                 if (restored == null) return null;
-                KeepLocal(current, restored);
+                KeepLocal(current, restored, JObject.Parse(json));
                 Log.Information("Settings restored from cloud");
                 return restored;
             }
@@ -326,7 +420,7 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>The slot's <see cref="AbsolutePathFields"/> keys, copied into <paramref name="upload"/> as they are
-        /// (WPF's Windows paths, or nothing when the last backup came from this head). This head's own paths never go up.</summary>
+        /// (WPF's Windows paths, or nothing when the last backup came from this head). This head's rooted paths never go up.</summary>
         internal static void CarryPathFields(JObject upload, JObject? slotSettings)
         {
             if (slotSettings == null) return;
@@ -334,6 +428,45 @@ namespace ConditioningControlPanel.Services
                 if (AbsolutePathFields.Contains(p.Name, StringComparer.OrdinalIgnoreCase)
                     || AbsolutePathFields.Contains(PropertyNameOfJsonKey(p.Name), StringComparer.OrdinalIgnoreCase))
                     upload[p.Name] = p.Value.DeepClone();
+            // Keep portable fields and relative paths; use slot paths for rooted/omitted item paths.
+            // Reuse the restore matching rules, including preset/trigger ids and edited action ids.
+            var serializer = JsonSerializer.Create(new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
+            var listNames = new[] { nameof(AppSettings.AudioLayers), nameof(AppSettings.CornerGifOverlays),
+                nameof(AppSettings.KeywordTriggers), nameof(AppSettings.KeywordTriggerPresets) };
+            JObject ListsOnly(JObject source) => new(source.Properties()
+                .Where(p => listNames.Contains(PropertyNameOfJsonKey(p.Name), StringComparer.OrdinalIgnoreCase))
+                .Select(p => new JProperty(p.Name, p.Value.DeepClone())));
+            var local = ListsOnly(slotSettings).ToObject<AppSettings>(serializer)!;
+            var portable = ListsOnly(upload).ToObject<AppSettings>(serializer)!;
+            KeepListPaths(local, portable, upload);
+            var merged = JObject.FromObject(portable);
+            foreach (var name in listNames)
+            {
+                var key = upload.Properties().First(p => PropertyNameOfJsonKey(p.Name).Equals(name, StringComparison.OrdinalIgnoreCase)).Name;
+                var list = merged.GetValue(name, StringComparison.OrdinalIgnoreCase)!.DeepClone();
+                PreserveOmittedPaths(upload[key], list);
+                upload[key] = list;
+            }
+            foreach (var item in Items(upload, nameof(AppSettings.AudioLayers)))
+                Drop(item, nameof(AudioLayerTrack.DisplayName));
+        }
+
+        // Model defaults must not turn stripped paths into explicit empty choices on a later restore.
+        // Keep a carried slot path, but omit generated blanks unless the upload explicitly carried one.
+        private static void PreserveOmittedPaths(JToken? source, JToken target)
+        {
+            if (target is JObject obj)
+                foreach (var property in obj.Properties().ToList())
+                {
+                    var original = (source as JObject)?.GetValue(property.Name, StringComparison.OrdinalIgnoreCase);
+                    if (original == null && property.Value.Type == JTokenType.String && (string?)property.Value == ""
+                        && (property.Name.ToLowerInvariant() is "path" or "gifpath" or "audiofilepath" or "filepath"))
+                        property.Remove();
+                    else PreserveOmittedPaths(original, property.Value);
+                }
+            else if (target is JArray array)
+                for (var i = 0; i < array.Count; i++)
+                    PreserveOmittedPaths((source as JArray)?.ElementAtOrDefault(i), array[i]);
         }
 
         /// <summary>The slot's settings JSON; null when there is none or it cannot be read (nothing to carry then).</summary>
