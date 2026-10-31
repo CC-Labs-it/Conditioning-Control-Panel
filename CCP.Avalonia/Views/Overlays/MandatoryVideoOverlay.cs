@@ -327,14 +327,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF: strict vetoes a user close while playing; a non-strict close is a dismiss.
             w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
+            WireChaosRestacking(w);
             w.Show();
             if (!floating)
             {
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
+            RestoreChaosLayer();
             return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
         }
+
+        // WPF ChaosModeService.cs:735-762: starting or clicking a video can cover keep-alive FX.
+        internal static void RestoreChaosLayer() => Chaos.ChaosRunHost.RaiseEStimAboveVideo();
+        internal static void WireChaosRestacking(Window w) => w.AddHandler(InputElement.PointerPressedEvent,
+            (_, _) => RestoreChaosLayer(), global::Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
 
         /// <summary>WPF GracePauseOverlayWindow's card: 360x200, centred, #1A1A2E with a 2 px pink edge,
         /// the pause glyph, "Paused", a pink Resume pill (0.85 on hover, 0.7 pressed) and the countdown.</summary>
