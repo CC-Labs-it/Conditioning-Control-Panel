@@ -300,12 +300,86 @@ public sealed class ChaosGifCascadeOverlayTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task VideoEndQuarantinesCascadeForThreeSeconds(bool forced)
+    {
+        var video = new MandatoryVideoScheduler(new GateVideoHost());
+        try
+        {
+            await WithDetonationRun(async () =>
+            {
+                var now = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => now;
+                Assert.True(video.Trigger(path: "gate-test.mp4")); // an existing, non-Chaos video
+                if (forced) video.ForceCleanup(); else video.End();
+                Assert.False(video.IsPlaying);
+                var pick = ChaosGifCascadeOverlay.LastPick;
+                Detonate(new GifCascadePayload());
+                Assert.Same(pick, ChaosGifCascadeOverlay.LastPick);
+                now = now.AddMilliseconds(2999);
+                Detonate(new GifCascadePayload());
+                Assert.Same(pick, ChaosGifCascadeOverlay.LastPick);
+                now = now.AddMilliseconds(1);
+                Assert.False(ChaosRunHost.HeavyEffectActive);
+                Detonate(new GifCascadePayload());
+                Assert.NotSame(pick, ChaosGifCascadeOverlay.LastPick);
+                await ChaosGifCascadeOverlay.LastPick!;
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(ChaosGifCascadeOverlay.IsRaining);
+            }, video);
+        }
+        finally { video.ForceCleanup(); }
+    }
+
+    [Fact]
+    public async Task VideoEndDoesNotShortenAnExistingHeavyReservation()
+    {
+        var video = new MandatoryVideoScheduler(new GateVideoHost());
+        await WithDetonationRun(() =>
+        {
+            var now = DateTime.UnixEpoch;
+            BubbleOverlay.Field.Clock = () => now;
+            Detonate(new VideoPayload()); // 18-second video floor, WPF :2308
+            Assert.True(video.Trigger(path: "gate-test.mp4"));
+            video.End();
+            now = now.AddSeconds(3);
+            Assert.True(ChaosRunHost.HeavyEffectActive);
+            now = now.AddSeconds(15);
+            Assert.False(ChaosRunHost.HeavyEffectActive);
+            return Task.CompletedTask;
+        }, video);
+    }
+
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("panic")]
+    [InlineData("close")]
+    public async Task TeardownUnsubscribesFromTheOriginalVideoScheduler(string ending)
+    {
+        var video = new MandatoryVideoScheduler(new GateVideoHost());
+        await WithDetonationRun(() =>
+        {
+            BubbleOverlay.Field.Clock = () => DateTime.UnixEpoch;
+            CoreEngine.Video = new MandatoryVideoScheduler(new GateVideoHost());
+            if (ending == "stop") ChaosRunHost.RequestStop();
+            else if (ending == "panic") ChaosRunHost.ForceShutdown();
+            else ChaosRunHost.Overlay!.Close();
+            Assert.False(ChaosRunHost.HeavyEffectActive);
+            Assert.True(video.Trigger(path: "gate-test.mp4"));
+            video.End(); // the old publisher must not re-arm the ended run's gate
+            Assert.False(ChaosRunHost.HeavyEffectActive);
+            return Task.CompletedTask;
+        }, video);
+    }
+
     private static void Detonate(EffectPayload payload) => ChaosRunHost.OnDetonated(new AmbientBubble
     {
         Spec = new EffectBubbleSpec { VariantId = "htlink", IsLive = true, Payload = payload },
     });
 
-    private static async Task WithDetonationRun(Func<Task> body)
+    private static async Task WithDetonationRun(Func<Task> body, MandatoryVideoScheduler? video = null)
     {
         var dir = Directory.CreateTempSubdirectory("ccp-cascade-detonation-").FullName;
         Directory.CreateDirectory(Path.Combine(dir, "images"));
@@ -321,6 +395,7 @@ public sealed class ChaosGifCascadeOverlayTests
                 var previousRoot = CorePaths.EffectiveAssetsProvider;
                 var previousFirer = EffectPayload.Firer;
                 var previousClock = BubbleOverlay.Field.Clock;
+                var previousVideo = CoreEngine.Video;
                 try
                 {
                     ChaosRunHost.ForceShutdown();
@@ -329,6 +404,7 @@ public sealed class ChaosGifCascadeOverlayTests
                     ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
                     ChaosGifCascadeOverlay.ManualFramesForTests = true;
                     global::ConditioningControlPanel.Avalonia.App.StartChaosPayloads();
+                    if (video != null) CoreEngine.Video = video;
                     ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
                     ChaosRunHost.Overlay!.FinishCountdown();
                     ChaosRunHost.StopTimerForTests();
@@ -345,6 +421,7 @@ public sealed class ChaosGifCascadeOverlayTests
                     CorePaths.EffectiveAssetsProvider = previousRoot;
                     EffectPayload.Firer = previousFirer;
                     BubbleOverlay.Field.Clock = previousClock;
+                    CoreEngine.Video = previousVideo;
                 }
             });
         }

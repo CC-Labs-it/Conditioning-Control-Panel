@@ -65,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static DispatcherTimer? _runTimer, _spawnTimer;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
         private static DateTime _heavyUntilUtc = DateTime.MinValue;
+        private static MandatoryVideoScheduler? _runVideo;
         // WPF ChaosModeService.cs:2155-2156: reality plus a floor for pending selection.
         internal static bool HeavyEffectActive => CoreEngine.Video?.IsPlaying == true
             || ChaosGifCascadeOverlay.IsRaining || BubbleOverlay.Field.Clock() < _heavyUntilUtc;
@@ -148,6 +149,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosRunLessons.OnRunStarted();   // WPF :399
             // ponytail: NotifyChaosRunStarted bark (WPF :389) -> chaos-payout-barks.
             _spawning = true;
+            // WPF ChaosModeService.cs:503-504: observe any mandatory video for this run.
+            _runVideo = CoreEngine.Video;
+            if (_runVideo != null) _runVideo.VideoEnded += OnVideoEndedDuringRun;
             _fx = ChaosFxWindow.Open();   // WPF BeginRun :500, one impact-vignette window per run
             _runTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(ChaosRunEngine.TICK_SEC) };
             _runTimer.Tick += (_, _) => Tick();
@@ -365,6 +369,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 "+" + ((long)pts).ToString("N0"), Color.FromRgb(0xFF, 0xE9, 0xA0));
         }
 
+        // WPF ChaosModeService.cs:2164-2167,2253-2260: never shorten an existing floor.
+        private static void OnVideoEndedDuringRun()
+        {
+            var until = BubbleOverlay.Field.Clock().AddSeconds(3);
+            if (until > _heavyUntilUtc) _heavyUntilUtc = until;
+        }
+
+        private static void UnhookRunVideo()
+        {
+            // Unsubscribe the captured publisher even if CoreEngine.Video has since changed.
+            if (_runVideo != null) _runVideo.VideoEnded -= OnVideoEndedDuringRun;
+            _runVideo = null;
+        }
+
         // WPF ChaosModeService.cs:2295-2322. Drop only the effect, retaining the
         // detonation's shield/streak consequences. Reserve BEFORE the asynchronous pool pick.
         private static void FirePayloadForDetonation(EffectPayload payload)
@@ -508,6 +526,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            UnhookRunVideo();
             _heavyUntilUtc = DateTime.MinValue; // also reset when already idle
             ChaosUnlockCardOverlay.CloseActive();
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
@@ -566,6 +585,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // WPF :3211: final-loop + end-of-descent lessons (a quit didn't run the full course).
             ChaosRunLessons.OnRunCompleted(_state.Shields, _state.Config.Difficulty, ranFullCourse);
             _spawning = false;
+            UnhookRunVideo();
             _heavyUntilUtc = DateTime.MinValue;
             _runTimer?.Stop();
             EndField();
@@ -708,6 +728,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF CleanupAfterRun :3322 (also reached by ForceShutdown / panic).</summary>
         private static void CleanupAfterRun()
         {
+            UnhookRunVideo(); // WPF CleanupAfterRun:3306-3307
             _heavyUntilUtc = DateTime.MinValue;
             ChaosUnlockCardOverlay.CloseActive();
             _lessonCardPaused = false;
