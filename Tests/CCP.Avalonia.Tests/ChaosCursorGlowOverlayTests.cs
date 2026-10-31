@@ -8,6 +8,8 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services.Chaos;
 
 namespace CCP.Avalonia.Tests;
 
@@ -19,7 +21,7 @@ public sealed class ChaosCursorGlowOverlayTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -49,6 +51,77 @@ public sealed class ChaosCursorGlowOverlayTests
             }
             return Task.CompletedTask;
         });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    public Task Run_precreates_only_the_equipped_classic_halo(bool equipped, bool skia) => WithSeams(() => true, (_, _) =>
+    {
+        var meta = ChaosMeta.State;
+        bool wasEquipped = meta.ActiveLifetimeBoons.Contains("rabbit_caller");
+        bool hadLevel = meta.LifetimeBoonLevels.TryGetValue("rabbit_caller", out int level);
+        bool wasSkia = CoreSettings.Current.ChaosSkiaFxEnabled;
+        try
+        {
+            if (equipped) meta.ActiveLifetimeBoons.Add("rabbit_caller");
+            else meta.ActiveLifetimeBoons.Remove("rabbit_caller");
+            meta.LifetimeBoonLevels["rabbit_caller"] = 1;
+            CoreSettings.Current.ChaosSkiaFxEnabled = skia;
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            Assert.Null(ChaosCursorGlowOverlay.Active); // countdown has not completed
+            ChaosRunHost.Overlay!.FinishCountdown();
+            Assert.Equal(equipped && !skia, ChaosCursorGlowOverlay.Active != null);
+            if (ChaosCursorGlowOverlay.Active is { } w)
+            {
+                Assert.True(w.IsVisible);
+                Assert.False(w.HaloVisible || w.Tracking);
+                Assert.Equal(new PixelPoint((int)(-152 * w.RenderScaling), (int)(-152 * w.RenderScaling)), w.Position);
+                ChaosCursorGlowOverlay.EnsureCreated();
+                Assert.Same(w, ChaosCursorGlowOverlay.Active);
+            }
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            if (wasEquipped) meta.ActiveLifetimeBoons.Add("rabbit_caller");
+            else meta.ActiveLifetimeBoons.Remove("rabbit_caller");
+            if (hadLevel) meta.LifetimeBoonLevels["rabbit_caller"] = level;
+            else meta.LifetimeBoonLevels.Remove("rabbit_caller");
+            CoreSettings.Current.ChaosSkiaFxEnabled = wasSkia;
+        }
+        Assert.Null(ChaosCursorGlowOverlay.Active);
+    });
+
+    [Fact]
+    public Task Every_arm_restacks_the_same_precreated_window() => WithSeams(() => true, (_, _) =>
+    {
+        var raise = ChaosCursorGlowOverlay.Raise;
+        try
+        {
+            int raised = 0;
+            ChaosCursorGlowOverlay.Raise = w =>
+            {
+                Assert.Same(ChaosCursorGlowOverlay.Active, w);
+                Assert.True(ChaosCursorGlowOverlay.Active!.HaloVisible);
+                raised++;
+            };
+            ChaosCursorGlowOverlay.EnsureCreated();
+            var retained = ChaosCursorGlowOverlay.Active;
+            Assert.NotNull(retained);
+            Assert.False(retained.HaloVisible || retained.Tracking);
+            ChaosCursorGlowOverlay.EnsureCreated();
+            Assert.Same(retained, ChaosCursorGlowOverlay.Active);
+            Assert.Equal(0, raised);
+            ChaosCursorGlowOverlay.Arm();
+            ChaosCursorGlowOverlay.Disarm();
+            ChaosCursorGlowOverlay.Arm();
+            Assert.Same(retained, ChaosCursorGlowOverlay.Active);
+            Assert.Equal(2, raised);
+        }
+        finally { ChaosCursorGlowOverlay.Raise = raise; }
+    });
 
     [Fact]
     public Task Arm_follows_and_breathes_disarm_stops_tracking_panic_closes() => WithSeams(() => true, (clock, point) =>

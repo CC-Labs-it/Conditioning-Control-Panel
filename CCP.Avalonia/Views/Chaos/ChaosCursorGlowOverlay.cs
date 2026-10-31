@@ -44,6 +44,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Breath clock. Test seam (P08).</summary>
         internal static TimeProvider Clock = TimeProvider.System;
 
+        // WPF ChaosCursorGlowOverlay.cs:57, focus-free re-stack on every arm.
+        internal static Action<Window> Raise = w => X11Overlay.Raise(w);
+
         private readonly Ellipse _halo;
         private readonly ScaleTransform _scale = new(1, 1);
         private DispatcherTimer? _timer;
@@ -53,8 +56,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal bool Tracking => _timer?.IsEnabled == true;
         internal double HaloScale => _scale.ScaleX;
 
-        /// <summary>Show the halo and start following the cursor. Safe from any thread.</summary>
-        public static void Arm() => OnUi(() =>
+        /// <summary>WPF ChaosCursorGlowOverlay.cs:27-43: birth hidden, without a follow timer.</summary>
+        public static void EnsureCreated() => OnUi(() =>
         {
             if (_active == null)
             {
@@ -71,7 +74,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 }
                 _active = w;
             }
+        });
+
+        /// <summary>WPF ChaosCursorGlowOverlay.cs:46-60: show and re-stack the retained halo.</summary>
+        public static void Arm() => OnUi(() =>
+        {
+            EnsureCreated();
+            if (_active == null) return;
             _active.StartTracking();
+            Raise(_active);
         });
 
         /// <summary>Hide the halo (the whistle was answered or cancelled) and stop tracking.</summary>

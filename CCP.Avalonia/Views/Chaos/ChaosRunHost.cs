@@ -135,6 +135,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             picks.CollectionChanged += (_, _) => _boonBar?.SetPicks(picks);
             // WPF :450 Pocket Watch: birth the wave-countdown window now (keep-alive contract).
             if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
+            // WPF ChaosModeService.cs:452: birth the classic halo only for an equipped Caller.
+            if (ChaosMeta.IsBoonActive("rabbit_caller") && !ChaosSkiaFxOverlay.Enabled)
+                ChaosCursorGlowOverlay.EnsureCreated();
             _state.StartShields = _state.Shields;
             StartToys();
             _waveDetonatedAt = _state.Detonated;
