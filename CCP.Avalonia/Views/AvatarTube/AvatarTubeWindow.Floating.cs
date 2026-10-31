@@ -1,14 +1,13 @@
 // WPF AvatarTubeWindow.Windowing.cs:97-98,730-750,801-809: legacy PNG sprite bob.
 using System;
 using Avalonia.Media;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
 
 public partial class AvatarTubeWindow
 {
-    private DispatcherTimer? _floatTimer;
-    private double _floatPhase;
+    private BeatLoop? _floatLoop;
     // Keep the sprite's motion separate from the parent's reply bounce (Chat.cs).
     private readonly TranslateTransform _avatarFloat = new();
 
@@ -16,24 +15,16 @@ public partial class AvatarTubeWindow
     {
         StopFloatingAnimation();
         _imgAvatar.RenderTransform = _avatarFloat;
-        _floatPhase = 0;
-        _floatTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-        _floatTimer.Tick += (_, _) => TickFloatingAnimation();
-        _floatTimer.Start();
-    }
-
-    // One production timer tick, exposed to headless tests without wall-clock sleeps.
-    internal void TickFloatingAnimation()
-    {
-        if (_floatTimer?.IsEnabled != true) return;
-        _floatPhase += 0.05;
-        _avatarFloat.Y = Math.Sin(_floatPhase) * 4;
+        // Preserve WPF's 0.05 radians per 16 ms on the shared window beat. Elapsed time
+        // keeps the speed independent of the frame rate; BeatLoop parks hidden windows.
+        _floatLoop ??= new BeatLoop(_imgAvatar,
+            seconds => _avatarFloat.Y = Math.Sin(seconds * (0.05 / 0.016)) * 4);
+        _floatLoop.Start();
     }
 
     private void StopFloatingAnimation()
     {
-        _floatTimer?.Stop();
-        _floatTimer = null;
+        _floatLoop?.Stop();
         _avatarFloat.Y = 0;
     }
 }

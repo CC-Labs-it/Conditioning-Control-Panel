@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -8,6 +9,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -28,6 +30,9 @@ public sealed class TubeFloatingTests
                 .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        var previousTime = BeatLoop.Time;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         service.Current.AvatarTubeDetached = detached;
@@ -41,6 +46,9 @@ public sealed class TubeFloatingTests
             var sprite = tube.FindControl<Image>("ImgAvatar")!;
             var bob = Assert.IsType<TranslateTransform>(sprite.RenderTransform);
             tube.StartFloatingAnimation(); // reset the phase after layout jobs, as WPF ShowTube does
+            var loop = Assert.Single(BeatLoop.Running.Where(l => l.Owner == sprite));
+            Assert.True(loop.IsTicking);
+            Assert.True(loop.OnFrameBeat);
             var position = tube.Position;
             // Starting/restarting the reply bounce must not replace the sprite's transform.
             tube.PlayDoubleBounce();
@@ -49,7 +57,8 @@ public sealed class TubeFloatingTests
             var negative = false;
             for (var i = 1; i <= 126; i++)
             {
-                tube.TickFloatingAnimation();
+                time.Advance(TimeSpan.FromMilliseconds(16));
+                BeatLoop.StepAll();
                 Assert.Equal(Math.Sin(i * 0.05) * 4, bob.Y, 8);
                 positive |= bob.Y > 3.99;
                 negative |= bob.Y < -3.99;
@@ -57,12 +66,18 @@ public sealed class TubeFloatingTests
             Assert.True(positive && negative);
             Assert.Same(bob, sprite.RenderTransform);
             Assert.Equal(position, tube.Position);
+            tube.Hide();
+            Assert.False(loop.IsTicking);
+            tube.Show();
+            Assert.True(Assert.Single(BeatLoop.Running.Where(l => l.Owner == sprite)).IsTicking);
             tube.Close();
+            Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == sprite);
             Assert.Equal(0, bob.Y);
-            tube.TickFloatingAnimation(); // a late tick cannot revive a closed sprite
+            time.Advance(TimeSpan.FromSeconds(1));
+            BeatLoop.StepAll(); // a late beat cannot revive a closed sprite
             Assert.Equal(0, bob.Y);
         }
-        finally { tube.Close(); shell.Close(); }
+        finally { tube.Close(); shell.Close(); BeatLoop.Time = previousTime; }
         return Task.CompletedTask;
     });
 }
