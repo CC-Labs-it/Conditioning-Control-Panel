@@ -45,6 +45,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\..\Assets\web\rain-wardrobe\items.json" Link="Resources\web\rain-wardrobe\items.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- The wardrobe registry at the heads' path, for WardrobeCatalogTests (art not needed). -->
     <Content Include="..\..\Assets\cosmetics\registry.json" Link="Resources\cosmetics\registry.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- The heads' shipped Spirals folder, so SessionRunnerTests run a default-path spiral like an install. -->

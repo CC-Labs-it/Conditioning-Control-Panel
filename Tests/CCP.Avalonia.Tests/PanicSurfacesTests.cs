@@ -87,6 +87,7 @@ public sealed class PanicSurfacesTests
         "leash-task",
         "tour",
         "games",
+        "rain-wardrobe",
         "first-show",
         "voice-capture",
         "ai-followups",

@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void WireQuickMenu()
         {
             Wire("MenuItemTalkToBambi", OpenChatInput);
+            Wire("MenuItemRainWardrobe", () => Platform.RainWardrobeHost.Open(_parentWindow));
             Wire("MenuItemEngine", OnMenuEngine);
             Wire("MenuItemTriggerMode", OnMenuTriggerMode);
             Wire("MenuItemBambiTakeover", OnMenuTakeover);
@@ -167,6 +168,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             else RunOnAvatar(Hide);
         }
 
+        internal static bool RegisteredRainMod()
+        {
+            try { using var reader = new System.IO.StreamReader(global::Avalonia.Platform.AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/avatar_emotes_registry.json")));
+            return Services.Companion.AvatarGenerationRule.ParseRegistry(reader.ReadToEnd()).generations.Exists(r => r.modId == CoreMods.ActiveModId && r.generation == "v2"); } catch { return false; }
+        }
         private static IconLabel MenuLabel(string key, params object[] args) => IconLabel.ForKey(key, args);
 
         /// <summary>WPF UpdateQuickMenuState: headers, colours and enabled state; on Opened and after each click.</summary>
@@ -175,6 +181,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(UpdateQuickMenuState); return; }
             var s = CoreSettings.Current;
             var mods = CoreMods.Service;
+            if (QuickItem("MenuItemRainWardrobe") is { } wardrobe)
+                wardrobe.IsVisible = Services.Companion.AvatarGenerationRule.IsV2(s.AvatarGeneration)
+                    && RegisteredRainMod();
 
             if (QuickItem("MenuItemTalkToBambi") is { } talk)
             {

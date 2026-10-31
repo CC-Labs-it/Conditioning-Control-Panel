@@ -346,6 +346,7 @@
                     ClipToBounds="False">
                 <Border.ContextMenu>
                     <ContextMenu x:Name="AvatarContextMenu">
+                        <MenuItem x:Name="MenuItemRainWardrobe" Header="{loc:Str section_rain_wardrobe}" IsVisible="False"/>
                         <MenuItem x:Name="MenuItemTalkToBambi" Header="{loc:Str section_talk_to_companion}" Foreground="{DynamicResource PinkBrush}" FontWeight="Bold"/>
                         <Separator/>
                         <MenuItem x:Name="MenuItemDetach" Header="{loc:Str section_detach}"/>
