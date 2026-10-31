@@ -307,7 +307,11 @@ namespace ConditioningControlPanel.Services
                     Services.UI.DndGuard.LogSuppressionThrottled("scheduled video");
                     ScheduleNext(SkipRetrySeconds);
                 }
-                else if (!_playing && !Trigger()) ScheduleNext();
+                else if (!_playing && !Trigger())
+                {
+                    // WPF VideoService.cs:2940,2982,2063: deferred work owns its wait; expiry drops it.
+                    if (_feedDefer == null) ScheduleNext();
+                }
             }
             catch (Exception ex)
             {
@@ -319,7 +323,7 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
-        /// pre-roll. False when nothing was started (no clip, or one is already playing).
+        /// pre-roll. False when nothing was started (deferred for the feed, no clip, or already playing).
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
         public bool Trigger(bool? strictOverride = null, string? path = null, bool userEarned = false, bool userInitiated = false)
         {

@@ -105,6 +105,30 @@ public sealed class MandatoryVideoSchedulerTests
     });
 
     [Fact]
+    public void Scheduled_feed_defer_expires_without_rearming_or_playing_when_feed_later_closes() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true }; var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Clips; });
+        try
+        {
+            v.Start();
+            // At 20/hour, the actual scheduled tick fires between 144 and 216 seconds.
+            clock.Advance(TimeSpan.FromSeconds(216));
+            Assert.False(v.IsPlaying);
+            Assert.Equal(0, picks);
+            // Even the latest possible first tick's 90-second defer has now expired.
+            clock.Advance(TimeSpan.FromSeconds(90));
+            host.FeedOwnsTheScreen = false;
+            clock.Advance(TimeSpan.FromHours(1));
+            Assert.True(v.IsRunning);
+            Assert.False(v.IsPlaying);
+            Assert.Empty(host.Shown);
+            Assert.Equal(0, picks);
+        }
+        finally { v.Stop(); }
+    });
+
+    [Fact]
     public void Earned_video_plays_over_feed_without_a_notice() => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
@@ -238,11 +262,13 @@ public sealed class MandatoryVideoSchedulerTests
     [Fact]
     public void Empty_library_starts_nothing_and_keeps_the_schedule_alive() => With(60, false, () =>
     {
-        var clock = new FakeClock(); var host = new Host();
-        var v = new MandatoryVideoScheduler(host, clock, () => Array.Empty<string>());
+        var clock = new FakeClock(); var host = new Host(); var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Array.Empty<string>(); });
         v.Start();
         Assert.False(v.Trigger());
+        Assert.Equal(1, picks);
         clock.Advance(TimeSpan.FromHours(1));
+        Assert.True(picks > 1); // Failed picks still re-arm; only pending deferrals own their wait.
         Assert.Empty(host.Shown);
         Assert.True(v.IsRunning);
         v.Stop();
