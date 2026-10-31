@@ -8,6 +8,7 @@
 
 using System;
 using System.Threading.Tasks;
+using System.Threading;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -32,13 +33,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly TranslateTransform _sheenShift = new();
         private Border _sheenHost = null!;
         private AmbientFxCanvas _sparks = null!;
-        private DispatcherTimer? _sheenClock;
+        private ITimer? _sheenClock;
+        internal static TimeProvider SheenTime = TimeProvider.System;
+        private int _sheenGeneration;
         private IBrush _pillDrop = Brushes.Transparent;
 
         internal int BurstsFired { get; private set; }
         internal int SheensRun { get; private set; }
         internal bool? AmbientTierOverride { get; set; }
-        internal bool SheenClockRunning => _sheenClock?.IsEnabled == true;
+        internal bool SheenClockRunning => _sheenClock != null;
         internal AmbientFxCanvas Sparks => _sparks;
         internal IBrush? TrayFloorBrush => _trayFloor.Background;
         internal IBrush? TrayWellTopBrush => _trayWellTop.Background;
@@ -275,21 +278,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void UpdateSheenClock()
         {
             bool runs = NavStripMotion.SheenRuns(Level, TierAllowsAmbient(), IsVisible && this.IsAttachedToVisualTree(), chromeAllows: true);
-            if (!runs) { _sheenClock?.Stop(); return; }
-            if (_sheenClock == null)
+            if (!runs) { StopSheenClock(); return; }
+            if (_sheenClock != null) return;
+            int generation = ++_sheenGeneration;
+            var interval = TimeSpan.FromMilliseconds(NavStripMotion.SheenEveryMs);
+            _sheenClock = SheenTime.CreateTimer(_ =>
             {
-                _sheenClock = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(NavStripMotion.SheenEveryMs) };
-                _sheenClock.Tick += (_, _) =>
+                void Tick()
                 {
+                    if (generation != _sheenGeneration || _sheenClock == null) return;
                     if (!NavStripMotion.SheenRuns(Level, TierAllowsAmbient(), IsVisible && this.IsAttachedToVisualTree(), ChromeAllows()))
                     {
-                        if (!IsVisible || !this.IsAttachedToVisualTree() || Level != MotionLevel.Full) _sheenClock?.Stop();
+                        if (!IsVisible || !this.IsAttachedToVisualTree() || Level != MotionLevel.Full) StopSheenClock();
                         return;
                     }
                     SweepSheen();
-                };
-            }
-            if (!_sheenClock.IsEnabled) _sheenClock.Start();
+                }
+                if (Dispatcher.UIThread.CheckAccess()) Tick();
+                else Dispatcher.UIThread.Post(Tick, DispatcherPriority.Background);
+            }, null, interval, interval);
+        }
+
+        private void StopSheenClock()
+        {
+            ++_sheenGeneration;
+            _sheenClock?.Dispose();
+            _sheenClock = null;
         }
 
         /// <summary>One sheen across the lit pill. False when there is no laid-out lit pill.</summary>
