@@ -17,10 +17,16 @@ public sealed class MandatoryVideoSchedulerTests
     {
         public readonly List<(string Path, bool Strict)> Shown = new();
         public bool Floating;
-        public bool IsFloating(bool strict) => Floating && !strict;
+        public bool Lockdown;
+        public bool IsFloating(bool strict) => Floating && !strict && !Lockdown;
         public int Closes;
         public double Watched;
-        public void Show(string path, bool strict) => Shown.Add((path, strict));
+        public readonly List<bool> FlashesAtShow = new();
+        public void Show(string path, bool strict)
+        {
+            FlashesAtShow.Add(CoreFlash.IsRunning);
+            Shown.Add((path, strict));
+        }
         public double CloseAll() { Closes++; return Watched; }
         public readonly List<AttentionVerdict> Messages = new();
         public Action? Then;
@@ -55,6 +61,32 @@ public sealed class MandatoryVideoSchedulerTests
             Assert.Equal(stays, CoreFlash.IsRunning);
             clock.Advance(MandatoryVideoScheduler.PreRoll);
             Assert.Equal(stays, CoreFlash.IsRunning);
+        }
+        finally { v.ForceCleanup(); CoreFlash.Stop(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Full_screen_decided_during_pre_roll_stops_flashes_before_show(bool lockStarts)
+        => With(20, false, () =>
+    {
+        CoreSettings.Current.FlashEnabled = true;
+        var clock = new FakeClock(); var host = new Host { Floating = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        CoreFlash.Start();
+        try
+        {
+            Assert.True(v.Trigger());
+            Assert.True(CoreFlash.IsRunning);
+            clock.Advance(MandatoryVideoScheduler.PreRoll / 2);
+            if (lockStarts) host.Lockdown = true;
+            else host.Floating = false;
+            Assert.True(CoreFlash.IsRunning);
+            clock.Advance(MandatoryVideoScheduler.PreRoll / 2);
+            Assert.Single(host.Shown);
+            Assert.False(Assert.Single(host.FlashesAtShow));
+            Assert.False(CoreFlash.IsRunning);
         }
         finally { v.ForceCleanup(); CoreFlash.Stop(); }
     });

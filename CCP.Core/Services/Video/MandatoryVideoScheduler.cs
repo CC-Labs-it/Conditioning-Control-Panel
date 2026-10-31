@@ -345,6 +345,8 @@ namespace ConditioningControlPanel.Services
                 Dispose(ref _preroll);
                 CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
+                // WPF StartVideoPlayback: presentation can change during the pre-roll.
+                if (!_host.IsFloating(strict) && CoreFlash.IsRunning) CoreFlash.Stop();
                 try { _host.Show(path, strict); }
                 catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
                 LastVideoPath = path;
