@@ -418,8 +418,27 @@ public sealed class HeaderQuestStampsTests
         Assert.Equal(5 / Math.Sqrt(2), shadow.BoxShadow[0].OffsetY, 6);
         Assert.Equal(140, shadow.BoxShadow[0].Color.A);
         Assert.Equal(24, visual.Margin.Left);
-        Assert.Equal(10 - 24, popup.VerticalOffset);
-        Assert.Equal(-6 - 24, popup.HorizontalOffset);
+        // Compare actual card placement against the same popup without its shadow margin.
+        // Disable screen-edge corrections so they cannot hide a horizontal anchor regression.
+        popup.PlacementConstraintAdjustment = global::Avalonia.Controls.Primitives.PopupPositioning.PopupPositionerConstraintAdjustment.None;
+        var card = visual.Children.OfType<Border>().Single(b => !ReferenceEquals(b, shadow));
+        PixelPoint CardCentre() => card.PointToScreen(new Point(card.Bounds.Width / 2, 0));
+        void Layout()
+        {
+            Dispatcher.UIThread.RunJobs();
+            visual.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+        }
+        Layout();
+        var padded = CardCentre();
+        visual.Margin = default;
+        // WPF MainWindow.QuestStamps.cs:809-811, and the original Avalonia card anchor.
+        popup.HorizontalOffset = -6;
+        popup.VerticalOffset = 10;
+        Layout();
+        var unpadded = CardCentre();
+        Assert.InRange(padded.X - unpadded.X, -1, 1);
+        Assert.InRange(padded.Y - unpadded.Y, -1, 1);
     });
 
     [Fact]
