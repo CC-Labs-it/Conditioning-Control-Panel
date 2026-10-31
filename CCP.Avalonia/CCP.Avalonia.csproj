@@ -228,6 +228,9 @@
     <AvaloniaResource Include="..\Assets\BlinkTrainer\Demo\*.png"
                       Link="Resources\BlinkTrainer\Demo\%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\app.ico" Link="Resources\app.ico" />
+    <Content Include="..\Assets\emi\desk-items\**\*"
+             Link="Resources\emi\desk-items\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Header Sparkle wallet's croupier EMI (WPF SparkleWallet.xaml:34-39). -->
     <AvaloniaResource Include="..\Assets\emi\wallet_croupier_*.png" Link="Resources\emi\%(Filename)%(Extension)" />
     <!-- WPF EmiFace.PixelFont's shipped Press Start 2P (Resources/emi/fonts), for the ring cards. -->
