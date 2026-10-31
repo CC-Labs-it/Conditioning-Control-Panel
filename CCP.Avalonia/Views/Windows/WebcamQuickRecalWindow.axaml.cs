@@ -21,7 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// PORTED from ConditioningControlPanel/Windows/WebcamQuickRecalWindow.xaml.cs over
     /// Platform/WebcamTracker (OnGazeMove / Calibration / SetRuntimeOffset); the median maths is
     /// Core GazeEngine.MedianAfterSaccadeSettle, which WPF also calls. Deviations: DialogResult
-    /// becomes Close(x) (ShowDialog&lt;bool?&gt;); the hotkey hint is hidden (below).
+    /// becomes Close(x) (ShowDialog&lt;bool?&gt;); the hotkey hint requires both shortcuts to be armed.
     /// </summary>
     public partial class WebcamQuickRecalWindow : Window
     {
@@ -44,6 +44,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly TextBlock _txtStatus, _txtHotkeyHint, _txtErrorDetail;
         private readonly Border _errorPanel;
 
+        internal static Func<string?> HotkeyHint = () => null;
+
         public WebcamQuickRecalWindow()
         {
             AvaloniaXamlLoader.Load(this);
@@ -54,10 +56,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtErrorDetail = this.FindControl<TextBlock>("TxtErrorDetail")!;
             _errorPanel = this.FindControl<Border>("ErrorPanel")!;
 
-            // ponytail: the full localized hint also teaches the camera start/stop chord, which
-            // is not ported. Keep it hidden until both shortcuts work on this head; Windows Quick
-            // Recal is now armed by MainShellWindow.QuickRecal, but Linux/Wayland still need a lane.
-            _txtHotkeyHint.IsVisible = false;
+            // WPF WebcamQuickRecalWindow.xaml.cs:43 names both chords.
+            var hint = HotkeyHint();
+            _txtHotkeyHint.Text = hint ?? "";
+            _txtHotkeyHint.IsVisible = hint != null;
             // WPF openers call App.ApplyCalibrationScreenPlacement: the dot must sit on the calibrated monitor.
             WebcamCalibrationWindow.PlaceOnCalibratedScreen(this);
 
