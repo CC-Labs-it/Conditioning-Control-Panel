@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -65,7 +66,7 @@ internal static class KeywordTriggerHead
             var generation = Volatile.Read(ref _generation);
             var ch = special == null ? Translate(vk) : null;
             uint processId = 0;
-            var needsForeground = KeywordMatchRules.NeedsForeground(CoreSettings.Current);
+            var needsForeground = Engine.NeedsForegroundSample(KeywordMatchRules.NeedsForeground(CoreSettings.Current));
             if (needsForeground) GetWindowThreadProcessId(GetForegroundWindow(), out processId);
             Dispatcher.UIThread.Post(() =>
             {
@@ -122,6 +123,27 @@ internal sealed class KeywordAudioRuntime
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
+    private DateTime _lastForegroundSample = DateTime.MinValue;
+    // WPF KeywordTriggerService:618/:662: sample even with app scoping off.
+    internal bool NeedsForegroundSample(bool scoped)
+    {
+        if (scoped) return true;
+        var now = Now().ToUniversalTime();
+        if ((now - _lastForegroundSample).TotalSeconds < 2) return false;
+        _lastForegroundSample = now;
+        return true;
+    }
+    private readonly LinkedList<string> _seenApps = new();
+    // UI dispatcher owns input and readers. WPF KeywordTriggerService:489-521.
+    internal IReadOnlyList<string> GetRecentForegroundApps() => _seenApps.ToArray();
+    private void RememberForeground(string? process, bool own)
+    {
+        if (own || string.IsNullOrWhiteSpace(process)) return;
+        var existing = _seenApps.FirstOrDefault(a => string.Equals(a, process, StringComparison.OrdinalIgnoreCase));
+        if (existing != null) _seenApps.Remove(existing);
+        _seenApps.AddFirst(existing ?? process);
+        while (_seenApps.Count > 8) _seenApps.RemoveLast();
+    }
     internal void Start() { IsActive = true; _input.Clear(); }
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
 
@@ -130,6 +152,7 @@ internal sealed class KeywordAudioRuntime
         var s = CoreSettings.Current;
         if (!IsActive || !s.KeywordTriggersEnabled ||
             !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return false;
+        RememberForeground(process, own);
         if (KeywordMatchRules.AppAllowed(s, process, own)) return true;
         _input.Clear(); // never join text typed on either side of a blocked app
         return false;
