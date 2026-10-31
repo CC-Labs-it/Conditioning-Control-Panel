@@ -13,6 +13,9 @@ using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -25,16 +28,22 @@ namespace CCP.Avalonia.Tests;
 /// click side effect runs.</summary>
 public sealed class ContentHitTestTests
 {
-    [Fact]
-    public async Task ContentButtonsReceiveThePointerAtTheirCentre()
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off)]
+    public async Task ContentButtonsReceiveThePointerAtTheirCentre(MotionLevel motion)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            CoreSettings.Current.MotionLevel = motion;
+            // Freeze entrances so runner speed cannot hide a missing completion before probing.
+            var w = new MainShellWindow { TabClock = new SteppedTime() };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -45,6 +54,9 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                // Finish the actual entrance before committing the frame and sampling its geometry.
+                w.CompleteTabTransition();
+                Assert.Null(w.EnteringTab);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
