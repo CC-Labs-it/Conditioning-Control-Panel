@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+ xmlns:models="clr-namespace:ConditioningControlPanel.Models;assembly=CCP.Core"
+ x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.KnowledgeLinksEditor">
+ <StackPanel Spacing="8">
+  <Border Background="#1AFFFFFF" CornerRadius="6" Padding="8"><Grid>
+  <ListBox x:Name="LstKnowledgeLinks" MinHeight="120" MaxHeight="320" Background="Transparent" BorderThickness="0" Foreground="White" FontSize="12" SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+   <ListBox.ItemTemplate>
+    <DataTemplate x:DataType="models:KnowledgeBaseLink">
+     <StackPanel Margin="0,3">
+      <TextBlock Text="{Binding Title}" Foreground="#FF69B4" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+      <TextBlock Text="{Binding Url}" Foreground="#909090" FontSize="10.5" TextTrimming="CharacterEllipsis"/>
+      <TextBlock Text="{Binding Description}" Foreground="#B0B0C0" FontSize="11" TextWrapping="Wrap" IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+     </StackPanel>
+    </DataTemplate>
+   </ListBox.ItemTemplate>
+  </ListBox>
+  <TextBlock x:Name="TxtKnowledgeLinksEmpty" Text="{loc:Str companion_page_links_known_empty}" Foreground="#909090" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False"/>
+  </Grid></Border>
+  <StackPanel Orientation="Horizontal" Spacing="8">
+   <Button x:Name="BtnAddKnowledgeLink" Theme="{StaticResource SecondaryButton}" Click="Add_Click"><TextBlock Text="{loc:Str btn_add_link}"/></Button>
+   <Button x:Name="BtnRemoveKnowledgeLink" Theme="{StaticResource SecondaryButton}" Click="Remove_Click"><TextBlock Text="{loc:Str btn_remove_selected}"/></Button>
+  </StackPanel>
+ </StackPanel>
+</UserControl>
