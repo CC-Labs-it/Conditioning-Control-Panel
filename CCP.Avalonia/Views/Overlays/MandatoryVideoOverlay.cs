@@ -81,6 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         // WPF VideoService.cs:2305: the game owns its lead-in, answer and retry cards too.
         public bool BubbleCountActive => CoreEngine.BubbleCount?.IsBusy == true;
+        public bool LockCardActive => global::ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.IsAnyOpen();
 
         private MandatoryVideoOverlay() => Scheduler = new MandatoryVideoScheduler(this)
         {

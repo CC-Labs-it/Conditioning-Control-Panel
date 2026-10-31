@@ -18,6 +18,8 @@ namespace ConditioningControlPanel.Services
         void Show(string path, bool strict);
         /// <summary>WPF VideoService.cs:2305-2313: wait while bubble count owns the screen.</summary>
         bool BubbleCountActive => false;
+        /// <summary>WPF InteractionQueueService.cs:88-121: an open card holds the fullscreen slot.</summary>
+        bool LockCardActive => false;
         /// <summary>Close every video window; returns the seconds of the clip that were watched.</summary>
         double CloseAll();
         /// <summary>WPF ShowMessage: the attention-check verdict over every screen for
@@ -324,7 +326,7 @@ namespace ConditioningControlPanel.Services
             // WPF InteractionQueueService.cs:108-121: the first queued request owns the handoff too.
             if (_bubbleWait != null) return true;
             // WPF VideoService.cs:2305-2313 queues one video before picking or taking effects.
-            if (_host.BubbleCountActive)
+            if (_host.BubbleCountActive || _host.LockCardActive)
             {
                 WaitForBubbleCount(strictOverride, path, _running);
                 return true;
@@ -429,7 +431,7 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     if (scheduled && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)) return;
-                    if (_host.BubbleCountActive) WaitForBubbleCount(strict, path, scheduled);
+                    if (_host.BubbleCountActive || _host.LockCardActive) WaitForBubbleCount(strict, path, scheduled);
                     else if (!Trigger(strict, path) && scheduled) ScheduleNext();
                 }
                 catch (Exception ex)

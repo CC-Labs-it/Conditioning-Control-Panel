@@ -23,6 +23,71 @@ namespace CCP.Avalonia.Tests;
 /// card while a lock card is up waits (no game, no Bambi Freeze) and plays once the card closes.</summary>
 public sealed class BubbleCountQueueTests
 {
+    // WPF InteractionQueueService.cs:88-121,137-210: only one fullscreen claim at a time.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task DeferredCardAndVideoExcludeEachOtherInEitherReplayOrder(bool cardFirst) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var clock = new Clock();
+        var b = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => Array.Empty<string>());
+        var video = new MandatoryVideoScheduler(
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance,
+            clock, () => new[] { "/none/clip.mp4" });
+        var (oldBubble, oldVideo, oldFreeze) = (CoreEngine.BubbleCount, CoreEngine.Video, CoreSubliminal.BambiFreezeProvider);
+        CoreEngine.BubbleCount = b; CoreEngine.Video = video;
+        CoreSubliminal.BambiFreezeProvider = () => { };
+        try
+        {
+            b.Trigger(forceTest: true);
+            LockCardWindow.ShowOnAllMonitors("waiting card", 2, true, isTest: true);
+            Assert.True(video.Trigger(path: "/none/first.mp4"));
+            Assert.False(LockCardWindow.IsAnyOpen());
+            Assert.False(video.IsPlaying);
+            b.ForceCleanup();
+            if (cardFirst)
+            {
+                LockCardWindow.ReplayAfterGame();
+                Assert.True(LockCardWindow.IsAnyOpen());
+                clock.Advance(BubbleCountScheduler.QueuePoll);
+                Assert.False(video.IsPlaying);
+                typeof(LockCardWindow).GetMethod("CloseAllWindows", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(LockCardWindow.Primary, null);
+                clock.Advance(BubbleCountScheduler.QueuePoll);
+                Assert.True(video.IsPlaying);
+                Assert.False(LockCardWindow.IsAnyOpen());
+            }
+            else
+            {
+                clock.Advance(BubbleCountScheduler.QueuePoll);
+                Assert.True(video.IsPlaying); // the 1.3 s pre-roll already owns the slot
+                LockCardWindow.ReplayAfterGame();
+                Assert.False(LockCardWindow.IsAnyOpen());
+                video.ForceCleanup();
+                LockCardWindow.ReplayAfterGame();
+                Assert.True(LockCardWindow.IsAnyOpen());
+                Assert.False(video.IsPlaying);
+            }
+            LockCardWindow.ForceCloseAll(); video.ForceCleanup();
+            Assert.True(video.Trigger(path: "/none/next.mp4"));
+            LockCardWindow.ShowOnAllMonitors("later card", 1, false, isTest: true);
+            Assert.False(LockCardWindow.IsAnyOpen()); // a new request also waits through pre-roll
+            video.ForceCleanup();
+            LockCardWindow.ReplayAfterGame();
+            Assert.Equal("later card", LockCardWindow.Primary!.PhraseShown);
+        }
+        finally
+        {
+            video.Stop(); LockCardWindow.ForceCloseAll(); b.ForceCleanup();
+            (CoreEngine.BubbleCount, CoreEngine.Video, CoreSubliminal.BambiFreezeProvider) = (oldBubble, oldVideo, oldFreeze);
+        }
+        return Task.CompletedTask;
+    });
+
     // WPF LockCardService.cs:201-251: queue before drawing or resolving live settings.
     [Theory]
     [InlineData(false)]
