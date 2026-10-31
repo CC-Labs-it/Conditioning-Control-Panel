@@ -43,10 +43,10 @@ public sealed class MandatoryVideoSchedulerTests
     public void Feed_coalesces_without_picking_or_playing_then_replays_first_request() => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true }; var picks = 0;
-        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Clips; });
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return new[] { "/v/first.mp4" }; });
         v.Start();
-        Assert.False(v.Trigger(true, "/v/first.mp4", userInitiated: true));
-        Assert.False(v.Trigger(false, "/v/second.mp4"));
+        Assert.False(v.Trigger(true, userInitiated: true));
+        Assert.False(v.Trigger(false));
         clock.Advance(TimeSpan.FromSeconds(20));
         Assert.False(v.IsPlaying);
         Assert.Equal(0, picks);
@@ -59,6 +59,7 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.True(v.IsPlaying);
         clock.Advance(MandatoryVideoScheduler.PreRoll);
         Assert.Equal(("/v/first.mp4", true), Assert.Single(host.Shown));
+        Assert.Equal(1, picks);
         v.End();
         clock.Advance(TimeSpan.FromSeconds(5));
         Assert.Single(host.Shown);
@@ -113,6 +114,58 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.Single(host.Shown);
         Assert.Equal(0, host.FeedNotices);
         v.Stop();
+    });
+
+    [Fact]
+    public void Explicit_path_plays_over_feed_with_scheduler_stopped_and_feature_disabled() => With(6, false, () =>
+    {
+        CoreSettings.Current.MandatoryVideosEnabled = false;
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => throw new InvalidOperationException("No library pick"));
+        try
+        {
+            Assert.False(v.IsRunning);
+            Assert.True(v.Trigger(true, "/v/requested.mp4", userInitiated: true));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(("/v/requested.mp4", true), Assert.Single(host.Shown));
+            Assert.Equal(0, host.FeedNotices);
+        }
+        finally { v.Stop(); }
+    });
+
+    [Fact]
+    public void Attention_retry_plays_over_new_feed_without_resetting_penalties_or_resuming_effects() => With(6, true, () =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.AttentionChecksEnabled, s.MercySystemEnabled, CoreBubbles.ResumeAction);
+        s.AttentionChecksEnabled = true;
+        s.MercySystemEnabled = false;
+        var resumes = 0;
+        CoreBubbles.ResumeAction = () => resumes++;
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        try
+        {
+            Assert.True(v.Trigger());
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            host.FeedOwnsTheScreen = true;
+            v.NoteSpawn();
+            v.Ended();
+            Assert.Equal(AttentionVerdict.Fail, Assert.Single(host.Messages));
+            host.Then!();
+            Assert.True(v.IsPlaying);
+            Assert.Equal(1, v.Penalties);
+            Assert.Equal(0, resumes);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(2, host.Shown.Count);
+            Assert.True(host.Shown[1].Strict);
+            Assert.Equal(0, host.FeedNotices);
+        }
+        finally
+        {
+            v.Stop();
+            (s.AttentionChecksEnabled, s.MercySystemEnabled, CoreBubbles.ResumeAction) = old;
+        }
     });
 
     [Fact]

@@ -324,8 +324,8 @@ namespace ConditioningControlPanel.Services
         public bool Trigger(bool? strictOverride = null, string? path = null, bool userEarned = false, bool userInitiated = false)
         {
             if (_playing) return false;
-            // WPF VideoService.cs:2270-2294: earned videos play over the feed; ambient ones wait.
-            if (_host.FeedOwnsTheScreen && !userEarned)
+            // WPF VideoService.cs:2270, :2630: earned and explicit-path videos bypass the ambient feed gate.
+            if (path == null && _host.FeedOwnsTheScreen && !userEarned)
             {
                 if (userInitiated) _host.AnnounceFeedDefer();
                 if (_feedDefer == null)
@@ -335,6 +335,13 @@ namespace ConditioningControlPanel.Services
                 }
                 return false;
             }
+            return PlayVideo(strictOverride, path);
+        }
+
+        // WPF VideoService.cs:2630, :5965: specific clips and attention retries enter playback directly.
+        private bool PlayVideo(bool? strictOverride, string? path = null)
+        {
+            if (_playing) return false;
             path ??= PickNext();
             if (path == null)
             {
@@ -443,7 +450,7 @@ namespace ConditioningControlPanel.Services
             _host.ShowMessage(mercy ? AttentionVerdict.Mercy : verdict, mercy ? 2500 : 2000, () =>
             {
                 if (gen != _retryGeneration) return;   // stopped or replaced while the message was up
-                if (mercy || !Trigger(strict)) AfterEnd();
+                if (mercy || !PlayVideo(strict)) AfterEnd();
             });
         }
 
