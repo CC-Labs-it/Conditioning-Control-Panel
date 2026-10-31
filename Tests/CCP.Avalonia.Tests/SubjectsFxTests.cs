@@ -137,10 +137,11 @@ public sealed class SubjectsFxTests
         {
             CoreSettings.Current.MotionLevel = MotionLevel.Full;
             shell = new MainShellWindow();
+            var view = shell.Named<AvailableSubjectsTabView>("AvailableSubjectsTab")!;
+            Paint(view, 3);
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(MotionLevel.Full, CoreSettings.Current.MotionLevel);
-            var view = shell.Named<AvailableSubjectsTabView>("AvailableSubjectsTab")!;
             var list = view.FindControl<ItemsControl>("AvailableSubjectsList")!;
             Paint(view, 3); // the Lobby keeps its snapshot across the repaint on arrival
             shell.OpenNavSection("social");
@@ -163,10 +164,19 @@ public sealed class SubjectsFxTests
     });
 
     // WPF staggers AvailableSubjectsList, which is the Lobby's Open column (MainWindow.SubjectsFx.cs:94).
-    private static void Paint(AvailableSubjectsTabView view, int open) => view.PaintSnapshot(
+    private static void Paint(AvailableSubjectsTabView view, int open)
+    {
+        view.ReadGates = () => LobbyGates.From(true, false, false);
+        // Keep the fixture roster while exercising real watch ownership; no network or completed refresh.
+        view.CreateLobby = () => new LobbyPoll(new ConditioningControlPanel.Avalonia.Platform.FriendsHead.Timer(),
+            () => true, () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>(),
+            () => new TaskCompletionSource<PbpLobbyReply>().Task, () => throw new InvalidOperationException(),
+            () => throw new InvalidOperationException());
+        view.PaintSnapshot(
         new LobbySnapshot(Enumerable.Range(0, open).Select(i => new LobbyRow
             { Game = LobbyGame.Remote, Key = "r" + i, HostName = "Host" + i, RemoteTier = "light" }).ToArray(),
             Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), LobbyGates.From(true, false, false));
+    }
 
     private static void SetClock(TimeProvider clock) => AvailableSubjectsTabView.FxTime = clock;
     private static void Step(AvailableSubjectsTabView view, Clock clock, int ms)

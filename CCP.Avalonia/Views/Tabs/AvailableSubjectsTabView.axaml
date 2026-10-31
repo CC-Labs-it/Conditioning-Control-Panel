@@ -1,5 +1,5 @@
-<!-- WPF AvailableSubjectsTabView is the Lobby now. Ported frame and responsive columns;
-     polling, Chess/Goon host doors and row joins remain the named b-lane. -->
+<!-- WPF Lobby: watched discovery, responsive columns and Chess doors.
+     Goon hosting/join and Remote claims still require their head hosts. -->
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
  xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
@@ -55,8 +55,8 @@
       </StackPanel>
       <TextBlock Text="{Binding Line}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="0,2,0,0" MaxLines="1" TextTrimming="CharacterEllipsis"/>
      </StackPanel>
-     <!-- ponytail: the row's game/claim door is not wired in this slice. -->
-     <Button Grid.Column="1" IsEnabled="False" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
+     <!-- ponytail: Goon and Remote doors still require their head hosts. -->
+     <Button Grid.Column="1" Click="BtnLobbyRow_Click" IsEnabled="{Binding DoorAvailable}" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
       <StackPanel Orientation="Horizontal" Spacing="4"><fx:IconGlyph Kind="LockClosed" Size="12" IsVisible="{Binding Locked}"/><TextBlock Text="{Binding ButtonText}"/></StackPanel>
      </Button>
     </Grid>
@@ -75,8 +75,8 @@
    </StackPanel>
    <StackPanel Grid.Row="1">
     <WrapPanel>
-     <Button x:Name="BtnHostChess" Theme="{StaticResource LobbyPill}" IsEnabled="False"><TextBlock Text="{loc:Str lobby_host_chess}"/></Button>
-     <Button x:Name="BtnHostGoon" Theme="{StaticResource LobbyPill}" IsEnabled="False"><TextBlock Text="{loc:Str lobby_host_goon}"/></Button>
+     <Button x:Name="BtnHostChess" Theme="{StaticResource LobbyPill}" Click="BtnHostChess_Click"><StackPanel Orientation="Horizontal" Spacing="6"><fx:IconGlyph x:Name="ChessHostLock" Kind="LockClosed" Size="13"/><TextBlock Text="{loc:Str lobby_host_chess}"/></StackPanel></Button>
+     <Button x:Name="BtnHostGoon" Theme="{StaticResource LobbyPill}" IsEnabled="False"><StackPanel Orientation="Horizontal" Spacing="6"><fx:IconGlyph x:Name="GoonHostLock" Kind="LockClosed" Size="13"/><TextBlock Text="{loc:Str lobby_host_goon}"/></StackPanel></Button>
      <Button x:Name="BtnBecomeASubject" Theme="{StaticResource LobbyPill}" Click="BtnBecomeASubject_Click" ToolTip.Tip="{loc:Str desc_optin_directory_consent}">
       <StackPanel Orientation="Horizontal" Spacing="6"><fx:IconGlyph x:Name="RemoteHostLock" Kind="LockClosed" Size="13"/><TextBlock Text="{loc:Str lobby_host_remote}"/></StackPanel>
      </Button>
@@ -101,7 +101,7 @@
       <Border x:Name="AvailableSubjectsEmptyPanel" DockPanel.Dock="Top">
        <StackPanel><TextBlock x:Name="TxtLobbyEmpty" Text="{loc:Str lobby_empty_open}" Theme="{StaticResource LobbyColumnEmpty}"/>
         <WrapPanel HorizontalAlignment="Center" Margin="0,8,0,4">
-         <Button x:Name="BtnEmptyHostChess" Theme="{StaticResource LobbyPill}" IsEnabled="False"><TextBlock Text="{loc:Str lobby_host_chess}"/></Button>
+         <Button x:Name="BtnEmptyHostChess" Theme="{StaticResource LobbyPill}" Click="BtnHostChess_Click"><TextBlock Text="{loc:Str lobby_host_chess}"/></Button>
          <Button x:Name="BtnEmptyHostGoon" Theme="{StaticResource LobbyPill}" IsEnabled="False"><TextBlock Text="{loc:Str lobby_host_goon}"/></Button>
         </WrapPanel>
        </StackPanel>
