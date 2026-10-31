@@ -217,15 +217,21 @@ public sealed class VaultGateDialog : Window
 
     internal async Task FillPlansAsync()
     {
-        _plans = await PlanCatalog.GetAsync(InviteApi.DefaultBaseUrl());
-        if (_plans.FromServer)
+        try
         {
-            Sale = _plans.Sale;
-            _saleReadUtc = DateTime.UtcNow;
+            var url = InviteApi.DefaultBaseUrl();
+            // Null disables reads on this head; Core interprets it as the default server.
+            _plans = url == null ? PlanCatalog.Current : await PlanCatalog.GetAsync(url);
+            if (_plans.FromServer)
+            {
+                Sale = _plans.Sale;
+                _saleReadUtc = DateTime.UtcNow;
+            }
+            foreach (var (slot, tier, compact, yearly, hints) in _priceSlots)
+                PaintPrice(slot, tier, compact, yearly, hints);
+            if (!_plans.FromServer) await FillSaleAsync();
         }
-        foreach (var (slot, tier, compact, yearly, hints) in _priceSlots)
-            PaintPrice(slot, tier, compact, yearly, hints);
-        if (!_plans.FromServer) await FillSaleAsync();
+        catch (Exception ex) { Log.Debug("[VaultGate] plans refresh failed: {E}", ex.GetType().Name); }
     }
 
     /// <summary>Reads the sale switch (cached five minutes); any failure means no sale.</summary>

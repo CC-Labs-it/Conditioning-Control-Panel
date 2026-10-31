@@ -421,6 +421,68 @@ public sealed class VaultGateTests
         }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task DisabledProxyWithColdCacheNeverReadsPlans(bool ending) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureAvalonia();
+        PlanCatalog.Reset();
+        var baseUrl = ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl;
+        var reads = 0;
+        ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl = () => null;
+        CoreSettings.Current.OfflineMode = false;
+        PlanCatalog.FetchOverride = _ =>
+        {
+            reads++;
+            return Task.FromResult<string?>(PlanCatalog.ToWire(PlanCatalog.Fallback).ToString());
+        };
+        VaultGateDialog? card = null;
+        try
+        {
+            card = ending ? VaultGateDialog.ShowEnding(null, DateTime.UtcNow.AddHours(12), () => { })
+                : VaultGateDialog.ShowOffer(null, null, 1, () => { });
+            await card.FillPlansAsync();
+            Assert.Equal(0, reads);
+            Assert.Same(PlanCatalog.Fallback, PlanCatalog.Current);
+            Assert.Contains("$7.50", Texts(card));
+        }
+        finally
+        {
+            card?.Close();
+            ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl = baseUrl;
+            PlanCatalog.Reset();
+        }
+    });
+
+    [Fact]
+    public Task PlanRefreshFailureLeavesTheFallbackCardUsable() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureAvalonia();
+        PlanCatalog.Reset();
+        var baseUrl = ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl;
+        var launch = VaultGateDialog.Launch;
+        string? opened = null;
+        VaultGateDialog.Launch = url => { opened = url; return true; };
+        ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl = () => throw new InvalidOperationException("proxy unavailable");
+        var card = new VaultGateDialog();
+        try
+        {
+            await card.FillPlansAsync();
+            card.Show();
+            Assert.Contains("$7.50", Texts(card));
+            Click(card, Loc.Get("vaultgate_open_vault"));
+            Assert.Equal(PlanCatalog.Fallback.Basic.PatreonUrl, opened);
+        }
+        finally
+        {
+            card.Close();
+            VaultGateDialog.Launch = launch;
+            ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl = baseUrl;
+            PlanCatalog.Reset();
+        }
+    });
+
     private static ConditioningControlPanel.Avalonia.Helpers.NotificationService Toasts(out StackPanel host)
     {
         var toasts = new ConditioningControlPanel.Avalonia.Helpers.NotificationService();
