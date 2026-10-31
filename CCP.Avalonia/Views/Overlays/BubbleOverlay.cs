@@ -139,6 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             _chaosOpenedWindows = false;
+            ChaosRipples.Clear();
             _running = false;
             _pending = false;
             _spawnTimer?.Stop();
@@ -179,6 +180,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         // ---- Chaos field (WPF BubbleService.BeginChaosMode / SpawnChaosBubble / EndChaosMode) ----
+        // WPF BubbleService.cs:1631-1632, 1669-1677, 1704-1719. Physical-pixel
+        // distances, advanced once per logical field tick, never by the render clock.
+        private static readonly List<(Point Center, double AgeMs)> ChaosRipples = new();
+
+        internal static Point CenterPx(AmbientBubble b)
+        {
+            double scale = b.Screen >= 0 && b.Screen < Targets.Count ? Targets[b.Screen].Scaling : 1;
+            return new Point(b.CenterX * scale, b.CenterY * scale);
+        }
+
+        internal static void TriggerChaosRipple(AmbientBubble b)
+        {
+            if (_chaosPopped == null || Field.HoldChaos) return;
+            var center = CenterPx(b);
+            ChaosRipples.Add((center, 0));
+            ChaosFieldFxOverlay.Ripple(center, 430, 550);
+            RequestFrame();
+        }
+
+        internal static void TickChaosRipples()
+        {
+            if (Field.HoldChaos || _chaosPopped == null) return;
+            for (int i = ChaosRipples.Count - 1; i >= 0; i--)
+            {
+                var (center, age) = ChaosRipples[i];
+                age += 32;
+                double radius = 430 * Math.Min(1, age / 550);
+                foreach (var b in Field.Bubbles.ToArray())
+                {
+                    if (b.Popping || b.Spec == null || b.Spec.IsLive || b.Spec.IsDarter || b.Spec.IsFreeze) continue;
+                    if (b.Spec.IsTease || b.Spec.IsBrittle) continue; // WPF BubbleService.cs:4653-4659
+                    var point = CenterPx(b);
+                    double dx = point.X - center.X, dy = point.Y - center.Y;
+                    if (dx * dx + dy * dy <= radius * radius) PopChaos(b);
+                }
+                if (age >= 550) ChaosRipples.RemoveAt(i);
+                else ChaosRipples[i] = (center, age);
+            }
+        }
+
         private static Action<AmbientBubble>? _chaosPopped;
         private static Func<AmbientBubble, bool>? _chaosCanChannel;
 
@@ -244,6 +285,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void EndChaos()
         {
             Field.HoldChaos = false;
+            ChaosRipples.Clear();
             _chaosPopped = null;
             _chaosCanChannel = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
@@ -331,9 +373,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
                 Field.Step();
+                TickChaosRipples();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
-                if (Field.Bubbles.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
+                if (Field.Bubbles.Count == 0 && ChaosRipples.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
             }
             RequestFrame();
         }
