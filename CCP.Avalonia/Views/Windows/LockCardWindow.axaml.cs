@@ -1063,7 +1063,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// decides — where WPF could insist with <c>SetWindowPos</c> in device pixels.</para>
         /// </summary>
         public static void ShowOnAllMonitors(string phrase, int repeats, bool strictMode, bool isTest = false, bool voiceMode = false)
+            => ShowCard(phrase, repeats, strictMode, isTest, voiceMode, gameOwned: false);
+
+        // WPF BubbleCountResultWindow.xaml.cs:304-346: mercy belongs to the active game,
+        // so it must bypass the ordinary LockCardService.cs:201-210 deferral.
+        internal static void ShowGameMercy(string phrase, int repeats, bool strictMode)
+            => ShowCard(phrase, repeats, strictMode, false, false, gameOwned: true);
+
+        private static void ShowCard(string phrase, int repeats, bool strictMode, bool isTest, bool voiceMode, bool gameOwned)
         {
+            if (!gameOwned && HoldForGame(() => ShowOnAllMonitors(phrase, repeats, strictMode, isTest, voiceMode)))
+                return;
             // A card is already up. Reconfiguring live covers would drop the lock mid-solve, which
             // is also why the WPF original deferred a second show rather than reusing the set.
             if (_allWindows.Count > 0) return;
@@ -1073,7 +1083,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (PopQuizWindow.IsAnyOpen())
             {
                 Log.Warning("LockCard: a pop quiz is on screen. Holding this card until it closes.");
-                _heldForQuiz = () => ShowOnAllMonitors(phrase, repeats, strictMode, isTest, voiceMode);
+                _heldForQuiz = () => ShowCard(phrase, repeats, strictMode, isTest, voiceMode, gameOwned);
                 return;
             }
 
@@ -1153,6 +1163,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <param name="strict">Null: the player's own setting. The leash passes false (never a strict card).</param>
         internal static void ShowNext(bool isTest, bool? strict)
         {
+            // WPF LockCardService.cs:201-251: defer the request before drawing a phrase or
+            // reading settings. Suppressed duplicates must not consume rotation slots.
+            if (HoldForGame(() => ShowNext(isTest, strict))) return;
+            if (IsAnyOpen()) return;
+            if (PopQuizWindow.IsAnyOpen())
+            {
+                _heldForQuiz ??= () => ShowNext(isTest, strict);
+                return;
+            }
             var phrase = LockCardScheduler.Instance.PickPhrase(LockCardScheduler.EnabledPhrases());
             if (phrase is null) return;   // no enabled phrases: nothing to lock behind
             var s = CoreSettings.Current;
@@ -1177,21 +1196,50 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The last card left the screen: a pop quiz deferred behind it replays (#763).</summary>
         public static event Action? AllClosed;
 
-        private static Action? _heldForQuiz;
+        private static Action? _heldForQuiz, _heldForGame;
+        private static readonly DispatcherTimer _gameWait = new() { Interval = TimeSpan.FromMilliseconds(500) };
+
+        private static bool HoldForGame(Action replay)
+        {
+            // WPF InteractionQueueService.cs:88-121: video owns the slot from pre-roll onward.
+            if (CoreEngine.BubbleCount?.IsBusy != true && CoreEngine.Video?.IsPlaying != true && _heldForGame == null) return false;
+            // WPF InteractionQueueService.cs:108-121: preserve the first pending request.
+            _heldForGame ??= replay;
+            _gameWait.Start();
+            return true;
+        }
+
+        // Poll the entire round, including lead-in, answers, retries and mercy. A visible mercy
+        // card also blocks replay if the round was externally cleaned up before it closed.
+        internal static void ReplayAfterGame()
+        {
+            if (CoreEngine.BubbleCount?.IsBusy == true || CoreEngine.Video?.IsPlaying == true || IsAnyOpen() || PopQuizWindow.IsAnyOpen()) return;
+            var replay = _heldForGame;
+            _heldForGame = null;
+            _gameWait.Stop();
+            replay?.Invoke();
+        }
 
         /// <summary>Forget a card held behind a pop quiz. An engine stop calls this BEFORE closing the
         /// quizzes, or the last quiz closing would replay the card (and its mic) mid-stop; WPF's stop
         /// drops deferred interactions the same way.</summary>
-        internal static void DropHeld() => _heldForQuiz = null;
+        internal static void DropHeld()
+        {
+            _heldForQuiz = _heldForGame = null;
+            _gameWait.Stop();
+        }
 
-        static LockCardWindow() =>
+        static LockCardWindow()
+        {
             PopQuizWindow.AllClosed += () => { var r = _heldForQuiz; _heldForQuiz = null; r?.Invoke(); };
+            _gameWait.Tick += (_, _) => ReplayAfterGame();
+        }
 
         /// <summary>Drop every card, solved or not - the panic exit. Strict mode does not survive
         /// this: <c>_isCompleted</c> is set first on each window so OnClosing cannot refuse.</summary>
         public static void ForceCloseAll()
         {
-            _heldForQuiz = null;
+            DropHeld();
             var windows = _allWindows.ToList();
             _allWindows.Clear();
             foreach (var window in windows)

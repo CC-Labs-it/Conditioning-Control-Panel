@@ -17,6 +17,7 @@ public sealed class MandatoryVideoSchedulerTests
     {
         public readonly List<(string Path, bool Strict)> Shown = new();
         public bool BubbleCountActive { get; set; }
+        public bool LockCardActive { get; set; }
         public int Closes;
         public double Watched;
         public void Show(string path, bool strict) => Shown.Add((path, strict));
@@ -36,6 +37,26 @@ public sealed class MandatoryVideoSchedulerTests
     }
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
+
+    [Fact]
+    public void Direct_video_trigger_waits_for_an_open_card() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { LockCardActive = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        try
+        {
+            Assert.True(v.Trigger(true, "/first.mp4"));
+            clock.Advance(TimeSpan.FromSeconds(10));
+            Assert.False(v.IsPlaying);
+            Assert.Empty(host.Shown);
+            host.LockCardActive = false;
+            clock.Advance(BubbleCountScheduler.QueuePoll);
+            Assert.True(v.IsPlaying);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal("/first.mp4", Assert.Single(host.Shown).Path);
+        }
+        finally { v.Stop(); }
+    });
 
     [Fact]
     public void Video_waits_for_the_whole_bubble_round_and_keeps_the_first_request() => With(6, false, () =>
