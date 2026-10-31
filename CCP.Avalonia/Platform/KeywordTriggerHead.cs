@@ -121,6 +121,9 @@ internal sealed class KeywordAudioRuntime
     private long? _duckGeneration;
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
+    // WPF KeywordTriggerService.cs:72,135,1196: record each accepted fire before notifying.
+    internal KeywordFireLog Fires { get; } = new();
+    internal event Action<KeywordTrigger>? TriggerFired;
     internal bool IsActive { get; private set; }
     internal void Start() { IsActive = true; _input.Clear(); }
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
@@ -161,6 +164,8 @@ internal sealed class KeywordAudioRuntime
         {
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
+            Fires.Record(t, "Keyboard", now);
+            TriggerFired?.Invoke(t);
         }
         // WPF merge: preset first, and only the first enabled PlayAudio action wins.
         var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
@@ -173,9 +178,29 @@ internal sealed class KeywordAudioRuntime
         if (audio != null) Play(audio);
     }
 
-    // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic
-    // Highlight+AvatarComment trigger with no audio and no settings; both actions land with wire-shell-keyword-triggers-b.
-    internal void FireDemo(string keyword, string source) { }
+    // WPF KeywordTriggerService.cs:393-427: gated synthetic fire, no saved trigger/audio lookup.
+    // Highlight and avatar action dispatch remain separate work (avatar covered by the comment lane).
+    internal void FireDemo(string keyword, string source)
+    {
+        if (string.IsNullOrWhiteSpace(keyword)) return;
+        if (!(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return;
+        var demo = new KeywordTrigger
+        {
+            Id = "tutorial:demo", Keyword = keyword, MatchType = KeywordMatchType.PlainText, Enabled = true,
+            VisualEffect = KeywordVisualEffect.HighlightOnly,
+            Actions = new() { new HighlightAction { Enabled = true },
+                new AvatarCommentAction { Enabled = true, FallbackPhraseCategory = "PuppyPraise", RequireAiAvailable = false } },
+        };
+        try
+        {
+            var now = Now();
+            // WPF KeywordTriggerService.cs:139,426: demos bypass checks but still mute the word.
+            _cooldowns.Record(demo, CoreSettings.Current, now.ToUniversalTime());
+            Fires.Record(demo, source, now);
+            TriggerFired?.Invoke(demo);
+        }
+        catch (Exception ex) { Log.Debug(ex, "FireDemo failed"); }
+    }
 
     internal void StopAudio()
     {
