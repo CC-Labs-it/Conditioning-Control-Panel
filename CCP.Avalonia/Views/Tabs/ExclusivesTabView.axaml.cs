@@ -58,6 +58,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, e) => { if (e.WidthChanged) FitShelf(); };
         }
 
+        private readonly HashSet<VaultCardAura> _auras = new();
+
+        private void Aura_Loaded(object? sender, RoutedEventArgs e)
+        {
+            if (sender is VaultCardAura aura && _auras.Add(aura) && _motion == null) aura.Rest();
+        }
+
+        private void Aura_Unloaded(object? sender, RoutedEventArgs e)
+        {
+            if (sender is VaultCardAura aura) { aura.Rest(); _auras.Remove(aura); }
+        }
+
         public static readonly StyledProperty<double> CardWidthProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(CardWidth), Services.UI.ExclusiveShelfFit.BaseWidth);
         public static readonly StyledProperty<double> CardHeightProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(CardHeight), Services.UI.ExclusiveShelfFit.BaseHeight);
         public static readonly StyledProperty<double> GroupHeadWidthProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(GroupHeadWidth), double.NaN);
@@ -128,6 +140,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void RefreshVault()
         {
+            // WPF MainWindow.Exclusives.cs:1022; Core retains the retry and sandbox gates.
+            _ = App.DailyFree?.RefreshAsync();
             RetintVaultChrome();
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
@@ -257,6 +271,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _kenBurns.ScaleX = _kenBurns.ScaleY = 1;
                 if (LitPlate != null) LitPlate.Opacity = 1;
             }
+            if (!want) foreach (var aura in _auras) aura.Rest();
             foreach (var part in _fxParts) Dress(part);
         }
 
@@ -265,6 +280,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (_motion == null) return;
             double t = FxAdorner.Time.GetElapsedTime(_motionStart).TotalSeconds;
+            foreach (var aura in _auras) if (aura.IsVisible) aura.Frame(t);
             _kenBurns.ScaleX = _kenBurns.ScaleY = Breath(t, 26, 1.0, 1.07);
             if (LitPlate != null) LitPlate.Opacity = Breath(t, 3.4, 0.75, 1.0);
             double glow = Breath(t, 3.4, 0.35, 0.9), fade = Breath(t, 1.9, 0.72, 1.0), swell = Breath(t, 1.9, 1.0, 1.06);
@@ -385,10 +401,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF OnExclusiveCardHover: the shared hover pop on the art, driven from the card.
-        /// ponytail: no MotionFx.HoverLift or glow bloom on this head yet.</summary>
-        private void Card_PointerEntered(object? sender, PointerEventArgs e) => HoverPop.Enter(CardArt(sender));
+        /// Includes the card lift and theme glow bloom.</summary>
+        private void Card_PointerEntered(object? sender, PointerEventArgs e) => HoverCard(sender as Control, true);
 
-        private void Card_PointerExited(object? sender, PointerEventArgs e) => HoverPop.Leave(CardArt(sender));
+        private void Card_PointerExited(object? sender, PointerEventArgs e) => HoverCard(sender as Control, false);
 
         private static Control? CardArt(object? card) =>
             (card as Control)?.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == "CardArt");
@@ -462,6 +478,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public IBrush EdgeBrush => Tier > 0 ? Livery(Tier) : FreeToday ? EdgeFree : new SolidColorBrush(ExclusivesTabView.WithAlpha(ExclusivesTabView.VaultPartner(), 0x4D));
         public Thickness EdgeThickness => new(Tier > 0 ? 3 : FreeToday ? 2 : 1);
 
+        // WPF MainWindow.Exclusives.Flair.cs:160-182: owned or daily-free doors wear the group aura.
+        public bool IsMine => !IsLocked;
+        public Color GroupHue => ExclusiveGroupRow.HueOf(Services.UI.PremiumShelfOrder.GroupOf(Feature.Key, Feature.Tier));
+        public int AuraSeed => (ExclusiveFeature.All.ToList().IndexOf(Feature) + 1) * 7 + Feature.Key.Length;
+        public Thickness AuraMargin => new(-EdgeThickness.Left);
+
         /// <summary>VaultLivery.EdgeFree: gold means "open for one day only".</summary>
         internal static IBrush EdgeFree => Brush("#E6FFD27A");
 
@@ -491,7 +513,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Services.UI.PremiumGroup.Prime => "prime",
             _ => "free",
         };
-        private Color Hue => Group switch
+        private Color Hue => HueOf(Group);
+        internal static Color HueOf(Services.UI.PremiumGroup group) => group switch
         {
             Services.UI.PremiumGroup.Basic => BasicGold,
             Services.UI.PremiumGroup.Prime => PrimeCyan,
