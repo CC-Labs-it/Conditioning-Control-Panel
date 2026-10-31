@@ -67,6 +67,13 @@ namespace ConditioningControlPanel.Services.Safety
             Interlocked.Exchange(ref _engineHeld, 0);
         }
 
+        /// <summary>Start today's session is a local START only when it starts the engine.
+        /// Called after session-start admission; a remote or scheduled start never calls this.</summary>
+        public static void UserProgramStart(bool engineRunning)
+        {
+            if (!engineRunning) EndQuiet();
+        }
+
         /// <summary>
         /// TRUE from a panic until the user's START (no time limit): the Lockdown dose keeper must not
         /// start the engine again on its own 4 s grace. Only the user undoes a panic.

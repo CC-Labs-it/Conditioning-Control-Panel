@@ -107,6 +107,14 @@ public sealed class MandatoryVideoFloatingTests
                 o.Show(clip, strict: false);
                 var w = Assert.Single(o.Windows);
                 Assert.True(o.Floating);
+                Assert.Contains(WindowTransparencyLevel.Transparent, w.TransparencyLevelHint);
+                Assert.InRange(w.Opacity, double.Epsilon, 0.001);
+                Assert.False(w.IsHitTestVisible);
+                Assert.Equal(0, o.PlayerVolume);
+                typeof(MandatoryVideoOverlay).GetMethod("CheckFloatingReveal",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(o, new object[] { true });
+                Assert.Equal(1, w.Opacity);
+                Assert.True(w.IsHitTestVisible);
                 Assert.False(o.AttentionArmed, "a floating video has no attention checks");
                 Assert.True(w.Topmost && w.IsVisible);
                 Assert.NotEqual(WindowState.FullScreen, w.WindowState);

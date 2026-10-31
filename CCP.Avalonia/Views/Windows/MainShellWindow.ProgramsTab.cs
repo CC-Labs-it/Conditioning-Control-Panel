@@ -278,7 +278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     return;
                 }
                 svc.AttachSessionRunner(runner);
-                StartSession(session);   // the row repaints when the runner really starts (StartSession)
+                StartSession(session, userProgramStart: true);   // the row repaints when the runner really starts (StartSession)
                 Serilog.Log.Information("[Programs] Started program session: {Name}", session.Name);
             }
             catch (Exception ex) { Serilog.Log.Error(ex, "[Programs] Failed to start today's session"); }
