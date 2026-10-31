@@ -154,6 +154,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     IsReady = true;
                     Post(InitMessage());   // WPF BackRoomHostService.BuildInit (:566); no manifest frame for Breakout
                     break;
+                case "breakout-wall" when Spec.Id == "breakoutdemo":
+                    SparklesPending = DeliverSparkles(ConditioningControlPanel.Services.Sparkles.SparklesPageResults.Send(
+                        ConditioningControlPanel.Services.Sparkles.SparklesPageResults.BreakoutWall(o), SparklesHead.Service));
+                    break;
                 case "media-request":
                     // WPF BackRoomBridge.cs:208 -> OnMediaRequestAsync: the station's pictures for this sit-down.
                     // The walk touches every library file, so it runs off the UI thread (WPF OffUi); the reply is posted back.
