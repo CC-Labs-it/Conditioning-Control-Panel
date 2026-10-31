@@ -7959,5 +7959,9 @@
   "online_official_plan_prime": "Prime получает самую большую дневную долю. Всё, что вы уже видели, повторяется бесплатно.",
   "online_official_nice": "Отлично",
   "online_official_stamped_line": "Онлайн-медиа приходят из Scrolller. На каждой картинке и клипе есть маленькая пометка \"via Scrolller\".",
-  "online_cache_day_line": "Онлайн-медиа хранятся в небольшом кэше на этом компьютере один день и никуда не загружаются."
+  "online_cache_day_line": "Онлайн-медиа хранятся в небольшом кэше на этом компьютере один день и никуда не загружаются.",
+  "toast_companion_max_title": "Максимальный уровень",
+  "toast_companion_max_body": "{0} достиг максимального уровня.",
+  "toast_companion_level_title": "Уровень спутника повышен",
+  "toast_companion_level_body": "{0} достиг уровня {1}."
 }
