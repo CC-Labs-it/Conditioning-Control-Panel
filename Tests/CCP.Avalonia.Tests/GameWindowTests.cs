@@ -197,7 +197,7 @@ public sealed partial class GameWindowTests
     }
 
     /// <summary>WPF PieceByPieceHostService.cs:164-168 and SeasonRecapService.cs:182-197.
-    /// One day event per fresh board, no recap Catalog entry, no credit for a refused launch.</summary>
+    /// One day event per fresh attempt, including failed setup; no recap Catalog entry or refocus credit.</summary>
     [Fact]
     public void PieceByPiece_FreshLaunchCreditsDayLog_RefocusDoesNot() => Run((shell, launcher) =>
     {
@@ -231,6 +231,17 @@ public sealed partial class GameWindowTests
             Assert.Equal(bucket, CoreSettings.Current.SeasonStatsSeason);
             Assert.Equal(counts, CoreSettings.Current.SeasonFeatureUse.ToArray());
             second.Close();
+            Dispatcher.UIThread.RunJobs();
+            var server = GameWindow.Server;
+            try
+            {
+                GameWindow.Server = () => throw new InvalidOperationException("setup failed");
+                var error = Assert.Throws<InvalidOperationException>(() => GameWindow.Launch(GameWindow.PbpId));
+                Assert.Equal("setup failed", error.Message);
+                Assert.Equal(3, Uses()); // WPF :168 runs before ChaosWebViewHost construction (:197).
+                Assert.False(GameWindow.IsAnyOpen());
+            }
+            finally { GameWindow.Server = server; }
         }
         finally
         {

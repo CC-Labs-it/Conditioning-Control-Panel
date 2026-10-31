@@ -11,12 +11,15 @@ public class SeasonFeatureTrackingTests
 {
     private static readonly DateTime Now = new(2026, 7, 3, 12, 0, 0, DateTimeKind.Utc);
 
-    [Fact]
-    public void CurrentSeasonKey_PrefersAMonthShapedServerKey()
+    [Theory]
+    [InlineData("2026-06", "2026-06")]
+    [InlineData("season-6", "2026-07")]
+    [InlineData(null, "2026-07")]
+    public void Track_FreshBucketUsesSharedSeasonKey(string? serverSeason, string expected)
     {
-        Assert.Equal("2026-06", SeasonFeatureTracking.CurrentSeasonKey("2026-06", Now));
-        Assert.Equal("2026-07", SeasonFeatureTracking.CurrentSeasonKey("season-6", Now));
-        Assert.Equal("2026-07", SeasonFeatureTracking.CurrentSeasonKey(null, Now));
+        var s = new AppSettings { CurrentSeason = serverSeason };
+        SeasonFeatureTracking.Track(s, SeasonFeatureKeys.Flash, null, Now);
+        Assert.Equal(expected, s.SeasonStatsSeason);
     }
 
     [Fact]

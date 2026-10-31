@@ -92,9 +92,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _pbpWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _pbpWatch.Tick += (_, _) => CheckPbpWatch(DateTime.UtcNow);
             _pbpWatch.Start();
-            // WPF PieceByPieceHostService.cs:168: fresh launch only, never a refocus.
-            try { SeasonFeatureTracking.Track(CoreSettings.Current, SeasonFeatureKeys.PieceByPiece, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow); }
-            catch (Exception ex) { Diag.Swallowed(ex); }
             try { FriendsHead.Service?.EnterActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("PieceByPieceHost: launched");
         }

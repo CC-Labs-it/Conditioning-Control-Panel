@@ -9,12 +9,6 @@ namespace ConditioningControlPanel.Services
     /// </summary>
     public static class SeasonFeatureTracking
     {
-        /// <summary>The server's season key when it looks like "yyyy-MM", else the UTC wall-clock month.</summary>
-        public static string CurrentSeasonKey(string? serverSeason, DateTime utcNow) =>
-            !string.IsNullOrWhiteSpace(serverSeason) && ProfileAdopt.LooksLikeMonthKey(serverSeason!)
-                ? serverSeason!
-                : utcNow.ToString("yyyy-MM");
-
         /// <summary>
         /// One use of a feature: the per-day log event (keys with a wire name only), then the season
         /// bucket (Catalog keys only), opening the bucket on first use. No Save, as WPF.
@@ -26,7 +20,7 @@ namespace ConditioningControlPanel.Services
 
             if (SeasonFeatureKeys.Find(featureKey) == null || s == null) return;
             if (string.IsNullOrEmpty(s.SeasonStatsSeason))
-                s.SeasonStatsSeason = CurrentSeasonKey(s.CurrentSeason, utcNow);
+                s.SeasonStatsSeason = EnhancementAnalytics.CurrentSeasonKey(s, utcNow);
             s.TrackSeasonFeature(featureKey);
         }
     }

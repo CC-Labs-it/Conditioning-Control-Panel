@@ -80,6 +80,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (live != null) { live.Activate(); return live; }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
+            // WPF PieceByPieceHostService.cs:165-168: refocus is free; failed setup still counts.
+            if (spec.Id == PbpId)
+            {
+                try { SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.PieceByPiece,
+                    ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow); }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+            }
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();
