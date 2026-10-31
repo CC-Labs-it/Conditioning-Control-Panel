@@ -154,7 +154,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // instead of importing the trunk's independent 16ms DispatcherTimer.
         private void AnimateXpReadout(TextBlock txt, double xp, double needed, int level)
         {
-            string target = $"{(int)xp} / {(int)needed} XP";
+            // WPF MainWindow.ChromeFx.cs:681 rounds the odometer; :690 truncates the snap path.
+            string target = xp.ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + $" / {(int)needed} XP";
             // Awarded and LevelUp can repaint the same total in one dispatcher turn. Keep the
             // first count alive rather than snapping it to its own target on the second repaint.
             if (_xpOdometer?.IsRunning == true && level == _lastXpLevelShown && xp == _lastXpShown
@@ -162,7 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             double from = !double.IsNaN(_lastXpShown) && level == _lastXpLevelShown ? _lastXpShown : 0;
             (_lastXpShown, _lastXpLevelShown) = (xp, level);
             _xpOdometer?.Stop();
-            _xpReadoutTarget = target;
+            _xpReadoutTarget = $"{(int)xp} / {(int)needed} XP";
             if (_heroClosed || !AmbientFxCanvas.Env.AllowTransitions || !IsVisible
                 || WindowState == WindowState.Minimized || Math.Abs(xp - from) < 0.5)
             {
@@ -170,6 +171,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             string tail = $" / {(int)needed} XP";
+            _xpReadoutTarget = target;
+            txt.Text = from.ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + tail;
             _xpOdometer = new BeatLoop(txt, seconds =>
             {
                 double p = Math.Clamp(seconds / 0.7, 0, 1);

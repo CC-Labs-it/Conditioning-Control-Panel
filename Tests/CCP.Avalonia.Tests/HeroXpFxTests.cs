@@ -19,6 +19,54 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class HeroXpFxTests
 {
+    // WPF MainWindow.ChromeFx.cs:681,690. The motion gate must settle at the
+    // rounded animation target, while an award made with motion off still truncates.
+    [Fact]
+    public Task FractionalOdometerKeepsRoundedTargetAcrossRepaintAndMotionGate() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        (s.PlayerLevel, s.PlayerXP, s.MotionLevel, s.PerformanceMode) = (10, 10, MotionLevel.Full, false);
+        s.OfflineMode = true;
+        s.OfflineUsername = "fractional-xp-test";
+        s.AutoPerformanceMode = false;
+        s.GentleVisuals = false;
+        var oldTime = BeatLoop.Time;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show(); shell.Activate(); Dispatcher.UIThread.RunJobs();
+            time.Advance(TimeSpan.FromSeconds(1)); BeatLoop.StepAll();
+            var txt = shell.FindControl<TextBlock>("TxtXP")!;
+            ProgressionBank.Add(.8, "Mantra"); Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.XpReadoutCounting);
+            Assert.StartsWith("10 / ", txt.Text);
+            shell.UpdateLevelDisplay(); // duplicate repaint must retain the same count
+            Assert.True(shell.XpReadoutCounting);
+            time.Advance(TimeSpan.FromSeconds(1)); BeatLoop.StepAll();
+            Assert.StartsWith("11 / ", txt.Text);
+            s.MotionLevel = MotionLevel.Off;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.StartsWith("11 / ", txt.Text);
+            shell.UpdateLevelDisplay();
+            Assert.StartsWith("10 / ", txt.Text);
+        }
+        finally
+        {
+            shell.Close(); Dispatcher.UIThread.RunJobs();
+            BeatLoop.Time = oldTime;
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task MeniscusRidesFillAndParksAtRestInReducedMotion() => AvaloniaTestDispatcher.RunAsync(() =>
     {
