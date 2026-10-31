@@ -188,21 +188,6 @@ internal static class ScrolllerWebKitFilter
         catch (Exception) { try { return DlopenC(name, flags); } catch (Exception) { return IntPtr.Zero; } }
     }
 
-    // Called only during the synchronous popup callback, while GTK waits for our decision.
-    // Read the native URI without pumping GLib (which would deadlock that callback).
-    internal static string? CurrentDocumentUrl(IntPtr view)
-    {
-        if (view == IntPtr.Zero) return null;
-        foreach (var name in Libraries)
-        {
-            var lib = LoadedLibrary(name);
-            if (lib == IntPtr.Zero) continue;
-            try { return Marshal.PtrToStringUTF8(Marshal.GetDelegateForFunctionPointer<Fn1>(
-                NativeLibrary.GetExport(lib, "webkit_web_view_get_uri"))(view)); }
-            finally { NativeLibrary.Free(lib); }
-        }
-        return null;
-    }
     private sealed class Api
     {
         public required Fn1 GetManager, ObjectRef;

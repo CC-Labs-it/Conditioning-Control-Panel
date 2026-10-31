@@ -27,8 +27,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// carry a settable Cancel — so a per-navigation allowlist that also catches redirects is
     /// possible here, unlike what the first pass of these views assumed) and
     /// <see cref="InvokeScriptAsync"/>, plus the live URL (<see cref="CurrentUrl"/>,
-    /// <see cref="NavigationCompleted"/>). NativeWebView also offers GoBack/GoForward, Stop and Refresh;
-    /// those are not wrapped. Home browser popups are routed in place. It has NO zoom factor, no document-created script
+    /// <see cref="NavigationCompleted"/>). NativeWebView additionally offers WebMessageReceived,
+    /// NewWindowRequested, GoBack/GoForward, Stop and Refresh; nothing needs
+    /// them yet, so they are not wrapped. It has NO zoom factor, no document-created script
     /// injection, and no fullscreen-element signal.
     ///
     /// The whole point is the fallback. A Linux box without webkit2gtk installed is the DEFAULT,
@@ -326,7 +327,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     _web.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
-                    _web.NewWindowRequested += (_, e) => e.Handled = OnBrowserPopup(e.Request);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
@@ -361,23 +361,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
             _fallback.IsVisible = _web is null;
             ApplySource();
-        }
-
-        // Only the Home browser opts in. Other embeds keep their existing popup policy.
-        public bool RouteBrowserPopups { get; set; }
-
-        // Native URL boundary, like ScriptInvoker. No cached URL fallback: unknown pages get no exemption.
-        internal Func<string?>? DocumentUrlReader { get; set; }
-
-        // WPF BrowserService.cs:538-562: handled even when blocked, never a second OS window.
-        internal bool OnBrowserPopup(Uri? target)
-        {
-            if (!RouteBrowserPopups) return false;
-            if (target is not { IsAbsoluteUri: true }) return true;
-            if (ConditioningControlPanel.Services.Browser.BrowserPopupRule.ShouldBlock(
-                    (DocumentUrlReader ?? (() => Platform.ScrolllerWebHostGate.CurrentDocumentUrl(_web?.TryGetPlatformHandle())))(), target.AbsoluteUri)) return true;
-            Navigate(target);
-            return true;
         }
 
         internal void BindNativeBackground(NativeWebView native) =>

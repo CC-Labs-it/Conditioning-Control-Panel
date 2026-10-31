@@ -84,21 +84,6 @@ internal static class ScrolllerWebHostGate
         }
     }
 
-    internal static string? CurrentDocumentUrl(IPlatformHandle? handle)
-    {
-        try
-        {
-            return handle switch
-            {
-                IWindowsWebView2PlatformHandle w when OperatingSystem.IsWindows() => ReadWebView2Url(w.CoreWebView2),
-                IGtkWebViewPlatformHandle g when OperatingSystem.IsLinux() => ScrolllerWebKitFilter.CurrentDocumentUrl(g.WebKitWebView),
-                _ => null
-            };
-        }
-        catch (Exception ex) { Log.Debug("Browser document URL unavailable: {E}", ex.Message); return null; }
-    }
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static string? ReadWebView2Url(IntPtr core) => ScrolllerWebView2Gate.CurrentDocumentUrl(core);
     private static void AttachWindows(IPlatformHandle? handle, Func<IPlatformHandle?> handleAgain, Action<bool> ready, int left)
     {
         var core = handle is IWindowsWebView2PlatformHandle w ? w.CoreWebView2 : IntPtr.Zero;
