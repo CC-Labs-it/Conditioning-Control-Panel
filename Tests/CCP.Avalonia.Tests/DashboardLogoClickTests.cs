@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -31,6 +33,51 @@ public sealed class DashboardLogoClickTests
 
     private const System.Reflection.BindingFlags Flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
     private static readonly Type Egg = typeof(SettingsTabView);
+
+    private sealed class Reset : IDisposable
+    {
+        public int Due;
+        public Action Fire = null!;
+        public bool Cancelled;
+        public void Dispose() => Cancelled = true;
+    }
+
+    [Fact]
+    public void OverlappingPulsesKeepBothLegsOfTheLatestClick() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var logo = new Border(); // No text or font dependency.
+        var resets = new List<Reset>();
+        int now = 0;
+        IDisposable Schedule(Action fire, TimeSpan delay)
+        {
+            var reset = new Reset { Due = now + (int)delay.TotalMilliseconds, Fire = fire };
+            resets.Add(reset);
+            return reset;
+        }
+        void At(int time)
+        {
+            now = time;
+            foreach (var reset in resets.Where(r => r.Due <= now).ToArray())
+            {
+                if (!reset.Cancelled) reset.Fire();
+                resets.Remove(reset);
+            }
+        }
+        double Target() => Assert.IsType<TransformOperations>(logo.GetBaseValue(Visual.RenderTransformProperty).Value).Value.M11;
+        var first = SettingsTabView.RestartLogoPulse(logo, null, Schedule);
+        var outward = logo.Transitions;
+        At(60);
+        using var latest = SettingsTabView.RestartLogoPulse(logo, first, Schedule);
+        Assert.NotSame(outward, logo.Transitions); // Restart outward from 1, even at the same target.
+        Assert.Equal(TimeSpan.FromMilliseconds(80), Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(logo.Transitions!)).Duration);
+        At(80); Assert.Equal(1.05, Target()); // The first click must not reverse the latest.
+        At(139); Assert.Equal(1.05, Target());
+        At(140); Assert.Equal(1, Target()); // Latest outward leg ends after its own 80 ms.
+        At(220); Assert.Equal(1, Target()); // Its return transition also lasts 80 ms.
+    });
 
     [Fact]
     public Task WordmarkClicksTrackPulseAndReachTheEasterEgg() => AvaloniaTestDispatcher.RunAsync(() =>

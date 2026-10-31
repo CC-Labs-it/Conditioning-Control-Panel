@@ -328,19 +328,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF's quick pulse: ImgLogo scales 1.0 -> 1.05 over 80 ms and back (AutoReverse),
         /// about its centre. A transition on RenderTransform, never an Animation on a Transform (P82).</summary>
-        private void PulseLogo()
+        private IDisposable? _logoPulseReset;
+        private void PulseLogo() => _logoPulseReset = RestartLogoPulse(ImgLogo, _logoPulseReset,
+            (reset, delay) => global::Avalonia.Threading.DispatcherTimer.RunOnce(reset, delay));
+
+        // WPF MainWindow.UiUpdates.cs:1230-1248 replaces the previous pulse and starts from 1.
+        internal static IDisposable RestartLogoPulse(Control logo, IDisposable? pending,
+            Func<Action, TimeSpan, IDisposable> schedule)
         {
-            ImgLogo.RenderTransformOrigin = RelativePoint.Center;
-            ImgLogo.Transitions ??= new global::Avalonia.Animation.Transitions
+            pending?.Dispose();
+            logo.Transitions = null;
+            logo.RenderTransformOrigin = RelativePoint.Center;
+            logo.RenderTransform = global::Avalonia.Media.Transformation.TransformOperations.Parse("scale(1)");
+            logo.Transitions = new global::Avalonia.Animation.Transitions
             {
                 new global::Avalonia.Animation.TransformOperationsTransition
                 {
                     Property = Visual.RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(80),
                 },
             };
-            ImgLogo.RenderTransform = global::Avalonia.Media.Transformation.TransformOperations.Parse("scale(1.05)");
-            global::Avalonia.Threading.DispatcherTimer.RunOnce(
-                () => ImgLogo.RenderTransform = global::Avalonia.Media.Transformation.TransformOperations.Parse("scale(1)"),
+            logo.RenderTransform = global::Avalonia.Media.Transformation.TransformOperations.Parse("scale(1.05)");
+            return schedule(
+                () => logo.RenderTransform = global::Avalonia.Media.Transformation.TransformOperations.Parse("scale(1)"),
                 TimeSpan.FromMilliseconds(80));
         }
 
