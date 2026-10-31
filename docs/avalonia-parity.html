@@ -793,6 +793,12 @@ Tick its rows as each lane lands.</p>
 ported-by-merge, needs-port (with its lane, 9 lanes incl. the A5 group <code>a5-glassroad-sync10</code>) or n/a with a reason. The
 Prize Counter shop is WPF desktop only in 7.2 (B3), so its rows are n/a; its web tree still moved to
 <code>Assets/web/prizecounter</code>. Tick its rows as each lane lands.</p>
+<p id="sync10-rain-gate-review-base">Review boundary for <code>sync10-rain-gate</code>: the requested lane base is
+<code>6121afbebda83bbbb3fe81c610c7c84a03c7e05c</code> (<code>avalonia-port/main-20261031-compat</code>).
+The release imports <code>cd4dd330f</code> and <code>1ebeb0a91</code> are separate prerequisite commits already in that base.
+Use <code>git diff 6121afbeb HEAD</code> for the lane review. A comparison from <code>74ac6ce3d</code> also reviews the prerequisite release import;
+it is not the lane's 600-line scope, and this lane does not certify the import as fully reviewed.
+The follow-up restores the Avalonia Windows installer contract from <code>74ac6ce3d</code>, retaining version 7.2.0.</p>
 <h2 id="dtrh-feel-rework-dtrh-feel-17-pace-merge-23054e370">DTRH feel rework (dtrh-feel 17-pace, merge <code>23054e370</code>)</h2>
 <p>The delta ledger for the DTRH feel rework (<code>11d7c3afc..46e9e908d</code>) is
 <a href="avalonia-main-sync-dtrh-feel.html"><code>avalonia-main-sync-dtrh-feel.html</code></a>: one row per non-merge commit (27). Web-only rows are
