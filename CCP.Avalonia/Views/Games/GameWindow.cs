@@ -120,6 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
+            if (Spec.Id == PbpId) StartPbpLocalProbe();
             if (Spec.Id == "loom") DirectoryForLoom();
             PageUrl = new Uri(server.Url(Spec.Page, Spec.Query));
             Web.Navigate(PageUrl);
