@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace ConditioningControlPanel.Services.Startup.Conversion
+namespace ConditioningControlPanel.Services.Conversion
 {
     /// <summary>Which lapse row an install owes right now.</summary>
     public enum LapseRow { None, Warn7, Warn3, Warn1, Closed }

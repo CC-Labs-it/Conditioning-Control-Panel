@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using ConditioningControlPanel.Services.Funnel;
+using ConditioningControlPanel.Services.Telemetry;
 using Xunit;
 
 namespace ConditioningControlPanel.Tests;

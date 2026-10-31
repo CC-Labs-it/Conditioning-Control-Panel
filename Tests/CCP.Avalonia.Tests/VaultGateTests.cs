@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using System.Collections.Concurrent;
-using ConditioningControlPanel.Services.Funnel;
+using ConditioningControlPanel.Services.Telemetry;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
