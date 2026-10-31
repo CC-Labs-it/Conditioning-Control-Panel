@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
 using ConditioningControlPanel.Localization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -21,6 +24,7 @@ public partial class ModCreatorWindow
     {
         public JObject Json = new();
         public StackPanel Panel = new(), Variants = new();
+        public Border Frame = new();
         public TextBox Id = new(), Trigger = new();
         public CheckBox Override = new();
         public readonly List<(TextBox Text, JToken Original, StackPanel Row)> Lines = new();
@@ -51,29 +55,53 @@ public partial class ModCreatorWindow
         card.Trigger.Text = loaded?.Value<string>("trigger") ?? "";
         card.Override.Content = Loc.Get("mod_barks_override");
         card.Override.IsChecked = loaded != null && loaded["trigger"] == null;
-        card.Trigger.IsVisible = card.Override.IsChecked != true;
-        card.Override.IsCheckedChanged += (_, _) => card.Trigger.IsVisible = card.Override.IsChecked != true;
+        var triggerLabel = CreateFieldLabel(Loc.Get("mod_barks_trigger"));
+        void ShowTrigger() => triggerLabel.IsVisible = card.Trigger.IsVisible = card.Override.IsChecked != true;
+        ShowTrigger();
+        card.Override.IsCheckedChanged += (_, _) => ShowTrigger();
+        card.Id.Width = 260; card.Id.HorizontalAlignment = HorizontalAlignment.Left;
+        card.Trigger.Width = 240; card.Trigger.HorizontalAlignment = HorizontalAlignment.Left;
         card.Id.Watermark = Loc.Get("mod_barks_id");
         card.Trigger.Watermark = Loc.Get("mod_barks_trigger");
-        card.Panel.Children.Add(card.Override);
-        card.Panel.Children.Add(card.Id);
-        card.Panel.Children.Add(card.Trigger);
-        card.Panel.Children.Add(card.Variants);
-        card.Panel.Children.Add(BarkButton("mod_barks_variant", () => AddBarkLine(card, new JValue(""))));
-        card.Panel.Children.Add(BarkButton("mod_barks_remove", () =>
+        card.Frame = new Border
+        {
+            Background = Brush.Parse("#23233F"), BorderBrush = Brush.Parse("#35355A"),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12), Margin = new Thickness(0, 0, 0, 10),
+            MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left, Child = card.Panel,
+        };
+        var header = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+        var removeCard = BarkButton("mod_barks_remove", () =>
         {
             _barkCards.Remove(card);
-            _barkCardsPanel?.Children.Remove(card.Panel);
-        }));
+            _barkCardsPanel?.Children.Remove(card.Frame);
+        });
+        removeCard.Background = Brushes.Transparent;
+        removeCard.Foreground = Brush.Parse("#FF6464");
+        removeCard.BorderThickness = new Thickness(0);
+        removeCard.FontSize = 11;
+        DockPanel.SetDock(removeCard, Dock.Right);
+        header.Children.Add(removeCard);
+        header.Children.Add(card.Override);
+        card.Panel.Children.Add(header);
+        card.Panel.Children.Add(CreateFieldLabel(Loc.Get("mod_barks_id")));
+        card.Panel.Children.Add(card.Id);
+        card.Panel.Children.Add(triggerLabel);
+        card.Panel.Children.Add(card.Trigger);
+        card.Panel.Children.Add(CreateSubHeader(Loc.Get("mod_barks_line")));
+        card.Panel.Children.Add(card.Variants);
+        card.Panel.Children.Add(BarkButton("mod_barks_variant", () => AddBarkLine(card, new JValue(""))));
         if (loaded?["variant_pool"] is JArray pool)
             foreach (var line in pool) AddBarkLine(card, line);
         else if (loaded == null) AddBarkLine(card, new JValue(""));
         _barkCards.Add(card);
-        _barkCardsPanel?.Children.Add(card.Panel);
+        _barkCardsPanel?.Children.Add(card.Frame);
     }
 
     private static void AddBarkLine(BarkCard card, JToken original)
     {
+        // WPF ModCreatorWindow.Barks.cs:329-350 ignores all other token kinds.
+        if (original.Type != JTokenType.String && original is not JObject) return;
         original = original.DeepClone();
         if (original is JObject legacy)
         {
@@ -81,15 +109,18 @@ public partial class ModCreatorWindow
             if (legacy["text"] == null && legacy["display"] != null) legacy["text"] = legacy["display"]!.DeepClone();
             if (legacy["audio"] == null && legacy["file"] != null) legacy["audio"] = legacy["file"]!.DeepClone();
         }
-        var row = new StackPanel();
+        // Blank audio is text-only, including null and legacy file aliases (WPF:340-342).
+        if (original is JObject line && string.IsNullOrWhiteSpace(line.Value<string>("audio")))
+            original = new JValue(line.Value<string>("text") ?? "");
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
         var text = new TextBox
         {
             Text = original is JObject obj ? obj.Value<string>("text") ?? "" : original.Value<string>() ?? "",
-            Watermark = Loc.Get("mod_barks_line"),
+            Watermark = Loc.Get("mod_barks_line"), Width = 280, Margin = new Thickness(0, 0, 6, 0),
         };
         row.Children.Add(text);
         if (original is JObject voiced && voiced.Value<string>("audio") is string audio)
-            row.Children.Add(new TextBlock { Text = audio });
+            row.Children.Add(new TextBlock { Text = audio, MaxWidth = 180, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
         row.Children.Add(BarkButton("mod_barks_remove", () =>
         {
             card.Lines.RemoveAll(v => v.Row == row);
@@ -115,7 +146,7 @@ public partial class ModCreatorWindow
                 if (original is JObject voiced)
                 {
                     var copy = (JObject)voiced.DeepClone();
-                    if (text.Length == 0 && copy["audio"] == null) continue;
+                    if (text.Length == 0 && string.IsNullOrWhiteSpace(copy.Value<string>("audio"))) continue;
                     copy["text"] = text;
                     pool.Add(copy);
                 }
