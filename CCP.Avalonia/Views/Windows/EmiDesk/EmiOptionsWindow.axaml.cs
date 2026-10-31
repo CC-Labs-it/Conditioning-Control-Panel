@@ -331,6 +331,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _spiceSuggestive.IsChecked = spice == 1;
                 _spiceAnything.IsChecked = spice == 2;
 
+                BuildDeskPicks();
                 var chord = s.EmiDeskHotkey;
                 // Chosen in code, not markup: which of the two strings applies depends on whether
                 // a chord is bound. Safe as an assignment - TxtHotkey carries no {loc:Str}, so

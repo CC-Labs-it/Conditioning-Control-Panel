@@ -31,6 +31,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Test seam: the owned-check every caller uses.</summary>
         internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
 
+        internal static event Action? DeskGrantsChanged;
+        internal static IEnumerable<string>? KnownDeskGrants()
+        {
+            lock (Gate)
+                return FriendsHead.Identity()?.UnifiedId == _heldAccount && _revision > 0
+                    ? ConditioningControlPanel.Services.EmiDesk.DeskEquipment.Items.Where(i => IsGranted(i.Grant)).Select(i => i.Grant).ToArray() : null;
+        }
         private static readonly object Gate = new();
         private static string? _heldAccount;
         private static long _revision;
@@ -56,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 (_heldAccount, _revision) = (accountId, revision);
                 _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
             }
+            DeskGrantsChanged?.Invoke();
         }
 
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>

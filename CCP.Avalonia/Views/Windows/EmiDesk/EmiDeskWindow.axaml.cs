@@ -356,6 +356,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             ScalingChanged += OnScalingSettled;
             Closed += OnClosedCleanup;
 
+            HookDeskItems();
             ApplyBodyWidth(_bodyWidth);
             SetPose("idle");
             DrawFace(EmiChains.RestFace);
@@ -834,6 +835,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // The stand-in stands down the moment real art lands, whichever road brings it.
                 _bodyPlaceholder.IsVisible = _bodyImage.Source is null;
                 PaintOutfitOver();
+                PaintDeskItems();
             }
             catch (Exception ex)
             {
@@ -858,6 +860,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 if (string.Equals(want, _outfit, StringComparison.Ordinal)) return;
                 _outfit = want;
                 PaintOutfitOver();
+                PaintDeskItems();
             }
             catch (Exception ex)
             {
@@ -2659,6 +2662,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 _closingForGood = true;
+                UnhookDeskItems();
                 KillOptionsPanel();
                 CloseBook();
                 StopIdleBeats();
