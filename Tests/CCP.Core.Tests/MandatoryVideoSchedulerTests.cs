@@ -37,6 +37,19 @@ public sealed class MandatoryVideoSchedulerTests
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
     [Fact]
+    public void Panic_after_natural_end_still_drops_the_hosts_fading_curtain() => With(6, false, () =>
+    {
+        var host = new Host();
+        var v = new MandatoryVideoScheduler(host, new FakeClock(), () => Clips);
+        Assert.True(v.Trigger());
+        v.Ended();
+        Assert.False(v.IsPlaying);
+        var closed = host.Closes;
+        v.ForceCleanup();
+        Assert.Equal(closed + 1, host.Closes);
+    });
+
+    [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host();

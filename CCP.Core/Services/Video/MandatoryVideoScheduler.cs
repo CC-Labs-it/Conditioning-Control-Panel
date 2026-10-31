@@ -415,7 +415,7 @@ namespace ConditioningControlPanel.Services
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
-            if (!Finish()) return;
+            if (!Finish()) { _host.CloseAll(); return; }   // also drop a natural-end curtain after playback ended
             // Deviation: WPF ForceCleanup leaves the presence on "Watching"; a closed clip is not watched.
             CoreDiscord.Service?.SetIdleActivity();
             if (_running) CoreBubbles.Resume();   // Stop() clears _running first: no resume after an engine stop
