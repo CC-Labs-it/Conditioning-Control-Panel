@@ -5,12 +5,15 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -48,6 +51,61 @@ public class SilentPhraseTests
         dialog.MarkSilentLines(_ => true);
         Assert.All(dialog.FindControl<ItemsControl>("ItemList")!.ItemsSource!.Cast<TextItem>(), x => Assert.False(x.IsSilent));
         Assert.False(dialog.FindControl<TextBlock>("TxtSilentHint")!.IsVisible);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(400)]
+    [InlineData(550)]
+    public Task Long_phrase_leaves_room_for_the_silent_mark_and_remove(int width) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var phrase = string.Join(" ", Enumerable.Repeat("a long phrase", 40));
+        var dialog = new TextEditorDialog("phrases", new Dictionary<string, bool> { [phrase] = true }) { Width = width };
+        dialog.MarkSilentLines(_ => false);
+        try
+        {
+            dialog.Show();
+            Dispatcher.UIThread.RunJobs();
+            var list = dialog.FindControl<ItemsControl>("ItemList")!;
+            var row = list.GetVisualDescendants().OfType<Border>().Single(x => x.Name == "ItemBorder");
+            var text = row.GetVisualDescendants().OfType<TextBlock>().Single(x => x.Text == phrase);
+            var remove = row.GetVisualDescendants().OfType<IconGlyph>().Single(x => x.Name == "BtnRemove");
+            var mark = row.GetVisualDescendants().OfType<IconGlyph>().Single(x => x.Kind == IconKind.SpeakerMute);
+            Assert.True(text.Bounds.Width > 0);
+            Assert.True(mark.IsVisible);
+            var textRight = text.TranslatePoint(new Point(text.Bounds.Width, 0), row)!.Value.X;
+            var markLeft = mark.TranslatePoint(default, row)!.Value.X;
+            var markRight = mark.TranslatePoint(new Point(mark.Bounds.Width, 0), row)!.Value.X;
+            var removeLeft = remove.TranslatePoint(default, row)!.Value.X;
+            Assert.True(textRight <= removeLeft, $"phrase ends at {textRight}, Remove starts at {removeLeft}");
+            Assert.True(textRight <= markLeft, $"phrase ends at {textRight}, mark starts at {markLeft}");
+            Assert.True(markRight <= removeLeft, $"mark ends at {markRight}, Remove starts at {removeLeft}");
+            Assert.True(removeLeft + remove.Bounds.Width <= row.Bounds.Width);
+        }
+        finally { dialog.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Silent_hint_sits_above_the_list_with_Wpf_spacing() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var dialog = new TextEditorDialog("phrases", new Dictionary<string, bool> { ["silent"] = true });
+        dialog.MarkSilentLines(_ => false);
+        try
+        {
+            dialog.Show();
+            Dispatcher.UIThread.RunJobs();
+            var hint = dialog.FindControl<TextBlock>("TxtSilentHint")!;
+            var list = dialog.FindControl<ItemsControl>("ItemList")!;
+            var hintBottom = hint.TranslatePoint(new Point(0, hint.Bounds.Height), dialog)!.Value.Y;
+            var listTop = list.TranslatePoint(default, dialog)!.Value.Y;
+            Assert.True(hintBottom <= listTop, $"hint ends at {hintBottom}, list starts at {listTop}");
+            Assert.Equal(11, hint.FontSize);
+            Assert.Equal(new Thickness(2, 0, 0, 8), hint.Margin);
+        }
+        finally { dialog.Close(); }
         return Task.CompletedTask;
     });
 
