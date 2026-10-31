@@ -78,6 +78,73 @@ public sealed class ShellSettingsWiringTests
         await Task.CompletedTask;
     });
 
+    // WPF EmiTourNarrator.cs:134-139, MainWindow.Settings.cs:572-573.
+    [Theory]
+    [InlineData("continue")]
+    [InlineData("panic")]
+    [InlineData("close")]
+    public Task MuteQuestionFinishesBeforeFirstCardAndOverlay(string ending) => Run(async (shell, service) =>
+    {
+        var desk = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+        var oldAsk = desk.AskMute;
+        var answer = new TaskCompletionSource<ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiMuteChoice>();
+        int asked = 0, started = 0, activated = 0;
+        EventHandler onStarted = (_, _) => started++;
+        EventHandler<ConditioningControlPanel.Avalonia.Tours.TutorialStep> onStep = (_, _) => activated++;
+        TutorialHead.Service.TutorialStarted += onStarted;
+        TutorialHead.Service.StepChanged += onStep;
+        desk.Window?.ShutDown();
+        desk.ResetMutePrompt();
+        desk.AskMute = () => { asked++; return answer.Task; };
+        service.Current.EmiDeskEnabled = true;
+        service.Current.EmiDeskMuteAvatar = true;
+        service.Current.EmiDeskMuteDontAsk = false;
+        service.Current.AiChatEnabled = true;
+        try
+        {
+            Click(shell.Named<Button>("BtnMainHelp")!);
+            Click(shell.Named<Button>("BtnTutorialGettingStarted")!);
+            Assert.Equal(1, asked);
+            Assert.Equal(1, started);
+            Assert.Equal(0, activated);
+            Assert.Null(TutorialHead.ShellOverlay);
+            Assert.False(TutorialHead.ShellStartup.IsCompleted);
+            Assert.False(desk.Window!.IsVisible);
+            TutorialHead.StartOnShell(TutorialType.FullTour);
+            Assert.Equal(1, started); // no second startup behind the pending question
+            if (ending == "panic") TutorialHead.OnPanic();
+            if (ending == "close") shell.Close();
+            answer.SetResult(ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiMuteChoice.Keep);
+            await TutorialHead.ShellStartup;
+            Dispatcher.UIThread.RunJobs();
+            if (ending == "continue")
+            {
+                Assert.True(desk.Window.IsVisible);
+                Assert.Equal(1, activated);
+                Assert.NotNull(TutorialHead.ShellOverlay);
+                TutorialHead.OnPanic();
+            }
+            else
+            {
+                Assert.Equal(0, activated);
+                Assert.Null(TutorialHead.ShellOverlay);
+                Assert.False(CoreTutorial.IsActive);
+            }
+            Assert.Null(EmiTourPresence.Active);
+        }
+        finally
+        {
+            answer.TrySetResult(ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiMuteChoice.Keep);
+            await TutorialHead.ShellStartup;
+            TutorialHead.OnPanic();
+            TutorialHead.Service.TutorialStarted -= onStarted;
+            TutorialHead.Service.StepChanged -= onStep;
+            desk.AskMute = oldAsk;
+            desk.ResetMutePrompt();
+            desk.Window?.ShutDown();
+        }
+    });
+
     [Fact]
     public Task HelpRowsStartTheirTourAndPanicRestoresTheBrowser() => Run(async (shell, _) =>
     {

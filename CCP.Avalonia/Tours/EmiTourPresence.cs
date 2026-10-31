@@ -55,7 +55,7 @@ internal sealed class EmiTourPresence : IDisposable
     {
         try
         {
-            // WPF :133-136. Do not await from the tour: this head's mute prompt is async.
+            // WPF :133-136. TutorialHead awaits this task before activating the first card.
             if (!_isOut() && _enabled()) await _summon();
         }
         catch (Exception ex)

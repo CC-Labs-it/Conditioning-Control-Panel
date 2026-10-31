@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Window = global::Avalonia.Controls.Window;
 
@@ -46,6 +47,8 @@ namespace ConditioningControlPanel.Avalonia.Tours
 
         private static bool _seeded;
         private static TutorialOverlay? _shellOverlay;
+        private static bool _shellStarting;
+        internal static Task ShellStartup { get; private set; } = Task.CompletedTask;
         internal static TutorialOverlay? ShellOverlay => _shellOverlay;
         private static readonly ConditionalWeakTable<TutorialStep, CoreTutorial.Step> Projected = new();
 
@@ -80,39 +83,66 @@ namespace ConditioningControlPanel.Avalonia.Tours
         /// shell the overlay sits on, then the overlay.</summary>
         internal static void StartOnShell(TutorialType type)
         {
-            if (_shellOverlay != null) return;
+            // WPF MainWindow.Settings.cs:542: one shell tour at a time, including modal startup.
+            if (_shellStarting || _shellOverlay != null) return;
+            ShellStartup = StartOnShellAsync(type);
+        }
+
+        private static async Task StartOnShellAsync(TutorialType type)
+        {
             var shell = TutorialHeadHooks.Shell;
             if (shell == null) return;
 
-            Service.ConfigureCallbacks(
-                showSettings: () => shell.ShowTab("settings"),
-                showPresets: () => shell.ShowTab("presets"),
-                showProgression: () => shell.ShowTab("progression"),
-                showAchievements: () => shell.ShowTab("achievements"),
-                showCompanion: () => shell.ShowTab("companion"),
-                // WPF routes the dead "patreon" key to the App Info popup; no step asks for it
-                // since the account cards moved to Settings, Account.
-                showPatreon: () => shell.ShowTab("appsettings"),
-                showAwareness: () => shell.ShowTab("awareness"),
-                showDeeper: () => shell.ShowTab("deeper"),
-                showTab: key => shell.ShowTab(key));
-
-            // WPF MainWindow/MainWindow.Settings.cs:570-577: attach before Start, detach on close.
-            EmiTourPresence.Attach(Service);
-            Service.Start(type);
-            if (!Service.IsActive) { EmiTourPresence.Detach(); return; }
-
-            var browser = shell.Named<Views.Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer;
-            if (browser != null) browser.IsVisible = false;
-            var overlay = new TutorialOverlay(shell);
-            _shellOverlay = overlay;
-            overlay.Closed += (_, _) =>
+            _shellStarting = true;
+            bool shellClosed = false;
+            void OnShellClosed(object? sender, EventArgs e)
             {
-                if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null;
-                EmiTourPresence.Detach();
-                if (browser != null) browser.IsVisible = true;
-            };
-            overlay.Show();
+                // WPF Windows/TutorialOverlay.xaml.cs:194-204: closing the host abandons the tour.
+                shellClosed = true;
+                OnPanic();
+            }
+            shell.Closed += OnShellClosed;
+            try
+            {
+                Service.ConfigureCallbacks(
+                    showSettings: () => shell.ShowTab("settings"),
+                    showPresets: () => shell.ShowTab("presets"),
+                    showProgression: () => shell.ShowTab("progression"),
+                    showAchievements: () => shell.ShowTab("achievements"),
+                    showCompanion: () => shell.ShowTab("companion"),
+                    // WPF routes the dead "patreon" key to the App Info popup; no step asks for it
+                    // since the account cards moved to Settings, Account.
+                    showPatreon: () => shell.ShowTab("appsettings"),
+                    showAwareness: () => shell.ShowTab("awareness"),
+                    showDeeper: () => shell.ShowTab("deeper"),
+                    showTab: key => shell.ShowTab(key));
+
+                // WPF MainWindow/MainWindow.Settings.cs:570-577: attach before Start, detach on close.
+                EmiTourPresence.Attach(Service);
+                var presence = EmiTourPresence.Active!;
+                // WPF EmiTourNarrator.cs:134-139 and MainWindow.Settings.cs:572-573:
+                // finish the mute modal and summon before activating a card or showing its overlay.
+                await Service.StartAsync(type, () => presence.PendingSummon);
+                if (!Service.IsActive || shellClosed) return;
+
+                var browser = shell.Named<Views.Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer;
+                if (browser != null) browser.IsVisible = false;
+                var overlay = new TutorialOverlay(shell);
+                _shellOverlay = overlay;
+                overlay.Closed += (_, _) =>
+                {
+                    if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null;
+                    EmiTourPresence.Detach();
+                    if (browser != null) browser.IsVisible = true;
+                };
+                overlay.Show();
+            }
+            finally
+            {
+                shell.Closed -= OnShellClosed;
+                _shellStarting = false;
+                if (_shellOverlay == null) EmiTourPresence.Detach();
+            }
         }
 
         /// <summary>Panic: a tour ends at once, by the abandon route (never latched as walked).</summary>
