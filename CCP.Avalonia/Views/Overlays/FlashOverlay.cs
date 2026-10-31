@@ -326,10 +326,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void CloseAll(bool final = true)
         {
             _generation++;
-            if (final) RemoteFlashSource.CleanupCache();
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
+            if (final) RemoteFlashSource.CleanupCache();
         }
 
         /// <summary>The burst a Core provider fires (tests swap it).</summary>

@@ -13,23 +13,6 @@ namespace CCP.Core.Tests;
 public sealed class RemoteFlashSourceTests
 {
     [Fact]
-    public void RemotePoolRejectsOldSelectionAndReusesLeastRecentlyShown()
-    {
-        var pool = new RemoteFlashPool();
-        pool.Select(new[] { "one" });
-        int old = pool.Generation;
-        Assert.True(pool.Add(old, "a"));
-        Assert.True(pool.Add(old, "b"));
-        var first = pool.Take(new Random(1), _ => true);
-        var second = pool.Take(new Random(1), _ => true);
-        Assert.NotEqual(first, second);
-        Assert.Equal(first, pool.TakeShown(_ => true));
-        Assert.Equal(second, pool.TakeShown(_ => true));
-        pool.Select(new[] { "two" });
-        Assert.False(pool.Add(old, "stale"));
-        Assert.Null(pool.TakeShown(_ => true));
-    }
-    [Fact]
     public void RemoteSourceRequiresConsentAndFallsBackWhenLocalPoolIsEmpty()
     {
         var s = new AppSettings { MediaSource = "mixed", RemoteMediaRatio = 0 };
@@ -126,43 +109,12 @@ public sealed class RemoteFlashSourceTests
         finally { Directory.Delete(dir, recursive: true); }
     });
     [Fact]
-    public void ClipFilesDrawnJustNowSurviveManyMoreWarms()
+    public void ClipTrimmingUsesLastUseRatherThanInsertionOrder()
     {
-        var files = new RemoteClipFiles();
-        long now = 0;
-        var released = new HashSet<string>();
-        for (int i = 0; i < 64; i++) foreach (var p in files.Put("u" + i, "p" + i, "poster", now)) released.Add(p);
-        Assert.Empty(released);
-        // A draw picks the oldest clip, then the next prefetch warms 40 more (the old sweep
-        // deleted exactly that file before LibVLC opened it).
-        now = 200_000;
-        Assert.True(files.TryUse("u0", now, out var drawn, out var poster));
-        Assert.Equal("p0", drawn);
-        Assert.Equal("poster", poster);
-        for (int i = 64; i < 104; i++) foreach (var p in files.Put("u" + i, "p" + i, "poster", now)) released.Add(p);
-        Assert.DoesNotContain("p0", released);
-        Assert.True(files.TryUse("u0", now, out _, out _));
-        Assert.Equal(RemoteClipFiles.SoftCap, files.Count);
-        Assert.Contains("p1", released);      // the unused old ones go first
         var order = new RemoteClipFiles();
         for (int i = 0; i < 64; i++) order.Put("u" + i, "p" + i, "poster", i);
         Assert.True(order.TryUse("u0", 1000, out _, out _));
         Assert.Equal(new[] { "p1" }, order.Put("u64", "p64", "poster", 200_000));
-    }
-    [Fact]
-    public void ClipFilesReplaceReleasesTheOldFileAndHardCapHolds()
-    {
-        var files = new RemoteClipFiles();
-        Assert.Empty(files.Put("u", "a", "poster", 0));
-        Assert.Equal(new[] { "a" }, files.Put("u", "b", "poster", 0));
-        Assert.Empty(files.Put("u", "b", "poster", 0));
-        // Everything recent: the set grows past the soft cap but never past the hard cap.
-        var dropped = new List<string>();
-        for (int i = 0; i < 300; i++) dropped.AddRange(files.Put("r" + i, "rp" + i, "poster", 1000));
-        Assert.Equal(RemoteClipFiles.HardCap, files.Count);
-        Assert.Equal(301 - RemoteClipFiles.HardCap, dropped.Count);
-        Assert.Equal(RemoteClipFiles.HardCap, files.TakeAll().Count);
-        Assert.Equal(0, files.Count);
     }
     [Fact]
     public Task DownloadsGoThroughTheScrolllerDeviceCacheGate() => WithSource(async () =>

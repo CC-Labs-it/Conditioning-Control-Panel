@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Threading;
+using Avalonia;
+using Avalonia.Headless;
 using System.Linq;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -42,6 +45,35 @@ public sealed class RemoteFlashLifetimeTests
         }
         finally { ContentPackStore.Current = previous; Directory.Delete(root, true); }
     }
+
+    [Fact]
+    public Task FinalCloseClosesWindowsEvenIfPrefetchCancellationThrows() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var window = new FlashOverlayWindow();
+        bool closed = false;
+        window.Closed += (_, _) => { closed = true; FlashOverlay.Active.RemoveAll(a => a.Window == window); };
+        window.Show();
+        FlashOverlay.Active.Add((window, default));
+        var cts = (CancellationTokenSource)typeof(RemoteFlashSource).GetField("Cts", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+        var registration = cts.Token.Register(() => throw new InvalidOperationException("cancellation probe"));
+        try
+        {
+            Assert.Throws<AggregateException>(() => FlashOverlay.CloseAll());
+            Assert.True(closed);
+        }
+        finally
+        {
+            registration.Dispose();
+            window.Close();
+            RemoteFlashSource.CleanupCache();
+        }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task StopKeepsPoolButPanicInvalidatesIt() => AvaloniaTestDispatcher.RunAsync(() =>

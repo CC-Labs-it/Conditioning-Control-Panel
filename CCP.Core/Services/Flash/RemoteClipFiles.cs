@@ -1,8 +1,18 @@
 using System;
 using System.Collections.Generic;
 
-namespace ConditioningControlPanel.Services.Flash;
+namespace ConditioningControlPanel.Services;
 
+/// <summary>
+/// The online flash clips on disk: clip URL -> (materialized file, poster URL). This set OWNS the
+/// files (materialized with ownerReleases), so RemoteMediaCache's shared 50-file sweep can no
+/// longer delete a clip between the draw and LibVLC opening it. That sweep is what turned every
+/// flash into a still a few rounds in: each round warms ~30 clips, so the files the draw had just
+/// picked were the oldest on the sweep's books.
+///
+/// Trimming is oldest-USED first and never touches a clip used inside <see cref="RecentMs"/>
+/// unless the hard ceiling is hit. Thread-safe. Returns paths for the caller to release.
+/// </summary>
 internal sealed class RemoteClipFiles
 {
     internal const int SoftCap = 64;
@@ -24,6 +34,9 @@ internal sealed class RemoteClipFiles
 
     public int Count { get { lock (_gate) return _byUrl.Count; } }
 
+    public bool Contains(string url) { lock (_gate) return _byUrl.ContainsKey(url); }
+
+    /// <summary>Look up a clip and mark it used now, so a trim leaves it alone for a while.</summary>
     public bool TryUse(string url, long nowMs, out string path, out string poster)
     {
         lock (_gate)
@@ -39,6 +52,7 @@ internal sealed class RemoteClipFiles
         return false;
     }
 
+    /// <summary>Add or replace a clip. Returns the files that are no longer referenced.</summary>
     public List<string> Put(string url, string path, string poster, long nowMs)
     {
         var drop = new List<string>();
@@ -52,6 +66,7 @@ internal sealed class RemoteClipFiles
         return drop;
     }
 
+    /// <summary>Everything, for teardown.</summary>
     public List<string> TakeAll()
     {
         lock (_gate)
