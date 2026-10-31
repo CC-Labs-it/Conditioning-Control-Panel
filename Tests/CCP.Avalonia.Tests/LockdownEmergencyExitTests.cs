@@ -168,6 +168,36 @@ public sealed class LockdownEmergencyExitTests
         });
     }
 
+    [Fact]
+    public async Task RenderConstructorDoesNotTouchLiveLockdown()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var previous = LockdownService.Current;
+            using var live = LockdownService.Current = new LockdownService();
+            live.Activate(TimeSpan.FromMinutes(30));
+            var settings = CoreSettings.Current;
+            var before = (settings.StrictLockEnabled, settings.PanicKeyEnabled);
+            EmergencyExitWindow? window = null;
+            try
+            {
+                window = Assert.IsType<EmergencyExitWindow>(Activator.CreateInstance(typeof(EmergencyExitWindow), nonPublic: true));
+                Assert.IsType<WebHost>(window.Content);
+                window.Show();
+                window.HandleMessage("{\"type\":\"game-finished\",\"result\":\"completed\"}");
+                window.Close();
+                Assert.Same(live, LockdownService.Current);
+                Assert.True(live.IsActive);
+                Assert.Equal(0, live.RestartCount);
+                Assert.Equal(before, (settings.StrictLockEnabled, settings.PanicKeyEnabled));
+                Assert.Null(EmergencyExitWindow.Current);
+            }
+            finally { window?.Close(); live.Deactivate(); LockdownService.Current = previous; }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void EnsureApp()
     {
         if (Application.Current == null)

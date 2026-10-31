@@ -62,6 +62,13 @@ internal sealed class EmergencyExitWindow : Window
 
     private static void ResetSession() { _attempt = 0; _last = ""; }
 
+    // RenderProof constructs every view with sample data. Keep this service inactive and
+    // private to the preview so rendering cannot start or change the user's Lockdown.
+    internal EmergencyExitWindow() : this(new LockdownService(), "password")
+    {
+        Closed += (_, _) => _lockdown.Dispose();
+    }
+
     internal EmergencyExitWindow(LockdownService lockdown, string game)
     {
         _lockdown = lockdown;
