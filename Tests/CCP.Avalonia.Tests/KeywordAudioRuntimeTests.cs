@@ -273,4 +273,72 @@ public sealed class KeywordAudioRuntimeTests
         finally { shell.Close(); }
     });
 
+    [Theory] // WPF KeywordTriggerService.cs:1713,1774-1782: flat and action-list paths.
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ExactSubliminalEchoesUppercaseAndForcesThreeSecondMute(bool legacy) => Run((engine, s, _) =>
+    {
+        var shown = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        s.AwarenessLoopProtectionEnabled = false;
+        var t = s.KeywordTriggers[0];
+        t.VisualEffect = KeywordVisualEffect.ExactSubliminal;
+        t.Actions.Clear();
+        if (!legacy) t.Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal });
+        var now = engine.Now();
+        engine.Now = () => now;
+        Type(engine, "sit");
+        Assert.Equal(new[] { "SIT" }, shown);
+        now = now.AddMilliseconds(2999);
+        Type(engine, "sit");
+        Assert.Single(shown);
+        engine.Key(ConditioningControlPanel.Services.KeywordInputKey.Clear);
+        now = now.AddMilliseconds(1);
+        Type(engine, "sit");
+        Assert.Equal(new[] { "SIT", "SIT" }, shown);
+    });
+
+    [Fact] // WPF Subliminal/SubliminalService.cs:311-324.
+    public void ExactSubliminalUsesCustomTextWithoutWhisperAndAwardsSubliminalXp() => Run((engine, s, played) =>
+    {
+        var shown = new List<string>();
+        var xp = new List<(double Amount, string Source)>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        CoreProgression.AddXPProvider = (amount, source) => xp.Add((amount, source));
+        s.KeywordTriggers[0].Keyword = "<b>sit</b>";
+        s.KeywordTriggers[0].MatchType = KeywordMatchType.Regex;
+        s.KeywordTriggers[0].Actions = new List<KeywordAction> { new VisualEffectAction {
+            Effect = KeywordVisualEffect.ExactSubliminal } };
+        Type(engine, "<b>sit</b>");
+        Assert.Equal(new[] { "SIT" }, shown);
+        Assert.Equal((10d, "Subliminal"), Assert.Single(xp));
+        Assert.Empty(played);
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1263,1288-1293,1309.
+    public void ExactSubliminalHonorsEnabledDeduplicatesAndStaysQuietAfterPanic() => Run((engine, s, _) =>
+    {
+        var shown = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        var t = s.KeywordTriggers[0];
+        t.Actions = new List<KeywordAction> { new VisualEffectAction {
+            Effect = KeywordVisualEffect.ExactSubliminal, Enabled = false } };
+        Type(engine, "sit");
+        Assert.Empty(shown);
+        t.Actions[0].Enabled = true;
+        s.KeywordTriggers.Add(new KeywordTrigger { Id = "preset:echo", Keyword = "sit", CooldownSeconds = 0,
+            Actions = new List<KeywordAction> { new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal } } });
+        engine.Now = () => new DateTime(2026, 10, 15);
+        Type(engine, "sit");
+        Assert.Equal(new[] { "SIT" }, shown);
+        engine.Now = () => new DateTime(2026, 10, 16);
+        ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+        try
+        {
+            Type(engine, "sit");
+            Assert.Single(shown);
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
+
 }
