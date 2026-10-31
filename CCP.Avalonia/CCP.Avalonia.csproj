@@ -237,6 +237,9 @@
          next to the binary. -->
     <AvaloniaResource Include="..\ConditioningControlPanel\Fonts\Fredoka.ttf" Link="Resources\fonts\Fredoka.ttf" />
     <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\guide\intro.png" Link="Resources\chaos\guide\intro.png" />
+    <!-- WPF ConditioningControlPanel.csproj:211-215: the HUD resolves this art from disk. -->
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\portraits\neutral.png" Link="assets\Chaos\portraits\neutral.png"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <AvaloniaResource Include="..\Assets\fonts\NotoEmoji-wght.ttf" Link="Resources\fonts\NotoEmoji-wght.ttf" />
     <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt;..\Assets\emi\fonts\OFL-NotoSansMono.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

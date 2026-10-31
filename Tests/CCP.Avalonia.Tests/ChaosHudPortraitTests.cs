@@ -15,6 +15,19 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class ChaosHudPortraitTests
 {
+    // WPF ConditioningControlPanel.csproj:211-215 ships the promoted art, not a test fixture.
+    [Fact]
+    public void Bundled_portrait_is_copied_to_output()
+    {
+        var source = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(ThisFile())!, "..", "..",
+            "ConditioningControlPanel", "assets", "Chaos", "portraits", "neutral.png"));
+        var bundled = Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", "portraits", "neutral.png");
+        Assert.True(File.Exists(bundled), $"Bundled HUD portrait was not copied: {bundled}");
+        Assert.Equal(File.ReadAllBytes(source), File.ReadAllBytes(bundled));
+    }
+
+    private static string ThisFile([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+
     // WPF ChaosArt.Resolve: prefer a decodable user override, else bundled, else hide.
     [Theory]
     [InlineData(true, true, 2)]
