@@ -204,20 +204,24 @@ public sealed class HeroXpFxTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        var service = new SettingsService();
-        CoreSettings.ServiceProvider = () => service;
-        var s = service.Current;
-        (s.PlayerLevel, s.PlayerXP, s.MotionLevel, s.PerformanceMode) = (10, 20, MotionLevel.Full, false);
-        s.OfflineMode = true;
-        s.OfflineUsername = "hero-quiet-test";
-        int notices = 0, sounds = 0;
-        ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => notices++;
-        CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { sounds++; return () => { }; };
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldSink = ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink;
+        var oldAudio = CoreAudio.PlayStoppableProvider;
         var oldTime = BeatLoop.Time;
-        BeatLoop.Time = new SteppedTime();
-        var shell = new MainShellWindow();
+        MainShellWindow? shell = null;
         try
         {
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            var s = service.Current;
+            (s.PlayerLevel, s.PlayerXP, s.MotionLevel, s.PerformanceMode) = (10, 20, MotionLevel.Full, false);
+            s.OfflineMode = true;
+            s.OfflineUsername = "hero-quiet-test";
+            int notices = 0, sounds = 0;
+            ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => notices++;
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { sounds++; return () => { }; };
+            BeatLoop.Time = new SteppedTime();
+            shell = new MainShellWindow();
             shell.Show();
             shell.Activate();
             Dispatcher.UIThread.RunJobs();
@@ -234,12 +238,52 @@ public sealed class HeroXpFxTests
         }
         finally
         {
-            shell.Close();
-            Dispatcher.UIThread.RunJobs();
-            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
-            BeatLoop.Time = oldTime;
+            try
+            {
+                shell?.Close();
+                Dispatcher.UIThread.RunJobs();
+            }
+            finally
+            {
+                MainShellWindow.StopLevelUpSound();
+                ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+                BeatLoop.Time = oldTime;
+                CoreSettings.ServiceProvider = oldSettings;
+                ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = oldSink;
+                CoreAudio.PlayStoppableProvider = oldAudio;
+            }
         }
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PanicQuietTestRestoresHooksBeforeAssemblyCleanup() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = CoreSettings.ServiceProvider;
+        var sink = ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink;
+        var audio = CoreAudio.PlayStoppableProvider;
+        var time = BeatLoop.Time;
+        try
+        {
+            // Direct invocation has no intervening assembly Before/After isolation hook.
+            await PanicQuietPreservesLevelNoticesSoundAndVisuals();
+            Assert.Same(settings, CoreSettings.ServiceProvider);
+            Assert.Same(sink, ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink);
+            Assert.Same(audio, CoreAudio.PlayStoppableProvider);
+            Assert.Same(time, BeatLoop.Time);
+        }
+        finally
+        {
+            MainShellWindow.StopLevelUpSound();
+            CoreSettings.ServiceProvider = settings;
+            ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = sink;
+            CoreAudio.PlayStoppableProvider = audio;
+            BeatLoop.Time = time;
+        }
     });
 
     private static void SaveFrame(MainShellWindow shell, string name)
