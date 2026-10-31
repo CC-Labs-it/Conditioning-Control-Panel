@@ -327,6 +327,11 @@ namespace ConditioningControlPanel.Services
                 if (Interlocked.Exchange(ref _noVideosShown, 1) == 0) NoVideos?.Invoke();
                 return false;
             }
+            // WPF: no Freeze while attention or the bubble-count game needs alert input.
+            var freeze = !CoreSettings.Current.AttentionChecksEnabled &&
+                !(CoreEngine.BubbleCount?.IsBusy ?? false) && CoreSubliminal.VideoFreezeProvider != null;
+            if (freeze) try { CoreSubliminal.VideoFreezeProvider?.Invoke(); }
+                catch (Exception ex) { Log.Warning(ex, "VideoService: Freeze callback failed"); }
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
             _playing = true;
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
@@ -353,7 +358,7 @@ namespace ConditioningControlPanel.Services
                 catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _preroll = created;
-            created.Change(PreRoll, Timeout.InfiniteTimeSpan);
+            created.Change(PreRoll + (freeze ? TimeSpan.FromMilliseconds(800) : TimeSpan.Zero), Timeout.InfiniteTimeSpan);
             Log.Information("VideoService: playing {File} (strict={Strict})", Path.GetFileName(path), strict);
             return true;
         }
@@ -363,6 +368,8 @@ namespace ConditioningControlPanel.Services
         public void End()
         {
             if (!Finish()) return;
+            try { CoreSubliminal.DeferredResetProvider?.Invoke(true); } // WPF VideoService.cs:7937, normal Cleanup only
+            catch (Exception ex) { Log.Warning(ex, "VideoService: Reset callback failed"); }
             AfterEnd();
         }
 
@@ -413,6 +420,8 @@ namespace ConditioningControlPanel.Services
         public void ForceCleanup()
         {
             _retryGeneration++;
+            try { CoreSubliminal.DeferredResetProvider?.Invoke(false); } // WPF ForceCleanup :2638 never plays Reset
+            catch (Exception ex) { Log.Warning(ex, "VideoService: Reset cancellation failed"); }
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
             if (!Finish()) return;

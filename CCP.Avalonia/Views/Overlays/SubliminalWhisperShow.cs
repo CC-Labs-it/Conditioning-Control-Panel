@@ -21,13 +21,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// (TriggerSubliminalWithHapticPattern :563).</para>
     /// <para>A new whisper cuts the previous one, and <see cref="StopAll"/> (Stop, tray Stop everything)
     /// silences one mid-play and drops a card still waiting behind it (WPF StopAudio + the
-    /// ShowSubliminalVisuals arrival guard). ponytail: no MarkWhisperAudio (no bark engine on this
-    /// head); no deferred Reset (only mandatory video defers).</para>
+    /// ShowSubliminalVisuals arrival guard). Whisper playback reserves the bark voice floor.</para>
+    /// <para>Mandatory video defers Reset until teardown.</para>
     /// </summary>
     internal static class SubliminalWhisperShow
     {
+        internal static WhisperActivity Activity = new();
         private static readonly Random Rng = new();
         private static Action? _stopWhisper;
+        private static int _deferredResetPending;
+        private static int _resetGen;
         private static int _gen;   // bumped by StopAll: anything scheduled before it is stale
 
         /// <summary>WPF <c>_audioPath</c>: BaseDirectory/Resources/sub_audio.</summary>
@@ -46,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void StopAll()
         {
             Interlocked.Increment(ref _gen);
+            Interlocked.Exchange(ref _deferredResetPending, 0);
             Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();
         }
 
@@ -72,12 +76,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>WPF TriggerBambiFreeze(deferReset: false): the mod's Freeze text, even with subliminals off.</summary>
-        public static void Freeze()
+        public static void Freeze() => Freeze(false);
+
+        internal static void Freeze(bool deferReset)
         {
             var text = App.Mods?.GetFreezeTriggerText() ?? "Freeze";
             if (Whisper(text))
             {
-                ScheduleReset();
+                if (deferReset) Interlocked.Exchange(ref _deferredResetPending, 1);
+                else ScheduleReset();
                 Log.Information("Bambi Freeze triggered with audio");
             }
             else
@@ -87,7 +94,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
         }
 
-        private static void ScheduleReset()
+        internal static void DeferredReset(bool completed = true)
+        {
+            var resetGen = Volatile.Read(ref _resetGen);
+            if (!completed) Interlocked.Increment(ref _resetGen);
+            if (Interlocked.Exchange(ref _deferredResetPending, 0) == 1 && completed) ScheduleReset(true, resetGen);
+        }
+
+        private static void ScheduleReset(bool deferred = false, int resetGen = 0)
         {
             if (!SubliminalWhisper.ResetFollows(Roll()))
             {
@@ -95,9 +109,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             int delay;
-            lock (Rng) delay = SubliminalWhisper.ResetDelayMs(Rng);
+            lock (Rng) delay = deferred ? SubliminalWhisper.DeferredResetDelayMs(Rng) : SubliminalWhisper.ResetDelayMs(Rng);
             Later(delay, () =>
             {
+                if (deferred && Volatile.Read(ref _resetGen) != resetGen) return;
                 var text = App.Mods?.GetResetTriggerText() ?? "Reset";
                 if (!Whisper(text)) HapticThenDraw(text);
                 Log.Debug("Bambi Reset triggered after Bambi Freeze");
@@ -106,6 +121,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>Duck, play the phrase's linked clip, then draw the card. False (nothing played) when
         /// there is no clip or whispers are muted: the caller then draws the card straight away.</summary>
+        internal static bool HasRecordedVoice(string text) => SubliminalWhisper.FindLinkedAudio(text,
+            SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath), SubAudioDir, App.Mods?.ActiveModId) != null;
+
         internal static bool Whisper(string text)
         {
             var s = CoreSettings.Current;
@@ -118,6 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var gen = CoreAudio.DuckGeneration;
             Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();   // WPF PlayWhisperAudio: StopAudio first
             _stopWhisper = CoreAudio.PlayStoppable(path, SubliminalWhisper.Volume(s.MasterVolume, s.SubAudioVolume), "whisper",
+                onStarted: duration => Activity.Mark(duration.TotalSeconds),
                 onFinished: () => After(SubliminalWhisper.UnduckDelayMs, () => CoreAudio.Unduck(gen)));
             if (Volatile.Read(ref _gen) != entry) Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();   // Stop raced the start
             Log.Debug("Playing subliminal audio: {Path}", Path.GetFileName(path));

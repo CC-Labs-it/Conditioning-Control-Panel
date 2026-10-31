@@ -25,6 +25,47 @@ public sealed class MandatoryVideoSchedulerTests
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { Messages.Add(verdict); Then = then; }
     }
 
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    public void Video_freeze_has_800ms_head_start_and_reset_on_cleanup(bool attention, bool forced, bool throwing)
+    {
+        var freeze = CoreSubliminal.VideoFreezeProvider;
+        var reset = CoreSubliminal.DeferredResetProvider;
+        var wasAttention = CoreSettings.Current.AttentionChecksEnabled;
+        var calls = new List<string>();
+        var clock = new FakeClock();
+        var host = new Host();
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        CoreSubliminal.VideoFreezeProvider = () => { calls.Add("freeze"); if (throwing) throw new InvalidOperationException("Freeze probe"); };
+        CoreSubliminal.DeferredResetProvider = completed => { calls.Add(completed ? "reset" : "cancel"); if (throwing) throw new InvalidOperationException("Reset probe"); };
+        CoreSettings.Current.AttentionChecksEnabled = attention;
+        try
+        {
+            Assert.True(video.Trigger());
+            Assert.Equal(attention ? 0 : 1, calls.Count);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(attention ? 1 : 0, host.Shown.Count);
+            clock.Advance(TimeSpan.FromMilliseconds(800));
+            Assert.Single(host.Shown);
+            if (forced) video.ForceCleanup(); else video.End();
+            Assert.Equal(forced ? "cancel" : "reset", calls[^1]);
+            video.End();
+            Assert.Equal(forced ? 0 : 1, calls.Count(x => x == "reset"));
+        }
+        finally
+        {
+            video.ForceCleanup();
+            CoreSettings.Current.AttentionChecksEnabled = wasAttention;
+            CoreSubliminal.VideoFreezeProvider = freeze;
+            CoreSubliminal.DeferredResetProvider = reset;
+        }
+    }
+
     private static void With(int perHour, bool strict, Action body)
     {
         var s = CoreSettings.Current;
