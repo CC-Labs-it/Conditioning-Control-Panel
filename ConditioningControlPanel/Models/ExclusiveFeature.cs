@@ -231,21 +231,21 @@ namespace ConditioningControlPanel.Models
                 TitleLocKey = "tab_lockdown_mode", TaglineLocKey = "exclusives_tag_lockdown",
                 ArtResource = "Resources/lockdown_icon.png",
             },
-            // ---- Prime (tier 2) games and Lab features. Owner, 2026-10-02: "add the other
-            // premium features, or this is not an exclusive page". The collection grid puts
-            // Prime first (MainWindow.Exclusives.cs ShelfRank); the order here is the order
-            // inside each shelf. Each card opens the same door the launcher / Play wall uses,
-            // and that door keeps its own refusal (MainWindow.OpenExclusiveFeature).
+            // Basic since 2026-10-31 (Racing Thoughts 3D is the Prime game now).
             new()
             {
-                Key = "dtrh", Emoji = "🕳", Tier = 2,
+                Key = "dtrh", Emoji = "🕳", Tier = 1,
                 TitleLocKey = "launcher_game_dtrh_title", TaglineLocKey = "exclusives_tag_dtrh",
                 ArtResource = "Resources/features/dtrh.png",
                 // Never on the daily wheel, but a server drop day names it (DailyFreeService
                 // OverridableKeys), and the card then wears FREE TODAY like the pool doors.
                 DailyFreeKey = "dtrh",
-                Gate = LabGate,
             },
+            // ---- Prime (tier 2) games and Lab features. Owner, 2026-10-02: "add the other
+            // premium features, or this is not an exclusive page". The collection grid puts
+            // Prime first (MainWindow.Exclusives.cs ShelfRank); the order here is the order
+            // inside each shelf. Each card opens the same door the launcher / Play wall uses,
+            // and that door keeps its own refusal (MainWindow.OpenExclusiveFeature).
             new()
             {
                 Key = "arcademy", Emoji = "🏫", Tier = 2,

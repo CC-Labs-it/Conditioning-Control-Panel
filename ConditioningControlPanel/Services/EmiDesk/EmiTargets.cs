@@ -327,7 +327,7 @@ public static class EmiTargets
         // ---- the rest of the doors ----------------------------------------------
 
         T("dtrh", "features/dtrh.png", Tile(0x8C, 0xF5, 0xC8), Always,
-            () => !LabOk("emi_desk_target_dtrh", "dtrh"),
+            () => !PremiumOk("emi_desk_target_dtrh", "dtrh"),
             () => Chaos.DtrhHostService.Launch());
 
         // Same rule as the launcher tile: Prime, or a free account with this week's pass unspent.
@@ -475,7 +475,7 @@ public static class EmiTargets
         switch (id)
         {
             case "arcademy": LabPrompt(key, null); break;
-            case "dtrh": LabPrompt(key, "dtrh"); break;
+            case "dtrh": PremiumPrompt(key, "dtrh"); break;
             case "intake": LabPrompt(key, null); break;
             case "fyp": PremiumPrompt(key, "fyp"); break;
             case "awareness": PremiumPrompt(key, "awareness"); break;
