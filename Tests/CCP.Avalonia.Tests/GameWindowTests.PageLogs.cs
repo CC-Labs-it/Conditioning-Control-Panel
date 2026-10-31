@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -12,6 +13,40 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class WebHostPageLogTests
 {
+    // WPF ChaosWebViewHost.cs:1700-1737: a bad frame is contained; later frames still dispatch.
+    [Theory]
+    [InlineData("{\"type\":{},\"level\":\"warn\",\"msg\":\"probe\"}")]
+    [InlineData("{\"type\":[],\"level\":\"warn\",\"msg\":\"probe\"}")]
+    [InlineData("{\"type\":\"log\",\"level\":{},\"msg\":\"probe\"}")]
+    [InlineData("{\"type\":\"log\",\"level\":[],\"msg\":\"probe\"}")]
+    [InlineData("{\"type\":\"log\",\"level\":\"warn\",\"msg\":{}}")]
+    [InlineData("{\"type\":\"log\",\"level\":\"warn\",\"msg\":[]}")]
+    public void CarrierContainsInvalidFieldsAndContinues(string malformed) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var web = new WebHost();
+        var forwarded = new List<string?>();
+        web.WebMessage += body =>
+        {
+            var message = JObject.Parse(body);
+            if (!WebHost.HandlePageLog(message, "carrier-probe")) forwarded.Add((string?)message["type"]);
+        };
+        var sink = new Sink();
+        var previous = Log.Logger;
+        using var logger = new LoggerConfiguration().MinimumLevel.Verbose().WriteTo.Sink(sink).CreateLogger();
+        try
+        {
+            Log.Logger = logger;
+            Assert.Null(Record.Exception(() => web.OnWebMessage(malformed)));
+            web.OnWebMessage("{\"type\":\"log\",\"level\":\"warn\",\"msg\":\"still working\"}");
+            web.OnWebMessage("{\"type\":\"ready\"}");
+            var entry = Assert.Single(sink.Events, e => e.Properties.ContainsKey("Msg"));
+            Assert.Equal(LogEventLevel.Warning, entry.Level);
+            Assert.Equal(new ScalarValue("still working"), entry.Properties["Msg"]);
+            Assert.Equal(new[] { "ready" }, forwarded);
+        }
+        finally { Log.Logger = previous; }
+    });
+
     [Theory]
     [InlineData(null, LogEventLevel.Debug)]
     [InlineData("", LogEventLevel.Debug)]
