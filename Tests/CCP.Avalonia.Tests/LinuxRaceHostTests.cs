@@ -10,6 +10,15 @@ namespace CCP.Avalonia.Tests;
 public sealed class LinuxRaceHostTests
 {
     [Fact]
+    public void EscapeDeliveryHasOneSourceAndDeduplicatesBySequence()
+    {
+        long last = 0;
+        Assert.False(RaceShellProtocol.AcceptEscape(ref last, 1, nativeListening: true));
+        Assert.True(RaceShellProtocol.AcceptEscape(ref last, 1, nativeListening: false));
+        Assert.False(RaceShellProtocol.AcceptEscape(ref last, 1, nativeListening: false));
+        Assert.True(RaceShellProtocol.AcceptEscape(ref last, 2, nativeListening: false));
+    }
+    [Fact]
     public void ProtocolRejectsMalformedAndUnboundedFrames()
     {
         Assert.ThrowsAny<Exception>(() => RaceShellProtocol.Parse("[]"));

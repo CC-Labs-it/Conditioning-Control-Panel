@@ -27,7 +27,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// press is a rebind, never a panic.</summary>
         internal static bool CapturingPanicKey { get; set; }
 
-        private DateTime _lastLinuxKey;
         private int _panicPressCount;
         private DateTime _lastPanicTime = DateTime.MinValue;
 
@@ -61,11 +60,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// counted press within 2 s exits the app, as WPF does when no engine is running.</summary>
         internal void HandlePanicKeyPress(DateTime now)
         {
-            if (Games.LinuxRaceHost.Current is { InFront: true })
-            {
-                if ((now - _lastLinuxKey).TotalMilliseconds < 120) return;
-                _lastLinuxKey = now;
-            }
             var s = CoreSettings.Current;
             // WPF MainWindow.xaml.cs:914: a Pause-key capture takes the press before the panic branch, so the
             // Escape that unbinds Pause (the default panic key) is never also a panic.

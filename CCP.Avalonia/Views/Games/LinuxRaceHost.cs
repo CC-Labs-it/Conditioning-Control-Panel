@@ -11,18 +11,18 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Avalonia.Views.Games;
-
-// Step 3 only. Engine installation and the labelled fallback card belong to adjacent lanes.
 internal sealed class LinuxRaceHost : IDisposable
 {
     internal static LinuxRaceHost? Current { get; private set; }
     private readonly Process _process;
+    private readonly Action<DateTime> _panic;
     private readonly int _pid;
     private readonly GlassroadSession _session;
     private readonly DispatcherTimer _watch;
     private readonly object _writeLock = new();
     private Task _writes = Task.CompletedTask;
     private int _closed;
+    private long _lastEscape;
     internal bool InFront { get; private set; }
     internal bool Ready => _session.Ready;
     internal static string EnginePath => Path.Combine(CorePaths.UserData, "engines", "electron-45.1.0", "electron");
@@ -56,9 +56,10 @@ internal sealed class LinuxRaceHost : IDisposable
             throw; // no silent renderer fallback on a startup failure
         }
     }
-    internal LinuxRaceHost(Process process)
+    internal LinuxRaceHost(Process process, Action<DateTime>? panic = null)
     {
         _process = process; _pid = process.Id;
+        _panic = panic ?? (now => MainShellWindow.Current?.HandlePanicKeyPress(now));
         _session = new GlassroadSession(Post, Dispose, () => Post(new { type = "focus" }));
         _watch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _watch.Tick += (_, _) => _session.CheckGlassroadWatch(DateTime.UtcNow);
@@ -70,7 +71,6 @@ internal sealed class LinuxRaceHost : IDisposable
         {
             try
             {
-                // Bound allocation even when a broken shell never terminates a line.
                 var line = new System.Text.StringBuilder();
                 var buffer = new char[1];
                 while (await _process.StandardOutput.ReadAsync(buffer, 0, 1) != 0)
@@ -97,8 +97,10 @@ internal sealed class LinuxRaceHost : IDisposable
             case RaceShellProtocol.Loaded: _session.PostGlassroadInit(); break;
             case RaceShellProtocol.Focus: InFront = (bool?)frame["active"] == true; break;
             case RaceShellProtocol.Escape:
+                if (!RaceShellProtocol.AcceptEscape(ref _lastEscape, (long?)frame["sequence"] ?? 0,
+                    Platform.X11PanicKey.IsListening && Platform.X11PanicKey.BoundKeycode != 0 && CoreSettings.Current.PanicKey == "Escape")) break;
                 InFront = true;
-                if (CoreSettings.Current.PanicKey == "Escape") MainShellWindow.Current?.HandlePanicKeyPress(DateTime.Now);
+                if (CoreSettings.Current.PanicKey == "Escape") _panic(DateTime.Now);
                 else Pause();
                 break;
             case "boot-error": Dispose(); break;
@@ -115,7 +117,6 @@ internal sealed class LinuxRaceHost : IDisposable
             json["caps"]!["forceRenderer"] = "webgl2";
             json["caps"]!["scrolller"] = false;
         }
-        // Never block panic or the UI thread on a stopped shell's stdin pipe.
         lock (_writeLock) _writes = _writes.ContinueWith(_ =>
         {
             try { if (_closed == 0) { _process.StandardInput.WriteLine(json.ToString(Formatting.None)); _process.StandardInput.Flush(); } }

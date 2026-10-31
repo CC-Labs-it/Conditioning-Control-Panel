@@ -48,7 +48,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private bool IsGlassroad => Spec.Id == GlassroadId;
         private GlassroadSession? _glassroad;
         private DispatcherTimer? _grWatch;
+
+        /// <summary>Test seam: the last net relay; done once its reply is queued on the UI thread.</summary>
         internal Task GlassroadPending => _glassroad?.GlassroadPending ?? Task.CompletedTask;
+
+        /// <summary>WPF Launch after the window exists: watchdog, presence, the load-time init.</summary>
         private void OpenGlassroad()
         {
             _glassroad = new GlassroadSession(Post, Close, () => Web.Focus());
@@ -58,13 +62,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _grWatch.Start();
             Closed += (_, _) => { _grWatch.Stop(); _glassroad.Dispose(); };
         }
+
+        /// <summary>The init frame, straight out (this head has no ready queue).</summary>
         internal void PostGlassroadInit() => _glassroad?.PostGlassroadInit();
+
+        /// <summary>WPF OnPageMessage. True = claimed; boot-error and log fall through to the shell frames.</summary>
         private bool HandleGlassroad(JObject o)
         {
             var handled = _glassroad?.HandleGlassroad(o) == true;
             IsReady = _glassroad?.Ready == true;
             return handled;
         }
+
+        /// <summary>One 5 s watchdog tick (WPF StartWatch): before ready, 45 s with no page message at all closes
+        /// it (the bridge beats every 2 s); after ready, silent past 20 s gets one ping, then the close.</summary>
         internal string CheckGlassroadWatch(DateTime nowUtc) => _glassroad?.CheckGlassroadWatch(nowUtc) ?? "idle";
     }
 }
