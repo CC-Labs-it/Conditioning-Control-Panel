@@ -80,13 +80,19 @@ public sealed class ChaosFlashOverlayTests
     [Fact]
     public void DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation()
     {
+        // Bitmap creation needs the render platform even though decoding runs off the UI thread.
+        // Initialize it explicitly so this test also works first in a fresh shard/testhost.
+        AvaloniaTestDispatcher.Run(Setup);
         var gif = WriteGif(out var dir);
         try
         {
             var (frames, delay) = SpiralOverlay.Decode(gif, 0, maxFrames: 2);   // 3 frames x 30 ms -> every 2nd
-            Assert.Equal(2, frames.Count);
-            Assert.Equal(TimeSpan.FromMilliseconds(60), delay);
-            foreach (var f in frames) f.Dispose();
+            try
+            {
+                Assert.Equal(2, frames.Count);
+                Assert.Equal(TimeSpan.FromMilliseconds(60), delay);
+            }
+            finally { foreach (var f in frames) f.Dispose(); }
         }
         finally { Directory.Delete(dir, true); }
     }

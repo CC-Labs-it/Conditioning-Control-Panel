@@ -20,7 +20,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///
     /// PORTED from ConditioningControlPanel/Windows/WebcamQuickRecalWindow.xaml.cs over
     /// Platform/WebcamTracker (OnGazeMove / Calibration / SetRuntimeOffset); the median maths is
-    /// Core GazeEngine.MedianAfterSaccadeSettle, which WPF also calls. Deviations: DialogResult
+    /// Core GazeEngine.MedianAfterSaccadeSettle, matching WPF's local median. The target is the
+    /// current window's DIP center, where the dot is displayed, as in WPF. Deviations: DialogResult
     /// becomes Close(x) (ShowDialog&lt;bool?&gt;); the hotkey hint is hidden (below).
     /// </summary>
     public partial class WebcamQuickRecalWindow : Window
@@ -137,8 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ShowError($"Didn't capture enough gaze samples ({_samples.Count}). Make sure your face is visible and try again.");
                 return;
             }
-            var (mx, my) = GazeEngine.MedianAfterSaccadeSettle(_samples, dropFirst: 10);
-            double dx = Bounds.Width / 2.0 - mx, dy = Bounds.Height / 2.0 - my;
+            var (dx, dy) = OffsetFor(Bounds.Size, _samples);
             Tracker.SetRuntimeOffset(new RuntimeOffsetData { Dx = dx, Dy = dy, CapturedAt = DateTime.UtcNow }, persist: true);
             Log.Information("WebcamQuickRecalWindow: offset captured dx={Dx:F1} dy={Dy:F1} from {N} samples", dx, dy, _samples.Count);
 
@@ -147,6 +147,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtStatus.Text = $"Done. Cursor nudged by ({dx:F0}, {dy:F0}) px.";
             await Task.Delay(FinishHoldMs);
             Close(true);
+        }
+
+        /// <summary>WPF WebcamQuickRecalWindow.xaml.cs:168-176: target the displayed dot at the
+        /// current window's DIP center, even when saved monitor dimensions are stale.</summary>
+        internal static (double Dx, double Dy) OffsetFor(global::Avalonia.Size window, IReadOnlyList<(double X, double Y)> samples)
+        {
+            var (mx, my) = GazeEngine.MedianAfterSaccadeSettle(samples, dropFirst: 10);
+            return (window.Width / 2.0 - mx, window.Height / 2.0 - my);
         }
 
         /// <summary>CalibrationSoundService.Play: master volume on the ^1.5 curve, silence when missing.</summary>
