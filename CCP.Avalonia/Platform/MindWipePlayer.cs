@@ -149,6 +149,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             IVoice? displaced;
             lock (_lock) { displaced = _oneShot; _oneShot = voice; }
             displaced?.Dispose();
+            // WPF App.xaml.cs:750-752: a played one-shot feeds the memory favourite.
+            if (voice != null) App.NoteFeatureUsed(Services.Companion.Brain.MemorySignalWriter.FeatureMindWipe);
             Log.Debug("MindWipe: Playing {File} at volume {Vol}%", Path.GetFileName(clip), volume * 100);
         }
 
