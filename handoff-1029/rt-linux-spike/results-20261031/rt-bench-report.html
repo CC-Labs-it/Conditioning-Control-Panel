@@ -569,6 +569,67 @@ Noted, not changed:
 5. No gamepad attached.
 6. Not run: the port build was not part of this task.
 7. Nothing noted. The desktop stayed responsive.
+
+### WebKitGTK: which GPU each row used (its renderer string is masked as &quot;Apple GPU&quot;)
+Source: `gpu-watch.py`, sampling every 5 s. The columns are:
+- the device nodes the WebKitWebProcess held open;
+- its maximum `nvidia-smi pmon` SM %;
+- the amdgpu gfx time it used, from /proc fdinfo.
+
+The 4080 WebKit processes held only NVIDIA nodes (/dev/nvidia0 plus renderD128 = 01:00.0).
+The 610M WebKit processes held only renderD129 (0c:00.0) and no /dev/nvidia* node.
+
+Not sampled:
+- The native-Wayland 4080 rows (wk-threshold, wk-goonworks, wk-threshold-auto, flatpak-threshold,
+  flatpak-goonworks). They died with Gdk Error 71 before the first 5 s sample, so no process was ever sampled.
+- The experiment rows (`exp.sh`). They ran with the same environment as the rows proven below, but were not
+  sampled themselves.
+
+| pass | run | nodes held by WebKitWebProcess | NVIDIA SM % (pmon) | amdgpu gfx ms | GPU used |
+| --- | --- | --- | --- | --- | --- |
+| RTX 4080 | wk-x11-threshold | /dev/nvidia-modeset, /dev/nvidia0, /dev/nvidiactl, 01:00.0 render | - | 0 | RTX 4080 (opened, no GPU time sampled: run stalled/died) |
+| RTX 4080 | wk-x11-goonworks | /dev/nvidia-modeset, /dev/nvidia0, /dev/nvidiactl, 01:00.0 render | - | 0 | RTX 4080 (opened, no GPU time sampled: run stalled/died) |
+| RTX 4080 | wk-x11-threshold-auto | /dev/nvidia-modeset, /dev/nvidia0, /dev/nvidiactl, 01:00.0 render | - | 0 | RTX 4080 (opened, no GPU time sampled: run stalled/died) |
+| RTX 4080 | wk-x11-nodmabuf-threshold | /dev/nvidia-modeset, /dev/nvidia0, /dev/nvidiactl, 01:00.0 render | 31 | 0 | RTX 4080 |
+| RTX 4080 | wk-x11-nodmabuf-goonworks | /dev/nvidia-modeset, /dev/nvidia0, /dev/nvidiactl, 01:00.0 render | 39 | 0 | RTX 4080 |
+| RTX 4080 | wk-x11-nodmabuf-threshold-auto | /dev/nvidia-modeset, /dev/nvidia0, /dev/nvidiactl, 01:00.0 render | 33 | 0 | RTX 4080 |
+| RTX 4080 | flatpak-x11-threshold | /dev/nvidia-modeset, /dev/nvidia0, /dev/nvidiactl, 01:00.0 render | - | 0 | RTX 4080 (opened, no GPU time sampled: run stalled/died) |
+| RTX 4080 | flatpak-x11-goonworks | /dev/nvidia-modeset, /dev/nvidia0, /dev/nvidiactl, 01:00.0 render | 7 | 0 | RTX 4080 |
+| RTX 4080 | flatpak-x11-nodmabuf-threshold | /dev/nvidia-modeset, /dev/nvidia0, /dev/nvidiactl, 01:00.0 render | 46 | 0 | RTX 4080 |
+| RTX 4080 | flatpak-x11-nodmabuf-goonworks | /dev/nvidia-modeset, /dev/nvidia0, /dev/nvidiactl, 01:00.0 render | 42 | 0 | RTX 4080 |
+| RTX 4080 auto re-run | wk-x11-threshold-auto | /dev/nvidia-modeset, /dev/nvidia0, /dev/nvidiactl, 01:00.0 render | - | 0 | RTX 4080 (opened, no GPU time sampled: run stalled/died) |
+| RTX 4080 auto re-run | wk-x11-nodmabuf-threshold-auto | /dev/nvidia-modeset, /dev/nvidia0, /dev/nvidiactl, 01:00.0 render | 35 | 0 | RTX 4080 |
+| Radeon 610M | wk-threshold | 0c:00.0 render | - | 58506 | Radeon 610M |
+| Radeon 610M | wk-goonworks | 0c:00.0 render | - | 59297 | Radeon 610M |
+| Radeon 610M | wk-threshold-auto | 0c:00.0 render | - | 57677 | Radeon 610M |
+| Radeon 610M | wk-x11-threshold | 0c:00.0 render | - | 64639 | Radeon 610M |
+| Radeon 610M | wk-x11-goonworks | 0c:00.0 render | - | 59318 | Radeon 610M |
+| Radeon 610M | wk-x11-threshold-auto | 0c:00.0 render | - | 53678 | Radeon 610M |
+| Radeon 610M | flatpak-threshold | 0c:00.0 render | - | 59127 | Radeon 610M |
+| Radeon 610M | flatpak-goonworks | 0c:00.0 render | - | 59034 | Radeon 610M |
+| Radeon 610M | flatpak-x11-threshold | 0c:00.0 render | - | 66313 | Radeon 610M |
+| Radeon 610M | flatpak-x11-goonworks | 0c:00.0 render | - | 60402 | Radeon 610M |
+
+### WebKitGTK is capped at 60 Hz
+On the 360 Hz DP-3 monitor, a trivial WebGL2 page in WebKitGTK 2.54.1 runs requestAnimationFrame at 60.7-60.8 Hz in
+every mode tried:
+- RTX 4080, XWayland, no-DMABuf;
+- RTX 4080, XWayland, no-DMABuf, with `__GL_SYNC_TO_VBLANK=0 vblank_mode=0`;
+- RTX 4080, XWayland, no-DMABuf, with `WEBKIT_FORCE_VBLANK_TIMER=1`;
+- Radeon 610M, native Wayland, with and without `vblank_mode=0`;
+- Radeon 610M, XWayland, with and without `vblank_mode=0`.
+
+Chromium, Electron and Firefox reach 226-342 fps on the same monitor. So the 60 Hz ceiling comes from WebKitGTK's own
+frame scheduling, not from GL vsync or from KWin throttling the window. The driver vsync variables do not lift it, so
+no uncapped row can be made with an environment variable, and none was added.
+
+What this means:
+- WebKitGTK can never show more than about 60 fps, so the bar (mean 57) leaves it only 3 fps of headroom.
+- The 960x540 experiment row (57 mean, worst second 40) is at the cap. That row shows the small window removes the
+  bottleneck, not how much faster it would go.
+- The early 57-58 fps smoke means on the 4080 came from a 1108x830 window (CSS px) and were also cap-bound.
+- The full-size WebKitGTK rows (11-25 fps) are far below the cap. Their verdicts and the pixels-versus-assets answer
+  do not depend on it.
 </pre>
 <h2>Box (RTX 4080 (01:00.0, NVIDIA 615.78.08), rt-linux-spike-cachyos-20261031-1405)</h2>
 <pre>date: 2026-10-31T14:05:43+01:00
@@ -704,7 +765,7 @@ wk python: /usr/bin/python3</pre>
 <h2>Box (Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5), exp-amd)</h2>
 <pre></pre>
 <script type="application/json" id="rt-bench">{
- "generated": "2026-10-31T14:20:35.299Z",
+ "generated": "2026-10-31T14:27:27.714Z",
  "bar": {
   "mean": 57,
   "worst1s": 50,
