@@ -9,17 +9,17 @@ namespace ConditioningControlPanel
         public enum Step { None, Start, Stop }
         public bool AutoStarted { get; set; }
         public bool ManuallyStopped { get; set; }
-        public Step OnStartup(AppSettings s, DateTime now)
+        public Step OnStartup(AppSettings s, DateTime now, bool restartHeld = false)
         {
-            if (!s.SchedulerEnabled || !InWindow(s, now)) return Step.None;
+            if (!s.SchedulerEnabled || restartHeld || !InWindow(s, now)) return Step.None;
             AutoStarted = true;
             return Step.Start;
         }
-        public Step OnTick(AppSettings s, DateTime now, bool running)
+        public Step OnTick(AppSettings s, DateTime now, bool running, bool restartHeld = false)
         {
             if (!s.SchedulerEnabled) return Step.None;
             bool inWindow = InWindow(s, now);
-            if (inWindow && !running && !AutoStarted && !ManuallyStopped) { AutoStarted = true; return Step.Start; }
+            if (inWindow && !running && !AutoStarted && !ManuallyStopped && !restartHeld) { AutoStarted = true; return Step.Start; }
             if (!inWindow && running && AutoStarted) { AutoStarted = false; return Step.Stop; }
             if (!inWindow) { AutoStarted = false; ManuallyStopped = false; }
             return Step.None;

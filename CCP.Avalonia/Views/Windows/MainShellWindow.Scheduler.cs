@@ -1,6 +1,7 @@
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Safety;
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
@@ -27,21 +28,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
         internal void SchedulerStartupCheck(DateTime now)
         {
-            if (Scheduler.OnStartup(CoreSettings.Current, now) != CoreScheduler.Step.Start) return;
+            if (Scheduler.OnStartup(CoreSettings.Current, now, PanicAftermath.HoldsEngineRestart) != CoreScheduler.Step.Start) return;
             Serilog.Log.Information("Scheduler: App started within scheduled time window - auto-starting");
-            MinimizeToTray();
-            Platform.OsNotifications.Show(Loc.Get("notif_scheduler_active"), Loc.Get("notif_scheduler_autostarted"));
-            StartEngine();
+            MinimizeToTray(); Platform.OsNotifications.Show(Loc.Get("notif_scheduler_active"), Loc.Get("notif_scheduler_autostarted")); StartEngine();
         }
         internal void SchedulerTick(DateTime now)
         {
-            switch (Scheduler.OnTick(CoreSettings.Current, now, CoreEngine.IsRunning))
+            switch (Scheduler.OnTick(CoreSettings.Current, now, CoreEngine.IsRunning, PanicAftermath.HoldsEngineRestart))
             {
                 case CoreScheduler.Step.Start:
                     Serilog.Log.Information("Scheduler: Entering scheduled time window - auto-starting");
-                    MinimizeToTray();
-                    Platform.OsNotifications.Show(Loc.Get("notif_scheduler_active"), Loc.Get("notif_scheduler_autostarted"));
-                    StartEngine();
+                    MinimizeToTray(); Platform.OsNotifications.Show(Loc.Get("notif_scheduler_active"), Loc.Get("notif_scheduler_autostarted")); StartEngine();
                     break;
                 case CoreScheduler.Step.Stop:
                     Serilog.Log.Information("Scheduler: Exiting scheduled time window - auto-stopping");

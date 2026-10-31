@@ -8,14 +8,9 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class EngineRampSchedulerTests
 {
-    private static AppSettings Schedule(string start, string end, bool today = true)
-    {
-        return new AppSettings
-        {
-            SchedulerEnabled = true, SchedulerStartTime = start, SchedulerEndTime = end,
-            SchedulerMonday = today, SchedulerTuesday = today, SchedulerWednesday = today, SchedulerThursday = today, SchedulerFriday = today, SchedulerSaturday = today, SchedulerSunday = today,
-        };
-    }
+    private static AppSettings Schedule(string start, string end, bool today = true) => new AppSettings {
+        SchedulerEnabled = true, SchedulerStartTime = start, SchedulerEndTime = end,
+        SchedulerMonday = today, SchedulerTuesday = today, SchedulerWednesday = today, SchedulerThursday = today, SchedulerFriday = today, SchedulerSaturday = today, SchedulerSunday = today };
     private static readonly DateTime Day = new(2026, 10, 22);   // a Thursday
     [Theory]
     [InlineData("16:00", "22:00", 16, 0, true)]    // start inclusive
@@ -43,7 +38,7 @@ public sealed class EngineRampSchedulerTests
         Assert.Equal(CoreScheduler.Step.None, sch.OnTick(s, outside, running: false));   // resets both flags
         Assert.False(sch.ManuallyStopped || sch.AutoStarted);
         Assert.Equal(CoreScheduler.Step.Start, sch.OnTick(s, inside.AddDays(1), running: false));
-        var manual = new CoreScheduler();   // a manual start is never auto-stopped
+        var manual = new CoreScheduler(); Assert.Equal(CoreScheduler.Step.None, manual.OnStartup(s, inside, restartHeld: true)); Assert.Equal(CoreScheduler.Step.None, manual.OnTick(s, inside, running: false, restartHeld: true)); Assert.False(manual.AutoStarted);
         Assert.Equal(CoreScheduler.Step.None, manual.OnTick(s, outside, running: true));
         manual.OnManualToggle(s, inside, stopping: true);   // the user started by hand, then stopped in the window
         Assert.Equal(CoreScheduler.Step.None, manual.OnTick(s, inside, running: false));

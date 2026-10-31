@@ -123,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             Serilog.Log.Information("Panic: stopping every surface ({Reason})", reason);
             shell ??= MainShellWindow.Current;
+            shell?.Scheduler.OnManualToggle(CoreSettings.Current, DateTime.Now, stopping: true); // WPF MainWindow.xaml.cs:1900
             foreach (var s in All)
             {
                 try { s.Stop(shell); }

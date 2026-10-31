@@ -51,6 +51,13 @@ public sealed class StartStopScheduleTests
             shell.Hide(); shell.Show();
             Assert.Same(grace, graceField.GetValue(shell));
             CoreEngine.StoppedHook = shell.OnEngineStopped;
+            shell.StartEngineFromUser(); shell.SchedulerTick(now.AddHours(-2)); shell.SchedulerTick(now); Assert.True(CoreEngine.IsRunning); Assert.False(shell.Scheduler.AutoStarted);
+            PanicSurfaces.StopAll("scheduler regression", shell);
+            shell.SchedulerTick(now); Assert.True(shell.Scheduler.ManuallyStopped); Assert.False(CoreEngine.IsRunning);
+            shell.Scheduler.ManuallyStopped = false; var before = notices.Count;
+            shell.SchedulerTick(now); shell.SchedulerStartupCheck(now); Assert.False(CoreEngine.IsRunning || shell.Scheduler.AutoStarted); Assert.Equal(before, notices.Count);
+            shell.Scheduler.ManuallyStopped = true; ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); shell.SchedulerTick(now); Assert.False(CoreEngine.IsRunning);
+            shell.StartEngineFromUser(); Assert.True(CoreEngine.IsRunning); Assert.False(shell.Scheduler.ManuallyStopped); MainShellWindow.StopEngine();
             shell.SchedulerStartupCheck(now);
             Assert.True(CoreEngine.IsRunning);
             Assert.True(CoreIntensityRamp.IsRunning);
