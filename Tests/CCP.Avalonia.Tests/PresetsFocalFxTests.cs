@@ -89,6 +89,29 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task ClosingTheMotionGateCancelsInFlightArrivals() => WithPresets((host, view) =>
+    {
+        // Restart arrivals and retain their token: the gate must cancel even if the
+        // render clock has already finished a card on a slow CI runner.
+        view.IsVisible = false;
+        view.IsVisible = true;
+        var source = (System.Threading.CancellationTokenSource)typeof(PresetsTabView)
+            .GetField("_entranceCancellation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(view)!;
+        var token = source.Token;
+        Assert.False(token.IsCancellationRequested);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(token.IsCancellationRequested);
+        Settle();
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        Assert.Equal(1, row.Opacity);
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, Assert.IsType<TransformGroup>(row.RenderTransform)
+            .Children.OfType<TranslateTransform>().Single().Y);
+    });
+
+    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view) =>
     {
         view.IsVisible = false; Settle();
