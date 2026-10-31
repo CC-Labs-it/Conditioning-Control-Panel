@@ -13,6 +13,8 @@ using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -25,16 +27,21 @@ namespace CCP.Avalonia.Tests;
 /// click side effect runs.</summary>
 public sealed class ContentHitTestTests
 {
-    [Fact]
-    public async Task ContentButtonsReceiveThePointerAtTheirCentre()
+    [Theory]
+    [InlineData(100)] // mid-entrance: keep the moving geometry covered
+    [InlineData(620)] // settled: the original content hit-test contract
+    public async Task ContentButtonsReceiveThePointerAtTheirCentre(int entranceMs)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            CoreSettings.Current.PerformanceMode = false;
+            var time = new SteppedTime();
+            var w = new MainShellWindow { TabClock = time };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -45,11 +52,17 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                // A live wall clock moves the entrance again while RenderLiveTree commits its batch:
+                // TranslatePoint then describes a newer position than InputHitTest's rendered frame
+                // (Windows CI 41196855484). Hold the real entrance at a known phase for both probes.
+                time.Now += TimeSpan.FromMilliseconds(entranceMs).Ticks;
+                w.TickTabTransition();
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
                 if (tab == "awareness") w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")!.IsVisible = false;
                 RenderLiveTree(w);
+                Assert.Equal(entranceMs < 620 ? 0.75 : 1, w.Named<Control>(panelName)!.Opacity, 5);
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
@@ -98,6 +111,13 @@ public sealed class ContentHitTestTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
+    }
+
+    private sealed class SteppedTime : TimeProvider
+    {
+        public long Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Now;
     }
 
     private static bool Inside(Visual v, Point p, Visual root)

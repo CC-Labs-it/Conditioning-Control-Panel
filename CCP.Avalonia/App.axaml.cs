@@ -954,6 +954,7 @@ namespace ConditioningControlPanel.Avalonia
                 TierGate.ReconnectIsTheAnswerProvider = Views.Windows.MainShellWindow.ReconnectIsTheAnswerNow;
                 // Dropped: WPF's EmiDesk "premiumTeaseSeen" fire - no EmiDesk service on this head.
                 var shell = (Views.Windows.MainShellWindow)desktop.MainWindow;
+                CoreEngine.StartedHook = shell.OnEngineStarted;
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
                 Sessions.Ticked += shell.OnSessionTick;
                 Sessions.SessionLog.LogReady += shell.OnSessionLogReady;
@@ -993,6 +994,7 @@ namespace ConditioningControlPanel.Avalonia
                 desktop.MainWindow.Closed += (_, _) =>
                 {
                     Serilog.Log.Information("Shell closed: stopping the session and the engine");
+                    CoreEngine.StartedHook = null;
                     CoreEngine.StoppedHook = null;   // the shell is gone; do not repaint it
                     Sessions.Ticked -= shell.OnSessionTick;
                     Sessions.SessionLog.LogReady -= shell.OnSessionLogReady;
