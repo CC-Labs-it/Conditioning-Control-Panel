@@ -245,6 +245,18 @@ caps platform 'web', net false, relayBase null, texturableRemote false, gamepad 
 Host -> page used in A: `init`, `pause {on}`, `kept-escape`, `gentle {...}`, `focus`, `ping`.
 Host -> page (7.2, desktop): `join-room { roomId }` = a CCP Lobby row or a friend's race invite while the window is up;
 the page takes it on the menu only (a cold start uses `?join=<roomId>` instead).
+Race your own song (7.2, desktop, SOLO ONLY; `Services/Glassroad/SongWords`): a host that sets `caps.songWords: true`
+takes page -> host `song-pick { trackId }` (the garage's "Choose music file"; the host opens its own file dialog and
+listens with whisper.cpp on the CPU, model fetched on first use) and `song-forget { id }` (the garage's "Remove this
+song" on a selected heard song; the page drops the row and resets every course that picked it). It answers host -> page
+`song-words { status: 'rows'|'progress'|'ready'|'error', trackId?, phase: 'model'|'read'|'listen', pct 0-1, note,
+song: {id,label,url}?, rows: [{id,label,url}] }`: rows are the player's heard songs, newest first, at most 12, urls
+`https://ccp.songs/<id>/chart.json` (`host/bridge.js` userSongRows). Such a chart carries `userSong: true`, heard
+words with bubble marks (confident, 3+ letters) and a placeholder bpm the page replaces from its own beat analysis
+at decode (`audio/music.js` heardGrid); `sim/wordPick.js` lifts `impactOnly` for a heard song so road, air and
+bubble runs agree. One job at a time: every course's dialog shows the job and takes no second pick; a ready frame
+during a race leaves the pick alone. The file never leaves the machine; the page's own `<input type=file>` lane stays
+for the web. Rooms keep the signed catalog: user rows never reach the online course list.
 Friends invite (7.2, `host/friendInvite.js`): a host that sets `caps.friendInvite: true` owns the pre-race room's
 "Invite a friend" (room host only, lobby phase): page -> host `friends-list { id }` and `invite-friend { id, friendUid,
 roomId }`; host -> page `friends-list-reply { id, friends: [{ uid, name }] }` and `invite-friend-reply { id, sent, note }`

@@ -70,6 +70,7 @@ export function normalizeChart(raw) {
     : Math.max(beats[beats.length - 1] || 0, sections.length ? sections[sections.length - 1].endS : 0, 1);
   return { id: String(c.id || 'song'), title: String(c.title || ''), audio: c.audio || null, version: num(c.version, 1), durationS, bpm, downbeatS,
     beats, downbeats, sections, hits, energy, lines, words, echoes, triggers, sfx,
+    userSong: !!c.userSong,   // the player's own song (desktop host, SongWordsService): words heard, beats from the recording
     cues: Array.isArray(c.cues) ? c.cues : [],
     events: timed(c.events, x => ({ event: String(x.event || ''), startS: num(x.startS, NaN) })),
     wordStarts: Float64Array.from(words, (w) => w.startS), triggerStarts: Float64Array.from(triggers, (x) => x.startS),

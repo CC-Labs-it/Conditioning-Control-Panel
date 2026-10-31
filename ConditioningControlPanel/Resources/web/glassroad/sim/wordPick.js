@@ -32,6 +32,9 @@ const clean = (w) => String(w || '').toLowerCase().replace(/[^a-z']/g, '');
 /** @returns {Uint8Array} one kind per song.words entry. */
 export function pickWords(song, P = PICK) {
   const words = (song && song.words) || [];
+  // RACE YOUR OWN SONG: a heard chart has no authored IMPACT list; its confident longer words (chart bubble marks)
+  // are the bubbles. Decided here so road, air and bubble runs agree on one pick.
+  if (song && song.userSong && P.impactOnly) P = { ...P, impactOnly: false };
   const kind = new Uint8Array(words.length);
   const taken = [];   // startS of every bubble moment
   // trigger phrases: the run of words starting on the trigger, as many as the phrase names
