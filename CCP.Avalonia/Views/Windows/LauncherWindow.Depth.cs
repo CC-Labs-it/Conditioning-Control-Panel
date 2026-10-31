@@ -38,8 +38,9 @@ public partial class LauncherWindow
 
     private void HookDepth()
     {
-        Wordmark.RenderTransformOrigin = RelativePoint.Center;
-        Wordmark.RenderTransform = _wordmarkScale;
+        // WPF LauncherWindow.xaml:357-365: only the logo drifts, inside the clipped wordmark.
+        WordmarkImage.RenderTransformOrigin = RelativePoint.Center;
+        WordmarkImage.RenderTransform = _wordmarkScale;
         GlowLayer.RenderTransform = _depth[0].Shift;
         PoolLayer.RenderTransform = _depth[1].Shift;
         Ambient.RenderTransform = _depth[2].Shift;
@@ -69,10 +70,15 @@ public partial class LauncherWindow
         EnsureFxClock();
     }
 
-    private void ParkDepth()
+    private void ResetWordmarkDrift()
     {
         _wordmarkTime = 0;
         _wordmarkScale.ScaleX = _wordmarkScale.ScaleY = 1;
+    }
+
+    private void ParkDepth()
+    {
+        ResetWordmarkDrift();
         foreach (var d in _depth)
         {
             d.X.On = d.Y.On = false;

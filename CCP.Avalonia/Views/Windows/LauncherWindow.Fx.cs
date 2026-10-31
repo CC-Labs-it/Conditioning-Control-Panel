@@ -329,7 +329,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _fxActive = active;
             if (active) StartSheens(); else StopSheens();
             if (active) { EnsureFxClock(); OnEdgeActivated(); }
-            else ParkDepth();
+            else
+            {
+                ResetWordmarkDrift();
+                // WPF Backdrop.cs:246-275: ease home while visible with transitions, otherwise snap.
+                TargetDepth(0, 0);
+            }
         }
 
         /// <summary>WPF OnEdgeActivated: focus coming back runs the shimmer and the glint, at most every 4 s.</summary>

@@ -203,7 +203,14 @@ public sealed class LauncherFxTests
             w.MoveDepth(new Point(1, 1)); // avoid an implicit render advancing wall time
             w.StepFx(0.13); // halfway through 260 ms: quadratic out covers 75 percent
             Assert.InRange(glow.X, -9.1, -8.8);
+            double glowAtBlur = glow.X, spiralAtBlur = spiral.X;
             w.OnFxActivated(false);
+            Assert.Equal(glowAtBlur, glow.X); // losing focus starts a tween, never a jump
+            Assert.Equal(spiralAtBlur, spiral.X);
+            w.StepFx(0.13);
+            Assert.Equal(glowAtBlur * 0.25, glow.X, 6); // 260 ms quadratic ease-out
+            Assert.Equal(spiralAtBlur * 0.25, spiral.X, 6);
+            w.StepFx(0.14);
             Assert.Equal(0, glow.X);
             Assert.Equal(0, spiral.X);
             w.OnFxActivated(true);
@@ -213,6 +220,53 @@ public sealed class LauncherFxTests
             Assert.Equal(0, glow.X, 2);
         }
         finally { LauncherWindow.LauncherSfx.Clock = TimeProvider.System; }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Deactivation_ParallaxSnapsWithoutTransitionsOrInPerformanceMode(bool performance) => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var clock = LauncherWindow.LauncherSfx.Clock;
+        LauncherWindow.LauncherSfx.Clock = new SteppedUtc();
+        try
+        {
+            w.OnFxActivated(true);
+            w.MoveDepth(new Point(w.Bounds.Width, w.Bounds.Height));
+            Step(w, 0.3);
+            var glow = (TranslateTransform)w.FindControl<Border>("GlowLayer")!.RenderTransform!;
+            Assert.InRange(glow.X, 17, 18);
+            CoreSettings.Current.MotionLevel = performance ? MotionLevel.Full : MotionLevel.Off;
+            CoreSettings.Current.PerformanceMode = performance;
+            w.OnFxActivated(false);
+            Assert.Equal(0, glow.X);
+            Assert.Equal(0, glow.Y);
+        }
+        finally { LauncherWindow.LauncherSfx.Clock = clock; }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Depth_HideAndMinimizeSnapEvenDuringTheFocusReturn(bool minimize) => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var clock = LauncherWindow.LauncherSfx.Clock;
+        LauncherWindow.LauncherSfx.Clock = new SteppedUtc();
+        try
+        {
+            w.OnFxActivated(true);
+            w.MoveDepth(new Point(w.Bounds.Width, w.Bounds.Height));
+            Step(w, 0.3);
+            var glow = (TranslateTransform)w.FindControl<Border>("GlowLayer")!.RenderTransform!;
+            Assert.InRange(glow.X, 17, 18);
+            w.OnFxActivated(false);
+            Assert.InRange(glow.X, 17, 18);
+            if (minimize) w.WindowState = WindowState.Minimized; else w.Hide();
+            Assert.Equal(0, glow.X);
+            Assert.Equal(0, glow.Y);
+            Assert.False(w.FxTicking);
+        }
+        finally { LauncherWindow.LauncherSfx.Clock = clock; }
     });
 
     [Fact]
@@ -264,7 +318,7 @@ public sealed class LauncherFxTests
         double before = scale.ScaleX;
         Step(w, 2);
         Assert.Equal(before, scale.ScaleX);
-        var wordmark = (ScaleTransform)w.FindControl<StackPanel>("Wordmark")!.RenderTransform!;
+        var wordmark = (ScaleTransform)w.FindControl<Image>("WordmarkImage")!.RenderTransform!;
         Assert.Equal(1, wordmark.ScaleX);
     });
 
@@ -291,9 +345,23 @@ public sealed class LauncherFxTests
     [Fact]
     public void WordmarkDrift_HasFortySecondLeg_AndResetsWhenHidden() => Run(MotionLevel.Full, (_, w, _) =>
     {
-        var wordmark = w.FindControl<StackPanel>("Wordmark")!;
-        var scale = (ScaleTransform)wordmark.RenderTransform!;
+        var host = w.FindControl<Grid>("Wordmark")!;
+        var image = w.FindControl<Image>("WordmarkImage")!;
+        var title = host.GetVisualDescendants().OfType<TextBlock>().Single();
+        var scale = Assert.IsType<ScaleTransform>(image.RenderTransform);
+        Assert.True(host.ClipToBounds);
+        Assert.Equal(RelativePoint.Center, image.RenderTransformOrigin);
+        Assert.Null(host.RenderTransform);
+        Assert.Null(((StackPanel)image.Parent!).RenderTransform);
+        Assert.Null(title.RenderTransform);
         w.Hide(); w.Show();
+        w.OnFxActivated(true);
+        Step(w, 40.1);
+        Assert.InRange(scale.ScaleX, 1.039, 1.041);
+        Assert.Null(title.RenderTransform);
+        Assert.Null(host.RenderTransform);
+        w.OnFxActivated(false);
+        Assert.Equal(1, scale.ScaleX);
         w.OnFxActivated(true);
         Step(w, 40.1);
         Assert.InRange(scale.ScaleX, 1.039, 1.041);

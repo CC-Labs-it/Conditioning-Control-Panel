@@ -212,12 +212,14 @@
         <!-- ================= top bar ================= -->
         <Border x:Name="TitleBar" Grid.Row="0" Background="Transparent" PointerPressed="TitleBar_PointerPressed">
             <Grid ColumnDefinitions="Auto,*,Auto">
-                <StackPanel x:Name="Wordmark" Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
-                    <Image Source="avares://CCP.Avalonia/Resources/logo2.png" Height="28"/>
-                    <TextBlock Text="{loc:Str launcher_window_title}" Margin="10,0,0,0"
-                               FontFamily="Fredoka, Segoe UI" FontSize="18" FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextLightBrush}" VerticalAlignment="Center"/>
-                </StackPanel>
+                <Grid x:Name="Wordmark" Margin="18,0,0,0" VerticalAlignment="Center" ClipToBounds="True">
+                    <StackPanel Orientation="Horizontal">
+                        <Image x:Name="WordmarkImage" Source="avares://CCP.Avalonia/Resources/logo2.png" Height="28"/>
+                        <TextBlock Text="{loc:Str launcher_window_title}" Margin="10,0,0,0"
+                                   FontFamily="Fredoka, Segoe UI" FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextLightBrush}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- signed out: a sign-in pill where the chip would be -->
                     <Button x:Name="SignInPill" Theme="{StaticResource LauncherSignInPill}" Margin="0,0,6,0"
