@@ -223,7 +223,10 @@ jobs:
       # fails with NETSDK1191 ("a runtime identifier for the property 'SelfContained' couldn't
       # be inferred"). Verified both ways.
       # Drop the flag if the solution ever builds clean without it.
+      - name: Check WPF render workflow scheduling
+        run: python .github/scripts/test_wpf_render_workflow.py
       - name: Build solution (hard gate)
+        id: windows_build
         run: dotnet build ConditioningControlPanel.sln -c Release -p:ValidateExecutableReferencesMatchSelfContained=false
 
       - uses: actions/setup-node@v4
@@ -239,8 +242,9 @@ jobs:
       # render tests included. Promoted on that one green run, deliberately - an advisory job
       # that is always green trains everyone to ignore it. If it turns out flaky, demote it with
       # evidence (link the failing runs) rather than pre-emptively.
+      # Render tests run once below, in the directory uploaded even after failures.
       - name: Test app suite
-        run: dotnet test Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release -p:ValidateExecutableReferencesMatchSelfContained=false
+        run: dotnet test Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release -p:ValidateExecutableReferencesMatchSelfContained=false --filter "FullyQualifiedName!~VerifiedRowRenderTests"
       - name: Test Core suite
         run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release
       - name: Test Core settings publication (isolated profile)
@@ -304,6 +308,7 @@ jobs:
           if ($neg -eq 0) { throw '--win-panic-check F23 passed: the check cannot fail' }
       # Keep rendering last so failures cannot hide the behaviour suites above.
       - name: Render WPF snapshot comparison rows (offscreen, sandbox profile)
+        if: ${{ !cancelled() && steps.windows_build.outcome == 'success' }}
         run: dotnet test Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release --no-build -p:ValidateExecutableReferencesMatchSelfContained=false --filter FullyQualifiedName~VerifiedRowRenderTests
         env:
           WPF_RENDER_OUT: ${{ runner.temp }}/wpf-render
