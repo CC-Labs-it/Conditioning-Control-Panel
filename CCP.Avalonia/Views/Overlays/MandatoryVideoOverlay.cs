@@ -327,6 +327,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF: strict vetoes a user close while playing; a non-strict close is a dismiss.
             w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
+            WireVibeTrailRestacking(w);
             w.Show();
             if (!floating)
             {

@@ -26,13 +26,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <see cref="X11Overlay.SetClickThrough"/>; a platform that refuses click-through or
     /// per-pixel transparency gets no trail rather than a full-screen block (PinkFilterOverlay.Accept).</para>
     ///
-    /// <para>ponytail: nothing calls <see cref="Start"/> yet - the VibePopping vibe window (WPF
-    /// ChaosModeService.cs:2709/:2946) and EnsureCreated at run start (:455) need the bubble field,
-    /// which <see cref="ChaosRunHost"/> does not have. Teardown and panic already close it.</para>
+    /// <para>Lifecycle: ChaosRunHost uses the WPF ChaosModeService.cs:455,2706,2943 callers.
+    /// Windows/native Wayland desktop pointer support remains missing.</para>
     /// </summary>
     internal sealed class ChaosVibeTrailOverlay : Window
     {
         private static ChaosVibeTrailOverlay? _active;
+        internal static bool SkipPlatformChecksForTests;
         private static bool _refused;   // the platform said no once: later vibes don't rebuild and re-warn
         internal static ChaosVibeTrailOverlay? Active => _active;
 
@@ -44,19 +44,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         });
 
         /// <summary>The vibe started: show the glow + trail and follow the pointer (WPF :57).</summary>
-        public static void Start() => Dispatcher.UIThread.Post(() =>
+        public static void Start()
+        {
+            if (Dispatcher.UIThread.CheckAccess()) StartNow();
+            else Dispatcher.UIThread.Post(StartNow);
+        }
+        private static void StartNow()
         {
             try
             {
-                if (_refused) return;
-                if (!X11Overlay.IsAvailable) { Log.Debug("ChaosVibeTrail: no X11 display, no trail"); return; }
+                if (_refused || !Overlays.BubbleOverlay.VibePopOn) return;
+                if (!SkipPlatformChecksForTests && (!X11Overlay.IsAvailable || X11Pointer.Read() == null))
+                { Log.Debug("ChaosVibeTrail: no desktop pointer, no trail"); return; }
                 _active ??= new ChaosVibeTrailOverlay();
                 var w = _active;
                 if (!w.IsVisible)
                 {
                     w.SizeToStage();
                     w.Show();
-                    if (!X11Overlay.SetClickThrough(w, true) || w.ActualTransparencyLevel == WindowTransparencyLevel.None)
+                    if (!SkipPlatformChecksForTests && (!X11Overlay.SetClickThrough(w, true) || w.ActualTransparencyLevel == WindowTransparencyLevel.None))
                     {
                         Log.Warning("ChaosVibeTrail: no click-through or no per-pixel transparency here, so no trail - it would cover the desktop");
                         _refused = true;
@@ -64,17 +70,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         return;
                     }
                 }
-                X11Overlay.Raise(w);   // un-hiding doesn't re-stack (WPF ChaosWindowZ.RaiseAboveVideo)
+                if (!SkipPlatformChecksForTests) X11Overlay.Raise(w);   // un-hiding doesn't re-stack (WPF ChaosWindowZ.RaiseAboveVideo)
                 w.BeginFollow();
             }
             catch (Exception ex) { Log.Debug("ChaosVibeTrail.Start: {E}", ex.Message); }
-        });
+        }
 
         /// <summary>The vibe ended: stop following and hide; the window stays for the next buzz (WPF :82).</summary>
         public static void Stop() => Dispatcher.UIThread.Post(() => { try { _active?.EndFollow(); } catch { } });
 
         /// <summary>Re-stack above a mandatory video (WPF :93). UI thread only.</summary>
-        public static void RaiseActive() { if (_active is { IsVisible: true } w) X11Overlay.Raise(w); }
+        internal static Action<Window> RaiseWindow = w => X11Overlay.Raise(w);
+        public static void RaiseActive() { if (_active is { IsVisible: true } w) RaiseWindow(w); }
 
         /// <summary>Run end, shutdown and panic: the only place this window dies (WPF :96).
         /// Synchronous on the UI thread so panic never waits on a post (P29); posted otherwise.</summary>
@@ -113,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             SystemDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = CoreSettings.Current.ChaosPinOnTop;   // WPF ChaosWindowZ.BornTopmost
+            Topmost = ChaosRunHost.RunPinOnTop;   // WPF ChaosWindowZ.BornTopmost
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;

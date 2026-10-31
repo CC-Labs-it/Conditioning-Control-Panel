@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -62,6 +63,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosOverlayWindow? _overlay;
         private static ChaosBoonBarOverlay? _boonBar;
         private static DispatcherTimer? _runTimer, _spawnTimer;
+        private static double _vibeRemainingSec;
+        private static bool _afterglowApplied;
+        private static bool _runPinOnTop;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
@@ -88,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static ChaosBoonBarOverlay? BoonBar => _boonBar;
         internal static ChaosFxWindow? Fx => _fx;
         internal static bool IsActive => _active;
+        internal static bool RunPinOnTop => _active ? _runPinOnTop : CoreSettings.Current.ChaosPinOnTop;
         /// <summary>WPF IsDescending: the clock is running (countdown over, recap not up).</summary>
         internal static bool IsDescending => _spawning;
         internal static bool IsManuallyPaused => _manualPaused;
@@ -100,6 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var cfg = config ?? ChaosRunConfig.FromSettings();
             try
             {
+                _runPinOnTop = CoreSettings.Current.ChaosPinOnTop;   // WPF ChaosModeService.cs:323
                 _state = new ChaosRunState(cfg);
                 _active = true;
                 _lastHeatTint = -1;
@@ -137,6 +143,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
             _state.StartShields = _state.Shields;
             StartToys();
+            // WPF ChaosModeService.cs:454-455: birth the hidden trail before the first buzz.
+            if (ChaosMeta.IsBoonActive("vibe_popping")) ChaosVibeTrailOverlay.EnsureCreated();
             _waveDetonatedAt = _state.Detonated;
             _invulnUntilUtc = DateTime.MinValue;
             ChaosRunLessons.OnRunStarted();   // WPF :399
@@ -148,7 +156,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer.Start();
 
             _spawnSerial = _ordinarySpawns = 0;
-            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse);
+            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse,
+                hitboxScale: () => _state?.Config.HitboxScale ?? 1, liveMagnet: () => _state?.MagnetEnabled == true);
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
             _spawnTimer.Start();
@@ -476,6 +485,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_spawning && !_manualPaused) _spawnTimer?.Start();
         }
 
+        /// <summary>WPF ChaosModeService.cs:747-762: only a pinned, descending run re-raises the trail.</summary>
+        internal static void RaiseVibeTrailAboveVideo()
+        {
+            if (_spawning && _runPinOnTop) ChaosVibeTrailOverlay.RaiseActive();
+        }
+
         public static void RequestStop()
         {
             if (_manualPaused) { _manualPaused = false; _hud?.SetPausedUi(false); }
@@ -615,6 +630,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF StopKeyHook + CloseToyButtons (EndRun / ForceShutdown / overlay closed). Idempotent.</summary>
         private static void StopToys()
         {
+            _vibeRemainingSec = 0;
+            _afterglowApplied = false;
+            BubbleOverlay.SetVibePop(false);
             X11PanicKey.ToyKey = null;
             X11PanicKey.ToyKeys = null;
             foreach (var b in _toyButtons.ToArray())
@@ -622,14 +640,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _toyButtons.Clear();
         }
 
-        /// <summary>WPF TickActiveToys' toy loop. ponytail: no toy effect runs on this head yet (they
-        /// live with the bubble field), so the glow state drops on the next tick.</summary>
+        /// <summary>WPF ChaosModeService.cs:2922-2947,3010-3028: buzz, Afterglow and cooldowns.</summary>
         private static void TickToys()
         {
             if (_state == null) return;
+            if (_vibeRemainingSec > 0)
+            {
+                _vibeRemainingSec -= ChaosRunEngine.TICK_SEC;
+                if (_vibeRemainingSec <= 0)
+                {
+                    if (_state.AfterglowSec > 0 && !_afterglowApplied)
+                    {
+                        _afterglowApplied = true;
+                        _vibeRemainingSec = _state.AfterglowSec;
+                        BubbleOverlay.SetVibePop(true, hoverPops: true);
+                        _state.PushEvent(Loc.Get("chaos_vibe_afterglow"));
+                    }
+                    else
+                    {
+                        BubbleOverlay.SetVibePop(false);
+                        ChaosVibeTrailOverlay.Stop();
+                        ChaosEffectBannerOverlay.End("vibe");
+                    }
+                }
+            }
             foreach (var t in ChaosToyRules.Tick(_state.ActiveToys, ChaosRunEngine.TICK_SEC))
                 ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.45f);
-            foreach (var t in _state.ActiveToys) t.IsEffectActive = false;
+            foreach (var t in _state.ActiveToys) t.IsEffectActive = t.Id == "vibe_popping" && _vibeRemainingSec > 0;
         }
 
         /// <summary>WPF OnToyKey (UI thread): a toy keybind press. The panic key never fires a toy.</summary>
@@ -649,12 +686,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (t.Id == id) { UseToy(t); return; }
         }
 
-        /// <summary>WPF UseToy, the gate + cooldown half. ponytail: the effect itself (vibe sweep,
-        /// freeze, DVD, snap, rabbits, e-stim) and the first_play Spark award are not wired yet.</summary>
+        /// <summary>WPF UseToy: gate, cooldown and VibePopping (ChaosModeService.cs:2684-2709).
+        /// Other toy effects and first_play credit remain missing.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused);
+            if (r == ChaosToyRules.UseResult.Fired && toy.Id == "vibe_popping")
+            {
+                BubbleOverlay.SetVibePop(true, _state.MaxedBoons.Contains(toy.Id));
+                _vibeRemainingSec = Math.Max(1, _state.ToyPower.GetValueOrDefault(toy.Id));
+                _afterglowApplied = false;
+                ChaosOverlayWindow.ChaosSfx.Play("vibe_buzz", 0.5f);
+                ChaosVibeTrailOverlay.Start();
+                ChaosEffectBannerOverlay.Show("vibe", "VibePopping", Color.FromRgb(0xFF, 0xB0, 0x3A));
+                _state.PushEvent(Loc.Get("chaos_vibe_sweep"));
+            }
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
         }
 
