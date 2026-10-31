@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -37,11 +38,30 @@ public sealed class ThemeEvidenceTests
     private static AwarenessAppPickerDialog Picker() => new(AwarenessListKind.Deny,
         Array.Empty<string>(), new[] { "editor" });
 
+    // Own entries override the authored merged dictionaries. Preserve both values and absence.
+    private sealed class ResourceOverrides : IDisposable
+    {
+        private readonly IResourceDictionary _resources = Application.Current!.Resources;
+        private readonly Dictionary<object, object?> _saved;
+
+        public ResourceOverrides() => _saved = _resources.Keys.ToDictionary(k => k, k => _resources[k]);
+
+        public void Dispose()
+        {
+            foreach (var k in _resources.Keys.ToArray())
+                if (!_saved.ContainsKey(k)) _resources.Remove(k);
+            foreach (var (k, v) in _saved) _resources[k] = v;
+        }
+    }
+
     // WPF Resources/Theme/Colors.xaml:9-19, Dialogs/AwarenessAppPickerDialog.xaml:7,75.
     [Fact]
     public Task PickerUsesWpfColorTokens() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
+        using var resources = new ResourceOverrides();
+        foreach (var key in new[] { "DarkerBg", "DarkerBgBrush", "SurfaceBg", "SurfaceBgBrush", "TextMuted", "TextMutedBrush" })
+            Application.Current!.Resources.Remove(key);
         var w = Picker();
         try
         {
@@ -55,6 +75,25 @@ public sealed class ThemeEvidenceTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task PickerDefaultsIgnoreAndRestoreLeakedModOverrides() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        using var resources = new ResourceOverrides();
+        var res = Application.Current!.Resources;
+        foreach (var key in new[] { "DarkerBg", "SurfaceBg", "TextMuted" })
+        {
+            var color = Color.Parse("#FF08080C");
+            var brush = new SolidColorBrush(color);
+            res[key] = color;
+            res[key + "Brush"] = brush;
+        }
+        var saved = res.Keys.ToDictionary(k => k, k => res[k]);
+        await PickerUsesWpfColorTokens();
+        Assert.True(saved.Keys.ToHashSet().SetEquals(res.Keys));
+        foreach (var (key, value) in saved) Assert.Same(value, res[key]);
+    });
+
     /// <summary>WPF MainWindow/MainWindow.xaml.cs:2512 overwrites the brush entry on a mod
     /// switch. The open picker's DynamicResource must follow that same real mod switch.</summary>
     [Fact]
@@ -66,18 +105,16 @@ public sealed class ThemeEvidenceTests
         if (oldMods is null) AvApp.StartMods();
         var mods = AvApp.Mods!;
         var startId = mods.ActiveModId;
-        var res = Application.Current!.Resources;
-        var saved = res.Keys.ToDictionary(k => k, k => res[k]);
-        var refresh = typeof(MainShellWindow).GetMethod("RefreshThemeAwareElements",
-            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        using var resources = new ResourceOverrides();
         var shell = new MainShellWindow();
         var w = Picker();
         try
         {
             shell.Show(); w.Show(); Dispatcher.UIThread.RunJobs();
             var before = ColorOf(w.Background);
-            mods.ActivateMod(startId == BuiltInMods.InfectionControlId ? BuiltInMods.CCPDefaultId : BuiltInMods.InfectionControlId);
-            refresh.Invoke(shell, null);
+            var targetId = startId == BuiltInMods.InfectionControlId ? BuiltInMods.CCPDefaultId : BuiltInMods.InfectionControlId;
+            shell.SwitchActiveModFromLauncher(targetId);
+            Assert.Equal(targetId, mods.ActiveModId);
             Dispatcher.UIThread.RunJobs();
             var expected = Color.Parse(mods.GetBackgroundColorHex() ?? "#1A1A2E");
             Assert.NotEqual(before, expected);
@@ -88,8 +125,6 @@ public sealed class ThemeEvidenceTests
             w.Close();
             if (mods.ActiveModId != startId) mods.ActivateMod(startId);
             shell.Close();
-            foreach (var k in res.Keys.ToArray()) if (!saved.ContainsKey(k)) res.Remove(k);
-            foreach (var (k, v) in saved) res[k] = v;
             typeof(AvApp).GetProperty(nameof(AvApp.Mods), BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, oldMods);
             Dispatcher.UIThread.RunJobs();
         }
