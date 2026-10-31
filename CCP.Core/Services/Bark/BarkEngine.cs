@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Services.Bark
 
         // Head seams; unseeded = WPF's answer for a missing service. No mouth = nothing said, nothing spent.
         public Action<BarkSpeech>? Speak;
+        public Func<bool>? IsNarratorPlaying; // WPF BarkService.cs:1676
         public Func<bool>? IsSpeaking;                 // App.AvatarWindow.IsSpeaking
         public Func<int, bool>? IsCompanionBusy;       // App.AvatarWindow.IsCompanionBusy(windowMs)
         public Func<bool>? EmiDeskAvatarMuted;         // App.EmiDesk.AvatarMuted
@@ -268,6 +269,7 @@ namespace ConditioningControlPanel.Services.Bark
             {
                 var now = Now;
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
+                if (Safe(IsNarratorPlaying)) return (false, -1, "narrator-active");
                 int window = s.BarkChatSuppressionMs;
                 if (Safe(() => IsCompanionBusy?.Invoke(window) == true)
                     || (window > 0 && (now - _lastUserMessageUtc).TotalMilliseconds < window))
