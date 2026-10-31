@@ -423,7 +423,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             if (ms == 0 || !IsEffectivelyVisible || TopLevel.GetTopLevel(this) == null) { Settle(); return; }
             _ctaMotion = new Helpers.BeatLoop(_ctaFace, elapsed =>
             {
-                double p = Math.Clamp(elapsed * 1000 / ms, 0, 1);
+                double p = Math.Clamp(elapsed / TimeSpan.FromMilliseconds(ms).TotalSeconds, 0, 1);
                 if (pressed) _ctaTravel.Y = from + (to - from) * p;
                 else if (p < 0.6)
                 {
