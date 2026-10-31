@@ -215,22 +215,24 @@ public sealed class RemoteDirectoryTabTests
                 Dispatcher.UIThread.RunJobs();
             }
 
-            // A session that is not listed: "Private only" even with a controller on.
+            // A session that is not listed stays private even with a controller on.
             await relay.StartAsync("light");
             await Poll(true);
             Assert.True(pill.IsVisible);
-            Assert.Equal("Private only", text.Text);
+            Assert.Equal("Remote: private", text.Text);
+            Assert.Equal("Your Remote session is private: you are not listed in the Available Subjects Directory. Goon tables have their own Who sees this table switch.", ToolTip.GetTip(pill));
             await Poll(false);
 
             // Listed, then claimed by a controller, then listed again when it leaves.
             tab.FindControl<CheckBox>("ChkOptIntoDirectory")!.IsChecked = true;
             await tab.RunOptInChainAsync();
-            Assert.Equal("Listed", text.Text);
+            Assert.Equal("Remote: listed", text.Text);
             Assert.True(tab.FindControl<Border>("ListedConfirmationPanel")!.IsVisible);
             await Poll(true);
-            Assert.Equal("Claimed", text.Text);
+            Assert.Equal("Remote: claimed", text.Text);
+            Assert.Equal("A controller has claimed your Remote listing.", ToolTip.GetTip(pill));
             await Poll(false);
-            Assert.Equal("Listed", text.Text);
+            Assert.Equal("Remote: listed", text.Text);
 
             // The session ends: the pill goes.
             await relay.StopAsync();
@@ -249,9 +251,12 @@ public sealed class RemoteDirectoryTabTests
     public void Pill_states_match_wpf()
     {
         Assert.False(MainShellWindow.DirectoryPillFor(active: false, optedIn: true, claimed: true).Visible);
-        Assert.Equal(("Private only", "#8A8AA0"), Pick(MainShellWindow.DirectoryPillFor(true, false, true)));
-        Assert.Equal(("Listed", "#B47BFF"), Pick(MainShellWindow.DirectoryPillFor(true, true, false)));
-        Assert.Equal(("Claimed", "#00FF88"), Pick(MainShellWindow.DirectoryPillFor(true, true, true)));
+        Assert.Equal(("Remote: private", "#8A8AA0"), Pick(MainShellWindow.DirectoryPillFor(true, false, true)));
+        Assert.Equal("Your Remote session is private: you are not listed in the Available Subjects Directory. Goon tables have their own Who sees this table switch.", MainShellWindow.DirectoryPillFor(true, false, true).Tip);
+        Assert.Equal(("Remote: listed", "#B47BFF"), Pick(MainShellWindow.DirectoryPillFor(true, true, false)));
+        Assert.Equal("Your Remote session is listed in the Available Subjects Directory and waiting to be claimed.", MainShellWindow.DirectoryPillFor(true, true, false).Tip);
+        Assert.Equal(("Remote: claimed", "#00FF88"), Pick(MainShellWindow.DirectoryPillFor(true, true, true)));
+        Assert.Equal("A controller has claimed your Remote listing.", MainShellWindow.DirectoryPillFor(true, true, true).Tip);
         static (string, string) Pick(MainShellWindow.DirectoryPill p) => (p.Text, p.DotHex);
     }
 
