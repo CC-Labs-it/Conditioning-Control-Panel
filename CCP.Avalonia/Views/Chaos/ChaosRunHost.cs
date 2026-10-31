@@ -252,6 +252,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.PushEvent($"{ChaosGlyphs.Gold} playing with fire +{gold} gold");
                 Pulse(Color.FromRgb(255, 140, 60), 0.30);
             }
+            // WPF ChaosModeService.cs:2028-2036: brink residue and the every-snap reward ring.
+            var center = BubbleOverlay.CenterPx(b);
+            if (_state.AftermathEnabled && fuseSecLeft <= 1.5)
+            {
+                BubbleOverlay.SnapHazards.Residue(center.X, center.Y, BubbleOverlay.Field.Clock());
+                ChaosFieldFxOverlay.Residue(center, ChaosSnapHazards.ResidueRadius, ChaosSnapHazards.ResidueLifeMs);
+            }
+            if (_state.RippleEnabled)
+            {
+                BubbleOverlay.SnapHazards.Ripple(center.X, center.Y);
+                if (ChaosSkiaFxOverlay.Enabled)
+                    ChaosSkiaFxOverlay.Ripple(center, ChaosSnapHazards.RippleRadius, ChaosSnapHazards.RippleLifeMs);
+                else ChaosFieldFxOverlay.Ripple(center, ChaosSnapHazards.RippleRadius, ChaosSnapHazards.RippleLifeMs);
+            }
             if (lastBreath > 1)
             {
                 _state.PushEvent($"⏱ last breath! x{lastBreath:0}");
@@ -260,7 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             else Pulse(Color.FromRgb(90, 255, 150), 0.16);   // soft green confirm
             if (slowburn > 1) _state.PushEvent("🐌 slow burn! x3");
             _state.PushEvent($"✔ snapped {spec.Payload.DisplayName}");
-            // ponytail: defuse lessons, first-times, regen, aftermath, ripple, combo milestones and
+            // ponytail: defuse lessons, first-times, regen, combo milestones and
             // the brink narrative -> chaos-payout-fallin-d; the defuse barks -> chaos-payout-barks.
         }
 

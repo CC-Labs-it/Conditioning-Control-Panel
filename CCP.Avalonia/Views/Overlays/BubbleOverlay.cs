@@ -43,6 +43,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal static class BubbleOverlay
     {
         internal static readonly AmbientBubbleField Field = new();
+        internal static readonly Services.Chaos.ChaosSnapHazards SnapHazards = new();
+
+        // WPF BubbleService.cs:2994 CenterPx: global DIPs become physical pixels using the bubble's monitor.
+        internal static Point CenterPx(AmbientBubble b)
+        {
+            double scale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+            return new Point(b.CenterX * scale, b.CenterY * scale);
+        }
+
+        // WPF BubbleService.cs:555,1739-1757: after movement, sweep through normal paid pop routing.
+        internal static void TickSnapHazards() => SnapHazards.Step(Field.Bubbles.ToArray(), Field.Clock(),
+            Field.HoldChaos, b => { var p = CenterPx(b); return (p.X, p.Y); }, b =>
+            {
+                if (b.Spec?.IsLive == true)
+                {
+                    if (b.Snap()) Field.ChaosDefused?.Invoke(b);
+                }
+                else PopChaos(b);
+            }, (x, y, b) =>
+            {
+                var from = new Point(x, y); var to = CenterPx(b);
+                if (Chaos.ChaosSkiaFxOverlay.Enabled) Chaos.ChaosSkiaFxOverlay.Strike(new[] { (from, to) });
+                else Chaos.ChaosEStimOverlay.Strike(new[] { (new PixelPoint((int)x, (int)y),
+                    new PixelPoint((int)to.X, (int)to.Y)) });
+            });
         private static readonly List<BubbleOverlayWindow> Windows = new();
         private static readonly List<Screen> Targets = new();
         private static DispatcherTimer? _spawnTimer;
@@ -181,6 +206,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // ---- Chaos field (WPF BubbleService.BeginChaosMode / SpawnChaosBubble / EndChaosMode) ----
         private static Action<AmbientBubble>? _chaosPopped;
         private static Func<AmbientBubble, bool>? _chaosCanChannel;
+        // WPF BubbleService.cs:1386-1391: hazards keep advancing when a run's field is empty.
+        internal static bool CanIdle => Field.Bubbles.Count == 0 && _chaosPopped == null;
 
         /// <summary>WPF Detonate/CompleteDefuse anchor the pop point at the bubble's centre.</summary>
         private static void AnchorPop(AmbientBubble b) { ChaosLastPopX = b.CenterX; ChaosLastPopY = b.CenterY; }
@@ -243,6 +270,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
+            SnapHazards.Clear();   // WPF EndChaosMode clears ripples/residue (:2021-2022)
             Field.HoldChaos = false;
             _chaosPopped = null;
             _chaosCanChannel = null;
@@ -331,9 +359,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
                 Field.Step();
+                TickSnapHazards();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
-                if (Field.Bubbles.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
+                if (CanIdle) { _lastStep = null; return; }   // idle until the next spawn
             }
             RequestFrame();
         }
