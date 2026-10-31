@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
@@ -181,9 +182,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 VerticalAlignment = VerticalAlignment.Top,
             };
             label.Build();
+            Control line = label;
+            // WPF ChaosModeService.cs:434 prefixes a mantra with a diamond. Keep the mark
+            // in the head as a Fluent icon, outside the outlined announcement text.
+            if (a.Kind == ChaosAnnounceKind.Mantra)
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal,
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top };
+                row.Children.Add(new IconGlyph { Kind = IconKind.Diamond, Variant = IconVariant.Filled,
+                    Size = FontSizeDip, Foreground = fill, VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 12, 0) });
+                row.Children.Add(label);
+                line = row;
+            }
             _scale = new ScaleTransform(ChaosAnnounceTiming.PopFrom, ChaosAnnounceTiming.PopFrom);
-            label.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-            label.RenderTransform = _scale;
+            line.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+            line.RenderTransform = _scale;
 
             // Anchored just under the effect-banner strip, centred over the primary work area.
             var anchor = new Grid
@@ -194,7 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 IsHitTestVisible = false,
             };
             if (!double.IsNaN(wa.width)) anchor.Width = wa.width;
-            anchor.Children.Add(label);
+            anchor.Children.Add(line);
             _host.Children.Clear();
             _host.Children.Add(anchor);
         }

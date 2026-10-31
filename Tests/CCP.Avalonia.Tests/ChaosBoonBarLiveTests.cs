@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
+using Avalonia.LogicalTree;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Services.Chaos;
@@ -36,6 +39,7 @@ public sealed class ChaosBoonBarLiveTests
             var resolver = ChaosRunState.IconResolver;
             try
             {
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
                 var boon = ChaosBoonPool.All.First(b => !b.IsCurse);
                 ChaosMeta.State.EquippedStartBoon = boon.Id;
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, ScriptedFirstRun = scripted });
@@ -47,7 +51,16 @@ public sealed class ChaosBoonBarLiveTests
                 Assert.Equal(scripted ? 0 : 1, state.RunPickTiles.Count);
                 Assert.Equal(scripted ? 0 : 1, bar.Row.Children.Count);
                 Assert.Equal(!scripted, bar.Pill.IsVisible);
-                if (!scripted) Assert.Equal(boon.Id, Assert.Single(state.RunPickTiles).Id);
+                if (!scripted)
+                {
+                    Assert.Equal(boon.Id, Assert.Single(state.RunPickTiles).Id);
+                    var announcement = ChaosAnnouncerOverlay.Active!;
+                    Assert.Equal(boon.Name, announcement.Current!.Text);
+                    var mark = Assert.Single(announcement.GetLogicalDescendants().OfType<IconGlyph>());
+                    Assert.Equal(FluentIcons.Common.Symbol.Diamond, mark.Kind);
+                    Assert.Equal(FluentIcons.Common.IconVariant.Filled, mark.Variant);
+                    Assert.False(mark.IsFallback);
+                }
             }
             finally
             {
