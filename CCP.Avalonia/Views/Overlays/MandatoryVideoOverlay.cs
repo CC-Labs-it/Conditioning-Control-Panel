@@ -50,7 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
-        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons);
+        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons, FloatingVideoReveal? Reveal = null);
 
         private readonly List<Surface> _surfaces = new();
         private readonly List<Window> _messages = new();
@@ -78,6 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private DateTime Now => Time.GetUtcNow().UtcDateTime;
         private DispatcherTimer? _graceTimer, _guard;
         private readonly Stopwatch _sinceShow = new();
+        private readonly Stopwatch _sinceReady = new();
 
         private MandatoryVideoOverlay() => Scheduler = new MandatoryVideoScheduler(this)
         {
@@ -129,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
+            _sinceReady.Reset();
             _sinceFrame.Reset();
             PlayedSkew = 0;
             FirstFrameMs = -1;
@@ -186,6 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     FirstFrameMs = _sinceShow.ElapsedMilliseconds;
                     if (!_gracePaused) _sinceFrame.Start();   // WPF arms the length/max timers once playing
                     Log.Information("VideoService: first frame after {Ms} ms", FirstFrameMs);
+                    foreach (var surface in _surfaces) surface.Reveal?.Present();
                     ShowVideoControls();   // mute and close, once the clip is rolling (MandatoryVideoOverlay.Controls.cs)
                 }
                 var fill = _surfaces.Any(x => x.Fill.IsVisible);
@@ -221,6 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _media = new Media(vlc, path, FromType.FromPath);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
+            _sinceReady.Restart();
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _guard.Tick += (_, _) => GuardTick();
             _guard.Start();
@@ -327,13 +331,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF: strict vetoes a user close while playing; a non-strict close is a dismiss.
             w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
-            w.Show();
+            var reveal = floating ? new FloatingVideoReveal(w) : null;
             if (!floating)
             {
+                w.Show();
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
-            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
+            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, reveal);
         }
 
         /// <summary>WPF GracePauseOverlayWindow's card: 360x200, centred, #1A1A2E with a 2 px pink edge,
@@ -483,6 +488,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (_gracePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
             var framed = FirstFrameMs >= 0;
+            // LibVLC is ready when Play returns; unlike the browser host there is no page-ready wait.
+            if (Floating && ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameExpired(_sinceReady.Elapsed.TotalSeconds, framed))
+            {
+                Log.Warning("VideoService: floating clip skipped: no first frame after 4 s");
+                Scheduler.End();
+                return;
+            }
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
                 (_player?.VideoTrackCount ?? -1) != 0, (_player?.Length ?? 0) / 1000.0,
@@ -902,7 +914,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _player = null;
                 try { _media?.Dispose(); } catch { }
                 _media = null;
-                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; x.Window.Close(); }
+                foreach (var x in _surfaces)
+                {
+                    x.Video.Source = x.Fill.Source = null;
+                    if (x.Reveal is { } reveal) reveal.Close();
+                    else x.Window.Close();
+                }
                 _surfaces.Clear();
                 _sink?.Free();
                 _sink = null;

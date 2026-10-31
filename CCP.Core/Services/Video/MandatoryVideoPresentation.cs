@@ -23,6 +23,10 @@ namespace ConditioningControlPanel.Services.Video
         /// One trigger opens ONE window; this is only the limit.</summary>
         public const int MaxWindows = 4;
 
+        /// <summary>A floating clip with no presented frame is skipped after four seconds.</summary>
+        public static bool FirstFrameExpired(double readySeconds, bool frameSeen) =>
+            !frameSeen && readySeconds >= 4;
+
         public const int MinSizePercent = 15, MaxSizePercent = 60, DefaultSizePercent = 33;
         public const int MinSpeedPercent = 10, MaxSpeedPercent = 100, DefaultSpeedPercent = 35;
 
