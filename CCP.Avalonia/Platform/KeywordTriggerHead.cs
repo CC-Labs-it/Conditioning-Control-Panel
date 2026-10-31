@@ -14,7 +14,7 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>Keyboard/audio slice of WPF KeywordTriggerService. OCR and the other actions remain a follow-up.</summary>
+/// <summary>Keyboard audio and basic visual slice of WPF KeywordTriggerService. OCR and other actions remain a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -162,6 +162,13 @@ internal sealed class KeywordAudioRuntime
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
         }
+        // WPF KeywordTriggerService.cs:1263-1269 holds dispatch during panic quiet.
+        if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+        // WPF :1286-1300 merges enabled effects by variant, in preset priority order.
+        var effects = fired.SelectMany(t => t.Actions ?? new()).OfType<VisualEffectAction>()
+            .Where(a => a.Enabled).Select(a => a.Effect).Distinct().ToList();
+        if (fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
+            effects.Add(fired[0].VisualEffect); // WPF :1236-1239 legacy fallback
         // WPF merge: preset first, and only the first enabled PlayAudio action wins.
         var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
         if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
@@ -171,6 +178,38 @@ internal sealed class KeywordAudioRuntime
                 PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
         }
         if (audio != null) Play(audio);
+        foreach (var effect in effects) FireVisual(effect, fired[0].Keyword);
+    }
+
+    private void FireVisual(KeywordVisualEffect effect, string keyword)
+    {
+        try
+        {
+            // WPF KeywordTriggerService.cs:1768-1787. Reuse the installed head renderers.
+            switch (effect)
+            {
+                case KeywordVisualEffect.SubliminalFlash:
+                    if (CoreSubliminal.PickPhrase() is { } phrase) CoreSubliminal.ShowProvider?.Invoke(phrase);
+                    break;
+                case KeywordVisualEffect.ExactSubliminal:
+                    // WPF Subliminal/SubliminalService.cs:314-323: custom text bypasses whisper lookup.
+                    var text = keyword.ToUpperInvariant().Trim();
+                    if (text.Length > 200) text = text.Substring(0, 200);
+                    text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]*>", "");
+                    if (!string.IsNullOrWhiteSpace(keyword))
+                    {
+                        Views.Overlays.SubliminalWhisperShow.HapticThenDraw(text);
+                        CoreProgression.AddXP(10, "Subliminal");
+                    }
+                    // Always mute, even with loop protection off. Never shorten an existing mute.
+                    _cooldowns.Mute(keyword, 3000, Now().ToUniversalTime());
+                    break;
+                case KeywordVisualEffect.ImageFlash:
+                    CoreFlash.ShowProvider?.Invoke();
+                    break;
+            }
+        }
+        catch (Exception ex) { Log.Debug(ex, "Keyword visual failed"); }
     }
 
     // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic

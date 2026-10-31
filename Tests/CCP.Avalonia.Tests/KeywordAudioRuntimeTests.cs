@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -55,6 +57,115 @@ public sealed class KeywordAudioRuntimeTests
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
                 CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled) = saved;
         }
+    });
+
+    [Fact]
+    public void VisualChoicesReachExistingRenderersAndExactEchoWaitsThreeSeconds() => Run((engine, s, _) =>
+    {
+        var shown = new List<string>();
+        var old = SubliminalWhisperShow.Draw;
+        var oldXp = CoreProgression.AddXPProvider;
+        var xp = new List<double>();
+        try
+        {
+            SubliminalWhisperShow.Draw = shown.Add;
+            CoreProgression.AddXPProvider = (amount, source) => { Assert.Equal("Subliminal", source); xp.Add(amount); };
+            s.AwarenessLoopProtectionEnabled = false;
+            // The real drawer's effect picker rebuilds the actions consumed by keyboard dispatch.
+            var panel = new ConditioningControlPanel.Avalonia.Views.Controls.Companion.KeywordTriggersPanel();
+            panel.GetLogicalDescendants().OfType<ComboBox>().Single(c => c.Items.Count == 8).SelectedIndex = 3;
+            Assert.Contains(s.KeywordTriggers[0].Actions, a => a is VisualEffectAction { Effect: KeywordVisualEffect.ExactSubliminal });
+            Type(engine, "sit");
+            Assert.Equal(new[] { "SIT" }, shown);
+            engine.Key(ConditioningControlPanel.Services.KeywordInputKey.Clear);
+            Type(engine, "sit"); Assert.Single(shown);
+            engine.Key(ConditioningControlPanel.Services.KeywordInputKey.Clear);
+            var now = engine.Now(); engine.Now = () => now.AddMilliseconds(2999);
+            Type(engine, "sit"); Assert.Single(shown);
+            engine.Key(ConditioningControlPanel.Services.KeywordInputKey.Clear);
+            engine.Now = () => now.AddMilliseconds(3000);
+            Type(engine, "sit"); Assert.Equal(2, shown.Count);
+            Assert.Equal(new double[] { 10, 10 }, xp);
+        }
+        finally { SubliminalWhisperShow.Draw = old; CoreProgression.AddXPProvider = oldXp; }
+    });
+
+    [Theory]
+    [InlineData("<b>sit</b>", "SIT")]
+    [InlineData("  sit  ", "SIT")]
+    [InlineData("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|sit", "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")]
+    public void ExactCustomTextUsesWpfSanitizing(string keyword, string expected) => Run((engine, s, _) =>
+    {
+        var shown = new List<string>(); var old = SubliminalWhisperShow.Draw;
+        try
+        {
+            SubliminalWhisperShow.Draw = shown.Add;
+            s.KeywordTriggers[0].Keyword = keyword;
+            s.KeywordTriggers[0].MatchType = KeywordMatchType.Regex;
+            s.KeywordTriggers[0].Actions = new() { new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal } };
+            Type(engine, keyword);
+            Assert.Equal(expected, Assert.Single(shown));
+        }
+        finally { SubliminalWhisperShow.Draw = old; }
+    });
+
+    [Fact]
+    public void VisualMergeSkipsDisabledAndDeduplicatesVariantsWithPresetKeyword() => Run((engine, s, _) =>
+    {
+        var shown = new List<string>(); var flashes = 0;
+        var old = CoreSubliminal.ShowProvider; var oldDraw = SubliminalWhisperShow.Draw; var oldFlash = CoreFlash.ShowProvider;
+        var pool = s.SubliminalPool;
+        try
+        {
+            CoreSubliminal.ShowProvider = shown.Add; SubliminalWhisperShow.Draw = shown.Add; CoreFlash.ShowProvider = () => flashes++;
+            s.SubliminalPool = new() { ["pool phrase"] = true };
+            s.KeywordTriggers[0].Actions = new() {
+                new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal, Enabled = false },
+                new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash },
+                new VisualEffectAction { Effect = KeywordVisualEffect.SubliminalFlash } };
+            s.KeywordTriggers.Add(new KeywordTrigger { Id = "preset:visual", Keyword = "SIT", CooldownSeconds = 0,
+                Actions = new() { new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash },
+                    new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal } } });
+            Type(engine, "sit");
+            Assert.Equal(1, flashes);
+            Assert.Equal(new[] { "SIT", "pool phrase" }, shown);
+        }
+        finally { CoreSubliminal.ShowProvider = old; SubliminalWhisperShow.Draw = oldDraw; CoreFlash.ShowProvider = oldFlash; s.SubliminalPool = pool; }
+    });
+
+    [Fact]
+    public void DisabledVisualActionDoesNotReachTheRenderer() => Run((engine, s, _) =>
+    {
+        var flashes = 0; var old = CoreFlash.ShowProvider;
+        try
+        {
+            CoreFlash.ShowProvider = () => flashes++;
+            s.KeywordTriggers[0].Actions = new() {
+                new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash, Enabled = false } };
+            Type(engine, "sit"); Assert.Equal(0, flashes);
+        }
+        finally { CoreFlash.ShowProvider = old; }
+    });
+
+    [Fact]
+    public void LegacyVisualFallbackAndPanicQuietApplyToAudioAndVisuals() => Run((engine, s, played) =>
+    {
+        var flashes = 0; var old = CoreFlash.ShowProvider;
+        try
+        {
+            CoreFlash.ShowProvider = () => { Assert.Single(played); flashes++; };
+            s.KeywordTriggers[0].Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash });
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Type(engine, "sit"); Assert.Empty(played); Assert.Equal(0, flashes);
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            s.AwarenessLoopProtectionEnabled = false;
+            s.KeywordTriggers[0].AudioFilePath = ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).FilePath;
+            s.KeywordTriggers[0].Actions.Clear();
+            s.KeywordTriggers[0].VisualEffect = KeywordVisualEffect.ImageFlash;
+            var now = engine.Now(); engine.Now = () => now.AddMinutes(10);
+            Type(engine, "sit"); Assert.Equal(1, flashes); Assert.Single(played);
+        }
+        finally { CoreFlash.ShowProvider = old; ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
     });
 
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
