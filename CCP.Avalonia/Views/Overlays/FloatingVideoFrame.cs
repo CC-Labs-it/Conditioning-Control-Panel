@@ -4,7 +4,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services.Video.Floating;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -15,7 +15,7 @@ internal sealed class FloatingVideoFrame
     private readonly Window _window;
     private readonly FloatingVideoMotionModel _motion;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
+    private readonly BeatLoop _beat;
     private readonly Func<double> _nowMs;
     private double _last;
     internal double MotionSpeed { get => _motion.Speed; set => _motion.Speed = value; }
@@ -33,15 +33,15 @@ internal sealed class FloatingVideoFrame
             var area = window.Screens.All.OrderBy(s => Distance(s.WorkingArea, x, y)).FirstOrDefault()?.WorkingArea;
             return area is { } a ? (a.X, a.Y, a.Width, a.Height) : null;
         };
+        _beat = new BeatLoop(window, _ => Tick());
         window.PointerPressed += Press;
         window.PointerMoved += Move;
         window.PointerReleased += Release;
         window.PointerCaptureLost += (_, _) => { if (_motion.Held) _motion.Drop(); };
         window.Screens.Changed += DisplaysChanged;
-        window.Closed += (_, _) => { _timer.Stop(); _motion.Drop(); window.Screens.Changed -= DisplaysChanged; };
-        _timer.Tick += (_, _) => Tick();
+        window.Closed += (_, _) => { _beat.Stop(); _motion.Drop(); window.Screens.Changed -= DisplaysChanged; };
         RefreshDesktop();
-        _timer.Start();
+        _beat.Start();
     }
 
     private static double Distance(PixelRect r, double x, double y)
