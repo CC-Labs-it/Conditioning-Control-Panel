@@ -2167,6 +2167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         /// <summary>True between the wake chain starting and <see cref="FinishSummon"/>.</summary>
         private bool _summonChainLive;
+        private long _transitionEpoch; // Invalidate deferred FX when summon/dismiss overtakes it.
 
         private Action? _summonDone;
 
@@ -2179,6 +2180,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 if (_closingForGood) return;
+                _transitionEpoch++;
                 _transiting = true;
                 InputLocked = true;
 
@@ -2270,8 +2272,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     return;
                 }
 
+                _transitionEpoch++;
                 _transiting = true;
                 InputLocked = true;
+                FinishSummon();
                 StopIdleBeats();
                 DisarmPet();
                 CancelChain();
@@ -2532,13 +2536,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// </summary>
         private void After(int ms, Action act)
         {
+            var epoch = _transitionEpoch; // WPF Fx.cs:431 uses the same guard for presentation ownership.
             try
             {
                 DispatcherTimer.RunOnce(() =>
                 {
                     try
                     {
-                        if (_closingForGood) return;
+                        if (_closingForGood || epoch != _transitionEpoch) return;
                         act();
                     }
                     catch (Exception ex)

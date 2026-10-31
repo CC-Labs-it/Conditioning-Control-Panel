@@ -66,7 +66,7 @@ public sealed class EmiDeskSummonTests
             Assert.True(heard);
 
             Click();
-            await Pump(2000);   // wink + CRT off + burst sweep
+            await WaitForDismiss(svc);   // full canon wink + CRT off + burst sweep
             Assert.False(svc.IsOut);
             Assert.False(svc.Window!.IsVisible);
             Assert.False(heard);
@@ -123,6 +123,31 @@ public sealed class EmiDeskSummonTests
             Dispatcher.UIThread.RunJobs();
         }
     }
+
+    // WPF Fx.cs:143-179: wink (1280 ms), CRT off (230), then sparks (900).
+    // Wait for completion, asserting the outro keeps input locked through every pending step.
+    private static async Task WaitForDismiss(EmiDeskService svc)
+    {
+        for (int elapsed = 0; elapsed < 5000 && svc.IsOut; elapsed += 20)
+        {
+            Assert.True(svc.Window!.InputLocked);
+            await Pump(20);
+        }
+        Assert.False(svc.IsOut);
+        Assert.False(svc.Window!.IsVisible);
+    }
+
+    [Theory]
+    [InlineData(100)] // smoke lead pending
+    [InlineData(450)] // CRT-to-wake pending
+    public Task DismissDuringIntroCannotBeOvertakenByWake(int delay) => Muted(
+        () => Task.FromResult(EmiMuteChoice.Keep), async svc =>
+        {
+            await svc.Summon();
+            await Pump(delay);
+            svc.Dismiss();
+            await WaitForDismiss(svc);
+        });
 
     /// <summary>WPF ShowGiggle (Speech.cs:461): with EMI out and the mute accepted, the tube does not speak.</summary>
     [Fact]
@@ -186,7 +211,7 @@ public sealed class EmiDeskSummonTests
             await svc.Summon();
             Assert.True(svc.IsOut);
             section.FindControl<CheckBox>("ChkEnabled")!.IsChecked = false;
-            await Pump(2000);
+            await WaitForDismiss(svc);
             Assert.False(svc.IsOut);
             Assert.False(svc.Window!.IsVisible);
         }
@@ -212,7 +237,7 @@ public sealed class EmiDeskSummonTests
         win.RestorePlacement();
         Assert.Equal(moved, win.Position);
         svc.Dismiss();
-        await Pump(2000);
+        await WaitForDismiss(svc);
     });
 
     /// <summary>WPF EmiDock.Refresh :150-163: while she is out the chip's mini face mirrors the
@@ -235,7 +260,7 @@ public sealed class EmiDeskSummonTests
             Assert.Equal(">_<", mini.Face);
 
             svc.Dismiss();
-            await Pump(2000);
+            await WaitForDismiss(svc);
             Assert.False(svc.IsOut);
             Assert.Equal("0_0", mini.Face);
             svc.Window!.DrawFace("^_^");
