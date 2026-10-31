@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Services
                         }
                     }
                     if (!response.IsSuccessStatusCode)
-                        return (false, (string?)JObject.Parse(json)["error"] ?? Localization.Loc.GetF("msg_export_server_error_0", response.StatusCode), null);
+                        return (false, (string?)JsonConvert.DeserializeObject<JObject>(json)?["error"] ?? Localization.Loc.GetF("msg_export_server_error_0", response.StatusCode), null);
                     return (true, null, JToken.Parse(json).ToString(Formatting.Indented));
                 }
                 finally { retry?.Dispose(); }

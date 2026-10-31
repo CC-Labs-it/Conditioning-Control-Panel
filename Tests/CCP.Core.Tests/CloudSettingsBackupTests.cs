@@ -336,6 +336,7 @@ public sealed class CloudSettingsBackupTests : IDisposable
     [InlineData("malformed", HttpStatusCode.OK, "Data export requires an internet connection")]
     [InlineData("status", HttpStatusCode.Forbidden, "Server error: Forbidden")]
     [InlineData("status", HttpStatusCode.BadGateway, "Server error: BadGateway")]
+    [InlineData("empty", HttpStatusCode.BadGateway, "Server error: BadGateway")]
     public async Task ExportErrorsMatchWpf(string failure, HttpStatusCode status, string expected)
     {
         var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
@@ -346,7 +347,7 @@ public sealed class CloudSettingsBackupTests : IDisposable
             var settings = Signed();
             if (failure == "identity") settings.UnifiedId = null;
             _fake.Status = status;
-            _fake.Body = failure == "malformed" ? "invalid json" : "{}";
+            _fake.Body = failure == "empty" ? "" : failure == "malformed" ? "invalid json" : "{}";
             if (failure == "transport") _fake.BodyFor = _ => throw new HttpRequestException("connection failed");
             var result = await new CloudSettingsBackup(_fake).ExportDataAsync(settings);
             Assert.False(result.success);
