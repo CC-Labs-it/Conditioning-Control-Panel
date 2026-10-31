@@ -60,15 +60,32 @@ public sealed class JustDropWindowTests
     private static GameWindow? Open() => GameWindow.OpenForTests(GameWindow.JustDropId);
 
     [Fact]
-    public void ShopAndReplayAreOwnedByThePanel() => Run(shell =>
+    public void ShopAndReplayStayIndependentWhenThePanelIsMinimizedOrHidden() => Run(shell =>
     {
         JustDropService.SetServerEnabledForTests(true);
         shell.ShowTab("justdrop");
         var shop = Open()!;
-        Assert.Same(shell, shop.Owner);
+        Assert.Null(shop.Owner); // A plain native owner would hide the shop with the panel on Windows.
+        Assert.True(shop.ShowInTaskbar);
+        shell.WindowState = global::Avalonia.Controls.WindowState.Minimized;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shop.IsVisible);
+        Assert.NotEqual(global::Avalonia.Controls.WindowState.Minimized, shop.WindowState);
+        shell.Hide();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shop.IsVisible);
+        shell.Show();
+        shell.WindowState = global::Avalonia.Controls.WindowState.Normal;
         shop.Close();
         var replay = GameWindow.LaunchJustDropReplay("kept-order", shell)!;
-        Assert.Same(shell, replay.Owner);
+        Assert.Null(replay.Owner); // Replay ducks the panel itself, so it must not inherit its minimize.
+        Assert.True(replay.ShowInTaskbar);
+        Assert.Equal(global::Avalonia.Controls.WindowState.Minimized, shell.WindowState);
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, replay.WindowState);
+        Assert.True(replay.IsVisible);
+        shell.Hide();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(replay.IsVisible);
     });
 
     [Fact]

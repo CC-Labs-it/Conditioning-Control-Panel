@@ -102,7 +102,10 @@ public sealed class TakeawayShelfTests
         Assert.True(GameWindow.IsAnyOpen());
         var live = GameWindow.LaunchJustDropReplay("another-order", shell)!;
         Assert.Contains(Uri.EscapeDataString(JustDropHandoff.ReplayPath("code1")), live.PageUrl!.Query);
-        Assert.Same(shell, live.Owner);
+        Assert.Null(live.Owner);
+        Assert.Equal(WindowState.Minimized, shell.WindowState);
+        Assert.True(live.IsVisible);
+        Assert.True(live.ShowInTaskbar);
         Assert.Equal(WindowState.FullScreen, live.WindowState);
         live.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
         Assert.Equal(WindowState.Normal, live.WindowState);

@@ -81,7 +81,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 if (duck && shell.IsVisible && shell.WindowState == global::Avalonia.Controls.WindowState.Minimized)
                     shell.WindowState = state;
             };
-            window.Show(shell);
+            // WPF ChaosWebViewHost.cs:919-972 suspends native ownership before the hide cascade.
+            // Keep this window independent until that minimize/hide-aware glue is ported.
+            window.Show();
             if (duck) { shell.WindowState = global::Avalonia.Controls.WindowState.Minimized; window.Activate(); }
             return window;
         }
