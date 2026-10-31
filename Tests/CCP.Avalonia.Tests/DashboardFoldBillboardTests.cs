@@ -19,6 +19,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Billboard;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -33,7 +34,7 @@ public sealed class DashboardFoldBillboardTests
     public Task FoldChevronRevealAndBillboardFollowTheUser() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var old = CoreSettings.ServiceProvider;
@@ -163,7 +164,7 @@ public sealed class DashboardFoldBillboardTests
     public Task FoldedLaunchAtFullMotionStartsTheClock() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var old = CoreSettings.ServiceProvider;
@@ -204,6 +205,73 @@ public sealed class DashboardFoldBillboardTests
             var code = File.ReadAllText(Path.Combine(RepoRoot(), rel));
             code = Regex.Replace(code, @"//[^\n]*|/\*.*?\*/|""(?:\\.|[^""\\])*""", "", RegexOptions.Singleline);
             Assert.DoesNotMatch(@"Sfx|Audio|Sound|Chime|NAudio|(?<![A-Za-z])Play\(", code);   // a Play( call; Core ArtShouldPlay( is a rule, not a sound
+        }
+    }
+
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(6, false)]
+    public Task LiveArrivalRefreshesDotsAndPreservesTheWalk(double elapsed, bool jump) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        var clock = new SteppedClock();
+        BillboardCardHost.Time = clock;
+        var provider = new ArrivalProvider();
+        var deck = new BillboardDeck(() => new[] { provider },
+            () => new BillboardContext(BillboardTier.Free, DateTime.UtcNow, DateTime.Now),
+            new Dictionary<string, DateTime>());
+        var host = new BillboardCardHost(deck);
+        var window = new Window { Content = host, Width = 800, Height = 400 };
+        try
+        {
+            window.Show();
+            host.Begin();
+            Assert.True(host.HoldRunning);
+            clock.Now += (long)(elapsed * TimeSpan.TicksPerSecond);
+            provider.Live = true;
+            host.MarkDirty();
+            Assert.Equal(3, host.ChipButtons.Count);
+            Assert.Equal(jump ? "live" : "resume", host.CurrentCard!.Spec.Id);
+            if (!jump)
+            {
+                Assert.InRange(host.HoldProgress, 0.49, 0.51);
+                host.Advance();
+                Assert.Equal("live", host.CurrentCard!.Spec.Id);
+            }
+            host.Advance();
+            Assert.Equal("house", host.CurrentCard!.Spec.Id);
+            host.IsVisible = false;
+            provider.Extra = true;
+            host.MarkDirty();
+            Assert.Equal(3, host.ChipButtons.Count);
+            host.IsVisible = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(4, host.ChipButtons.Count);
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
+    private sealed class ArrivalProvider : IBillboardProvider
+    {
+        public bool Live, Extra;
+        public string Id => "arrival";
+        public event EventHandler? Changed { add { } remove { } }
+        public void Invoke(string target) { }
+        private static BillboardCardSpec Card(string id, BillboardCardKind kind) =>
+            new(id, kind, 1, "", id, "", "#ffffff", "", null, BillboardAction.None);
+        public IEnumerable<BillboardCardSpec> Current(BillboardContext context)
+        {
+            if (Live) yield return Card("live", BillboardCardKind.Live);
+            yield return Card("resume", BillboardCardKind.Resume);
+            yield return Card("house", BillboardCardKind.House);
+            if (Extra) yield return Card("event", BillboardCardKind.Event);
         }
     }
 

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
@@ -113,8 +114,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _targetModel = ResolveStartingModel();
             _txtAdvancedModel.Text = _targetModel;
             UpdateConsentDiskNote();
+            var ram = Platform.LocalAiHardware.TotalRamBytes();
+            var vram = Platform.LocalAiHardware.LargestVramBytes();
+            UpdatePerfCard(ram, vram);
 
             Opened += async (_, _) => await StartDetectAsync();
+        }
+
+        internal void UpdatePerfCard(long ram, long vram)
+        {
+            var fit = LocalAiHardwareRules.Judge(ram, vram);
+            var title = this.FindControl<TextBlock>("TxtPerfTitle")!;
+            title.Text = Loc.Get(fit == LocalAiHardwareRules.Fit.Below
+                ? "label_local_ai_perf_title_below" : "label_local_ai_perf_title");
+            if (fit == LocalAiHardwareRules.Fit.Below && this.TryFindResource("PinkBrush", out var brush))
+                title.Foreground = brush as global::Avalonia.Media.IBrush;
+            this.FindControl<TextBlock>("TxtPerfFound")!.Text =
+                (fit == LocalAiHardwareRules.Fit.Unknown ? "" : Loc.GetF("label_local_ai_perf_found",
+                    LocalAiHardwareRules.FormatGb(ram), LocalAiHardwareRules.FormatGb(vram)) + " ")
+                + Loc.Get("label_local_ai_perf_recommended");
         }
 
         private static string ResolveStartingModel()
