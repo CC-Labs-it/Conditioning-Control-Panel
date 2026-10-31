@@ -30,8 +30,8 @@ public enum EffectBubblePayloadKind
 ///
 /// <see cref="Fire"/> is invoked on the UI thread (from a timer tick or a click handler).
 /// The payloads are data here; what firing DOES is head-side, through <see cref="Firer"/>,
-/// which each head seeds at startup (WPF: EffectPayloadFiring; Avalonia: a logging no-op
-/// until its effect runner lands). The head's services own their own dispatching/threading.
+/// which each head seeds at startup (WPF: EffectPayloadFiring; Avalonia: Gif Rain dispatch,
+/// with logging for unported payloads). The head's services own their own dispatching/threading.
 /// </summary>
 public abstract class EffectPayload
 {

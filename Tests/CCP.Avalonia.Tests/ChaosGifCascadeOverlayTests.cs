@@ -201,6 +201,7 @@ public sealed class ChaosGifCascadeOverlayTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var now = DateTime.UtcNow;
+            var previousClock = BubbleOverlay.Field.Clock;
             BubbleOverlay.Field.Clock = () => now;
             int fired = 0;
             EffectPayload.Firer = _ => fired++;
@@ -233,6 +234,7 @@ public sealed class ChaosGifCascadeOverlayTests
             }
             finally
             {
+                BubbleOverlay.Field.Clock = previousClock;
                 ChaosRunHost.ForceShutdown();
                 ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
                 ChaosGifCascadeOverlay.ManualFramesForTests = false;
@@ -254,6 +256,7 @@ public sealed class ChaosGifCascadeOverlayTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var now = DateTime.UtcNow;
+            var previousClock = BubbleOverlay.Field.Clock;
             BubbleOverlay.Field.Clock = () => now;
             CoreSettings.Current.MasterVolume = 100;
             var events = new List<(string Key, float Volume)>();
@@ -275,8 +278,35 @@ public sealed class ChaosGifCascadeOverlayTests
                 ChaosRunHost.FirePayloadForDetonation(spec);
                 Assert.Equal(expected.Concat(expected), events);
             }
-            finally { ChaosRunHost.ForceShutdown(); }
+            finally
+            {
+                BubbleOverlay.Field.Clock = previousClock;
+                ChaosRunHost.ForceShutdown();
+            }
             return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
+    [InlineData("heavy")]
+    [InlineData("htlink")]
+    [InlineData("other")]
+    public async Task Frozen_clock_cases_restore_the_callers_clock(string testCase)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var previousClock = BubbleOverlay.Field.Clock;
+            Func<DateTime> sentinel = () => DateTime.UnixEpoch;
+            BubbleOverlay.Field.Clock = sentinel;
+            try
+            {
+                if (testCase == "heavy")
+                    await Heavy_detonations_are_dropped_during_pick_grace_and_real_rain_then_reset_on_shutdown();
+                else
+                    await Rain_stinger_uses_variant_and_only_plays_after_heavy_gate_accepts(testCase, testCase == "htlink");
+                Assert.Same(sentinel, BubbleOverlay.Field.Clock);
+            }
+            finally { BubbleOverlay.Field.Clock = previousClock; }
         });
     }
 
