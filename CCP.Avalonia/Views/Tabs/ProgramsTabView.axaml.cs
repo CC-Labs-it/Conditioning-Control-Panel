@@ -39,7 +39,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged += OnModChanged;   // the active mod's programs lead (WPF #966)
             Platform.ProgramEngineBridge.SessionChanged += OnProgramSessionChanged;   // P41
             HookIgnition();
+            ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MotionGateChanged += EntranceMotionChanged;
             RefreshPrograms();
+            Dispatcher.UIThread.Post(StartRunEntrance); // VisualRoot is set after the attach callback.
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -50,6 +52,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             UnsubscribePrograms();
             StopSessionSheen();
             UnhookIgnition();
+            ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MotionGateChanged -= EntranceMotionChanged;
+            CompleteRunEntrance();
             base.OnDetachedFromVisualTree(e);
         }
 

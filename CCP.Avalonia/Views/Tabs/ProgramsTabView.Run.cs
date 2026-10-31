@@ -80,11 +80,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             base.OnPropertyChanged(change);
             if (change.Property != IsVisibleProperty) return;
-            if (!IsVisible || VisualRoot is null) { SyncIgnition(); return; }
+            if (!IsVisible || VisualRoot is null) { CompleteRunEntrance(); SyncIgnition(); return; }
             var enrollment = AvApp.Programs?.ActiveEnrollment;
             var boundaryCrossed = _builtStale is { } built && enrollment != null &&
                                   built != IsSnapshotStale(enrollment, Clock.GetLocalNow().DateTime);
             if (_refreshPending || boundaryCrossed) RefreshPrograms();
+            StartRunEntrance();
             SyncIgnition();   // WPF :1661: clocks stop behind a hidden tab and re-arm on the way back
         }
 
@@ -97,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 return;
             }
             _refreshPending = false;
+            var runWasVisible = Find<StackPanel>("ProgramsRunPanel").IsVisible;
             SubscribePrograms();
 
             var svc = AvApp.Programs;
@@ -146,7 +148,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ToolTip.SetTip(Find<Button>("BtnProgramRestart"), restartBlocked);
                 Find<Button>("BtnProgramDismissGraduated").IsEnabled = !readOnly;
                 // WPF :540: the edge glow is a sibling of the whole view; leaving the run parks it.
-                if (!run) { StopIgnitionLoops(); _ignitionEnrollment = null; }
+                if (!run) { CompleteRunEntrance(); StopIgnitionLoops(); _ignitionEnrollment = null; }
+                else if (!runWasVisible) StartRunEntrance();
             }
         }
 
