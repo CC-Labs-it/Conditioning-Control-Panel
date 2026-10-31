@@ -308,6 +308,31 @@ public sealed class EmiDeskSummonTests
         finally { win.ShutDown(); }
     });
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1500)]
+    public Task PresentationAbandonsDismissalAndLeavesHerUsable(int delay) => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>
+    {
+        CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+        await svc.Summon();
+        var win = svc.Window!;
+        svc.Dismiss();
+        await Pump(delay);
+        win.BeginPresentation(() => { });
+        win.RunPresentationEntrance();
+        await Pump(3000);
+        Assert.True(win.IsVisible);
+        Assert.False(win.PresentationArriving);
+        win.EndPresentation();
+        win.PlayChain("shock");
+        Assert.True(win.ChainLive);
+        svc.Dismiss();
+        await Pump(3000);
+        Assert.False(win.IsVisible);
+        Assert.False(win.InputLocked);
+        Assert.False(svc.IsOut);
+    });
+
     /// <summary>P06: the panic registry's emi-desk-feedback entry kills a running chain.</summary>
     [Fact]
     public Task PanicEntryCancelsHerChain() => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>

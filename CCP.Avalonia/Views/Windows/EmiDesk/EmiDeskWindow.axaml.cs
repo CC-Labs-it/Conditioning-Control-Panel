@@ -893,6 +893,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         // ---------------------------------------------------------------- chains
 
+        /// <summary>Play a canon chain by id. Unknown ids are ignored.</summary>
         public void PlayChain(string chainId, Action? done = null, string? bodyFrameOverride = null)
             => PlayChain(EmiChains.Get(chainId), done, bodyFrameOverride);
 
@@ -920,11 +921,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             }, bodyFrameOverride);
         }
 
+        /// <summary>Say a line on the locked . / .. / ... cadence.</summary>
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
             => PlayChain(EmiChains.MakeSay(line, reactionFace, EmiChains.SayHoldMs(line)), done);
 
-        // WPF MainWindow.xaml.cs:1934-2013 leaves desk FX running. This head cancels feedback,
-        // so panic must also complete the hide/callback from WPF EmiDeskWindow.Fx.cs:182-203.
         internal void StopForPanic()
         {
             FinishSummon();
@@ -932,6 +932,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _finishDismiss?.Invoke();
         }
 
+        /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
         {
             StopPatFeedback();
@@ -2285,14 +2286,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 }
 
                 if (_finishDismiss != null) return;
-                bool finished = false;
-                Action finish = () =>
+                void finish()
                 {
-                    if (finished) return;
-                    finished = true;
+                    if (_finishDismiss != finish) return;
                     _finishDismiss = null;
                     FinishDismiss(done);
-                };
+                }
                 _finishDismiss = finish;
                 _transiting = true;
                 InputLocked = true;
@@ -2307,12 +2306,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 PlayChain("wink", () =>
                 {
-                    if (finished) return;
+                    if (_finishDismiss != finish) return;
                     if (_closingForGood) { finish(); return; }
                     CrtOff();
                     After(CrtOffMs, () =>
                     {
-                        if (finished) return;
+                        if (_finishDismiss != finish) return;
                         _bodyRoot.IsVisible = false;
                         Burst(spark: true);
                         After(FxLifeMs, finish);

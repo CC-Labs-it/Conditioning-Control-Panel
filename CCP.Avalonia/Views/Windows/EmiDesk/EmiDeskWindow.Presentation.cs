@@ -23,6 +23,7 @@ public partial class EmiDeskWindow
         _stopPresentation = stop;
         try
         {
+            _finishDismiss = null;
             FinishSummon(); CancelChain(); CloseRing(); CloseOptionsPanel(); CloseBook();
             StopIdleBeats(); DisarmPet(); _dragging = false; SweepFx(all: true); TearDownReactions();
         }

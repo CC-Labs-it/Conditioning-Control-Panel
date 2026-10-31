@@ -4,14 +4,7 @@ using Serilog;
 
 namespace ConditioningControlPanel.Services.EmiDesk;
 
-/// <summary>
-/// Plays one chain on the supplied surface dispatcher, the clock-driven twin of chains.js <c>playChain</c>: fx fires
-/// once at frame 0 (when the chain has one), the body move fires once at frame 0, the pose is
-/// set once for the whole chain, and <see cref="EmiChainHooks.Done"/> fires after the LAST
-/// frame's hold. <see cref="Cancel"/> kills the pending timer and does NOT call Done.
-///
-/// One player owns one surface: <see cref="Play"/> cancels whatever was running first.
-/// </summary>
+/// <summary>Clocked chains hold the last frame before Done; Cancel discards Done and stale ticks.</summary>
 public sealed class EmiChainPlayback : IDisposable
 {
     private readonly TimeProvider _clock;
@@ -23,10 +16,8 @@ public sealed class EmiChainPlayback : IDisposable
     private int _index;
     private bool _disposed;
 
-    /// <summary>The chain currently running, or null.</summary>
     public EmiChain? Current => _chain;
 
-    /// <summary>True while a chain is on screen.</summary>
     public bool IsLive => _chain != null;
 
     public EmiChainPlayback(TimeProvider clock, Action<Action> post)
@@ -35,10 +26,6 @@ public sealed class EmiChainPlayback : IDisposable
         _post = post;
     }
 
-    /// <summary>
-    /// Start a chain. <paramref name="bodyFrameOverride"/> is the call-site pose override the
-    /// campus uses for the pet streak (a shared chain, a different pose).
-    /// </summary>
     public void Play(EmiChain? chain, EmiChainHooks hooks, string? bodyFrameOverride = null)
     {
         if (_disposed) return;
@@ -119,17 +106,13 @@ public sealed class EmiChainPlayback : IDisposable
         }
     }
 
-    /// <summary>Kill the running chain. Done is NOT called.</summary>
     public void Cancel()
     {
         _epoch++;
         try
         {
-            if (_timer != null)
-            {
-                _timer.Dispose();
-                _timer = null;
-            }
+            _timer?.Dispose();
+            _timer = null;
         }
         catch (Exception ex)
         {
@@ -140,7 +123,6 @@ public sealed class EmiChainPlayback : IDisposable
         _index = 0;
     }
 
-    /// <inheritdoc/>
     public void Dispose()
     {
         _disposed = true;
