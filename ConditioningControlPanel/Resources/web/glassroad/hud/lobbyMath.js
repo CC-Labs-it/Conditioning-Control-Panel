@@ -10,10 +10,12 @@ import { LOOK_OUTFITS, LOOK_VEHICLES, DEFAULT_LOOK, normLook, SHOP_LOOK_OUTFITS,
 import { KARTS, PAINTS, UMBRELLAS, TRAILS, lockedKarts, ownedKarts, ownedLooks } from './garageState.js';
 import { formatTime, ordinal, BOT_NAMES } from './format.js';
 import { LINK_TOKEN } from '../net/lobbyApi.js';
+import { COURSES } from '../track/catalog.js';
 
 export const POLL_MS = 15000;
 export const PRIME_TIER = 2;
-export const TRACKS = Object.freeze({ threshold: 'Threshold' });
+export const TRACKS = Object.freeze(Object.fromEntries(COURSES.map((c) => [c.id, c.name])));
+const ONLINE_COURSES = COURSES.filter((c) => c.online);
 export const LOOK_KEY = 'glassroad.look.v1';
 
 const int = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
@@ -39,6 +41,8 @@ export function rowStartsIn(row, listMs, nowMs) {
   if (!row || row.startsIn == null || !(row.startsIn >= 0)) return null;
   return Math.max(0, Math.round(row.startsIn - Math.max(0, (nowMs - listMs) / 1000)));
 }
+/** The small line under an open table: who hosts it, its laps, when it starts. The course is the row's title. */
+export const tableLine = (r, starts) => 'Host ' + r.host + (r.friend ? ' (friend)' : '') + ', ' + r.laps + (r.laps === 1 ? ' lap, ' : ' laps, ') + startsLabel(starts);
 export const startsLabel = (s) => (s == null ? 'Host starts' : s <= 0 ? 'Starting' : s < 60 ? 'Starts in ' + s + ' s' : 'Starts in ' + Math.ceil(s / 60) + ' min');
 
 /**
@@ -89,14 +93,21 @@ const HOST_STEPS = { laps: [1, 9], seats: [2, 8] };
 export function cleanHost(f = {}) {
   const mode = f.mode === 'friends' ? 'friends' : 'open';
   return {
-    mode, laps: int(f.laps, 1, 9, 3), seats: int(f.seats, 2, 8, 8), botFill: f.botFill !== false,
+    mode, track: ONLINE_COURSES.some((c) => c.id === f.track) ? f.track : null, laps: int(f.laps, 1, 9, 3), seats: int(f.seats, 2, 8, 8), botFill: f.botFill !== false,
     laneKeeper: mode === 'friends' ? !!f.laneKeeper : false,
   };
 }
-/** One step of a host form row (dir +1 / -1). Numbers wrap; switches flip; lane keeper stays off on open tables. */
+/** One step of a host form row (dir +1 / -1). Numbers and courses wrap; switches flip; lane keeper stays off on open
+ * tables. A new course brings its own lap count unless the host already changed it. */
 export function stepHost(form, key, dir = 1) {
   const f = cleanHost(form);
   if (key === 'mode') f.mode = f.mode === 'open' ? 'friends' : 'open';
+  else if (key === 'track') {
+    const n = ONLINE_COURSES.length, at = Math.max(0, ONLINE_COURSES.findIndex((c) => c.id === f.track));
+    const was = ONLINE_COURSES[at], to = ONLINE_COURSES[(at + (dir < 0 ? -1 : 1) + n) % n];
+    if (f.laps === was.laps) f.laps = to.laps;
+    f.track = to.id;
+  }
   else if (HOST_STEPS[key]) { const [lo, hi] = HOST_STEPS[key], span = hi - lo + 1; f[key] = lo + (((f[key] - lo + (dir < 0 ? -1 : 1)) % span) + span) % span; }
   else if (key === 'botFill' || key === 'laneKeeper') f[key] = !f[key];
   return cleanHost(f);
@@ -104,7 +115,7 @@ export function stepHost(form, key, dir = 1) {
 /** POST /v2/race/open body (NET.md section 12). No stakes here: they wait for RACE_STAKES. */
 export function hostBody(form, look, track = 'threshold') {
   const f = cleanHost(form);
-  return { track, mode: f.mode, seats: f.seats, laps: f.laps, botFill: f.botFill, laneKeeper: f.laneKeeper, look: normLook(look) };
+  return { track: f.track || track, mode: f.mode, seats: f.seats, laps: f.laps, botFill: f.botFill, laneKeeper: f.laneKeeper, look: normLook(look) };
 }
 
 // ---- seats -------------------------------------------------------------------------------------

@@ -4,13 +4,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  hostGate, isPrime, signedIn, tableRows, rowStartsIn, startsLabel, pollDue, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS,
+  tableLine, hostGate, isPrime, signedIn, tableRows, rowStartsIn, startsLabel, pollDue, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS,
   applySeats, applySeat, seatName, seatBadges, raceTags, seatRows, readyCount, canStart, hostSeat, lobbyNote, holdNote, hostMoved, lookChoices, cycleLook, lookLabel,
   loadLook, saveLook, LOOK_KEY, countdown, serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, trackName,
 } from '../hud/lobbyMath.js';
 import { PRESETS, POSE_BASE, presetOf, poseOf, presetByPose, poseHoldS, emoteAllowed, isPreset, CLIP_S } from '../hud/presets.js';
 import { LOOK_OUTFITS, LOOK_VEHICLES, DEFAULT_LOOK, ABORTS, CLOSE, TYPES } from '../net/protocol.js';
 import { BOT_NAMES } from '../hud/format.js';
+import { COURSES } from '../track/catalog.js';
 
 const G = fileURLToPath(new URL('..', import.meta.url));
 const json = (f) => JSON.parse(readFileSync(G + f, 'utf8'));
@@ -54,6 +55,9 @@ test('open tables: starts-in counts down on the list clock', () => {
   assert.equal(startsLabel(12), 'Starts in 12 s');
   assert.equal(startsLabel(90), 'Starts in 2 min');
   assert.equal(trackName('threshold'), 'Threshold');
+  assert.equal(trackName('keep'), 'The Keep');
+  assert.equal(trackName('goonworks'), 'GOONWORKS');
+  assert.equal(tableLine({ host: 'Ana', friend: true, laps: 2 }, null), 'Host Ana (friend), 2 laps, Host starts');
   assert.equal(trackName('glass-bay'), 'Glass-bay');
 });
 
@@ -68,7 +72,7 @@ test('polling every 15 s like Goon, quick match retry clamped', () => {
 
 test('host form: steps wrap, lane keeper stays off on open tables, body matches the lobby route', () => {
   let f = cleanHost(HOST_DEFAULTS);
-  assert.deepEqual(f, { mode: 'open', laps: 3, seats: 8, botFill: true, laneKeeper: false });
+  assert.deepEqual(f, { mode: 'open', track: null, laps: 3, seats: 8, botFill: true, laneKeeper: false });
   assert.equal(stepHost(f, 'laps', -1).laps, 2);
   assert.equal(stepHost({ ...f, laps: 9 }, 'laps', 1).laps, 1);
   assert.equal(stepHost({ ...f, seats: 2 }, 'seats', -1).seats, 8);
@@ -79,6 +83,8 @@ test('host form: steps wrap, lane keeper stays off on open tables, body matches 
   assert.equal(f.laneKeeper, true);
   assert.equal(stepHost(f, 'mode', 1).laneKeeper, false, 'switching back to open drops it');
   assert.equal(stepHost(f, 'botFill', 1).botFill, false);
+  assert.equal(hostBody({ track: 'keep' }, null, 'threshold').track, 'keep', 'the host form names its course');
+  assert.equal(hostBody({ track: 'nowhere' }, null, 'mainframe').track, 'mainframe', 'never a course this build does not have');
   const body = hostBody({ mode: 'open', laps: 12, seats: 1, laneKeeper: true }, { outfit: 'emi-outfit-cheer', vehicle: 'nope' });
   assert.deepEqual(body, { track: 'threshold', mode: 'open', seats: 2, laps: 9, botFill: true, laneKeeper: false,
     look: { outfit: 'emi-outfit-cheer', vehicle: 'emi-teacup-kart' } });
@@ -319,4 +325,18 @@ test('look picker: the lobby sends the whole look, and boot hands it the garage 
   assert.doesNotMatch(lobby, /send\(\{ t: 'look', outfit: st\.look\.outfit, vehicle: st\.look\.vehicle \}\)/);
   const boot = readFileSync(fileURLToPath(new URL('../boot.js', import.meta.url)), 'utf8');
   assert.match(boot, /lookOwned:\(\)=>ownedChoices\(shared\.owned\.grants,unlockedSet\(loadRecord\(\)\)\)/);
+});
+
+test('the host picks the course: it wraps, and brings its own laps unless the host changed them', () => {
+  let f = cleanHost({ ...HOST_DEFAULTS, track: 'threshold', laps: 3 });
+  const seen = [];
+  for (let i = 0; i < 5; i++) { f = stepHost(f, 'track', 1); seen.push([f.track, f.laps]); }
+  assert.deepEqual(seen, [['mainframe', 3], ['keep', 2], ['boudoir', 2], ['goonworks', 2], ['threshold', 3]]);
+  assert.equal(stepHost(f, 'track', -1).track, 'goonworks');
+  const mine = stepHost(stepHost(f, 'laps', 1), 'track', 1);
+  assert.equal(mine.laps, 4, 'a hand-picked lap count stays');
+});
+
+test('every course in the catalog carries the lap count of its track file', () => {
+  for (const c of COURSES) assert.equal(JSON.parse(readFileSync(new URL('../tracks/' + c.id + '.json', import.meta.url), 'utf8')).laps, c.laps, c.id);
 });
