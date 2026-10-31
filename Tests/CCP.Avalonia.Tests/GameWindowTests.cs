@@ -895,6 +895,7 @@ public sealed partial class GameWindowTests
     {
         var (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider,
             CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
+        var (oldFavorites, oldMerge) = (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats);
         var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
         var lib = Directory.CreateTempSubdirectory("dtrh-lib-").FullName;
         var xp = new List<double>();
@@ -902,6 +903,8 @@ public sealed partial class GameWindowTests
         var denied = new List<string>();
         try
         {
+            GameWindow.DtrhFavorites = _ => new List<string>();
+            GameWindow.DtrhMergeAssetStats = _ => { };
             CoreAccount.IsLoggedInProvider = () => true;
             CoreEntitlement.HasLabProvider = () => lab;
             CoreEntitlement.IsFreeTodayProvider = _ => false;
@@ -921,6 +924,7 @@ public sealed partial class GameWindowTests
         {
             (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks,
                 CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
+            (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats) = (oldFavorites, oldMerge);
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
             GameWindow.CloseAllForPanic();
             Directory.Delete(lib, true);
@@ -1038,6 +1042,43 @@ public sealed partial class GameWindowTests
         Assert.Equal(new[] { "init", "manifest", "run-config" }, sent.Select(o => (string?)o["type"]));
         w.Close();
     });
+
+    // Exercise ordered calls inside one test so the assembly isolation hook cannot hide a leak.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_EngagementTests_RestoreDelegatesBeforeTheNextRun(bool storeFails)
+    {
+        var (favorites, merge) = (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats);
+        try
+        {
+            // A populated or broken ambient store must not affect unrelated lifecycle tests.
+            GameWindow.DtrhFavorites = _ => new List<string> { "prior-history.gif" };
+            GameWindow.DtrhMergeAssetStats = _ => throw new IOException("ambient store");
+            var expectedFavorites = GameWindow.DtrhFavorites;
+            var expectedMerge = GameWindow.DtrhMergeAssetStats;
+            if (storeFails) Dtrh_EngagementStoreFailure_DoesNotBlockPlay();
+            else Dtrh_EngagementDeltas_AndFavorites(true);
+            Assert.Same(expectedFavorites, GameWindow.DtrhFavorites);
+            Assert.Same(expectedMerge, GameWindow.DtrhMergeAssetStats);
+            Dtrh_LabDoor_BootRunLifecycle_AndCloseBanks();
+
+            Assert.Throws<InvalidOperationException>(() => RunDtrh(true, (_, _, _, _) =>
+            {
+                Assert.Empty(GameWindow.DtrhFavorites(12));
+                GameWindow.DtrhMergeAssetStats(new JObject());
+                GameWindow.DtrhFavorites = _ => throw new IOException("test read");
+                GameWindow.DtrhMergeAssetStats = _ => throw new IOException("test write");
+                throw new InvalidOperationException("test body failed");
+            }));
+            Assert.Same(expectedFavorites, GameWindow.DtrhFavorites);
+            Assert.Same(expectedMerge, GameWindow.DtrhMergeAssetStats);
+        }
+        finally
+        {
+            (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats) = (favorites, merge);
+        }
+    }
 
     /// <summary>WPF DtrhHostService.PostManifest / OnRemoteCopiesReady (724ac82bc): the manifest's urls are root-relative
     /// (hostMedia.js counts only those, not 127.0.0.1, as local); with online media on, copies landing in
