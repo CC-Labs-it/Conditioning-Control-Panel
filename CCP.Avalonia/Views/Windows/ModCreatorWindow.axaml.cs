@@ -1930,11 +1930,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private readonly Dictionary<string, (Button Clear, TextBlock Plus, Image Hint)> _imageSlotParts = new();
 
-        private void SetImageSlot(string key, string filePath, bool validate = true)
+        private async Task SetImageSlot(string key, string filePath, bool validate = true)
         {
             if (!_imageControls.ContainsKey(key)) return;
 
-            if (validate && !PassesImageSlotChecks(key, filePath)) return;
+            if (validate && !await PassesImageSlotChecks(key, filePath)) return;
 
             // A framing describes ONE picture. An author swapping a different file into the same
             // slot must not inherit the crop they chose for the old one -- that is invisible in the
@@ -1968,18 +1968,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch { /* invalid image file */ }
         }
 
-        /// <summary>
-        /// ponytail: NOT blocked on a message box - this head ships Views/Dialogs/MessageDialog.
-        /// Two other things block it. First, the rules: ModImageSlotRules is pure C# (Path,
-        /// FileInfo, invariant formatting) but is declared inside
-        /// ConditioningControlPanel/Windows/ModCreatorWindow.UiArt.cs, a WPF partial, so reaching it
-        /// means moving that type to Core - not copying it here, which is the duplication this split
-        /// exists to prevent. Second, half of the WPF gate is a CONFIRM ("this is 6.2 MB, use it
-        /// anyway?") and MessageDialog is async, so this synchronous bool cannot carry it; the
-        /// caller chain from the Browse handler down through SetImageSlot has to become async first.
-        /// The hard-reject half alone would be honest, but it still needs the rules type.
-        /// </summary>
-        private bool PassesImageSlotChecks(string key, string filePath) => true;
+        // WPF ModCreatorWindow.xaml.cs:1977-2007: reject mismatches, then confirm over 4 MB.
+        private async Task<bool> PassesImageSlotChecks(string key, string filePath)
+        {
+            if (ModImageSlotRules.DescribeExtensionMismatch(key, filePath) != null)
+            {
+                await MessageDialog.ShowAsync(this, Loc.Get("mod_art_wrong_title"),
+                    Loc.GetF("mod_art_wrong", Path.GetFileName(filePath), Path.GetExtension(key)));
+                return false;
+            }
+            long size;
+            try { size = new FileInfo(filePath).Length; }
+            catch { return true; } // WPF does not block an unreadable size.
+            return !ModImageSlotRules.IsOversized(size) || await MessageDialog.ConfirmAsync(this,
+                Loc.Get("mod_art_large_title"), Loc.GetF("mod_art_large",
+                    Path.GetFileName(filePath), ModImageSlotRules.FormatSize(size)), okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"));
+        }
 
         /// <summary>
         /// WPF drops the crop stored for a slot whose image just changed or was cleared - left
@@ -2028,14 +2032,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var files = await PickFilesAsync($"Select image for {Path.GetFileName(key)}", patterns, multiple: false);
             if (files.Count > 0)
-                SetImageSlot(key, files[0]);
+                await SetImageSlot(key, files[0]);
         }
 
-        private void HandleImageDrop(string key, DragEventArgs e)
+        private async void HandleImageDrop(string key, DragEventArgs e)
         {
             var file = e.DataTransfer.TryGetValue(DataFormat.File)?.TryGetLocalPath();
             if (!string.IsNullOrEmpty(file))
-                SetImageSlot(key, file!);
+                await SetImageSlot(key, file!);
         }
 
         /// <summary>
@@ -2126,7 +2130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var imgPath = Path.Combine(resourcesDir, key.Replace('/', Path.DirectorySeparatorChar));
                 if (File.Exists(imgPath))
-                    SetImageSlot(key, imgPath, validate: false);
+                    SetImageSlot(key, imgPath, validate: false).GetAwaiter().GetResult(); // No prompt on load.
             }
             LoadAudioFromResources(resourcesDir);
             LoadSideFilesFrom(resourcesDir);

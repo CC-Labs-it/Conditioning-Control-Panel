@@ -1,5 +1,4 @@
-using System;
-using System.IO;
+using ConditioningControlPanel.Localization;
 using Avalonia.Controls;
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -7,49 +6,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         private static readonly (string Key, string Name)[] NavDoorSlots =
         {
-            ("nav/door_home.png", "Home door (64px sq)"),
-            ("nav/door_play.png", "Play door (64px sq)"),
-            ("nav/door_companion.png", "Companion door (64px sq)"),
-            ("nav/door_library.png", "Library door (64px sq)"),
-            ("nav/door_studio.png", "Studio door (64px sq)"),
-            ("nav/door_you.png", "You door (64px sq)"),
-            ("nav/door_webapp.png", "Web App door (64px sq)"),
-            ("nav/door_settings.png", "Settings door (64px sq)"),
+            ("nav/door_home.png", "mod_art_slot_nav_door_home"),
+            ("nav/door_play.png", "mod_art_slot_nav_door_play"),
+            ("nav/door_companion.png", "mod_art_slot_nav_door_companion"),
+            ("nav/door_library.png", "mod_art_slot_nav_door_library"),
+            ("nav/door_studio.png", "mod_art_slot_nav_door_studio"),
+            ("nav/door_you.png", "mod_art_slot_nav_door_you"),
+            ("nav/door_webapp.png", "mod_art_slot_nav_door_webapp"),
+            ("nav/door_settings.png", "mod_art_slot_nav_door_settings"),
         };
         private static readonly (string Key, string Name)[] PlayWallSlots =
         {
-            ("features/dtrh.png", "Rabbit Hole hero (1376x768)"),
-            ("features/loom.png", "Loom strip (1376x768)"),
-            ("features/goon_game.png", "Goon Game hero (1024 sq)"),
-            ("features/lab_gaze_hero.png", "Gaze plate (1376x768)"),
-            ("features/lab_focusgaze_hero.png", "Focus Gaze plate (1376x768)"),
-            ("features/lab_quiz_hero.png", "Intake plate (1376x768)"),
-            ("features/lab_aimemory_hero.png", "AI Memory plate (1376x768)"),
+            ("features/dtrh.png", "mod_art_slot_features_dtrh"),
+            ("features/loom.png", "mod_art_slot_features_loom"),
+            ("features/goon_game.png", "mod_art_slot_features_goon_game"),
+            ("features/lab_gaze_hero.png", "mod_art_slot_features_lab_gaze_hero"),
+            ("features/lab_focusgaze_hero.png", "mod_art_slot_features_lab_focusgaze_hero"),
+            ("features/lab_quiz_hero.png", "mod_art_slot_features_lab_quiz_hero"),
+            ("features/lab_aimemory_hero.png", "mod_art_slot_features_lab_aimemory_hero"),
         };
         private static readonly (string Key, string Name)[] VaultDashboardSlots =
         {
-            ("features/vault.png", "Velvet Vault (1376x768)"),
-            ("features/mysterybox.png", "Mystery Box (1376x768)"),
-            ("features/justdrop.png", "JustDrop (1376x768)"),
-            ("features/fyp.png", "FYP tile (1376x768)"),
-            ("features/fyp_banner.png", "FYP banner (1376x459)"),
-            ("features/awareness.png", "Awareness (1376x768)"),
-            ("features/remote_control.png", "Remote Control (1376x768)"),
-            ("features/blink_trainer.png", "Blink Trainer (1376x768)"),
-            ("features/deeper.png", "Deeper (1376x768)"),
-            ("lockdown_icon.png", "Lockdown strip (1527x343)"),
-            ("exclusives/vault_backdrop.png", "Vault backdrop (wide 16:9)"),
+            ("features/vault.png", "mod_art_slot_features_vault"),
+            ("features/mysterybox.png", "mod_art_slot_features_mysterybox"),
+            ("features/justdrop.png", "mod_art_slot_features_justdrop"),
+            ("features/fyp.png", "mod_art_slot_features_fyp"),
+            ("features/fyp_banner.png", "mod_art_slot_features_fyp_banner"),
+            ("features/awareness.png", "mod_art_slot_features_awareness"),
+            ("features/remote_control.png", "mod_art_slot_features_remote_control"),
+            ("features/blink_trainer.png", "mod_art_slot_features_blink_trainer"),
+            ("features/deeper.png", "mod_art_slot_features_deeper"),
+            ("lockdown_icon.png", "mod_art_slot_lockdown_icon"),
+            ("exclusives/vault_backdrop.png", "mod_art_slot_exclusives_vault_backdrop"),
         };
         private static readonly (string Key, string Name)[] SessionIntakeSlots =
         {
-            ("Cards/fireworks.png", "Fireworks card (512 sq)"),
-            ("Cards/hearth.png", "Hearth card (512 sq)"),
-            ("Cards/spotlight.png", "Spotlight card (512 sq)"),
-            ("intake/pass_card.png", "Pass card, all niches (1024 sq)"),
-            ("intake/pass_card_bambi.png", "Pass card: Bambi (1024 sq)"),
-            ("intake/pass_card_sissy.png", "Pass card: Sissy (1024 sq)"),
-            ("intake/pass_card_circe.png", "Pass card: Circe (1024 sq)"),
-            ("intake/pass_card_drone.png", "Pass card: Drone (1024 sq)"),
+            ("Cards/fireworks.png", "mod_art_slot_cards_fireworks"),
+            ("Cards/hearth.png", "mod_art_slot_cards_hearth"),
+            ("Cards/spotlight.png", "mod_art_slot_cards_spotlight"),
+            ("intake/pass_card.png", "mod_art_slot_intake_pass_card"),
+            ("intake/pass_card_bambi.png", "mod_art_slot_intake_pass_card_bambi"),
+            ("intake/pass_card_sissy.png", "mod_art_slot_intake_pass_card_sissy"),
+            ("intake/pass_card_circe.png", "mod_art_slot_intake_pass_card_circe"),
+            ("intake/pass_card_drone.png", "mod_art_slot_intake_pass_card_drone"),
         };
         // WPF ModCreatorWindow.UiArt.cs:39-109, 114-190: slot order and shared image plumbing.
         private void BuildUiArtSection()
@@ -57,19 +56,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var panel = CreateSectionPanel("uiart");
             var stack = new StackPanel();
             panel.Child = stack;
-            stack.Children.Add(CreateSectionHeader("UI Art"));
-            stack.Children.Add(CreateSectionDescription("Swap artwork for navigation, Play, dashboard and session cards. Empty slots keep the built-in art."));
-            stack.Children.Add(CreateSubHeader("Nav Doors"));
-            stack.Children.Add(CreateSectionDescription("Eight room icons. Use square transparent PNGs, 64 or 128 pixels wide."));
+            stack.Children.Add(CreateSectionHeader(Loc.Get("mod_art_title")));
+            stack.Children.Add(CreateSectionDescription(Loc.Get("mod_art_intro")));
+            stack.Children.Add(CreateSubHeader(Loc.Get("mod_art_nav_title")));
+            stack.Children.Add(CreateSectionDescription(Loc.Get("mod_art_nav_help")));
             stack.Children.Add(BuildUiArtSlotWrap(NavDoorSlots, 100, 100));
-            stack.Children.Add(CreateSubHeader("Play Wall"));
-            stack.Children.Add(CreateSectionDescription("Play artwork. Filenames remain stable for existing mods. Shared files also change other surfaces."));
+            stack.Children.Add(CreateSubHeader(Loc.Get("mod_art_play_title")));
+            stack.Children.Add(CreateSectionDescription(Loc.Get("mod_art_play_help")));
             stack.Children.Add(BuildUiArtSlotWrap(PlayWallSlots, 150, 84));
-            stack.Children.Add(CreateSubHeader("Vault & Dashboard"));
-            stack.Children.Add(CreateSectionDescription("Dashboard and vault artwork. Keep the subject near the middle for cropped tiles."));
+            stack.Children.Add(CreateSubHeader(Loc.Get("mod_art_vault_title")));
+            stack.Children.Add(CreateSectionDescription(Loc.Get("mod_art_vault_help")));
             stack.Children.Add(BuildUiArtSlotWrap(VaultDashboardSlots, 150, 84));
-            stack.Children.Add(CreateSubHeader("Session & Intake Cards"));
-            stack.Children.Add(CreateSectionDescription("Square session and intake cards. The all-niches pass card overrides the four niche cards."));
+            stack.Children.Add(CreateSubHeader(Loc.Get("mod_art_cards_title")));
+            stack.Children.Add(CreateSectionDescription(Loc.Get("mod_art_cards_help")));
             stack.Children.Add(BuildUiArtSlotWrap(SessionIntakeSlots, 110, 110));
         }
         private WrapPanel BuildUiArtSlotWrap((string Key, string Name)[] slots, double width, double height)
@@ -77,9 +76,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var wrap = new WrapPanel();
             foreach (var (slotKey, name) in slots)
             {
-                var displayName = CoreMods.MakeModAware(name);
+                var displayName = CoreMods.MakeModAware(Loc.Get(name));
                 var slot = CreateImageSlot(slotKey, displayName, width, height);
-                ToolTip.SetTip(slot, $"Packed as resources/{slotKey}  (overrides Resources/{slotKey})");
+                ToolTip.SetTip(slot, Loc.GetF("mod_art_packed", slotKey));
                 wrap.Children.Add(slot);
             }
             return wrap;
