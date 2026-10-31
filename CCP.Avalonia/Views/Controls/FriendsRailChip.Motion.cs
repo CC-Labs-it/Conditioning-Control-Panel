@@ -34,7 +34,7 @@ public sealed partial class FriendsRailChip
     private void Bump(Border target)
     {
         if (_bumps.Remove(target, out var old)) { old.Cancel(); old.Dispose(); }
-        var amount = FriendsDrawerRules.MotionAmount(CoreSettings.Current.MotionLevel);
+        var amount = FriendsDrawerRules.MotionAmount(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level);
         if (amount <= 0) return;
         var run = new CancellationTokenSource();
         _bumps[target] = run;
@@ -45,8 +45,13 @@ public sealed partial class FriendsRailChip
         try
         {
             var peak = 1 + .45 * amount;
-            await ScalePhase(target, 1, peak, 120, new LinearEasing(), run.Token);
-            await ScalePhase(target, peak, 1, 300, new WpfElasticOut(), run.Token);
+            // One clock, like WPF's 420 ms keyframe animation, avoids a reset between phases.
+            var animation = new Animation { Duration = TimeSpan.FromMilliseconds(420), Easing = new BumpTimeline(), Children =
+            {
+                new KeyFrame { Cue = new Cue(0), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1d), new Setter(ScaleTransform.ScaleYProperty, 1d) } },
+                new KeyFrame { Cue = new Cue(1), Setters = { new Setter(ScaleTransform.ScaleXProperty, peak), new Setter(ScaleTransform.ScaleYProperty, peak) } },
+            } };
+            await animation.RunAsync(target, run.Token);
         }
         catch (OperationCanceledException) { }
         finally
@@ -55,14 +60,12 @@ public sealed partial class FriendsRailChip
             run.Dispose();
         }
     }
-    private static Task ScalePhase(Border target, double from, double to, int milliseconds, Easing easing, CancellationToken token)
+    private sealed class BumpTimeline : Easing
     {
-        var animation = new Animation { Duration = TimeSpan.FromMilliseconds(milliseconds), Easing = easing, Children =
-        {
-            new KeyFrame { Cue = new Cue(0), Setters = { new Setter(ScaleTransform.ScaleXProperty, from), new Setter(ScaleTransform.ScaleYProperty, from) } },
-            new KeyFrame { Cue = new Cue(1), Setters = { new Setter(ScaleTransform.ScaleXProperty, to), new Setter(ScaleTransform.ScaleYProperty, to) } },
-        } };
-        return animation.RunAsync(target, token);
+        private readonly WpfElasticOut _settle = new();
+        public override double Ease(double progress) => progress < 120d / 420
+            ? progress * 420 / 120
+            : 1 - _settle.Ease((progress * 420 - 120) / 300);
     }
     /// <summary>WPF ElasticEase { EasingMode = EaseOut, Oscillations = 1, Springiness = 4 }; Avalonia's ElasticEaseOut rings several times.</summary>
     internal sealed class WpfElasticOut : Easing

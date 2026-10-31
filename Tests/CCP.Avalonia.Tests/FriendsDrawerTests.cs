@@ -143,7 +143,7 @@ public sealed partial class FriendsDrawerTests
             global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .WithInterFont()
                 .With(AppFonts.Options())
-                .ConfigureFonts(AppFonts.Register).WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options()).ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
+                .ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, wire) = Service();
         var chip = new FriendsRailChip(svc) { Width = 200, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom };
@@ -261,7 +261,7 @@ public sealed partial class FriendsDrawerTests
                 .WithInterFont()
                 .With(AppFonts.Options())
                 .ConfigureFonts(AppFonts.Register)
-                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options()).ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var (svc, _) = Service();
         var chip = new FriendsRailChip(svc);
@@ -492,7 +492,7 @@ public sealed partial class FriendsDrawerTests
             global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .WithInterFont()
                 .With(AppFonts.Options())
-                .ConfigureFonts(AppFonts.Register).WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options()).ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
+                .ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, _) = Service();
         var d = new FriendsDrawer(svc);

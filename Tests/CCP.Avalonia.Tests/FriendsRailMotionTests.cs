@@ -69,6 +69,7 @@ public sealed partial class FriendsDrawerTests
     public Task RailHoverSnapsAtOffAndAnimatesOtherwise() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         ChipApp();
+        var oldMotion = CoreSettings.Current.MotionLevel;
         var (svc, _) = Service();
         var chip = new FriendsRailChip(svc);
         var window = new Window { Content = chip }; window.Show();
@@ -85,7 +86,7 @@ public sealed partial class FriendsDrawerTests
             Assert.Equal(2, scale.Transitions.Count);
             Assert.All(scale.Transitions, t => Assert.Equal(TimeSpan.FromMilliseconds(150), Assert.IsType<global::Avalonia.Animation.DoubleTransition>(t).Duration));
         }
-        finally { window.Close(); svc.Dispose(); }
+        finally { window.Close(); svc.Dispose(); CoreSettings.Current.MotionLevel = oldMotion; }
         return Task.CompletedTask;
     });
 
@@ -93,6 +94,7 @@ public sealed partial class FriendsDrawerTests
     public Task RailOnlineCountBumpsAtReducedButNotOffAndCancelsOnDetach() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         ChipApp();
+        var oldMotion = CoreSettings.Current.MotionLevel;
         var (svc, wire) = Service();
         var chip = new FriendsRailChip(svc);
         var window = new Window { Content = chip }; window.Show();
@@ -109,13 +111,14 @@ public sealed partial class FriendsDrawerTests
             Assert.True(chip.ActiveBumps > 0);
             window.Content = null; Assert.Equal(0, chip.ActiveBumps);
         }
-        finally { window.Close(); svc.Dispose(); }
+        finally { window.Close(); svc.Dispose(); CoreSettings.Current.MotionLevel = oldMotion; }
     });
 
     [Fact]
     public Task UnreadBadgeBumpsOnlyOnIncreaseAndHonoursMotionOff() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         ChipApp();
+        var oldMotion = CoreSettings.Current.MotionLevel;
         var (svc, _) = Service();
         var feed = new FriendsFeed(() => "u_me");
         var chip = new FriendsRailChip(svc);
@@ -142,7 +145,7 @@ public sealed partial class FriendsDrawerTests
             Assert.Equal(0, chip.ActiveBumps);
             await Task.CompletedTask;
         }
-        finally { window.Close(); svc.Dispose(); }
+        finally { window.Close(); svc.Dispose(); CoreSettings.Current.MotionLevel = oldMotion; }
     });
 
     [Theory]
@@ -179,11 +182,18 @@ public sealed partial class FriendsDrawerTests
     });
 
     [Theory]
-    [InlineData(MotionLevel.Full, false)] [InlineData(MotionLevel.Reduced, false)]
-    [InlineData(MotionLevel.Full, true)] [InlineData(MotionLevel.Reduced, true)]
-    public Task BumpsRenderWpfsRiseSettleAndCancel(MotionLevel level, bool unread) => AvaloniaTestDispatcher.RunAsync(async () =>
+    [InlineData(MotionLevel.Full, false, false, true)] [InlineData(MotionLevel.Reduced, false, false, true)]
+    [InlineData(MotionLevel.Full, true, false, true)] [InlineData(MotionLevel.Reduced, true, false, true)]
+    [InlineData(MotionLevel.Full, false, true, true)] [InlineData(MotionLevel.Full, true, true, true)]
+    [InlineData(MotionLevel.Full, false, false, false)] [InlineData(MotionLevel.Full, true, false, false)]
+    public Task BumpsRenderWpfsRiseSettleAndCancel(MotionLevel level, bool unread, bool gentle, bool osAnimations) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         ChipApp();
+        var settings = CoreSettings.Current;
+        var old = (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe);
+        settings.GentleVisuals = gentle;
+        UiMotionPreference.OsProbe = () => osAnimations;
+        UiMotionPreference.CacheStamp = long.MinValue;
         var (svc, wire) = Service(); await svc.RefreshAsync();
         var feed = new FriendsFeed(() => "u_clock");
         var chip = new FriendsRailChip(svc); chip.Drawer.FeedSource = () => feed;
@@ -191,7 +201,7 @@ public sealed partial class FriendsDrawerTests
         CoreSettings.Current.MotionLevel = level;
         var target = chip.GetVisualDescendants().OfType<Border>().Single(b => Equals(b.Tag, unread ? "friends-chip-unread" : "friends-chip-online"));
         var clock = new RailStepClock(); target.SetValue(RailStepClock.Property, clock.Instance);
-        double k = level == MotionLevel.Full ? 1 : .5;
+        double k = level == MotionLevel.Full && !gentle && osAnimations ? 1 : .5;
         void Scale(double expected)
         {
             Assert.Equal(expected, target.RenderTransform!.Value.M11, 5);
@@ -207,7 +217,7 @@ public sealed partial class FriendsDrawerTests
         {
             await Increase("first");
             Step(0); Step(60); Scale(1 + .225 * k);
-            Step(120); Step(120); Scale(1 + .45 * k);
+            clock.Step(120); Scale(1 + .45 * k); Step(120); Scale(1 + .45 * k);
             Step(270); Scale(1 - .45 * k * (Math.Exp(2) - 1) / (Math.Exp(4) - 1) * Math.Sqrt(.5));
             Step(419); Assert.NotEqual(1, target.RenderTransform!.Value.M11);
             Step(420); Step(421); Scale(1); Assert.Equal(0, chip.ActiveBumps);
@@ -216,7 +226,12 @@ public sealed partial class FriendsDrawerTests
             window.Content = null; Step(1000); Scale(1); Assert.Equal(0, chip.ActiveBumps);
             window.Content = chip; Step(1200); Scale(1);
         }
-        finally { window.Close(); svc.Dispose(); }
+        finally
+        {
+            window.Close(); svc.Dispose();
+            (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe) = old;
+            UiMotionPreference.CacheStamp = long.MinValue;
+        }
     });
 
     // Avalonia 12 hides IClock. Use its real ClockBase, as SharedDeeperThemeTests does.
