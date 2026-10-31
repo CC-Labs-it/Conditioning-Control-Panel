@@ -73,6 +73,8 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.PatreonMember),
             nameof(AppSettings.PostGrants),
             nameof(AppSettings.ServerPaidUntil),
+            // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
+            nameof(AppSettings.RainPackHash),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
             // ---- not in WPF (no WPF reader): which privacy switches this install owns (SyncPush) ----
@@ -134,6 +136,7 @@ namespace ConditioningControlPanel.Services
             restored.ServerPaidUntil = current.ServerPaidUntil;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
+            restored.RainPackHash = current.RainPackHash;
             restored.ConsentOwnedAccount = current.ConsentOwnedAccount;
             restored.ConsentOwnedFields = current.ConsentOwnedFields;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so

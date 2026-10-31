@@ -19,7 +19,7 @@ th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockq
 </head>
 <body>
 <h1 id="avalonia-performance-parity">Avalonia performance parity</h1>
-<p>Numbers come from <code>--perf-bench &lt;out.json&gt;</code> (<code>CCP.Avalonia/PerfBench.cs</code>, <code>ConditioningControlPanel/PerfBench.cs</code>), run on the real windowing platform, never headless.
+<p>Numbers come from <code>--perf-bench &lt;out.json&gt;</code> (<code>CCP.Avalonia/PerfBench.cs</code>), run on the real windowing platform, never headless.
 Decision and threshold: <code>docs/avalonia-decisions.html</code> (2026-10-23). A row passes when the Avalonia median is ≤ WPF median × 1.10 + 20 ms
 (memory: ≤ WPF × 1.10), both heads measured back to back on the same <code>windows-latest</code> runner. Linux is information only. A row
 with no WPF number is a gap, not a pass.</p>
@@ -27,39 +27,26 @@ with no WPF number is a gap, not a pass.</p>
 <ul>
 <li><strong>Startup</strong>: a <code>Stopwatch</code> started on the first line of <code>Main</code>, stopped when the render thread has drawn the first frame after
 the shell's <code>Opened</code>. The shell is built straight after <code>SetupWithoutStarting</code>: no splash, no account/session seeding, no
-launcher routing. WPF starts the clock on the first line of its custom <code>Main</code>, runs its normal service startup, then shows
-the real main window directly, timed with <code>CompositionTarget.Rendering</code> and sampled after that Render-priority pass returns.
-Splash, launcher routing and modal onboarding are bypassed only under the flag; the WPF startup ladder is held and the sandbox is an
-onboarded offline user. <code>startup_since_process_ms</code> adds the runtime's own start-up (process start time to the same frame).
-<strong>Startup is informational, not a gate:</strong> the scopes differ (WPF includes its full service init, Avalonia does not), so
-<code>perf-compare.py</code> reports both startup rows as <code>info</code> and never fails on them.</li>
+launcher routing. <code>startup_since_process_ms</code> adds the runtime's own start-up (process start time to the same frame).</li>
 <li><strong>Tab switch</strong>: <code>ShowTab</code> (the call every rail handler makes) to the next rendered frame, for every panel in
-<code>NavCheck.TabPanels</code>, 21 cycles with the first discarded; median (middle pair averaged) and p95 (nearest rank) per tab. Frame done differs slightly: Avalonia waits for <code>RequestCompositionBatchCommitAsync().Rendered</code> (render thread included), WPF stops at a Background hop after <code>CompositionTarget.Rendering</code> (UI thread committed, before the render thread presents), so tab rows lean slightly against Avalonia; the 20 ms slack is meant to absorb it.</li>
+<code>NavCheck.TabPanels</code>, 21 cycles with the first discarded; median (middle pair averaged) and p95 (nearest rank) per tab.</li>
 <li><strong>Memory</strong>: working set after the cycles and two <code>GC.Collect</code> + <code>WaitForPendingFinalizers</code> passes.</li>
-<li>Exit 0 with the JSON written; 3 when a tab is missing or does not show; 4 on a frame timeout (30 s). WPF also exits 2 with usage on a bad command line or a non-absolute <code>CCP_USERDATA_DIR</code>, and every WPF benchmark exit goes through <code>PerfBench.Exit</code> (flush, then <code>TerminateProcess</code>), because <code>Environment.Exit</code> crashes WPF in ProcessExit and loses the code.</li>
+<li>Exit 0 with the JSON written; 3 when a tab is missing or does not show; 4 on a frame timeout (30 s).</li>
 </ul>
 <p>JSON shape <code>ccp-perf-bench/1</code> (the WPF twin writes the same shape, <code>head: &quot;wpf&quot;</code>):</p>
 <pre><code class="language-json">{ &quot;schema&quot;: &quot;ccp-perf-bench/1&quot;, &quot;head&quot;: &quot;avalonia&quot;, &quot;os&quot;: &quot;...&quot;, &quot;runtime&quot;: &quot;...&quot;,
   &quot;startup_ms&quot;: 0, &quot;startup_since_process_ms&quot;: 0, &quot;working_set_mb&quot;: 0, &quot;cycles&quot;: 20,
   &quot;tabs&quot;: [ { &quot;tab&quot;: &quot;SettingsTab&quot;, &quot;median_ms&quot;: 0, &quot;p95_ms&quot;: 0 } ] }
 </code></pre>
-<p>CI: <code>perf-bench-linux</code> (xvfb, artifact <code>perf-bench-linux</code>) and <code>perf-bench-windows</code> (artifact <code>perf-bench-windows</code>)
-in <code>.github/workflows/build.yml</code>. Windows publishes both heads as they ship (Avalonia win-x64 profile, WPF ReadyToRun single-file),
-runs five Avalonia/WPF pairs sequentially on the same runner with a fresh <code>CCP_USERDATA_DIR</code> per process (four-minute outer timeout each),
-and checks that a WPF run with a missing tab exits 3 without JSON. The job is report-only until three consecutive stable runs have been reviewed.</p>
-<p>Compare reports (Python stdlib only): <code>python3 .github/scripts/perf-compare.py --self-test</code>, then
-<code>python3 .github/scripts/perf-compare.py --avalonia 'perf-results/avalonia-*.json' --wpf 'perf-results/wpf-*.json'</code>.
-It takes each metric's median across runs (per-tab median and p95 too), applies the rule above, prints a Markdown table and exits 1 on a
-regression, missing reports, missing/extra tabs or invalid measurements. Tab keys are <code>NavCheck.TabPanels</code>; WPF's legacy
-<code>ExclusivesTab</code> goes through <code>ShowTab(&quot;exclusives&quot;)</code> to the lazy Premium page, whose visibility is checked.</p>
+<p>CI: job <code>perf-bench-linux</code> in <code>.github/workflows/build.yml</code> (xvfb, report-only, artifact <code>perf-bench-linux</code>).</p>
 <h2 id="results">Results</h2>
 
 <table>
 <tr><th>metric</th><th>Linux Avalonia</th><th>Windows Avalonia</th><th>Windows WPF</th><th>verdict</th></tr>
-<tr><td>startup (ms)</td><td>see ledger</td><td>5124 (info: scope differs)</td><td>4268</td><td>info</td></tr>
-<tr><td>tab switch median, worst tab (ms)</td><td>see ledger</td><td>423.0 (ExclusivesTab)</td><td>171.4 (AchievementsTab; ExclusivesTab 108.7)</td><td>FAIL</td></tr>
-<tr><td>tab switch p95, worst tab (ms)</td><td>see ledger</td><td>492.6 (ExclusivesTab)</td><td>223.5 (AchievementsTab; ExclusivesTab 123.8)</td><td>FAIL</td></tr>
-<tr><td>working set after GC (MB)</td><td>see ledger</td><td>1172.4</td><td>1030.8</td><td>FAIL (limit 1133.9)</td></tr>
+<tr><td>startup (ms)</td><td>see ledger</td><td>pending perf-bench-wpf-compare</td><td>pending perf-bench-wpf-compare</td><td>gap</td></tr>
+<tr><td>tab switch median, worst tab (ms)</td><td>see ledger</td><td>pending perf-bench-wpf-compare</td><td>pending perf-bench-wpf-compare</td><td>gap</td></tr>
+<tr><td>tab switch p95, worst tab (ms)</td><td>see ledger</td><td>pending perf-bench-wpf-compare</td><td>pending perf-bench-wpf-compare</td><td>gap</td></tr>
+<tr><td>working set after GC (MB)</td><td>see ledger</td><td>pending perf-bench-wpf-compare</td><td>pending perf-bench-wpf-compare</td><td>gap</td></tr>
 </table>
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
@@ -67,10 +54,6 @@ regression, missing reports, missing/extra tabs or invalid measurements. Tab key
 <li>2026-10-23, CI ubuntu-latest under xvfb (job perf-bench-linux, run 39869706826, snapshot 10ae4e753), Release, sandboxed profile:
 startup 12860 ms, working set 909 MB, tab switch median 108-237 ms on 23 tabs, <strong>ExclusivesTab 801 ms median / 821 ms p95</strong>.
 Artifact <code>perf-bench-linux</code>.</li>
-<li>2026-10-30, CI windows-latest (job perf-bench-windows, rgate run 40982914646, snapshot 4fea68912 of avalonia-port/r72-perf-bench-wpf-compare), published Release, 5 Avalonia/WPF pairs, medians:
-startup (info) Avalonia 5124 / WPF 4268 ms; working set 1172.4 / 1030.8 MB (FAIL); 12 of 48 tab rows FAIL: SettingsTab 99.7/18.4, ProgramsTab 64.3/31.1,
-EnhancementsTab 72.6/44.4, AvailableSubjectsTab 64.0/12.9, BlinkTrainerTab 65.1/24.3, <strong>ExclusivesTab 423.0/108.7 ms median</strong> (p95 also DiscordTab, RemoteControlTab).
-WPF missing-tab run exited 3 with no JSON. One run; report-only until three stable runs are reviewed. Artifact <code>perf-bench-windows</code>.</li>
 </ul>
 
 <script>

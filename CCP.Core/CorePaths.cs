@@ -30,17 +30,21 @@ namespace ConditioningControlPanel
             string? overrideDir = null;
             try { overrideDir = Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"); }
             catch { }
-            if (!string.IsNullOrWhiteSpace(overrideDir) && Path.IsPathRooted(overrideDir))
+            var root = UserDataFor(overrideDir);
+            if (root == overrideDir)
             {
                 // A sandbox never reaches a real server. Outside any catch on purpose: a guard that
                 // failed must fail loudly, never fall back quietly to the real profile.
                 Services.SandboxNet.Install();
-                return overrideDir;
             }
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ConditioningControlPanel");
+            return root;
         }
+
+        /// <summary>The user data root for a given CCP_USERDATA_DIR value (null, blank or relative = not set).</summary>
+        public static string UserDataFor(string? overrideDir) =>
+            !string.IsNullOrWhiteSpace(overrideDir) && Path.IsPathRooted(overrideDir)
+                ? overrideDir
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ConditioningControlPanel");
 
         /// <summary>
         /// Supplied by the host head. Invoked on every <see cref="EffectiveAssets"/> read on purpose:

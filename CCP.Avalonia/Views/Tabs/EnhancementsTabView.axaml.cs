@@ -117,9 +117,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Dispatcher.UIThread.Post(RepaintIfShown);
         }
 
-        private void OnModChanged(object? sender, ModPackage e) => Dispatcher.UIThread.Post(() => { _art.Clear(); _blurredArt.Clear(); _treeState = null; RepaintIfShown(); });
+        private void OnModChanged(object? sender, ModPackage e) => Dispatcher.UIThread.Post(() => { _art.Clear(); _blurredArt.Clear(); RepaintIfShown(); });
 
-        private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() => { _treeState = null; RepaintIfShown(); });
+        private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RepaintIfShown);
 
         /// <summary>A hidden or detached tab repaints on its next show/attach (P07; WPF's sweep
         /// and SparkleWallet refresh only the visible tab).</summary>
@@ -130,8 +130,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private bool _dirty;
-        private (int Points, string Owned, string Secrets)? _treeState;
-        private Control? _treeHeader;
 
         private void OnVisibilityChanged()
         {
@@ -155,33 +153,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtConditioningTime.Text = SkillTreeRules.FormatConditioningTime(settings);
             TxtPinkRushIndicator.IsVisible = settings.PinkRushActive;
 
-            // The header contains live statistics/time-of-day bonuses. The nodes and secret
-            // cards only depend on these inputs; retaining them avoids re-templating the entire
-            // board on every tab visit. Read the lists too: in-place edits raise no notification.
-            var state = (settings.SkillPoints, string.Join(",", settings.UnlockedSkills),
-                string.Join(",", SkillDefinition.All.Where(s => s.IsSecret)
-                    .Select(s => SkillTreeRules.IsSecretSkillAvailable(settings, s.Id))));
-            bool rebuild = _treeState != state;
-            if (rebuild)
-            {
-                SkillTreeCanvas.Children.Clear();
-                SecretSkills.Children.Clear();
-                _ownedGlows.Clear();
-                _treeState = state;
-            }
+            SkillTreeCanvas.Children.Clear();
+            SecretSkills.Children.Clear();
+            _ownedGlows.Clear();
             _treeBrush = TreeBrush(header: false);
             SkillTreeOuterBorder.Background = _treeBrush;
-            if (rebuild)
-            {
-                PaintTree();
-                PaintSecretRail();
-            }
-            else if (_treeHeader != null)
-            {
-                int index = SkillTreeCanvas.Children.IndexOf(_treeHeader);
-                _treeHeader = Place(Header(), 5, 0);
-                SkillTreeCanvas.Children[index] = _treeHeader;
-            }
+            PaintTree();
+            PaintSecretRail();
             RefreshActiveBonuses();
             _fxStarted = Time.GetTimestamp();
             StopFx(rest: false);
@@ -341,7 +319,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     SkillTreeRules.HasSkill(settings, skill.Id), SkillTreeRules.HasSkill(settings, skill.PrerequisiteId!)));
             }
 
-            SkillTreeCanvas.Children.Add(_treeHeader = Place(Header(), 5, 0));
+            SkillTreeCanvas.Children.Add(Place(Header(), 5, 0));
             foreach (var skill in tree)
                 SkillTreeCanvas.Children.Add(Place(Node(skill), positions[skill.Id].X, positions[skill.Id].Y));
         }
