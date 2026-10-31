@@ -71,7 +71,7 @@ public sealed class FirstShowStageTests
         stage.FetchFeed = (_, _, _) => Task.FromResult<IReadOnlyList<FypAssetManifest.Entry>>(pics.Select(p => new FypAssetManifest.Entry { Url = p }).ToList());
         stage.Download = (url, ct) => FirstShowStageWindow.SaveCapped(File.OpenRead(url), ct);
         var played = new List<string>();
-        stage.Audio.Play = (path, _, _) => { played.Add(Path.GetFileName(path)); return () => { }; };
+        stage.Audio.Play = (path, _, _, finished) => { played.Add(Path.GetFileName(path)); return finished; };
         CoreSettings.Current.MasterVolume = 50;
         double t = S.GreetAfter + .1; stage.Clock = () => t; stage.Frame();
         await (bundled ? stage.Bundled() : stage.Load("censored"));
@@ -355,7 +355,7 @@ public sealed class FirstShowStageTests
         var center = rows[rows.Length / 2];
         var cues = new List<string>();
         CoreSettings.Current.MasterVolume = 50;
-        stage.Audio.Play = (path, _, _) => { cues.Add(Path.GetFileName(path)); return () => { }; };
+        stage.Audio.Play = (path, _, _, finished) => { cues.Add(Path.GetFileName(path)); return finished; };
         var at = new Point(center.X + center.Width / 2.0, center.Y);
         stage.MouseDown(at, global::Avalonia.Input.MouseButton.Right);
         stage.MouseUp(at, global::Avalonia.Input.MouseButton.Right);
@@ -398,13 +398,13 @@ public sealed class FirstShowStageTests
         CoreSettings.Current.MasterVolume = 50;
         CoreModArt.AudioOverridePathProvider = _ => path;
         CoreAudio.IsOutputSuppressedProvider = () => false;
-        stage.Audio.Play = (p, volume, tag) =>
+        stage.Audio.Play = (p, volume, tag, finished) =>
         {
             Assert.Equal(path, p);
             Assert.Equal(.16f, volume);
             Assert.Equal("first-show-cue", tag);
             played++;
-            return () => { };
+            return finished;
         };
         try
         {
@@ -432,11 +432,11 @@ public sealed class FirstShowStageTests
         CoreAudio.IsOutputSuppressedProvider = () => false;
         var cue = Path.GetTempFileName();
         CoreModArt.AudioOverridePathProvider = _ => cue;
-        audio.Play = (path, volume, tag) =>
+        audio.Play = (path, volume, tag, finished) =>
         {
             Assert.Equal(tag == "first-show-voice" ? .5f : .16f, volume);
             paths.Add(path);
-            return () => stopped.Add(tag);
+            return () => { stopped.Add(tag); finished(); };
         };
         try
         {
@@ -473,13 +473,61 @@ public sealed class FirstShowStageTests
     });
 
     [Fact]
+    public Task CacheWaitsForDelayedDisposalOfCurrentAndReplacedPlayback() => Run(async stage =>
+    {
+        stage.Clock = () => 0;
+        var audio = stage.Audio;
+        var released = new List<Action>();
+        var locks = new List<FileStream>();
+        int stopped = 0;
+        CoreSettings.Current.MasterVolume = 50;
+        CoreAudio.IsOutputSuppressedProvider = () => false;
+        var real = CoreAudio.PlayStoppableProvider;
+        CoreAudio.PlayStoppableProvider = (path, _, _, _, finished) =>
+        {
+            Assert.NotNull(finished);
+            // FileShare.None enforces the Windows lock; assertions also catch early unlink on Linux.
+            var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
+            locks.Add(stream);
+            released.Add(() => { stream.Dispose(); finished(); });
+            return () => stopped++; // stop queues disposal, as LibVlcAudio does
+        };
+        try
+        {
+            audio.Speak("first"); audio.Speak("second"); audio.Speak("third");
+            Assert.Equal(2, stopped);
+            var files = Directory.GetFiles(audio.CacheDirectory);
+            Assert.Equal(3, files.Length);
+            // Two replaced voices finish after close, in a different order.
+            audio.Dispose();
+            Assert.Equal(3, stopped);
+            Assert.All(files, path => Assert.True(File.Exists(path)));
+            await Task.Run(released[2]); // current voice finishes first
+            Assert.All(files, path => Assert.True(File.Exists(path)));
+            await Task.Run(released[0]);
+            Assert.All(files, path => Assert.True(File.Exists(path)));
+            await Task.Run(released[1]);
+            Assert.False(Directory.Exists(audio.CacheDirectory));
+            released[1](); // defensive duplicate completion and Dispose remain harmless
+            audio.Dispose();
+            Assert.False(Directory.Exists(audio.CacheDirectory));
+        }
+        finally
+        {
+            foreach (var stream in locks) stream.Dispose();
+            foreach (var finish in released) finish();
+            CoreAudio.PlayStoppableProvider = real;
+        }
+    });
+
+    [Fact]
     public Task SpeechWaitsForSettlingAndGesturesDecayWithMotion() => Run(stage =>
     {
         double t = 0; stage.Clock = () => t;
         var spoken = new List<string>();
         CoreSettings.Current.MasterVolume = 50;
         CoreAudio.IsOutputSuppressedProvider = () => false;
-        stage.Audio.Play = (path, _, tag) => { if (tag == "first-show-voice") spoken.Add(path); return () => { }; };
+        stage.Audio.Play = (path, _, tag, finished) => { if (tag == "first-show-voice") spoken.Add(path); return finished; };
         t = S.GreetAfter + .1; stage.Frame();
         t += .2; stage.Frame();
         Assert.Single(spoken);
@@ -507,7 +555,7 @@ public sealed class FirstShowStageTests
         double t = S.GreetAfter + .1; stage.Clock = () => t;
         var spoken = new List<string>();
         CoreSettings.Current.MasterVolume = 50;
-        stage.Audio.Play = (path, _, tag) => { if (tag == "first-show-voice") spoken.Add(path); return () => { }; };
+        stage.Audio.Play = (path, _, tag, finished) => { if (tag == "first-show-voice") spoken.Add(path); return finished; };
         stage.Frame();
         Assert.Single(spoken);
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
