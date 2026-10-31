@@ -380,8 +380,8 @@
                      and the B pair (60fps breathing / wobble / bob), MistScale (mist drift) and
                      AvatarAnimatedTranslate (GIF bob) were all x:Named transforms driven from
                      AvatarTubeWindow.Avatar.cs. Avalonia only name-scopes StyledElements (AVLN2000),
-                     and every driver lives in a partial this layer does not port, so the identity
-                     transforms are dropped and the avatar renders as a static frame. -->
+                     so transform drivers live in code. Floating.cs now bobs ImgAvatar independently
+                     of the reply bounce; portrait breathing and animated layers remain part B. -->
                 <Grid x:Name="AvatarBounceHost" RenderTransformOrigin="50%,100%">
                     <!-- Static PNG avatar (default) / emotive-portrait crossfade layer A -->
                     <Image x:Name="ImgAvatar"

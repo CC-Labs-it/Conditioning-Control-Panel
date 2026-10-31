@@ -314,8 +314,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
 
             InitTakeoverCountdownBar();
-            // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection;
-            // neither has ported.
+            StartFloatingAnimation(); // WPF xaml.cs:614 and Windowing.cs:1481
+            // Part B: WPF StartFullscreenDetection.
         }
 
         protected override void OnClosed(EventArgs e)
@@ -327,6 +327,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _avatarSetsClosed = true;
             CoreMods.ModChanged -= OnTubeModChanged;
             CancelAvatarSwitch();
+            StopFloatingAnimation(); // WPF Windowing.cs:1507
             ReleaseWindowing();
             DetachAwareness();
             UnwireContentPolicyWarning();
@@ -828,7 +829,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 var img = this.FindControl<Image>(name);
                 if (img == null) continue;
                 img.RenderTransformOrigin = new RelativePoint(0.5, 1.0, RelativeUnit.Relative);
-                img.RenderTransform = transform;
+                // WPF Avatar.cs:762-777 scales layout independently of the bob
+                // (Windowing.cs:751). Scale first, then translate without scaling the bob.
+                img.RenderTransform = name == "ImgAvatar"
+                    ? new TransformGroup { Children = { transform ?? new ScaleTransform(1, 1), _avatarFloat } }
+                    : transform;
             }
 
             // When the mod only overrides the ATTACHED tube image, force the attached layout in the
