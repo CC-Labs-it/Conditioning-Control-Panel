@@ -5,7 +5,6 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Activation;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;

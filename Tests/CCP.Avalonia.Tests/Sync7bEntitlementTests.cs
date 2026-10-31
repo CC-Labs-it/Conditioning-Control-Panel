@@ -14,7 +14,6 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Activation;
 using Newtonsoft.Json.Linq;
 using Xunit;
 

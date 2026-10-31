@@ -86,7 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var status = this.FindControl<TextBlock>("TxtJustSubscribed")!;
             button.IsEnabled = false;
             status.Text = Loc.Get("plans_just_subscribed_checking");
-            try { status.Text = Loc.Get(Services.Activation.JustSubscribedRule.LocKey(await Platform.EntitlementRefresh.CheckAsync())); }
+            try { status.Text = Loc.Get(Services.JustSubscribedRule.LocKey(await Platform.EntitlementRefresh.CheckAsync())); }
             catch (Exception ex) { Serilog.Log.Debug(ex, "Subscription check failed"); status.Text = Loc.Get("plans_just_subscribed_unreachable"); }
             finally { button.IsEnabled = true; }
         }

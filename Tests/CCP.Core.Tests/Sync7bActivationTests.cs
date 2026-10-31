@@ -1,7 +1,6 @@
 using System;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Activation;
 using Xunit;
 
 namespace CCP.Core.Tests;
