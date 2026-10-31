@@ -293,7 +293,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             "dtrh" => "play",
             _ => null,
         };
-        private void CardVault_Click(object? sender, RoutedEventArgs e) => Shell?.BtnPatreonExclusives_Click(sender, e);
+        private void CardVault_Click(object? sender, RoutedEventArgs e) => Shell?.OpenAppSettingsSection("account");
         private void CardJustDrop_Click(object? sender, RoutedEventArgs e) { }        // mw.CardJustDrop_Click(...)
         /// <summary>
         /// WIRED (the bark and the easter egg). WPF's handler

@@ -104,7 +104,7 @@
             <fx:AmbientFxCanvas x:Name="ExclusivesAmbientFx"/>
 
             <!-- 2 + 3. Content -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
+            <ScrollViewer x:Name="ContentScroll" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="26,20,26,22">
 
@@ -130,8 +130,8 @@
                                            Margin="0,0,18,0"/>
                             </Border>
                             <StackPanel VerticalAlignment="Center" Margin="18,0,0,0">
-                                <TextBlock Theme="{StaticResource Type.CardTitle}" Text="{loc:Str premium_page_title}"/>
-                                <TextBlock Text="{loc:Str premium_page_sub}"
+                                <TextBlock x:Name="TxtVaultTitle" Theme="{StaticResource Type.CardTitle}" Text="{loc:Str premium_page_title}"/>
+                                <TextBlock x:Name="TxtVaultSub" Text="{loc:Str premium_page_sub}"
                                            FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"
                                            Margin="0,1,0,0" MaxWidth="620" HorizontalAlignment="Left"
                                            TextTrimming="CharacterEllipsis"/>
@@ -307,6 +307,12 @@
                             </Border>
                         </Grid>
                     </Border>
+
+                    <Button x:Name="BtnSeePremium" Theme="{StaticResource SecondaryButton}"
+                            HorizontalAlignment="Left" Margin="0,-8,0,18" Padding="18,7"
+                            IsVisible="False" Click="SeePremium_Click">
+                        <TextBlock Text="{loc:Str plans_see_premium}"/>
+                    </Button>
 
                     <!-- Collection label: dropped since polish 12 (WPF collapses it); the shelf carries
                          its own Basic / Prime / Free headers (ExclusiveGroupRow). -->
@@ -489,7 +495,9 @@
 
                     <!-- Invites (WPF Controls/Invites/InvitePanel, InvitesHost). Hidden until the
                          server answers /v2/invites/mine; read on every show of the tab. -->
-                    <inv:InvitePanel x:Name="InvitesHost" Margin="0,18,0,0"/>
+                    <Border x:Name="PlansInvitesHost" IsVisible="False">
+                        <inv:InvitePanel x:Name="InvitesHost" Margin="0,18,0,0"/>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

@@ -67,6 +67,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (pill != null) pill.Click += SectionPill_Click;
             }
             SectionScroll.ScrollChanged += SectionScroll_ScrollChanged;
+            SectionChecked += SyncPlansMotion;
+            PropertyChanged += (_, e) =>
+            {
+                if (e.Property == IsVisibleProperty || e.Property.Name == "IsEffectivelyVisible") SyncPlansMotion();
+            };
+            AttachedToVisualTree += (_, _) =>
+            {
+                _plansWindow = TopLevel.GetTopLevel(this) as Window;
+                if (_plansWindow != null) _plansWindow.PropertyChanged += PlansWindowChanged;
+                SyncPlansMotion();
+            };
+            DetachedFromVisualTree += (_, _) =>
+            {
+                if (_plansWindow != null) _plansWindow.PropertyChanged -= PlansWindowChanged;
+                _plansWindow = null;
+                SectionAccount.PlansView.SetPlansActive(false);
+            };
         }
 
         // =====================================================================================
@@ -188,6 +205,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _raisedKey = key;
             SectionChecked?.Invoke();
         }
+
+        private Window? _plansWindow;
+
+        private void PlansWindowChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+        {
+            if (e.Property == IsVisibleProperty || e.Property == Window.WindowStateProperty) SyncPlansMotion();
+        }
+
+        private void SyncPlansMotion() => SectionAccount?.PlansView.SetPlansActive(IsEffectivelyVisible
+            && _plansWindow is { IsVisible: true } window && window.WindowState != WindowState.Minimized
+            && CheckedSectionKey == "account");
 
         private string? _raisedKey;
 

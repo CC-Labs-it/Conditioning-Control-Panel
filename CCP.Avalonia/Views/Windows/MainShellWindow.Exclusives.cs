@@ -60,11 +60,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         // No member of this partial is referenced from MainShellWindow.axaml.
 
-        /// <summary>WPF RefreshExclusivesTab, for the entitlement events (tier change, day rollover).
-        /// The body lives in ExclusivesTabView.RefreshVault.</summary>
+        internal Tabs.ExclusivesTabView? PlansVaultView => Named<Tabs.AppSettingsTabView>("AppSettingsTab")
+            ?.FindControl<Controls.AppSettings.AccountSettingsSection>("SectionAccount")?.PlansView;
+
+        /// <summary>Repaint both vault hosts after entitlement changes and day rollover.</summary>
         internal void RefreshExclusivesTab()
         {
             Named<Tabs.ExclusivesTabView>("ExclusivesTab")?.RefreshVault();
+            PlansVaultView?.RefreshVault();
             RefreshInvites();
         }
 
@@ -82,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF _invitePanel.RefreshAsync(): throttled inside, so a repaint storm costs one read.</summary>
-        internal void RefreshInvites() => _ = Named<Tabs.ExclusivesTabView>("ExclusivesTab")
+        internal void RefreshInvites() => _ = PlansVaultView
             ?.FindControl<Controls.Invites.InvitePanel>("InvitesHost")?.RefreshAsync();
     }
 }

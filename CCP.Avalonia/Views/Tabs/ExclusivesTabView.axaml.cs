@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -45,6 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             foreach (var name in new[] { "SpotVeilLock", "SpotFreeToday" }) _fxParts.Add(this.FindControl<Control>(name)!);
 
             LoadBackdrop();
+            ApplyPlansMode();
             RefreshVault();
 
             // The shell enrolls the room in RegisterTabFx on first arrival at "premium",
@@ -53,9 +55,58 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             // PLAYBOOK P01: the shell hides tabs with IsVisible, so the motion clock follows it too.
-            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) UpdateMotion(); };
+            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty || e.Property.Name == "IsEffectivelyVisible") UpdateMotion(); };
             // Main bf57cecdf: columns follow the width, cards stretch to fill the row (Core ExclusiveShelfFit).
             this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, e) => { if (e.WidthChanged) FitShelf(); };
+        }
+
+        // WPF PlansMode: the same vault painter, without a collection or nested scroller.
+        public bool PlansMode
+        {
+            get => _plansMode;
+            set
+            {
+                if (_plansMode == value) return;
+                _plansMode = value;
+                ApplyPlansMode();
+                var scroll = this.FindControl<ScrollViewer>("ContentScroll")!;
+                if (value && scroll.Content is Control content && scroll.Parent is Panel host)
+                {
+                    var index = host.Children.IndexOf(scroll);
+                    scroll.Content = null;
+                    host.Children.RemoveAt(index);
+                    host.Children.Insert(index, content);
+                }
+                RefreshVault();
+            }
+        }
+        private void ApplyPlansMode()
+        {
+            this.FindControl<Control>("SpotlightCard")!.IsVisible = !PlansMode;
+            this.FindControl<Button>("BtnSeePremium")!.IsVisible = PlansMode;
+            // The panel still owns its signed-out and server-response visibility.
+            // This outer host keeps it off Premium even after a late response.
+            this.FindControl<Control>("PlansInvitesHost")!.IsVisible = PlansMode;
+            BindHeader("TxtVaultTitle", PlansMode ? "plans_header_title" : "premium_page_title");
+            BindHeader("TxtVaultSub", PlansMode ? "plans_header_sub" : "premium_page_sub");
+        }
+
+        private void BindHeader(string name, string key) => this.FindControl<TextBlock>(name)!
+            .Bind(TextBlock.TextProperty, new Binding($"[{key}]")
+            {
+                Source = LocalizationManager.Instance,
+                Mode = BindingMode.OneWay,
+            });
+
+        private bool _plansMode;
+        private bool _plansActive;
+
+        internal void SetPlansActive(bool active)
+        {
+            _plansActive = active;
+            if (active) { RefreshVault(); StartAmbient(); }
+            else _ambientFx.Stop();
+            UpdateMotion();
         }
 
         public static readonly StyledProperty<double> CardWidthProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(CardWidth), Services.UI.ExclusiveShelfFit.BaseWidth);
@@ -83,7 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged += UpdateMotion;
-            StartAmbient();
+            if (!PlansMode || _plansActive) StartAmbient();
             UpdateMotion();
         }
 
@@ -133,7 +184,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.
             var rows = new List<object>();
-            var cards = ExclusiveFeature.All.Where(f => f.Shown()).Select(f => new ExclusiveCardRow(f));
+            var cards = ExclusiveFeature.All.Where(f => !PlansMode && f.Shown()).Select(f => new ExclusiveCardRow(f));
+            this.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible = !PlansMode;
             foreach (var (group, items) in Services.UI.PremiumShelfOrder.Arrange(cards, r => r.Feature.Key, r => r.Tier, r => !r.IsLocked))
             {
                 rows.Add(new ExclusiveGroupRow(group, items.Count(r => !r.IsLocked), items.Count));
@@ -237,7 +289,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The only start/stop: visible, attached and MotionFx.AllowAmbientLoops (PLAYBOOK P01).</summary>
         private void UpdateMotion()
         {
-            bool want = IsVisible && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
+            bool want = IsEffectivelyVisible && (!PlansMode || _plansActive) && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
             // Re-dressed either way: a glow-gate change (performance tier) alone must re-apply the glows.
             if (want == (_motion != null)) { }
             else if (want)
@@ -353,6 +405,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>"Resources/features/x.png" -> "features/x.png", the name ModArt resolves.</summary>
         internal static string? ArtName(string? resource) =>
             resource?.StartsWith("Resources/", StringComparison.Ordinal) == true ? resource["Resources/".Length..] : resource;
+
+        private void SeePremium_Click(object? sender, RoutedEventArgs e) =>
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.ShowTab("premium");
 
         private void Spotlight_Click(object? sender, RoutedEventArgs e) => Open(ExclusiveFeature.All[0]);
 
