@@ -17,6 +17,9 @@ public sealed class MandatoryVideoSchedulerTests
     {
         public readonly List<(string Path, bool Strict)> Shown = new();
         public int Closes;
+        public bool FeedOwnsTheScreen { get; set; }
+        public int FeedNotices;
+        public void AnnounceFeedDefer() => FeedNotices++;
         public double Watched;
         public void Show(string path, bool strict) => Shown.Add((path, strict));
         public double CloseAll() { Closes++; return Watched; }
@@ -35,6 +38,82 @@ public sealed class MandatoryVideoSchedulerTests
     }
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
+
+    [Fact]
+    public void Feed_coalesces_without_picking_or_playing_then_replays_first_request() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true }; var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Clips; });
+        v.Start();
+        Assert.False(v.Trigger(true, "/v/first.mp4", userInitiated: true));
+        Assert.False(v.Trigger(false, "/v/second.mp4"));
+        clock.Advance(TimeSpan.FromSeconds(20));
+        Assert.False(v.IsPlaying);
+        Assert.Equal(0, picks);
+        Assert.Equal(1, host.FeedNotices);
+        Assert.Empty(host.Shown);
+        host.FeedOwnsTheScreen = false;
+        clock.Advance(TimeSpan.FromMilliseconds(499));
+        Assert.False(v.IsPlaying);
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.True(v.IsPlaying);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(("/v/first.mp4", true), Assert.Single(host.Shown));
+        v.End();
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("panic")]
+    [InlineData("disabled")]
+    [InlineData("not-running")]
+    [InlineData("expired")]
+    public void Feed_replay_cannot_outlive_its_permission_or_deadline(string reason) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        if (reason != "not-running") v.Start();
+        v.Trigger();
+        if (reason == "stop") { v.Stop(); v.Start(); }
+        if (reason == "panic") v.ForceCleanup();
+        if (reason == "disabled") CoreSettings.Current.MandatoryVideosEnabled = false;
+        if (reason == "expired")
+        {
+            clock.Advance(TimeSpan.FromSeconds(89));
+            v.Trigger(); // coalescing cannot renew the original ceiling
+            clock.Advance(TimeSpan.FromSeconds(1));
+        }
+        host.FeedOwnsTheScreen = false;
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.False(v.IsPlaying);
+        Assert.Empty(host.Shown);
+        Assert.Equal(0, host.FeedNotices);
+        // Expiry releases the latch so the next request can wait and replay normally.
+        if (reason == "expired")
+        {
+            host.FeedOwnsTheScreen = true;
+            v.Trigger();
+            host.FeedOwnsTheScreen = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.True(v.IsPlaying);
+        }
+        v.Stop();
+    });
+
+    [Fact]
+    public void Earned_video_plays_over_feed_without_a_notice() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        Assert.True(v.Trigger(userEarned: true, userInitiated: true));
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Single(host.Shown);
+        Assert.Equal(0, host.FeedNotices);
+        v.Stop();
+    });
 
     [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>

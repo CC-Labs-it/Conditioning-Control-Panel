@@ -10,6 +10,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Skia;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -68,6 +69,35 @@ public sealed class GameWindowFypTests
             }
         });
     }
+
+    [Fact]
+    public void Visible_feed_stands_down_mandatory_video_and_panic_releases_the_screen() => Run((shell, _) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var host = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        var video = new MandatoryVideoScheduler(host, library: () => new[] { "/v/a.mp4" });
+        Assert.False(host.FeedOwnsTheScreen);
+        shell.ShowTab("fyp");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(host.FeedOwnsTheScreen);
+        Assert.False(video.Trigger());
+        Assert.False(video.IsPlaying);
+        var oldVideo = CoreEngine.Video;
+        try
+        {
+            CoreEngine.Video = video;
+            var card = new ConditioningControlPanel.Avalonia.Views.Features.VideoFeatureControl();
+            card.FindControl<Button>("BtnTestVideo")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(card.TestVideoRun.IsCompletedSuccessfully);
+            var notice = shell.FindControl<StackPanel>("NotificationHost")!.Children.OfType<Border>().Last();
+            Assert.Contains(notice.GetVisualDescendants().OfType<TextBlock>(),
+                t => t.Text == ConditioningControlPanel.Localization.Loc.Get("video_toast_feed_has_the_screen"));
+            Assert.Equal(TimeSpan.FromSeconds(6), Assert.IsType<DispatcherTimer>(notice.Tag).Interval);
+        }
+        finally { CoreEngine.Video = oldVideo; video.Stop(); } // also cancels the pending poll
+        GameWindow.CloseAllForPanic();
+        Assert.False(host.FeedOwnsTheScreen);
+    });
 
     /// <summary>WPF ShowTab("fyp") -> OpenFypFeed (MainWindow.Lab.cs:234), refused out loud; panic closes it (GameSurfaces.cs:56).</summary>
     [Fact]
