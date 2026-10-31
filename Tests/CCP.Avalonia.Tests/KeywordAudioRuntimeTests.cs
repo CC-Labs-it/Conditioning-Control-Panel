@@ -98,6 +98,58 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
+    public void AcceptedMatchesRecordBeforeNotificationAndRespectEveryGate() => Run((engine, s, _) =>
+    {
+        var notifications = 0;
+        engine.TriggerFired += trigger =>
+        {
+            notifications++;
+            var record = engine.Fires.Recent()[0];
+            Assert.Equal(trigger.Id, record.TriggerId);
+            Assert.Equal("Keyboard", record.Source);
+            Assert.Equal(engine.Now(), record.FiredAt);
+        };
+        CoreEntitlement.HasPremiumProvider = () => false;
+        Type(engine, "sit"); Assert.Empty(engine.Fires.Recent());
+        CoreEntitlement.HasPremiumProvider = () => true;
+        s.KeywordTriggersEnabled = false;
+        Type(engine, "sit"); Assert.Empty(engine.Fires.Recent());
+        s.KeywordTriggersEnabled = true;
+        s.KeywordTriggerIgnoreOwnFocus = true;
+        foreach (var ch in "sit") engine.Character(ch, "ccp", true);
+        Assert.Empty(engine.Fires.Recent());
+        s.KeywordGlobalCooldownSeconds = 10;
+        Type(engine, "sit");
+        Assert.Single(engine.Fires.Recent());
+        Type(engine, "sit");
+        Assert.Equal(1, notifications);
+        engine.Stop(); Type(engine, "sit");
+        Assert.Single(engine.Fires.Recent()); // stop retains the session history, as WPF does
+    });
+
+    [Fact]
+    public void DemoHistoryNeedsEntitlementButBypassesMasterAndCooldowns() => Run((engine, s, played) =>
+    {
+        var notifications = 0;
+        engine.TriggerFired += _ => notifications++;
+        engine.Stop(); s.KeywordTriggersEnabled = false;
+        CoreEntitlement.HasPremiumProvider = () => false;
+        engine.FireDemo("sit", "Tutorial");
+        Assert.Empty(engine.Fires.Recent());
+        CoreEntitlement.HasPremiumProvider = () => true;
+        engine.FireDemo(" ", "Tutorial");
+        Assert.Empty(engine.Fires.Recent());
+        engine.FireDemo("sit", "Tutorial"); engine.FireDemo("sit", "Tutorial");
+        Assert.Equal(2, notifications);
+        Assert.Equal(2, engine.Fires.Recent().Count);
+        var record = engine.Fires.Recent()[0];
+        Assert.Equal("tutorial:demo", record.TriggerId);
+        Assert.Equal("Tutorial", record.Source);
+        Assert.Equal(new[] { "Highlight", "AvatarComment" }, record.ActionKeys);
+        Assert.Empty(played);
+    });
+
+    [Fact]
     public void StopCancelsPendingAudioRepeats() => Run((engine, s, played) =>
     {
         var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
