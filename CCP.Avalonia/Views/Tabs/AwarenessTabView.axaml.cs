@@ -193,13 +193,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var on = ChkAwarenessMaster.IsChecked == true;
 
                 // WPF MainWindow.Awareness.cs:395: ON needs premium or the awareness free day
-                // (KeywordTriggerService.HasAccess); the box bounces back. TierGate's toast stands
-                // in for WPF's message box.
-                if (on && !ConditioningControlPanel.Services.TierGate.DemandPremium(ConditioningControlPanel.Localization.Loc.Get("tab_awareness"), "awareness"))
+                // (KeywordTriggerService.HasAccess); the box bounces back and WPF's message box
+                // says why, the same prompt the OCR toggle below shows.
+                if (on && !ConditioningControlPanel.Services.TierGate.RequiresPremium(ConditioningControlPanel.Localization.Loc.Get("tab_awareness"), "awareness").Allowed)
                 {
                     _isLoading = true;
                     try { ChkAwarenessMaster.IsChecked = false; }
                     finally { _isLoading = false; }
+                    _ = Controls.Companion.KeywordTriggersPanel.Inform(TopLevel.GetTopLevel(this) as Window,
+                        ConditioningControlPanel.Localization.Loc.Get("title_patreon_feature"),
+                        ConditioningControlPanel.Localization.Loc.Get("msg_keyword_triggers_patreon_only"));
                     return;
                 }
 
