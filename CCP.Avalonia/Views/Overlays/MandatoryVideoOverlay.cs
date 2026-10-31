@@ -232,6 +232,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF DecidePresentation: floating is for an ordinary video only - never a strict one,
         /// a Lockdown or a Chaos run (DtRH is n/a on this head).</summary>
+        public bool IsFloating(bool strict) => Floats(strict);
+
         internal static bool Floats(bool strict) => ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ShouldFloat(
             CoreSettings.Current.MandatoryVideoFloating, strict,
             ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true, global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);

@@ -77,13 +77,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         /// <summary>
-        /// The header's account chip. Opens the Settings door and scrolls it to Account - no popup
+        /// The header's account chip. Signed out, opens sign-in. Signed in, opens Settings at Account - no popup
         /// and no reparenting, same as WPF (MainWindow.UiUpdates.cs). The scroll deliberately
         /// happens after the tab is shown, because a section can only be measured once visible;
         /// OpenAppSettingsSection keeps that order and swallows a failed scroll.
         /// </summary>
-        private void BtnAccountChip_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-            => OpenAppSettingsSection("account");
+        private async void BtnAccountChip_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            if (!CoreAccount.IsLoggedIn) { await OpenUnifiedLoginDialog(); return; }
+            OpenAppSettingsSection("account");
+        }
 
         // ---- header stat pills (WPF MainWindow.UiUpdates.cs:530-641 UpdateStatPills, :717 timer) ----
         private global::Avalonia.Threading.DispatcherTimer? _statPillTimer;

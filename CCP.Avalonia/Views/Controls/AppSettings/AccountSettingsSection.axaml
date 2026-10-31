@@ -21,7 +21,7 @@
         <TextBlock Text="{loc:Str set2_section_account}" Theme="{StaticResource SectionHeader}"/>
 
         <!-- Net-new: who you are, and which bar you clear. Painted by RefreshTierBadge(). -->
-        <Border x:Name="AccountTierCard" CornerRadius="12" Padding="0" Margin="0,0,0,12"
+        <Border Tapped="AccountTierCard_Tapped" x:Name="AccountTierCard" CornerRadius="12" Padding="0" Margin="0,0,0,12"
                 Background="{DynamicResource ElevatedSurfaceBrush}"
                 BorderBrush="{StaticResource SectionHueAccountBorderBrush}" BorderThickness="1">
             <Grid>
