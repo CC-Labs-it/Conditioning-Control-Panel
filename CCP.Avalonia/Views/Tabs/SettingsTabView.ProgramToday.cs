@@ -284,6 +284,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return t;
         }
 
+        // Same frame-request seam as HelpLoopView: tests deliver callbacks separately from elapsed time.
+        internal static Action<TopLevel, Action<TimeSpan>> ProgramBannerRequestFrame =
+            (top, callback) => top.RequestAnimationFrame(callback);
+
         /// <summary>WPF NudgeProgramBannerArt (:478-490): 260 ms quadratic ease-out slide of the art, per
         /// rendered frame (an Animation cannot run on a Transform, P82). A newer nudge or a stop cancels it.</summary>
         private void NudgeProgramBannerArt(double to)
@@ -300,9 +304,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (run != _programBannerNudge) return;
                 var p = Math.Min(1, BeatLoop.Time.GetElapsedTime(start).TotalMilliseconds / 260);
                 slide.X = from + (to - from) * (1 - (1 - p) * (1 - p));
-                if (p < 1) top.RequestAnimationFrame(Frame);
+                if (p < 1) ProgramBannerRequestFrame(top, Frame);
             }
-            top.RequestAnimationFrame(Frame);
+            ProgramBannerRequestFrame(top, Frame);
         }
     }
 }
