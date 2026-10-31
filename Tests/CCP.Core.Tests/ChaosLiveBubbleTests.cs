@@ -69,6 +69,9 @@ public class ChaosLiveBubbleTests
         Assert.Equal(new[] { "snap:held" }, log);
         Assert.Equal(fuse / 1000.0, b.DefuseJudgeFuseSec, 6);
         Assert.True(b.Deflating);
+        double scale = b.Scale;
+        b.Step();
+        Assert.True(b.Scale < scale);   // WPF BubbleService.cs:3762: a completed hold still shrinks.
     }
 
     [Theory]
@@ -128,6 +131,10 @@ public class ChaosLiveBubbleTests
         f.Bubbles.Add(treat);
         f.DefuseAllLive();
         Assert.Equal(new[] { "snap:swept" }, log);
+        Assert.False(b.Deflating);   // WPF BubbleService.cs:4672,3786: sweep Pop expands.
+        double scale = b.Scale;
+        b.Step();
+        Assert.Equal(scale + 0.04, b.Scale, 6);
         Assert.False(treat.Popping);
         Assert.Equal(b.FuseRemainingMs / 1000.0, b.DefuseJudgeFuseSec, 6);
     }

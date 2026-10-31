@@ -586,7 +586,13 @@ public sealed class ChaosRunHostTests
                 Assert.Equal(treatHit, treat.Popping); Assert.Equal(liveHit, live.Popping);
                 Assert.Equal(treatHit ? 1 : 0, st.EffectsFired);
                 Assert.Equal(liveHit ? 2 : 1, st.Defused); Assert.Equal(0, st.Detonated);
-                if (liveHit) Assert.True(live.Deflating);
+                if (liveHit)
+                {
+                    Assert.False(live.Deflating);   // WPF BubbleService.cs:1754,4672,3786: residue bursts.
+                    double scale = live.Scale;
+                    live.Step();
+                    Assert.Equal(scale + 0.04, live.Scale, 6);
+                }
                 ChaosRunHost.ForceShutdown();
                 Assert.True(BubbleOverlay.CanIdle);
                 var next = BubbleOverlay.SpawnChaos(LiveSpec()); next.X = next.Y = 0;
