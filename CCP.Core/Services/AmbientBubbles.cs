@@ -289,7 +289,10 @@ namespace ConditioningControlPanel.Services
         public const double StepMs = 30.0;
 
         public readonly List<AmbientBubble> Bubbles = new();
-        public readonly Random Random = new();
+        public readonly Random Random;
+        public AmbientBubbleField(Random? random = null) => Random = random ?? new Random();
+        /// <summary>WPF SkillTreeService.cs:222 raises at the roll, even if the daily bucket is empty.</summary>
+        public Action<int>? LuckyProc;
         /// <summary>WPF SetChaosFrozen: a held Chaos run's live bubbles do not move (a pop burst still plays).</summary>
         public bool HoldChaos;
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
@@ -327,6 +330,7 @@ namespace ConditioningControlPanel.Services
             if (b.Popping) return 0;
             b.Popping = true;
             var multiplier = SkillTreeRules.HasSkill(s, "lucky_bubbles") && Random.NextDouble() < 0.05 ? 20 : 1;
+            if (multiplier > 1) LuckyProc?.Invoke(multiplier);
             var paid = AmbientBubbleXp.Take(s, 5 * multiplier);
             b.Lucky = multiplier > 1 && paid > 0;
             return paid;
