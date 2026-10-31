@@ -274,6 +274,45 @@ public sealed class ChaosUnlockCardOverlayTests
         finally { ChaosRunHost.ForceShutdown(); ChaosFxWindow.Clock = time; ChaosFxWindow.Accept = accept; }
     });
 
+    [Theory]
+    [InlineData(0), InlineData(1), InlineData(2)]
+    public async Task Panic_during_draft_stops_reveal_autopick_and_confirmation(int stage) => await Run(_ =>
+    {
+        Begin();
+        var state = ChaosRunHost.State!;
+        Assert.False(RevealService.IsUnlocked(RevealIds.DraftSkip));
+        state.Config.DraftAutoResumeSec = 1;
+        state.Config.AllowCurses = false;
+        state.ElapsedSec = 20;
+        var audio = new System.Collections.Generic.List<string>();
+        int barks = 0;
+        CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => audio.Add(path);
+        CoreBark.ChaosDraftAutopick = () => barks++;
+        ChaosRunHost.Tick();
+        var window = ChaosRunHost.Overlay!;
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        object? Field(string name) => typeof(ChaosOverlayWindow).GetField(name, flags)!.GetValue(window);
+        void Tick(DispatcherTimer timer) => ((EventHandler)typeof(DispatcherTimer).GetField("Tick", flags)!.GetValue(timer)!)(timer, EventArgs.Empty);
+        if (stage > 0) for (int i = 0; i <= state.Config.DraftChoices; i++) Tick((DispatcherTimer)Field("_revealTimer")!);
+        if (stage > 1) Tick((DispatcherTimer)Field("_autoResumeTimer")!);
+        var names = new[] { "_revealTimer", "_autoResumeTimer", "_confirmTimer" };
+        var timers = names.Select(Field).OfType<DispatcherTimer>().ToArray();
+        Assert.True(timers.Any(t => t.IsEnabled));
+        Assert.NotEmpty(audio);
+        Assert.Equal(stage > 1 ? 1 : 0, barks);
+        audio.Clear(); barks = 0;
+        try
+        {
+            ChaosRunHost.ForceShutdown();
+            Assert.All(timers, t => Assert.False(t.IsEnabled));
+            foreach (var timer in timers) for (int i = 0; i < 20; i++) Tick(timer); // callbacks queued before Close
+            Assert.All(names.Append("_onBoonPick"), name => Assert.Null(Field(name)));
+            Assert.Empty(audio);
+            Assert.Equal(0, barks);
+        }
+        finally { foreach (var timer in timers.Concat(names.Select(Field).OfType<DispatcherTimer>())) timer.Stop(); }
+    });
+
     private sealed class SteppedClock : TimeProvider
     {
         public long Ticks;
