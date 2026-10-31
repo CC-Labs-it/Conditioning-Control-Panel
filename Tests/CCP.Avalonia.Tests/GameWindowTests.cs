@@ -79,11 +79,6 @@ public sealed partial class GameWindowTests
     [Fact]
     public void PageFrames_OnlyTheLoadedDocumentCanDriveTheBridge() => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
         var root = Directory.CreateTempSubdirectory("game-document-").FullName;
         using var server = new WebAssetServer(root);
         var w = new GameWindow(GameWindow.Games["breakoutdemo"]);

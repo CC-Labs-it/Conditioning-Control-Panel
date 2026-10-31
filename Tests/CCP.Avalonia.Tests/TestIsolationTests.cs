@@ -1,8 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Media;
-using Avalonia.Skia;
 using CCP.Avalonia.Testing;
 using System.IO;
 using System.Linq;
@@ -39,16 +37,11 @@ public class TestIsolationTests
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
-    /// <summary>A fixture with the old bare builder must still get the desktop font collection.
-    /// The first fixture used to choose fonts for the whole shard, so adding a test changed which
-    /// later windows could measure their text on Linux.</summary>
+    /// <summary>The isolation hook supplies desktop fonts before any fixture, independent of test order.</summary>
     [Fact]
     public void TheHookProvidesDesktopFontsBeforeAnyFixture() => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        Assert.NotNull(Application.Current);
         foreach (var (family, weight) in new[]
         {
             ("fonts:Inter#Inter", FontWeight.Normal),

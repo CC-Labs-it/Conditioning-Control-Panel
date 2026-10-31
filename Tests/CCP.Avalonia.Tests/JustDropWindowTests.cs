@@ -127,11 +127,6 @@ public sealed class JustDropWindowTests
     [InlineData(JustDropHandoff.PlayerPath)]
     public void SignedInHandoffRedirect_StillDeliversSiteMessages(string destination) => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         CoreAccount.UnifiedUserId = "handoff-test-user";
