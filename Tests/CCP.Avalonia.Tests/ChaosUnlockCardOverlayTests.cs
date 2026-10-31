@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
@@ -153,6 +154,169 @@ public sealed class ChaosUnlockCardOverlayTests
         Assert.Equal(0u, style & 0x20u); // clickable
         Assert.NotEqual(0u, style & 0x08000000u); // NOACTIVATE
         window.Close();
+    });
+
+    [Fact]
+    public async Task Wave_draft_and_ready_go_defer_cards_until_the_last_dismissal() => await Run(clock =>
+    {
+        ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true });
+        var overlay = ChaosRunHost.Overlay!;
+        overlay.FinishCountdown();
+        ChaosRunHost.StopTimerForTests();
+        var state = ChaosRunHost.State!;
+        state.WelcomeShowerEnabled = true;
+        ChaosMeta.State.LessonsComplete.Remove("silk_touch");
+        ChaosMeta.State.LessonProgress["silk_touch"] = ChaosLessons.ById("silk_touch")!.Target - 1;
+        state.ElapsedSec = 40; // entering the final loop
+        ChaosRunHost.Tick();
+        Assert.True(overlay.FindControl<global::Avalonia.Controls.Border>("DraftPanel")!.IsVisible);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(ChaosLessons.IsComplete("silk_touch"));
+        Assert.False(ChaosUnlockCardOverlay.IsShowing);
+        double elapsed = state.ElapsedSec;
+        ChaosRunHost.Tick();
+        ChaosRunHost.SpawnTick();
+        Assert.Equal(elapsed, state.ElapsedSec);
+        Assert.Equal(0, BubbleOverlay.ChaosCount);
+        int shields = state.Shields;
+        // Drive the overlay's actual selection callback, including HideDraft.
+        typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic
+            | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { null });
+        Assert.Equal(shields + 1, state.Shields);
+        Complete("intrusive_thoughts"); // a second completion during ReadyGo
+        Assert.False(ChaosUnlockCardOverlay.IsShowing);
+        overlay.FinishCountdown();
+        Assert.Equal(1, ChaosUnlockCardOverlay.QueuedCount);
+        Assert.False(ChaosUnlockCardOverlay.Active!.AutoDismiss);
+        Step(clock, 240); Click();
+        ChaosRunHost.Tick();
+        Assert.Equal(elapsed, state.ElapsedSec);
+        Step(clock, 240); Click(); Step(clock, 150);
+        ChaosRunHost.StopTimerForTests();
+        ChaosRunHost.Tick();
+        Assert.Equal(elapsed + ChaosRunEngine.TICK_SEC, state.ElapsedSec);
+        Assert.Equal(3, state.WaveIndex);
+        Assert.True(state.WelcomeShowerEnabled);
+        Assert.False(ChaosUnlockCardOverlay.IsShowing);
+        Assert.Equal(6, BubbleOverlay.ChaosCount);
+        Assert.All(BubbleOverlay.Field.Bubbles, b => Assert.Equal(ChaosMotion.RainDown, b.Spec!.Motion));
+        double y = BubbleOverlay.Field.Bubbles[0].Y;
+        BubbleOverlay.Field.Step();
+        Assert.True(BubbleOverlay.Field.Bubbles[0].Y > y);
+        Assert.Equal("final_loop", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Draft_pick_earns_a_deferred_lesson_and_shutdown_drops_the_handoff(bool curse) => await Run(clock =>
+    {
+        Begin();
+        var state = ChaosRunHost.State!;
+        state.ElapsedSec = 20;
+        state.RerollsLeft = 1;
+        ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        ChaosMeta.State.LessonsComplete.Remove("draft4");
+        ChaosMeta.State.LessonProgress["draft4"] = ChaosLessons.ById("draft4")!.Target - 1;
+        ChaosRunHost.Tick();
+        var overlay = ChaosRunHost.Overlay!;
+        var reroll = overlay.FindControl<Button>("BtnReroll")!;
+        Assert.True(reroll.IsVisible);
+        reroll.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(0, state.RerollsLeft);
+        Assert.False(reroll.IsVisible);
+        var boon = curse ? ChaosBoonPool.Draft(true, 3, guaranteeCurse: true).First(b => b.IsCurse)
+            : ChaosBoonPool.All.Single(b => b.Id == "golden_touch");
+        int shields = state.Shields;
+        double mult = state.BoonMult;
+        state.SinExtraMult = 0.2;
+        if (curse) state.MaxedBoons.Add("surrender");
+        ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Whisper);
+        ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Yes);
+        typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic
+            | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { boon });
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(boon, curse ? state.ActiveCurses : state.ActiveBoons);
+        Assert.Equal(mult + boon.RunMultBonus + (curse ? 0.2 : 0), state.BoonMult, 8);
+        Assert.Equal(shields + (curse ? 1 : 0), state.Shields);
+        Assert.Equal(curse, state.SurrenderShieldUsed);
+        Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
+        Assert.Equal(curse, ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes));
+        Assert.True(ChaosLessons.IsComplete("draft4"));
+        Assert.False(ChaosUnlockCardOverlay.IsShowing);
+        ChaosRunHost.ForceShutdown();
+        overlay.FinishCountdown(); // an old GO cannot revive cards or spawns
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(ChaosUnlockCardOverlay.IsShowing);
+        Assert.False(BubbleOverlay.Field.HoldChaos);
+        Assert.Equal(0, BubbleOverlay.ChaosCount);
+        Begin();
+        Assert.False(ChaosUnlockCardOverlay.IsShowing);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Freeze_pickup_keeps_its_remaining_window_across_a_lesson_or_manual_pause(bool manual) => await Run(clock =>
+    {
+        ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
+            EnabledVariants = new System.Collections.Generic.List<string> { "bambifreeze" } });
+        ChaosRunHost.Overlay!.FinishCountdown();
+        ChaosRunHost.StopTimerForTests();
+        ChaosMeta.State.LessonsComplete.Remove("freeze_trigger");
+        ChaosMeta.State.LessonProgress["freeze_trigger"] = ChaosLessons.ById("freeze_trigger")!.Target - 1;
+        ChaosRunHost.SpawnTick();
+        var bubble = Assert.Single(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsFreeze == true);
+        BubbleOverlay.Pop(bubble);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(ChaosLessons.IsComplete("freeze_trigger"));
+        Assert.Equal(3.5, ChaosRunHost.FreezeRemainingSec);
+        Assert.True(BubbleOverlay.Field.FreezeChaos);
+        for (int i = 0; i < 30; i++) ChaosRunHost.Tick();
+        Assert.Equal(3.5, ChaosRunHost.FreezeRemainingSec);
+        Step(clock, 240); Click(); Step(clock, 150);
+        ChaosRunHost.StopTimerForTests();
+        ChaosRunHost.Tick();
+        Assert.Equal(3.25, ChaosRunHost.FreezeRemainingSec);
+        // WPF ChaosModeService.cs:1930,1991: frozen defuses need and spend no focus.
+        var state = ChaosRunHost.State!;
+        state.Focus = 0;
+        var live = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+            { IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
+        var savedClock = BubbleOverlay.Field.Clock;
+        var now = DateTime.UnixEpoch;
+        try
+        {
+            BubbleOverlay.Field.Clock = () => now = now.AddMilliseconds(32);
+            BubbleOverlay.Press(live, live.CenterX, live.CenterY);
+            Assert.True(live.Channeling);
+            state.Focus = 50; // completion must preserve focus as well as admitting a zero-focus press
+            for (int i = 0; i < 32; i++) BubbleOverlay.Field.Step();
+            Assert.Equal(1, state.Defused);
+            Assert.Equal(50, state.Focus);
+        }
+        finally { BubbleOverlay.Field.Clock = savedClock; }
+        if (manual) ChaosRunHost.ToggleManualPause();
+        else Complete("taking_chances");
+        for (int i = 0; i < 30; i++) ChaosRunHost.Tick();
+        Assert.Equal(3.25, ChaosRunHost.FreezeRemainingSec);
+        if (manual) ChaosRunHost.ToggleManualPause();
+        else { Step(clock, 240); Click(); Step(clock, 150); }
+        ChaosRunHost.StopTimerForTests();
+        int count = BubbleOverlay.ChaosCount; // the caught pickup's pop burst may already be gone
+        ChaosRunHost.SpawnTick();
+        Assert.Equal(count, BubbleOverlay.ChaosCount);
+        Assert.True(BubbleOverlay.Field.FreezeChaos);
+        Assert.Equal(2.5, EffectPayload.GlobalDurationMult);
+        for (int i = 0; i < 13; i++) ChaosRunHost.Tick();
+        Assert.Equal(0, ChaosRunHost.FreezeRemainingSec);
+        Assert.False(BubbleOverlay.Field.FreezeChaos);
+        Assert.Equal(1, EffectPayload.GlobalDurationMult);
+        ChaosRunHost.SpawnTick();
+        Assert.True(BubbleOverlay.ChaosCount > count);
+        ChaosRunHost.ForceShutdown();
+        Assert.Equal(0, ChaosRunHost.FreezeRemainingSec);
+        Assert.False(BubbleOverlay.Field.FreezeChaos);
     });
 
     private sealed class SteppedClock : TimeProvider

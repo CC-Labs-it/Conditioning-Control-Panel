@@ -32,7 +32,21 @@ public sealed class ChaosRunHostTests
 
     private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3 };
 
-    private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
+    // Keep drafts enabled. Long-run clock/payout tests now drive the real draft UI callback
+    // and ReadyGo instead of assuming a wave transition resumes without a user choice.
+    private static void TickRun()
+    {
+        var overlay = ChaosRunHost.Overlay;
+        if (overlay?.FindControl<Border>("DraftPanel")?.IsVisible == true)
+        {
+            typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { null });
+            overlay.FinishCountdown();
+        }
+        ChaosRunHost.Tick();
+    }
+
+    private static void Ticks(int n) { for (int i = 0; i < n; i++) TickRun(); }
 
     /// <summary>A fresh in-memory save (TestIsolation puts the files back afterwards).</summary>
     private static void FreshMeta()
@@ -426,7 +440,7 @@ public sealed class ChaosRunHostTests
                 state.Score = 1234;
                 var meta = ChaosMeta.State;
                 int gold0 = meta.Gold;
-                for (int i = 0; i < 4 * 1000 && ChaosRunHost.IsDescending; i++) ChaosRunHost.Tick();
+                for (int i = 0; i < 4 * 1000 && ChaosRunHost.IsDescending; i++) TickRun();
                 Assert.False(ChaosRunHost.IsDescending);
 
                 double durMin = state.RunDurationSec / 60.0, diff = state.Config.DifficultyMult;
@@ -478,9 +492,9 @@ public sealed class ChaosRunHostTests
                 state.Shields = 2;   // one absorbs the detonation, one is left at the end
                 if (detonate) Detonate();
                 int loop1 = state.WaveIndex;
-                while (state.WaveIndex == loop1) ChaosRunHost.Tick();
+                while (state.WaveIndex == loop1) TickRun();
                 bool silk = ChaosLessons.IsComplete("silk_touch");
-                for (int i = 0; i < 4 * 1000 && ChaosRunHost.IsDescending; i++) ChaosRunHost.Tick();
+                for (int i = 0; i < 4 * 1000 && ChaosRunHost.IsDescending; i++) TickRun();
                 Assert.False(ChaosRunHost.IsDescending);
                 int detonated = state.Detonated;
                 ChaosRunHost.ForceShutdown();
