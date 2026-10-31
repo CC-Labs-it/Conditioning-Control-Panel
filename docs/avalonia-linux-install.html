@@ -22,6 +22,63 @@ th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockq
 <p>Goal: installing CCP on Linux must be easy for a non-technical user. Installing CCP installs every dependency; the user
 never has to find packages by hand. This belongs to the installer / Linux package phase (phase 5) and must be done before
 &quot;retire WPF from shipping&quot; counts as finished.</p>
+<h2 id="rt-linux-packaging">Racing Thoughts 7.2 packaging (A5 step 6)</h2>
+<p>B2 sections 3 and 4.6 and <code>handoff-1031/MICH-72-ANSWERS-1031.md</code> are the release rules.
+The tarball and Flatpak do not bundle Electron. The first race downloads the release-pinned engine
+(start at 45.1.0, URL and SHA256 per x64/arm64) to <code>CorePaths.UserData/engines/electron-&lt;ver&gt;/</code>.
+This is the app's writable data/cache area, including inside Flatpak; never write to <code>/app</code>.
+Verify the archive before extracting, retain <code>LICENSE</code> and <code>LICENSES.chromium.html</code>,
+and only prune older engines after the new one verifies. No extra host filesystem permission is needed.</p>
+<p>Existing Flatpak grants suffice: <code>--share=network</code> for the first download and loopback bridge,
+<code>--share=ipc</code> for Chromium/X11 shared memory, <code>--device=dri</code> for GPU rendering,
+<code>--socket=x11</code> for XWayland and the focused-window panic key, and PulseAudio for sound.
+No new share, device or talk-name is added. Existing tray/notification D-Bus names are unrelated to the engine.
+WPE stays out. Publish a <code>.flatpak</code> bundle beside the tarball on
+<code>linux-preview-&lt;version&gt;</code>, a GitHub pre-release never marked Latest; no preview OSTree repo.</p>
+<p><code>packaging/linux/rt-engine-check.sh &lt;verified-engine-directory&gt;</code> rejects missing, empty or symlinked
+licence files, then probes user namespaces once with a three-second timeout (one-second kill grace).
+It prints no argument when available, otherwise exactly <code>--no-sandbox</code>, and logs the choice to stderr.
+Flatpak skips the forbidden namespace probe. The helper is shipped in the tarball and Flatpak; the future
+first-race host must invoke it before launch, capture its log, and register any probe/engine it starts with its
+cancellation/panic lifetime. It is not wired to a race host on this base. Namespace success is only a capability
+check: per-binary AppArmor can still refuse Electron. Do not silently retry a failed sandboxed launch;
+show the labelled fallbacks instead. Never make a user-cache executable setuid.</p>
+<p>The unsandboxed mode is permitted only for the restricted race shell: token-bearing loopback game URL only,
+no navigation/new windows, permission requests refused except gamepad/fullscreen, no Scrolller.
+It is not permission to disable the sandbox on other web surfaces. The host must end the exact engine pid and
+process group on panic, close, cancellation and exit. Escape pauses; double Escape panics. The helper starts no race.</p>
+<p>Licence entry: Electron (MIT) / Chromium (BSD). <code>RT-ENGINE-NOTICES.txt</code> ships beside CCP's licence
+(and in Flatpak's licence directory); it points to the complete notices retained in the downloaded engine folder.
+About names the engine and licences; the fetcher retention gate still needs wiring in its owning lane.
+H.264/MP3 ffmpeg shipping remains blocked on owner/legal approval or a verified codec-free replacement.</p>
+<h3 id="rt-a6">A6 Linux release checklist</h3>
+<ul>
+<li>Check/bump the Electron version, URL and SHA256 for every manifest architecture; verify downloads resolve,
+checksums match, executables run and both upstream licence files survive installation and pruning.</li>
+<li>Obtain Mich's Electron WebGL2 report on RTX 4080 and Radeon iGPU: mean at least 57 fps, worst second at least
+50 fps, no racing frame over 100 ms on Threshold and GOONWORKS, all five course hashes match Node.</li>
+<li>Desk-run first-race download, cancel, offline/failure fallbacks, sandbox choice log, My files, online seat,
+Escape/double Escape and panic with the race focused on X11 and Wayland/XWayland; confirm no orphan processes.
+The browser fallback must say &quot;Panic cannot close a browser tab.&quot;</li>
+<li>Build/install the Flatpak and tarball on a clean desktop. Test cached engine reuse without network.
+Keep the release blocked until the shell restrictions, host panic lifetime and codec decision are proven.</li>
+</ul>
+<h3 id="rt-spike-rerun">Spike re-run (measurement only)</h3>
+<p>The nine files in <code>packaging/linux/rt-spike/</code> were copied from
+<code>origin/mich/rt-linux-spike:handoff-1029/rt-linux-spike/</code>. Eight remain verbatim;
+<code>make-report.mjs</code> now requires <code>hashes.match === true</code> before reporting MEETS BAR.
+Missing, null, mismatched or malformed hash evidence is BELOW BAR, even with passing frame rates.
+The report's hash column also accepts only boolean true as yes. Focused Node tests cover these cases.
+The copy exception is explicit in <code>handoff-1031/MICH-72-ANSWERS-1031.md:95-97</code>:
+verbatim copies do not count toward the 600 hand-written lines. Count the whole corrected report file
+conservatively as hand-written and list the other eight as copied. No prerequisite split is needed.
+From the repository root:</p>
+<pre><code>GLASSROAD_DIR="$PWD/Assets/web/glassroad" bash packaging/linux/rt-spike/run.sh</code></pre>
+<p>This overrides the kit's historical WPF tree path. The kit fetches latest Electron and uses
+<code>--no-sandbox</code>: it is a benchmark, not the production installer or a release-pin check.
+Record the measured version in the report. Its standalone process cleanup is not CCP panic integration;
+run it only as a supervised benchmark, not from the app. No desktop/GPU run was performed in this cloud task.
+The original kit README has the runtime prerequisites and report instructions.</p>
 <h2 id="why-this-came-up">Why this came up</h2>
 <p>On a fresh box, web features show &quot;WebKitGtk library is not installed. Install webkit2gtk 4.0+ package.&quot; The user had to
 install <code>webkit2gtk-4.1</code> by hand. Avalonia.Controls.WebView 12.1.0 loads the GTK3 builds only (libwebkit2gtk-4.0.so.37 or
