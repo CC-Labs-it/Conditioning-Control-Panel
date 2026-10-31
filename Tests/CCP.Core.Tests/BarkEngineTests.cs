@@ -35,6 +35,21 @@ public sealed class BarkEngineTests : IDisposable
     }
 
     [Fact]
+    public void IdleBarksCarryTheUnpromptedFlagThroughBothRoutes()
+    {
+        Assert.True(Engine(Rule("Idle", "idle")).Raise("Idle"));
+        Assert.True(_said[^1].Unprompted);
+        Assert.True(Engine(Rule("Clicked", "reply")).Raise("Clicked"));
+        Assert.False(_said[^1].Unprompted);
+        _s.MasterVolume = 0;
+        var egg = Rule("Idle", "quiet");
+        egg.ClassRaw = "easter_egg";
+        Assert.True(Engine(egg).Raise("Idle"));
+        Assert.True(_said[^1].SilentEgg);
+        Assert.True(_said[^1].Unprompted);
+    }
+
+    [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()
     {
         var high = Rule("T", "level {level} in {0}");

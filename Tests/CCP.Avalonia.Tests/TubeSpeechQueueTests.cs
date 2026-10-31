@@ -49,6 +49,50 @@ public sealed class TubeSpeechQueueTests
     }
 
     [Fact]
+    public Task IdleLinesStayVisibleAndQueuedLinesKeepTheirFlag() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        s.AvatarMuted = false;
+        s.CompanionSpeaksIdleWhenEngineOff = false;
+        CoreSession.IsEngineRunningProvider = () => false;
+        CoreSession.IsSessionRunningProvider = () => false;
+        s.MasterVolume = 80;
+        var plays = 0;
+        CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { plays++; return () => { }; };
+        var clip = Path.GetTempFileName();
+        CoreModArt.OverridePathProvider = name => name.StartsWith("sounds/giggle") ? clip : null;
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            var delays = CaptureDelays(tube);
+            var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+            tube.GigglePriority("idle", aiGenerated: false, phraseAudioPath: clip, unprompted: true);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("idle", text.Text);
+            Assert.Equal(0, plays);
+            s.CompanionSpeaksIdleWhenEngineOff = true;
+            tube.GigglePriority("opted in", aiGenerated: false, phraseAudioPath: clip, unprompted: true);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, plays);
+            tube.EndSpeechBubble();
+            // Presets queue during the previous line's gap; the fifth has a giggle cue.
+            s.CompanionSpeaksIdleWhenEngineOff = false;
+            for (int i = 0; i < 5; i++) tube.Giggle("queued idle", unprompted: true);
+            Dispatcher.UIThread.RunJobs();
+            for (int i = 0; i < 5; i++) { delays[i].Fire(); tube.EndSpeechBubble(); }
+            Assert.Equal("queued idle", text.Text);
+            Assert.Equal(1, plays);
+            tube.GigglePriority("prompted", aiGenerated: false, phraseAudioPath: clip);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, plays);
+        }
+        finally { tube.Close(); File.Delete(clip); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task PresetsSpeakInOrderAfterTheEarnedGap() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApp();

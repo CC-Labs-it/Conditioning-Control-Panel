@@ -39,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private bool _fypHooked;
         private bool _fypFileMenuHooked;
         internal ContextMenu? FypFileMenu { get; private set; }
+        private readonly HashSet<string> _fypSentIds = new(StringComparer.Ordinal);
         private int _fypRemoteInFlight;   // 0/1 via Interlocked
         private readonly HashSet<string> _fypProbesInFlight = new(StringComparer.OrdinalIgnoreCase);
 
@@ -101,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 case "ready":
                     IsReady = true;
+                    _fypSentIds.Clear();
                     PostFypInit();
                     return true;
                 case "stats-save":
@@ -229,7 +231,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     if (_closing) return;   // feed closed while fetching
-                    foreach (var frame in FypRules.BatchFrames(batch)) Post(frame);
+                    int fresh = ScrolllerReuse.CountNewToPage(_fypSentIds, batch.Entries.Select(e => e.Id));
+                    foreach (var frame in FypRules.BatchFrames(batch, fresh)) Post(frame);
                 });
             }
             catch (Exception ex) { Log.Warning("[Game] fyp: remote batch failed: {E}", ex.Message); }

@@ -43,6 +43,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             // WPF wired Checked/Unchecked separately; Avalonia has one event for both.
             ChkMuteWhispersCompanion.IsCheckedChanged += ChkMuteWhispers_Changed;
             ChkVoiceLinesCompanion.IsCheckedChanged += ChkVoiceLines_Changed;
+            ChkIdleVoiceEngineOffCompanion.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff = ChkIdleVoiceEngineOffCompanion.IsChecked == true;
+                CoreSettings.Save();
+            };
             ChkTubeMidnightGlass.IsCheckedChanged += ChkTubeMidnightGlass_Changed;
             ChkPauseBrowserCompanion.IsCheckedChanged +=
                 async (_, _) =>
@@ -85,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 // "Muted" is its own flag, not the inverse of the enable (AppSettings.SubAudioMuted).
                 ChkMuteWhispersCompanion.IsChecked = s.SubAudioMuted;
                 ChkVoiceLinesCompanion.IsChecked = s.CompanionVoiceLinesMuted;
+                ChkIdleVoiceEngineOffCompanion.IsChecked = s.CompanionSpeaksIdleWhenEngineOff;
 
                 // Labels set explicitly rather than left to ValueChanged, which _isLoading blocks.
                 SliderIdleIntervalCompanion.Value = s.IdleGiggleIntervalSeconds;
