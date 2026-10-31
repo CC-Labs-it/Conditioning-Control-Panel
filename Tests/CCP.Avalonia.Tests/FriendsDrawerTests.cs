@@ -42,6 +42,7 @@ public sealed class FriendsDrawerTests
         public readonly List<string> Sends = new();
         /// <summary>When set, a "send" waits for it: the answer is still out while the test folds the drawer.</summary>
         public TaskCompletionSource? HoldSends;
+        public TaskCompletionSource? HoldActions;
         public string StateBody = State;
         public bool ActSucceeds = true;
         public string? RequestBody;
@@ -50,6 +51,7 @@ public sealed class FriendsDrawerTests
             var op = r.RequestUri!.AbsolutePath.Split('/').Last();
             lock (Ops) Ops.Add(op);
             if (op == "send") { Sends.Add(await r.Content!.ReadAsStringAsync(ct)); if (HoldSends != null) await HoldSends.Task; }
+            if (op == "accept" && HoldActions != null) await HoldActions.Task;
             var body = op == "request" && RequestBody != null ? RequestBody
                 : op == "state" ? StateBody : op == "poll" ? """{"ok":true,"online":[],"inbox":[],"receipts":[]}"""
                 : op == "send" ? """{"ok":true,"status":"sent"}""" : ActSucceeds ? """{"ok":true}""" : """{"ok":false,"error":"try_later"}""";

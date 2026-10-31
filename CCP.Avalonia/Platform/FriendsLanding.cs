@@ -297,7 +297,11 @@ internal static class FriendsLanding
         try
         {
             var s = CoreSettings.Current;
-            if (s.MasterVolume <= 0) return;
+            // WPF Services/Friends/FriendsSfx.cs:47-51: suppression precedes the gate,
+            // including a send/request result that arrives after its drawer folds.
+            if (s.MasterVolume <= 0 || CoreAudio.IsOutputSuppressed
+                || CoreEngine.Video?.IsPlaying == true
+                || ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.HoldActive) return;
             lock (SfxGate) if (!SfxGate.TryPass(DateTime.UtcNow, incoming)) return;
             var path = CoreModArt.AudioOverridePath(rel)
                 ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel.Replace('/', Path.DirectorySeparatorChar)));
