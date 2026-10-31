@@ -971,15 +971,6 @@
                             <Border x:Name="BannerDrumLip" CornerRadius="15" IsHitTestVisible="False"/>
                             <Border x:Name="BannerDrumFoot" CornerRadius="15" BorderThickness="0,0,0,1"
                                     BorderBrush="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
-                            <Border x:Name="BannerGlass" CornerRadius="12,12,5,5" Height="11" Margin="7,2,7,0"
-                                    VerticalAlignment="Top" IsHitTestVisible="False">
-                                <Border.Background>
-                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
-                                        <GradientStop Offset="0" Color="#24FFFFFF"/>
-                                        <GradientStop Offset="1" Color="#00FFFFFF"/>
-                                    </LinearGradientBrush>
-                                </Border.Background>
-                            </Border>
                             <Grid x:Name="BannerDrum" ClipToBounds="True" Margin="2,0">
                             <Grid Margin="12,0">
                             <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkBrush}"
@@ -1054,7 +1045,7 @@
                                  Grid, which would start clipping the banner text itself.
                                  Hit-test invisible so the hyperlinks underneath keep working.
                                  Driven from MainWindow.ChromeFx.cs. -->
-                            <Grid x:Name="BannerSheenHost" ClipToBounds="True" IsHitTestVisible="False">
+                            <Grid x:Name="BannerSheenHost" Margin="14,0" ClipToBounds="True" IsHitTestVisible="False">
                                 <Border x:Name="BannerSheen" Width="110" HorizontalAlignment="Left" Opacity="0"
                                         RenderTransformOrigin="0.5,0.5">
                                     <Border.Background>
@@ -1072,6 +1063,15 @@
                                     </Border.RenderTransform>
                                 </Border>
                             </Grid>
+                            <Border x:Name="BannerGlass" CornerRadius="12,12,5,5" Height="11" Margin="7,2,7,0"
+                                    VerticalAlignment="Top" IsHitTestVisible="False">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                        <GradientStop Offset="0" Color="#24FFFFFF"/>
+                                        <GradientStop Offset="1" Color="#00FFFFFF"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
                         </Grid>
                     </Border>
                 </Grid>

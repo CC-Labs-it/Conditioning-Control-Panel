@@ -16,6 +16,52 @@ namespace CCP.Avalonia.Tests;
 
 public class BannerDrumTests
 {
+    [Fact]
+    public void SheenKeepsTheWpfInsetInsideTheRoundedPill() => WithBanner((w, host, layers) =>
+    {
+        var sheen = w.Named<Grid>("BannerSheenHost")!;
+        Assert.Same(layers, sheen.Parent);
+        Assert.Equal(new Thickness(14, 0), sheen.Margin);
+        Assert.True(sheen.ClipToBounds);
+        Assert.False(sheen.IsHitTestVisible);
+        // Measure the authored paint layers without measuring unrelated shell text.
+        w.Named<Grid>("BannerDrum")!.IsVisible = false;
+        ((Panel)host.Parent!).Children.Remove(host);
+        host.Width = 300;
+        host.Measure(new Size(300, 31));
+        host.Arrange(new Rect(0, 0, 300, 31));
+        Assert.Equal(15, layers.Bounds.Left + sheen.Bounds.Left, 6); // 1 px rim plus WPF's 14 px inset
+        Assert.Equal(285, layers.Bounds.Left + sheen.Bounds.Right, 6);
+    });
+
+    [Fact]
+    public void GlassIsPaintedAboveEveryBannerLayer() => WithBanner((w, _, layers) =>
+    {
+        var glass = w.Named<Border>("BannerGlass")!;
+        Assert.Same(layers, glass.Parent);
+        Assert.Same(glass, layers.Children[layers.Children.Count - 1]);
+        Assert.False(glass.IsHitTestVisible);
+        foreach (var layer in layers.Children) Assert.Equal(0, layer.ZIndex);
+    });
+
+    private static void WithBanner(System.Action<MainShellWindow, Border, Grid> check)
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var w = new MainShellWindow();
+            try
+            {
+                var host = w.Named<Border>("HeaderBannerHost")!;
+                check(w, host, Assert.IsType<Grid>(host.Child));
+            }
+            finally { w.Close(); }
+        });
+    }
+
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, false)]
