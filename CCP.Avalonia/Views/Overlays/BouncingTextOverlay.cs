@@ -249,7 +249,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Platform.BarkHead.Engine?.Raise("BouncingTextBounce");   // WPF BarkService.cs:728
                     UpdateText(i);
                     Bounced?.Invoke(); // WPF BouncingTextService.cs:381, EffectPayloadFiring.cs:201
-                    if (!_running) return;
+                    // A bounce callback may stop or rebuild the renderer and replace its logos.
+                    if (i >= logos.Count || !ReferenceEquals(logos[i], l)) return;
                 }
             }
             _zAccum += realDt ?? dt;
