@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
@@ -17,6 +18,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The Core client; seeded by the app at startup only. Unseeded (every test that does not set it) = no check.</summary>
         internal static Func<V2AuthService>? AnnouncementClient;
 
+        internal static TimeProvider AnnouncementTime = TimeProvider.System;
+        private ITimer? _announcementTimer;
         private bool _announcementArmed;
 
         private void InitializeServerAnnouncement()
@@ -25,8 +28,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (_announcementArmed || AnnouncementClient == null) return;
                 _announcementArmed = true;
-                DispatcherTimer.RunOnce(() => _ = CheckServerAnnouncementAsync(), TimeSpan.FromSeconds(7));
+                _announcementTimer = AnnouncementTime.CreateTimer(state => Dispatcher.UIThread.Post(() =>
+                {
+                    _announcementTimer?.Dispose();
+                    _announcementTimer = null;
+                    if (!_windowClosed) _ = CheckServerAnnouncementAsync();
+                }), null, TimeSpan.FromSeconds(7), Timeout.InfiniteTimeSpan);
             };
+            Closed += (_, _) => { _announcementTimer?.Dispose(); _announcementTimer = null; };
         }
 
         /// <summary>One check: fetch, skip the dismissed id, route through the startup ladder.</summary>
@@ -34,10 +43,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                if (_windowClosed) return;
                 var make = AnnouncementClient;
                 if (make == null) return;
                 var a = await make().GetAnnouncementAsync(CoreSettings.Current.UnifiedId);
-                if (a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
+                if (_windowClosed || a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
                 Log.Information("Server announcement received: id={Id}, title={Title}", a.Id, a.Title);
 
                 string id = a.Id!, title = a.Title!, message = a.Message ?? "";

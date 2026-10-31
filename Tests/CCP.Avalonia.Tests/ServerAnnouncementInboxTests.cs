@@ -29,21 +29,27 @@ public sealed class ServerAnnouncementInboxTests
     private sealed class FakeProxy : HttpMessageHandler
     {
         public readonly List<string> Calls = new();
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        internal TaskCompletionSource? AnnouncementGate;
+        internal int AnnouncementRequests
+        {
+            get { lock (Calls) return Calls.Count(c => c.StartsWith("GET /config/announcement")); }
+        }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var path = r.RequestUri!.AbsolutePath;
             lock (Calls) Calls.Add(r.Method + " " + path + r.RequestUri.Query + " " + r.Content?.ReadAsStringAsync().Result);
             var body = path == "/config/announcement"
                 ? "{\"enabled\":true,\"id\":\"a1\",\"title\":\"The Spiral is open\",\"message\":\"Come\\n\\n  in,   dear.\"}"
                 : "{}";
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+            if (path == "/config/announcement" && AnnouncementGate is { } gate) await gate.Task;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
 
     private static Task Run(Func<FakeProxy, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;   // the profile TestUserDataProfile seeded (feature intros spent)
@@ -52,6 +58,7 @@ public sealed class ServerAnnouncementInboxTests
         s.DismissedAnnouncementId = null;
         var fake = new FakeProxy();
         StartupLadder.ResetForTests();
+        MainShellWindow.AnnouncementTime = new StartupLadder.TestClock();
         MainShellWindow.AnnouncementClient = () => new V2AuthService(() => s, fake);
         try { await body(fake); }
         finally
@@ -69,6 +76,42 @@ public sealed class ServerAnnouncementInboxTests
     {
         for (var i = 0; i < 200 && !done(); i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
     }
+
+    [Fact]
+    public Task ClosedShellCancelsItsAnnouncementPoll() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var clock = (StartupLadder.TestClock)MainShellWindow.AnnouncementTime;
+        var shell = new MainShellWindow();
+        shell.Show();
+        Assert.Single(clock.Timers);
+        shell.Close();
+        Assert.Empty(clock.Timers);
+        clock.Advance(TimeSpan.FromSeconds(7));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, fake.AnnouncementRequests);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ClosedShellDiscardsALateAnnouncementResponse() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var waiting = new MainShellWindow();
+        var gate = fake.AnnouncementGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            waiting.Show();
+            var check = waiting.CheckServerAnnouncementAsync();
+            Assert.Equal(1, fake.AnnouncementRequests);
+            waiting.Close();
+            gate.SetResult();
+            await check;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(StartupLadder.Inbox.Items);
+        }
+        finally { gate.TrySetResult(); waiting.Close(); }
+    });
 
     [Fact]
     public Task QuietLaunchParksTheAnnouncementAndDismissRecordsBothHalves() => Run(async fake =>

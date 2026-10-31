@@ -189,7 +189,7 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        var shell = new MainShellWindow();
+        var shell = new MainShellWindow { TabClock = new RenderedInput.FrozenClock() };
         try
         {
             shell.Show();
@@ -200,12 +200,13 @@ public sealed class CompanionEditorsTests
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
+            shell.CompleteTabTransition();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
             foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
-                Dispatcher.UIThread.RunJobs();
+                RenderedInput.Render(shell);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
