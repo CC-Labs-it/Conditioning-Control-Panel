@@ -107,8 +107,8 @@ export function wearMode(id, wears) {
   if (wears.includes(fam)) return 'wear';
   return fam === 'kart' ? 'garage' : null;
 }
-/** A card line for an owned row this host cannot wear: desk items are bought anywhere and worn on desktop. Fails closed:
- * a host that sends no wears list (desktop) gets no line. */
+/** A card line for a row this host cannot wear: desk items are bought anywhere and worn on desktop. It shows before the
+ * buy too, since a buy has no refund. Fails closed: a host that sends no wears list (desktop) gets no line. */
 export function wearHint(id, wears) {
   return Array.isArray(wears) && wearFamily(id) === 'desk' && !wears.includes('desk') ? 'shop_desk_on_desktop' : null;
 }
@@ -139,7 +139,7 @@ export function createShop({ request, newIdem, tab: startTab = null, wears = und
     if (!row) return null;
     const f = card.forced || faceOf(row, st.sp, st.tier);
     const wear = f.face === 'owned' ? wearMode(row.id, wears) : undefined;
-    const hintKey = f.face === 'owned' ? wearHint(row.id, wears) : null;
+    const hintKey = wearHint(row.id, wears);
     return { itemId: row.id, priceSp: row.priceSp, ...f, ...(wear !== undefined ? { wear } : {}), ...(hintKey ? { hintKey } : {}), noteKey: card.noteKey, pending: card.pending, retry: card.retry };
   }
   const openCard = (itemId, noteKey = null) => {

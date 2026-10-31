@@ -107,8 +107,11 @@ test('the desktop is unchanged: list with desk or no list at all means Wear and 
   }
 });
 
-test('a desk row not owned yet keeps its buy card with no line', async () => {
-  const shop = await openDeskCard(WEB, false);
-  assert.equal(shop.card().face, 'buy');
-  assert.doesNotMatch(drawn(shop.card()).text, /desktop app/);
+test('a desk row not owned yet says where it shows before the buy, off the desktop only', async () => {
+  const web = await openDeskCard(WEB, false);
+  assert.equal(web.card().face, 'buy');
+  assert.match(drawn(web.card()).text, new RegExp(DESK_LINE));
+  const desktop = await openDeskCard(DESKTOP, false);
+  assert.equal(desktop.card().face, 'buy');
+  assert.doesNotMatch(drawn(desktop.card()).text, /desktop app/);
 });
