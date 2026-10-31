@@ -54,7 +54,17 @@ public sealed class SessionRunWireTests
                     Assert.Equal("Keep going", Assert.IsType<TextBlock>(no.Content).Text);
                     Assert.Equal(yesText, Assert.IsType<TextBlock>(yes.Content).Text);
                     Assert.False(no.IsDefault || yes.IsDefault || no.IsCancel || yes.IsCancel);
-                    Assert.Same(yes, dialog.FocusManager!.GetFocusedElement());
+                    // WPF ShowStyledDialog does not focus Yes: stray keys cannot end a session.
+                    dialog.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                    Assert.True(dialog.IsVisible, "Enter on opening must leave the stop dialog open");
+                    dialog.KeyRelease(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                    Assert.True(dialog.IsVisible, "Releasing Enter must leave the stop dialog open");
+                    Assert.True(runner.IsRunning);
+                    dialog.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null);
+                    Assert.True(dialog.IsVisible, "Space on opening must leave the stop dialog open");
+                    dialog.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null);
+                    Assert.True(dialog.IsVisible, "Releasing Space must leave the stop dialog open");
+                    Assert.True(runner.IsRunning);
                     dialog.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
                     Assert.True(dialog.IsVisible);
                     Assert.True(runner.IsRunning);

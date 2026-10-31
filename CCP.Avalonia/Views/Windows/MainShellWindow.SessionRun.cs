@@ -89,8 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var remaining = runner.Remaining;
             var potentialXP = (int)Math.Round(session.BonusXP * SessionXp.Multiplier(CoreSettings.Current.PlayerLevel));
             // WPF MainWindow.Presets.cs:2098 and MainWindow.StartStop.cs:85 supply distinct labels.
-            // ShowStyledDialog (MainWindow.Presets.cs:773-813) has no default/cancel
-            // and focuses its first (yes) button.
+            // ShowStyledDialog (MainWindow.Presets.cs:695-813) sets no default/cancel
+            // and does not assign initial button focus. Enter/Space must not confirm on open.
             var dialog = new MessageDialog(Loc.Get(titleKey),
                 Loc.GetF(bodyKey, session.Icon ?? "", session.Name ?? "",
                     $"{(int)elapsed.TotalMinutes:D2}:{elapsed.Seconds:D2}",
@@ -99,7 +99,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 showCancel: true, okText: Loc.Get(yesKey), cancelText: Loc.Get(noKey));
             var yes = dialog.FindControl<Button>("BtnOk")!;
             yes.IsDefault = false;
-            dialog.Opened += (_, _) => yes.Focus();
             var confirmed = await dialog.ShowDialogSafe<bool?>(this) == true;
             if (!confirmed || !ReferenceEquals(runner.CurrentSession, session)) return;
             Log.Information("Session stop confirmed by the user");
