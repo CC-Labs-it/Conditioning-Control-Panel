@@ -9,7 +9,7 @@
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
 // ponytail: slice game-dtrh-host-c, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, loom-list and
-// loom-*, favorites + asset-stats, the heartbeat watchdog + relaunch-once recovery, bark routing, sfx,
+// loom-*, the heartbeat watchdog + relaunch-once recovery, bark routing, sfx,
 // fire-payload, freeze/mute (native video), vn-speaking, haptics, fullscreen-set, report-bug, session stats,
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray, and SeasonRecap TrackFeature.
@@ -44,6 +44,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The host's own clock inside a descent (P08); tests step it.</summary>
         internal static Func<DateTime> DtrhUtcNow = () => DateTime.UtcNow;
 
+        // WPF DtrhHostService.cs:314,403. Keep the store at the head boundary so bridge tests
+        // need neither a profile write nor process-wide engagement history.
+        internal static Func<int, System.Collections.Generic.List<string>> DtrhFavorites = DtrhAssetStatsStore.TopAssets;
+        internal static Action<JObject> DtrhMergeAssetStats = DtrhAssetStatsStore.Merge;
+
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
         private bool _dtrhRunActive, _dtrhExiting;
         private IDisposable? _dtrhExitWatchdog;
@@ -75,6 +80,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "heartbeat":
                 case "pong":
                     return true;   // the watchdog lands with game-dtrh-host-b
+                case "asset-stats":
+                    // WPF DtrhHostService.cs:400-404: deltas are additive, best-effort telemetry.
+                    try { DtrhMergeAssetStats(o); }
+                    catch (Exception ex) { Log.Debug("DtrhHost: asset stats failed: {E}", ex.Message); }
+                    return true;
                 case "request-run":
                     OnDtrhRequestRun(o);
                     return true;
@@ -141,6 +151,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // (the page replaces its pools), so the tube fills without a relaunch. Unsubscribed in DisposeDtrh (P68).
             DtrhRemoteMedia.CopiesReady -= OnDtrhCopiesReady;
             DtrhRemoteMedia.CopiesReady += OnDtrhCopiesReady;
+            // WPF DtrhHostService.cs:309-318: seed biome selection with the top twelve;
+            // an empty history sends no frame, and a failed read must not prevent play.
+            try
+            {
+                var favorites = DtrhFavorites(12);
+                if (favorites.Count > 0) Post(new { type = "favorites", names = favorites });
+            }
+            catch (Exception ex) { Log.Debug("DtrhHost: favorites post failed: {E}", ex.Message); }
         }
 
         /// <summary>WPF PostManifest (:83): the library, then the online half on top (Core DtrhRemoteMedia). Urls are

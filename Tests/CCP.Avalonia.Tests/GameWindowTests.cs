@@ -995,6 +995,50 @@ public sealed partial class GameWindowTests
         });
     }
 
+    /// <summary>WPF DtrhHostService.cs:309-318,400-404: page deltas reach the store;
+    /// the next ready seeds the page with twelve ranked names, only when history exists.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_EngagementDeltas_AndFavorites(bool hasHistory) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var expected = hasHistory ? new List<string> { "grabbed.gif", "watched.png" } : new List<string>();
+        var merged = new List<JObject>();
+        GameWindow.DtrhMergeAssetStats = o => merged.Add(o);
+        GameWindow.DtrhFavorites = count => { Assert.Equal(12, count); return expected; };
+        var w = GameWindow.Launch("dtrh")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.Web.OnNavigationCompleted(w.PageUrl!);
+        w.Web.OnWebMessage("{\"type\":\"asset-stats\",\"stats\":[{\"name\":\"grabbed.gif\",\"grabs\":3}]}");
+        Assert.Equal(3, (int)Assert.Single(merged)["stats"]![0]!["grabs"]!);
+        Assert.Empty(sent);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal(new[] { "init", "manifest" }, sent.Take(2).Select(o => (string?)o["type"]));
+        var favorites = sent.Where(o => (string?)o["type"] == "favorites").ToList();
+        if (hasHistory)
+            Assert.Equal(expected, Assert.Single(favorites)["names"]!.Values<string>());
+        else Assert.Empty(favorites);
+        w.Close();
+    });
+
+    /// <summary>WPF DtrhHostService.cs:318,403: telemetry failures do not block the game bridge.</summary>
+    [Fact]
+    public void Dtrh_EngagementStoreFailure_DoesNotBlockPlay() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        GameWindow.DtrhFavorites = _ => throw new IOException("read failed");
+        GameWindow.DtrhMergeAssetStats = _ => throw new IOException("write failed");
+        var w = GameWindow.Launch("dtrh")!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"asset-stats\",\"stats\":[]}");
+        w.HandleMessage("{\"type\":\"request-run\"}");
+        Assert.True(w.DtrhReady);
+        Assert.Equal(new[] { "init", "manifest", "run-config" }, sent.Select(o => (string?)o["type"]));
+        w.Close();
+    });
+
     /// <summary>WPF DtrhHostService.PostManifest / OnRemoteCopiesReady (724ac82bc): the manifest's urls are root-relative
     /// (hostMedia.js counts only those, not 127.0.0.1, as local); with online media on, copies landing in
     /// <c>&lt;assets&gt;/.temp</c> re-post the manifest with them as asset urls; a closed window stops listening.</summary>
