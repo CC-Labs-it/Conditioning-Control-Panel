@@ -322,9 +322,8 @@
              0.30 out on the knob and 0.28 both ways on the track; a Transition has a single
              duration, so the knob keeps the 0.34 enter value.
 
-         Spark exit (0.08s fade to 0)         ->  dropped. Unchecking stops the style matching, so
-             the spark snaps back to its parked Opacity="0" - the same "cut it dead" intent the
-             WPF comment states, minus the 80ms ramp. -->
+         Spark opacity uses ToggleSpark to snapshot the visible value when unchecked and
+             replace the ON decay with WPF's 80ms exit fade (Controls.xaml:272-277,308-314). -->
   <ControlTheme x:Key="ToggleStyle" TargetType="CheckBox">
     <Setter Property="Template">
       <ControlTemplate TargetType="CheckBox">
@@ -365,7 +364,7 @@
                    HorizontalAlignment="Left" VerticalAlignment="Center"
                    Margin="27,0,0,0" Opacity="0" IsHitTestVisible="False"
                    RenderTransformOrigin="50%,50%"
-                   RenderTransform="scale(0.4)">
+                   RenderTransform="scale(0.4)" theme:ToggleSpark.IsOn="{TemplateBinding IsChecked}">
             <Ellipse.Transitions>
               <Transitions>
                 <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.45">
@@ -391,22 +390,8 @@
            no keyframe animator for RenderTransform, and an <Animation> touching it dies at
            TEMPLATE APPLY time with "No animator registered for the property RenderTransform" -
            i.e. the toggle takes the whole window down before it ever draws. Found by rendering.
-           The opacity decay below is genuinely keyframed (three WPF LinearDoubleKeyFrames), and
-           Opacity does have a built-in animator. -->
+           ToggleSpark owns the opacity keyframes and snapshots the current value on exit. -->
       <Setter Property="RenderTransform" Value="scale(3)"/>
-      <Style.Animations>
-        <Animation Duration="0:0:0.45" FillMode="Forward">
-          <KeyFrame Cue="0%">
-            <Setter Property="Opacity" Value="0"/>
-          </KeyFrame>
-          <KeyFrame Cue="13%">
-            <Setter Property="Opacity" Value="0.9"/>
-          </KeyFrame>
-          <KeyFrame Cue="100%">
-            <Setter Property="Opacity" Value="0"/>
-          </KeyFrame>
-        </Animation>
-      </Style.Animations>
     </Style>
 
     <!-- A locked toggle used to be pixel-identical to a live one (users read the two as "a bit

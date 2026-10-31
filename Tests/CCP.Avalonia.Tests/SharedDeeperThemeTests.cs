@@ -133,6 +133,54 @@ public sealed class SharedDeeperThemeTests
         await Task.CompletedTask;
     });
 
+    // WPF Controls.xaml:272-277,308-314. Exercise a real click on the shared toggle.
+    [Fact]
+    public Task ToggleSparkSnapshotsTheOnDecayAndFadesOutOver80ms() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var toggle = new CheckBox { Theme = Theme("ToggleStyle"), Width = 44, Height = 22 };
+        var window = new Window { Content = toggle, Width = 200, Height = 100 };
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var spark = toggle.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>().Single(b => b.Name == "spark");
+            var clock = new StepClock();
+            spark.SetValue(StepClock.Property, clock.Instance);
+            void Click()
+            {
+                window.MouseDown(new Point(100, 50), MouseButton.Left);
+                window.MouseUp(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+            }
+            Click(); Assert.True(toggle.IsChecked);
+            clock.Step(0); clock.Step(60);
+            Assert.Equal(0.9, spark.Opacity, 4);
+            clock.Step(100);
+            double visible = spark.Opacity;
+            Assert.InRange(visible, 0.7, 0.9);
+            Click(); Assert.False(toggle.IsChecked);
+            clock.Step(100); // Replacement starts at the visible ON value, without a snap.
+            Assert.Equal(visible, spark.Opacity, 4);
+            clock.Step(140);
+            Assert.Equal(visible / 2, spark.Opacity, 4);
+            clock.Step(180);
+            Assert.Equal(0, spark.Opacity, 4);
+            // A fresh ON restarts the one-shot; a settled OFF stays dark.
+            Click(); clock.Step(200); clock.Step(260);
+            Assert.Equal(0.9, spark.Opacity, 4);
+            clock.Step(650);
+            Assert.Equal(0, spark.Opacity, 4);
+            Click(); clock.Step(700); clock.Step(780);
+            Assert.Equal(0, spark.Opacity, 4);
+            Click(); clock.Step(800); clock.Step(860);
+            Assert.Equal(0.9, spark.Opacity, 4);
+            window.Content = null; Dispatcher.UIThread.RunJobs();
+            clock.Step(900);
+            Assert.Equal(0, spark.Opacity, 4);
+        }
+        finally { window.Close(); }
+        await Task.CompletedTask;
+    });
+
     /// <summary>Hand-stepped animation clock, so transitions advance only when the test says so. Avalonia 12 made
     /// IClock internal, and the headless render clock is real time, so this reaches Avalonia's own ClockBase by
     /// reflection; a rename there fails loudly here instead of silently passing.</summary>
