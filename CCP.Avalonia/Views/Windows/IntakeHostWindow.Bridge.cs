@@ -145,7 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// showing "listening".</summary>
         internal static void StopMicsForPanic()
         {
-            foreach (var w in Snapshot()) w.StopSpeechBridge("panic", notifyPage: true);
+            foreach (var w in Snapshot()) w.ReleaseSpeechMic("panic", notifyPage: true);
         }
 
         /// <summary>Panic closes the intake like WPF's GameSurfaces close pass. True when one was up
@@ -155,7 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var open = Snapshot();
             foreach (var w in open)
             {
-                w.StopSpeechBridge("panic", notifyPage: false);
+                w.ReleaseSpeechMic("panic", notifyPage: false);
                 try { w.Close(); } catch (Exception ex) { Log.Warning("PANIC: closing intake failed: {E}", ex.Message); }
             }
             return open.Length > 0;
@@ -169,13 +169,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private object SpeechCaps()
         {
-            var reason = SpeechUnavailability();
+            var reason = SpeechUnavailability(countMicHeld: MainShellWindow.Current?.UserDrivenVoiceArmed != true);
             return new { bridge = true, available = reason == null, reason };
         }
 
-        /// <summary>Null = the mic can open now. <c>IsListening</c> covers anything already holding the engine,
-        /// including the voice-command wake-word loop (MainShellWindow.VoiceCommands.cs).</summary>
-        private string? SpeechUnavailability()
+        internal IntakeMicBorrow MicBorrow { get; init; } = new(
+            () => MainShellWindow.Current?.UserDrivenVoiceArmed == true,
+            () => Dispatcher.UIThread.Post(() => MainShellWindow.Current?.StopVoiceInput()),
+            () => Dispatcher.UIThread.Post(() => MainShellWindow.Current?.RefreshVoiceInputModes()));
+
+        private async Task WaitForBorrowedMicAsync(CancellationToken ct)
+        {
+            // Drain the posted stand-down before waiting for the capture to release.
+            await Dispatcher.UIThread.InvokeAsync(() => { });
+            for (int waited = 0; waited < 600 && Speech()?.IsListening == true; waited += 25)
+                await Task.Delay(25, ct).ConfigureAwait(false);
+        }
+
+        private void ReleaseSpeechMic(string why, bool notifyPage = false)
+        {
+            StopSpeechBridge(why, notifyPage);
+            MicBorrow.ReturnAll();
+        }
+
+        private string? SpeechUnavailability(bool countMicHeld = true)
         {
             try
             {
@@ -183,7 +200,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var model = speech == null ? SpeechModelStatus.NoModelFound
                           : (speech.IsAvailable ? SpeechModelStatus.Ok : speech.ModelStatus);
                 return IntakeSpeechPolicy.Unavailability(CoreSettings.Current.MicConsentGiven,
-                    CoreSpeech.HasCaptureDevice, model, speech?.IsListening == true);
+                    CoreSpeech.HasCaptureDevice, model, countMicHeld && speech?.IsListening == true);
             }
             catch (Exception ex)
             {
@@ -199,13 +216,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (id <= 0 || phrase.Length == 0) { PostSpeechEvent(id, "unavailable", new { reason = IntakeSpeechPolicy.ReasonError }); return; }
 
             StopSpeechBridge("superseded", notifyPage: false);   // at most one loop ever touches the mic
-            var reason = SpeechUnavailability();
+            var reason = SpeechUnavailability(countMicHeld: false);
             if (reason != null)
             {
                 Log.Information("IntakeHostService: speech-start #{Id} refused ({Reason})", id, reason);
                 PostSpeechEvent(id, "unavailable", new { reason });
                 return;
             }
+            MicBorrow.Take(id);
             var cts = new CancellationTokenSource();
             lock (_speechGate) { _speechCts = cts; _speechId = id; }
             Log.Information("IntakeHostService: speech-start #{Id} ({Chars}-char target)", id, phrase.Length);
@@ -234,7 +252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private async Task RunSpeechLoopAsync(int id, string phrase, CancellationToken ct)
         {
             var speech = Speech();
-            if (speech == null) { PostSpeechEvent(id, "unavailable", new { reason = IntakeSpeechPolicy.ReasonNoModel }); return; }
+            if (speech == null) { MicBorrow.Return(id); PostSpeechEvent(id, "unavailable", new { reason = IntakeSpeechPolicy.ReasonNoModel }); return; }
 
             string lastPartial = "";
             void OnPartial(object? _, string text)
@@ -252,6 +270,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 bool announced = false;
                 while (!ct.IsCancellationRequested)
                 {
+                    if (MicBorrow.Take(id) || MicBorrow.IsOwed)
+                        await WaitForBorrowedMicAsync(ct).ConfigureAwait(false);
+                    if (ct.IsCancellationRequested) return;
                     var reason = SpeechUnavailability();
                     if (reason != null) { PostSpeechEvent(id, "unavailable", new { reason }); return; }
                     if (!announced) { announced = true; PostSpeechEvent(id, "listening", null); }
@@ -289,6 +310,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             finally
             {
                 speech.PartialTranscript -= OnPartial;
+                MicBorrow.Return(id);
                 CancellationTokenSource? mine = null;
                 lock (_speechGate) { if (_speechId == id) { mine = _speechCts; _speechCts = null; _speechId = 0; } }
                 try { mine?.Dispose(); } catch { }
