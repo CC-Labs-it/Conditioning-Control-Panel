@@ -144,6 +144,7 @@ internal static class FriendsLanding
     {
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
+        InviteDestination.Race => Str("friends_land_dest_race", "Racing Thoughts"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
@@ -151,7 +152,7 @@ internal static class FriendsLanding
     internal static string KnockLine(InboxItem item)
     {
         if (item.Kind == SendKind.Invite)
-            return string.Format(Str("friends_land_invite_line", "invites you to {0}"), DestinationName(item.Destination));
+            return string.Format(Str("friends_land_invite_line", "invites you to {0}"), LandingRules.WithCourse(DestinationName(item.Destination), item.Track));
         return item.Watch?.Kind == WatchKind.Flavour ? Str("friends_land_flavour_line", "sends you a flavour") : Str("friends_land_watch_line", "sends you a watch");
     }
 
@@ -257,6 +258,11 @@ internal static class FriendsLanding
         if (item.Kind != SendKind.Invite) { StartupLadder.Inbox.Remove("friends:" + item.Id); return; }
         if (!CanJoin(item)) { OnKnockDone(item, KnockOutcome.Later); return; }   // never a Joined receipt for nothing
         StartupLadder.Inbox.Remove("friends:" + item.Id);
+        if (item.Destination == InviteDestination.Race && !GameWindow.JoinRace(item.Room))
+        {
+            FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Declined));
+            return;
+        }
         FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Joined));
         Sfx("chaos/reveal_chime.mp3", 0.20f, "friends-join");   // WPF FriendsSfx.Join
         Join(item);
@@ -264,7 +270,7 @@ internal static class FriendsLanding
 
     /// <summary>Destinations this head can open. ponytail: Back Room / Goon / chess hosts are not on this head
     /// (GameWindow has the Breakout demo only), so their cards carry Not now and the x only.</summary>
-    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp;
+    internal static bool CanJoin(InboxItem item) => item.Destination is InviteDestination.Ramp or InviteDestination.Race;
 
     /// <summary>WPF LauncherHost.OpenPanelTab: the panel up (it may be hidden behind the launcher), then the tab.
     /// Tests replace it.</summary>

@@ -8,6 +8,7 @@
 // Escape inside 2 s panics, and panic closes it with every other game (PanicSurfaces "games").
 // Not here yet: MergedAccountRecovery on a merged-account answer (the board host lacks it too).
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -127,6 +128,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "pong":
                         _grLastBeatUtc = DateTime.UtcNow;
                         _grPinged = false;
+                        return true;
+                    case "friends-list":
+                        Post(new { type = "friends-list-reply", id = (string?)o["id"] ?? "",
+                            friends = new JArray((FriendsHead.Service?.Snapshot.Friends ?? Array.Empty<Friend>())
+                                .Where(f => f.Online && !string.IsNullOrEmpty(f.Id) && !string.IsNullOrWhiteSpace(f.Name))
+                                .Take(50).Select(f => new JObject { ["uid"] = f.Id, ["name"] = f.Name })) });
+                        return true;
+                    case "invite-friend":
+                        GlassroadPending = InviteRaceFriend(o);
                         return true;
                     case "net":
                         OnGlassroadNet(o);

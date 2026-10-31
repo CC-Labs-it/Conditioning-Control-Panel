@@ -781,6 +781,10 @@ lands.</p>
 <a href="avalonia-main-sync-20261024.html"><code>avalonia-main-sync-20261024.html</code></a>: one row per non-merge commit (32), each
 ported-by-merge or needs-port (with its <code>sync8-*</code> port lane, 15 lanes). Safety rows (voice panic reach, Lockdown veil,
 remote hand-back, leash cut, factory reset) are all needs-port. Tick its rows as each lane lands.</p>
+<table>
+<tr><th>id</th><th>WPF reference</th><th>Avalonia counterpart</th><th>status</th><th>notes / evidence</th></tr>
+<tr><td>a5-lobby-race</td><td>release/7.2.0: MainWindow.Lobby.cs; GlassroadHostService.cs; FriendsLanding.cs; 0f68f3437</td><td>AvailableSubjectsTabView.Race.cs; GameWindow.LobbyRace.cs; FriendsLanding.cs; Core FriendsApi</td><td>ported</td><td>Open race rows use Core merge and course summary, poll only while visible, validate joins and use the Prime-gated existing panic surface. Friends pre-race list/send bridge and course-aware received invite. LobbyPageTests, GameWindowTests.LobbyRace, LobbyRaceInviteTests. Review follow-up: lobby/invite joins use Prime alone with CCP_GLASSROAD unset, accepted invites report Joined, and signed-out polling keeps 10 seconds. Regressions cover unset/set preview switch, receipt states and sign-in cadence. No live tester verification. Other lobby games and launcher dropdown remain outside this slice.</td></tr>
+</table>
 <h2 id="main-sync-9-7115-glassroad-sparkles-b1-lobby-race-rows-pin-7e01ec326">main-sync-9 (7.1.15, Glassroad, Sparkles B1, Lobby race rows, pin <code>7e01ec326</code>)</h2>
 <p>The delta ledger for the ninth main sync (<code>avalonia-port/main-20261030</code>, on <code>review/mich-1025-merge</code>) is
 <a href="avalonia-main-sync-20261030.html"><code>avalonia-main-sync-20261030.html</code></a>: one row per non-merge commit (591, pins <code>7e01ec326</code> + <code>a11ada22e</code>), each
