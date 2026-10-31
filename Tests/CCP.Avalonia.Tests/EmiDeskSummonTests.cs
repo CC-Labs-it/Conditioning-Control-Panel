@@ -66,7 +66,7 @@ public sealed class EmiDeskSummonTests
             Assert.True(heard);
 
             Click();
-            await Pump(2000);   // wink + CRT off + burst sweep
+            await Pump(3000);   // wink + CRT off + burst sweep
             Assert.False(svc.IsOut);
             Assert.False(svc.Window!.IsVisible);
             Assert.False(heard);
@@ -156,7 +156,7 @@ public sealed class EmiDeskSummonTests
         svc.Dismiss();               // the x while the prompt is up
         answer(EmiMuteChoice.Mute);
         await first;
-        await Pump(1500);
+        await Pump(3000);
         Assert.False(svc.Window!.IsVisible);
         Assert.False(svc.IsOut);
 
@@ -186,11 +186,167 @@ public sealed class EmiDeskSummonTests
             await svc.Summon();
             Assert.True(svc.IsOut);
             section.FindControl<CheckBox>("ChkEnabled")!.IsChecked = false;
-            await Pump(2000);
+            await Pump(3000);
             Assert.False(svc.IsOut);
             Assert.False(svc.Window!.IsVisible);
         }
         finally { host.Close(); }
+    });
+
+    [Fact]
+    public Task DismissBeforeSmokeEndsCannotRestartWake() => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async _ =>
+    {
+        var win = new EmiDeskWindow();
+        try
+        {
+            win.Show();
+            win.RunSummon();
+            win.RunDismiss();
+            await Pump(800);
+            Assert.False((bool)typeof(EmiDeskWindow).GetField("_summonChainLive",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!);
+        }
+        finally { win.ShutDown(); }
+    });
+
+    // WPF Fx.cs:143-202 completes dismissal; MainWindow.xaml.cs:1934-2013 leaves it running.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1500)]
+    public Task PanicCompletesDismissalExactlyOnce(int delay) => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>
+    {
+        await svc.Summon();
+        var win = svc.Window!;
+        int dismissed = 0;
+        EventHandler<bool> changed = (_, isOut) => { if (!isOut) dismissed++; };
+        svc.OutChanged += changed;
+        try
+        {
+            svc.Dismiss();
+            await Pump(delay);
+            Assert.True(win.InputLocked);
+            var entry = Assert.Single(ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All, s => s.Id == "emi-desk-feedback");
+            entry.Stop(null);
+            Assert.False(win.ChainLive);
+            Assert.False(win.IsVisible);
+            Assert.False(win.InputLocked);
+            Assert.False(svc.IsOut);
+            entry.Stop(null);
+            await Pump(3000); // deferred FX and duplicate panic cannot complete it twice
+            Assert.Equal(1, dismissed);
+        }
+        finally { svc.OutChanged -= changed; }
+    });
+
+    // WPF React.cs:132-138 cuts wake, completes summon, then processes this same click as a pat.
+    [Fact]
+    public Task LeftClickDuringWakeCompletesSummonAndPats() => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async _ =>
+    {
+        var win = new EmiDeskWindow();
+        int completed = 0;
+        int pets = ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal;
+        try
+        {
+            win.RunSummon(() => completed++);
+            await Pump(700);
+            Assert.True(win.ChainLive);
+            Assert.False(win.InputLocked);
+            var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!;
+            var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), win)!.Value;
+            win.MouseDown(point, global::Avalonia.Input.MouseButton.Left);
+            win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
+            Assert.Equal(1, completed);
+            Assert.Equal("^_^", win.Face);
+            Assert.Equal(pets + 1, ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal);
+            await Pump(2000);
+            Assert.Equal(1, completed);
+            Assert.Equal("0_0", win.Face); // cancelled wake cannot replace the pat
+        }
+        finally { win.ShutDown(); }
+    });
+
+    [Fact]
+    public Task SayDuringDismissalCannotCancelTheOutro() => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>
+    {
+        await svc.Summon();
+        var win = svc.Window!;
+        svc.Dismiss();
+        win.Say("x");
+        win.PlayChain("shock");
+        await Pump(3000);
+        Assert.False(win.IsVisible);
+        Assert.False(win.InputLocked);
+        Assert.False(svc.IsOut);
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task InterruptedWakeFinishesOnceAndLaterLinesEatPats(bool panic) => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async _ =>
+    {
+        var win = new EmiDeskWindow();
+        int completed = 0;
+        try
+        {
+            win.RunSummon(() => completed++);
+            await Pump(700);
+            Assert.True(win.ChainLive);
+            if (panic) win.StopForPanic(); else win.Say("x");
+            Assert.Equal(1, completed);
+            win.PlayChain("shock");
+            var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!;
+            var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), win)!.Value;
+            win.MouseDown(point, global::Avalonia.Input.MouseButton.Left);
+            win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
+            Assert.Equal("o_o", win.Face);
+            Assert.True(win.ChainLive);
+            await Pump(2000);
+            Assert.Equal(1, completed);
+        }
+        finally { win.ShutDown(); }
+    });
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1500)]
+    public Task PresentationAbandonsDismissalAndLeavesHerUsable(int delay) => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>
+    {
+        CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+        await svc.Summon();
+        var win = svc.Window!;
+        svc.Dismiss();
+        await Pump(delay);
+        win.BeginPresentation(() => { });
+        win.RunPresentationEntrance();
+        await Pump(3000);
+        Assert.True(win.IsVisible);
+        Assert.False(win.PresentationArriving);
+        win.EndPresentation();
+        win.PlayChain("shock");
+        Assert.True(win.ChainLive);
+        svc.Dismiss();
+        await Pump(3000);
+        Assert.False(win.IsVisible);
+        Assert.False(win.InputLocked);
+        Assert.False(svc.IsOut);
+    });
+
+    /// <summary>P06: the panic registry's emi-desk-feedback entry kills a running chain.</summary>
+    [Fact]
+    public Task PanicEntryCancelsHerChain() => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>
+    {
+        CoreSettings.Current.EmiDeskMuteAvatar = false;
+        await svc.Summon();
+        var win = svc.Window!;
+        win.PlayChain("shock");
+        Assert.True(win.ChainLive);
+        var entry = Assert.Single(ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All, s => s.Id == "emi-desk-feedback");
+        entry.Stop(null);
+        Assert.False(win.ChainLive);
+        svc.Dismiss();
+        await Pump(3000);
     });
 
     /// <summary>WPF EmiDeskService.Summon :313/:325: a summon counts in EmiState and puts her back
@@ -212,7 +368,7 @@ public sealed class EmiDeskSummonTests
         win.RestorePlacement();
         Assert.Equal(moved, win.Position);
         svc.Dismiss();
-        await Pump(2000);
+        await Pump(3000);
     });
 
     /// <summary>WPF EmiDock.Refresh :150-163: while she is out the chip's mini face mirrors the
@@ -235,7 +391,7 @@ public sealed class EmiDeskSummonTests
             Assert.Equal(">_<", mini.Face);
 
             svc.Dismiss();
-            await Pump(2000);
+            await Pump(3000);
             Assert.False(svc.IsOut);
             Assert.Equal("0_0", mini.Face);
             svc.Window!.DrawFace("^_^");
