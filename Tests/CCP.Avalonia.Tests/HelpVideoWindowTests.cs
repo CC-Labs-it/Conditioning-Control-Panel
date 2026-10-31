@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -125,12 +126,27 @@ public sealed class HelpVideoWindowTests
                     Assert.True(container.IsVisible);
                     Assert.False(win.FindControl<TextBlock>("TxtCaption")!.IsVisible);   // a playing clip needs no blurb
                     var sink = win.Sink!;
-                    // The 2 s, 24-frame clip runs past its end: frames keep coming (WPF EndReached -> Play loop;
-                    // without it one pass stops below 50 displays). Event-driven wait, no sleep (P08).
+                    // VlcFrameSink deliberately coalesces UI blits on a busy dispatcher. A fixed
+                    // frame count therefore cannot prove looping. Require two actual end/restart
+                    // cycles (three passes), then a fresh displayed frame from the third pass.
+                    int ended = 0, restarted = 0, framesAtRestart = 0;
+                    win.Player!.EndReached += (_, _) => Interlocked.Increment(ref ended);
+                    win.Player.Playing += (_, _) =>
+                    {
+                        int passes = Volatile.Read(ref ended);
+                        if (passes == 0) return;
+                        Volatile.Write(ref framesAtRestart, sink.FrameCount);
+                        Volatile.Write(ref restarted, passes);
+                    };
                     var looped = new TaskCompletionSource();
-                    win.FrameShown += () => { if (sink.FrameCount >= 70) looped.TrySetResult(); };
+                    win.FrameShown += () =>
+                    {
+                        if (Volatile.Read(ref restarted) >= 2 && sink.FrameCount > Volatile.Read(ref framesAtRestart))
+                            looped.TrySetResult();
+                    };
                     try { await looped.Task.WaitAsync(TimeSpan.FromSeconds(10)); } catch (TimeoutException) { }
-                    Assert.True(sink.FrameCount >= 70, $"looped past the 2 s end ({sink.FrameCount} frames)");
+                    Assert.True(looped.Task.IsCompletedSuccessfully,
+                        $"two end/restart cycles and a fresh frame ({ended} ends, {restarted} restarts, {sink.FrameCount} blits)");
                     Assert.Same(sink.Bitmap, Assert.IsType<Image>(container.Child).Source);
                     Assert.Equal(-1, win.Player!.AudioTrack);   // muted tutorial loop: the clip's audio track is never selected
                     win.Close();
@@ -153,7 +169,7 @@ public sealed class HelpVideoWindowTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var oldSettings = CoreSettings.ServiceProvider;
