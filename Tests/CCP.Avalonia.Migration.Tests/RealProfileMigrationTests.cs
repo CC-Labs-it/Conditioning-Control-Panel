@@ -120,9 +120,13 @@ public sealed class RealProfileMigrationTests
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllBytes(file, new byte[] { 0, 255, 13, 10, 42 });
         Assert.Contains(relative, Files(fixture));
-        var hash = Sha256(file);
+        var hashes = new Dictionary<string, string> { [relative] = Sha256(file) };
+        var inputs = new Dictionary<string, string> { [relative] = file };
+        Assert.Empty(CompareFiles(fixture, hashes, inputs, _ => { }));
         File.WriteAllBytes(file, new byte[] { 0, 255, 13, 10, 43 });
-        Assert.NotEqual(hash, Sha256(file));
+        Assert.Equal(new[] { "file changed: " + relative }, CompareFiles(fixture, hashes, inputs, _ => { }));
+        File.Delete(file);
+        Assert.Equal(new[] { "file removed: " + relative }, CompareFiles(fixture, hashes, inputs, _ => { }));
     }
 
     private static string Fixture(string name, [CallerFilePath] string here = "") =>
@@ -224,18 +228,25 @@ public sealed class RealProfileMigrationTests
             failures.Add("settings.json was not saved on shutdown (the round trip did not run)");
         failures.AddRange(CompareSettings(original, ReadJson(savedPath), Expect));
 
-        foreach (var (relative, hash) in sourceHashes.Where(kv => !IsSettingsFile(kv.Key)))
-        {
-            var copy = Path.Combine(profile, relative);
-            if (!File.Exists(copy)) failures.Add("file removed: " + relative);
-            else if (Sha256(copy) == hash) continue;
-            else if (ExpectedChange(relative, inputs[relative], copy) is { } transform) Expect(transform);
-            else failures.Add("file changed: " + relative);
-        }
+        failures.AddRange(CompareFiles(profile, sourceHashes, inputs, Expect));
 
         TestContext.Current.TestOutputHelper?.WriteLine($"migration: {original.Count} settings keys, {sourceHashes.Count} files copied, "
             + $"expected transforms [{string.Join(", ", expected.Select(kv => kv.Key + " " + kv.Value))}], {failures.Count} failure(s)");
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    internal static IEnumerable<string> CompareFiles(string profile,
+        IReadOnlyDictionary<string, string> sourceHashes, IReadOnlyDictionary<string, string> inputs,
+        Action<string> expect)
+    {
+        foreach (var (relative, hash) in sourceHashes.Where(kv => !IsSettingsFile(kv.Key)))
+        {
+            var copy = Path.Combine(profile, relative);
+            if (!File.Exists(copy)) yield return "file removed: " + relative;
+            else if (Sha256(copy) == hash) continue;
+            else if (ExpectedChange(relative, inputs[relative], copy) is { } transform) expect(transform);
+            else yield return "file changed: " + relative;
+        }
     }
 
     private static readonly string[] DailyRollKeys =
