@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -14,7 +15,7 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>Keyboard/audio slice of WPF KeywordTriggerService. OCR and the other actions remain a follow-up.</summary>
+/// <summary>Keyboard slice of WPF KeywordTriggerService: audio, haptic, XP, Chaster, quest credit and the pulse feed. OCR and visual actions remain a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -161,20 +162,120 @@ internal sealed class KeywordAudioRuntime
         {
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
+            RecordFire(t, "Keyboard", now);   // WPF KeywordTriggerService.cs:1191-1200
+            try { TriggerFired?.Invoke(t); } catch (Exception ex) { Log.Warning(ex, "Keyword fired handler failed"); }
         }
-        // WPF merge: preset first, and only the first enabled PlayAudio action wins.
-        var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
-        if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
-        {
-            var t = fired[0];
-            audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
-                PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
-        }
-        if (audio != null) Play(audio);
+        Dispatch(fired);
     }
 
-    // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic
-    // Highlight+AvatarComment trigger with no audio and no settings; both actions land with wire-shell-keyword-triggers-b.
+    /// <summary>WPF TriggerFired (KeywordTriggerService :55). Raised on the UI thread, once per fired trigger.</summary>
+    internal event Action<KeywordTrigger>? TriggerFired;
+
+    // Test seams for the response actions (WPF KeywordTriggerService.cs:1393-1455).
+    internal Action QuestCredit = () => App.Quests?.TrackKeywordTrigger();
+    internal Action<string, double> Haptic = (keyword, intensity) => _ = CoreHaptics.Service?.TriggerKeywordPatternAsync(keyword, intensity);
+    internal Action<double> AddXp = amount => CoreProgression.AddXP(amount, "KeywordTrigger");
+    internal Func<int, int> ChasterBook = seconds => ChasterHead.Service?.NoteSeconds("watcher", seconds).AppliedSeconds ?? 0;
+    internal Func<string> ChasterCapPath = () => Path.Combine(CorePaths.UserData, "chaster_trigger_caps.json");
+
+    private const int PulseBufferCapacity = 20;   // WPF :64
+    private readonly LinkedList<TriggerFireRecord> _recentFires = new();
+    private KeywordTriggerChasterCap? _chasterCap;
+
+    /// <summary>WPF GetRecentFires :72: newest first, for the Awareness "Last Detected" feed.</summary>
+    internal IReadOnlyList<TriggerFireRecord> GetRecentFires() { lock (_recentFires) return _recentFires.ToArray(); }
+
+    private void RecordFire(KeywordTrigger t, string source, DateTime now)
+    {
+        var record = new TriggerFireRecord { Keyword = t.Keyword, TriggerId = t.Id, VisualEffect = t.VisualEffect,
+            Source = source, FiredAt = now, ActionKeys = ActionKeys(t) };
+        lock (_recentFires)
+        {
+            _recentFires.AddFirst(record);
+            while (_recentFires.Count > PulseBufferCapacity) _recentFires.RemoveLast();
+        }
+    }
+
+    /// <summary>WPF BuildActionKeySnapshot :110. AddXp is deliberately not shown.</summary>
+    internal static List<string> ActionKeys(KeywordTrigger t) => (t.Actions ?? new()).Where(a => a is { Enabled: true })
+        .Select(a => a switch
+        {
+            PlayAudioAction => "PlayAudio",
+            HighlightAction => "Highlight",
+            HapticAction => "Haptic",
+            AvatarCommentAction => "AvatarComment",
+            ExtendSessionAction ext => $"ExtendSession:{ext.Minutes}",
+            ChasterAddTimeAction ch => $"ChasterAddTime:{ch.Minutes}",
+            VisualEffectAction ve => $"VisualEffect:{ve.Effect}",
+            _ => null,
+        }).OfType<string>().ToList();
+
+    /// <summary>WPF KeywordTriggerService.cs:1217,1257,1674.</summary>
+    private void Dispatch(List<KeywordTrigger> fired)
+    {
+        // WPF KeywordTriggerService.cs:1261: keep response actions quiet after panic.
+        if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+        foreach (var _ in fired)
+            try { QuestCredit(); } catch (Exception ex) { Log.Warning(ex, "Keyword quest credit failed"); }
+        var first = fired[0];
+        List<KeywordAction> actions;
+        if (fired.Count == 1 && (first.Actions == null || first.Actions.Count == 0))
+        {
+            // Legacy flat fields; HighlightOnly runs only the highlight, which a keystroke never has words for.
+            actions = new();
+            if (first.VisualEffect == KeywordVisualEffect.HighlightOnly) return;
+            actions.Add(new PlayAudioAction { FilePath = first.AudioFilePath, Volume = first.AudioVolume,
+                PlayCount = first.AudioPlayCount, DelayBetweenMs = first.AudioDelayBetweenMs, DuckSystemAudio = first.DuckAudio });
+            if (first.HapticEnabled) actions.Add(new HapticAction { Intensity = first.HapticIntensity });
+            if (first.XPAward > 0) actions.Add(new AddXpAction { Amount = first.XPAward });
+        }
+        else if (fired.Count == 1) actions = first.Actions!.Where(a => a is { Enabled: true }).ToList();
+        else
+        {
+            var seen = new HashSet<string>();   // WPF KeywordTriggerService.cs:1322: one slot per type, VisualEffect per effect
+            actions = fired.SelectMany(t => t.Actions ?? new()).Where(a => a is { Enabled: true } &&
+                seen.Add(a is VisualEffectAction ve ? $"VisualEffect:{ve.Effect}" : a.GetType().Name)).ToList();
+        }
+        var played = false;
+        foreach (var action in actions)
+        {
+            try
+            {
+                switch (action)
+                {
+                    // One clip at a time on this head: the first enabled clip wins (WPF's next play stops the last).
+                    case PlayAudioAction audio when !played: played = true; Play(audio); break;
+                    case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
+                    // WPF KeywordTriggerService.cs:1435-1444; MainWindow.xaml.cs:339 wires the session callback.
+                    case AddXpAction xp when xp.Amount > 0:
+                        AddXp(xp.Amount * (CoreSession.IsSessionRunning ? CoreSettings.Current.KeywordSessionMultiplier : 1));
+                        break;
+                    case ChasterAddTimeAction chaster: BookChaster(chaster, first); break;
+                    // ponytail: VisualEffect, Highlight and AvatarComment need the overlay/avatar ports
+                    // (wire-shell-keyword-triggers-b-next); WPF ExtendSession is itself a logged stub.
+                }
+            }
+            catch (Exception ex) { Log.Warning(ex, "Keyword action {Action} failed", action.GetType().Name); }
+        }
+    }
+
+    /// <summary>WPF KeywordTriggerService.cs:1467: per-trigger day allowance, then Circe's tab.</summary>
+    private void BookChaster(ChasterAddTimeAction chaster, KeywordTrigger trigger)
+    {
+        var id = string.IsNullOrEmpty(trigger.Id) ? "keyword:" + (trigger.Keyword ?? "") : trigger.Id;
+        var now = Now();
+        var path = ChasterCapPath();
+        _chasterCap ??= KeywordTriggerChasterCap.Load(path);
+        var allowed = _chasterCap.Allowance(id, Math.Clamp(chaster.Minutes, 0, 60) * 60, now);
+        if (allowed <= 0) { Log.Information("Keyword Chaster time for '{Keyword}' is at its day cap", trigger.Keyword); return; }
+        var applied = ChasterBook(allowed);
+        if (applied <= 0) return;
+        _chasterCap.Record(id, applied, now);
+        _chasterCap.Save(path);
+    }
+
+    // ponytail: WPF FireDemoTrigger (KeywordTriggerService.cs:401-430) checks HasAccess (#887) and fires a synthetic
+    // Highlight+AvatarComment trigger with no audio and no settings; both actions land with wire-shell-keyword-triggers-b-next.
     internal void FireDemo(string keyword, string source) { }
 
     internal void StopAudio()
