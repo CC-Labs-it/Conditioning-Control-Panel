@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services.UI;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 
@@ -19,7 +20,7 @@ internal sealed class LuckyToastWindow : Window
     private readonly Border _card;
     internal readonly TextBlock Multiplier;
     private readonly TextBlock _title;
-    private readonly DispatcherTimer _timer;
+    private readonly BeatLoop _beat;
     private long _phaseAt;
     private bool _fading, _entering;
 
@@ -46,8 +47,8 @@ internal sealed class LuckyToastWindow : Window
             Padding = new Thickness(20, 12), Child = stack };
         Content = _card;
         SizeChanged += (_, _) => Place();
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-        _timer.Tick += (_, _) => Tick();
+        // WPF MainWindow.Enhancements.cs:2147,2220 keeps the same fade timing; Avalonia uses the shared window beat.
+        _beat = new BeatLoop(_card, _ => Tick());
     }
 
     internal static void Post(bool flash, int multiplier)
@@ -79,7 +80,7 @@ internal sealed class LuckyToastWindow : Window
         w.Opacity = w._entering ? 0 : 1;
         if (w._entering) w.Show();
         w.Place();
-        w._timer.Start();
+        w._beat.Start();
     }
 
     private void Place()
@@ -96,7 +97,7 @@ internal sealed class LuckyToastWindow : Window
         if (_fading)
         {
             Opacity = Math.Clamp(1 - ms / 300, 0, 1);
-            if (ms >= 300) { _timer.Stop(); Hide(); }
+            if (ms >= 300) { _beat.Stop(); Hide(); }
             return;
         }
         if (_entering) Opacity = Math.Clamp(ms / 200, 0, 1);
@@ -110,7 +111,7 @@ internal sealed class LuckyToastWindow : Window
     internal static void CloseToast()
     {
         _generation++;
-        Current?._timer.Stop();
+        Current?._beat.Stop();
         Current?.Close();
         Current = null;
     }

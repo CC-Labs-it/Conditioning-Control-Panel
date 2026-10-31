@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
@@ -22,6 +23,35 @@ public sealed class LuckyToastTests
         public override long GetTimestamp() => Now;
         public override long TimestampFrequency => 1000;
     }
+
+    [Fact]
+    public Task Toast_fades_on_shared_beat_and_releases_it_on_hide_and_close() => Ui(() =>
+    {
+        var clock = new Clock();
+        LuckyToastWindow.Clock = clock;
+        LuckyToastWindow.ShowProc(true, 10);
+        var w = LuckyToastWindow.Current!;
+        var beat = Assert.Single(BeatLoop.Running, b => ReferenceEquals(b.Owner, w.Content));
+        Assert.True(beat.OnFrameBeat);
+        clock.Now = 100; BeatLoop.StepAll(); Assert.Equal(0.5, w.Opacity, 3);
+        clock.Now = 200; BeatLoop.StepAll(); Assert.Equal(1, w.Opacity);
+        LuckyToastWindow.ShowProc(false, 20);
+        Assert.Same(beat, Assert.Single(BeatLoop.Running, b => ReferenceEquals(b.Owner, w.Content)));
+        clock.Now = 3200; BeatLoop.StepAll();
+        clock.Now = 3350; BeatLoop.StepAll(); Assert.Equal(0.5, w.Opacity, 3);
+        clock.Now = 3500; BeatLoop.StepAll();
+        Assert.False(w.IsVisible);
+        Assert.False(beat.IsRunning);
+        Assert.False(beat.IsTicking);
+        Assert.DoesNotContain(beat, BeatLoop.Running);
+        LuckyToastWindow.ShowProc(true, 10);
+        Assert.Same(w, LuckyToastWindow.Current);
+        Assert.True(beat.OnFrameBeat);
+        LuckyToastWindow.CloseToast();
+        Assert.False(beat.IsRunning);
+        Assert.False(beat.IsTicking);
+        Assert.DoesNotContain(beat, BeatLoop.Running);
+    });
 
     [Fact]
     public Task Shared_toast_routes_both_procs_refreshes_during_fade_and_hides_for_reuse() => Ui(() =>
