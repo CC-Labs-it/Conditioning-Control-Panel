@@ -14,6 +14,7 @@ export const LEX = {
   shop_buy: 'Buy',
   shop_keep_looking: 'Keep looking',
   shop_wear: 'Wear',
+  shop_desk_on_desktop: 'Shows on EMI\'s desk in the desktop app',
   shop_wear_in_garage: 'Wear it in the garage',
   shop_worn: 'Wearing it now.',
   shop_owned: 'Owned',

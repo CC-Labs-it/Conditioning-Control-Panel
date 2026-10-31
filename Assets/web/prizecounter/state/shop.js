@@ -20,14 +20,20 @@ export function readRow(r) {
     sale: r.sale === 'on' ? 'on' : 'soon' };
 }
 
-/** The state body -> the page's state, or null. Unknown tabs are dropped; known ones come in TAB_ORDER. */
-export function readState(body) {
+const RAIN_PORTRAIT = 'profile.avatar.rain-portrait';
+const isRainTab = (id) => String(id).startsWith('rain-');
+const isRainRow = (r) => obj(r) && typeof r.id === 'string' && (r.id.startsWith('rain.') || r.id === RAIN_PORTRAIT);
+
+/** The state body -> the page's state, or null. Unknown tabs are dropped; known ones come in TAB_ORDER. With `rain` false
+ * (Rain V2 waits for its release; only a host sending init.rainV2 true shows her, and the website and the phone never do)
+ * her tabs go, even empty ones, and her rows read as holes so slots keep the server's layout. */
+export function readState(body, { rain = true } = {}) {
   if (!obj(body) || body.ok !== true || !Array.isArray(body.tabs)) return null;
   const byId = new Map();
   for (const t of body.tabs) {
-    if (!obj(t) || !TAB_ORDER.includes(t.id) || byId.has(t.id)) continue;
+    if (!obj(t) || !TAB_ORDER.includes(t.id) || byId.has(t.id) || (!rain && isRainTab(t.id))) continue;
     const shelves = (Array.isArray(t.shelves) ? t.shelves : []).slice(0, BAYS)
-      .map((s) => ({ rows: (obj(s) && Array.isArray(s.rows) ? s.rows : []).slice(0, SLOTS).map(readRow) }));
+      .map((s) => ({ rows: (obj(s) && Array.isArray(s.rows) ? s.rows : []).slice(0, SLOTS).map((r) => (!rain && isRainRow(r) ? null : readRow(r))) }));
     byId.set(t.id, { id: t.id, shelves });
   }
   const p = obj(body.prizes) || {};
@@ -107,13 +113,18 @@ export function wearMode(id, wears) {
   if (wears.includes(fam)) return 'wear';
   return fam === 'kart' ? 'garage' : null;
 }
+/** A card line for a row this host cannot wear: desk items are bought anywhere and worn on desktop. It shows before the
+ * buy too, since a buy has no refund. Fails closed: a host that sends no wears list (desktop) gets no line. */
+export function wearHint(id, wears) {
+  return Array.isArray(wears) && wearFamily(id) === 'desk' && !wears.includes('desk') ? 'shop_desk_on_desktop' : null;
+}
 /** Families the host wears in place (the counter stays open and the card says so); Rain and kart close the counter. */
 const IN_PLACE = ['desk', 'chess', 'profile'];
 
 const RETRY = { busy: 'shop_note_retry', offline: 'shop_note_retry', timeout: 'shop_note_retry', signed_out: 'shop_note_signed_out' };
 
-/** deps: { request(op, body, idem) -> body, newIdem(), tab? (init.tab), wears? (init.wears), now? }. request may answer {ok,status,body} too. */
-export function createShop({ request, newIdem, tab: startTab = null, wears = undefined, now = () => new Date().toISOString() }) {
+/** deps: { request(op, body, idem) -> body, newIdem(), tab? (init.tab), wears? (init.wears), rain? (init.rainV2 === true), now? }. request may answer {ok,status,body} too. */
+export function createShop({ request, newIdem, tab: startTab = null, wears = undefined, rain = true, now = () => new Date().toISOString() }) {
   let st = null, tab = 0, foc = null, card = null, status = 'idle';
   const send = (op, body, idem) => Promise.resolve().then(() => request(op, body, idem)).catch(() => null)
     .then((res) => (obj(res) && obj(res.body) && 'status' in res ? res.body : res) || { ok: false, reason: 'offline' });
@@ -134,7 +145,8 @@ export function createShop({ request, newIdem, tab: startTab = null, wears = und
     if (!row) return null;
     const f = card.forced || faceOf(row, st.sp, st.tier);
     const wear = f.face === 'owned' ? wearMode(row.id, wears) : undefined;
-    return { itemId: row.id, priceSp: row.priceSp, ...f, ...(wear !== undefined ? { wear } : {}), noteKey: card.noteKey, pending: card.pending, retry: card.retry };
+    const hintKey = wearHint(row.id, wears);
+    return { itemId: row.id, priceSp: row.priceSp, ...f, ...(wear !== undefined ? { wear } : {}), ...(hintKey ? { hintKey } : {}), noteKey: card.noteKey, pending: card.pending, retry: card.retry };
   }
   const openCard = (itemId, noteKey = null) => {
     card = { itemId, idem: newIdem(), catalogVersion: st.catalogVersion, week: st.week, pending: false, retry: false, noteKey, forced: null };
@@ -174,7 +186,7 @@ export function createShop({ request, newIdem, tab: startTab = null, wears = und
     async load() {
       status = 'loading';
       const res = await send('shop-state');
-      const next = readState(res);
+      const next = readState(res, { rain });
       if (!next) { status = res.reason === 'signed_out' ? 'signed_out' : 'offline'; return { status }; }
       replace(next); status = 'ready';
       return { status, tab: tabView(), focus: focusView(), card: cardView() };
@@ -242,7 +254,7 @@ export function createShop({ request, newIdem, tab: startTab = null, wears = und
           if (Number.isFinite(Number(res.sp))) st.sp = Math.max(0, int(res.sp));
           c.forced = { face: 'short', action: null, short: Math.max(1, row ? row.priceSp - st.sp : 1) };
         } else {   // stock_changed and catalog_changed carry a fresh state; bad_input, idem_mismatch and anything new read it again
-          const next = (reason === 'stock_changed' || reason === 'catalog_changed') && readState({ ok: true, ...(obj(res.state) || res) });
+          const next = (reason === 'stock_changed' || reason === 'catalog_changed') && readState({ ok: true, ...(obj(res.state) || res) }, { rain });
           if (next) replace(next); else await shop.load();
           out.tab = tabView(); out.focus = focusView();
           if (open && card) openCard(c.itemId, next ? 'shop_note_changed' : 'shop_note_try_again');
