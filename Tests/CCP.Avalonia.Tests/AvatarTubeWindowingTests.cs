@@ -18,14 +18,30 @@ namespace CCP.Avalonia.Tests;
 /// <summary>User report: the tube never moved on Detach and never sat on main's left edge.</summary>
 public sealed class AvatarTubeWindowingTests
 {
-    /// <summary>WPF's left dock: tube's right art edge (353*s in, less 3 px daylight) on main's left edge.</summary>
+    /// <summary>WPF's left dock: tube's measured right art edge (less 3 px daylight) on main's left edge.</summary>
     private static PixelPoint Docked(Window main, AvatarTubeWindow tube)
     {
         double s = tube.Width / 780;   // art px scale (headless DesktopScaling is 1)
         int w = (int)Math.Round(tube.Width), h = (int)Math.Round(tube.Height);
         int mainH = (int)Math.Round(main.ClientSize.Height);
-        return new PixelPoint(main.Position.X - w + (int)Math.Round(353 * s - 3),
+        return new PixelPoint(main.Position.X - w + Math.Max(0, StockInsets(tube).Right - 3),
                               (int)Math.Round(main.Position.Y + (mainH - h) / 2.0) + (int)Math.Round(20 * s));
+    }
+
+    // Golden alpha columns of Assets/tube.png at alpha >12: [636,1129) of 2048.
+    // Independently project the shipped art and avatar; do not call the production measurement.
+    private static (int Left, int Right) StockInsets(AvatarTubeWindow tube)
+    {
+        var frame = tube.FindControl<Image>("ImgTubeFrame")!;
+        var avatar = tube.FindControl<Border>("AvatarBorder")!;
+        double sc = Math.Min(frame.Bounds.Width / 2048, frame.Bounds.Height / 2048);
+        double off = (frame.Bounds.Width - 2048 * sc) / 2;
+        // These expectations are used on the unmirrored left/float dock.
+        var a = frame.TranslatePoint(new Point(off + 636 * sc, 0), tube)!.Value;
+        var b = frame.TranslatePoint(new Point(off + 1129 * sc, 0), tube)!.Value;
+        var al = avatar.TranslatePoint(default, tube)!.Value;
+        var ar = avatar.TranslatePoint(new Point(avatar.Bounds.Width, 0), tube)!.Value;
+        return ((int)Math.Floor(Math.Min(a.X, al.X)), (int)Math.Floor(tube.Width - Math.Max(b.X, ar.X)));
     }
 
     [Fact]
@@ -83,7 +99,8 @@ public sealed class AvatarTubeWindowingTests
         Dispatcher.UIThread.RunJobs();
         var f = tube.InputRect!.Value;
         Assert.True(f.X > 0 && f.Right < (int)Math.Round(tube.Width), $"float rect {f}");
-        Assert.True(f.Width > tube.Width / 4);
+        var insets = StockInsets(tube);
+        Assert.Equal((int)Math.Round(tube.Width) - Math.Max(0, insets.Left - 3) - Math.Max(0, insets.Right - 3), f.Width);
     });
 
     [Fact]

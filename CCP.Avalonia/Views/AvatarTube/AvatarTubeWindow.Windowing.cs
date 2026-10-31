@@ -5,8 +5,7 @@
 // px throughout, as WPF's physical route did (GetWindowRect/SetWindowPos). The saved
 // AvatarTubeLeft/Top stay in WPF's DIPs, so a WPF-written file reads unchanged: px = dip * DesktopScaling.
 //
-// ponytail: mirrored right-dock art and measured mod-art insets (stock 239/353 are used)
-// remain in the WPF reference.
+// Painted bounds and frame-only mirroring follow WPF Windowing.cs:873-894,1037-1155.
 
 using System;
 using System.Linq;
@@ -82,11 +81,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 if (e.Property == IsVisibleProperty && !IsVisible) RestoreMadeRoom();
             };
+            LayoutUpdated += OnTubeArtLayoutUpdated;
             ApplyModeChrome();
         }
 
         private void ReleaseWindowing()
         {
+            LayoutUpdated -= OnTubeArtLayoutUpdated;
             RestoreMadeRoom();
             if (ToggleDetachedSink == (Action)ToggleDetached) ToggleDetachedSink = null;
             if (_parentWindow == null) return;
@@ -127,6 +128,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (!attached) RestoreMadeRoom();
             else _makeRoom.Rearm();
             _isAttached = attached;
+            if (!attached) ApplyTubeArtFlip(false);
             _restorePending = false;   // the user's own mode change wins over the saved one
             // WPF Windowing.cs:2352-2359: attach resets her to the base size (not saved).
             if (attached && _currentScale != 1.0) { _currentScale = 1.0; ApplyScale(); }
@@ -258,9 +260,17 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             var size = TubePixelSize;
             int rightInset = (int)Math.Round(Math.Max(0, (TubeArtRightPadding - SeamOverlapOverMain) * art - day));
             int leftInset = (int)Math.Round(Math.Max(0, TubeArtLeftPadding * art - day));
+            int? mirroredLeftInset = null;
+            if (TryMeasureArtInsetsPx(out var measuredLeft, out var measuredRight, out var axis))
+            {
+                leftInset = Math.Max(0, measuredLeft - (int)Math.Round(day));
+                rightInset = Math.Max(0, measuredRight - (int)Math.Round(day));
+                mirroredLeftInset = Math.Max(0, (int)Math.Round(2 * axis - (size.Width - measuredRight)) - (int)Math.Round(day));
+            }
             var parent = MakeRoom(ToBox(pr), work, size.Width - leftInset - rightInset);
             var plan = TubeDockPlacement.Place(parent, size.Width, size.Height, leftInset, rightInset,
-                (int)Math.Round(VerticalOffset * art), ToBox(work));
+                (int)Math.Round(VerticalOffset * art), ToBox(work), mirroredLeftInset);
+            ApplyTubeArtFlip(plan.Side == DockSide.Right);
             Position = new PixelPoint(plan.Left, plan.Top);
             // WPF's transparent margin was click-through (layered window); an X11 window takes
             // clicks on every pixel, so cut her input down to everything left of the seam or the
@@ -269,7 +279,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             InputRect = plan.Side switch
             {
                 DockSide.Left => new PixelRect(0, 0, size.Width - rightInset, size.Height),
-                DockSide.Right => new PixelRect(leftInset, 0, size.Width - leftInset, size.Height),
+                DockSide.Right => new PixelRect(mirroredLeftInset ?? leftInset, 0, size.Width - (mirroredLeftInset ?? leftInset), size.Height),
                 _ => new PixelRect(leftInset, 0, Math.Max(0, size.Width - leftInset - rightInset), size.Height),   // floating over the shell: both margins
             };
             Platform.X11Overlay.SetInputRect(this, InputRect);
