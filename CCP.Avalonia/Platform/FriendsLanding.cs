@@ -301,7 +301,9 @@ internal static class FriendsLanding
         try
         {
             var s = CoreSettings.Current;
-            if (s.MasterVolume <= 0) return;
+            // WPF Services/Friends/FriendsSfx.cs:47-54: silence must not consume the cue gate.
+            if (CoreAudio.IsOutputSuppressed || CoreEngine.Video?.IsPlaying == true
+                || s.MasterVolume <= 0 || Services.EmiDesk.EmiLineEngine.Instance.HoldActive) return;
             lock (SfxGate) if (!SfxGate.TryPass(DateTime.UtcNow, incoming)) return;
             var path = CoreModArt.AudioOverridePath(rel)
                 ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel.Replace('/', Path.DirectorySeparatorChar)));
