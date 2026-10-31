@@ -43,15 +43,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// <list type="bullet">
     ///   <item><c>SpiralRoom.StateFor</c> (Core) reads the real settings and fuse. The withhold
     ///     reads the persisted migration gates through the shared <c>SpiralRoom.SpiralWithheldFor</c>,
-    ///     but its live inputs (an offer in hand, an open ceremony) and <c>App.Descent</c> (the block)
-    ///     are WPF-head services, so <see cref="Refresh"/> passes false for those and Spiral is
-    ///     unreachable — see the placeholder there.</item>
+    ///     but the live offer-in-hand input still needs migration ownership (WPF ceremony-open is false).
+    ///     The block comes from the shared DescentService and its BlockChanged event.</item>
     ///   <item>The first-light canvas supplies the fog; the one-shot reveal still needs the
     ///     ceremony director and block-service handoff, timeout and cancellation integration.</item>
     ///   <item><c>SpiralEmbedView</c> now carries the Core ready/state protocol over WebHost;
     ///     native process-loss reporting and a pre-document carrier remain
     ///     unavailable on this seam.</item>
-    ///   <item><c>DescentBarkWatcher</c> still needs the live descent block service.
+    ///   <item><c>DescentBarkWatcher</c> still needs the companion bark adapter.
     ///     Room SFX and the Windows motion cap are ported. <c>HelpPopover</c> is real on
     ///     this head and carries the shared Core topic.</item>
     /// </list>
@@ -310,11 +309,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void OnTabShown() => Refresh();
 
-        /// <summary>WPF Wire: the fuse's phase and tick drive the fog. BlockChanged has no twin
-        /// (DescentService is WPF-only).</summary>
+        /// <summary>WPF Wire: block changes drive the room, phase and tick drive the fog.</summary>
         private void Wire()
         {
             WireMigrationGate();
+            WireDescent();
             if (_wiredFuse != null || App.DescentCountdown is not { } fuse) return;
             _wiredFuse = fuse;
             fuse.PhaseChanged += OnPhaseChanged;
@@ -324,6 +323,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Unwire from the fuse that was wired, even if the static has been swapped since.</summary>
         private void Unwire()
         {
+            UnwireDescent();
             UnwireMigrationGate();
             if (_wiredFuse is not { } fuse) return;
             _wiredFuse = null;
@@ -378,10 +378,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     CoreSettings.Current,
                     fuse?.LastAnnouncedPhase ?? DescentFusePhase.Dark,
                     fuse?.IsArmed == true,
-                    // ponytail: the persisted unanswered-offer gate is shared with WPF. Live offers,
-                    // ceremony ownership and server blocks still need the Descent service lane.
+                    // ponytail: live offers still need the migration lane. WPF
+                    // DescentMigrationService.cs:66 also reports ceremony-open as false.
                     spiralWithheld: SpiralRoom.SpiralWithheldFor(CoreSettings.Current, false, false),
-                    hasBlock: false));
+                    hasBlock: App.Descent?.Current is not null));
             }
             catch (Exception ex)
             {
@@ -497,7 +497,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <c>DescentShowDirector</c> after it has brought the window forward and navigated here.
         ///
         /// <para>ponytail: the drawing control is ported, but the ceremony director and descent
-        /// block service are absent. Without their wait/timeout/cancellation there is no handoff. It fails SOFT the way every
+        /// block handoff are absent. Without their wait/timeout/cancellation there is no handoff. It fails SOFT the way every
         /// other first-light failure does in the original (a thrown frame, a withdrawn block, a
         /// twelve-second timeout): hand the room straight back to the ordinary selection rather
         /// than hold a black rectangle for three and a half seconds. Nothing is lost — the withhold
@@ -624,7 +624,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ============================== the embed ==============================
 
-        // ponytail: bridge wired here; the account descent feed still has no Avalonia publisher.
+        // WPF SpiralTabView.xaml.cs:872-892: seed the browser with the current server block.
         private void EnsureEmbed()
         {
             if (_embedGaveUp) { ShowWaitingUnderSpiral(); return; }
@@ -651,8 +651,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     TeardownEmbed();
                     ShowWaitingUnderSpiral();
                 };
-                // No server block exists on this head yet: never fabricate one from local XP.
-                embed.PostState(null);
+                embed.PostState(App.Descent?.Current);
                 StartEmbed(embed);
             }
             catch (Exception ex)

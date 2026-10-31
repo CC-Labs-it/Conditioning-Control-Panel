@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Reflection;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -137,8 +139,10 @@ public sealed partial class AccountSeedTests
         }
     }
 
-    [Fact]
-    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(750)] // slow headless rendering must not split the intended double-click
+    public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard(int renderDelayMs)
     {
         var s = CoreSettings.Current;
         var old = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
@@ -164,11 +168,21 @@ public sealed partial class AccountSeedTests
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                // Headless's per-window input clock is private in Avalonia 12. Freeze it for
+                // this gesture: MouseDown/MouseUp pump rendering, whose cost is not click timing.
+                var inputClock = Assert.IsType<Stopwatch>(w.PlatformImpl!.GetType()
+                    .GetField("_st", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w.PlatformImpl));
+                inputClock.Stop();
+                try
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    for (var i = 0; i < 2; i++)
+                    {
+                        w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                        w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                        if (i == 0 && renderDelayMs > 0) await Task.Delay(renderDelayMs);
+                    }
                 }
+                finally { inputClock.Start(); }
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
