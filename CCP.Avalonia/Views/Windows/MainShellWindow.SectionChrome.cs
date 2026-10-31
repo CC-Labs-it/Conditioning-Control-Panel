@@ -12,8 +12,7 @@
 // The section edge (PaintSectionEdge, WPF MainWindow.SectionEdge.cs, 8f4bb7814) is here too: the
 // frame line, the 28 px glow band and the lift in the hue.
 //
-// ponytail: not yet here (lane sync6-nav-polish-c): the edge lift's lap round the frame at Full
-// motion (it sits at the top centre, WPF's Reduced), the fog and ember strips the band thins for
+// ponytail: not yet here (lane sync6-nav-polish-c): the fog and ember strips the band thins for
 // (EdgeParticles, AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
 // (PaintDepthRail/Hud/Home/Quests), the "Moved" redirects and their note, and the "Cloud sync
 // issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
@@ -90,11 +89,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var hue = NavStripRules.Accent(section);
                 PaintSectionInk(section);
                 Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.QuestsTabView>("QuestsTab")?.PaintDepthQuests(hue);
-                var level = CoreSettings.Current.MotionLevel;
+                var level = AmbientFxCanvas.Env.Level;
                 int ms = level switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => SectionWashMs / 2, _ => SectionWashMs };
                 PaintFill(Named<Border>("SectionWashFill"), NavStripRules.WithAlpha(hue, SectionWashAlpha / 255.0), ms);
                 PaintFill(Named<Border>("SectionWashLine"), NavStripRules.WithAlpha(hue, SectionWashLineAlpha / 255.0), ms);
-                PaintSectionEdge(hue, level, ms);
+                PaintSectionEdge(hue, ms);
             }
             catch (Exception ex) { Serilog.Log.Debug("PaintSectionWash failed: {E}", ex.Message); }
         }
@@ -121,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 // Before the first navigation the frame wears Home's hue (the XAML default; WPF _edgeHue).
-                PaintSectionEdge(NavStripRules.Accent(_washSection ?? NavSections.Home), CoreSettings.Current.MotionLevel, 0);
+                PaintSectionEdge(NavStripRules.Accent(_washSection ?? NavSections.Home), 0);
                 PageStrip?.UpdateSheenClock();
                 if (!AmbientFxCanvas.Env.AllowAmbientLoops) StopLockdownPulse();
                 if (Named<Tabs.SettingsTabView>("SettingsTab") is { } dash)
@@ -136,7 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF PaintSectionEdge (SectionEdge.cs :105) with no fog running (the full band):
         /// the 3 px line at 0xE6, each band's edge alpha balanced for brightness
         /// (SectionEdgeRules.GlowAlpha), the lift the hue toward white, hidden at Motion Off.</summary>
-        private void PaintSectionEdge(global::Avalonia.Media.Color hue, Models.MotionLevel level, int ms)
+        private void PaintSectionEdge(global::Avalonia.Media.Color hue, int ms)
         {
             if (Named<Border>("GlassWindowEdge") is { } line)
             {
@@ -146,11 +145,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<Panel>("SectionEdgeGlow") is { } glow)
                 foreach (var band in glow.Children.OfType<Border>())
                     PaintFill(band, NavStripRules.WithAlpha(hue, NavStripRules.EdgeGlowAlpha(hue) / 255.0), ms);
-            if (Named<Border>("SectionEdgeLiftTop") is { } lift)
-            {
-                lift.IsVisible = level != Models.MotionLevel.Off;
-                PaintFill(lift, NavStripRules.Mix(hue, global::Avalonia.Media.Colors.White, SectionEdgeLiftWhite), ms);
-            }
+            EnsureEdgeLifts();
+            if (_edgeLifts != null)
+                foreach (var lift in _edgeLifts)
+                    PaintFill(lift, NavStripRules.Mix(hue, global::Avalonia.Media.Colors.White, SectionEdgeLiftWhite), ms);
+            UpdateEdgeLap();
         }
 
         /// <summary>A solid background, crossfaded over <paramref name="ms"/> (0 = at once, WPF's

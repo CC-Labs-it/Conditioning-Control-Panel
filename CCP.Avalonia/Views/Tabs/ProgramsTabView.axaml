@@ -80,17 +80,13 @@
                         <Border Background="{TemplateBinding Background}" CornerRadius="8"/>
                         <Border x:Name="PART_Indicator" HorizontalAlignment="Left" CornerRadius="8"
                                 Background="{TemplateBinding Foreground}">
-                            <!-- Static top gloss so the fill reads as a lit bar, not a flat strip.
-                                 Gradient only - no per-frame work. -->
-                            <Border CornerRadius="8">
-                                <Border.Background>
-                                    <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
-                                        <GradientStop Color="#50FFFFFF" Offset="0"/>
-                                        <GradientStop Color="#00FFFFFF" Offset="0.55"/>
-                                        <GradientStop Color="#22000000" Offset="1"/>
-                                    </LinearGradientBrush>
-                                </Border.Background>
-                            </Border>
+                            <Grid>
+                                <Border x:Name="SessionTubeGloss" CornerRadius="8" Background="{StaticResource DepthTubeGloss}"/>
+                                <Ellipse x:Name="SessionTubeBead" Width="12" Height="12" Margin="0,0,2,0"
+                                         HorizontalAlignment="Right" IsHitTestVisible="False"
+                                         IsVisible="{Binding Value, RelativeSource={RelativeSource TemplatedParent}}"
+                                         Fill="{StaticResource DepthTubeBead}"/>
+                            </Grid>
                         </Border>
                     </Grid>
                 </ControlTemplate>
@@ -1056,7 +1052,10 @@
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="tabs:ProgramTaskItem">
-                                            <Border Width="360" MinHeight="92" Margin="0,0,10,10" Padding="14,12"
+                                            <Grid Margin="0,0,10,10">
+                                            <Border x:Name="TaskFloatBand" Height="12" VerticalAlignment="Bottom" Margin="6,0,6,-8" CornerRadius="6"
+                                                    IsHitTestVisible="False" Opacity="{Binding RowOpacity}" Background="{StaticResource DepthFloatBand}"/>
+                                            <Border Width="360" MinHeight="92" Padding="14,12"
                                                     CornerRadius="12"
                                                     Opacity="{Binding RowOpacity}"
                                                     Background="{DynamicResource SurfaceBgBrush}"
@@ -1066,6 +1065,9 @@
                                                     <ScaleTransform ScaleX="1" ScaleY="1"/>
                                                 </Border.RenderTransform>
                                                 <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="*,Auto,Auto">
+                                                    <Border x:Name="TaskFloatRim" Grid.ColumnSpan="3" Grid.RowSpan="3" Margin="-14,-12"
+                                                            CornerRadius="11" BorderThickness="1" IsHitTestVisible="False"
+                                                            BorderBrush="{StaticResource DepthFloatRim}"/>
 
                                                     <!-- The app's own product icon for whatever verifies
                                                          this task. Full-colour on purpose: the Dashboard
@@ -1128,14 +1130,18 @@
                                                           ColumnDefinitions="*,Auto">
                                                         <Grid Grid.Column="0" Height="6" VerticalAlignment="Center">
                                                             <Border CornerRadius="3"
-                                                                    Background="{DynamicResource PanelAccentBrush}"/>
+                                                                    Background="{StaticResource DepthWellFloorBrush}"/>
+                                                            <Border x:Name="TaskGrooveTop" Height="3" VerticalAlignment="Top" CornerRadius="3,3,0,0"
+                                                                    IsHitTestVisible="False" Background="{StaticResource DepthWellTop}"/>
                                                             <Grid>
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="{Binding ProgressStar}"/>
                                                                     <ColumnDefinition Width="{Binding RemainderStar}"/>
                                                                 </Grid.ColumnDefinitions>
                                                                 <Border Grid.Column="0" CornerRadius="3"
-                                                                        Background="{Binding AccentBrush}"/>
+                                                                        Background="{Binding AccentBrush}">
+                                                                    <Border x:Name="TaskTubeGloss" CornerRadius="3" IsHitTestVisible="False" Background="{StaticResource DepthTubeGloss}"/>
+                                                                </Border>
                                                             </Grid>
                                                         </Grid>
                                                         <TextBlock Grid.Column="1" Text="{Binding ProgressText}"
@@ -1168,6 +1174,7 @@
                                                     </Button>
                                                 </Grid>
                                             </Border>
+                                            </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
