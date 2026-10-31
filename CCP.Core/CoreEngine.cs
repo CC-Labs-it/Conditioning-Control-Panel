@@ -66,6 +66,8 @@ namespace ConditioningControlPanel
                 if (s.MindWipeLoop) CoreMindWipe.StartLoop(s.MindWipeVolume / 100.0);
             }
 
+            if (s.IntensityRampEnabled) CoreIntensityRamp.Start(); // WPF StartStop.cs:432-433
+
             _running = true;
             StartedUtc = DateTime.UtcNow;
             Log.Information("Engine started - Flash: {Flash}, Subliminal: {Sub}, LockCard: {Lock}, BouncingText: {Bt}",
@@ -90,6 +92,7 @@ namespace ConditioningControlPanel
                 LockCardScheduler.Instance.Stop();
                 PopQuiz?.Stop();   // closes an open quiz (WPF StartStop.cs:492)
                 CoreMindWipe.Stop();   // WPF StartStop.cs:489, also ends the loop
+                CoreIntensityRamp.Stop(); // WPF StartStop.cs:578
                 _running = false;
                 StartedUtc = null;
                 try { StoppedHook?.Invoke(); }

@@ -7959,5 +7959,11 @@
   "online_official_plan_prime": "Prime recibe la mayor cuota diaria. Lo que ya has visto se repite gratis.",
   "online_official_nice": "Genial",
   "online_official_stamped_line": "Los medios en línea vienen de Scrolller. Cada imagen y clip lleva una pequeña marca \"via Scrolller\".",
-  "online_cache_day_line": "Los medios en línea se guardan un día en una pequeña caché de este ordenador y nunca se suben."
+  "online_cache_day_line": "Los medios en línea se guardan un día en una pequeña caché de este ordenador y nunca se suben.",
+  "notif_scheduler_active": "Programador activo",
+  "notif_scheduler_autostarted": "Sesión iniciada automáticamente según el horario.",
+  "notif_scheduler": "Programador",
+  "notif_scheduler_ended": "Sesión programada finalizada.",
+  "notif_ramp_complete": "Sesión completada",
+  "notif_ramp_complete_body": "Rampa de intensidad terminada. Deteniendo..."
 }
