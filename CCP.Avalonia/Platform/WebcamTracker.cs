@@ -26,11 +26,24 @@ namespace ConditioningControlPanel.Avalonia.Platform
     internal static class V4l2Cameras
     {
         /// <summary>sysfs root; tests point it at a fake tree.</summary>
-        internal static string Root = "/sys/class/video4linux";
+        internal const string DefaultRoot = "/sys/class/video4linux";
+        internal static string Root = DefaultRoot;
 
         public static IReadOnlyList<(int Index, string Name)> Enumerate()
         {
+            return EnumerateForPlatform(OperatingSystem.IsWindows(), WindowsCameras.Enumerate);
+        }
+
+        // WPF WebcamDeviceEnumerator.cs:79. Keep DirectShow order and indices, including duplicate names.
+        internal static IReadOnlyList<(int Index, string Name)> EnumerateForPlatform(bool windows,
+            Func<IReadOnlyList<WindowsCameras.WebcamDevice>> enumerateWindows)
+        {
             var list = new List<(int, string)>();
+            if (windows && Root == DefaultRoot)
+            {
+                foreach (var camera in enumerateWindows()) list.Add((camera.Index, camera.Name));
+                return list;
+            }
             try
             {
                 if (!Directory.Exists(Root)) return list;
@@ -56,11 +69,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
     {
         private VideoCapture? _cap;
 
+        // WPF WebcamTrackingService.cs:229-244: names and capture share the DirectShow index space.
+        internal static VideoCaptureAPIs CaptureBackend(bool linux, bool windows) =>
+            linux ? VideoCaptureAPIs.V4L2 : windows ? VideoCaptureAPIs.DSHOW : VideoCaptureAPIs.ANY;
+
         public bool Open()
         {
             int index = int.TryParse(Environment.GetEnvironmentVariable("CCP_WEBCAM_DEVICE"), out var i)
                 ? Math.Max(0, i) : ResolveSavedIndex();
-            _cap = new VideoCapture(index, OperatingSystem.IsLinux() ? VideoCaptureAPIs.V4L2 : VideoCaptureAPIs.ANY);
+            _cap = new VideoCapture(index, CaptureBackend(OperatingSystem.IsLinux(), OperatingSystem.IsWindows()));
             if (!_cap.IsOpened()) return false;
             // WPF's default mode (WebcamTrackingService CaptureWidth/Height/TargetFps).
             _cap.Set(VideoCaptureProperties.FrameWidth, 640);
