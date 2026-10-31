@@ -11,7 +11,7 @@
 // aggregation is Core EnhancementAnalytics, also called by WPF.
 //
 // Purchases: EnhancementsTabView.Purchase.cs over Core SkillPurchase (auth recovery + sync retry).
-// Part B: node/prestige bursts and sheen, trophy columns, immediate Pink Rush, SkillUnlocked bark.
+// Part B: node/prestige bursts and sheen, trophy columns, SkillUnlocked bark.
 // Still missing: lucky-proc toast and season recording host.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows

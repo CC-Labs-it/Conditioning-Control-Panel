@@ -14,6 +14,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
@@ -79,4 +80,25 @@ public sealed class EnhancementsPurchaseTests
         }
         finally { w.Close(); }
     });
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public Task PurchaseArmsPinkRushAndStopOrPanicDisarmsIt(bool panic) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings;
+        var s = settings.Current; s.AudioOnlySession = true; s.SkillPoints = 100; s.UnifiedId = "purchase-test"; s.UnlockedSkills = new() { "lucky_bubbles" }; s.SuppressPerkNotifications = true;
+        var http = new Fake { Answer = "{\"success\":true,\"skill_points\":75,\"unlocked_skills\":[\"pink_rush\"]}" };
+        var purchase = new SkillPurchase(() => s, http) { Save = () => { } }; ConditioningControlPanel.Avalonia.App.WireSkillPurchases(purchase);
+        var shell = new MainShellWindow(); CoreEngine.StoppedHook = shell.OnEngineStopped; var roll = PinkRushHost.Roll;
+        try
+        {
+            CoreEngine.Start(); Assert.False(PinkRushHost.IsChecking);
+            Assert.True((await purchase.PurchaseSkillAsync("pink_rush")).Success); Assert.True(PinkRushHost.IsChecking);
+            PinkRushHost.Roll = () => 0; PinkRushHost.CheckTick(); Assert.True(s.PinkRushActive);
+            if (panic) PanicSurfaces.StopAll("purchase-test", shell); else MainShellWindow.StopEngine();
+            Assert.False(PinkRushHost.IsChecking); Assert.False(s.PinkRushActive);
+        }
+        finally { CoreEngine.Stop(); PinkRushHost.Stop(); PinkRushHost.Roll = roll; shell.Close(); }
+    });
+
 }

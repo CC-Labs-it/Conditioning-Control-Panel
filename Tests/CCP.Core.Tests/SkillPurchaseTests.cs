@@ -10,26 +10,26 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
+using ConditioningControlPanel.Localization;
 namespace CCP.Core.Tests;
 [Collection(CoreSecretsStatics.Name)]
 public class SkillPurchaseTests : IDisposable
 {
+    private readonly string _language = LocalizationManager.Instance.CurrentLanguage;
+    public static IEnumerable<object[]> Languages => LocalizationManager.AvailableLanguages.Select(l => new object[] { l.Code });
     private readonly Func<string, string?>? _get = CoreSecrets.RetrieveProvider;
     private readonly Action<string, string?>? _set = CoreSecrets.StoreProvider;
     private readonly Dictionary<string, string?> _secrets = new();
-    public SkillPurchaseTests()
-    {
+    public SkillPurchaseTests() {
         CoreSecrets.RetrieveProvider = key => _secrets.GetValueOrDefault(key);
         CoreSecrets.StoreProvider = (key, value) => _secrets[key] = value;
     }
-    public void Dispose() { CoreSecrets.RetrieveProvider = _get; CoreSecrets.StoreProvider = _set; }
-    private sealed class Fake : HttpMessageHandler
-    {
+    public void Dispose() { CoreSecrets.RetrieveProvider = _get; CoreSecrets.StoreProvider = _set; LocalizationManager.Instance.SetLanguage(_language); }
+    private sealed class Fake : HttpMessageHandler {
         public readonly Queue<Func<HttpResponseMessage>> Answers = new();
         public readonly List<string> Bodies = new();
         public readonly List<string?> Tokens = new();
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {
             Bodies.Add(await request.Content!.ReadAsStringAsync(ct));
             Tokens.Add(request.Headers.TryGetValues("X-Auth-Token", out var v) ? v.First() : null);
             Assert.EndsWith("/v2/user/purchase-skill", request.RequestUri!.AbsolutePath);
@@ -39,19 +39,16 @@ public class SkillPurchaseTests : IDisposable
     private static Func<HttpResponseMessage> Json(HttpStatusCode code, string json) =>
         () => new HttpResponseMessage(code) { Content = new StringContent(json.Replace('\'', '"'), Encoding.UTF8, "application/json") };
     private static readonly SkillDefinition Skill = SkillDefinition.All.First(s => !s.IsSecret && string.IsNullOrEmpty(s.PrerequisiteId));
-    private static AppSettings Settings(int points, string? id = "u_1") => new()
-    {
+    private static AppSettings Settings(int points, string? id = "u_1") => new() {
         SkillPoints = points, UnifiedId = id, AuthToken = "tok", UnlockedSkills = new List<string>(),
     };
-    private static (SkillPurchase service, Fake http, List<string> saves) Make(AppSettings s)
-    {
+    private static (SkillPurchase service, Fake http, List<string> saves) Make(AppSettings s) {
         var http = new Fake();
         var saves = new List<string>();
         return (new SkillPurchase(() => s, http) { Save = () => saves.Add("save") }, http, saves);
     }
     [Fact]
-    public void PurchaseEffectsGrantInitialShieldAndPersistInsuranceCharge()
-    {
+    public void PurchaseEffectsGrantInitialShieldAndPersistInsuranceCharge() {
         var s = Settings(0);
         var (service, _, saves) = Make(s);
         service.ApplySkillEffects(s, "good_girl_streak");
@@ -61,8 +58,7 @@ public class SkillPurchaseTests : IDisposable
         Assert.Equal(before + 1, s.StreakFixCharges); Assert.Single(saves);
     }
     [Fact]
-    public async Task AccountSwitchDuringRefusalSyncNeverBuysForTheNewAccount()
-    {
+    public async Task AccountSwitchDuringRefusalSyncNeverBuysForTheNewAccount() {
         var s = Settings(Skill.Cost);
         var (service, http, _) = Make(s);
         service.SyncBeforeRetry = () => { s.UnifiedId = "different"; return Task.FromResult(true); };
@@ -70,8 +66,7 @@ public class SkillPurchaseTests : IDisposable
         Assert.False((await service.PurchaseSkillAsync(Skill.Id)).Success); Assert.Single(http.Bodies); Assert.Equal(Skill.Cost, s.SkillPoints); Assert.Empty(s.UnlockedSkills);
     }
     [Fact]
-    public async Task UnauthorizedRecoversOnceAndSendsTheNewToken()
-    {
+    public async Task UnauthorizedRecoversOnceAndSendsTheNewToken() {
         var s = Settings(Skill.Cost);
         var (service, http, _) = Make(s);
         int recoveries = 0;
@@ -81,10 +76,9 @@ public class SkillPurchaseTests : IDisposable
             "{'success':true,'skill_points':0,'unlocked_skills':['" + Skill.Id + "']}"));
         Assert.True((await service.PurchaseSkillAsync(Skill.Id)).Success); Assert.Equal(1, recoveries); Assert.Equal(new[] { "tok", "recovered" }, http.Tokens);
     }
-    [Fact]
-    public async Task ADebitedAnswerLowersTheWalletAndUnlocksTheSkill()
-    {
-        var s = Settings(Skill.Cost + 5);
+    [Theory] [InlineData(null)] [InlineData("")] [InlineData("2020-01")]
+    public async Task ADebitedAnswerLowersTheWalletAndUnlocksTheSkill(string? bucket) {
+        var s = Settings(Skill.Cost + 5); s.SeasonStatsSeason = bucket; s.CurrentSeason = "2030-01";
         var (service, http, saves) = Make(s);
         int spent = 0; long reconciled = 0; string? unlocked = null;
         service.PointsSpent = c => spent += c;
@@ -94,43 +88,45 @@ public class SkillPurchaseTests : IDisposable
             "{'success':true,'skill_points':5,'unlocked_skills':['" + Skill.Id + "'],'lifetime_points_spent':321}"));
         var (ok, error) = await service.PurchaseSkillAsync(Skill.Id);
         Assert.True(ok); Assert.Null(error); Assert.Equal(5, s.SkillPoints); Assert.Contains(Skill.Id, s.UnlockedSkills); Assert.Equal(Skill.Cost, s.SeasonPointsSpent); Assert.Equal(Skill.Cost, spent);
-        Assert.Equal(321, reconciled); Assert.Equal(Skill.Id, unlocked); Assert.NotEmpty(saves); Assert.Contains("skill_points", http.Bodies.Single());
+        Assert.Equal(string.IsNullOrEmpty(bucket) ? "2030-01" : bucket, s.SeasonStatsSeason); Assert.Equal(321, reconciled); Assert.Equal(Skill.Id, unlocked); Assert.NotEmpty(saves); Assert.Contains("skill_points", http.Bodies.Single());
         Assert.Contains((Skill.Cost + 5).ToString(), http.Bodies.Single());
     }
     [Fact]
-    public async Task SignedOutNeverReachesTheServerAndKeepsTheWallet()
-    {
+    public async Task SignedOutNeverReachesTheServerAndKeepsTheWallet() {
         var s = Settings(Skill.Cost, id: null);
         var (service, http, _) = Make(s);
         var (ok, error) = await service.PurchaseSkillAsync(Skill.Id);
         Assert.False(ok); Assert.False(string.IsNullOrEmpty(error)); Assert.Empty(http.Bodies); Assert.Equal(Skill.Cost, s.SkillPoints); Assert.Empty(s.UnlockedSkills);
     }
     [Fact]
-    public async Task TooFewPointsIsRefusedLocally()
-    {
+    public async Task TooFewPointsIsRefusedLocally() {
         var s = Settings(Skill.Cost - 1);
         var (service, http, _) = Make(s);
         var (ok, _) = await service.PurchaseSkillAsync(Skill.Id);
         Assert.False(ok); Assert.Empty(http.Bodies);
     }
-    [Fact]
-    public async Task OfflineAndServerErrorsKeepTheWallet()
-    {
+    [Theory] [MemberData(nameof(Languages))]
+    public async Task OfflineAndServerErrorsKeepTheWallet(string language) {
+        LocalizationManager.Instance.SetLanguage(language);
         var s = Settings(Skill.Cost + 2);
         var (service, http, saves) = Make(s);
         http.Answers.Enqueue(() => throw new HttpRequestException("refused"));
         var (ok, error) = await service.PurchaseSkillAsync(Skill.Id);
-        Assert.False(ok); Assert.Equal("Connection failed. Please check your internet connection.", error);
+        Assert.False(ok); Assert.Equal(Loc.Get("skill_err_connection"), error);
         http.Answers.Enqueue(Json(HttpStatusCode.BadRequest, "{'success':false,'error':'Nope','skill_points':0}"));
         (ok, error) = await service.PurchaseSkillAsync(Skill.Id);
         Assert.False(ok); Assert.Equal("Nope", error);
         http.Answers.Enqueue(Json(HttpStatusCode.Unauthorized, "{}"));
         (ok, error) = await service.PurchaseSkillAsync(Skill.Id);
-        Assert.False(ok); Assert.StartsWith("Your session has expired.", error); Assert.Equal(Skill.Cost + 2, s.SkillPoints); Assert.Empty(s.UnlockedSkills); Assert.Empty(saves);
+        Assert.False(ok); Assert.Equal(Loc.Get("catalogue_toast_auth_failed"), error); Assert.Equal(Skill.Cost + 2, s.SkillPoints); Assert.Empty(s.UnlockedSkills); Assert.Empty(saves);
+        foreach (var (status, body, key) in new[] { (HttpStatusCode.OK, "null", "skill_err_invalid_response"), (HttpStatusCode.BadRequest, "{}", "skill_err_server"), (HttpStatusCode.OK, "{}", "dialog_purchase_failed") })
+        {
+            http.Answers.Enqueue(Json(status, body)); (ok, error) = await service.PurchaseSkillAsync(Skill.Id);
+            Assert.False(ok); Assert.Equal(key == "skill_err_server" ? Loc.GetF(key, status) : Loc.Get(key), error); Assert.Equal(Skill.Cost + 2, s.SkillPoints); Assert.Empty(s.UnlockedSkills); Assert.Empty(saves);
+        }
     }
     [Fact]
-    public async Task ABalanceRefusalSyncsOnceAndAsksAgainBeforeLoweringAnything()
-    {
+    public async Task ABalanceRefusalSyncsOnceAndAsksAgainBeforeLoweringAnything() {
         var s = Settings(Skill.Cost);
         var (service, http, _) = Make(s);
         int syncs = 0;
@@ -141,8 +137,7 @@ public class SkillPurchaseTests : IDisposable
         Assert.True(ok); Assert.Equal(1, syncs); Assert.Equal(2, http.Bodies.Count); Assert.Equal(0, s.SkillPoints);
     }
     [Fact]
-    public async Task ARefusalThatSurvivesTheSyncAdoptsTheServerBalance()
-    {
+    public async Task ARefusalThatSurvivesTheSyncAdoptsTheServerBalance() {
         var s = Settings(Skill.Cost);
         var (service, http, saves) = Make(s);
         service.SyncBeforeRetry = () => Task.FromResult(true);
@@ -154,8 +149,7 @@ public class SkillPurchaseTests : IDisposable
         Assert.Single(saves);
     }
     [Fact]
-    public async Task ARefusalWithNoSyncKeepsTheWallet()
-    {
+    public async Task ARefusalWithNoSyncKeepsTheWallet() {
         var s = Settings(Skill.Cost);
         var (service, http, _) = Make(s);
         service.SyncBeforeRetry = () => Task.FromResult(false);
@@ -164,8 +158,7 @@ public class SkillPurchaseTests : IDisposable
         Assert.False(ok); Assert.Equal(Skill.Cost, s.SkillPoints); Assert.Single(http.Bodies);
     }
     [Fact]
-    public void LifetimeSpendOnlyRises()
-    {
+    public void LifetimeSpendOnlyRises() {
         var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "k2-ach-" + Guid.NewGuid().ToString("N"));
         System.IO.Directory.CreateDirectory(dir);
         try
