@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <Import Project="..\Version.props" />
+  <Import Project="Build/ReleaseNotes.targets" />
 
   <!--
     Platform-agnostic engine library. Targets plain net10.0 ON PURPOSE: the target framework
