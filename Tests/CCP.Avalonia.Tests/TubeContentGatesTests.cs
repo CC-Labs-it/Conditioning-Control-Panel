@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -32,7 +33,7 @@ public sealed class TubeContentGatesTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -47,6 +48,12 @@ public sealed class TubeContentGatesTests
     public Task ExplicitPresetFromTheMenuWaitsOnTheAcknowledgement() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
+        // Pure tube helpers may initialize the cached palette on a worker before the first window.
+        var brushes = new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" }.Select(name =>
+            (ISolidColorBrush)typeof(AvatarTubeWindow).GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!).ToArray();
+        var colors = await Task.Factory.StartNew(() => brushes.Select(b => b.Color).ToArray(),
+            System.Threading.CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        Assert.Equal(new[] { "#FF6347", "#90EE90", "#9B59B6", "#606070" }.Select(Color.Parse), colors);
         var previous = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;

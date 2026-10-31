@@ -18,7 +18,6 @@ namespace ConditioningControlPanel.Services
         private Task _pending = Task.CompletedTask;
         private int _generation;
         private ChunkManager? _chunkManager;
-
         private bool _disposed;
         private bool _stopped = true;
         private bool _isProcessing;
@@ -26,27 +25,16 @@ namespace ConditioningControlPanel.Services
         private bool _isWaitingForChunk;
         private DateTime _lastResyncTime;
         private const int RESYNC_INTERVAL_MS = 5000; // Force resync every 5 seconds
-
         public event EventHandler<string>? ProcessingStarted;
-
         public event EventHandler<ChunkProgressEventArgs>? ProcessingProgress;
-
         public event EventHandler? ProcessingCompleted;
-
         public event EventHandler<string>? Error;
-
         public event EventHandler<int>? ChunkLoadingRequired;
-
         public event EventHandler? ChunkLoadingCompleted;
-
         public bool IsEnabled => _settings.Enabled;
-
         public bool IsProcessing => _isProcessing;
-
         public bool IsReadyToPlay => _chunkManager?.IsFirstChunkReady ?? false;
-
         public bool IsWaitingForChunk => _isWaitingForChunk;
-
         public BrowserAudioSyncService(HapticService hapticService, AudioSyncSettings settings,
             Func<string, TimeSpan, TimeSpan, CancellationToken, float[]> read)
         {
@@ -138,7 +126,6 @@ namespace ConditioningControlPanel.Services
 
             if (!double.IsFinite(currentTimeSeconds) || currentTimeSeconds < 0 || currentTimeSeconds > 86400) return;
             var currentTime = TimeSpan.FromSeconds(currentTimeSeconds);
-
             if (paused && !_isPaused)
             {
                 _isPaused = true;
@@ -186,7 +173,6 @@ namespace ConditioningControlPanel.Services
         internal TimeSpan GetLookAhead(TimeSpan currentTime, DateTime now)
         {
             var needsResync = (now - _lastResyncTime).TotalMilliseconds >= RESYNC_INTERVAL_MS;
-
             TimeSpan lookAheadTime;
             if (needsResync)
             {
@@ -322,7 +308,6 @@ namespace ConditioningControlPanel.Services
         {
             const float minDeviceIntensity = 0.08f;
             var liveIntensity = (float)_settings.LiveIntensity;
-
             if (intensity <= 0.01f || liveIntensity <= 0)
             {
                 return 0;
