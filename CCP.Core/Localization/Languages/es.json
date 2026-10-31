@@ -7959,5 +7959,8 @@
   "online_official_plan_prime": "Prime recibe la mayor cuota diaria. Lo que ya has visto se repite gratis.",
   "online_official_nice": "Genial",
   "online_official_stamped_line": "Los medios en línea vienen de Scrolller. Cada imagen y clip lleva una pequeña marca \"via Scrolller\".",
-  "online_cache_day_line": "Los medios en línea se guardan un día en una pequeña caché de este ordenador y nunca se suben."
+  "online_cache_day_line": "Los medios en línea se guardan un día en una pequeña caché de este ordenador y nunca se suben.",
+  "set2_cursor_enabled": "Cursor de depuración activado. El seguimiento debe estar activo y calibrado para mostrar el punto.",
+  "set2_cursor_hidden": "Cursor de depuración oculto.",
+  "set2_cursor_unavailable": "Cursor de depuración no disponible: la plataforma no admite una capa transparente que deje pasar los clics."
 }

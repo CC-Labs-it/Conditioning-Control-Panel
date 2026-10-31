@@ -7959,5 +7959,8 @@
   "online_official_plan_prime": "O Prime recebe a maior cota diária. O que você já viu repete de graça.",
   "online_official_nice": "Legal",
   "online_official_stamped_line": "A mídia online vem do Scrolller. Cada imagem e clipe leva uma pequena marca \"via Scrolller\".",
-  "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada."
+  "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada.",
+  "set2_cursor_enabled": "Cursor de depuração ativado. O rastreamento deve estar ativo e calibrado para exibir o ponto.",
+  "set2_cursor_hidden": "Cursor de depuração oculto.",
+  "set2_cursor_unavailable": "Cursor de depuração indisponível: a plataforma não permite uma sobreposição transparente que deixe os cliques passarem."
 }

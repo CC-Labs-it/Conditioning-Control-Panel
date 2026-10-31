@@ -133,6 +133,7 @@ public sealed class PanicSurfacesTests
         "descent-fuse",
         "deeper-editor-audio",
         "knock-cards",
+        "gaze-debug-cursor",
         "quick-recal",
         "asset-preview",
         "camera",
