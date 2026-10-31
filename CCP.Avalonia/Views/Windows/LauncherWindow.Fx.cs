@@ -18,6 +18,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
 using Serilog;
@@ -82,7 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public bool Busy => Lift.On || Lean.On || Shine.On || Dim.On || PopT >= 0;
         }
 
-        private readonly DispatcherTimer _fxClock = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(1000.0 / 30) };
+        private FrameClock _fxClock = null!;
         private readonly DispatcherTimer _fadeGuard = new() { Interval = TimeSpan.FromSeconds(1) };
         private readonly List<TileFx> _tileFx = new();
         private bool _fxActive = true;
@@ -113,6 +114,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Called once from the constructor, after the first BuildTiles.</summary>
         private void HookFx()
         {
+            // WPF storyboards render with the window. A Render-priority dispatcher timer
+            // can refill the queue faster than software painting drains it, starving input.
+            _fxClock = new FrameClock(this) { Interval = TimeSpan.FromSeconds(1d / 30) };
             HookSheens();
             _fxClock.Tick += (_, _) =>
             {
