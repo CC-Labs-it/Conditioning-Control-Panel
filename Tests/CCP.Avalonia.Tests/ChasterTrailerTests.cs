@@ -31,45 +31,13 @@ public sealed class ChasterTrailerTests {
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().WithInterFont().With(AppFonts.Options(systemEmoji: false)).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
-    private sealed class FakeChaster : HttpMessageHandler {
-        public volatile string Locks = "[]";
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) {
-                Content = new StringContent(r.RequestUri!.AbsolutePath switch { "/auth/profile" => "{\"username\":\"kitten\"}", "/locks" => Locks, _ => "{}" }),
-            });
-    }
-    private static async Task WithTab(Func<ChasterTabView, Window, Task> body) {
+    private static Task WithTab(Func<ChasterTabView, Window, Task> body) {
         App();
-        var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
-        var s = CoreSettings.Current;
-        s.MotionLevel = MotionLevel.Full; s.PerformanceMode = false; s.AutoPerformanceMode = false;
-        var old = (s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPrices, s.ChasterPriceOverrides, s.ChasterFlashDodge);
-        var (oldGet, oldSet) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
-        var secrets = new Dictionary<string, string?>();   // memory only: never the OS keyring
-        CoreSecrets.RetrieveProvider = n => secrets.GetValueOrDefault(n); CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
-        (s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPrices, s.ChasterPriceOverrides, s.ChasterFlashDodge) = ("l1", true, new List<string> { "attention" }, new Dictionary<string, int>(), false);
-        var dir = Directory.CreateTempSubdirectory("ccp-chaster-menu-").FullName;
-        new SecretChasterTokenStore().Write(new ChasterStoredTokens("acc", "ref", DateTime.UtcNow.AddHours(1)));
-        var fake = new FakeChaster();
-        var chaster = new ChasterService(new ChasterClient(fake), new SecretChasterTokenStore(), Path.Combine(dir, "chaster_tab.json"),
-            () => new ChasterOptions(CoreSettings.Current.ChasterTabEnabled, CoreSettings.Current.ChasterLockId,
-                new HashSet<string>(CoreSettings.Current.ChasterPrices ?? new List<string>())));
-        ChasterHead.Service = chaster;
-        var tab = new ChasterTabView();
-        var w = new Window { Width = 1200, Height = 3000, Content = tab };
-        try {
-            w.Show(); await chaster.RefreshLockAsync();
-            tab.OnTabShown(); Dispatcher.UIThread.RunJobs();
-            await body(tab, w);
-        }
-        finally {
-            w.Close(); ChasterHead.Service = null;
-            chaster.Dispose(); new SecretChasterTokenStore().Clear();
-            try { Directory.Delete(dir, true); } catch { }
-            (s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPrices, s.ChasterPriceOverrides, s.ChasterFlashDodge) = old;
-            (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (oldGet, oldSet);
-            service.SaveImmediate(); CoreSettings.ServiceProvider = null;
-        }
+        return ChasterMenuTests.Run((_, _, tab, w) => {
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            CoreSettings.Current.PerformanceMode = CoreSettings.Current.AutoPerformanceMode = false;
+            return body(tab, w);
+        });
     }
     [Fact]
     public Task HoverWaitsThenRetargetsImmediatelyAndClosesAfterTheGrace() => AvaloniaTestDispatcher.RunAsync(() => WithTab((tab, w) => {
@@ -245,14 +213,31 @@ public sealed class ChasterTrailerTests {
         Assert.Equal(ChasterTrailerView.MountScript("program", 1800, 600), scripts.Last());
         Assert.True(view.IsVisible); Assert.True(view.IsReady);
     }));
-    [Fact]
-    public Task ProcessFailureAfterReadinessImmediatelyRestoresArtwork() => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) => {
+    [Theory, InlineData(false), InlineData(true)]
+    public Task ProcessFailureBeforeOrAfterReadinessImmediatelyRestoresArtwork(bool completed) => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) => {
         var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!;
         var host = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = _ => Task.FromResult<string?>("true") };
-        view.Browser = host; tab.OpenTrailer(tab.PriceRows["typo"]); await view.NavigationFinished(view.Page, true);
-        Assert.True(view.IsVisible); var failures = 0; view.Failed += (_, _) => failures++;
-        host.OnBrowserProcessFailed(); Assert.True(view.HasFailed); Assert.False(view.IsReady); Assert.False(view.IsVisible); Assert.Empty(view.Children);
+        Action? crash = null;
+        host.FailurePolicy = (_, failed) => { Assert.Null(host.ScrolllerGate); crash = failed; return new TrailerBrowserPolicy(() => { }); };
+        view.Browser = host; tab.OpenTrailer(tab.PriceRows["typo"]);
+        var ready = host.NewScrolllerEngine(); ready(true); // core ready, before navigation
+        Assert.NotNull(crash); Assert.Null(host.CurrentUrl);
+        var watch = crash; ready(true); Assert.Same(watch, crash);
+        if (completed) await view.NavigationFinished(view.Page, true);
+        Assert.Equal(completed, view.IsVisible); var failures = 0; view.Failed += (_, _) => failures++;
+        crash!(); Assert.True(view.HasFailed); Assert.False(view.IsReady); Assert.False(view.IsVisible); Assert.Empty(view.Children);
         Assert.NotNull(tab.FindControl<Image>("TrailerArt")!.Source);
-        host.OnBrowserProcessFailed(); Assert.Equal(1, failures);
+        await view.NavigationFinished(view.Page, true); // a late completion cannot revive a crashed player
+        crash!(); Assert.Equal(1, failures); Assert.False(view.IsVisible); Assert.Empty(view.Children);
     }));
+    [Fact]
+    public Task FailureSubscriptionErrorKeepsNavigationHeld() => AvaloniaTestDispatcher.RunAsync(() => WithTab((tab, w) => {
+        var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!;
+        view.Browser = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = _ => Task.FromResult<string?>("true"),
+            FailurePolicy = (_, _) => throw new InvalidOperationException("no native core") };
+        tab.OpenTrailer(tab.PriceRows["typo"]); view.Browser.NewScrolllerEngine()(true);
+        Assert.Null(view.Browser.ScrolllerGate); Assert.True(view.HasFailed); Assert.Empty(view.Children);
+        return Task.CompletedTask;
+    }));
+
 }
