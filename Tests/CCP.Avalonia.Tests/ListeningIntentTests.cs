@@ -112,7 +112,7 @@ public sealed class ListeningIntentTests
         }
         finally
         {
-            SpiralOverlay.StopForPanic(); PinkFilterOverlay.StopForPanic(); shell.Close();
+            SpiralOverlay.Stop(); PinkFilterOverlay.Stop(); shell.Close();
             (s.SpiralEnabled, s.SpiralOpacity, s.PinkFilterEnabled, s.PinkFilterOpacity) = old;
         }
     });
@@ -201,8 +201,96 @@ public sealed class ListeningIntentTests
         {
             runner.Ticked -= shell.OnSessionTick;
             runner.Stop(); CoreEngine.Stop();
-            SpiralOverlay.StopForPanic(); PinkFilterOverlay.StopForPanic();
+            SpiralOverlay.Stop(); PinkFilterOverlay.Stop();
             global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+            shell.Close();
+        }
+    });
+
+    // WPF SessionEngine.cs:530 -> OverlayService.Stop:471, StopPinkFilter:1519, StopSpiral:2151.
+    [Fact]
+    public void PauseButtonClearsVoiceHoldsAndResumeDoesNotResurrectThem() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var shell = new MainShellWindow();
+        var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+        try
+        {
+            CoreSettings.Current.SkipPauseXpWarning = true;
+            runner.Start(new ConditioningControlPanel.Models.Session { Id = "voice-pause", Name = "Voice pause", DurationMinutes = 10 });
+            shell.OnSessionTick();
+            shell.VoiceCmds.Host.ActionFor("spiral_on")!(); shell.VoiceCmds.Host.ActionFor("pink_on")!();
+            Assert.NotNull(SpiralOverlay.VoiceOpacity); Assert.NotNull(PinkFilterOverlay.VoiceOpacity);
+            var pause = shell.Named<global::Avalonia.Controls.Button>("BtnPauseSession")!;
+            pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+            Assert.True(runner.IsPaused);
+            Assert.Null(SpiralOverlay.VoiceOpacity); Assert.Null(PinkFilterOverlay.VoiceOpacity);
+            Assert.False(SpiralOverlay.IsShowing); Assert.False(PinkFilterOverlay.IsShowing);
+            pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+            Assert.False(runner.IsPaused);
+            Assert.Null(SpiralOverlay.VoiceOpacity); Assert.Null(PinkFilterOverlay.VoiceOpacity);
+            Assert.False(SpiralOverlay.IsShowing); Assert.False(PinkFilterOverlay.IsShowing);
+        }
+        finally
+        {
+            runner.Stop(); CoreEngine.Stop();
+            SpiralOverlay.Stop(); PinkFilterOverlay.Stop();
+            global::ConditioningControlPanel.Avalonia.App.Sessions = null;
+            shell.Close();
+        }
+    });
+
+    // WPF AutonomyService.cs:574,1604; RemoteControlService.cs:1045,1189.
+    [Theory]
+    [InlineData("pulse-expiry", false, true)]
+    [InlineData("pulse-cancel", false, true)]
+    [InlineData("remote-end", false, true)]
+    [InlineData("remote-leave", false, true)]
+    [InlineData("pulse-expiry", true, true)]
+    [InlineData("pulse-cancel", true, true)]
+    [InlineData("remote-end", true, true)]
+    [InlineData("remote-leave", true, true)]
+    [InlineData("remote-leave", false, false)]
+    public void OtherOverlayStopsDropIdleHoldsButKeepARunningEngineOrOptedOutDisconnect(string path, bool running, bool stopOnLeave)
+        => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var shell = new MainShellWindow();
+        var timers = new System.Collections.Generic.List<Action>();
+        shell.PulseTimer = (action, _) => timers.Add(action);
+        try
+        {
+            if (running) CoreEngine.Start(); else CoreEngine.Stop();
+            CoreSettings.Current.StopEffectsOnRemoteDisconnect = stopOnLeave;
+            if (path.StartsWith("pulse"))
+            {
+                CoreSettings.Current.AutonomyConsentGiven = true;
+                CoreEntitlement.HasPremiumProvider = () => true;
+                Assert.True(shell.SetAutonomyEnabled(true));
+                Dispatcher.UIThread.RunJobs();
+                shell.PerformAutonomy(AutonomyActionType.PinkFilterPulse);
+            }
+            shell.VoiceCmds.Host.ActionFor("spiral_on")!(); shell.VoiceCmds.Host.ActionFor("pink_on")!();
+            Assert.NotNull(SpiralOverlay.VoiceOpacity); Assert.NotNull(PinkFilterOverlay.VoiceOpacity);
+            switch (path)
+            {
+                case "pulse-expiry": Assert.Single(timers)(); break;
+                case "pulse-cancel": shell.CancelAutonomyPulses(); break;
+                case "remote-end": shell.OnRemoteSessionEnded(); break;
+                case "remote-leave": shell.OnRemoteControllerChanged(); break;
+            }
+            var stopped = !running && (path != "remote-leave" || stopOnLeave);
+            Assert.Equal(stopped, SpiralOverlay.VoiceOpacity == null);
+            Assert.Equal(stopped, PinkFilterOverlay.VoiceOpacity == null);
+        }
+        finally
+        {
+            shell.CancelAutonomyPulses(); CoreEngine.Stop();
+            SpiralOverlay.Stop(); PinkFilterOverlay.Stop();
             shell.Close();
         }
     });

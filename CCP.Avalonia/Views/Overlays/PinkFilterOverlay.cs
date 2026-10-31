@@ -54,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             VoiceOpacity = next;
             return changed;
         }
-        internal static void StopForPanic() { VoiceOpacity = null; CloseAll(); }
+        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
 
         internal static double PaintedOpacity => VoiceOpacity
             ?? (App.Sessions?.PinkOpacity ?? CoreSettings.Current.PinkFilterOpacity) / 100.0;

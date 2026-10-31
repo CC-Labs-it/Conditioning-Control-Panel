@@ -126,6 +126,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Loc.GetF("msg_pause_session_body", runner.XPPenalty, runner.XPPenalty + SessionXp.PausePenalty));
             if (!confirmed || !runner.IsRunning) return;
             runner.Pause();
+            // WPF SessionEngine.cs:530 -> OverlayService.Stop:471: pause drops sustained holds too.
+            SpiralOverlay.Stop();
+            PinkFilterOverlay.Stop();
             PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
             SpiralOverlay.Refresh(this);
             SetPauseButton(true);

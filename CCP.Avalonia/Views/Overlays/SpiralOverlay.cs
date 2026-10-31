@@ -97,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             VoiceOpacity = next;
             return changed;
         }
-        internal static void StopForPanic() { VoiceOpacity = null; CloseAll(); }
+        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>

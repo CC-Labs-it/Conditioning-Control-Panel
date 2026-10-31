@@ -178,7 +178,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (cancelled || s.PinkFilterOpacity == _pinkAppliedOpacity)
                 s.PinkFilterOpacity = _pinkBaseOpacity;
             PinkFilterOverlay.PulseHold = false;
-            PinkFilterOverlay.Refresh(this);
+            // WPF AutonomyService.cs:574,1604: give an idle pulse's overlay service back.
+            if (!CoreEngine.IsRunning) { SpiralOverlay.Stop(); PinkFilterOverlay.Stop(); }
+            else PinkFilterOverlay.Refresh(this);
         }
 
         private static readonly string[] CommentPhrases =

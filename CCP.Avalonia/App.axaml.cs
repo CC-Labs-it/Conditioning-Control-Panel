@@ -1092,8 +1092,8 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.SubliminalOverlay.CloseAll();
             Views.Overlays.BouncingTextOverlay.Stop();
             Views.Overlays.ChaosFlashOverlay.CloseActive();
-            Views.Overlays.SpiralOverlay.StopForPanic();
-            Views.Overlays.PinkFilterOverlay.StopForPanic(); // WPF MainWindow.StartStop.cs:527 Overlay.Stop
+            Views.Overlays.SpiralOverlay.Stop();
+            Views.Overlays.PinkFilterOverlay.Stop(); // WPF MainWindow.StartStop.cs:527 Overlay.Stop
         }
 
         /// <summary>WPF App.OnAchievementUnlocked (App.xaml.cs:3815): one popup per unlock, shown at once.
