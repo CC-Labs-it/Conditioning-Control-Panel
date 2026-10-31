@@ -79,7 +79,7 @@ public sealed class FlashShatterWiringTests
         var shards = w.GetVisualDescendants().OfType<Control>().Where(i => i.Name == "FlashShard").ToArray();
         Assert.Equal(4, shards.Length);
         Assert.All(shards, i => Assert.IsType<RectangleGeometry>(i.Clip));
-        Assert.All(shards, i => Assert.Equal(Colors.Black, Assert.IsAssignableFrom<ISolidColorBrush>(((Border)i).Background).Color));   // WPF FlashLayer.cs:582-584
+        Assert.All(shards, i => Assert.Null(((Border)i).Background));   // WPF DrawShards draws only the image
         clock.Now += TimeSpan.TicksPerSecond / 10;
         w.ExitFrame();
         Assert.All(shards, i => Assert.True(((TransformGroup)i.RenderTransform!).Children.OfType<TranslateTransform>().Single().Y > 0));

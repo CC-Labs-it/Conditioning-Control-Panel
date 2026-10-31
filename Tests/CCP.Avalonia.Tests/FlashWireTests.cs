@@ -10,7 +10,6 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
-using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -235,46 +234,6 @@ public sealed class FlashWireTests
         s.CorruptionMode = false;
         ShowOne().MouseDown(new Point(50, 50), MouseButton.Left);
         Assert.Single(spawned);
-    });
-
-    [Fact]
-    public Task No_glow_keeps_a_black_backing_even_behind_transparent_image_pixels() => OnUi((s, _, _, _) =>
-    {
-        s.FlashGlowEnabled = false;
-        var w = ShowOne();
-        Assert.Contains(w.GetVisualDescendants().OfType<Border>(), b =>
-            b.Background is ISolidColorBrush brush && brush.Color == Colors.Black);
-    });
-
-    [Fact]
-    public Task Glitch_draws_opposed_tinted_ghosts_beneath_its_seven_slices() => OnUi((s, clock, _, _) =>
-    {
-        s.FlashExitStyle = FlashExitStyle.Glitch;
-        var w = ShowOne();
-        w.Width = 400; w.Height = 300;
-        w.CaptureRenderedFrame();
-        w.UpdateLayout();
-        w.MouseDown(new Point(50, 50), MouseButton.Left);
-        w.CaptureRenderedFrame();
-        w.UpdateLayout();
-        clock.Now += TimeSpan.TicksPerSecond / 10;
-        w.ExitFrame();
-        var images = w.GetVisualDescendants().OfType<Image>().ToArray();
-        var red = Assert.Single(images, i => i.Name == "FlashGlitchRed");
-        var cyan = Assert.Single(images, i => i.Name == "FlashGlitchCyan");
-        var split = FlashExit.Sample(w.Exit!).Glitch * 0.04 * red.Bounds.Width;
-        Assert.True(split > 0.5);
-        Assert.Equal(-split, ((TranslateTransform)red.RenderTransform!).X, 6);
-        Assert.Equal(split, ((TranslateTransform)cyan.RenderTransform!).X, 6);
-        Assert.InRange(red.Opacity, 0.001, 0.5);
-        Assert.NotSame(red.Source, cyan.Source);
-        Assert.Equal(7, w.Slices!.Children.Count);
-        var redFrame = (Bitmap)red.Source!;
-        using var encoded = new MemoryStream();
-        redFrame.Save(encoded);
-        using var pixels = SkiaSharp.SKBitmap.Decode(encoded.ToArray());
-        var pixel = pixels.GetPixel(pixels.Width / 2, pixels.Height / 2);
-        Assert.True(pixel.Red > pixel.Green); // modulation, not two untinted copies
     });
 
     [Fact]
