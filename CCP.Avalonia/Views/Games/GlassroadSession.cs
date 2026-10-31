@@ -69,7 +69,6 @@ internal sealed class GlassroadSession : IDisposable
                         return true;
                     case "exit":
                     case "menu-back":
-                        // The page's own Leave / the menu's Back link. Escape never sends these.
                         Close();
                         return true;
                 }

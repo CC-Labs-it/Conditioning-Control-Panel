@@ -264,7 +264,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal static void CloseAllForPanic()
         {
-            LinuxRaceHost.Current?.Dispose();
             GameWindow[] all;
             lock (Open) all = Open.ToArray();
             foreach (var w in all)
