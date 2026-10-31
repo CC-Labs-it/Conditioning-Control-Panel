@@ -113,6 +113,53 @@ public sealed class CompanionRosterSwitchTests
         finally { CompanionCore.Switched -= Switched; }
     });
 
+    // WPF AvatarTubeWindow.Avatar.cs:827-833: switch the persona, keep the sole emote look.
+    [Theory]
+    [InlineData("builtin-bambisleep", false)]
+    [InlineData("builtin-sissyhypno", false)]
+    [InlineData("roster-local-emote", true)]
+    public Task RosterSwitchKeepsSingleEmoteLookAndSavedPicks(string modId, bool local) => WithRoster((shell, room, roster) =>
+    {
+        var root = System.IO.Directory.CreateTempSubdirectory("ccp-roster-emote-").FullName;
+        try
+        {
+            if (local)
+            {
+                var folder = System.IO.Path.Combine(root, "resources", "emotes", "set8");
+                System.IO.Directory.CreateDirectory(folder);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(folder, "emotes.json"), "{}");
+            }
+            var mod = new ModPackage(new ModManifest { Id = modId }, local ? root : null, !local);
+            CoreMods.ActiveModPackageProvider = () => mod;
+            CoreMods.ActiveModIdProvider = () => mod.Id;
+            CoreSettings.Current.SelectedAvatarSet = 4;
+            CoreSettings.Current.ModAvatarSet[modId] = 4;
+            CoreSettings.Current.AvatarEnabled = true;
+            shell.ShowAvatarTube();
+            Dispatcher.UIThread.RunJobs();
+            var tube = shell.Tube!;
+            Assert.NotNull(tube);
+            int pinned = Assert.Single(tube.PickableAvatarSets());
+            Assert.Equal(pinned, tube.CurrentAvatarSet);
+            int switches = 0;
+            void Switched(CompanionId _) => switches++;
+            CompanionCore.Switched += Switched;
+            try
+            {
+                Click(shell, roster.FindControl<Border>("CompanionCard2")!, MouseButton.Left);
+                Assert.Equal(CompanionId.BrainParasite, CompanionCore.ActiveCompanion);
+                Assert.Equal(1, switches);
+                Assert.Equal(pinned, tube.CurrentAvatarSet);
+                Assert.Equal(4, CoreSettings.Current.SelectedAvatarSet);
+                Assert.Equal(4, CoreSettings.Current.ModAvatarSet[modId]);
+                Assert.False(tube.FindControl<Border>("BtnPrevAvatar")!.IsVisible);
+                Assert.False(tube.FindControl<Border>("BtnNextAvatar")!.IsVisible);
+            }
+            finally { CompanionCore.Switched -= Switched; }
+        }
+        finally { System.IO.Directory.Delete(root, recursive: true); }
+    });
+
     [Fact]
     public Task RightClickAndPersonalityButtonDoNotSwitchTheCard() => WithRoster((shell, room, roster) =>
     {
@@ -148,6 +195,10 @@ public sealed class CompanionRosterSwitchTests
         s.AvatarEnabled = false;
         s.SlutModeEnabled = false;
         for (int i = 0; i < 5; i++) s.CompanionProgressData[i] = new CompanionProgress { Level = i + 2 };
+        // This fixture exercises the static roster looks. Single-emote cases override this mod.
+        var mod = new ModPackage(new ModManifest { Id = "roster-static", SupportedAvatarSets = new() { 1, 2, 3, 4, 5, 6, 7 } }, null, false);
+        CoreMods.ActiveModPackageProvider = () => mod;
+        CoreMods.ActiveModIdProvider = () => mod.Id;
         var shell = new MainShellWindow();
         try
         {

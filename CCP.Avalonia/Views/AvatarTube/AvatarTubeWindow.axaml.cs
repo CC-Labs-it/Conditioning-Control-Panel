@@ -1137,9 +1137,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// SwitchToAvatarSet (:395): a roster switch puts the companion's set on the tube and saves it,
         /// globally and per mod. The companion itself is already switched by the caller, so the
         /// set->companion coupling is not re-fired. All sets are unlocked (WPF IsAvatarSetUnlocked).
-        /// ponytail: WPF's single-emote-mod pin has nothing to pin here - emote mode did not port.</summary>
+        /// Single-emote mods keep their pinned look while the caller switches the persona.</summary>
         public void SwitchToCompanionAvatar(CompanionId companionId) => RunOnAvatar(() =>
         {
+            // WPF AvatarTubeWindow.Avatar.cs:827-833: no picker can restore a displaced emote.
+            if (SingleEmoteSet() != null) return;
             // WPF GetAvatarSetForCompanion (:525) is the inverse of CompanionForAvatarSet; derive it
             // so the mapping lives once. No set -> set 1 (BambiSprite's default).
             int set = 1;
