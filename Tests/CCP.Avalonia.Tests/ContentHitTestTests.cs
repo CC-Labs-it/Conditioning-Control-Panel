@@ -13,6 +13,8 @@ using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -31,53 +33,70 @@ public sealed class ContentHitTestTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
-            // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
-            // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
-            // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
-            ToolTip.SetServiceEnabled(w, false);
-            w.Show();
-            Dispatcher.UIThread.RunJobs();
-            var misses = new List<string>();
-            foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
+            var settings = CoreSettings.Current;
+            var oldMotion = settings.MotionLevel;
+            settings.MotionLevel = MotionLevel.Full; // Exercise entrances regardless of earlier tests' settings.
+            MainShellWindow? w = null;
+            try
             {
-                w.ShowTab(tab);
-                // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
-                if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
-                // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
-                if (tab == "awareness") w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")!.IsVisible = false;
-                RenderLiveTree(w);
-                int tested = 0;
-                foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
+                w = new MainShellWindow { TabClock = new PausedEntranceClock() };
+                // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
+                // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
+                // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
+                ToolTip.SetServiceEnabled(w, false);
+                w.Show();
+                w.CompleteTabTransition();
+                Dispatcher.UIThread.RunJobs();
+                var misses = new List<string>();
+                foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
                 {
-                    // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
+                    w.ShowTab(tab);
+                    // A rendered batch is not a settled entrance: its next tick moves UI geometry
+                    // ahead of compositor hit geometry (Windows CI 41181000505, Awareness header).
+                    // WPF MainWindow.ChromeFx.cs:204-460; use the real 620 ms cleanup, never a sleep.
+                    w.CompleteTabTransition();
+                    Assert.Null(w.EnteringTab);
+                    // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
+                    if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
+                    // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
+                    if (tab == "awareness") w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")!.IsVisible = false;
                     RenderLiveTree(w);
-                    // !IsHitTestVisible: inert until hovered by design (the privacy card's chip close, WPF the same).
-                    if (!b.IsEffectivelyVisible || !b.IsEffectivelyEnabled || !b.IsHitTestVisible || b.Bounds.Width < 4 || b.TemplatedParent is ScrollBar) continue;
-                    // Click-proof on purpose (WPF Hidden): only the Presets rack row actions at rest; their hover path has its own test.
-                    if (b.GetVisualAncestors().OfType<StackPanel>().Any(s => s.Classes.Contains("rackActions") && !s.IsHitTestVisible)) continue;
-                    var p = b.TranslatePoint(new Point(b.Bounds.Width / 2, b.Bounds.Height / 2), w)!.Value;
-                    if (!new Rect(w.Bounds.Size).Contains(p) || b.GetVisualAncestors().OfType<ScrollViewer>().Any(s => !Inside(s, p, w))) continue;
-                    if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
-                    tested++;
-                    var hit = w.InputHitTest(p) as Visual;
-                    bool pressed = false;
-                    void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
-                    b.AddHandler(InputElement.PointerPressedEvent, Swallow, RoutingStrategies.Tunnel);
-                    w.MouseDown(p, MouseButton.Left);
-                    w.MouseUp(p, MouseButton.Left);
-                    Dispatcher.UIThread.RunJobs();
-                    b.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Swallow);
-                    if (hit is null || (hit != b && !b.IsVisualAncestorOf(hit)) || !pressed)
-                        misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");
+                    int tested = 0;
+                    foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
+                    {
+                        // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
+                        RenderLiveTree(w);
+                        // !IsHitTestVisible: inert until hovered by design (the privacy card's chip close, WPF the same).
+                        if (!b.IsEffectivelyVisible || !b.IsEffectivelyEnabled || !b.IsHitTestVisible || b.Bounds.Width < 4 || b.TemplatedParent is ScrollBar) continue;
+                        // Click-proof on purpose (WPF Hidden): only the Presets rack row actions at rest; their hover path has its own test.
+                        if (b.GetVisualAncestors().OfType<StackPanel>().Any(s => s.Classes.Contains("rackActions") && !s.IsHitTestVisible)) continue;
+                        var p = b.TranslatePoint(new Point(b.Bounds.Width / 2, b.Bounds.Height / 2), w)!.Value;
+                        if (!new Rect(w.Bounds.Size).Contains(p) || b.GetVisualAncestors().OfType<ScrollViewer>().Any(s => !Inside(s, p, w))) continue;
+                        if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
+                        tested++;
+                        var hit = w.InputHitTest(p) as Visual;
+                        bool pressed = false;
+                        void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
+                        b.AddHandler(InputElement.PointerPressedEvent, Swallow, RoutingStrategies.Tunnel);
+                        w.MouseDown(p, MouseButton.Left);
+                        w.MouseUp(p, MouseButton.Left);
+                        Dispatcher.UIThread.RunJobs();
+                        b.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Swallow);
+                        if (hit is null || (hit != b && !b.IsVisualAncestorOf(hit)) || !pressed)
+                            misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");
+                    }
+                    Assert.True(tested >= 3, $"{tab}: only {tested} buttons on screen to test");
                 }
-                Assert.True(tested >= 3, $"{tab}: only {tested} buttons on screen to test");
+                Assert.True(misses.Count == 0, string.Join("\n", misses));
             }
-            w.Close();
-            Assert.True(misses.Count == 0, string.Join("\n", misses));
+            finally
+            {
+                w?.Close();
+                settings.MotionLevel = oldMotion;
+            }
             return Task.CompletedTask;
         });
     }
@@ -98,6 +117,13 @@ public sealed class ContentHitTestTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
+    }
+
+    // Freeze elapsed entrance time so a fast runner cannot hide a missing completion call.
+    private sealed class PausedEntranceClock : TimeProvider
+    {
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => 0;
     }
 
     private static bool Inside(Visual v, Point p, Visual root)
