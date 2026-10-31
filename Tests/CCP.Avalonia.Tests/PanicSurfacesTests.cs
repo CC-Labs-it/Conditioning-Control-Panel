@@ -135,6 +135,7 @@ public sealed class PanicSurfacesTests
         "knock-cards",
         "quick-recal",
         "asset-preview",
+        "quest-stamps",
         "camera",
     };
 
