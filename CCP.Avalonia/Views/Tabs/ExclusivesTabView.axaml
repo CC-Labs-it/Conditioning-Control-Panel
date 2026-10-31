@@ -165,6 +165,11 @@
                         </Grid>
                     </Border>
 
+                    <StackPanel x:Name="JustSubscribedRow" Orientation="Horizontal" Spacing="12" Margin="0,0,0,18">
+                        <Button x:Name="BtnJustSubscribed" Content="{loc:Str plans_just_subscribed}" Click="JustSubscribed_Click"/>
+                        <TextBlock x:Name="TxtJustSubscribed" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420"/>
+                    </StackPanel>
+
                     <!-- Spotlight: the newest exclusive, hero-sized -->
                     <Border x:Name="SpotlightCard"
                             Height="250" CornerRadius="14" Margin="0,0,0,22"

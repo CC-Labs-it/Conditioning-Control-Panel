@@ -44,7 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public static bool Open(string? target)
         {
             if (!Allowed(target)) return false;
-            try { return Shell(target!); }
+            try { Services.Activation.CheckoutWatch.NoteOpened(target); return Shell(target!); }
             catch (Exception ex) { Log.Warning("Could not open {Target}: {Error}", Path.IsPathRooted(target!) ? target : "link", ex.Message); return false; }
         }
 
@@ -109,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (!Allowed(target)) return false;
             try
             {
+                Services.Activation.CheckoutWatch.NoteOpened(target);
                 if (top?.Launcher is { } l && (Directory.Exists(target)
                         ? await l.LaunchDirectoryInfoAsync(new DirectoryInfo(target!))
                         : await l.LaunchUriAsync(Path.IsPathRooted(target!) ? new Uri(Path.GetFullPath(target!)) : new Uri(target!))))
