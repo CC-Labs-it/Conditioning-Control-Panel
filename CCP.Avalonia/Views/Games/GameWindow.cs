@@ -68,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal Uri? PageUrl { get; private set; }
         internal bool IsReady { get; private set; }
         private bool _closing;
+        private readonly List<string> _pending = new();
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
@@ -103,7 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
             Closing += (_, _) => _closing = true;
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); IsReady = false; _pending.Clear(); DisposeRace(); DisposeDtrh(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
@@ -143,9 +144,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The shared shell frames (WPF ChaosWebViewHost.OnWebMessage + each host's OnPageReady).</summary>
         internal void HandleMessage(string json)
         {
+            if (_closing) return;
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            // WPF ChaosWebViewHost.cs:1711-1715,1740-1748: queued frames precede page-ready replies.
+            // Do this before any per-page handler, including the Loom and board protocols.
+            if ((string?)o["type"] == "ready")
+            {
+                IsReady = true;
+                foreach (var pending in _pending) _ = Web.PostJsonAsync(pending);
+                _pending.Clear();
+            }
             if (Spec.Id == "loom") { HandleLoom(o); return; } // only the Loom bridge subset
             if (Spec.Id == FypId && HandleFyp(o)) return;
             if (Spec.Id == JustDropId) { HandleJustDrop(o); return; }   // the remote site never gets the games' frames
@@ -242,17 +252,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 ? new { storyLimit = 3, endless = false, demo = true }
                 : null;
 
-        /// <summary>Every host -&gt; page frame, as sent (tests read the bridge from here).</summary>
+        /// <summary>Every requested host -&gt; page frame (tests read the protocol from here, before delivery).</summary>
         internal event Action<string>? Posted;
 
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post) through the page's string carrier.</summary>
         internal void Post(object message)
         {
+            if (_closing) return;
             // Scrolller media: raw urls for a Windows view WPF's gate answers, the loopback relay otherwise (WebHost.ScrolllerFrame).
             var json = Web.ScrolllerFrame(JsonConvert.SerializeObject(message), PageUrl);
             Posted?.Invoke(json);
-            if (_closing) return;
-            _ = Web.PostJsonAsync(json);
+            // WPF ChaosWebViewHost.cs:788-800: serialize now, deliver only after the handshake.
+            if (IsReady) _ = Web.PostJsonAsync(json);
+            else _pending.Add(json);
         }
 
         // ---- panic (PanicSurfaces "games", WPF GameSurfaces.cs:53-55 -> CloseActive("panic")) ----
