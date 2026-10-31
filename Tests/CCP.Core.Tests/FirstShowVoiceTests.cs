@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Text;
+using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services.FirstShow;
 using Xunit;
 
@@ -11,39 +12,39 @@ public class FirstShowVoiceTests
     [Fact]
     public void SameLineAndMoodProduceTheSameMelodyAndPcm()
     {
-        var a = FirstShowVoice.MakeScore("hi again", "idle");
-        var b = FirstShowVoice.MakeScore("hi again", "idle");
+        var a = EmiVoxScore.MakeScore("hi again", "idle");
+        var b = EmiVoxScore.MakeScore("hi again", "idle");
         Assert.Equal(a, b);
-        Assert.Equal(FirstShowVoice.RenderBurst(a), FirstShowVoice.RenderBurst(b));
-        Assert.NotEqual(a.Select(x => x.Pitch), FirstShowVoice.MakeScore("bye again", "idle").Select(x => x.Pitch));
-        Assert.True(FirstShowVoice.MakeScore("hi again", "sad")[0].Pitch < a[0].Pitch);
+        Assert.Equal(EmiVoxScore.RenderBurst(a), EmiVoxScore.RenderBurst(b));
+        Assert.NotEqual(a.Select(x => x.Pitch), EmiVoxScore.MakeScore("bye again", "idle").Select(x => x.Pitch));
+        Assert.True(EmiVoxScore.MakeScore("hi again", "sad")[0].Pitch < a[0].Pitch);
     }
 
     [Fact]
     public void WpfProsodyAndBurstLimitsArePreserved()
     {
         const string line = "okay okay listen. i know you said one more class but that was four classes ago, sweetheart!";
-        foreach (var mood in FirstShowVoice.Moods.Keys)
+        foreach (var mood in EmiVoxScore.Moods.Keys)
         {
-            var score = FirstShowVoice.MakeScore(line, mood);
+            var score = EmiVoxScore.MakeScore(line, mood);
             Assert.InRange(score.Count, 1, 13);
             Assert.InRange(score[^1].AtMs, 0, 1400);
             Assert.All(score, b => { Assert.InRange(b.Pitch, .5, 2); Assert.InRange(b.Gain, .02, 1); });
         }
-        Assert.Equal(.82 * Math.Pow(2, 4 / 12.0), FirstShowVoice.MakeScore("are you awake?", "idle")[^1].Pitch, 10);
-        Assert.Empty(FirstShowVoice.MakeScore(null, "idle"));
-        Assert.Empty(FirstShowVoice.MakeScore("   ", "idle"));
+        Assert.Equal(.82 * Math.Pow(2, 4 / 12.0), EmiVoxScore.MakeScore("are you awake?", "idle")[^1].Pitch, 10);
+        Assert.Empty(EmiVoxScore.MakeScore(null, "idle"));
+        Assert.Empty(EmiVoxScore.MakeScore("   ", "idle"));
     }
 
     [Fact]
     public void BurstIsAudibleBoundedMonoPcmWithSilenceBetweenBlips()
     {
-        var score = FirstShowVoice.MakeScore("bye bye. see you at school.", "celebration");
-        var samples = FirstShowVoice.RenderBurst(score);
+        var score = EmiVoxScore.MakeScore("bye bye. see you at school.", "celebration");
+        var samples = EmiVoxScore.RenderBurst(score);
         Assert.True(samples.Length > 44100 * score[^1].AtMs / 1000.0);
         Assert.InRange(samples.Max(x => Math.Abs(x)), .01f, 1f);
         Assert.Equal(0f, samples[2600]); // after the first 56 ms tone, before the next word
-        var wav = FirstShowVoice.WriteWav(samples);
+        var wav = EmiVoxScore.WriteWav(samples);
         Assert.Equal("RIFF", Encoding.ASCII.GetString(wav, 0, 4));
         Assert.Equal("WAVE", Encoding.ASCII.GetString(wav, 8, 4));
         Assert.Equal(1, BitConverter.ToUInt16(wav, 20));

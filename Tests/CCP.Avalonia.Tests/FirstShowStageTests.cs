@@ -44,7 +44,7 @@ public sealed class FirstShowStageTests
         Assert.DoesNotContain(played, p => p.Tag == "first-show-voice");
         t += .2; stage.Frame();
         var voice = Assert.Single(played.Where(p => p.Tag == "first-show-voice"));
-        Assert.Equal(FirstShowVoice.WriteWav(FirstShowVoice.RenderBurst(FirstShowVoice.MakeScore(stage.SpeechText, "celebration"))), File.ReadAllBytes(voice.Path));
+        Assert.Equal(EmiVoxScore.WriteWav(EmiVoxScore.RenderBurst(EmiVoxScore.MakeScore(stage.SpeechText, "celebration"))), File.ReadAllBytes(voice.Path));
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
         t += .2; stage.Frame();
         Assert.Single(played.Where(p => p.Tag == "first-show-voice"));
@@ -368,8 +368,17 @@ public sealed class FirstShowStageTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                // Linux headless has no Segoe; use the bundled face for the shell geometry tests.
+                .With(new FontManagerOptions
+                {
+                    DefaultFamilyName = "fonts:Inter#Inter",
+                    FontFamilyMappings = new Dictionary<string, FontFamily>
+                    {
+                        ["Segoe UI Black"] = new("fonts:Inter#Inter"), ["Segoe UI"] = new("fonts:Inter#Inter")
+                    }
+                })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
     private static Task Run(Func<FirstShowStageWindow, Task> body, string? panicKey = null) => AvaloniaTestDispatcher.RunAsync(async () =>

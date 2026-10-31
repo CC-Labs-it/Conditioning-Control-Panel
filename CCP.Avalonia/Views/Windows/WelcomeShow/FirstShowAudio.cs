@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.FirstShow;
 using Serilog;
@@ -28,7 +29,7 @@ internal sealed class FirstShowAudio : IDisposable
         {
             Directory.CreateDirectory(_cache);
             var path = Path.Combine(_cache, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text + mood))) + ".wav");
-            if (!File.Exists(path)) File.WriteAllBytes(path, FirstShowVoice.WriteWav(FirstShowVoice.RenderBurst(FirstShowVoice.MakeScore(text, mood))));
+            if (!File.Exists(path)) File.WriteAllBytes(path, EmiVoxScore.WriteWav(EmiVoxScore.RenderBurst(EmiVoxScore.MakeScore(text, mood))));
             Stop(ref _stopVoice);
             _stopVoice = Play(path, (float)Volume, "first-show-voice");
         }

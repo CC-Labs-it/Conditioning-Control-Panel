@@ -2,12 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ConditioningControlPanel.Services.FirstShow;
+namespace ConditioningControlPanel.Services.EmiDesk;
 
-// Adapted from parity/trunk a4ee52d40cd347d288dcf7fdaa8445b79f8e5038 EmiVox:
-// the WPF score and triangle synthesis, unchanged. Only the show calls this pure half;
-// ponytail: omit the unused typing tick and playback interface/instance.
-internal static class FirstShowVoice
+/// <summary>Shared EMI melody, triangle synthesis and mono PCM encoding. Playback belongs to each head.</summary>
+public static class EmiVoxScore
 {
     public static class VoxDials
     {
@@ -274,12 +272,12 @@ internal static class FirstShowVoice
         return outp;
     }
 
-    private const int SampleRate = 44100;
+    internal const int SampleRate = 44100;
     private const double VoiceBus = 0.85;
 
     // shell/audio.js RECIPES, the two EMI ones, verbatim.
     private const double BlipF0 = 760.0, BlipF1 = 680.0, BlipMs = 56.0, BlipGain = 0.35, BlipAttack = 0.3;
-    private static void MixTone(float[] buf, int atSample, double f0, double f1, double ms,
+    internal static void MixTone(float[] buf, int atSample, double f0, double f1, double ms,
                                 double recGain, double attackFrac, double level, double pitch)
     {
         double dur = Math.Max(0.02, ms / 1000.0);

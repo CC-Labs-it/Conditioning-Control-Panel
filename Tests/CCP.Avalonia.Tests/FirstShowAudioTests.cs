@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 using ConditioningControlPanel.Services.FirstShow;
@@ -24,7 +25,7 @@ public class FirstShowAudioTests
             var first = Assert.Single(played);
             Assert.Equal(.5f, first.Volume);
             Assert.Equal("first-show-voice", first.Tag);
-            Assert.Equal(FirstShowVoice.WriteWav(FirstShowVoice.RenderBurst(FirstShowVoice.MakeScore("hi again", "idle"))), File.ReadAllBytes(first.Path));
+            Assert.Equal(EmiVoxScore.WriteWav(EmiVoxScore.RenderBurst(EmiVoxScore.MakeScore("hi again", "idle"))), File.ReadAllBytes(first.Path));
             audio.Cue("pop");
             Assert.Empty(stopped); // a cue must not cut the voice
             Assert.Equal("first-show-cue", played[1].Tag);
