@@ -1,6 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Threading;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
@@ -12,6 +17,49 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class CompanionLinkLauncherTests
 {
+    // Route the existing host seam to the real shell navigation, not a boolean fake.
+    [Theory]
+    [InlineData(false, "https://127.0.0.1/video", 1)]
+    [InlineData(false, "http://127.0.0.1/video", 0)]
+    [InlineData(true, "https://127.0.0.1/video", 0)]
+    public Task MissingNativeEngineReachesOnlyTheHttpsFallback(bool hasEngine, string url, int expectedExternal)
+        => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.OfflineMode = false;
+        (settings.Current.Welcomed, settings.Current.HasAcceptedAgeVerification,
+            settings.Current.WhatMovedCardShown, settings.Current.AvatarEnabled) = (true, true, 1, false);
+        using var relay = new RemoteRelay(() => null, () => null, "test", (_, _) => null, _ => { });
+        RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+        var previousOpen = AppUpdater.OpenUrl;
+        var previousNavigate = CompanionLinkLauncher.Navigate;
+        var external = new List<string>();
+        var shell = new MainShellWindow();
+        try
+        {
+            CompanionLinkLauncher.Navigate = value => shell.NavigateToUrlInBrowser(value, autoPlayFullscreen: true);
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var host = shell.Named<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
+            if (hasEngine) host.ScriptInvoker = _ => Task.FromResult<string?>(null);
+            Assert.Equal(hasEngine, host.HasEngine);
+            AppUpdater.OpenUrl = (_, value) => { external.Add(value); return Task.CompletedTask; };
+            await CompanionLinkLauncher.OpenAsync(url);
+            Assert.Equal(new Uri(url), host.Source);
+            Assert.Equal(expectedExternal, external.Count);
+            Assert.All(external, value => Assert.Equal(url, value));
+        }
+        finally
+        {
+            AppUpdater.OpenUrl = previousOpen;
+            CompanionLinkLauncher.Navigate = previousNavigate;
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
     [Theory]
     [InlineData(false, true, "https://127.0.0.1/video", 1, 0)]
     [InlineData(false, false, "https://127.0.0.1/video", 1, 1)]
