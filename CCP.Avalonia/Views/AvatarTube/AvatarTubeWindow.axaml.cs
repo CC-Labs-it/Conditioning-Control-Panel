@@ -1411,7 +1411,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         }
 
         /// <summary>
-        /// The voice for one bubble, with WPF's volume curves verbatim: a bark voiceline at
+        /// The voice for one bubble, with WPF's default curves and live Voice level: a bark voiceline at
         /// master^1.5 * 0.85, a phrase clip at * 0.56, the canned giggle at * 0.7. MasterVolume 0
         /// means "attempt no audio at all" (the mute egg), so it returns before touching a file.
         /// <para>"Mute Voice Lines" (#846) silences only the spoken VO and drops back to a sound
@@ -1440,9 +1440,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                         return;
                     }
                     if (!File.Exists(phraseAudioPath)) return;
+                    var gain = ConditioningControlPanel.Services.CompanionVoiceGain.Current(barkVoice
+                        ? ConditioningControlPanel.Services.CompanionVoiceGain.BarkTrim
+                        : ConditioningControlPanel.Services.CompanionVoiceGain.EventTrim);
+                    if (gain <= 0f) return; // Voice level zero keeps the bubble and completes the latch.
                     handedOff = true;
                     _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
-                    _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
+                    _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, gain,
                                           barkVoice ? "bark-voice" : "phrase-audio", onFinished: onSpoken);
                     return;
                 }
@@ -1657,9 +1661,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 return;
             }
             _txtUserInput.Text = string.Empty;
-            // Keep the box open and focused so the player can type the next line (WPF ShowInputPanel,
-            // ccp-bugs #1279). The reply bubble sits above it (ZIndex 10 over 3), so it is never covered.
-            OpenChatInput();
+            // WPF b248a7b91: the owner superseded #1279. Send closes the box; click her to reopen it.
+            _inputPanel.IsVisible = false;
 
             var ai = App.Ai;
             var brain = App.Brain;   // decided once, up front, as WPF (ChatInput.cs:772)
