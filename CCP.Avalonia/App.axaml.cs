@@ -18,6 +18,9 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
+        /// <summary>The playlist player, null until a service is installed.</summary>
+        public static Services.AudioPlayer.IAudioPlaylistService? AudioPlaylist { get; private set; }
+
         /// <summary>In-app corner toasts (WPF App.Notifications). Queues until the shell attaches it.</summary>
         public static Helpers.NotificationService Notifications { get; } = new();
 

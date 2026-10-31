@@ -611,6 +611,8 @@
                                 </StackPanel>
                             </Border>
                         </WrapPanel>
+                        <TextBlock x:Name="TxtPresetScope" Text="{loc:Str sd_presets_scope}" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
 
