@@ -451,14 +451,14 @@ html.pad-nav #card button:focus, html.pad-nav #card input:focus, html.pad-nav #c
 .feel-row input[type="range"] { flex: 1 1 80px; padding: 0; }
 .feel-row input[type="checkbox"] { flex: 0 0 auto; }
 
-/* the 1-2-3 how-to card (music road pass 4, hud/howto.js): three paper panels, a rubber-stamp number each, ink
- * drawings; the keys press on the countdown beat (96 bpm), slower and shallower under Gentle; IN = the panels stamp
+/* the 1-2-3 how-to card (hud/howto.js): three paper panels, a rubber-stamp number each, a print of the game (art/guide/),
+ * a stamped title, ink keys; the keys press on the countdown beat (96 bpm), slower and shallower under Gentle; IN = the panels stamp
  * down one after another, OUT = the card lifts away */
 #card { --hw-beat: 0.625s; --hw-paper: #fbf8f2; }
 #card[data-kind="howto"] .card-body { width: min(760px, calc(100vw - 24px)); padding: 18px 20px 16px; text-align: left; }
 #card[data-kind="howto"] .card-title { font-size: 21px; margin: 0 0 14px 2px; }
 .hw-panels { list-style: none; margin: 0 0 14px; padding: 6px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.hw-panel { --hw-r: 0deg; position: relative; padding: 12px 8px 9px; background: var(--hw-paper); border: 1.5px solid var(--paper-ink);
+.hw-panel { --hw-r: 0deg; position: relative; padding: 7px 7px 9px; background: var(--hw-paper); border: 1.5px solid var(--paper-ink);
   border-radius: 3px; box-shadow: 2px 2px 0 rgba(28, 23, 34, 0.18); transform: rotate(var(--hw-r));
   animation: hw-in 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.25) both; animation-delay: calc(var(--hw-i, 0) * 0.12s + 0.08s); }
 .hw-panel:nth-child(1) { --hw-r: -0.7deg; }
@@ -470,23 +470,25 @@ html.pad-nav #card button:focus, html.pad-nav #card input:focus, html.pad-nav #c
   text-align: center; box-shadow: inset 0 0 0 2px var(--paper), inset 0 0 0 3.5px var(--paper-pink); transform: rotate(-10deg); opacity: 0.92; }
 .hw-panel:nth-child(2) .hw-n { transform: rotate(7deg); }
 .hw-panel:nth-child(3) .hw-n { transform: rotate(-4deg); }
-.hw-art { display: block; width: 100%; height: auto; color: var(--paper-ink); overflow: visible; }
+.hw-shot { display: block; width: 100%; height: auto; aspect-ratio: 520 / 273; object-fit: cover; box-sizing: border-box;
+  border: 1.5px solid var(--paper-ink); background: var(--paper-ink); user-select: none; -webkit-user-drag: none; }
+.hw-title { display: table; position: relative; margin: -13px 0 6px 5px; padding: 4px 7px 3px; background: var(--hw-paper); color: var(--paper-pink);
+  border: 2px solid var(--paper-pink); border-radius: 3px; font: 900 13px/1 var(--font); letter-spacing: 0.06em; text-transform: uppercase; transform: rotate(-1.6deg); }
+.hw-panel:nth-child(2) .hw-title { transform: rotate(1.1deg); }
+.hw-gist { margin: 0 0 7px 2px; font: 700 13px/1.25 var(--font); }
+.hw-hands { display: flex; align-items: center; gap: 8px; min-height: 38px; }
+.hw-art { display: block; flex: none; width: auto; height: 38px; color: var(--paper-ink); overflow: visible; }
 .hw-art .ink-fill { fill: currentColor; stroke: none; }
 .hw-art .paper-fill { fill: var(--hw-paper); stroke: currentColor; }
 .hw-art .pk-line { stroke: var(--paper-pink); }
 .hw-art .pk-fill { fill: var(--paper-pink); stroke: none; }
-.hw-art .pk-soft { fill: rgba(212, 48, 124, 0.14); stroke: var(--paper-pink); }
-.hw-art .paper-line { stroke: #fff; }
 .hw-art text { stroke: none; }
 .hw-art .hw-t { fill: currentColor; font-family: var(--mono); font-weight: 700; }
-.hw-art .hw-stamp-t { fill: var(--paper-pink); font-family: var(--font); font-weight: 900; letter-spacing: 0.08em; }
-.hw-art .hw-bub-t { fill: var(--paper-pink); font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 700; }
-.hw-art .hw-road-t { fill: currentColor; opacity: 0.45; font-family: var(--font); font-weight: 800; }
 .hw-key .hw-top { animation: hw-press var(--hw-beat) ease-out infinite; }
 @keyframes hw-press { 0%, 100% { transform: translateY(0); } 10% { transform: translateY(3px); } 45% { transform: translateY(0); } }
 .hw-ring { transform-box: fill-box; transform-origin: center; animation: hw-ring var(--hw-beat) ease-out infinite; }
 @keyframes hw-ring { from { transform: scale(0.7); opacity: 0.9; } to { transform: scale(1.35); opacity: 0; } }
-.hw-cap { margin: 6px 0 0; font: 700 13px/1.25 var(--mono); text-align: center; }
+.hw-cap { margin: 0; font: 700 12px/1.25 var(--mono); }
 .hw-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 #card .hw-go { padding: 9px 18px; font-size: 15px; }
 #card .hw-off { min-height: 32px; padding: 4px 12px; font-size: 13px; border-color: rgba(28, 23, 34, 0.35); }
@@ -509,14 +511,27 @@ html.pad-nav #card button:focus, html.pad-nav #card input:focus, html.pad-nav #c
 #card.c-gentle .card-body.out { animation: hw-out-soft 0.32s ease-out forwards; }
 @keyframes hw-out-soft { to { opacity: 0; } }
 @media (max-width: 520px) {
-  .hw-panels { gap: 8px; }
-  .hw-panel { padding: 10px 4px 7px; }
-  .hw-cap { font-size: 10.5px; }
-  .hw-n { width: 24px; height: 24px; font-size: 14px; line-height: 20px; top: -10px; left: -6px; }
+  /* a phone stands the prints in a column, each beside its words: three across would shrink the kart to a dot */
+  .hw-panels { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .hw-panel { display: grid; grid-template-columns: 42% minmax(0, 1fr); gap: 9px; align-items: center; padding: 6px; }
+  .hw-title { margin: 0 0 5px; font-size: 12px; }
+  .hw-gist { margin: 0 0 4px; font-size: 12px; }
+  .hw-hands { min-height: 0; gap: 6px; }
+  .hw-art { height: 30px; }
+  .hw-cap { font-size: 11px; }
+  .hw-n { width: 24px; height: 24px; font-size: 14px; line-height: 20px; top: -9px; left: -6px; }
+}
+@media (max-height: 480px) and (min-width: 521px) {
+  /* a phone on its side: shorter prints, no small print, so Go stays on screen */
+  .hw-shot { aspect-ratio: 3 / 1; object-position: 50% 75%; }
+  .hw-panel:nth-child(3) .hw-shot { object-position: 50% 35%; }
+  .hw-title { margin-top: -7px; }
+  .hw-gist, .hw-items, .hw-camera { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .hw-panel, .hw-key .hw-top, .hw-ring, #card .card-body.out { animation: none; }
 }
+#card.c-still .hw-panel, #card.c-still .hw-key .hw-top, #card.c-still .hw-ring, #card.c-still .card-body.out { animation: none; }
 
 /* logbook recap (hud/recap.js, the results branch of hud/cards.js): page 2 = highlights + course sketch, page 3 =
  * rubber stamps; every page slides in and out, the stamps thunk down one after another; Gentle and reduced motion

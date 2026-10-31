@@ -110,7 +110,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (k !== 'results') rc = null;
     if (!k) return;
     card.dataset.kind = k;
-    card.classList.toggle('c-gentle', !!(host.gentle || opts.gentlePreview));
+    card.classList.toggle('c-gentle', !!(host.gentle || opts.gentlePreview)); card.classList.toggle('c-still', opts.motion === 'off');
     body.classList.remove('in'); void body.offsetWidth; body.classList.add('in');
     go.hidden = !(k === 'start' || k === 'finish');
     extra.innerHTML = '';
