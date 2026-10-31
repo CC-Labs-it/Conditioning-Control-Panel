@@ -179,6 +179,69 @@ public sealed class AvatarTubeFinishTests
     });
 
     [Fact]
+    public Task RosterFadesBeforePaintingAndRejectsSupersededAndClosedCallbacks() => Run((_, tube, _) =>
+    {
+        var callbacks = new List<Action>();
+        int canceled = 0;
+        tube.AvatarSwitchScheduler = (delay, fire) =>
+        {
+            Assert.Equal(TimeSpan.FromMilliseconds(200), delay);
+            callbacks.Add(fire);
+            return () => canceled++;
+        };
+        var border = tube.FindControl<Border>("AvatarBorder")!;
+        var title = tube.FindControl<TextBlock>("TxtAvatarTitle")!;
+        var before = title.Text;
+        tube.SwitchToCompanionAvatar(CompanionId.CultBunny);
+        Assert.Single(callbacks); // fail-proof: an immediate paint never schedules the fade
+        Assert.Equal(before, title.Text);
+        Assert.Equal(0, border.GetBaseValue(Visual.OpacityProperty).Value);
+        Assert.Equal(4, CoreSettings.Current.SelectedAvatarSet);
+        Assert.Equal(4, CoreSettings.Current.ModAvatarSet["tube-test"]);
+        var transition = Assert.IsType<global::Avalonia.Animation.DoubleTransition>(Assert.Single(border.Transitions!));
+        Assert.Equal(Visual.OpacityProperty, transition.Property);
+        Assert.Equal(TimeSpan.FromMilliseconds(200), transition.Duration);
+        tube.SwitchToCompanionAvatar(CompanionId.BimboCow);
+        callbacks[0](); // a callback posted before cancellation must not paint
+        Assert.Equal(before, title.Text);
+        Assert.Equal(1, canceled);
+        callbacks[1]();
+        Assert.Equal(AvatarTubeWindow.AvatarSetTitle(7).ToUpperInvariant(), title.Text);
+        Assert.NotEqual(before, title.Text);
+        Assert.Equal(7, tube.CurrentAvatarSet);
+        Assert.Equal(1, border.GetBaseValue(Visual.OpacityProperty).Value);
+        var settled = title.Text;
+        tube.SwitchToCompanionAvatar(CompanionId.BrainParasite);
+        tube.PanicSilence();
+        Assert.Equal(AvatarTubeWindow.AvatarSetTitle(5).ToUpperInvariant(), title.Text);
+        Assert.Null(border.Transitions);
+        Assert.NotEqual(settled, title.Text); // panic settles the saved selection without waiting
+        Assert.Equal(1, border.GetBaseValue(Visual.OpacityProperty).Value);
+        settled = title.Text;
+        callbacks[2]();
+        Assert.Equal(settled, title.Text);
+        tube.SwitchToCompanionAvatar(CompanionId.BambiTrainer);
+        tube.Close();
+        callbacks[3]();
+        Assert.Equal(settled, title.Text);
+        tube.SwitchToCompanionAvatar(CompanionId.OGBambiSprite);
+        Assert.Equal(4, callbacks.Count);
+    });
+
+    [Fact]
+    public Task RosterPreservesSingleEmoteLookAndSavedSelection() => Run((_, tube, change) =>
+    {
+        change(new ModPackage(new ModManifest { Id = "builtin-bambisleep" }, null, true));
+        var title = tube.FindControl<TextBlock>("TxtAvatarTitle")!.Text;
+        tube.AvatarSwitchScheduler = (_, _) => throw new InvalidOperationException("pinned look must not fade");
+        tube.SwitchToCompanionAvatar(CompanionId.BimboCow);
+        Assert.Equal(1, tube.CurrentAvatarSet);
+        Assert.Equal(4, CoreSettings.Current.SelectedAvatarSet);
+        Assert.False(CoreSettings.Current.ModAvatarSet.ContainsKey("builtin-bambisleep"));
+        Assert.Equal(title, tube.FindControl<TextBlock>("TxtAvatarTitle")!.Text);
+    }, savedSet: 4);
+
+    [Fact]
     public Task SingleEmoteModPinsItsLookWithoutOverwritingTheGlobalPick() => Run((_, tube, change) =>
     {
         change(new ModPackage(new ModManifest { Id = "builtin-bambisleep" }, null, true));

@@ -75,6 +75,11 @@ public sealed class CompanionRosterSwitchTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previous = CoreSettings.ServiceProvider;
+        var previousMod = CoreMods.ActiveModIdProvider;
+        var previousPackage = CoreMods.ActiveModPackageProvider;
+        // A single-emote built-in pins its look; this test exercises static roster sets.
+        CoreMods.ActiveModIdProvider = () => "roster-static-test";
+        CoreMods.ActiveModPackageProvider = () => null;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
@@ -120,6 +125,8 @@ public sealed class CompanionRosterSwitchTests
             s.MotionLevel = oldMotion;
             service.SaveImmediate();
             CoreSettings.ServiceProvider = previous;
+            CoreMods.ActiveModIdProvider = previousMod;
+            CoreMods.ActiveModPackageProvider = previousPackage;
         }
         return Task.CompletedTask;
     });
