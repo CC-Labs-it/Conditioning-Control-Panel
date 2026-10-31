@@ -1,4 +1,5 @@
 using System;
+using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services.JustDrop;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -14,16 +15,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// page message goes to Core <see cref="JustDropService"/>; a panic closes it with every other game
     /// window (PanicSurfaces "games", WPF GameSurfaces.cs:57).
     /// <para>Takeaway replay uses the bare player, fullscreen and panel duck/restore. Remaining:
-    /// HostOwnedFullscreen's persistent strip and Chromium no-throttle flags (WebKitGTK has no equivalent).</para>
+    /// HostOwnedFullscreen's persistent strip (PR #3378) and document-start hooks.</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
         internal const string JustDropId = "justdrop";
 
+        // WPF JustDropHostService.cs:132-135: audio starts and the live clock survives occlusion.
+        internal const string JustDropBrowserArguments = "--autoplay-policy=no-user-gesture-required "
+            + "--disable-background-timer-throttling --disable-backgrounding-occluded-windows";
+
         /// <summary>WPF ShowTab("justdrop"): a door the account cannot see is a no-op, never a redirect.</summary>
         private static bool JustDropDoorOpen()
         {
-            if (JustDropService.DoorAvailable) return true;
+            if (JustDropService.DoorAvailable)
+            {
+                // WPF JustDropHostService.cs:72: count each shop open, including refocus, once.
+                try { EmiState.NoteUsage(JustDropId); }
+                catch (Exception ex) { Log.Debug(ex, "[EmiDesk] shop open not counted"); }
+                return true;
+            }
             Log.Debug("[Game] justdrop ignored: the door is not available on this account");
             return false;
         }
@@ -41,6 +52,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void LoadJustDrop()
         {
             PageUrl = new Uri(JustDropHandoff.BuildStartUrl(Spec.Query ?? JustDropHandoff.ShopPath, JustDropHandoff.UnifiedId(), JustDropHandoff.AuthToken()));
+            Web.WindowsBrowserArguments = JustDropBrowserArguments;
+            Web.WindowsUserDataFolder = System.IO.Path.Combine(CorePaths.UserData, "browser_data_avalonia_justdrop");
             Web.AllowNavigation = JustDropHandoff.IsSite;
             Web.RequestHeader = uri => JustDropHeaderFor(uri, JustDropHandoff.AuthToken());
             Web.InjectCarrier = true;   // the remote page speaks chrome.webview; WebKitGTK needs the shim
@@ -68,6 +81,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 if (duck && shell.IsVisible && shell.WindowState == global::Avalonia.Controls.WindowState.Minimized)
                     shell.WindowState = state;
             };
+            // WPF ChaosWebViewHost.cs:919-972 suspends native ownership before the hide cascade.
+            // Keep this window independent until that minimize/hide-aware glue is ported.
             window.Show();
             if (duck) { shell.WindowState = global::Avalonia.Controls.WindowState.Minimized; window.Activate(); }
             return window;

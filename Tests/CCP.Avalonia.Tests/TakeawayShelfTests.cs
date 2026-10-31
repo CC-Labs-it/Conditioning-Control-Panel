@@ -24,6 +24,27 @@ namespace CCP.Avalonia.Tests;
 public sealed class TakeawayShelfTests
 {
     [Fact]
+    public Task ReceiptAndShopHoverUseTheSharedMotionAwareLift() => InShell(async shell =>
+    {
+        CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        var tab = shell.Named<PresetsTabView>("PresetsTab")!;
+        var shelf = tab.FindControl<StackPanel>("TakeawayShelf")!;
+        foreach (var chip in new[] { shelf.Children[0], shelf.Children[^1] })
+        {
+            var group = Assert.IsType<global::Avalonia.Media.TransformGroup>(chip.RenderTransform);
+            var scale = Assert.Single(group.Children.OfType<global::Avalonia.Media.ScaleTransform>());
+            chip.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, chip,
+                new Pointer(1, PointerType.Mouse, true), chip, default, 0, default, KeyModifiers.None));
+            Assert.Equal(1.02, scale.ScaleX);
+            Assert.Null(scale.Transitions);
+            chip.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, chip,
+                new Pointer(1, PointerType.Mouse, true), chip, default, 0, default, KeyModifiers.None));
+            Assert.Equal(1, scale.ScaleX);
+        }
+    });
+
+    [Fact]
     public Task TabVisitReadsRealDrawerAndPinsThreeWithAllRowsInTheToggleTray() => InShell(async shell =>
     {
         shell.ShowTab("presets"); await shell.TakeawayLoad;
@@ -81,6 +102,10 @@ public sealed class TakeawayShelfTests
         Assert.True(GameWindow.IsAnyOpen());
         var live = GameWindow.LaunchJustDropReplay("another-order", shell)!;
         Assert.Contains(Uri.EscapeDataString(JustDropHandoff.ReplayPath("code1")), live.PageUrl!.Query);
+        Assert.Null(live.Owner);
+        Assert.Equal(WindowState.Minimized, shell.WindowState);
+        Assert.True(live.IsVisible);
+        Assert.True(live.ShowInTaskbar);
         Assert.Equal(WindowState.FullScreen, live.WindowState);
         live.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
         Assert.Equal(WindowState.Normal, live.WindowState);
