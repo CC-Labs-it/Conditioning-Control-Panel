@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -72,12 +73,18 @@ public sealed class ContentHitTestTests
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
                     var hit = w.InputHitTest(p) as Visual;
+                    string route = "no window press";
+                    void Trace(object? sender, PointerPressedEventArgs e) => route = $"source={Describe(e.Source as Visual)} handled={e.Handled} captured={Describe(e.Pointer.Captured as Visual)}";
+                    w.AddHandler(InputElement.PointerPressedEvent, Trace, RoutingStrategies.Tunnel, handledEventsToo: true);
                     bool pressed = false;
                     void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
                     b.AddHandler(InputElement.PointerPressedEvent, Swallow, RoutingStrategies.Tunnel);
                     w.MouseDown(p, MouseButton.Left);
                     w.MouseUp(p, MouseButton.Left);
                     Dispatcher.UIThread.RunJobs();
+                    w.RemoveHandler(InputElement.PointerPressedEvent, (EventHandler<PointerPressedEventArgs>)Trace);
+                    File.AppendAllText("hit-probe.txt", $"{tab} {b.Name} @{p} hit={Describe(hit)} desc={hit != null && b.IsVisualAncestorOf(hit)} pressed={pressed} {route} after={Describe(w.InputHitTest(p) as Visual)} gate={w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")?.IsVisible}\n");
+                    if (!pressed) { using var frame = w.CaptureRenderedFrame(); frame?.Save("hit-probe.png"); }
                     b.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Swallow);
                     if (hit is null || (hit != b && !b.IsVisualAncestorOf(hit)) || !pressed)
                         misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");
@@ -114,6 +121,8 @@ public sealed class ContentHitTestTests
     {
         public override long GetTimestamp() => 0;
     }
+
+    private static string Describe(Visual? v) => v == null ? "null" : string.Join("/", v.GetSelfAndVisualAncestors().Select(x => x.GetType().Name + ":" + (x as Control)?.Name + (x is TextBlock t ? "[" + t.Text + "]" : "")));
 
     private static bool Inside(Visual v, Point p, Visual root)
         => v.TranslatePoint(default, root) is { } tl && v.TranslatePoint(new Point(v.Bounds.Width, v.Bounds.Height), root) is { } br
