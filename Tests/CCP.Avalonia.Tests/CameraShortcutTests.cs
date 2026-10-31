@@ -12,12 +12,35 @@ using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.EmiDesk;
+using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
 public class CameraShortcutTests
 {
+    [Fact]
+    public void X11ChordTogglesOncePerHoldIncludingSyntheticReleasePairs()
+    {
+        var gate = new X11ChordPressGate();
+        int toggles = 0;
+        void Feed(bool pressed, ulong time) { if (gate.Accept(pressed, time)) toggles++; }
+        Feed(true, 100);
+        Assert.Equal(1, toggles);
+        Feed(true, 110); // detectable repeat: press without release
+        Feed(false, 120); Feed(true, 120); // legacy repeat, even across queue drains
+        Feed(false, 130); Feed(true, 130);
+        Assert.Equal(1, toggles);
+        Feed(false, 140); // physical release
+        Feed(true, 200);
+        Assert.Equal(2, toggles);
+        Feed(true, 210);
+        Assert.Equal(2, toggles);
+        gate.Reset(); // rebind/disarm forgets the previous hold
+        Feed(true, 220);
+        Assert.Equal(3, toggles);
+    }
+
     [Fact]
     public void ParsesSavedChordAndFallsBackToDefault()
     {

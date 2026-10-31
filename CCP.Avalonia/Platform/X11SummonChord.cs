@@ -22,9 +22,9 @@ internal static class X11SummonChord
 internal sealed class X11Chord
 {
     private const string LibX11 = "libX11.so.6";
-    private const int KeyPress = 2, MappingNotify = 34, BadAccess = 10, GrabModeAsync = 1, AnyModifier = 1 << 15;
+    private const int KeyPress = 2, KeyRelease = 3, MappingNotify = 34, BadAccess = 10, GrabModeAsync = 1, AnyModifier = 1 << 15;
     private const uint ShiftMask = 1, LockMask = 2, ControlMask = 4, Mod1Mask = 8, Mod2Mask = 16, Mod4Mask = 64;
-    private const int XEventSize = 192, KeyEventKeycode = 84, ErrorEventCode = 32;
+    private const int XEventSize = 192, KeyEventTime = 56, KeyEventKeycode = 84, ErrorEventCode = 32;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct PollFd { public int Fd; public short Events; public short REvents; }
@@ -53,6 +53,7 @@ internal sealed class X11Chord
     private static readonly object Gate = new();
     private IntPtr _display, _root;
     private int _keycode;
+    private readonly X11ChordPressGate _press = new();
     private Action? _onPress;
     private bool _badAccess;
     // Rooted for the process lifetime: Xlib keeps the pointer while it is installed.
@@ -115,6 +116,7 @@ internal sealed class X11Chord
     private void UngrabLocked()
     {
         _onPress = null;
+        _press.Reset();
         if (_keycode == 0) return;
         XUngrabKey(_display, _keycode, AnyModifier, _root);
         XFlush(_display);
@@ -164,8 +166,10 @@ internal sealed class X11Chord
                         XNextEvent(_display, ev);
                         int type = Marshal.ReadInt32(ev);
                         if (type == MappingNotify) XRefreshKeyboardMapping(ev);
-                        else if (type == KeyPress && _keycode != 0 && Marshal.ReadInt32(ev, KeyEventKeycode) == _keycode)
-                            fire = _onPress;
+                        else if ((type == KeyPress || type == KeyRelease) && _keycode != 0
+                            && Marshal.ReadInt32(ev, KeyEventKeycode) == _keycode
+                            && _press.Accept(type == KeyPress, unchecked((ulong)Marshal.ReadInt64(ev, KeyEventTime))))
+                            fire += _onPress;
                     }
                 }
                 fire?.Invoke();
@@ -176,4 +180,24 @@ internal sealed class X11Chord
             }
         }
     }
+}
+
+// WPF GlobalHotkeyService.cs:108 uses MOD_NOREPEAT. X11 can send either repeated
+// presses or synthetic release/press pairs with the same server timestamp.
+internal sealed class X11ChordPressGate
+{
+    private bool _held;
+    private ulong? _releasedAt;
+
+    internal bool Accept(bool pressed, ulong time)
+    {
+        if (!pressed) { _releasedAt = time; return false; }
+        if (_releasedAt is { } release && release != time) _held = false;
+        _releasedAt = null;
+        if (_held) return false;
+        _held = true;
+        return true;
+    }
+
+    internal void Reset() { _held = false; _releasedAt = null; }
 }
