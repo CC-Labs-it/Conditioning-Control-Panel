@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
@@ -34,6 +35,9 @@ public sealed class ChaosBoonBarLiveTests
             Setup();
             var before = ChaosMeta.State.EquippedStartBoon;
             var resolver = ChaosRunState.IconResolver;
+            var announcerEnabled = CoreSettings.Current.ChaosAnnouncerEnabled;
+            CoreSettings.Current.ChaosAnnouncerEnabled = true;
+            ChaosAnnouncerOverlay.CloseActive();
             try
             {
                 var boon = ChaosBoonPool.All.First(b => !b.IsCurse);
@@ -47,13 +51,22 @@ public sealed class ChaosBoonBarLiveTests
                 Assert.Equal(scripted ? 0 : 1, state.RunPickTiles.Count);
                 Assert.Equal(scripted ? 0 : 1, bar.Row.Children.Count);
                 Assert.Equal(!scripted, bar.Pill.IsVisible);
-                if (!scripted) Assert.Equal(boon.Id, Assert.Single(state.RunPickTiles).Id);
+                if (scripted) Assert.Null(ChaosAnnouncerOverlay.Active?.Current);
+                else
+                {
+                    Assert.Equal(boon.Id, Assert.Single(state.RunPickTiles).Id);
+                    // WPF ChaosModeService.cs:434: authored announcement text, kind and art key.
+                    var announcement = Assert.IsType<ChaosAnnouncement>(ChaosAnnouncerOverlay.Active?.Current);
+                    Assert.Equal(($"◈ {boon.Name}", ChaosAnnounceKind.Mantra, boon.Id),
+                        (announcement.Text, announcement.Kind, announcement.ArtKey));
+                }
             }
             finally
             {
                 ChaosRunHost.ForceShutdown();
                 ChaosMeta.State.EquippedStartBoon = before;
                 ChaosRunState.IconResolver = resolver;
+                CoreSettings.Current.ChaosAnnouncerEnabled = announcerEnabled;
             }
             return Task.CompletedTask;
         });
