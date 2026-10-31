@@ -22,6 +22,19 @@ namespace ConditioningControlPanel.Services.Companion
 
         public static bool IsV2(string? generation) => Normalize(generation) == V2;
 
+        /// <summary>
+        /// The generation the tube plays: the saved one while <see cref="RainV2Gate"/> is on, always V1
+        /// while it is off. The saved setting is never rewritten, so a "v2" comes back when V2 ships.
+        /// </summary>
+        public static string Effective(string? generation, bool v2On) => v2On ? Normalize(generation) : V1;
+
+        /// <summary><see cref="Effective(string?, bool)"/> through the release gate.</summary>
+        public static string Effective(string? generation) => Effective(generation, RainV2Gate.On);
+
+        /// <summary>The pill as the tube asks it: never while the V2 gate is off.</summary>
+        public static bool PillVisible(bool v2On, bool modHasV2Row, bool portraitMode, bool glitchUp)
+            => v2On && PillVisible(modHasV2Row, portraitMode, glitchUp);
+
         /// <summary>The pill's click: V1 -> V2, V2 -> V1.</summary>
         public static string Toggle(string? generation) => IsV2(generation) ? V1 : V2;
 

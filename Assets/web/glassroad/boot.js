@@ -20,7 +20,7 @@
  */
 import { createBridge, songCharts, isPreviewSongHost, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
-import { showSlip, hideSlip } from './sparkles-slip.js';
+import { showSlip, hideSlip, releaseSlip } from './sparkles-slip.js';
 import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
 import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
@@ -36,6 +36,7 @@ import { createKeyboard } from './input/keyboard.js';
 import { createGamepad } from './input/gamepad.js';
 import { createPointerLook } from './input/pointerLook.js';
 import { createTouch } from './input/touch.js';
+import { holdCueAt } from './input/holdCue.js';
 import { glideActive, resetGlide } from './sim/glide.js';
 import { S, RESPAWN, createState } from './sim/state.js';
 import { resolveMode } from './meta/mode.js';
@@ -49,6 +50,7 @@ import { createAi } from './sim/ai.js';
 import { createContact } from './sim/contact.js';
 import { createStandings } from './sim/standings.js';
 import { createItems } from './sim/items.js';
+import { createArchOnlyItems } from './sim/boostArches.js';
 import { loadTrack } from './track/load.js';
 import { selectTrack, allowsOnline, courseSongs, courseSongRows } from './track/selection.js';
 import { createMainframeScan, scanClock } from './sim/mainframeScan.js';
@@ -91,22 +93,28 @@ import { createMusicEdges } from './render/musicEdges.js';
 import { loadFonts } from './render/fonts.js';
 import { createAssist } from './sim/assist.js';
 import { createRoomSession } from './net/room.js';
+import { catchUpSteps } from './net/catchUp.js';
 import { onlineCourseHash as onlineHash } from './net/courseHash.js';
 import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
 import { createProfileSync } from './meta/profileSync.js';
 import { createOwned } from './meta/owned.js';
 import { configureLobby } from './hud/lobby.js';
 import { hostInvites, createHostInvite } from './host/friendInvite.js';
-import { linkToken, dropLinkParam, joinParam } from './hud/lobbyMath.js';
+import { linkToken, dropLinkParam, joinParam, goneLine } from './hud/lobbyMath.js';
 import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
 import { createLoading, LOAD_STALL_MS } from './hud/loading.js';
-import { describeFailure, rememberFailure, failureLine, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS } from './core/failure.js';
+import { createRaceToys } from './host/raceToys.js';
+import { describeFailure, rememberFailure, failureLine, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS, earlierLine, rebuildAllowed } from './core/failure.js';
 import { ORDER as TIER_ORDER } from './render/quality.js';
 import { dismantleScene } from './render/sceneResources.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
+import { bodyOfVehicle, isKartBody } from './sim/kartStats.js';
+import { ownedChoices } from './hud/lobbyMath.js';
+import { unlockedSet } from './meta/unlocks.js';
+import { hostCounter, counterMessage } from './host/prizeCounter.js';
 import { COURSES, selectedCourse, courseUrl, courseRaceIntent } from './track/catalog.js';
 import { getKeepLayout } from './track/keep-layout.js';
 import { getBoudoirLayout } from './track/boudoir-layout.js';
@@ -129,6 +137,8 @@ if (qs.has('start')) {
   history.replaceState(history.state, '', url);
 }
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
+// ?boostRim=0..1: dev look at the boost speed rim, held at that level while racing (Motion off and Gentle still apply)
+const RIM_FORCE = Math.max(0, Math.min(1, Number(qs.get('boostRim')) || 0));
 // ?dev=1: the scripted drives in dev/hook.js (window.__glassroad.dev); refused without the query and online
 const DEV = devAllowed(location.search);
 // ?hitch=1 (dev/hitch-check.mjs): per-frame section times in window.__hitch (ms), read by the check's rAF probe
@@ -141,6 +151,7 @@ const hLap = (k) => { const t = performance.now(); HT[k] = t - hT; hT = t; };
 // init.caps.songs (host/bridge.js songCharts). Set once the init lands, before any race can start. The phone app's
 // own loopback server is a host, not the preview server (isPreviewSongHost).
 
+const CATCH_UP_MAX_S = 2;                          // online: a sim further behind the room than this (a late join) is not replayed
 const COUNT = 8;                                   // offline grid (and the kart slots the world builds); online = the room's seats
 const LOCAL_URL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
 let canvas = document.getElementById('view');   // replaced by a fresh element after a WebGPU fallback or a GPU rebuild
@@ -159,18 +170,32 @@ shared.feelTask = Promise.all([loadFeel(), loadFonts()]).then(([feel]) => {
 shared.bridge.on('gentle', m => { shared.hostGentle = m; });
 // THE PRIZE COUNTER'S KART BODIES (meta/owned.js): the garage offers the free kart, the earned ones and the owned
 // ones. The desktop host pushes `owned { grants }` after a buy; the profile pull answers the same list everywhere.
+// After the counter's Wear on a kart look it adds `wear: <counter row id>` (desktop only): the garage puts it on.
 shared.owned = createOwned();
 const adoptOwned = list => { if (shared.owned.adopt(list)) shared.garage?.refreshLocks?.(); };
-shared.bridge.on('owned', m => adoptOwned(m?.grants));
+shared.bridge.on('owned', m => {
+  adoptOwned(m?.grants);
+  if (typeof m?.wear === 'string') try { shared.garage?.wear?.(m.wear); } catch (e) { /* a look never breaks the page */ }
+});
 // SPARKLES BY PLACE (B1 W7): the desktop host's receipt for a finished race, bottom left of the results card
 // (styles.css moves it off the card); a new run takes it away. The website never sends one.
 // A receipt that lands once the next run is under way is dropped rather than covering the race; the
 // Motion row plays it calm when it is not Full (shared.slipGate is set per course).
+// Desk run 2026-10-30 (owner: 6 s went before anyone read it): it stays while the results are up (the finished
+// race and its results card, solo or online) and at least SLIP_MIN_MS from when it lands.
+const SLIP_MIN_MS = 10000;
+let slipWatch = 0;
+const slipGate = () => { try { return shared.slipGate?.() || null; } catch (e) { return null; } };   // null: no course yet
 function receiptSlip(m) {
-  let gate = null;
-  try { gate = shared.slipGate?.(); } catch (e) { /* no course yet */ }
+  const gate = slipGate();
   if (gate?.blocked) return;
-  showSlip(m, { calm: !!gate?.calm });
+  clearInterval(slipWatch); slipWatch = 0;
+  const held = !!gate?.results;
+  showSlip(m, { calm: !!gate?.calm, holdMs: held ? Infinity : SLIP_MIN_MS });
+  if (held) slipWatch = setInterval(() => {
+    if (slipGate()?.results) return;
+    clearInterval(slipWatch); slipWatch = 0; releaseSlip(SLIP_MIN_MS);
+  }, 250);
 }
 shared.bridge.on('sparkles-receipt', receiptSlip);
 // The web host's Scrolller pictures (host/scrolllerFeed.js): display only. Built once so a feed
@@ -219,8 +244,11 @@ function fail(e) {
   const rec = record('boot', e);
   const note = document.getElementById('card-note');
   if (note) note.textContent = 'Could not start: ' + rec.reason;
+  showFailure(rec);
+}
+function showFailure(rec) {
   if (window.__glassroad) window.__glassroad.phase = 'failed';
-  loading.fail(failureLine(rec));
+  loading.fail([failureLine(rec), earlierLine(rec)].filter(Boolean).join(' '));
   loading.onRetry(() => void retry(rec.course));
 }
 /** Drop every GPU-side shared object (renderer, art, garage, kart pool; the audio stays). The next boot builds them
@@ -245,8 +273,10 @@ function retry(id) {
  *  throwing rebuilds the renderer and the course behind the loading cover, back into the race or the garage. */
 async function recover(kind, e, { race = false } = {}) {
   if (shared.closed || shared.recovering) return false;
-  shared.recovering = true;
+  const again = !rebuildAllowed(shared.failures);
   const rec = record(kind, e);
+  if (again) { console.error('[glassroad] ' + failureLine(rec) + '; no second rebuild'); showFailure(rec); return false; }
+  shared.recovering = true;
   console.error('[glassroad] ' + failureLine(rec) + '; rebuilding the graphics');
   try {
     teardownGpu({ lowerTier: kind === 'lost' });
@@ -261,9 +291,7 @@ loading.onStall(({ stage, progress }) => {
   const rec = record('stall', new Error('stuck at ' + (stage || 'the start') + ' (' + Math.round(progress * 100) + '%) for ' + Math.round(LOAD_STALL_MS / 1000) + ' s'));
   console.error('[glassroad] ' + failureLine(rec));
   shared.recovering = false;   // a hung rebuild never finished; the next loss may rebuild again
-  if (window.__glassroad) window.__glassroad.phase = 'failed';
-  loading.fail(failureLine(rec));
-  loading.onRetry(() => void retry(rec.course));
+  showFailure(rec);
 });
 
 /** ?botFall=1: once, steer the player to the outside of the first open stretch (a rescue to look at). */
@@ -528,9 +556,14 @@ async function boot(course, options, lifetime, isCurrent) {
   renderer.beginCourse(); renderer.setHold(true);
   const racing = () => !online && (state === 'intro' || state === 'race');
   shared.slipGate = () => ({ blocked: state === 'intro' || (state === 'race' && !!race && race.phase !== 'finished'),
-    calm: (hud.options?.motion || 'full') !== 'full' });
+    calm: (hud.options?.motion || 'full') !== 'full',
+    results: state === 'results' || (state === 'race' && !!race && race.phase === 'finished') });
   lifetime.defer(renderer.onLost((lost) => {
     if (isCurrent()) void recover('lost', new Error((lost.api ? lost.api + ' ' : '') + (lost.message || 'device lost') + (lost.reason ? ' (' + lost.reason + ')' : '')), { race: racing() });
+  }));
+  // a compat device refusing every frame is a black world with no throw: end on the reason and Retry, never on black
+  lifetime.defer(renderer.onCompatDead((message) => {
+    if (isCurrent()) fail(new Error('this phone\'s graphics could not draw the course: ' + message));
   }));
   shared.counts.courses++;
   if (!shared.artLibrary && qs.get('art') !== '0') {
@@ -628,8 +661,8 @@ async function boot(course, options, lifetime, isCurrent) {
   showLoading('Getting the garage ready', 0.56);
   await paintGap();
   if (!lifetime.alive) return;
-  const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas,
-    track: trackName, laps, trackId: track.id, online: course.online, owned: () => shared.owned.grants,
+  const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas, feel,
+    track: trackName, laps, trackId: track.id, online: course.online, owned: () => shared.owned.grants, counter: hostCounter(shared.bridge, init),
     onProgress: (d, n) => showLoading('Getting the garage ready', 0.56 + 0.36 * d / Math.max(1, n)) });
   if (!lifetime.alive) { garage?.dispose(); return; }
   loaded('garage');
@@ -638,7 +671,8 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!shared.counts.garage) shared.counts.garage++;
     garage.setCourse({ trackId: track.id, track: trackName, laps, online: course.online });
     garage.setHandlers({ changeTrack: id => void selectCourse(id, { race: true }),
-      action: name => hud.menuAction(name), sound: name => { audio.start(); audio.cue(name); } });
+      action: name => { if (name === 'counter') shared.bridge.send(counterMessage()); else hud.menuAction(name); },
+      sound: (name, opts) => { audio.start(); audio.cue(name, opts); } });
     const mediaFor = id => {
       const saved = shared.coursePicks[id] || {}, local = shared.courseSongs[id];
       return { source: id === TRACK_ID ? view().source : saved.source || (consentOn() ? 'scrolller' : 'off'),
@@ -776,8 +810,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const ghostView = { st: createState(), meta: { i: 1, id: 'ghost', name: 'Ghost', isBot: false, tint: 0, slot: 1 },
     fxv: { spinRad: 0, shield: null, echo: 0, effect: null, ghost: true, slip: 0, place: 1 } };
   const ghostPose = {}, ghostKarts = [null, ghostView];
-  const NO_ITEM_VIEW = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
-  const noItems = () => ({ update() {}, view: () => NO_ITEM_VIEW, reset() {}, nearOpenEdge: () => false, trapRows: () => [], lobTarget: () => -1 });
+  const noItems = (events) => createArchOnlyItems(track, feel, events);
   function ghostSlotShadow(off) {
     world.karts?.[1]?.traverse((o) => {
       if (!o.isMesh) return;
@@ -796,6 +829,11 @@ async function boot(course, options, lifetime, isCurrent) {
     debug.trial = trial ? { ghost: ghost ? Math.round(ghost.timeS * 100) / 100 : 0, saved: false } : null;
     if (trial && garage && world.setLook) { world.setLook(1, raceLook(garage.state)); ghostSlotShadow(true); }
   }
+  // ?kart=<id> (dev, solo): drive and wear that body, owned or not
+  const devKart = DEV && isKartBody(feel, qs.get('kart')) ? qs.get('kart') : null;
+  const soloLook = () => { const look = raceLook(garage.state); return devKart ? { ...look, vehicle: 'emi-vehicle-' + devKart } : look; };
+  /** Solo: the garage pick is the player's body too (online it comes from the seat's look, sim/racers.js). */
+  function setSoloBody() { racers.setBody(0, devKart || bodyOfVehicle(garage ? raceLook(garage.state).vehicle : null)); debug.playerBody = racers.player.feel.kart; }
   function buildRun(s = null) {
     if (P) { bindAirWords(P.st, null); bindAirWords(P.view, null); }
     airWords?.reset(); airWords = null; airSong = null;
@@ -824,13 +862,12 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     perfume = createBoudoirPerfume(track, q);
     standings = createStandings(track, feel, q);
-    items = s ? s.mount(racers, race, q) : solo ? noItems() : createItems(track, feel, q, { seed: sd });
+    items = s ? s.mount(racers, race, q) : solo ? noItems(q) : createItems(track, feel, q, { seed: sd });
     P = racers.player;
     assist = createAssist(track, P.feel);
-    if (!s) {
-      airWords = createAirWordRun(null, track);
-      bindAirWords(P.st, airWords); bindAirWords(P.view, airWords);
-    }
+    // online too (owner 2026-10-30), and with no song at all: the flights fall back to stock words
+    airWords = createAirWordRun(null, track);
+    bindAirWords(P.st, airWords); bindAirWords(P.view, airWords);
     sctx = { ai, items, standings, hazards, industry, moving };
     Object.defineProperty(debug, 'movingTraps', { get: () => moving.inspect(racers.clockS), configurable: true });
     aiCtx = { racers: racers.list, items, standings, race };
@@ -842,9 +879,10 @@ async function boot(course, options, lifetime, isCurrent) {
     // each seat's look (Astra's wardrobe and vehicles) on its kart: online the room's ids, back to the seat picks after
     if (world.setLook && (s || looksOnline || garage)) {
       for (let i = 0; i < COUNT; i++) world.setLook(i, s && racers.list[i] ? racers.list[i].meta.look : undefined);
-      if(garage&&!s)world.setLook(0,raceLook(garage.state));
+      if(garage&&!s)world.setLook(0,soloLook());
       looksOnline = !!s;
     }
+    if (!s) setSoloBody();
     if (solo && garage && world.setLook) world.setLook(1, raceLook(garage.state));   // the ghost wears your look
     ghostSlotShadow(solo);
   }
@@ -879,7 +917,8 @@ async function boot(course, options, lifetime, isCurrent) {
   let tapItem = false;                            // touch: a tap on the HUD item slot
   hud.on('item', () => { tapItem = true; });
   const tapSource = { poll(into) { into.item = tapItem; tapItem = false; }, dispose() {} };
-  const actions = createActionMap([createKeyboard({ target: window }), padSource, createTouch({ root: document.body }), tapSource], { items: true, camera: true, feel });
+  const touch = createTouch({ root: document.body });
+  const actions = createActionMap([createKeyboard({ target: window }), padSource, touch, tapSource], { items: true, camera: true, feel });
   lifetime.defer(() => actions.dispose());
   const hopLatch = createEdgeLatch('hopPressed'), itemLatch = createItemLatch();
 
@@ -889,6 +928,10 @@ async function boot(course, options, lifetime, isCurrent) {
   // online: { s (net/room.js session), cfg, go (race.start() done) } or null; lobbyUi = the hud/lobby.js handle
   let opts = hud.options, assistKey = '', autopilotKind = null;
   const reactiveOptions = { paused: false, gentle: false, muted: false };
+  // the boost speed rim's view (render/boostRim.js via post.js), one object refilled every frame (no per-frame allocation)
+  const rimView = { enabled: false, off: true, boostKind: 0, motion: 'full', gentle: false, photosafe: false, riseMs: 300, fadeMs: 600,
+    palette: () => world.musicColours(), speedFeel: 0, speedLines: 0, force: RIM_FORCE };
+  const feelNum = (k, d) => { try { const v = feel.get(k); return Number.isFinite(+v) ? +v : d; } catch { return d; } };
   /** The Steer assist mode: the Options pick; online it is off on a no lane keeper table and Strong while paused
    *  (only Strong drives a hands-off kart: the paused coast needs its autopilot and cruise). */
   function syncAssist() {
@@ -931,6 +974,12 @@ async function boot(course, options, lifetime, isCurrent) {
   introVeil.setAttribute('aria-hidden', 'true'); document.body.append(introVeil);
   lifetime.defer(() => introVeil.remove());
   lifetime.defer(() => { introHud.style.visibility = ''; });
+  // the connected toy (fx/toyPlan.js): the player's own events only; a host without toys never sets caps.toys
+  const raceToys = init.caps.toys ? createRaceToys({ bus, send: m => bridge.send(m), place: () => standings.placeOf(0), bumpMinDv: feel.get('contact.cueMinDvMps') }) : null;
+  lifetime.defer(() => raceToys?.dispose());
+  lifetime.listen(document, 'visibilitychange', () => { if (document.hidden) raceToys?.stop(); });
+  hud.setToys(init.caps.toysConnected === true);
+  bridge.on('toys', (m) => hud.setToys(m.connected === true));
   function resetAll() {
     introElapsed = 0; introTarget = null; introHud.style.visibility = '';
     glideHintLap = -1;
@@ -955,6 +1004,7 @@ async function boot(course, options, lifetime, isCurrent) {
     racers.interpolate(1);
     cam.snap(P.view, track, renderer.aspect);
     finishAt = 0; result = null; debug.result = null; debug.place = 0;
+    raceToys?.reset();
     coins.reset();
     armWords();
   }
@@ -962,8 +1012,7 @@ async function boot(course, options, lifetime, isCurrent) {
   function armWords() {
     const song = audio.music && audio.music.song;
     songCues?.dispose(); songCues = song ? createSongCueRun(song, track) : null;
-    if (online) { airWords?.reset(); airWords = null; bindAirWords(P.st, null); bindAirWords(P.view, null); }
-    else if (!airWords) {
+    if (!airWords) {
       airSong = song;
       airWords = createAirWordRun(song, track); bindAirWords(P.st, airWords); bindAirWords(P.view, airWords);
     } else if (airSong !== song) {
@@ -1103,7 +1152,8 @@ async function boot(course, options, lifetime, isCurrent) {
     setSoloLaps(opts);
     prepareRunMode();
     const started = audio.start(); unpause(); resetAll();
-    if(garage){world.setLook(0,raceLook(garage.state));debug.playerLook=world.looks()[0];}
+    if(garage){world.setLook(0,soloLook());debug.playerLook=world.looks()[0];}
+    setSoloBody();
     raceAudioStart = started;
     state = 'intro'; introElapsed = 0;
     cam.snap(P.view, track, renderer.aspect);
@@ -1142,7 +1192,7 @@ async function boot(course, options, lifetime, isCurrent) {
     return { transport: fetchTransport({ base: init.caps.relayBase || '' }), identity: init.identity };
   }
   const link = lobbyLink();
-  const lobbyApi = link ? createLobbyApi(link.transport) : null;
+  const lobbyApi = link ? createLobbyApi(link.transport, { platform: init.caps.platform }) : null;
   // the account record (CONTRACT-LOGBOOK.md section 8): pull once per page, push after each saved run; silent offline
   const profileSync = link ? createProfileSync({ request: link.transport, onGrants: adoptOwned }) : null;
   if (profileSync && !profilePulled) {
@@ -1179,6 +1229,7 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   const platform = init.caps.platform === 'desktop' || init.caps.platform === 'phone' ? init.caps.platform : 'web';
   const goS = feel.get('juice.countdownPulses') * 60 / feel.get('clock.bpm');
+  let lightsSession = null;   // the room session still waiting to tell its room this page has loaded
   /** The lobby UI's room: a net/room.js session behind the on / send / close / now shape hud/lobby.js codes to. */
   async function connectRoom(join) {
     if (!course.online) throw new Error('This course is for solo races');
@@ -1187,10 +1238,12 @@ async function boot(course, options, lifetime, isCurrent) {
       void selectCourse(join.track, { join, replace: true });
       throw Object.assign(new Error('Changing course'), { handoff: true });
     }
-    const s = createRoomSession({ track, feel, courseHash: onlineCourseHash, lobby: lobbyApi, platform, log: (lv, m) => console.warn('[glassroad]', m) });
+    const s = createRoomSession({ track, feel, courseHash: onlineCourseHash, lobby: lobbyApi, platform, loads: true, log: (lv, m) => console.warn('[glassroad]', m) });
     lifetime.defer(() => s.leave());
     const welcome = await s.connect(join, { lookNow: join.look });
     if (!lifetime.alive) { s.leave(); throw new Error('Course closed'); }
+    // the room's start waits for this seat until its lights are warm (owner 2026-10-30)
+    if (lights.ready) s.markLoaded(); else lightsSession = s;
     return {
       session: s,
       on(t, fn) {
@@ -1227,6 +1280,7 @@ async function boot(course, options, lifetime, isCurrent) {
   } : null, connect: lobbyApi ? connectRoom : null, identity: () => (link && link.identity) || null, track: track.id, trackLaps: TRACK_LAPS, platform,
   ...(hostInvite ? { friends: hostInvite.friends } : {}),
   garageLook:()=>garage?raceLook(garage.state):null,
+  lookOwned:()=>ownedChoices(shared.owned.grants,unlockedSet(loadRecord())),
   // a race link (?r=<token>, NET.md section 13): the address drops its r after the first claim answer
   linkClaimed: () => { const to = dropLinkParam(location.href); if (to) history.replaceState(history.state, '', to); } });
   hud.on('online', (e) => { lobbyUi = (e && e.lobby) || lobbyUi; });
@@ -1238,7 +1292,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const s = ctx && ctx.room && ctx.room.session;
     if (!s || (online && online.s === s)) return;
     stopSong(); unpause();
-    online = { s, cfg: s.cfg, go: false };
+    online = { s, cfg: s.cfg, go: false, simS: 0 };
     track.laps = (s.cfg && s.cfg.laps) || TRACK_LAPS; laps = track.laps;
     buildRun(s);
     resetAll();
@@ -1287,6 +1341,8 @@ async function boot(course, options, lifetime, isCurrent) {
     state = 'results';
     hud.setCard('lobby', { view: 'results' });
   });
+  // someone left the race (or dropped past the reconnect grace): one line in the toast band; their kart is removed
+  hud.on('online-gone', (g) => { if (online && state === 'race' && g && g.name) hud.toast(goneLine(g.name), { group: 'gone-' + g.seat }); });
   hud.on('online-left', () => endOnline());
   hud.on('online-abort', () => endOnline(true));
   hud.on('online-closed', () => endOnline(true));
@@ -1475,6 +1531,7 @@ async function boot(course, options, lifetime, isCurrent) {
       lights.busy = false;
       if (lifetime.alive && isCurrent()) {
         lights.ready = true; hud.setLights({ ready: true });
+        if (lightsSession) { lightsSession.markLoaded(); lightsSession = null; }
         loaded('lights'); debug.loading.lightsMs = Math.round(performance.now() - loadStarted);
         const want = lights.want; lights.want = null;
         if (lights.covered) { lights.covered = false; void loading.finish(); }
@@ -1563,7 +1620,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const cameraToggle = canLook() && a.cameraPressed;
     const rearView = canLook() && a.rearView;
     if (cameraToggle) hud.toast(cam.views.toggle() === 'first' ? 'First person' : 'Chase view');
-    const nav = gamepad.takeNav();
+    const nav = gamepad.takeNav(!!hud.card);                     // no card: a held stick waits for a release (input/stickNav.js)
     const card = hud.card;
     if (card) {                                                   // 0. cards take the pad; Escape only ever pauses
       if (card === 'pause' && pad.pause) setPaused(false);
@@ -1584,15 +1641,24 @@ async function boot(course, options, lifetime, isCurrent) {
     // online the count keeps server time (bells and go on the room's clock, even through a slow frame)
     if (online && online.go && race.phase === 'countdown') race.syncCount((online.s.serverNow() - online.s.raceStartAt(goS)) / 1000 - steps * clock.dt);
     const simOn = inRace && (online ? online.go : !paused);
+    // online the kart sim keeps the room's race clock: a slow frame (a GO hitch, a phone under 30 fps) runs extra
+    // steps instead of dropping the time (net/catchUp.js); a gap past CATCH_UP_MAX_S (a late join) is not replayed
+    let simSteps = steps;
+    if (simOn && online && (race.phase === 'racing' || race.phase === 'finished')) {
+      const behind = online.s.raceTimeS() - online.simS;
+      if (behind > CATCH_UP_MAX_S) online.simS += behind - steps * clock.dt;
+      else simSteps += catchUpSteps(behind, steps, clock.dt);
+    }
+    if (debug.online) debug.online.behindS = online && online.go ? Math.round((online.s.raceTimeS() - online.simS) * 1000) / 1000 : 0;
     const machineryMusic = audio.music;
     const machinerySong = machineryMusic?.song || machineryMusic?.analysis;
     sctx.cleanPace = !online;
     sctx.songDrive = machineryMusic?.playing ? songDrive(machinerySong, machineryMusic.songS) : 0;
     if (!paused || online) setMachineryBeat(track, { enabled: inRace && !online && (race.phase === 'racing' || race.phase === 'finished'),
       fallback: !machineryMusic?.playing || !(machinerySong?.bpm >= 40 && machinerySong?.bpm <= 240),
-      songS: machineryMusic?.songS, raceS: racers.clockS + (simOn ? steps * clock.dt : 0),
+      songS: machineryMusic?.songS, raceS: racers.clockS + (simOn ? simSteps * clock.dt : 0),
       song: machinerySong, bpm: machinerySong?.bpm, offsetS: machinerySong?.downbeatS ?? machinerySong?.downbeats?.[0] ?? 0, playing: simOn });
-    if (simOn) for (let i = 0; i < steps; i++) {                    // 2. sim
+    if (simOn) for (let i = 0; i < simSteps; i++) {                 // 2. sim
       if (BOT && !P.finished) {
         ai.drive(P, aiCtx, clock.dt, a); if (fall) fall.apply(a);
         if (debug.hands) {                                      // dev drive scripts (steerAdd leans on the AI's own steer)
@@ -1609,8 +1675,12 @@ async function boot(course, options, lifetime, isCurrent) {
       const pa = BOT && !debug.assistOn && !coast ? a : assist.apply(a, P.st, clock.dt, race.phase);
       if (devHook && !online) devHook.apply(pa, clock.dt);         //    ?dev=1 only: a scripted drive holds the hands
       race.update(clock.dt, pa, P.st);
+      if (online && (race.phase === 'racing' || race.phase === 'finished')) {   // the race clock = sim seconds since go
+        online.simS += clock.dt;
+        if (race.phase === 'racing') race.timeS = online.simS;
+      }
       airWords?.update(audio.music?.playing ? audio.music.songS : NaN, P.st,
-        { active: !online && (race.phase === 'racing' || race.phase === 'finished'), paused });
+        { active: race.phase === 'racing' || race.phase === 'finished', paused: paused && !online });   // online a pause stops nothing
       sctx.timeS = online ? online.s.raceTimeS() : undefined;
       racers.step(clock.dt, pa, race, sctx);
       if (ghostRec || ghost) {                                    //    Time Trial: record you, run the ghost's clock on
@@ -1665,6 +1735,8 @@ async function boot(course, options, lifetime, isCurrent) {
         rumbleSent = rm; rumbleT = ms / 1000;
       }
     } else { rumbleT = 0; rumbleSent = 0; }
+    raceToys?.update(frameDt, { racing: state === 'race' && race.phase === 'racing' && !paused && !P.finished,
+      speedShare: pst[S.speedPct], mode: hud.options.toys });
     if (HT) hLap('audio');
 
     // feel wave hit-stop: while fs.holdS > 0 the drawn karts and the camera keep last frame's pose (render-only:
@@ -1672,7 +1744,7 @@ async function boot(course, options, lifetime, isCurrent) {
     // poseLag.lagS behind the sim (fs.renderRate), closing once the rate is back to 1.
     const holdPose = fs.holdS > 0 && !frozen;
     if (!holdPose) racers.interpolate(alpha);                     // 6. camera
-    if (online && !holdPose) online.s.drawRemotes();              //    remote karts at this frame's server time (100 ms back)
+    if (online && !holdPose) online.s.drawRemotes(now);              //    remote karts at this frame's server time (100 ms back)
     poseLag.step(fxDt, fs.renderRate ?? 1);
     if (!holdPose && (poseLag.lagS > 0 || fs.renderRate < 1)) poseLag.record(renderTime, racers.list.map(r => r.view));
     else if (poseLag.lagS === 0) poseLag.reset();
@@ -1752,15 +1824,17 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
-    for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = !online && glideActive(racers.list[i].st);
-    if ((keepLayout || boudoirLayout || goonworksLayout) && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
-      const bridge = goonworksLayout?.launch || boudoirLayout?.mirrorJump || keepLayout.drawbridge;
-      if (pst[S.s] >= bridge.rampS0 - 65 && pst[S.s] < bridge.rampS1) {
+    // online the local kart still flies its own sim (racer 0); a rival's flight state does not exist on this page
+    for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = (!online || i === 0) && glideActive(racers.list[i].st);
+    const launchLip = goonworksLayout?.launch || boudoirLayout?.mirrorJump || keepLayout?.drawbridge || null;
+    touch?.setHoldCue(state === 'race' && race.phase === 'racing' && !paused && holdCueAt(launchLip, pst[S.s]));
+    if (launchLip && inRace && !paused && pst[S.lap] !== glideHintLap) {
+      if (pst[S.s] >= launchLip.rampS0 - 65 && pst[S.s] < launchLip.rampS1) {
         glideHintLap = pst[S.lap]; hud.toast('Hold jump to fly with the propeller cap');
       }
     }
     if (BOT) debug.gliding = !!kartViews[0]?.glide;
-    if (inRace && !paused && !online) for (const zone of track.aerials || []) {
+    if (inRace && !paused) for (const zone of track.aerials || []) {
       const key = `${pst[S.lap]}:${zone.id}`;
       if (pst[S.s] < zone.rampS0 - 55 || pst[S.s] >= zone.gapS0 || aerialHints.has(key)) continue;
       aerialHints.add(key);
@@ -1777,7 +1851,7 @@ async function boot(course, options, lifetime, isCurrent) {
     world.roadWords?.setCoins?.(coinsLive() ? coinSink : null);
     world.update({ kart: P.view, karts: shownKarts, fx: viewFx, timeS: renderTime, beat: clock.beat, motion: opts?.motion || 'full',
         raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, gentle: cueSafety.on, song, songS, audioReactive, words: wordLive, beatSong,
-      airWords: inRace && !online ? airWords : null,
+      airWords: inRace ? airWords : null,
       songCues: cueView?.live || NO_WORDS, cueGentle: cueSafety.on, songCueList: songCues?.cues || NO_WORDS,
       cueFired: cueView?.fired || NO_WORDS, cueSpeed: cueView?.speed || 0, cueSolo: !online,
       scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready,
@@ -1818,8 +1892,15 @@ async function boot(course, options, lifetime, isCurrent) {
     const garageScene=!!garage&&state==='menu',inGarage=garageScene&&hud.card==='menu';
     garage?.setVisible(inGarage);
     if(garageScene)garage.render(frameDt,matchMedia('(prefers-reduced-motion: reduce)').matches,{gentle:hostGentle||!!feel.get('gentle.on')||!!hud.options.gentlePreview});
-    else renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt,
-      musicView: { song: beatSong, songS, audioReactive, paused: frozen, musicEdgeShift: musicEdges.shiftU } });   // 7. render
+    // the boost speed rim: racing only (menu, garage, intro and the count clear it); the player's finish, the finish slow
+    // frame and the hit cam ease it out; it reads the same settled fs.speedFeel as the boost fov widen
+    rimView.enabled = state === 'race';
+    rimView.off = race.phase !== 'racing' || !!P.finished || (fs.renderRate ?? 1) < 1 || !!(hitCam && hitCam.focus >= 0);
+    rimView.boostKind = P.st[S.boostKind] | 0; rimView.motion = opts?.motion || 'full';
+    rimView.gentle = !!feel.get('gentle.on'); rimView.photosafe = feelNum('photosafe.on', 0) > 0;
+    rimView.riseMs = feelNum('gentle.riseMs', 300); rimView.fadeMs = feelNum('gentle.fadeMs', 600);
+    if (!garageScene) renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt,
+      musicView: { song: beatSong, songS, audioReactive, paused: frozen, musicEdgeShift: musicEdges.shiftU, boostRim: rimView } });   // 7. render
     if (HT) hLap('render');
 
     const place = inRace && standings.order.length ? standings.placeOf(0) : 0;   // 8. hud
@@ -1869,7 +1950,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!renderer.frameDue(now)) return;
     const { frameDt } = clock.frame(now);
     const a = actions.sample();
-    const nav = gamepad.takeNav();
+    const nav = gamepad.takeNav(!!hud.card);                     // no card: a held stick waits for a release (input/stickNav.js)
     if (hud.card) { if (nav) hud.nav(nav); else if (a.throttle >= 0.5 && !cardThrottle) hud.nav('throttle'); }
     cardThrottle = a.throttle >= 0.5;
     hopLatch.clear(); itemLatch.clear();

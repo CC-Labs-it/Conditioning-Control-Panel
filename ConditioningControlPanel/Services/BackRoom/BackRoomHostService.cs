@@ -329,7 +329,7 @@ internal static class BackRoomHostService
 
         try
         {
-            _panicSuspended = _minimised = false;
+            _panicSuspended = _minimised = _counterOpen = false;
             _lastPanicPressUtc = DateTime.MinValue;
 
             // Start filling the remote picture pool now. A local-only room makes this a no-op, and for an
@@ -448,9 +448,66 @@ internal static class BackRoomHostService
 
     }
 
+    // ============================ the Prize Counter door (7.2) ============================
+
+    /// <summary>The 3D Prize Counter is open over this room (contract 1); the room is suspended under it.</summary>
+    private static bool _counterOpen;
+
+    /// <summary>What the room does when the counter over it closes: resume unless a panic press holds it
+    /// (or the counter went on panic or app exit), and take the focus back only on a plain back.</summary>
+    internal static (bool Resume, bool Focus) CounterReturn(string reason, bool panicSuspended)
+    {
+        bool calm = reason != PrizeCounter.PrizeCounterHostService.ClosePanic
+            && reason != PrizeCounter.PrizeCounterHostService.CloseAppExit;
+        return (calm && !panicSuspended,
+            calm && !panicSuspended && reason != PrizeCounter.PrizeCounterHostService.CloseWear);
+    }
+
+    /// <summary>The page's <c>open-prize-counter</c> (walking to the counter + E): suspend the room and
+    /// open the counter WINDOW over it on the Back Room tab (owner call: no per-game relay).</summary>
+    private static void OpenCounter(string? tab)
+    {
+        if (_host == null || _bridge == null || _racePage || _breakoutPage) return;
+        if (!_counterOpen)
+        {
+            _counterOpen = true;
+            _bridge.Suspend(true, "counter");
+        }
+        var generation = _roomGeneration;
+        PrizeCounter.PrizeCounterHostService.Launch("backroom", tab ?? "backroom",
+            reason => OnUi(() => OnCounterClosed(reason, generation)));
+    }
+
+    /// <summary>The counter closed: the room comes back, re-reads what the account owns
+    /// (<c>owned {grants}</c>, contract 1; the page refreshes its shelf and stamps what was bought)
+    /// and takes the keyboard back so Escape is the room's again.</summary>
+    private static void OnCounterClosed(string reason, int generation)
+    {
+        if (!_counterOpen) return;
+        _counterOpen = false;
+        if (_host == null || _bridge == null || _racePage || generation != _roomGeneration) return;
+        var (resume, focus) = CounterReturn(reason, _panicSuspended);
+        if (resume && !_minimised) _bridge.Suspend(false, "counter");
+        Post(new { type = "owned", grants = App.Ownership?.Grants?.ToArray() ?? Array.Empty<string>() });
+        if (focus)
+        {
+            // Now, and once more after the close settles: Windows hands the activation to the owner
+            // (the panel) as the counter goes, and Escape must reach the room again, not the panel.
+            _host.FocusWeb();
+            Application.Current?.Dispatcher.BeginInvoke(DispatcherPriority.Background,
+                new Action(() => { if (generation == _roomGeneration && !_counterOpen) _host?.FocusWeb(); }));
+        }
+        App.Logger?.Information("BackRoom: Prize Counter closed ({Reason}), room {State}", reason, resume ? "resumed" : "held");
+    }
+
     private static void OnRoomMessage(JObject message)
     {
         if (_breakoutPage && (string?)message["type"] == "game-open") return;
+        if (PrizeCounter.PrizeCounterHostService.TryReadOpenRequest(message, out _, out var counterTab))
+        {
+            OpenCounter(counterTab);
+            return;
+        }
         if (message["type"]?.Type == JTokenType.String && (string?)message["type"] == "breakout-wall")
         {
             // SPARKLES BY PLACE (B1): one medal per cleared wall, the Story Demo included.
@@ -502,7 +559,7 @@ internal static class BackRoomHostService
         {
             CreateBridge();
             if (_host.Window != null) _host.Window.Title = ProductName;
-            _panicSuspended = _minimised = false;
+            _panicSuspended = _minimised = _counterOpen = false;
             HookSettings(true);
             BackRoomFxServices.Viewport = ReadViewport;
             _host.NavigatePage(StartUrl + "?raceReturn=1", () => _bridge?.OnReady(), OnRoomMessage);
@@ -574,11 +631,21 @@ internal static class BackRoomHostService
         bool min = w.WindowState == WindowState.Minimized;
         if (min == _minimised) return;
         _minimised = min;
+        // A restore under an open counter keeps the room held: the counter's close resumes it.
+        if (!min && _counterOpen) return;
         _bridge?.Suspend(min, "minimise");
     }
 
     private static void OnWindowActivated()
     {
+        // The counter and the room are sibling windows: a click on the held room raised it over the
+        // counter, a frozen room whose Escape the page ignores. The counter owns the room until it closes.
+        if (_counterOpen && PrizeCounter.PrizeCounterHostService.IsActive)
+        {
+            Application.Current?.Dispatcher.BeginInvoke(DispatcherPriority.Background,
+                new Action(() => { if (_counterOpen) PrizeCounter.PrizeCounterHostService.BringForward(); }));
+            return;
+        }
         if (!_panicSuspended || DateTime.UtcNow - _lastPanicPressUtc <= PanicDoublePressWindow) return;
         _panicSuspended = false;
         _bridge?.Suspend(false, "panic");
@@ -611,6 +678,9 @@ internal static class BackRoomHostService
             // No door endpoint exists yet: null = unknown, and the page learns `closed` from its
             // first station-request (CONTRACT section 3, 403 closed).
             open = (bool?)null,
+            // 7.2: the counter + E opens the 3D Prize Counter window (open-prize-counter, contract 1)
+            // instead of the 2D station cards. A host without it (the web shim today) leaves this out.
+            prizeCounter = !_breakoutPage,
             // The plan list (contract C1 via PlanCatalog) for the end cards (C10): Breakout demo
             // end, bank cash-out. A page shows a price only when this is present.
             plans = Vault.PlanCatalog.ToWire(Vault.PlanCatalog.Current),
@@ -786,7 +856,7 @@ internal static class BackRoomHostService
             // (ShutdownFlush), on a source / niche / consent change (OnSettingChanged while open, the
             // pool's own source key on the next Launch while closed), and RemoteMediaCache's startup
             // sweep still clears anything a crash left behind.
-            _panicSuspended = _minimised = false;
+            _panicSuspended = _minimised = _counterOpen = false;
             App.Logger?.Information("BackRoomHostService: closed");
             App.Friends?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.BackRoom);
             App.Friends?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);

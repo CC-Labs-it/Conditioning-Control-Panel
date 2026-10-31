@@ -1,6 +1,7 @@
 /* hud/lobby.js - the online lobby, drawn in the #card (hud/cards.js kind 'lobby'). NET.md sections 4, 8, 10, 12, 13.
  *
- * Views: home (open tables, quick match, host a table, friends room), host (the table form), look (outfit and
+ * Views: home (open tables on every course, quick match, host a table, friends room), host (the table form, its course
+ * included: a table on another course moves this page there when the seat comes), look (outfit and
  * vehicle from Astra's wardrobe and vehicle files), quick (waiting), room (8 seats, ready, start, preset chat,
  * invite, Invite link and Revoke for a friends room host, leave, the server-time countdown), invite (friends), results
  * (times and pops), msg (an error or abort), link (a race link claim: waiting for the host, or why it was refused).
@@ -17,6 +18,7 @@
  *        ({ code }), room.send(msg), room.close(), room.now() (server ms).
  *   identity: { displayName, tier } or a function returning it. friends?: () -> [{ uid, name }].
  *   track: 'threshold'. storage: localStorage-like. looks?: () -> { wardrobe, vehicles } (default: fetch the files).
+ *   lookOwned?: () -> lobbyMath ownedChoices(grants, unlocked): the picker offers only those (absent: every wire id).
  *   link (section 13): api.makeLink(), revokeLink(), claimLink(token, look, platform), access(); platform: 'web' | ...;
  *        linkClaimed(): after the first claim answer (boot drops ?r= from the address bar).
  * Events (through the hud's emit): online-start, online-race (at countAt), online-seat, online-emote,
@@ -24,12 +26,13 @@
  */
 import {
   hostGate, signedIn, tableRows, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS, applySeats, applySeat,
-  seatRows, raceTags, readyCount, humans, canStart, lookChoices, cycleLook, lookLabel, loadLook, saveLook, countdown,
-  serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, connectFailCopy, trackName, startsLabel, rowStartsIn, BADGE_COPY,
-  linkButton, linkNote, claimStep, pollNow, pollStep, pollReset, listKey,
+  seatRows, raceTags, canStart, hostSeat, lobbyNote, holdNote, hostMoved, lookChoices, cycleLook, lookLabel, loadLook, saveLook, countdown,
+  lookKeys, fitLook, LOOK_ROW_LABEL,
+  serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, connectFailCopy, trackName, tableLine, startsLabel, rowStartsIn, BADGE_COPY,
+  linkButton, linkNote, claimStep, pollNow, pollStep, pollReset, listKey, seatsGone, goneLine,
 } from './lobbyMath.js';
 import { PRESETS, presetOf, poseOf, poseHoldS, emoteAllowed, EMOTE_GAP_MS, EMOTE_SHOW_MS } from './presets.js';
-import { normLook } from '../net/protocol.js';
+import { normLook, roomLook } from '../net/protocol.js';
 import { actSound, seatSound, nextGridBell } from './sounds.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -85,15 +88,16 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   const ident = () => { const i = deps().identity; return typeof i === 'function' ? i() : i || null; };
   const storage = () => { const d = deps(); if (d.storage) return d.storage; try { return win.localStorage; } catch (e) { return null; } };
   const track = () => deps().track || 'threshold';
+  const owned = () => { try { return deps().lookOwned?.() || null; } catch (e) { return null; } };
 
   const st = {
     view: 'home', msg: '', busy: false,
     rows: [], listAt: -1e9, listMs: 0, listSeen: 0, poll: { key: null, same: 0 },
-    host: cleanHost({ ...HOST_DEFAULTS, laps: deps().trackLaps || HOST_DEFAULTS.laps }), look: loadLook(storage()), choices: lookChoices(), looksAsked: false,
+    host: cleanHost({ ...HOST_DEFAULTS, laps: deps().trackLaps || HOST_DEFAULTS.laps, track: deps().track }), look: loadLook(storage()), choices: lookChoices(null, null, owned()), looksAsked: false,
     join: null, room: null, offs: [], welcome: null, seenAt: 0, seat: -1, phase: 'lobby', cfg: null, seed: 0, keep: [],
     seats: applySeats([]), start: null, raced: false, results: null, leaving: false,
     lastEmote: -Infinity, myPose: null, bubbles: {}, friends: null, sent: new Set(),
-    quickT: 0, quickOn: false, autoAt: 0, gen: 0,
+    quickT: 0, quickOn: false, autoAt: 0, gen: 0, hostMsg: '', hostMsgT: 0, hold: [],
     // the race link (NET.md section 13): preview refusal, access().host, our live link, a claim in flight
     preview: false, access: null, accessAsked: false, link: null, linkCopied: false, linkMsg: '', linkBusy: false, claim: null,
   };
@@ -134,8 +138,8 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   }
   const setNote = (t) => { note.hidden = !t; note.textContent = t || ''; };
 
-  const lookRows = () => ['outfit', 'vehicle'].map((k) => '<div class="c-opt"><span>' + (k === 'outfit' ? 'Outfit' : 'Ride') +
-    '</span>' + btn('lb-lstep', esc(lookLabel(st.look, k, st.choices)), 'c-tog', ' data-key="' + k + '" aria-label="' + (k === 'outfit' ? 'Outfit' : 'Ride') + '"') + '</div>').join('');
+  const lookRows = () => lookKeys(st.look, st.choices).map((k) => '<div class="c-opt"><span>' + LOOK_ROW_LABEL[k] +
+    '</span>' + btn('lb-lstep', esc(lookLabel(st.look, k, st.choices)), 'c-tog', ' data-key="' + k + '" aria-label="' + LOOK_ROW_LABEL[k] + '"') + '</div>').join('');
 
   const VIEWS = {
     home() {
@@ -146,10 +150,10 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
       if (st.preview) { setNote(errorCopy('preview')); extra.innerHTML = '<div class="c-list">' + btn('lb-exit', 'Back', 'quiet') + '</div>'; return; }
       const now = listNow();
       setNote(st.msg || (st.rows.length ? st.rows.length + ' open' + (st.poll.same < 2 ? ', refreshed every 15 s' : ', checked less often while quiet') : st.listAt > 0 ? 'No open tables. Host one, or quick match' : 'Looking'));
-      const rows = st.rows.map((r) => '<li>' + btn('lb-join', '<b>' + esc(r.host) + (r.friend ? ' (friend)' : '') + '</b><span class="n">' + r.seatsLabel +
-        '</span><small data-starts="' + r.roomId + '">' + esc(r.track) + ', ' + r.laps + ' laps, ' + esc(startsLabel(rowStartsIn(r.raw, st.listMs, now))) + '</small>',
+      const rows = st.rows.map((r) => '<li>' + btn('lb-join', '<b>' + esc(r.track) + '</b><span class="n">' + r.seatsLabel +
+        '</span><small data-starts="' + r.roomId + '">' + esc(tableLine(r, rowStartsIn(r.raw, st.listMs, now))) + '</small>',
         'lb-row', ' data-id="' + r.roomId + '"' + (r.full ? ' disabled' : '')) + '</li>').join('');
-      extra.innerHTML = '<div class="c-list">' + btn('lb-quick', 'Quick match', 'hot') + '</div>' +
+      extra.innerHTML = '<div class="c-list">' + btn('lb-quick', 'Quick match, ' + esc(trackName(track())), 'hot') + '</div>' +
         (rows ? '<div class="lb-head">Open tables</div><ol class="lb-tables">' + rows + '</ol>' : '') +
         '<div class="lb-hostrow">' +
           btn('lb-host', 'Host a table' + (gate.open === 'locked' ? '<span class="c-stamp">Prime</span>' : ''), gate.open === 'locked' ? 'lb-locked' : '',
@@ -160,10 +164,10 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     host() {
       const f = st.host, open = f.mode === 'open';
       title.textContent = open ? 'Host a table' : 'Friends room';
-      setNote(st.msg || (open ? 'Anyone can join. Starts by itself' : 'Friends you invite. You start it'));
+      setNote(st.msg || (open ? 'Anyone can join. You start it' : 'Friends you invite. You start it'));
       const row = (key, label, value, hint, dis) => '<div class="c-opt"><span>' + label + (hint ? '<small>' + hint + '</small>' : '') + '</span>' +
         btn('lb-hstep', value, 'c-tog', ' data-key="' + key + '" aria-label="' + label + '"' + (dis ? ' disabled' : '')) + '</div>';
-      extra.innerHTML = '<div class="c-opts">' + row('laps', 'Laps', String(f.laps)) + row('seats', 'Seats', String(f.seats)) +
+      extra.innerHTML = '<div class="c-opts">' + row('track', 'Course', esc(trackName(f.track || track()))) + row('laps', 'Laps', String(f.laps)) + row('seats', 'Seats', String(f.seats)) +
         row('botFill', 'Bots fill', f.botFill ? 'On' : 'Off', 'Empty seats race as bots') +
         row('laneKeeper', 'Lane keeper', f.laneKeeper ? 'On' : 'Off', open ? 'Off on open tables' : 'Steer assist allowed', open) + '</div>' +
         '<div class="c-list row">' + btn('lb-open', 'Open it', 'hot') + btn('lb-back', 'Back') + '</div>';
@@ -187,8 +191,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     room() {
       const cfg = st.cfg || {}, me = st.seats[st.seat] || {};
       title.textContent = trackName(cfg.track) + ', ' + (cfg.laps || 3) + ' laps';
-      const hs = humans(st.seats).length;
-      setNote(st.msg || st.linkMsg || (st.phase === 'lobby' ? (cfg.mode === 'friends' ? 'Friends room' : 'Open table') + ', ' + readyCount(st.seats) + ' of ' + hs + ' ready'
+      setNote(st.msg || st.linkMsg || (st.phase === 'lobby' ? holdNote(st.seats, st.hold, st.seat) || st.hostMsg || lobbyNote(st.seats, st.seat, cfg.mode)
         : st.phase === 'done' ? 'Race over' : 'Racing'));
       if (cfg.mode === 'friends' && me.host && !st.accessAsked) askAccess();
       const linkOn = linkButton(cfg, me, st.access, st.phase);
@@ -201,11 +204,11 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
       }).join('');
       const lobby = st.phase === 'lobby', counting = !!st.start && st.phase !== 'done';
       const chatOff = !emoteAllowed(st.lastEmote, now);
-      extra.innerHTML = (counting ? '<div class="lb-count" aria-live="polite"></div>' : lobby && st.autoAt ? '<p class="lb-head lb-auto"></p>' : '') +
+      extra.innerHTML = (counting ? '<div class="lb-count" aria-live="polite"></div>' : lobby && st.autoAt && hostSeat(st.seats) < 0 ? '<p class="lb-head lb-auto"></p>' : '') +
         '<ol class="lb-seats">' + seats + '</ol>' +
         (lobby ? '<div class="c-opts">' + lookRows() + '</div><div class="c-list row">' +
           btn('lb-ready', me.ready ? 'Ready' : 'Not ready', 'c-tog' + (me.ready ? ' on' : ''), ' aria-pressed="' + !!me.ready + '"') +
-          (me.host ? btn('lb-start', 'Start', 'hot', canStart(st.seats, st.seat, st.phase) ? '' : ' disabled') : '') + '</div>' : '') +
+          (me.host ? btn('lb-start', 'Start', 'hot', canStart(st.seats, st.seat, st.phase) && !st.hold.length ? '' : ' disabled') : '') + '</div>' : '') +
         '<div class="lb-chat" role="group" aria-label="Say">' + PRESETS.map((p) => btn('lb-emote', esc(p.text), '', ' data-id="' + p.code + '"' + (chatOff ? ' disabled' : ''))).join('') + '</div>' +
         (linkOn && st.link && !st.linkCopied ? '<p class="lb-url" aria-label="Race link">' + esc(st.link.url) + '</p>' : '') +
         '<div class="c-links">' + (lobby && me.host && deps().friends && st.join ? btn('lb-invite', 'Invite a friend', 'c-link') : '') +
@@ -257,7 +260,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
       const now = listNow();
       for (const r of st.rows) {
         const sm = extra.querySelector('[data-starts="' + r.roomId + '"]');
-        if (sm) sm.textContent = r.track + ', ' + r.laps + ' laps, ' + startsLabel(rowStartsIn(r.raw, st.listMs, now));
+        if (sm) sm.textContent = tableLine(r, rowStartsIn(r.raw, st.listMs, now));
       }
     }
   }
@@ -353,7 +356,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     st.listMs = Number(r.serverMs) || localNow(); st.listSeen = localNow();
     st.poll = pollStep(st.poll, listKey(r));
     const raw = new Map((r.rows || []).map((x) => [x && x.roomId, x]));
-    st.rows = tableRows(r, st.listMs).filter(row => raw.get(row.roomId)?.track === track()).map((x) => ({ ...x, raw: raw.get(x.roomId) }));
+    st.rows = tableRows(r, st.listMs).map((x) => ({ ...x, raw: raw.get(x.roomId) }));
     if (st.view === 'home') { st.msg = ''; paint(); }
   }
 
@@ -367,8 +370,10 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
         const get = async (f) => { const res = await win.fetch(new URL('../art/models/' + f, import.meta.url)); return res.ok ? res.json() : null; };
         [w, v] = await Promise.all([get('emi-bot-wardrobe.json'), get('emi-vehicle-variants.json')]);
       }
-      st.choices = lookChoices(w, v);
-    } catch (e) { st.choices = lookChoices(); }
+      st.lookFiles = [w, v];
+      st.choices = lookChoices(w, v, owned());
+    } catch (e) { st.choices = lookChoices(null, null, owned()); }
+    st.look = fitLook(st.look, st.choices);
     if (st.view === 'look' || st.view === 'room') paint();
   }
 
@@ -399,8 +404,9 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     if (!room || st.join !== join) { if (room && st.join !== join) room.close?.(); if (st.join === join) { st.msg = connectFailCopy(why); st.view = 'msg'; st.join = null; paint(); } return; }
     st.room = room;
     const on = (t, fn) => { const off = room.on(t, m => { if(alive() && st.room===room)fn(m); }); if (typeof off === 'function') st.offs.push(off); };
-    on('welcome', onWelcome); on('seats', (m) => { const was = st.seats; st.seats = applySeats(m.seats, st.seats); seatSay(was); seatsChanged(); });
-    on('seat', (m) => { const was = st.seats; st.seats = applySeat(st.seats, m); seatSay(was); seatsChanged(m.seat); });
+    on('welcome', onWelcome); on('seats', (m) => { const was = st.seats; st.seats = applySeats(m.seats, st.seats); hostSay(was); seatSay(was); seatGone(was); seatsChanged(); });
+    on('seat', (m) => { const was = st.seats; st.seats = applySeat(st.seats, m); seatSay(was); seatGone(was); seatsChanged(m.seat); });
+    on('hold', (m) => { st.hold = m.seats; if (st.view === 'room') paint(); });
     on('start', onStart); on('emote', onEmote); on('finish', onFinish); on('abort', onAbort); on('error', onError); on('close', onClose);
   }
 
@@ -419,6 +425,25 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
       if (srv() >= st.start.countAt) { st.raced = true; emit('online-race', ctx()); }
     }
   }
+  /** The host left the lobby and the room handed the role on: one line for a few seconds. */
+  function hostSay(was) {
+    const line = st.phase === 'lobby' ? hostMoved(was, st.seats, st.seat) : '';
+    if (!line) return;
+    st.hostMsg = line;
+    if (st.hostMsgT) win.clearTimeout(st.hostMsgT);
+    st.hostMsgT = win.setTimeout(() => { st.hostMsgT = 0; st.hostMsg = ''; if (alive() && st.view === 'room') paint(); }, 5000);
+  }
+  /** Someone left (or dropped past the reconnect grace): '<name> left' under the room's seats while it waits, and
+   *  online-gone for the race (boot.js toasts it). */
+  function seatGone(was) {
+    for (const g of seatsGone(was, st.seats, st.seat)) {
+      emit('online-gone', g);
+      if (st.phase !== 'lobby' || st.view !== 'room') continue;
+      const line = goneLine(g.name);
+      st.msg = line; setNote(line);
+      win.setTimeout(() => { if (st.msg !== line) return; st.msg = ''; if (st.view === 'room') paint(); }, 2400);
+    }
+  }
   /** Someone sat down, left or got ready while the room waits: one sound (never in a race). */
   function seatSay(was) { if (st.phase === 'lobby') say(seatSound(was, st.seats)); }
   /** The grid count's bells on server time: each whole second before countAt (the race bells take over after). */
@@ -435,7 +460,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   }
   function onStart(m) {
     st.start = { countAt: m.countAt, startAt: m.startAt, goTick: m.goTick, seed: m.seed };
-    st.seed = m.seed; st.phase = 'countdown'; st.raced = false; st.autoAt = 0;
+    st.seed = m.seed; st.phase = 'countdown'; st.raced = false; st.autoAt = 0; st.hold = [];
     if (srv() < st.start.countAt) say('lobby-tick');
     armBell();
     emit('online-start', ctx());
@@ -476,7 +501,8 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     st.offs = [];
     const r = st.room; st.room = null;
     if (r) { st.leaving = true; try { r.close?.(); } catch (e) { /* already closed */ } }
-    st.join = null; st.welcome = null; st.start = null; st.autoAt = 0; st.bubbles = {}; st.myPose = null;
+    if (st.hostMsgT) { win.clearTimeout(st.hostMsgT); st.hostMsgT = 0; } st.hostMsg = '';
+    st.join = null; st.welcome = null; st.start = null; st.autoAt = 0; st.bubbles = {}; st.myPose = null; st.hold = [];
     st.link = null; st.linkCopied = false; st.linkMsg = '';             // the link lives on server side; Invite link fetches it again
     if (bellT) { win.clearTimeout(bellT); bellT = 0; }
   }
@@ -532,7 +558,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     if (a === 'lb-host') {
       const gate = hostGate(ident());
       if (gate[id] !== 'ok') { st.msg = errorCopy(gate[id] === 'locked' ? 'tier' : 'auth'); paint(); return false; }
-      st.host = cleanHost({ ...st.host, mode: id }); st.msg = ''; st.view = 'host'; paint(); return;
+      st.host = cleanHost({ ...st.host, mode: id, track: st.host.track || track() }); st.msg = ''; st.view = 'host'; paint(); return;
     }
     if (a === 'lb-hstep') { step(el, 1); return; }
     if (a === 'lb-lstep') { step(el, 1); return; }
@@ -581,9 +607,10 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   function step(el, dir) {
     const key = el.dataset.key;
     if (el.dataset.act === 'lb-hstep') { st.host = stepHost(st.host, key, dir); paint(); return; }
-    st.look = cycleLook(st.look, key, dir, st.choices);
+    st.look = fitLook(cycleLook(st.look, key, dir, st.choices), st.choices);
     saveLook(storage(), st.look);
-    if (st.room && st.phase === 'lobby') send({ t: 'look', outfit: st.look.outfit, vehicle: st.look.vehicle });
+    // the whole look, extras and skin too: the room keeps them bound to the ticket, a bare change would drop them
+    if (st.room && st.phase === 'lobby') send({ t: 'look', ...roomLook(st.look) });
     paint();
   }
 
@@ -624,7 +651,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     /** hud/cards.js calls this from show('lobby', data). data.view: 'results' or 'home' to jump there; data.claim: a link token (boot's ?r=). */
     show(data = {}) {
       if (!alive()) return;
-      if(!st.room){const selected=deps().garageLook?.();if(selected)st.look=normLook(selected);}
+      if(!st.room){const selected=deps().garageLook?.();if(selected)st.look=normLook(selected);const [lw,lv]=st.lookFiles||[];st.choices=lookChoices(lw||null,lv||null,owned());st.look=fitLook(st.look,st.choices);}
       injectCss();
       if (data.join && !st.room) {
         if(data.join.look)st.look=normLook(data.join.look);

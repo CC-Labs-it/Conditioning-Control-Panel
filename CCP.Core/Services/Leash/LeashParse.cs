@@ -157,7 +157,7 @@ public static class LeashParse
     public static LeashPerson? Person(JToken? t)
     {
         if (t is not JObject o || Str(o["id"]) is not { Length: > 0 } id) return null;
-        return new LeashPerson(id, Str(o["name"]) ?? "", Str(o["avatar"]));
+        return new LeashPerson(id, Str(o["name"]) ?? "", Str(o["avatar"])) { Look = Services.PlayerLook.From(o["cosmetics"]) };
     }
 
     public static LeashWatch? Watch(JToken? t)

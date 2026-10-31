@@ -124,6 +124,13 @@ namespace ConditioningControlPanel.Localization
         }
 
         /// <summary>
+        /// Re-read every <c>{loc:Str}</c> binding after a mod switch: the vocabulary tokens
+        /// (<see cref="VocabTokens"/>, e.g. <c>{companion}</c>) answer differently per mod. UI thread.
+        /// </summary>
+        public void NotifyVocabChanged()
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
+
+        /// <summary>
         /// Get a localized string by key. Falls back to English, then to the key itself.
         /// </summary>
         public string this[string key] => Get(key);

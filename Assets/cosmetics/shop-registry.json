@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "profile.frame.lace",
+      "type": "frame",
+      "file": "shop/profile.frame.lace.png",
+      "unlock": "cos.profile.frame.lace"
+    },
+    {
+      "id": "profile.frame.ink-stamp",
+      "type": "frame",
+      "file": "shop/profile.frame.ink-stamp.png",
+      "unlock": "cos.profile.frame.ink-stamp"
+    },
+    {
+      "id": "profile.frame.gilt",
+      "type": "frame",
+      "file": "shop/profile.frame.gilt.png",
+      "unlock": "cos.profile.frame.gilt"
+    },
+    {
+      "id": "profile.frame.polaroid",
+      "type": "frame",
+      "file": "shop/profile.frame.polaroid.png",
+      "unlock": "cos.profile.frame.polaroid"
+    },
+    {
+      "id": "prime.frame.room-host",
+      "type": "frame",
+      "file": "shop/prime.frame.room-host.png",
+      "unlock": "cos.prime.frame.room-host",
+      "needs": "prime"
+    },
+    {
+      "id": "profile.avatar.emi-pixel",
+      "type": "avatar",
+      "file": "shop/profile.avatar.emi-pixel.png",
+      "unlock": "cos.profile.avatar.emi-pixel"
+    },
+    {
+      "id": "profile.avatar.rain-portrait",
+      "type": "avatar",
+      "file": "shop/profile.avatar.rain-portrait.png",
+      "unlock": "cos.profile.avatar.rain-portrait"
+    }
+  ]
+}

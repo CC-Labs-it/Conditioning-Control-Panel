@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.Haptics;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
 using Microsoft.Web.WebView2.Core;
@@ -124,9 +125,12 @@ internal static class GlassroadHostService
             _host.Show();
             if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
             StartWatch();
+            if (App.Haptics != null) { App.Haptics.ConnectionChanged -= OnToyConnectionChanged; App.Haptics.ConnectionChanged += OnToyConnectionChanged; }
             if (App.Ownership != null) { App.Ownership.OwnershipChanged -= OnOwnershipChanged; App.Ownership.OwnershipChanged += OnOwnershipChanged; }
             _host.FocusWeb();
             try { App.Friends?.EnterActivity(Friends.PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // Feature day log: one e_race3d per window opened (re-focusing a live window is not a launch).
+            try { SeasonRecapService.TrackFeature(Models.SeasonFeatureKeys.Race3d); } catch (Exception ex) { Diag.Swallowed(ex); }
             App.Logger?.Information("GlassroadHostService: launched");
         }
         catch (Exception ex)
@@ -150,6 +154,9 @@ internal static class GlassroadHostService
             try { if (_core != null) _core.DOMContentLoaded -= OnDomContentLoaded; } catch (Exception ex) { Diag.Swallowed(ex); }
             _core = null;
             try { if (App.Ownership != null) App.Ownership.OwnershipChanged -= OnOwnershipChanged; } catch (Exception ex) { Diag.Swallowed(ex); }
+            _counterOpen = false;
+            try { if (App.Haptics != null) App.Haptics.ConnectionChanged -= OnToyConnectionChanged; } catch (Exception ex) { Diag.Swallowed(ex); }
+            RaceHapticDirector.Stop();
             try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
             if (had)
@@ -166,6 +173,12 @@ internal static class GlassroadHostService
 
     private static void OnDomContentLoaded(object? sender, CoreWebView2DOMContentLoadedEventArgs e) => PostInitNow();
 
+    private static bool ToysConnected => App.Settings?.Current?.Haptics is { Enabled: true } && App.Haptics is { IsConnected: true };
+
+    /// <summary>A toy came or went while the race is up: the Options row follows (host -> page <c>toys</c>).</summary>
+    private static void OnToyConnectionChanged(object? sender, bool connected)
+        => RunOnUi(() => _host?.Post(new { type = "toys", connected = ToysConnected }));
+
     /// <summary>Straight to the core, past the ready queue (see the class remarks).</summary>
     private static void PostInitNow()
     {
@@ -178,7 +191,7 @@ internal static class GlassroadHostService
             try { tier = EntitlementTierSync.EffectiveTierNow(); } catch (Exception ex) { Diag.Swallowed(ex); }
             var init = GlassroadRules.InitFrame(online ? uid : null, s?.UserDisplayName, tier, GentleVisuals.On,
                 s?.GentleFadeSeconds ?? GentleVisuals.DefaultFadeSeconds, s?.GentleSpeed ?? GentleVisuals.DefaultSpeed,
-                App.Ownership?.Grants);
+                App.Ownership?.Grants, ToysConnected);
             _core?.PostWebMessageAsJson(init.ToString(Newtonsoft.Json.Formatting.None));
         }
         catch (Exception ex) { App.Logger?.Debug("Glassroad: init post failed: {E}", ex.Message); }
@@ -233,6 +246,14 @@ internal static class GlassroadHostService
                 case "race-result":
                     OnRaceResult(o);
                     break;
+                case "open-prize-counter":
+                    RunOnUi(OpenPrizeCounter);
+                    break;
+                case "toy":
+                case "toy-bed":
+                case "toy-stop":
+                    RaceHapticDirector.OnPageMessage(o);
+                    break;
                 case "exit":
                 case "menu-back":
                     // The page's own Leave / the menu's Back link. Escape never sends these.
@@ -248,6 +269,39 @@ internal static class GlassroadHostService
         {
             App.Logger?.Warning("Glassroad: message handler threw ({Type}): {E}", (string?)o["type"], ex.Message);
         }
+    }
+
+    /// <summary>The Prize Counter is open over the garage (one close hook at a time).</summary>
+    private static bool _counterOpen;
+
+    /// <summary>The garage's Prize Counter row (7.2 contract 1, owner call: no per-game relay): pause the page and
+    /// open the counter WINDOW over it on the kart tab (the shared seam, <c>Launch(from, tab, onClosed)</c>). When
+    /// the counter closes the page gets the owned frame again, so a look bought there lights up even if no
+    /// ownership event reached us.</summary>
+    private static void OpenPrizeCounter()
+    {
+        if (_host == null) return;
+        try { _host.Post(new { type = "pause", on = true }); } catch (Exception ex) { Diag.Swallowed(ex); }
+        if (_counterOpen) { PrizeCounter.PrizeCounterHostService.BringForward(); return; }
+        _counterOpen = true;
+        PrizeCounter.PrizeCounterHostService.Launch(GlassroadRules.CounterFrom, GlassroadRules.CounterTab,
+            reason => RunOnUi(() => OnCounterClosed(reason)));
+    }
+
+    /// <summary>The counter went: a plain back re-sends <c>owned</c> and hands the keyboard back; panic and app
+    /// exit close this window too, so nothing comes forward then.</summary>
+    private static void OnCounterClosed(string reason)
+    {
+        if (!_counterOpen) return;
+        _counterOpen = false;
+        var worn = reason == PrizeCounter.PrizeCounterHostService.CloseWear ? PrizeCounter.PrizeCounterHostService.WornItem : null;
+        var (resend, focus) = GlassroadRules.CounterReturn(reason, kartWorn: worn != null);
+        try
+        {
+            if (resend) _host?.Post(GlassroadRules.OwnedFrame(App.Ownership?.Grants, worn));
+            if (focus) _host?.FocusWeb();
+        }
+        catch (Exception ex) { App.Logger?.Debug("Glassroad: owned re-send after the counter failed: {E}", ex.Message); }
     }
 
     /// <summary>SPARKLES BY PLACE (B1): a finished race claims; the server prices it, tapers repeats

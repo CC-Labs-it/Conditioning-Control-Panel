@@ -1,8 +1,12 @@
 // pelvis-data.js (26 MB) is not in the repo: the CCP host serves BIG_ASSETS from a local folder.
 import {BIG_ASSETS} from './host-bridge.js';
+import {moduleUrl,releaseModule} from './wardrobe-loading.js';
 // Modular derivatives share the exported evaluated animation and geometry.
 export async function expandWardrobe({THREE,avatar,nodes,materials,info}) {
-  const {nativePelvis}=await import(BIG_ASSETS+'pelvis-data.js');
+  // viewer.js prefetches it with a byte count (the boot cover's bar); without that, the plain url.
+  const pelvisUrl=BIG_ASSETS+'pelvis-data.js';
+  let pelvisModule;try{pelvisModule=await import(await moduleUrl(pelvisUrl));}catch{pelvisModule=await import(pelvisUrl);}releaseModule(pelvisUrl);
+  const {nativePelvis}=pelvisModule;
   const sync=[],anchors=[],generated=[],shafts=[],pantsCuts=[];
   const coveredRange={value:new THREE.Vector2(100,100)},coveredHem={value:new THREE.Vector3()},hasCoveredHem={value:0};
   avatar.updateMatrixWorld(true);

@@ -118,6 +118,27 @@ const BOX_ROWS = [
   { piece: 'L4a', at: 0.2, xs: [-3.5, 0, 3.5] },
   { piece: 'home', at: 0.6, xs: [-4.5, -1.5, 1.5, 4.5] },
 ];
+// Jump ramps (handoff-1030/GLASSROAD-RAMPS.md): `node` is the lip, the wedge rises over lenM before it.
+// Placed and proven against the loaded, runtime-shaped course by tests/ramps-threshold.test.mjs, so they
+// are keyed by final node index (the node list is pinned by tests/gen-threshold.test.mjs).
+// The dare is not rampable: every speed must cross its 24 m opening, and a straight flight over that bend
+// spreads ~13 m sideways between 40 and 66.7 m/s on a 16 m landing deck (66.7 lands ~1 m off its far rail).
+const RAMPS = [
+  { id: 'thr-ramp-king', node: 28, x: -10, widthM: 6, lenM: 7, heightM: 1.2, upMps: 13, purpose: 'air',
+    note: 'left lane of the induction straight, launching past the chess king; lands well before the stepping stones' },
+  { id: 'thr-ramp-crest', node: 69, x: 10, widthM: 6, lenM: 7, heightM: 1.2, upMps: 13, purpose: 'air',
+    note: 'top of the tidal climb: off the crest over the gallery vista, landing down the opening bend' },
+  { id: 'thr-ramp-tide', node: 116, x: 0, widthM: 6, lenM: 7, heightM: 1.2, upMps: 14, purpose: 'item',
+    note: 'centre of the wide tidal stream: three floating boxes ride the arc, the ground lanes stay free' },
+  { id: 'thr-ramp-chute', node: 306, x: 7, widthM: 6, lenM: 7, heightM: 1.2, upMps: 13, purpose: 'cut',
+    note: 'foot of the cascade chute: flies the chord over the inside of the bend into the lower gallery' },
+];
+// Floating boxes on thr-ramp-tide's arc (its 55 m/s flight at 0.3, 0.5 and 0.7 s; 50-66.7 m/s collect all three).
+const LIFTED_BOXES = [
+  { node: 117, x: 0, kind: 'box', ds: 6.6, liftM: 4.1 },
+  { node: 118, x: 0, kind: 'box', ds: 7.8, liftM: 4.7 },
+  { node: 119, x: 0, kind: 'box', ds: 8.8, liftM: 4.1 },
+];
 // Pickup-bubble clusters: [ds metres past the node, x] per bubble, on the inside line of a bend.
 const BUBBLE_CLUSTERS = [
   { piece: 'sweepA', at: 0.45, dots: [[0, 3], [3, 3.8], [6, 4.4], [9, 3.8], [12, 3]] },
@@ -326,6 +347,7 @@ export function build(pieces = PIECES) {
     const i = nodeAt(pieceIdx(c.piece), c.at);
     c.dots.forEach(([ds, x]) => items.push({ node: i, x, kind: 'bubble', ds }));
   }
+  const ramps = RAMPS.map((r) => ({ ...r }));
 
   // drop shortcuts: open the rail on one side over the gap stretch, register the landing stretch
   const routes = ROUTES.map((rt) => {
@@ -390,12 +412,14 @@ export function build(pieces = PIECES) {
     sections: sectionRows,
     checkpoints,
     spawn: { node: 0, grid: [[-4, -5], [4, -9], [-4, -13], [4, -17], [-4, -21], [4, -25], [-4, -29], [4, -33]] },
-    items, boosts, jumps, routes, courts, fields, hazards: [], media: [],
+    items, boosts, jumps, ramps, routes, courts, fields, hazards: [], media: [],
     ai: { lines: [], pace: [1.0, 1.05, 1.1] },
     beat: { bpm: null, offsetMs: 0, map: [] },
     limits: { fallY: Math.floor(minY - 25), edgeGraceM: 1.2, edgeGraceS: 0.8 },
   };
   track.boosts = densifyBoosts(track).boosts;
+  // Floating boxes join after the pad plan: they sit above the road, so they never move a ground pad.
+  for (const box of LIFTED_BOXES) track.items.push({ ...box });
   return { track, closure, lengthM: sAcc, meta, lipPiece, pieces };
 }
 
@@ -469,7 +493,8 @@ export function checks({ track, closure, lengthM, lipPiece, meta, pieces }) {
     if (loopS.some((o) => sd(s, o) < ITEM_LOOP_CLEAR_M)) errs.push(it.kind + ' inside a loop at node ' + it.node);
     if (it.kind !== 'box') continue;
     if (s > lipS - ITEM_JUMP_CLEAR_M && s < landS + ITEM_JUMP_CLEAR_M) errs.push('box near the jump at node ' + it.node);
-    for (const b of track.boosts) { const bs = meta[b.node].s; if (s > bs - ITEM_PAD_CLEAR_M && s < bs + b.len + ITEM_PAD_CLEAR_M) errs.push('box on a pad at node ' + it.node); }
+    // a floating box (liftM) hangs over a ramp arc, never on the road: authored pads below it are fine
+    if (!it.liftM) for (const b of track.boosts) { const bs = meta[b.node].s; if (s > bs - ITEM_PAD_CLEAR_M && s < bs + b.len + ITEM_PAD_CLEAR_M) errs.push('box on a pad at node ' + it.node); }
   }
   // water: the chute's steepest segment, the pool's length, every stream node carries a flow, pools carry none
   const pieceNodes = (id) => meta.map((m, i) => (pieces[m.piece].id === id ? i : -1)).filter((i) => i >= 0);

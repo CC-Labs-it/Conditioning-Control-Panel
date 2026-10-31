@@ -30,6 +30,33 @@ public sealed class LobbyRowView
     /// <summary>Stable identity across polls, for the "new table" pop.</summary>
     public string Id => LobbyPageRules.Id(Row);
     public bool Friend => Row.Friend;
+
+    // ---- the host's look (contract 4, fix wave 2 F4): a 22 px face on the art's corner, their Prize Counter
+    // frame over it at the one frame geometry (ShopCosmetics.FrameWindowRatio). Only when they wear something.
+
+    public const double FaceSize = 22;
+    public double FrameSize => FaceSize / Services.ShopCosmetics.FrameWindowRatio;
+    public System.Windows.Thickness FrameMargin => new(-(FrameSize - FaceSize) / 2d);
+    public bool HasLook => !Row.Look.IsEmpty;
+    /// <summary>Their preset or shop avatar, else the roster's initials gradient (the friends drawer's fall-through).</summary>
+    public Brush? FaceBrush => HasLook ? FaceFor(Row) : null;
+    public ImageSource? FrameArt => HasLook ? SafeFrame(Row.Look.FrameId) : null;
+
+    private static Brush? FaceFor(LobbyRow row)
+    {
+        try
+        {
+            if (Services.CosmeticsCatalog.GetAvatarImage(row.Look.AvatarId) is { } img)
+                return new ImageBrush(img) { Stretch = Stretch.UniformToFill };
+            return Services.LeaderboardEntry.BuildAvatarBrush(row.HostName);
+        }
+        catch { return null; }
+    }
+
+    private static ImageSource? SafeFrame(string? id)
+    {
+        try { return Services.CosmeticsCatalog.GetFrameImage(id); } catch { return null; }
+    }
     public string ButtonText { get; }
     public bool HasButton { get; }
     /// <summary>The join would be refused by the game's gate: the button shows with a lock.</summary>

@@ -45,6 +45,7 @@
 import { createRules } from '../game/rules.js';
 import { DEFAULT_MS, formatClock } from '../game/clock.js';
 import * as defaultApi from './api.js';
+import { seatCosmetics } from '../skins/profile.js';
 
 /** How often the derived clock repaints. Matches game/clock.js so the HUD looks identical. */
 export const TICK_MS = 250;
@@ -626,6 +627,11 @@ export function createOnlineMatch({
       seatKnown = true;
       if (changed) bus.emit('seat', { color: me });
     }
+    // What each seat wears (Prize Counter contract 4), already clamped by the server.
+    if (state.looks && typeof state.looks === 'object') bus.emit('looks', { white: state.looks.white || null, black: state.looks.black || null });
+    // Both seats' profile frames and avatars (contract 4) for the name tags, when the server sends them.
+    const faces = seatCosmetics(state);
+    if (faces) bus.emit('cosmetics', faces);
     if (state.white || state.black) {
       bus.emit('players', {
         white: state.white || null,

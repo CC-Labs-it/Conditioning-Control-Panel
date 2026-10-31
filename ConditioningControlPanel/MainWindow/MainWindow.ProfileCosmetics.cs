@@ -378,6 +378,23 @@ namespace ConditioningControlPanel
         }
 
         /// <summary>
+        /// The Prize Counter's Wear on an owned profile frame or avatar: the Customize dialog's own save
+        /// (sanitized against the grants, settings first, then the cosmetics push), with one slot changed.
+        /// False when the id is not a shop frame/avatar or the sanitize refused it (not owned).
+        /// </summary>
+        internal bool WearProfileItemFromCounter(string itemId)
+        {
+            var item = ShopCosmetics.Find(itemId);
+            if (item == null || (!item.IsFrame && !item.IsAvatar)) return false;
+            var next = (App.Settings?.Current?.ProfileCosmetics ?? new ProfileCosmetics()).Clone();
+            if (item.IsFrame) next.FrameId = item.Id; else next.AvatarId = item.Id;
+            var clean = CosmeticsCatalog.SanitizeOwn(next);
+            if ((item.IsFrame ? clean.FrameId : clean.AvatarId) != item.Id) return false;
+            PersistOwnCosmetics(clean);
+            return true;
+        }
+
+        /// <summary>
         /// The single "this is my loadout now" path: saves to settings, repaints the card and
         /// pushes the change. Used by the Customize dialog and by the Showcase's click-to-pin.
         /// <paramref name="chosen"/> must already be sanitized.

@@ -7,31 +7,10 @@ echo ============================================
 echo.
 
 :: Configuration
-set VERSION=7.1.15
-:: 7.2+: the shipped app is the Avalonia head (one app on Windows and Linux). Its exe is
-:: CCP.Avalonia.exe in the publish tree; installer.iss installs it as ConditioningControlPanel.exe
-:: (DestName), same AppId and folder, so a WPF install upgrades in place
-:: (docs/avalonia-decisions.html, "Upgrade in place from WPF"). The WPF head is not packaged.
-set PROJECT_DIR=CCP.Avalonia
-set CORE_DIR=CCP.Core
-set PUBLISH_DIR=%PROJECT_DIR%\bin\publish\win-x64
-set APP_EXE=CCP.Avalonia.exe
+set VERSION=7.2.0
+set PROJECT_DIR=ConditioningControlPanel
+set PUBLISH_DIR=%PROJECT_DIR%\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish
 set INSTALLER_OUTPUT=installer-output
-
-:: .NET 10 SDK. A machine whose default dotnet is older keeps 10 in %USERPROFILE%\.dotnet10.
-set DOTNET=dotnet
-if exist "%USERPROFILE%\.dotnet10\dotnet.exe" (
-    set DOTNET=%USERPROFILE%\.dotnet10\dotnet.exe
-    set DOTNET_ROOT=%USERPROFILE%\.dotnet10
-)
-set DOTNET_VER=
-for /f "delims=" %%v in ('"%DOTNET%" --version 2^>nul') do set DOTNET_VER=%%v
-if not "%DOTNET_VER:~0,3%"=="10." (
-    echo ERROR: the .NET 10 SDK is required, found "%DOTNET_VER%" at %DOTNET%
-    echo Install it, or unpack it into %USERPROFILE%\.dotnet10
-    pause
-    exit /b 1
-)
 :: Short staging path for the Inno Setup compile. The publish tree sits ~131 chars
 :: deep, and some builtin-sissyhypno audio files run past MAX_PATH (260) from there,
 :: which aborts ISCC ("The system cannot find the path specified"). We mirror the
@@ -60,33 +39,22 @@ echo [1/4] Cleaning previous builds...
 :: prior run is "up to date" even when source code has changed, and the new
 :: single-file bundle gets wrapped around the old DLL — burning v6.0.1's
 :: bump into a v6.0.0 binary inside a v6.0.1-named installer.
-:: CCP.Core gets the same treatment: it is a project reference that ships inside the
-:: single-file bundle and now holds shipping logic (Chaos tuning constants, the
-:: chaos_meta save schema), so a stale Core DLL is the same hazard one layer down.
 if exist "%PROJECT_DIR%\bin\Release" rmdir /s /q "%PROJECT_DIR%\bin\Release"
 if exist "%PROJECT_DIR%\obj\Release" rmdir /s /q "%PROJECT_DIR%\obj\Release"
-if exist "%CORE_DIR%\bin\Release" rmdir /s /q "%CORE_DIR%\bin\Release"
-if exist "%CORE_DIR%\obj\Release" rmdir /s /q "%CORE_DIR%\obj\Release"
 if exist "%PUBLISH_DIR%" rmdir /s /q "%PUBLISH_DIR%"
 if exist "%INSTALLER_OUTPUT%" rmdir /s /q "%INSTALLER_OUTPUT%"
 mkdir "%INSTALLER_OUTPUT%" 2>nul
 
 echo.
-echo [2/4] Building application (Release, %DOTNET_VER%)...
-:: Settings live in the publish profile (self-contained single file, ReadyToRun, libvlc loose):
-:: CCP.Avalonia\Properties\PublishProfiles\win-x64.pubxml. Build on Windows (Vosk picks its
-:: native by the BUILD machine's OS).
-"%DOTNET%" publish %PROJECT_DIR%\CCP.Avalonia.csproj -c Release -p:PublishProfile=win-x64
+echo [2/4] Building application (Release)...
+cd %PROJECT_DIR%
+dotnet publish -c Release -r win-x64 --self-contained true
 if errorlevel 1 (
     echo ERROR: Build failed!
     pause
     exit /b 1
 )
-if not exist "%PUBLISH_DIR%\%APP_EXE%" (
-    echo ERROR: %PUBLISH_DIR%\%APP_EXE% was not produced
-    pause
-    exit /b 1
-)
+cd ..
 
 echo.
 echo [2.5/6] Cleaning empty locale folders from publish output...
@@ -130,18 +98,10 @@ echo ============================================
 echo [3/6] CODE SIGN - Application EXE
 echo ============================================
 echo.
-echo Sign the app exe now (it is renamed to ConditioningControlPanel.exe only at install time):
-echo   C:\downloads\ActalisCodeSigner-win-x64-latest.new\ActalisCodeSigner.exe -fu YOUR_USERNAME -fp YOUR_PASSWORD -in "%PUBLISH_DIR%\%APP_EXE%" -ts
+echo Sign the app exe now:
+echo   C:\downloads\ActalisCodeSigner-win-x64-latest\ActalisCodeSigner.exe -fu YOUR_USERNAME -fp YOUR_PASSWORD -in "%PUBLISH_DIR%\ConditioningControlPanel.exe" -ts
 echo.
 pause
-
-:: The staged copy must carry the signature: refuse to package an unsigned exe.
-powershell -NoProfile -Command "if ((Get-AuthenticodeSignature -LiteralPath '%PUBLISH_DIR%\%APP_EXE%').Status -eq 'NotSigned') { exit 1 }"
-if errorlevel 1 (
-    echo ERROR: %PUBLISH_DIR%\%APP_EXE% is not signed. Sign it, then run this script again.
-    pause
-    exit /b 1
-)
 
 echo.
 echo [3.5/6] Staging signed publish to short path (MAX_PATH workaround)...
@@ -177,7 +137,7 @@ echo [5/6] CODE SIGN - Installer EXE
 echo ============================================
 echo.
 echo Sign the installer now:
-echo   C:\downloads\ActalisCodeSigner-win-x64-latest.new\ActalisCodeSigner.exe -fu YOUR_USERNAME -fp YOUR_PASSWORD -in "%INSTALLER_OUTPUT%\ConditioningControlPanel-%VERSION%-Setup.exe" -ts
+echo   C:\downloads\ActalisCodeSigner-win-x64-latest\ActalisCodeSigner.exe -fu YOUR_USERNAME -fp YOUR_PASSWORD -in "%INSTALLER_OUTPUT%\ConditioningControlPanel-%VERSION%-Setup.exe" -ts
 echo.
 pause
 

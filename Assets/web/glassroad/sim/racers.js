@@ -8,6 +8,9 @@
  * Online (B2, `net` option, NET.md): one racer per seat at that seat's grid slot, racer 0 = this client's seat.
  * A racer of kind 'remote' runs no sim: racers.remote(r, dt) (net/remote.js) writes its state each tick. The
  * bot seats this client keeps are kind 'local' bots; setKind moves a seat between the two (bot keeper).
+ * Kart bodies (sim/kartStats.js): r.feel.kart is the racer's row. A person's comes from the seat's look online and
+ * from setBody (boot.js, the garage pick) in solo; a bot drives the default, whatever it wears: every bot pace in
+ * ai.paceMul and every test of the course was tuned on that kart, and a bot on a fast body would only be a harder bot.
  */
 import { S, BOOST, RESPAWN, createState, copyState, lerpState } from './state.js';
 import { spawn, step as kartStep } from './kart.js';
@@ -18,6 +21,7 @@ import { clamp } from '../core/math.js';
 import { gap } from './gaps.js';
 import { updateStoneMotion } from '../track/stoneMotion.js';
 import { cleanPace, resetCleanPace } from './cleanPace.js';
+import { kartStats, bodyOfVehicle } from './kartStats.js';
 
 const DEG = Math.PI / 180;
 const has = Object.prototype.hasOwnProperty;
@@ -48,7 +52,7 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
   };
   const slots = net ? net.map((x) => x.seat) : grid();
   for (let i = 0; i < count; i++) list.push(makeRacer(i, slots[i]));
-  const racers = { list, player: list[0], clockS: 0, seed, place, step, interpolate, setAssist, nearby, setKind, remote: null };
+  const racers = { list, player: list[0], clockS: 0, seed, place, step, interpolate, setAssist, nearby, setKind, setBody, remote: null };
 
   function makeRacer(i, slot) {
     const n = net && net[i], isBot = n ? n.kind === 'bot' : i > 0;
@@ -73,11 +77,13 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
           r.bestLapS = r.bestLapS > 0 ? Math.min(r.bestLapS, p.lapTimeS) : p.lapTimeS;
         } else if (name === 'finish') { r.finished = true; r.finishS = p.timeS; }
         else if (name === 'drop') r.falls++;
+        else if (name === 'ramp') p.racer = i;     // ramps contract: { racer, id }
         if (i > 0) queue.emit('racer-event', { racer: i, name, p });   // online, a remote person is not the player either
         else queue.emit(name, p);
       },
     };
     r.progress = createProgress(track, r.events);
+    r.feel.kart = kartStats(feel, n && !isBot ? bodyOfVehicle(n.look?.vehicle) : null);
     if (isBot) r.raceView = botRace();
     return r;
   }
@@ -170,6 +176,9 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
     const d = muls[clamp(feel.get('ai.difficulty') | 0, 0, muls.length - 1)];
     return pace.map((p) => p * d);
   }
+
+  /** Put a racer on a kart body (an unknown id is the default). A restart keeps it. */
+  function setBody(i, bodyId) { list[i].feel.kart = kartStats(feel, bodyId); }
 
   /** Online: 'remote' (state written by net) or 'local' (a kept bot simulated here). */
   function setKind(i, kind) { list[i].kind = kind === 'remote' ? 'remote' : 'local'; }

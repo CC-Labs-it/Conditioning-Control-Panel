@@ -43,11 +43,13 @@ import { gripYaw, slewSteer } from './steer.js';
 import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway, guideLanding } from './routes.js';
 import { fallBeneath, fallLand, resetFall } from './falls.js';
 import { waterAt, waterOut, blendPush, gradeDeg, surfaceKind } from './flow.js';
-import { lipLeave, broadPlatformEdgeKick, platformHopUp, fieldAtS } from './stones.js';
+import { lipLeave, broadPlatformEdgeKick, platformHopUp, fieldAtS, fromLipVoid } from './stones.js';
 import { armGlide, glideGravity, resetGlide } from './glide.js';
 import { aerialGapAt } from '../track/aerial.js';
 import { airWordQuery, resetAirWords, stepAirWords } from './airWords.js';
 import { pistonHopUp } from '../track/movingHazards.js';
+import { rampCrossed, RAMP_HOP_GRACE_S } from './ramps.js';
+import { NEUTRAL_KART } from './kartStats.js';
 
 export { applyBoost };
 
@@ -158,7 +160,9 @@ export function step(st, a, track, feel, dt, ev) {
   }
   // a chute: gravity along the kart's own downhill forward feeds the engine (no magnet holds it)
   const slope = W.chute ? feel.get('hop.gravityMps2') * -F[1] : 0;
-  engine(st, a, feel, dt, top, wasGround && qa.surface === 'haze', ev, typeof cc === 'number' ? cc : 1, loop, W.thrustMul, W.dragTcS, slope);
+  // the body's top speed is a cap on the engine only: `top`, speedPct and every boost amount stay the class's own
+  const K = feel.kart || NEUTRAL_KART;
+  engine(st, a, feel, dt, top, wasGround && qa.surface === 'haze', ev, (typeof cc === 'number' ? cc : 1) * K.topMul, loop, W.thrustMul, W.dragTcS, slope);
 
   // on the ground: forward speed chases engineV, lateral bleeds into the heading, slip costs engineV
   let slipDeg = 0;
@@ -174,7 +178,7 @@ export function step(st, a, track, feel, dt, ev) {
     } else { wm.cur[0] = 0; wm.cur[1] = 0; WV[0] = 0; WV[1] = 0; WV[2] = 0; }
     let f = v3dot(V, FP) - v3dot(WV, FP), l = v3dot(V, RP) - v3dot(WV, RP);
     f += (st[S.engineV] - f) * Math.min(1, dt / feel.get('engine.chaseTcS'));
-    const tc = st[S.driftDir] ? gap(feel, 'drift.slideTcS') * W.slideMul : gap(feel, 'kart.gripTcS') * W.gripMul;
+    const tc = st[S.driftDir] ? gap(feel, 'drift.slideTcS') * W.slideMul : gap(feel, 'kart.gripTcS') * W.gripMul * K.gripMul;
     l *= Math.exp(-dt / tc);
     slipDeg = Math.atan2(Math.abs(l), Math.max(Math.abs(f), 1)) * RAD2DEG;
     v3scale(V, FP, f); v3addScaled(V, V, RP, l);
@@ -216,6 +220,14 @@ export function step(st, a, track, feel, dt, ev) {
   v3addScaled(P, P, V, dt);
   let qb = airWordQuery(st, P, track.query(P[0], P[1], P[2], qa.seg, QB), PRE);
   const snap = gap(feel, 'kart.snapM');
+  // ramps (sim/ramps.js): a grounded kart (or one that just hopped off the wedge) crossing a lip fast enough leaves
+  // with velY = max(velY, upMps) and keeps its speed; the take-off itself happens below with the ground decision
+  const rampHop = air && !!qa.ramp && st[S.hopT] <= RAMP_HOP_GRACE_S && st[S.airTime] <= st[S.hopT] + 1e-6;
+  const ramp = (!air || rampHop) && !qa.airWord && track.ramps?.length ? rampCrossed(track, qa, qb, dt) : null;
+  if (ramp) {
+    V[1] = Math.max(V[1], ramp.upMps);
+    ev.emit('ramp', { id: ramp.id, purpose: ramp.purpose, upMps: ramp.upMps, s: qb.s, x: qb.lateral, speed: Math.hypot(V[0], V[2]) });
+  }
   // A low hop reaching the edge of a broad Keep platform receives its normal lip kick once.
   if (air) v3addScaled(V, V, qb.normal, broadPlatformEdgeKick(track, qa, qb, v3dot(V, qb.normal), feel.get('stones.kickUpMps')));
   // wave 2 STONES: over a field's void the kart is still on its own road while within the snap band of the deck
@@ -243,14 +255,22 @@ export function step(st, a, track, feel, dt, ev) {
   }
   const road = !has(qb.flags, 'jump'), n = qb.normal, vn = v3dot(V, n);
   const travel = Math.hypot(P[0] - PRE[0], P[1] - PRE[1], P[2] - PRE[2]);
-  const heldRail = !air && qa.onRoad && qb.railed && !qb.hole && road && qb.edgeDist >= -travel &&
+  // A flight coming down along a rail where the road narrows (the funnel after the Threshold stones) touches down on
+  // the rail's road side too: the rail below pushes it back in. Before, every tick ended just past the narrowing edge,
+  // never counted as road, and the kart sank under the deck it was riding beside.
+  const heldRail = (!air || qa.edgeDist >= 0) && qa.onRoad && qb.railed && !qb.hole && road && qb.edgeDist >= -travel &&
     edgeAt(track, qb, qb.lateral, gap(feel, 'kart.radiusM')) !== 'kicker';
   const following = !air && qa.onRoad && qa.forkId === qb.forkId;
   const crossed = air && crossedSupportedRoad(track, qa, qb);
+  // wave 2 STONES: a flight over a field's void inside the snap band is still on its own road (overLip); reaching the
+  // next stone or the deck past the field there lands, never passes under its front edge (sim/stones.js fromLipVoid)
+  const lipCatch = air && fromLipVoid(qa, qb, snap);
   const band = snap + (following || crossed ? travel : Math.abs(vn) * dt);
   const previousHeight = (PRE[0] - qb.p[0]) * n[0] + (PRE[1] - qb.p[1]) * n[1] + (PRE[2] - qb.p[2]) * n[2];
-  const ground = (qb.onRoad || heldRail) && qb.height >= -band &&
-    (air ? qb.height <= 0 && (crossed || previousHeight >= -.03 && vn <= 0) : qb.height <= band);
+  // a ramp wedge is solid: a kart inside its volume (stepped on from the side, or a flight that clips it) stands on it
+  const inWedge = !!qb.ramp && qb.height < 0 && qb.height >= -qb.rampH - snap;
+  const ground = !ramp && (qb.onRoad || heldRail) && (inWedge || qb.height >= -band &&
+    (air ? qb.height <= 0 && (crossed || (lipCatch || previousHeight >= -.03) && vn <= 0) : qb.height <= band));
   if (ground) {
     // The probe's surface point is exact on a curved bank; a normal-plane step is not.
     v3copy(P, qb.p); v3reject(V, V, n);
@@ -274,6 +294,8 @@ export function step(st, a, track, feel, dt, ev) {
     if (air && under && onLanding(track, st, qb) === under) landRoute(track, st, under, qb, F, feel, ev, prevS);
     else if (air && fall && qb === QD) fallLand(track, st, qb, ev);
     else if (air) resetFall(st);
+  } else if (!air && ramp) {
+    takeoff(st, ev, 'lip');                        // a ramp lip: the trick late window and the online LIP pulse
   } else if (!air) {
     // a drop shortcut's kicker lip (sim/routes.js edgeAt): driving off the opening throws the kart up a little,
     // a 'lip' take-off, so a hop right after it pays the trick
@@ -324,7 +346,7 @@ export function step(st, a, track, feel, dt, ev) {
       v3addScaled(V, V, b, -side * into * (1 + keep));
       if (v3dot(F, b) * side > 0) railNose(F, V, b, frame.t, st[S.engineV] >= 0);   // the nose turns along the rail
       if (into >= gap(feel, 'wall.minHitMps')) {
-        st[S.engineV] *= 1 - feel.get('wall.engineLoss');
+        st[S.engineV] *= 1 - Math.min(1, feel.get('wall.engineLoss') * K.wallMul);
         if (!grace) { cancelDrift(st, 'wall', ev); endBoost(st, feel, ev); }
         ev.emit('wall', railHit(P, frame, side, radius, into * (1 + keep)));
       }
@@ -413,7 +435,7 @@ function engine(st, a, feel, dt, top, haze, ev, capMul = 1, loop = false, waterM
       if (e < cap) {
         const g = feel.get('engine.bandGains');
         const band = clamp(Math.floor(e / top * g.length), 0, g.length - 1);
-        e = Math.min(cap, e + g[band] * top * a.throttle * mul * dt);
+        e = Math.min(cap, e + g[band] * top * a.throttle * mul * (feel.kart || NEUTRAL_KART).accelMul * dt);
       }
     }
   } else e = approach(e, 0, coast);
