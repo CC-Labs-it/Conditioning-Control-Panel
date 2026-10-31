@@ -1,4 +1,5 @@
 using System;
+using ForegroundInput = (string? Process, bool Own, bool Observe);
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
@@ -66,12 +67,14 @@ internal static class KeywordTriggerHead
             };
             var generation = Volatile.Read(ref _generation);
             var ch = special == null ? Translate(vk) : null;
+            var foreground = Engine.CaptureInput();
+            if (foreground == null) return;
             Dispatcher.UIThread.Post(() =>
             {
                 if (generation != Volatile.Read(ref _generation)) return;
-                if (special is { } key) Engine.Key(key);
-                else if (ch is { } c) Engine.Character(c);
-                else Engine.Key(KeywordInputKey.None);
+                if (special is { } key) Engine.Key(key, snapshot: foreground);
+                else if (ch is { } c) Engine.Character(c, snapshot: foreground);
+                else Engine.Key(KeywordInputKey.None, snapshot: foreground);
             });
         }
         catch (Exception ex) { Log.Debug(ex, "Keyword input failed"); }
@@ -136,37 +139,39 @@ internal sealed class KeywordAudioRuntime
     internal void Start() { IsActive = true; _input.Clear(); }
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
 
-    private bool Accept(string? process, bool own)
+    private bool HasInputAccess => IsActive && CoreSettings.Current.KeywordTriggersEnabled &&
+        (CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"));
+    // WPF KeywordTriggerService.cs:218-219,650-668: capture before dispatch, after access.
+    internal ForegroundInput? CaptureInput()
     {
-        var s = CoreSettings.Current;
-        if (!IsActive || !s.KeywordTriggersEnabled ||
-            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return false;
-        // WPF KeywordTriggerService.cs:218-224,650-668: access before observation.
-        if (KeywordMatchRules.NeedsForeground(s))
-        {
-            if (process == null) (process, own) = RecentApps.Source();
-            RecentApps.Remember(process, own);
-        }
-        else if ((Now().ToUniversalTime() - _lastAppSample).TotalSeconds >= 2)
-        {
-            _lastAppSample = Now().ToUniversalTime();
-            RecentApps.Sample();
-        }
-        if (KeywordMatchRules.AppAllowed(s, process, own)) return true;
+        if (!HasInputAccess) return null;
+        var now = Now().ToUniversalTime();
+        var restricted = KeywordMatchRules.NeedsForeground(CoreSettings.Current);
+        if (!restricted && (now - _lastAppSample).TotalSeconds < 2) return (null, false, false);
+        if (!restricted) _lastAppSample = now;
+        var (process, own) = RecentApps.Source();
+        return (process, own, true);
+    }
+    private bool Accept(string? process, bool own, ForegroundInput? snapshot)
+    {
+        if (!HasInputAccess) return false;
+        var input = snapshot ?? (process == null ? CaptureInput().GetValueOrDefault() : (process, own, true));
+        if (input.Observe) RecentApps.Remember(input.Process, input.Own);
+        if (KeywordMatchRules.AppAllowed(CoreSettings.Current, input.Process, input.Own)) return true;
         _input.Clear(); // never join text typed on either side of a blocked app
         return false;
     }
 
-    internal void Character(char ch, string? process = null, bool own = false)
+    internal void Character(char ch, string? process = null, bool own = false, ForegroundInput? snapshot = null)
     {
-        if (!Accept(process, own)) return;
+        if (!Accept(process, own, snapshot)) return;
         _input.Append(ch, Now(), CoreSettings.Current.KeywordBufferTimeoutMs);
         Check();
     }
 
-    internal void Key(KeywordInputKey key, string? process = null, bool own = false)
+    internal void Key(KeywordInputKey key, string? process = null, bool own = false, ForegroundInput? snapshot = null)
     {
-        if (Accept(process, own) && _input.Key(key, Now(), CoreSettings.Current.KeywordBufferTimeoutMs)) Check();
+        if (Accept(process, own, snapshot) && _input.Key(key, Now(), CoreSettings.Current.KeywordBufferTimeoutMs)) Check();
     }
 
     private void Check()
