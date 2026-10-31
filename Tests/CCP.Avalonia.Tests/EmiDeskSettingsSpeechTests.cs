@@ -221,4 +221,23 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.Equal(EmiChains.RestFace, window.Face);
         Assert.False(window.HoldPending);
     });
+    [Fact]
+    public Task LockCardPanicSilencesSpeechAndThePendingGreeting() => InDesk(desk =>
+    {
+        var settings = CoreSettings.Current; settings.EmiDeskSpice = 2; settings.PanicKeyEnabled = true; settings.PanicKey = "F8";
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            LockCardWindow.ShowOnAllMonitors("test", 1, strictMode: false, isTest: true);
+            Assert.True(LockCardWindow.IsAnyOpen());
+            shell.HandlePanicKeyPress(DateTime.UtcNow);
+            Assert.False(LockCardWindow.IsAnyOpen());
+            desk.Fire("resized"); Assert.Null(desk.Window!.BubbleText);
+            desk.GreetingDue(); Assert.Null(desk.Window.BubbleText);
+        }
+        finally { LockCardWindow.ForceCloseAll(); shell.Close(); }
+        return Task.CompletedTask;
+    });
+
 }

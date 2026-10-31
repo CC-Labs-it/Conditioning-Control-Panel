@@ -7,59 +7,39 @@ public partial class EmiDeskWindow
     private DispatcherTimer? _speechTimer;
     private int _speechStage;
     private EmiChain? _speechChain;
-    private string? _speechLine;
-    private string _speechFace = "^_^";
     private Action? _speechDone;
     private void BeginSpeech(string? line, string face, Action? done)
     {
         if (PresentationActive) return; // WPF EmiDeskWindow.xaml.cs:1048,1077
         CancelChain();
         _speechChain = EmiChains.MakeSay(line, face, EmiChains.SayHoldMs(line));
-        _speechLine = line;
-        _speechFace = string.IsNullOrEmpty(face) ? "^_^" : face;
         _speechDone = done;
-        _speechStage = 0;
-        DrawFace("0_0");
-        OnBubbleTextCore(".");
-        _speechTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(_speechChain!.Seq[0].Ms) };
+        _speechStage = -1;
+        _speechTimer = new DispatcherTimer();
         _speechTimer.Tick += (_, _) => AdvanceSpeech();
+        AdvanceSpeech();
         _speechTimer.Start();
     }
     internal void AdvanceSpeech()
     {
-        if (_speechTimer == null) return;
-        switch (++_speechStage)
+        if (_speechTimer == null || _speechChain == null) return;
+        if (++_speechStage >= _speechChain.Seq.Count)
         {
-            case 1:
-                OnBubbleTextCore("..");
-                _speechTimer.Interval = TimeSpan.FromMilliseconds(_speechChain!.Seq[1].Ms);
-                break;
-            case 2:
-                OnBubbleTextCore("...");
-                _speechTimer.Interval = TimeSpan.FromMilliseconds(_speechChain!.Seq[2].Ms);
-                break;
-            case 3:
-                DrawFace(_speechFace);
-                OnBubbleTextCore(_speechLine);
-                _speechTimer.Interval = TimeSpan.FromMilliseconds(_speechChain!.Seq[3].Ms);
-                break;
-            case 4:
-                DrawFace("0_0");
-                OnBubbleTextCore(null);
-                _speechTimer.Interval = TimeSpan.FromMilliseconds(_speechChain!.Seq[4].Ms);
-                break;
-            default:
-                var done = _speechDone;
-                CancelSpeech();
-                done?.Invoke();
-                break;
+            var done = _speechDone;
+            CancelSpeech();
+            done?.Invoke();
+            return;
         }
+        var frame = _speechChain.Seq[_speechStage];
+        DrawFace(frame.Text);
+        OnBubbleTextCore(frame.Bubble);
+        _speechTimer.Interval = TimeSpan.FromMilliseconds(frame.Ms);
     }
     private void CancelSpeech()
     {
         _speechTimer?.Stop();
         _speechTimer = null;
-        _speechLine = null;
+        _speechChain = null;
         _speechDone = null;
         OnBubbleTextCore(null);
     }

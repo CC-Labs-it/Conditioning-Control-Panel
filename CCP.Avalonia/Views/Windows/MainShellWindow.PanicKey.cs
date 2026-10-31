@@ -81,6 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (TryGamePauseOnEscape(now)) return;
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
+            try { EmiDesk.EmiDeskService.Instance.PanicSilence(); } catch (Exception ex) { Serilog.Log.Warning(ex, "EMI panic silence failed"); } // WPF MainWindow.xaml.cs:1620
             // WPF MainWindow.xaml.cs:1620: Circe's Tab safety hold, armed up here because the lock-card, palette and
             // grace-pause rungs below return before the stop pass ("chaster-hold"). A game's pause above is no panic.
             PanicChasterHold.Open("panic key");
