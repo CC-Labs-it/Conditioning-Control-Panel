@@ -17,9 +17,11 @@
  * Playtest 2026-10-28: the Race door opens it as the PRE-RACE card every time (Laps 1 / 2 / 3 and Steer assist chips
  * over the panels, act 'pick'), not once a session; "Don't show again" and ?howto=0 still skip it; Again skips it.
  * Polish 5 (S4): every move, confirm, back, toggle and refusal emits `sound` { name } (hud/sounds.js); boot plays it.
+ * Power-ups (hud/glossary.js, owner 2026-10-31): kind 'glossary' from the how-to and pause cards; up and down scroll its list.
  */
 import { formatTime, ordinal, pauseLine, resultRows } from './format.js';
 import { howtoHtml, preraceHtml } from './howto.js';
+import { glossaryHtml, glossaryKeys, scrollGlossary } from './glossary.js';
 import { cleanOptions, loadOptions, saveOptions, stepOption, cycleOption, choiceLabel, assistHint, STEER_SENS } from './options.js';
 import { controlRows, deviceView, pauseHint } from './labels.js';
 import { PROFILES, nextProfile } from '../input/padmap.js';
@@ -43,7 +45,7 @@ const CYCLE_ROWS = [['frameCap', 'Frame cap', 'Lower keeps a slow PC steady'], [
 /** The Quality hint on the options card opened from the pause card. */
 export const QUALITY_LATER = 'Changes after this race';
 
-export function createCards(card, { doc = globalThis.document, emit, devices = null, kit = null } = {}) {
+export function createCards(card, { doc = globalThis.document, emit, devices = null, kit = null, feel = null } = {}) {
   const body = card.querySelector('.card-body');
   const title = card.querySelector('.card-title');
   const note = card.querySelector('.card-note');
@@ -76,7 +78,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (fill) fill.style.transform = 'scaleX(' + load.p.toFixed(3) + ')';
     if (bar) bar.setAttribute('aria-valuenow', String(Math.round(load.p * 100)));
   }
-  const stack = { options: null, controls: null, howto: null };
+  const stack = { options: null, controls: null, howto: null, glossary: null };
   // the pre-race card: before every race from the Race door, never in a dev bot run unless asked for
   let leaving = 0;
   const howtoSkip = (() => {
@@ -94,7 +96,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   const hwInner = () => '<div class="hw-wrap">' + (data.then === 'race' ? preraceHtml(opts, choiceLabel, assistHint) : '') +
     howtoHtml(devices || {}, { off: opts.howtoOff }) + '</div>';
   const lapsLine = (n) => n + (n === 1 ? ' lap' : ' laps');
-  const BACKS = ['options', 'controls', 'howto'];
+  const BACKS = ['options', 'controls', 'howto', 'glossary'];
   // B2-d: the online lobby draws in this card as kind 'lobby' (hud/lobby.js); its Back returns to the opener
   const lobby = createLobby({ doc, card, title, note, extra, emit, focusFirst: () => focusFirst(), exit: () => {
     const p = stack.lobby || { kind: 'menu', data: {} };
@@ -115,7 +117,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     go.hidden = !(k === 'start' || k === 'finish');
     extra.innerHTML = '';
     note.hidden = false;
-    topClose.hidden = k !== 'options';
+    topClose.hidden = k !== 'options' && k !== 'glossary';
     if (k === 'start') {
       title.textContent = data.title || 'Threshold';
       note.textContent = ready ? 'Press any key' : waitNote;
@@ -140,7 +142,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       title.textContent = 'Paused';
       note.textContent = pauseLine(data) || 'The race waits';
       extra.innerHTML = '<div class="c-list">' + btn('resume', 'Resume', 'hot') + btn('restart', 'Restart') +
-        btn('options', 'Options') + btn('quit', 'Quit to menu', 'quiet') + '</div><p class="c-hint"></p>';
+        btn('options', 'Options') + btn('glossary', 'Power-ups') + btn('quit', 'Quit to menu', 'quiet') + '</div><p class="c-hint"></p>';
       hint();
     } else if (k === 'options') {
       if (typeof data.hostGentle === 'boolean') host.gentle = data.hostGentle;
@@ -155,6 +157,10 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       title.textContent = data.then === 'race' ? 'Ready' : 'How to race';
       note.hidden = true;
       extra.innerHTML = hwInner();
+    } else if (k === 'glossary') {
+      title.textContent = 'Power-ups';
+      note.hidden = true;
+      extra.innerHTML = (feel ? glossaryHtml(feel, devices || {}) : '') + '<div class="c-list">' + btn('back', 'Back', 'quiet') + '</div>';
     } else if (k === 'lobby') {
       lobby.show(data);                              // draws and focuses itself
       return;
@@ -277,6 +283,8 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   function refreshDevice() {
     if (card.hidden) return;
     if (kind === 'pause') { hint(); return; }
+    const gk = kind === 'glossary' && extra.querySelector('.gl-keys');
+    if (gk) { gk.textContent = glossaryKeys(devices); return; }
     const hw = kind === 'howto' && extra.querySelector('.hw-wrap');
     if (hw) { hw.outerHTML = hwInner(); focusFirst(); return; }
     const wrap = kind === 'controls' && extra.querySelector('.c-keyswrap');
@@ -361,7 +369,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       if (pad) devices.setLayout(pad.id, nextProfile(pad.profile));   // devices tells the hud, which refreshes this card
       return;
     }
-    if (a === 'options' || a === 'controls') {
+    if (a === 'options' || a === 'controls' || a === 'glossary') {
       stack[a] = { kind, data };
       show(a, a === 'options' ? { from: kind, hostGentle: host.gentle } : { from: kind });
       emit(a, { from: stack[a].kind });
@@ -425,6 +433,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (kind === 'lobby' && lobby.nav(dir)) return;   // back, and left / right on the lobby's form rows
     if (dir === 'throttle') { if (kind === 'howto' && !leaving) { sound('menu-ok'); howtoGo(); } else if (kind === 'results') recapNext(); return; }   // boot.js: a throttle press on a card
     if (dir === 'back') { if (BACKS.includes(kind)) back(); return; }
+    if (kind === 'glossary' && (dir === 'up' || dir === 'down')) { if (scrollGlossary(extra.querySelector('.gl-list'), dir)) sound('menu-move'); return; }
     const list = focusables();
     if (!list.length) return;
     const cur = doc.activeElement, i = list.indexOf(cur);

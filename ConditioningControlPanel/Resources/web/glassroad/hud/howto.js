@@ -135,5 +135,6 @@ export function howtoHtml(devices = {}, { off = false } = {}) {
     '<p class="c-hint hw-camera" style="margin:0 0 14px"><strong>' + esc(viewLabel) + '</strong>: chase / first person. ' +
     '<strong>' + esc(rearLabel) + '</strong>: look behind.</p>' +
     '<div class="hw-foot"><button type="button" class="c-btn hot hw-go" data-act="howto-go">' + esc(goLabel) + '</button>' +
+    '<button type="button" class="c-btn hw-off" data-act="glossary">Power-ups</button>' +
     '<button type="button" class="c-btn c-tog hw-off' + (off ? ' on' : '') + '" data-act="howto-off" aria-pressed="' + !!off + '">Don&#39;t show again</button></div>';
 }
