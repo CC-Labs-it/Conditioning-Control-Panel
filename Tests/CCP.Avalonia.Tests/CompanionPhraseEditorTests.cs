@@ -16,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Bark;
 using Xunit;
@@ -176,6 +177,7 @@ public sealed class CompanionPhraseEditorTests
         settings.UserAddedCustomTriggers.Clear();
         settings.UserAddedCustomTriggers.UnionWith(new[] { "REMOVE", "KEEP" });
         var shell = new MainShellWindow();
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
         try
         {
             shell.Show();
@@ -226,11 +228,36 @@ public sealed class CompanionPhraseEditorTests
             ClickEditor(editor, "BtnSave");
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(settings.CustomTriggers);
+
+            // Verify the real button route in every language after the existing save/cancel checks.
+            foreach (var (language, title) in new[]
+            {
+                ("en", "Trigger Phrases"),
+                ("de", "Auslösesätze"),
+                ("es", "Frases de activación"),
+                ("fr", "Phrases de déclenchement"),
+                ("it", "Frasi di attivazione"),
+                ("ja", "トリガーフレーズ"),
+                ("ko", "트리거 문구"),
+                ("pt-BR", "Frases de ativação"),
+                ("ru", "Триггерные фразы"),
+                ("zh-CN", "触发短语"),
+            })
+            {
+                LocalizationManager.Instance.SetLanguage(language);
+                Open();
+                editor = Editor();
+                Assert.Equal(title, editor.FindControl<ConditioningControlPanel.Avalonia.Controls.IconLabel>("TxtTitle")!.Text);
+                Assert.Equal(Loc.GetF("title_manager", title), editor.Title);
+                ClickEditor(editor, "BtnCancel");
+                Dispatcher.UIThread.RunJobs();
+            }
         }
         finally
         {
             foreach (var owned in shell.OwnedWindows.ToArray()) owned.Close();
             shell.RequestExit();
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
         }
     });
 

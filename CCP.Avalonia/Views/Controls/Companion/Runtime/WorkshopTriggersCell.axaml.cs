@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 var triggers = (CoreSettings.Current.CustomTriggers ?? new List<string>())
                     .Where(t => !string.IsNullOrWhiteSpace(t))
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(t => t, _ => true);
-                var dialog = new TextEditorDialog("Trigger Phrases", triggers);
+                var dialog = new TextEditorDialog(Loc.Get("title_trigger_phrases"), triggers);
                 if (!await dialog.ShowDialogSafe<bool>(owner) || dialog.ResultData == null) return;
                 var enabled = dialog.ResultData.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
                 var defaults = new HashSet<string>(App.Mods?.GetDefaultCustomTriggers() ?? new List<string>(),
