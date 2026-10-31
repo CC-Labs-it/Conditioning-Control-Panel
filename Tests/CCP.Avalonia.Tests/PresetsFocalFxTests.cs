@@ -89,6 +89,36 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task TurningMotionOffCancelsAnActiveArrivalBeforeRowHover() => WithPresets((host, view) =>
+    {
+        // Restart the real arrival so the gate changes while an animation still owns the transform.
+        view.IsVisible = false; Settle();
+        view.IsVisible = true; Settle();
+        var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
+        Assert.Contains(rack.Children.OfType<Border>(), row => row.Opacity < 1);
+
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged(); Settle();
+        foreach (var zone in new Panel[] { view.FindControl<WrapPanel>("PresetCardsPanel")!, rack,
+                     view.FindControl<StackPanel>("TakeawayShelf")! })
+        {
+            Assert.All(zone.Children.OfType<Border>().Where(card => card.IsVisible), card =>
+            {
+                Assert.Equal(1, card.Opacity);
+                Assert.Equal(0, Assert.IsType<TransformGroup>(card.RenderTransform)
+                    .Children.OfType<TranslateTransform>().Single().Y);
+            });
+        }
+
+        var first = rack.Children.OfType<Border>().First();
+        host.MouseMove(Center(host, first)); Settle();
+        var slide = Assert.IsType<TransformGroup>(first.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        Assert.Equal(-2, slide.Y);
+        Settle(); Assert.Equal(-2, slide.Y); // a later arrival frame must not reclaim the hover value
+        host.MouseMove(new Point(1, 1)); Settle(); Assert.Equal(0, slide.Y);
+    });
+
+    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view) =>
     {
         view.IsVisible = false; Settle();
