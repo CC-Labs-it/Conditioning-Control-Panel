@@ -62,6 +62,7 @@ import { createSpiralBeatClock } from './spiralBeat.js';
 import { largeMediaLayout } from './worldMediaScale.js';
 import { worldScreenLayout, worldScreenSolids, worldScreenExistingSlots } from './worldScreens.js';
 import { createWordBubbles } from './wordBubbles.js';
+import { createBoostArches } from './boostArches.js';
 import { createWordPopFx } from './wordPopFx.js';
 import { createRoadWords } from './roadWords.js';
 import { createNearDressing } from './nearDressing.js';
@@ -394,6 +395,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (routes && bus) offs.push(bus.on('route-land', (p) => routes.land(p || {})));
   const kartPos = [];
   let itemVis = null;
+  const boostArches = createBoostArches(scene, track);
   try { itemVis = itemsMod ? itemsMod.createItemVisuals(scene, art, feel, { photosafe, track, waterVolume, palette: () => pal.primaryHex(), backend: renderer ? renderer.backend : '' }) : null; } catch (e) { console.warn('[glassroad/world] item visuals failed: ' + (e && e.message)); }
   if (itemVis && bus) for (const name of ['item-box', 'item-fire', 'item-flyby', 'disc-bounce', 'tether-hook', 'tether-break', 'snap-burst', 'item-hit'])
     offs.push(bus.on(name, payload => itemVis.event(name, payload)));
@@ -731,6 +733,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     lines.update(dt, k, fx, kart, speedFieldVisibility(k[S.s], goonworks?.plan.layout.tube));
     if (view.mode === 'menu') lines.object.visible = false;
     if (itemVis && view.items) itemVis.update(view.items, dt, racers, view.camera, view);   // visuals read racer .st (CONTRACT-B1 view.karts)
+    boostArches.update(view.items?.arches, { paused: !!view.paused, gentle: gentle || !!view.gentle || !!view.reducedMotion, motion: view.motion || motionLevel });
     if (wordVis) wordVis.update(view.words || [], view.song || null, dt, {
       paused: !!view.paused, motion: view.motion || motionLevel, gentle: gentle || !!view.gentle || !!view.reducedMotion });
     if (wordFx) wordFx.update(dt, view.camera);
@@ -775,6 +778,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     for (const o of owned) o.traverse((m) => { if (m.geometry && !m.isSprite) m.geometry.dispose(); if (m.material) m.material.dispose(); });
     particles.dispose(); skids.dispose(); lines.dispose(); wakes.dispose(); motes.dispose(); if (!kartPool) karts.dispose();
     if (itemVis) itemVis.dispose();
+    boostArches.dispose();
     if (shadows) shadows.dispose();
     if (colossi && colossi.dispose) colossi.dispose();
     pinkAtmosphere?.dispose();
@@ -820,5 +824,5 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { afterimageBackdrop.reset(); railBarrier.reset(); courseAtmosphere?.reset(); pinkAtmosphere?.reset(); itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); finalLap.reset(); glance.reset(); trapTicks.reset(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { boostArches.reset(); afterimageBackdrop.reset(); railBarrier.reset(); courseAtmosphere?.reset(); pinkAtmosphere?.reset(); itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); finalLap.reset(); glance.reset(); trapTicks.reset(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }
