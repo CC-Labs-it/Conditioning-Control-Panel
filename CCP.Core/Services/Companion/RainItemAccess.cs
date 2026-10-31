@@ -5,7 +5,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace ConditioningControlPanel.Services.Companion
+namespace ConditioningControlPanel.Services.Companion.Rain
 {
     /// <summary>How one wardrobe item can be worn (RAIN-V2-PLAN 2.5, items.json <c>access</c>).</summary>
     public enum RainItemAccessKind { Free, Unlock, Shop }

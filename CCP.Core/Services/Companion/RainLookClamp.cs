@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace ConditioningControlPanel.Services.Companion
+namespace ConditioningControlPanel.Services.Companion.Rain
 {
     /// <summary>
     /// The one look clamp (RAIN-V2-PLAN 2.4: Apply -> host clamp -> bake; also the wardrobe window's clamp on

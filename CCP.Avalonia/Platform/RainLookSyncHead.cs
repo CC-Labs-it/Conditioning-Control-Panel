@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.BackRoom;
-using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.Companion.Rain;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 

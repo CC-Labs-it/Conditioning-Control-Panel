@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace ConditioningControlPanel.Services.Companion
+namespace ConditioningControlPanel.Services.Companion.Rain
 {
     /// <summary>
     /// Rain's wardrobe look as <c>AppSettings.RainLook</c> stores it (Rain avatar brief, contract 4; the

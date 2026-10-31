@@ -9,7 +9,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
-using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.Companion.Rain;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
