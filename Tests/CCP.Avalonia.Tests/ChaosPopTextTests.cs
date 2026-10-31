@@ -21,9 +21,84 @@ public sealed class ChaosPopTextTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+    }
+
+    // WPF BubbleService.cs:4685/:4918: pressing a treat shows its effect word at its centre.
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public async Task Pressing_a_treat_reaches_the_pooled_overlay_without_an_injected_sink(bool lowFocus, bool scores, bool panicBeforeDrain)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var prepare = ChaosPopText.Prepare;
+            var canShow = ChaosPopText.PlatformCanShow;
+            bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            ChaosPopText.Prepare = (w, r) => { w.Position = r.Position; return true; };
+            ChaosPopText.PlatformCanShow = () => true;
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.State!.ShowPopScores = scores;
+                foreach (bool enabled in new[] { false, true })
+                {
+                    CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
+                    ChaosRunHost.State.Focus = lowFocus ? 0 : 100;
+                    double beforeScore = ChaosRunHost.State.Score;
+                    var b = global::ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.SpawnChaos(
+                        new EffectBubbleSpec
+                        {
+                            VariantId = "spiral", SizePx = 200, Tint = 0xFF00C8FF,
+                            Payload = new FlashPayload()
+                        });
+                    global::ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                    if (enabled && panicBeforeDrain)
+                    {
+                        Assert.Empty(ChaosPopText.Pool.All); // the pop is still queued
+                        ChaosRunHost.ForceShutdown();
+                        Dispatcher.UIThread.RunJobs();
+                        Assert.Empty(ChaosPopText.Pool.All); // panic must invalidate that pop
+                        ChaosPopText.Show(500, 300, "snap", Colors.Red);
+                        Dispatcher.UIThread.RunJobs();
+                        Assert.Equal("SNAP", Assert.Single(ChaosPopText.Pool.All).LabelText);
+                        return Task.CompletedTask; // later shows still work after teardown
+                    }
+                    Dispatcher.UIThread.RunJobs();
+                    if (!enabled) { Assert.Empty(ChaosPopText.Pool.All); continue; }
+                    Assert.Equal(1 + (lowFocus ? 1 : 0) + (scores ? 1 : 0), ChaosPopText.Pool.All.Count);
+                    if (lowFocus) Assert.Contains(ChaosPopText.Pool.All, w =>
+                        w.LabelText == $"+{(int)ChaosFieldMath.TreatFocusGain(1)} FOCUS");
+                    if (scores) Assert.Contains(ChaosPopText.Pool.All, w =>
+                        w.LabelText == "+" + ((long)(ChaosRunHost.State.Score - beforeScore)).ToString("N0"));
+                    var word = Assert.Single(ChaosPopText.Pool.All, w => w.LabelText == "SPIRAL");
+                    Assert.True(word.IsVisible);
+                    Assert.Equal("SPIRAL", word.LabelText);
+                    Assert.Equal(Color.FromRgb(71, 215, 255), ((ISolidColorBrush)word.LabelFill).Color);
+                    var k = word.Screens.Primary?.Scaling is > 0 and var scale ? scale : 1.0;
+                    Assert.Equal((int)Math.Round((b.CenterX - 140) * k), word.Position.X);
+                    Assert.Equal((int)Math.Round((b.CenterY - 44) * k), word.Position.Y);
+                }
+                ChaosRunHost.ForceShutdown();
+                Assert.Empty(ChaosPopText.Pool.All);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosPopText.ShutdownPool();
+                ChaosPopText.Prepare = prepare;
+                ChaosPopText.PlatformCanShow = canShow;
+                CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+            }
+            return Task.CompletedTask;
+        });
     }
 
     [Fact]
