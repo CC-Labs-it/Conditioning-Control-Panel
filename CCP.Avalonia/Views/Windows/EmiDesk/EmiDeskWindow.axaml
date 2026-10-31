@@ -152,6 +152,12 @@
                    IsHitTestVisible="False"
                    RenderOptions.BitmapInterpolationMode="None"/>
 
+            <!-- Owned items follow the outfit, face and glass, below window chrome. -->
+            <Image x:Name="DeskHatOverImage" Stretch="Fill" IsVisible="False"
+                   IsHitTestVisible="False" RenderOptions.BitmapInterpolationMode="None"/>
+            <Image x:Name="DeskToyOverImage" Stretch="Fill" IsVisible="False"
+                   IsHitTestVisible="False" RenderOptions.BitmapInterpolationMode="None"/>
+
             <!-- THE THING SHE IS HOLDING (idle beat). One plate at her right hand - a phone, a
                  clipboard, a punch card - shown for a couple of seconds by a fidget and taken
                  straight back off.

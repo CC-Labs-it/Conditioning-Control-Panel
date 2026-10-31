@@ -355,6 +355,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // layered-window compositor bug and has no X11 twin.
             ScalingChanged += OnScalingSettled;
             Closed += OnClosedCleanup;
+            HookDeskItems();
 
             ApplyBodyWidth(_bodyWidth);
             SetPose("idle");
@@ -834,6 +835,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // The stand-in stands down the moment real art lands, whichever road brings it.
                 _bodyPlaceholder.IsVisible = _bodyImage.Source is null;
                 PaintOutfitOver();
+                PaintDeskItems();
             }
             catch (Exception ex)
             {
@@ -2157,6 +2159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// </summary>
         public void RunSummon(Action? done = null)
         {
+            RefreshDeskItems();
             try
             {
                 if (_closingForGood) return;
@@ -2630,6 +2633,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 _closingForGood = true;
+                UnhookDeskItems();
                 try { OnTearDownCore(); }
                 catch (Exception ex) { Log.Debug(ex, "[EmiDesk] teardown seam threw"); }
                 KillOptionsPanel();
@@ -2659,6 +2663,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 _closingForGood = true;
+                UnhookDeskItems();
                 KillOptionsPanel();
                 CloseBook();
                 StopIdleBeats();
