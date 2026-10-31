@@ -39,9 +39,14 @@ public sealed class MonoConsumerSourceTests
     {
         // WPF Services/EmiDesk/EmiFace.cs:118,137,178,197 guards the face and pixel fallback chains.
         var root = new DirectoryInfo(RepoRoot());
-        foreach (var file in new[] { "EmiFace.cs", "EmiBookWindow.axaml.cs", "EmiRingWindow.axaml.cs" })
+        // WPF Services/Banner/MarqueeReadEffects.cs:556 also uses the guarded EmiFace.PixelFont.
+        foreach (var file in new[]
         {
-            var lines = Code(root, "CCP.Avalonia/Views/Windows/EmiDesk/" + file).Split('\n').Where(l => l.Contains("Consolas")).ToArray();
+            "Views/Windows/EmiDesk/EmiFace.cs", "Views/Windows/EmiDesk/EmiBookWindow.axaml.cs",
+            "Views/Windows/EmiDesk/EmiRingWindow.axaml.cs", "Views/Tabs/SettingsTabView.MarqueeReads.cs",
+        })
+        {
+            var lines = Code(root, "CCP.Avalonia/" + file).Split('\n').Where(l => l.Contains("Consolas")).ToArray();
             Assert.NotEmpty(lines);
             Assert.All(lines, l => Assert.Contains("FontGuard.Startup.Family(", l));
         }
