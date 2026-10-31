@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -24,6 +25,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     {
         private IReadOnlyList<ProgramDefinition> _library = BuiltInPrograms.All();
         private string? _selectedProgramId;
+        private readonly ObservableCollection<ProgramBrowseItem> _browseItems = new();
+        private ProgramBrowseItem? _detailsItem;
+        internal int BrowseRowChanges { get; private set; }
+
 
         public ProgramsTabView()
         {
@@ -58,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnLanguageChanged(object? sender, EventArgs e) =>
             Dispatcher.UIThread.Post(() =>
             {
+                _detailsItem = null;
                 if (VisualRoot is not null) RefreshPrograms();
             });
 
@@ -73,11 +79,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void RefreshBrowse()
         {
             var list = Find<ListBox>("ProgramLibraryList");
-            // Snapshot first: replacing ItemsSource raises SelectionChanged with an empty
-            // selection, which would null out _selectedProgramId before we can restore it.
+            // Snapshot first: replacing/removing a selected row raises SelectionChanged
+            // before we can restore it.
             var wantedId = _selectedProgramId;
-            var items = MainShellWindow.BuildProgramBrowseItems(_library, AvApp.Programs);
-            list.ItemsSource = items;
+            var fresh = MainShellWindow.BuildProgramBrowseItems(_library, AvApp.Programs);
+            // Keep the carrier and its realized templates. Session notifications also reach
+            // browse, even though they normally change none of its presentation values.
+            if (!ReferenceEquals(list.ItemsSource, _browseItems)) list.ItemsSource = _browseItems;
+            for (var i = 0; i < fresh.Count; i++)
+            {
+                if (i >= _browseItems.Count) { _browseItems.Add(fresh[i]); BrowseRowChanges++; }
+                else if (!SameBrowseRow(_browseItems[i], fresh[i]))
+                { _browseItems[i] = fresh[i]; BrowseRowChanges++; }
+            }
+            while (_browseItems.Count > fresh.Count)
+            { _browseItems.RemoveAt(_browseItems.Count - 1); BrowseRowChanges++; }
+            var items = _browseItems;
 
             Find<StackPanel>("ProgramsBrowsePanel").IsVisible = true;
             Find<StackPanel>("ProgramsRunPanel").IsVisible = false;
@@ -92,6 +109,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ShowProgramDetails(selected);
         }
 
+        private static bool SameBrowseRow(ProgramBrowseItem a, ProgramBrowseItem b) =>
+            ReferenceEquals(a.Definition, b.Definition) && a.ProgramId == b.ProgramId &&
+            a.Icon == b.Icon && a.Title == b.Title && a.Subtitle == b.Subtitle && a.Pitch == b.Pitch &&
+            a.LengthLabel == b.LengthLabel && a.TierLabel == b.TierLabel &&
+            a.IsLocked == b.IsLocked && a.ActionText == b.ActionText &&
+            a.IsActionEnabled == b.IsActionEnabled && a.ActionOpacity == b.ActionOpacity &&
+            a.ReasonText == b.ReasonText && a.ReasonVisible == b.ReasonVisible &&
+            a.CardOpacity == b.CardOpacity && a.BannerVisible == b.BannerVisible &&
+            ReferenceEquals(a.BannerArt, b.BannerArt) && a.ArtVisible == b.ArtVisible &&
+            a.AccentBrush.ToString() == b.AccentBrush.ToString() &&
+            ReferenceEquals((a.ArtMask as ImageBrush)?.Source, (b.ArtMask as ImageBrush)?.Source);
+
         private void ProgramLibraryList_SelectionChanged(object? sender, SelectionChangedEventArgs e)
         {
             var selected = Find<ListBox>("ProgramLibraryList").SelectedItem as ProgramBrowseItem;
@@ -101,6 +130,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void ShowProgramDetails(ProgramBrowseItem? item)
         {
+            if (item is not null && ReferenceEquals(_detailsItem, item)) return;
+            _detailsItem = item;
             var panel = Find<Border>("ProgramDetailsPanel");
             panel.IsVisible = item is not null;
             var chapters = Find<ItemsControl>("ProgramDetailsChapterList");

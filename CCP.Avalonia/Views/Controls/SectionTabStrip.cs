@@ -72,6 +72,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             VerticalAlignment = VerticalAlignment.Center, Width = 0, IsVisible = false, IsHitTestVisible = false,
         };
         private readonly List<PillParts> _pills = new();
+        private sealed record PillCache(string Signature, Control[] Hosts, PillParts[] Parts,
+            Dictionary<string, Control> Help);
+        private readonly Dictionary<string, PillCache> _pillCache = new();
+
         private string? _section, _tab, _activePill;
         private IBrush _accent = Brushes.Transparent, _activeText = Brushes.Black;
         private Color _hue;
@@ -160,6 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Rebuilds the pills (language switch, a tier change).</summary>
         public void Rebuild()
         {
+            _pillCache.Clear();
             var section = _section;
             _section = null;
             Show(section, _tab, section == NavSections.Settings ? SettingsPageLabel?.Invoke() : null);
@@ -249,6 +254,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _activeFill.Width = 0;
             _activeFill.IsVisible = false;
             var tabs = NavStripTable.Pills(section);
+            var signature = LocalizationManager.Instance.CurrentLanguage + ":" +
+                string.Join(";", tabs.Select(t => $"{t.Key}:{CanOpen(t)}:{PillLocked(t.Tier)}"));
+            if (_pillCache.TryGetValue(section, out var cached) && cached.Signature == signature)
+            {
+                _pills.AddRange(cached.Parts);
+                foreach (var pair in cached.Help) _helpBadges.Add(pair.Key, pair.Value);
+                foreach (var part in _pills)
+                {
+                    part.Pressed = part.Hovered = false;
+                    part.FaceRun?.Cancel();
+                    FxHover(part, false, animate: false);
+                }
+                _pillRow.Children.AddRange(cached.Hosts);
+                return;
+            }
             var hue = Hue(section);
             for (int index = 0; index < tabs.Count; index++)
             {
@@ -364,6 +384,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 DepthSettle(parts, animate: false);
                 PillCreated?.Invoke(tab, pill);
             }
+            _pillCache[section] = new PillCache(signature, _pillRow.Children.ToArray(),
+                _pills.ToArray(), new Dictionary<string, Control>(_helpBadges));
         }
 
         /// <summary>WPF PillToolTip: where it leads, what it does (HelpText), then the tier line for a locked page.</summary>

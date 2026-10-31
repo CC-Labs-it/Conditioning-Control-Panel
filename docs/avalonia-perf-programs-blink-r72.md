@@ -1,0 +1,102 @@
+# Programs / BlinkTrainer switch work (r72)
+
+Checkout verification: `/workspace/Conditioning-Control-Panel`, clean `work` at
+`aa9918833722f057079e455167cb3d1b14462340`. Fetched
+`CC-Labs-it/Conditioning-Control-Panel` and created the delivery branch from
+`7a78d5357b642858568f6005f50cb0b2fc2b85a4` (commit comparison, not branch-name comparison).
+That exact base has the rendered-batch PerfBench endpoint but does **not** contain
+`MainShellWindow.TabSwitchTiming.cs` or `CCP_TRACE_TAB_SWITCH`; this change adds opt-in tracing.
+
+WPF comparison: `MainWindow.ProgramsTab.cs:509` defers hidden updates; Avalonia
+already did that and already skipped unchanged repeat shows. WPF's
+`MainWindow.TabNavigation.cs:1017` refreshes Blink settings and rebuilds folder cards
+on entry too. Those suspected paths were not the dominant cost locally.
+Avalonia section entry rebuilds pill controls and replaces globally referenced
+section ink brushes; WPF's resource pipeline does not have Avalonia's shell-wide
+DynamicResource rebinding cost. Retaining brushes and realized pill templates
+reduces that synchronous work without changing the palette or entry animation.
+
+Changes:
+- `CCP.Avalonia/Views/Tabs/ProgramsTabView.axaml.cs:79`: reconcile browse rows in a
+  retained observable collection; keep selection and unchanged chapter details.
+- `CCP.Avalonia/Views/Tabs/BlinkTrainerTabView.axaml.cs:412`: retain localization
+  bindings and unchanged mix/consent paint. At `:463`, retain folder cards by their
+  displayed content; rescan every refresh so external file changes remain visible.
+- `CCP.Avalonia/Views/Controls/SectionTabStrip.cs:249`: reuse realized section pills;
+  language, tier/eligibility changes and explicit Rebuild invalidate the cache.
+- `CCP.Avalonia/Views/Windows/MainShellWindow.SectionChrome.cs:182`: mutate retained
+  ink brushes, still publishing all four Color resources together once.
+- `Tests/CCP.Avalonia.Tests/TabVisualReuseTests.cs:19`: guards for pill/tier,
+  brush/color, row/selection/chapter, repeat-show card identity, external file count
+  changes and adding another folder without rebuilding its neighbor.
+- Three existing headless fixtures now use the production font builder; all their
+  assertions remain intact. A bare builder could initialize the process without
+  Inter and make the mixed suite fail depending on which fixture ran first.
+
+Linux headless measurements: .NET 10.0.403, Release, full application fonts,
+21 alternating switches, first discarded; 20 samples per tab. Same tracing/probe
+on base and final. Each cell is **median / p95 milliseconds** (nearest-rank p95).
+Trace-file overhead is included. `layout-jobs` includes queued dispatcher work;
+`render` forces a headless tick and screenshot capture, **not** PerfBench's desktop
+rendered-batch latency. Animated CPU screenshot timings are noisy and regressed;
+these data do not establish Windows acceptance.
+
+Source key: **nav** = `CCP.Avalonia/Views/Windows/MainShellWindow.TabNavigation.cs`;
+**blink** = `CCP.Avalonia/Views/Tabs/BlinkTrainerTabView.axaml.cs`;
+**probe** = `Tests/CCP.Avalonia.Tests/TabSwitchWorkTests.cs`.
+
+| Tab / stage | Source | Before | After |
+|---|---|---:|---:|
+| programs / visibility | nav:175 | 0.473 / 2.108 | 0.419 / 1.568 |
+| programs / entrance | nav:179 | 0.062 / 0.151 | 0.056 / 0.093 |
+| programs / rail | nav:184 | 0.167 / 0.358 | 0.154 / 0.374 |
+| programs / fx | nav:186 | 0.011 / 0.032 | 0.009 / 0.024 |
+| programs / section | nav:188 | 15.503 / 33.649 | 11.039 / 19.650 |
+| programs / chrome | nav:193 | 0.060 / 0.106 | 0.050 / 0.081 |
+| programs / on-shown | nav:195 | 0.074 / 0.151 | 0.066 / 0.086 |
+| ProgramsTab / layout-jobs | probe:32 | 62.851 / 79.807 | 53.213 / 56.779 |
+| ProgramsTab / render | probe:35 | 312.500 / 801.266 | 323.150 / 860.632 |
+| blink-refresh / settings | blink:148 | 0.075 / 0.210 | 0.042 / 0.104 |
+| blink-refresh / folders | blink:164 | 0.015 / 0.034 | 0.015 / 0.030 |
+| blink-refresh / status | blink:166 | 0.416 / 0.832 | 0.327 / 0.599 |
+| blink-refresh / stage | blink:171 | 0.029 / 0.065 | 0.028 / 0.047 |
+| blinktrainer / visibility | nav:175 | 0.884 / 1.585 | 0.736 / 1.193 |
+| blinktrainer / entrance | nav:179 | 0.041 / 0.080 | 0.039 / 0.109 |
+| blinktrainer / rail | nav:184 | 0.136 / 0.376 | 0.141 / 0.251 |
+| blinktrainer / fx | nav:186 | 0.010 / 0.026 | 0.013 / 0.042 |
+| blinktrainer / section | nav:188 | 17.151 / 53.968 | 11.027 / 17.741 |
+| blinktrainer / chrome | nav:193 | 0.065 / 0.228 | 0.042 / 0.065 |
+| blinktrainer / on-shown | nav:195 | 0.084 / 0.148 | 0.081 / 0.148 |
+| BlinkTrainerTab / layout-jobs | probe:32 | 68.690 / 107.035 | 58.130 / 65.522 |
+| BlinkTrainerTab / render | probe:35 | 349.873 / 1038.726 | 361.822 / 1788.135 |
+
+Programs performs zero browse-row mutations on unchanged repeat show/refresh;
+Blink performs zero folder-card builds on unchanged repeat show (guarded with a
+nonempty folder, not just an empty-library case). There are no new deferrals,
+WPF changes, reduced-quality effects or benchmark endpoint/threshold changes.
+
+Commands and tails (run at repository root; SDK installed locally because dotnet
+was absent; Xvfb/system package installation unavailable in this unprivileged runtime):
+
+```sh
+CCP_TRACE_TAB_SWITCH=1 CCP_TRACE_TAB_SWITCH_FILE=/tmp/ccp-before-detailed.txt \
+ /tmp/ccp-dotnet/dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
+ --filter FullyQualifiedName~TabSwitchWorkTests
+# baseline with tracing/probe only: Passed: 1; Total time: 33.2334 Seconds
+
+/tmp/ccp-dotnet/dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
+ --filter 'FullyQualifiedName~TabSwitchWorkTests|FullyQualifiedName~TabSwitchReuseTests|FullyQualifiedName~TabVisualReuseTests|FullyQualifiedName~ProgramsBrowseTests|FullyQualifiedName~BlinkTrainerTabLiveTests|FullyQualifiedName~SectionTabStripShellTests'
+# Test Run Successful. Total tests: 17; Passed: 17; Total time: 44.2476 Seconds
+
+CCP_TRACE_TAB_SWITCH=1 CCP_TRACE_TAB_SWITCH_FILE=/tmp/ccp-after-isolated.txt \
+ /tmp/ccp-dotnet/dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
+ --no-build --filter FullyQualifiedName~TabSwitchWorkTests
+# Test Run Successful. Total tests: 1; Passed: 1; Total time: 32.7702 Seconds
+
+git diff --check
+# exit 0, no output
+```
+
+Windows numbers come from the PR's **perf-bench-windows** CI artifact. They were
+not measured here. Both median and p95 must satisfy WPF x 1.10 + 20 ms under
+`docs/avalonia-perf.html`; local headless stage costs are not a substitute.
