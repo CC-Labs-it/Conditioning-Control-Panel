@@ -886,11 +886,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // ---------------------------------------------------------------- chains
 
         /// <summary>Play a canon chain by id. Unknown ids are ignored.</summary>
-        // ponytail: needs EmiChainPlayer (WPF head) - the frame clock and the
-        // Draw/Bubble/BodyFrame/Fx/Move hook set. The chain table (EmiChains) is in Core; wired
-        // when the chain player moves to Core.
+        // The wake face chain is wired; other chains still complete without a performance.
         public void PlayChain(string chainId, Action? done = null, string? bodyFrameOverride = null)
         {
+            // WPF EmiDeskWindow.xaml.cs:1042 and EmiChainPlayer.cs:77-133.
+            // Part B retains the remaining chains, voice, bubble, body art and moves.
+            if (chainId == "wake") { StartWakeFeedback(done); return; }
             done?.Invoke();
         }
 
@@ -2120,12 +2121,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         // ---------------------------------------------------------------- summon / dismiss FX
 
-        // PORTED from ConditioningControlPanel/Windows/EmiDesk/EmiDeskWindow.Fx.cs, the seventh
-        // partial of the WPF class and the only one of the six still missing whose whole dependency
-        // set was already in this file. It needs no EmiDesk service: the two chains it plays
-        // (`wake`, `wink`) go through PlayChain, which on this head runs its continuation straight
-        // away, so she arrives and leaves with the smoke, the CRT and the sparkles but without the
-        // little line either end. That degradation is visible and honest, not silent.
+        // PORTED from ConditioningControlPanel/Windows/EmiDesk/EmiDeskWindow.Fx.cs.
+        // The wake face cadence follows the CRT power-on and can be cut by a pat.
+        // Part B: the wink chain still completes immediately, so dismiss runs its
+        // CRT collapse and sparkle scatter without the preceding face performance.
+        // The shared face data is used without changing its frame holds.
+        // Body art, voice and bubble hooks remain part B.
         //
         // EmiDeskService (this folder) is the only caller of RunSummon / RunDismiss: the dock chip,
         // the hover x and the settings switch all go through it.
@@ -2553,7 +2554,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 if (_transiting || InputLocked) return;
-                if (ChainLive) return;   // WPF React.cs:132-137: a live chain eats the click (summon-cut is -b)
+                if (ChainLive)
+                {
+                    // WPF React.cs:132-137: only her entrance can be cut for a pat.
+                    if (!_summonChainLive) return;
+                    FinishSummon();
+                    CancelChain();
+                }
                 DisarmPet();
                 _petArmed = true;
                 RaiseActivity();
