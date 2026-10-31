@@ -34,7 +34,7 @@ public sealed class ChaosRunHostTests
 
     // Keep drafts enabled. Long-run clock/payout tests now drive the real draft UI callback
     // and ReadyGo instead of assuming a wave transition resumes without a user choice.
-    private static void TickRun()
+    internal static void TickRun()
     {
         var overlay = ChaosRunHost.Overlay;
         if (overlay?.FindControl<Border>("DraftPanel")?.IsVisible == true)

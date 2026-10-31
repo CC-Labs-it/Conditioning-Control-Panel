@@ -494,7 +494,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     ChaosOverlayWindow.ChaosSfx.Play("sin_accept", 0.6f); // WPF :1565
                 }
                 // WPF ChaosModeService.cs:1566,1574: the accepted card names its kind and art.
-                ChaosAnnouncerOverlay.Announce((boon.IsCurse ? "☠ " : "◈ ") + boon.Name,
+                ChaosAnnouncerOverlay.Announce(boon.Name,
                     boon.IsCurse ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
             _state.WaveIndex = _pendingWave;

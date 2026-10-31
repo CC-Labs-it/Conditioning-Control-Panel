@@ -11,6 +11,8 @@ using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
 using ConditioningControlPanel;
+using Avalonia.LogicalTree;
+using ConditioningControlPanel.Avalonia.Controls;
 
 namespace CCP.Avalonia.Tests;
 
@@ -195,8 +197,11 @@ public sealed class ChaosUnlockCardOverlayTests
         Assert.Equal(shields + (curse ? 1 : pick == 2 ? 2 : 0), state.Shields);
         Assert.Equal(pick != 0, pulses.Contains((0xFF78DCA0u, 0.22)));
         Assert.Equal(curse, cues.Contains("sin_accept"));
-        Assert.Equal((boon.Id, curse ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, (curse ? "☠ " : "◈ ") + boon.Name),
+        Assert.Equal((boon.Id, curse ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, boon.Name),
             (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
+        var icon = Assert.Single(ChaosAnnouncerOverlay.Active!.GetLogicalDescendants().OfType<IconGlyph>());
+        Assert.Equal(curse ? ChaosOverlayWindow.CurseIcon : FluentIcons.Common.Symbol.Diamond, icon.Kind);
+        Assert.Equal(FluentIcons.Common.IconVariant.Filled, icon.Variant);
         Assert.Equal(curse, state.SurrenderShieldUsed);
         Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
         Assert.Equal(curse, ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes));
