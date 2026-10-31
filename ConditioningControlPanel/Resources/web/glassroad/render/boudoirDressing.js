@@ -75,17 +75,24 @@ export function buildBoudoirDressing(track, art, pal, samples) {
   };
   const swatches = { cream: '#f0e5d0', rose: '#b55673', lavender: '#79628f', gold: '#dfb56a',
     mirror: '#e4def7', pearl: '#fff4db', lip: '#e72e64', glass: '#baa1cf', floor: '#58314f', velvet: '#47182c', mint: '#4aaca4', district: '#ffffff' };
+  // Lacquer, satin, velvet and porcelain need different highlight widths at driver distance.
+  const roughness = { cream: .28, rose: .3, lavender: .56, gold: .2, mirror: .16,
+    pearl: .24, lip: .23, glass: .18, floor: .72, velvet: .9, mint: .29, district: .48 };
   const materials = {};
   for (const [name, hex] of Object.entries(swatches)) {
-    const source = new MeshStandardMaterial({ color: hex, metalness: name === 'gold' ? .85 : name === 'mirror' ? .97 : .12,
-      roughness: name === 'gold' || name === 'mirror' ? .18 : name === 'pearl' ? .27 : .4 });
+    const metal = name === 'gold' || name === 'mirror';
+    const source = new MeshStandardMaterial({ color: hex, metalness: metal ? (name === 'gold' ? .85 : .97) : .02,
+      roughness: roughness[name] });
     source.name = 'boudoir-' + name;
-    const material = createSoftMaterial(source, pal, { haze: .025, fill: .5, rim: vec3(.5, .13, .32), rimGain: .42, rimPow: 3 }).material;
+    const material = createSoftMaterial(source, pal, { haze: .025, fill: .5, rim: vec3(.5, .13, .32),
+      rimGain: name === 'velvet' ? .18 : metal ? .42 : .28, rimPow: 3 }).material;
     source.dispose(); materials[name] = material;
     if (['rose', 'lavender', 'cream', 'velvet'].includes(name)) {
       const u = uv(), detailFade = float(1).sub(smoothstep(.005, .04, max(fwidth(u.x), fwidth(u.y))));
       const weave = sin(u.x.mul(115)).mul(sin(u.y.mul(140))).mul(.035).mul(detailFade);
-      const fold = name === 'velvet' ? cos(u.x.mul(45)).mul(.13).add(.86) : float(1);
+      const folds = cos(u.x.mul(Math.PI * 8).add(sin(u.y.mul(5)).mul(.35)));
+      const fold = name === 'velvet' ? folds.mul(.17).add(.83)
+        : name === 'lavender' ? folds.mul(.06).add(.94) : float(1);
       material.colorNode = material.colorNode.mul(fold.add(weave));
       // A fine edge separates adjacent lacquer boards without heavy black cartoon hulls.
       const pixels = min(min(u.x, float(1).sub(u.x)).div(fwidth(u.x).max(.00001)),
