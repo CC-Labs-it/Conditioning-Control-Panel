@@ -69,6 +69,21 @@ public sealed class GameWindowFypTests
         });
     }
 
+    // WPF VideoService.cs:1982: the video host uses the same visible-feed predicate as Bubble Count.
+    [Fact]
+    public void MandatoryVideoHost_TracksVisibleFeed_AndPanicClearsIt() => Run((shell, _) =>
+    {
+        var host = global::ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        Assert.False(host.FeedOwnsTheScreen);
+        CoreEntitlement.HasPremiumProvider = () => true;
+        shell.ShowTab("fyp");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(host.FeedOwnsTheScreen);
+        GameWindow.CloseAllForPanic();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(host.FeedOwnsTheScreen);
+    });
+
     /// <summary>WPF ShowTab("fyp") -> OpenFypFeed (MainWindow.Lab.cs:234), refused out loud; panic closes it (GameSurfaces.cs:56).</summary>
     [Fact]
     public void ShowTabFyp_IsGatedOpensTheFeed_AndPanicClosesIt() => Run((shell, _) =>

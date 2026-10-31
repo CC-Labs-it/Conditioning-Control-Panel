@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using Serilog;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Fyp;
 
 namespace ConditioningControlPanel.Services
 {
@@ -16,6 +18,8 @@ namespace ConditioningControlPanel.Services
         /// <see cref="MandatoryVideoScheduler.End"/> at the clip's end or on Esc, and
         /// <see cref="MandatoryVideoScheduler.ForceCleanup"/> on the in-window panic key.</summary>
         void Show(string path, bool strict);
+        /// <summary>WPF VideoService.cs:1982: visible, non-ghosted For You feed.</summary>
+        bool FeedOwnsTheScreen => false;
         /// <summary>Close every video window; returns the seconds of the clip that were watched.</summary>
         double CloseAll();
         /// <summary>WPF ShowMessage: the attention-check verdict over every screen for
@@ -42,7 +46,7 @@ namespace ConditioningControlPanel.Services
     /// <see cref="IMandatoryVideoHost"/>.
     /// Content-pack clips come through <see cref="PackVideos"/>.
     /// ponytail: remote clips, the duration filter
-    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed/DND/browser-media defers and the
+    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/DND/browser-media defers and the
     /// interaction queue are WPF-head services; add each here when it reaches Core.
     /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
     /// schedule. WPF returns from ContinueTriggerVideo (:2424) without ScheduleNext, so its schedule
@@ -59,6 +63,7 @@ namespace ConditioningControlPanel.Services
             { ".mp4", ".mov", ".avi", ".wmv", ".mkv", ".webm", ".m4v", ".mpg", ".mpeg", ".flv", ".ts" };
 
         private readonly IMandatoryVideoHost _host;
+        private readonly FypFeedDefer _feedDefer;
         private readonly TimeProvider _time;
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
@@ -99,6 +104,7 @@ namespace ConditioningControlPanel.Services
             _host = host;
             _time = time ?? TimeProvider.System;
             _library = library ?? LocalLibrary;
+            _feedDefer = new FypFeedDefer(_time, "VideoService", () => _host.FeedOwnsTheScreen);
         }
 
         public bool IsRunning => _running;
@@ -271,6 +277,7 @@ namespace ConditioningControlPanel.Services
         public void Stop()
         {
             _running = false;
+            _feedDefer.Reset();
             _retryGeneration++;   // WPF CancelPendingRetry: a verdict message must not replay after a stop
             Dispose(ref _scheduler);
             ForceCleanup();
@@ -316,9 +323,24 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
         /// pre-roll. False when nothing was started (no clip, or one is already playing).
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
-        public bool Trigger(bool? strictOverride = null, string? path = null)
+        public bool Trigger(bool? strictOverride = null, string? path = null, bool userInitiated = false, bool userEarned = false)
         {
             if (_playing) return false;
+            // WPF VideoService.cs:2270-2293: earned and specific clips bypass only the feed hold.
+            if (path == null && !userEarned && _host.FeedOwnsTheScreen)
+            {
+                if (userInitiated)
+                    CoreProgram.Notify(Loc.Get("video_toast_feed_has_the_screen"), "Info", TimeSpan.FromSeconds(6));
+                _feedDefer.Defer(() =>
+                {
+                    // WPF :2048: stop and live disable invalidate the held trigger.
+                    if (!_running || !CoreSettings.Current.MandatoryVideosEnabled) return;
+                    if (!Trigger(strictOverride)) Rearm();
+                }, Rearm);
+                // Keep the base's empty-library rearm policy when a hold expires.
+                void Rearm() { if (_scheduler == null && !_playing) ScheduleNext(); }
+                return true;
+            }
             path ??= PickNext();
             if (path == null)
             {
@@ -405,13 +427,18 @@ namespace ConditioningControlPanel.Services
             _host.ShowMessage(mercy ? AttentionVerdict.Mercy : verdict, mercy ? 2500 : 2000, () =>
             {
                 if (gen != _retryGeneration) return;   // stopped or replaced while the message was up
-                if (mercy || !Trigger(strict)) AfterEnd();
+                if (mercy) { AfterEnd(); return; }
+                // WPF VideoService.cs:5964-5965: retry directly, retaining strictness and the prior clip fallback.
+                // An attention retry is part of the current run, so it must not enter the feed hold.
+                var retryPath = PickNext() ?? LastVideoPath;
+                if (retryPath == null || !Trigger(strict, retryPath)) AfterEnd();
             });
         }
 
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            _feedDefer.Reset(); // A panic cannot leave a held trigger behind.
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
