@@ -6,6 +6,8 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -18,21 +20,18 @@ public class SkillPurchaseTests : IDisposable
     public SkillPurchaseTests()
     {
         var secrets = new Dictionary<string, string?>();
-        ConditioningControlPanel.CoreSecrets.RetrieveProvider = n => secrets.GetValueOrDefault(n);
-        ConditioningControlPanel.CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+        (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (n => secrets.GetValueOrDefault(n), (n, v) => secrets[n] = v);
     }
-    public void Dispose()
-    {
-        ConditioningControlPanel.CoreSecrets.RetrieveProvider = _get;
-        ConditioningControlPanel.CoreSecrets.StoreProvider = _set;
-    }
+    public void Dispose() => (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (_get, _set);
     private sealed class Fake : HttpMessageHandler
     {
         public readonly Queue<Func<HttpResponseMessage>> Answers = new();
         public readonly List<string> Bodies = new();
         public readonly List<string?> Tokens = new();
+        public int SyncCalls; public HttpStatusCode SyncStatus = HttpStatusCode.OK;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/sync")) { SyncCalls++; return Json(SyncStatus, "{}")(); }
             Bodies.Add(await request.Content!.ReadAsStringAsync(ct));
             Tokens.Add(request.Headers.TryGetValues("X-Auth-Token", out var v) ? v.First() : null);
             Assert.EndsWith("/v2/user/purchase-skill", request.RequestUri!.AbsolutePath);
@@ -42,14 +41,10 @@ public class SkillPurchaseTests : IDisposable
     private static Func<HttpResponseMessage> Json(HttpStatusCode code, string json) =>
         () => new HttpResponseMessage(code) { Content = new StringContent(json.Replace('\'', '"'), Encoding.UTF8, "application/json") };
     private static readonly SkillDefinition Skill = SkillDefinition.All.First(s => !s.IsSecret && string.IsNullOrEmpty(s.PrerequisiteId));
-    private static AppSettings Settings(int points, string? id = "u_1") => new()
-    {
-        SkillPoints = points, UnifiedId = id, AuthToken = "tok", UnlockedSkills = new List<string>(),
-    };
+    private static AppSettings Settings(int points, string? id = "u_1") => new() { SkillPoints = points, UnifiedId = id, AuthToken = "tok", UnlockedSkills = new List<string>() };
     private static (SkillPurchase service, Fake http, List<string> saves) Make(AppSettings s)
     {
-        var http = new Fake();
-        var saves = new List<string>();
+        var (http, saves) = (new Fake(), new List<string>());
         return (new SkillPurchase(() => s, http) { Save = () => saves.Add("save") }, http, saves);
     }
     [Fact]
@@ -85,10 +80,12 @@ public class SkillPurchaseTests : IDisposable
         var (service, http, _) = Make(s);
         service.Unauthorized = _ => { s.AuthToken = "recovered"; return Task.FromResult(true); };
         http.Answers.Enqueue(Json(HttpStatusCode.Unauthorized, "{}"));
-        http.Answers.Enqueue(Json(HttpStatusCode.OK, "{'success':true,'skill_points':0}"));
+        var receipt = Json(HttpStatusCode.OK, "{'success':true,'skill_points':0}")();
+        http.Answers.Enqueue(() => receipt);
         var result = await service.PurchaseSkillAsync(Skill.Id);
         Assert.True(result.Success, result.Error);
         Assert.Equal(new[] { "tok", "recovered" }, http.Tokens);
+        Assert.Throws<ObjectDisposedException>(() => receipt.Content.ReadAsStringAsync().GetAwaiter().GetResult());
         s.SkillPoints = Skill.Cost;
         http.Answers.Enqueue(() =>
         {
@@ -124,6 +121,46 @@ public class SkillPurchaseTests : IDisposable
         http.Answers.Enqueue(Json(HttpStatusCode.OK, "{'success':false,'skill_points':0}"));
         Assert.False((await service.PurchaseSkillAsync(Skill.Id)).Success);
         Assert.Equal(0, s.SkillPoints);
+    }
+    [Theory]
+    [InlineData(HttpStatusCode.OK, true)]
+    [InlineData((HttpStatusCode)429, false)]
+    [InlineData(HttpStatusCode.Conflict, false)]
+    public async Task PurchaseAfterLevelUpWaitsForARealSync(HttpStatusCode status, bool expected)
+    {
+        var (oldSettings, oldLogin) = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider);
+        var store = new SettingsService(); CoreSettings.ServiceProvider = () => store; CoreAccount.IsLoggedInProvider = () => true;
+        var s = store.Current; s.UnlockedSkills = new(); (s.UnifiedId, s.AuthToken, s.SkillPoints, s.LastConfirmedServerXp, s.OfflineMode) = ("retry", "tok", Skill.Cost + 5, 0, false);
+        var (purchase, http, _) = Make(s); http.SyncStatus = status;
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, http);
+        var now = DateTime.UtcNow; int waits = 0; sync.UtcNow = () => now;
+        sync.PurchaseRetryDelay = delay => { Assert.InRange(delay, TimeSpan.Zero, SyncPush.Cooldown + TimeSpan.FromMilliseconds(250)); waits++; now += delay; return Task.CompletedTask; };
+        try
+        {
+            sync.MarkLoaded(null); await sync.PushAsync("level-up"); purchase.SyncBeforeRetry = sync.SyncBeforeRetryAsync;
+            http.Answers.Enqueue(Json(HttpStatusCode.OK, "{'success':false,'skill_points':0}"));
+            http.Answers.Enqueue(Json(HttpStatusCode.OK, "{'success':true,'skill_points':5}"));
+            Assert.Equal(expected, (await purchase.PurchaseSkillAsync(Skill.Id)).Success);
+            Assert.Equal(expected ? 5 : Skill.Cost + 5, s.SkillPoints);
+            Assert.Equal(1, waits); Assert.Equal(2, http.SyncCalls);
+        }
+        finally { sync.Reset(); store.SaveImmediate(); (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider) = (oldSettings, oldLogin); }
+    }
+    [Fact]
+    public async Task ClientFailuresUseLocalizedMessages()
+    {
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        LocalizationManager.Instance.SetLanguage("fr");
+        try
+        {
+            foreach (var (status, json, key) in new[] { (401, "{}", "login_session_expired"), (500, "{}", "dialog_purchase_failed"), (200, "null", "skill_err_invalid_response"), (200, "{'success':false}", "dialog_purchase_failed"), (0, "", "wizard_connect_failed") })
+            {
+                var (service, http, _) = Make(Settings(Skill.Cost));
+                http.Answers.Enqueue(status == 0 ? () => throw new HttpRequestException() : Json((HttpStatusCode)status, json));
+                Assert.StartsWith(Loc.Get(key), (await service.PurchaseSkillAsync(Skill.Id)).Error!);
+            }
+        }
+        finally { LocalizationManager.Instance.SetLanguage(language); }
     }
     [Fact]
     public void LifetimeSpendOnlyRises()

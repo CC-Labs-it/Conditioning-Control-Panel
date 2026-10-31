@@ -29,8 +29,7 @@ public sealed class EnhancementsPurchaseTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Calls++;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-                { Content = new StringContent(Answer.Replace('\'', '"'), Encoding.UTF8, "application/json") });
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Answer.Replace('\'', '"'), Encoding.UTF8, "application/json") });
         }
     }
     private static Dictionary<string, Control> Nodes(EnhancementsTabView tab) =>
@@ -50,9 +49,9 @@ public sealed class EnhancementsPurchaseTests
             Assert.False(answer.IsCompleted);
             var texts = Assert.Single(EnhancementsTabView.PurchaseDialogs).GetLogicalDescendants()
                 .OfType<TextBlock>().Select(t => t.Text).ToArray();
-            Assert.Contains(Loc.Get("label_yes"), texts);
-            Assert.Contains(Loc.Get("label_no"), texts);
-            Assert.DoesNotContain(texts, t => t is "label_no" or "label_yes");
+            Assert.Contains(Loc.Get("btn_yes"), texts);
+            Assert.Contains(Loc.Get("btn_no"), texts);
+            Assert.DoesNotContain(texts, t => t is "btn_no" or "btn_yes");
             var surface = Assert.Single(ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All,
                 x => x.Id == "enhancement-purchase");
             surface.Stop(null);
@@ -67,6 +66,7 @@ public sealed class EnhancementsPurchaseTests
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         Window? w = null;
+        var language = LocalizationManager.Instance.CurrentLanguage;
         try
         {
             var s = CoreSettings.Current;
@@ -77,6 +77,8 @@ public sealed class EnhancementsPurchaseTests
             s.UnifiedId = "u_k2";
             s.UnlockedSkills = new List<string> { "sparkle_boost_1" };
             var buyable = SkillDefinition.All.Single(x => x.Id == "sparkle_boost_2");
+            CoreMods.MakeModAwareProvider = text => text == buyable.Name ? "Focus boost" : text == buyable.FlavorText ? "Focus flavor" : text == buyable.Description ? "Focus description" : text;
+            LocalizationManager.Instance.SetLanguage("fr");
             var http = new Fake();
             var questions = new List<string>();
             var failures = new List<string>();
@@ -99,6 +101,7 @@ public sealed class EnhancementsPurchaseTests
             Dispatcher.UIThread.RunJobs();
             var asked = Assert.Single(questions);
             Assert.StartsWith(Loc.Get("dialog_purchase_enhancement") + "|", asked);
+            Assert.All(new[] { "Focus boost", "Focus flavor", "Focus description" }, text => Assert.Contains(text, asked));
             Assert.Contains(ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("msg_skill_permanent_note"), asked);
             Assert.Equal(0, http.Calls);
             Assert.Equal(1000, s.SkillPoints);
@@ -140,9 +143,6 @@ public sealed class EnhancementsPurchaseTests
             pending.SetResult(false);
             await first;
         }
-        finally
-        {
-            w?.Close();
-        }
+        finally { w?.Close(); LocalizationManager.Instance.SetLanguage(language); }
     });
 }
