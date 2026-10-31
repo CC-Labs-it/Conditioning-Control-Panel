@@ -2,15 +2,15 @@
 
 Base: 74ac6ce3d5e0ae082c2871c00e864943e15aa2ad. Old lane: 75bfcb6b1ec2.
 The full old lane is +846/-40 before adapting to 7.2, so this cut prioritizes safe links and header behavior.
-No WPF files or existing tests changed. No new localization keys; the three browser strings and signed-in/no-name string already exist in all ten Core language files.
+No WPF files or existing tests changed. No new localization keys; the browser strings and signed-in/no-name string already exist in all ten Core language files.
 
 | Behavior | WPF specification | This cut or unchanged base | Old lane evidence |
 | --- | --- | --- | --- |
 | Motion Off swaps | MainWindow/MainWindow.Marquee.cs:432 | CCP.Avalonia/Views/Windows/MainShellWindow.Marquee.cs:166 | MainShellWindow.Marquee.cs:160 |
 | Welcome identity, blank provider fallback, sign-in repaint | MainWindow/MainWindow.Marquee.cs:125; MainWindow/MainWindow.Login.cs:57,123,328 | MainShellWindow.Marquee.cs:186; MainShellWindow.Login.cs:53 | MainShellWindow.Marquee.cs:194; MainShellWindow.Login.cs:53 |
 | 31px/744px/14px banner, support link | MainWindow/MainWindow.xaml:1102,1133,1143 | MainShellWindow.axaml:952,968 | MainShellWindow.axaml:941,959 |
-| Browser failure copies URL and explains | Helpers/BrowserLauncher.cs:63 | CCP.Avalonia/Controls/SafeHyperlinkButton.cs:41; MainShellWindow.axaml:1015 | SafeHyperlinkButton.cs:41 |
-| Sandbox refusal has no clipboard or dialog side effect | External opening remains gated; stricter than WPF BrowserLauncher.cs:63 | SafeHyperlinkButton.cs:47 | SafeHyperlinkButton.cs:47 |
+| Browser failure copies URL and explains | Helpers/BrowserLauncher.cs:63 | CCP.Avalonia/Controls/SafeHyperlinkButton.cs:51; MainShellWindow.axaml:1015 | SafeHyperlinkButton.cs:41 |
+| Sandbox refusal has no clipboard or dialog side effect | External opening remains gated; stricter than WPF BrowserLauncher.cs:63 | SafeHyperlinkButton.cs:70 | SafeHyperlinkButton.cs:47 |
 | Panic closes fallback prompt | BrowserLauncher.cs:75 modal; stricter cleanup here | CCP.Avalonia/Views/Windows/PanicSurfaces.cs:107 | PanicSurfaces.cs browser-prompt registration |
 | Rotation, retirement, authored pool, server feeds | MainWindow/MainWindow.Marquee.cs:51,504,746,881 | Already on 74ac6ce3d: MainShellWindow.Marquee.cs:120,261; MainShellWindow.BannerPool.cs:17; MainShellWindow.ServerBanners.cs:25; MainShellWindow.Announcement.cs:33 | Preserved by the old lane |
 | 750ms sheen, 20s throttle, force bypass | MainWindow/MainWindow.ChromeFx.cs:766 | Already on 74ac6ce3d: MainShellWindow.ChromeFx.cs:49 | MainShellWindow.BannerFx.cs:115; retained newer base implementation |
@@ -63,4 +63,27 @@ dotnet build Tests/CCP.Avalonia.Tests --no-restore: 145 warnings, 0 errors.
 dotnet test Tests/CCP.Avalonia.Tests --no-build --no-restore --filter 'FullyQualifiedName~BannerMotionTests|FullyQualifiedName~TestIsolationTests': Test Run Successful, 21 passed.
 ```
 
-The entire Avalonia suite was compiled; only the 54 selected tests (and the final 21-case subset) were run. WPF, native Windows browser fallbacks and an interactive live browser were not run. docs/avalonia-progress.html was not changed.
+For the original re-cut, the entire Avalonia suite was compiled; only the 54 selected tests (and the final 21-case subset) were run. WPF, native Windows browser fallbacks and an interactive live browser were not run. docs/avalonia-progress.html was not changed.
+
+## Review follow-up
+
+Both findings accepted. No WPF or Core files changed, and no existing assertions were weakened.
+
+- P2: SafeHyperlinkButton.cs:44 increments the panic generation before closing registered prompts. Each request captures that generation and watches its owner's Closed event (:56-60), checks validity after launcher and clipboard awaits (:64,74), and unsubscribes on completion (:85). WPF BrowserLauncher.cs:68-80 performs these operations synchronously; the Avalonia checks prevent an async continuation from opening a late modal. Four new headless cases delay either await, then trigger panic or owner closure, and assert no prompt, visited-state write or later clipboard call.
+- P3: MainShellWindow.axaml:1015 carries the exact WPF purpose, "open the CC Labs web app" (WPF MainWindow.Marquee.cs:489). SafeHyperlinkButton.cs:77-80 uses the existing msg_browser_no_default_for key (WPF BrowserLauncher.cs:71-74). The existing fallback test now asserts the complete localized message including its URL. Required browser keys were verified in all ten language files; no new key was needed.
+
+Initial follow-up validation: 33 affected/isolation tests passed. Full Core suite: 4,635 passed, 6 existing skips, 0 failed. Core guards and docs self-check passed.
+
+Review fail-proof: temporarily removed both post-await validity checks and the XAML FailurePurpose. dotnet test Tests/CCP.Avalonia.Tests --no-restore --filter FullyQualifiedName~BannerMotionTests compiled and returned exit 1: 13 cases, 5 failed, 8 passed. The four PendingBrowserFailureStopsOnPanicOrOwnerClose cases failed, and WebFailureCopiesTheLinkAndPanicClosesThePrompt failed its complete-copy assertion. Production sources were restored in finally; no test was modified for the fail-proof.
+
+Restored review validation commands and result tails:
+
+```text
+dotnet build CCP.Core --no-restore: Build succeeded; 0 errors.
+dotnet build CCP.Avalonia --no-restore: 201 warnings; 0 errors.
+dotnet build Tests/CCP.Avalonia.Tests --no-restore: 145 warnings; 0 errors.
+dotnet test Tests/CCP.Core.Tests --no-build --no-restore: Failed 0, Passed 4635, Skipped 6, Total 4641.
+dotnet test Tests/CCP.Avalonia.Tests --no-build --no-restore --filter 'FullyQualifiedName~BannerMotionTests|FullyQualifiedName~TestIsolationTests|FullyQualifiedName~PanicSurfacesTests|FullyQualifiedName~FavoritesRailShellTests': Test Run Successful; Total tests 33; Passed 33.
+bash .github/scripts/core-guards.sh: All Core guards passed.
+python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
+```

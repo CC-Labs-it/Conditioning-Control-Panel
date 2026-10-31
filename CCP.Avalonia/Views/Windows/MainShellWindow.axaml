@@ -1012,7 +1012,7 @@
                                         <fx:SafeHyperlinkButton x:Name="BannerWebLink" Padding="0" Margin="0" BorderThickness="0"
                                                                 HorizontalAlignment="Left"
                                                                 NavigateUri="https://app.cclabs.app"
-                                                                ExplainFailure="True" Click="BannerWebLink_Click">
+                                                                ExplainFailure="True" FailurePurpose="open the CC Labs web app" Click="BannerWebLink_Click">
                                             <TextBlock Text="{loc:Str label_banner_web_link}" FontWeight="Bold" FontSize="14"
                                                        FontStyle="Italic" Foreground="{DynamicResource PinkBrush}"
                                                        TextDecorations="Underline" TextTrimming="CharacterEllipsis"/>

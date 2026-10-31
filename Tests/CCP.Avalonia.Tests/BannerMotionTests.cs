@@ -117,7 +117,9 @@ public sealed class BannerMotionTests
                 open = OpenLink(link);
                 Dispatcher.UIThread.RunJobs();
                 var prompt = Assert.Single(Prompts());
-                Assert.Contains("https://app.cclabs.app", prompt.FindControl<TextBlock>("TxtMessage")!.Text);
+                Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("msg_browser_no_default_for", "open the CC Labs web app")
+                    + ConditioningControlPanel.Localization.Loc.GetF("msg_browser_link_copied", "https://app.cclabs.app/"),
+                    prompt.FindControl<TextBlock>("TxtMessage")!.Text);
                 Assert.Contains(PanicSurfaces.All, s => s.Id == "browser-prompt");
                 clipboard = w.Clipboard!.TryGetTextAsync();
                 PanicSurfaces.StopAll("banner-test", w);
@@ -139,6 +141,51 @@ public sealed class BannerMotionTests
         await OpenLink(w.Named<SafeLink>("BannerWebLink")!);
         Assert.Empty(Prompts());
         Assert.Equal("unchanged", await w.Clipboard.TryGetTextAsync());
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public Task PendingBrowserFailureStopsOnPanicOrOwnerClose(bool delayClipboard, bool closeOwner) => InShell(async w =>
+    {
+        var refused = SafeLink.Refused;
+        var release = new TaskCompletionSource<bool>();
+        Task? pending = null;
+        try
+        {
+            SafeLink.Refused = _ => false;
+            var link = w.Named<SafeLink>("BannerWebLink")!;
+            var copied = 0;
+            var shown = 0;
+            using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((window, _) =>
+            {
+                if (window is ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog) shown++;
+            });
+            link.LaunchLink = (_, _) => delayClipboard ? Task.FromResult(false) : release.Task;
+            link.CopyLink = async (_, _) => { copied++; if (delayClipboard) await release.Task; };
+            pending = OpenLink(link);
+            Assert.False(pending.IsCompleted);
+            Assert.Equal(delayClipboard ? 1 : 0, copied);
+            if (closeOwner) w.Close();
+            else PanicSurfaces.StopAll("pending-browser-test", w);
+            release.SetResult(false);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(pending.IsCompleted);
+            await pending;
+            Assert.Empty(Prompts());
+            Assert.Equal(0, shown);
+            Assert.False(link.IsVisited);
+            Assert.Equal(delayClipboard ? 1 : 0, copied);
+        }
+        finally
+        {
+            release.TrySetResult(false);
+            SafeLink.CloseBrowserPrompts();
+            try { if (pending is not null) await pending; }
+            finally { SafeLink.Refused = refused; }
+        }
     });
 
     private static Task OpenLink(SafeLink link) =>
