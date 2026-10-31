@@ -377,7 +377,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF TierBadge_MouseEnter/Leave: the big copy in a popup under the badge.
-        /// ponytail: WPF's 8 s wobble and the popup's pop-in scale are launcher-fx.</summary>
+        /// WPF TierBadge.cs:22-97: wobble and popup scale share the frame clock.</summary>
         private void TierBadge_PointerEntered(object? sender, PointerEventArgs e)
         {
             if (TierBadge.Source is not { } src) return;
@@ -385,12 +385,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             double bigWidth = src.Size.Height > 0 ? TierBadgeBig.Height * src.Size.Width / src.Size.Height : TierBadgeBig.Height;
             TierBadgePopup.HorizontalOffset = (TierBadge.Bounds.Width - bigWidth) / 2 - TierBadgeBig.Margin.Left;
             TierBadgePopup.IsOpen = true;
+            _badgePopT = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowTransitions ? 0 : -1;
+            _tierBigScale.ScaleX = _tierBigScale.ScaleY = _badgePopT == 0 ? 0.35 : 1;
+            EnsureFxClock();
         }
 
         private void TierBadge_PointerExited(object? sender, PointerEventArgs e) => TierBadgePopup.IsOpen = false;
 
         /// <summary>WPF RefreshStats: level, Sparkle Points, time under and the XP bar.
-        /// ponytail: WPF odometers the numbers and tweens the bar; they snap here until launcher-fx.</summary>
+        /// WPF LauncherWindow.xaml.cs:626-645: odometers and XP fill share our frame clock.</summary>
         internal void RefreshStats()
         {
             try
@@ -402,13 +405,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try { need = ConditioningControlPanel.Services.XpCurve.GetXPForLevel(level, ConditioningControlPanel.Services.XpCurve.EpochOf(s)); } catch { }
                 double minutes = Math.Max(0, s.TotalConditioningMinutes);
 
-                StatLevel.Text = level.ToString("0");
-                StatSparkles.Text = Math.Max(0, s.SkillPoints).ToString("N0");
+                int sparkles = Math.Max(0, s.SkillPoints);
                 int hours = (int)(minutes / 60), mins = (int)(minutes % 60);
                 StatTime.Text = hours > 0 ? $"{hours}h {mins:00}m" : $"{mins}m";
 
                 double ratio = need > 0 ? Math.Clamp(xp / need, 0, 1) : 0;
-                XpFill.Width = XpTrack.Bounds.Width * ratio;
+                TweenStats(level, sparkles, XpTrack.Bounds.Width > 0 ? XpTrack.Bounds.Width * ratio : -1);
                 XpCaption.Text = Loc.GetF("launcher_stat_xp", ((int)xp).ToString("N0"), ((int)need).ToString("N0"));
             }
             catch (Exception ex) { Log.Debug(ex, "[Launcher] RefreshStats failed"); }
@@ -545,13 +547,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF LauncherWindow.OpenSignIn: the panel's login dialog, owned by the launcher.</summary>
-        private async void OpenSignIn()
+        private bool _signingIn;
+        internal async void OpenSignIn()
         {
+            if (_signingIn || MainShellWindow.LockdownActive) return;
             var panel = Panel;
             if (panel == null) { Log.Warning("[Launcher] sign-in with no main window"); return; }
+            _signingIn = true;
             try { await panel.OpenUnifiedLoginDialog(this); }
             catch (Exception ex) { Log.Warning(ex, "[Launcher] sign-in dialog failed"); }
+            finally { _signingIn = false; }
             RefreshAccount();
+            FriendsChip.UpdatePill();
             RefreshStats();
             BuildTiles();
         }
@@ -706,6 +713,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             tile.Child = body;
             DecorateTileFx(tile, hue);
+            if (locked)
+            {
+                global::ConditioningControlPanel.Avalonia.Controls.TierFxBorder.SetRimThickness(tile, tile.BorderThickness.Left);
+                global::ConditioningControlPanel.Avalonia.Controls.TierFxBorder.SetTier(tile, 2);
+            }
             return tile;
         }
 

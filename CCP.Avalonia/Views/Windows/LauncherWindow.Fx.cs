@@ -5,7 +5,7 @@
 // WPF runs one storyboard per tween; here ONE frame clock steps every tween, and only while the launcher is shown
 // and not minimised (P01) and something is moving. It stops the moment nothing is. No allocation per frame.
 // ponytail: not ported (docs/avalonia-parity.html win-launcher): cursor parallax, Ken-Burns art drift, sparkle trail,
-// perimeter comets, wordmark sheen, wordmark drift, running-dot breath, title tint, embers layer.
+// perimeter comets, wordmark sheen, wordmark drift, title tint, embers layer.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -114,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void HookFx()
         {
             HookSheens();
+            HookBadgeMotion();
             _fxClock.Tick += (_, _) =>
             {
                 long now = Stopwatch.GetTimestamp();
@@ -210,6 +211,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _fxClock.Stop();
             StopSheens();
+            SettleStats();
+            ParkBadgeMotion();
             try
             {
                 _edgeFlareT = _glintT = -1;
@@ -262,6 +265,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (_echoIn >= 0 && (_echoIn -= dt) < 0) BurstAt(_echoAnchor, _echoColor, _echoAnchor == Wordmark ? WelcomeBurstCount : PlayBurstEcho);
                 if (_echoIn >= 0) busy = true;
                 if (_exitIn >= 0) { busy = true; if ((_exitIn -= dt) < 0) BeginFadeOut(); }
+                busy |= StepStats(dt);
+                busy |= StepBadgeMotion(dt);
                 StepTile(_cardFx, dt);
                 busy |= _cardFx.Busy;
                 foreach (var t in _tileFx) { StepTile(t, dt); busy |= t.Busy; }
@@ -647,14 +652,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // ------------------------------------------------------------------ the cues
 
         /// <summary>WPF LauncherSfx: one-shots through the head's CoreAudio, silent when the launcher's speaker is
-        /// off, the master volume is 0 or the file is missing. ponytail: CoreAudio returns no handle, so WPF's
-        /// three-voice hover cap and the IsOutputSuppressed probe have nothing to call here.</summary>
+        /// off, output is suppressed, the master volume is 0 or the file is missing.
+        /// WPF Services/Launcher/LauncherSfx.cs: hover voices are capped at three.</summary>
         internal static class LauncherSfx
         {
             /// <summary>The hover throttle's and edge cue gate's clock (P08: tests step it).</summary>
             internal static TimeProvider Clock = TimeProvider.System;
             private static readonly LauncherMelody Melody = new();
             private static DateTime _lastHover = DateTime.MinValue;
+            private sealed class Voice { public Action Stop = () => { }; public volatile bool Finished; }
+            private static readonly Queue<Voice> Ringing = new();
 
             public static void Open() { Melody.Reset(); Play("chaos/reveal_chime.mp3", 0.18f, "launcher-open"); }
             public static void Click() => Play("chaos/ui_click.mp3", 0.16f, "launcher-click");
@@ -679,10 +686,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try
                 {
                     var s = CoreSettings.Current;
-                    if (!s.LauncherSoundEnabled || s.MasterVolume <= 0) return;
+                    if (!s.LauncherSoundEnabled || s.MasterVolume <= 0 || CoreAudio.IsOutputSuppressed) return;
                     var path = Resolve(rel) ?? (fallback == null ? null : Resolve(fallback));
                     if (path == null) return;
-                    CoreAudio.PlayOneShot(path, Math.Clamp(s.MasterVolume / 100f * scale, 0f, 1f), tag);
+                    float volume = Math.Clamp(s.MasterVolume / 100f * scale, 0f, 1f);
+                    if (tag != "launcher-hover") { CoreAudio.PlayOneShot(path, volume, tag); return; }
+                    var voice = new Voice();
+                    voice.Stop = CoreAudio.PlayStoppable(path, volume, tag, onFinished: () => voice.Finished = true);
+                    Voice? oldest = null;
+                    lock (Ringing)
+                    {
+                        Ringing.Enqueue(voice);
+                        while (Ringing.Count > 0 && Ringing.Peek().Finished) Ringing.Dequeue();
+                        if (Ringing.Count > 3) oldest = Ringing.Dequeue();
+                    }
+                    oldest?.Stop();
                 }
                 catch (Exception ex) { Log.Debug(ex, "[Launcher] sfx {Tag} failed", tag); }
             }

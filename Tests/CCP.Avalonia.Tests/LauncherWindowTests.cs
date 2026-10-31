@@ -66,6 +66,155 @@ public sealed class LauncherWindowTests
     // Finite routing/opacity checks drive their own clock; they do not pump the
     // unrelated headless renderer until idle (Skia frames can stay queued under load).
     [Fact]
+    public void LockedTile_HasTierBand_SignedOutTileDoesNot() => Run(shell =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreEntitlement.HasLabProvider = () => false;
+        var oldPass = CoreEntitlement.IntakePassAvailableProvider;
+        try
+        {
+            CoreEntitlement.IntakePassAvailableProvider = () => false;
+            LauncherWindow.BackToLauncher(shell);
+            shell.StepLauncherFade(1);
+            Dispatcher.UIThread.RunJobs();
+            var w = LauncherWindow.Instance!;
+            var tile = (Border)w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
+            Assert.True(global::ConditioningControlPanel.Avalonia.Controls.TierFxBorder.HasBand(tile));
+            CoreAccount.IsLoggedInProvider = () => false;
+            w.BuildTiles();
+            Dispatcher.UIThread.RunJobs();
+            tile = (Border)w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
+            Assert.False(global::ConditioningControlPanel.Avalonia.Controls.TierFxBorder.HasBand(tile));
+        }
+        finally { CoreEntitlement.IntakePassAvailableProvider = oldPass; }
+    });
+
+    [Fact]
+    public void FriendsIdentity_RefreshesAfterSignIn_AndAccountSwitchOnActivation() => Run(shell =>
+    {
+        var oldName = CoreAccount.DisplayNameProvider;
+        string name = "";
+        try
+        {
+            CoreAccount.DisplayNameProvider = () => name;
+            CoreAccount.IsLoggedInProvider = () => name.Length > 0;
+            LauncherWindow.BackToLauncher(shell);
+            var w = LauncherWindow.Instance!;
+            var chip = w.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.FriendsRailChip>("FriendsChip")!;
+            w.OpenSignIn();
+            Assert.True(LoginOpen(w));
+            name = "Alice";
+            foreach (var dialog in w.OwnedWindows.ToArray()) dialog.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains("Alice", Texts(chip)); Assert.Contains("A", Texts(chip));
+            name = "Bob";
+            Assert.IsType<Action>(typeof(global::Avalonia.Platform.IWindowBaseImpl).GetProperty("Activated")!.GetValue(w.PlatformImpl))();
+            Assert.Contains("Bob", Texts(chip)); Assert.Contains("B", Texts(chip));
+        }
+        finally { CoreAccount.DisplayNameProvider = oldName; }
+    });
+
+    [Fact]
+    public void WhatsNew_OpensCurrentNotesOverLauncher_AndPanicClosesIt() => Run(shell =>
+    {
+        var oldVersion = CoreReleaseContent.AppVersionProvider;
+        var oldNotes = CoreReleaseContent.PatchNotesProvider;
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        try
+        {
+            LocalizationManager.Instance.SetLanguage("de");
+            CoreReleaseContent.AppVersionProvider = () => "7.1.5";
+            CoreReleaseContent.PatchNotesProvider = () => "Launcher release notes";
+            LauncherWindow.BackToLauncher(shell);
+            Dispatcher.UIThread.RunJobs();
+            var w = LauncherWindow.Instance!;
+            Raise(w, "WhatsNewLink");
+            Dispatcher.UIThread.RunJobs();
+            var notes = Assert.Single(w.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.WhatsNewDialog>());
+            Assert.Equal("Was ist neu in v7.1.5", notes.FindControl<TextBlock>("TxtTitle")!.Text);
+            Assert.Equal("Launcher release notes", notes.FindControl<TextBlock>("TxtNotes")!.Text);
+            Assert.False(shell.IsVisible);
+            PanicSurfaces.All.Single(s => s.Id == "launcher-notes").Stop(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(notes.IsVisible);
+        }
+        finally { CoreReleaseContent.AppVersionProvider = oldVersion; CoreReleaseContent.PatchNotesProvider = oldNotes; LocalizationManager.Instance.SetLanguage(oldLanguage); }
+    });
+
+    [Fact]
+    public void FriendsChip_OpensDrawer_SettingsWakePanel_AndPanicFoldsIt() => Run(shell =>
+    {
+        LauncherWindow.BackToLauncher(shell);
+        Dispatcher.UIThread.RunJobs();
+        var w = LauncherWindow.Instance!;
+        var chip = w.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.FriendsRailChip>("FriendsChip")!;
+        chip.Toggle();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(chip.IsOpen);
+        PanicSurfaces.All.Single(s => s.Id == "launcher-friends").Stop(shell);
+        Assert.False(chip.IsOpen);
+        chip.Toggle();
+        Dispatcher.UIThread.RunJobs();
+        chip.Drawer.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Tag, "friends-settings"))
+            .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(chip.IsOpen);
+        Assert.False(w.IsVisible);
+        Assert.True(shell.IsVisible);
+        Assert.Equal("appsettings", shell.CurrentTab);
+    });
+
+    [Fact]
+    public void FriendsDrawer_SignInStaysOverLauncher_InvitesOpenPanel() => Run(shell =>
+    {
+        CoreAccount.IsLoggedInProvider = () => false;
+        LauncherWindow.BackToLauncher(shell);
+        Dispatcher.UIThread.RunJobs();
+        var w = LauncherWindow.Instance!;
+        var chip = w.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.FriendsRailChip>("FriendsChip")!;
+        chip.Toggle();
+        Dispatcher.UIThread.RunJobs();
+        chip.Drawer.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Tag, "friends-sign-in"))
+            .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(LoginOpen(w));
+        Assert.False(chip.IsOpen);
+        Assert.False(shell.IsVisible);
+        foreach (var dialog in w.OwnedWindows.ToArray()) dialog.Close();
+        Dispatcher.UIThread.RunJobs();
+        chip.Toggle();
+        Dispatcher.UIThread.RunJobs();
+        // The subscriber-only link exists in the drawer's add box; its handler uses the same route.
+        chip.Drawer.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Tag, "friends-invite-link"))
+            .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(chip.IsOpen);
+        Assert.False(w.IsVisible);
+        Assert.True(shell.IsVisible);
+        Assert.Equal("premium", shell.CurrentTab);
+    });
+
+    [Fact]
+    public void SignIn_RepeatedPressesKeepOneDialog() => Run(shell =>
+    {
+        CoreAccount.IsLoggedInProvider = () => false;
+        LauncherWindow.BackToLauncher(shell);
+        Dispatcher.UIThread.RunJobs();
+        var w = LauncherWindow.Instance!;
+        Raise(w, "SignInPill");
+        Raise(w, "SignInPill");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(w.OwnedWindows.Where(o => o is ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog));
+        foreach (var dialog in w.OwnedWindows.ToArray()) dialog.Close();
+        Dispatcher.UIThread.RunJobs();
+        Raise(w, "SignInPill");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(LoginOpen(w));
+        foreach (var dialog in w.OwnedWindows.ToArray()) dialog.Close();
+    });
+
+    [Fact]
     public void BackToLauncher_WithMotion_HoldsTheVisiblePanelForItsFade() => Run(shell =>
     {
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
