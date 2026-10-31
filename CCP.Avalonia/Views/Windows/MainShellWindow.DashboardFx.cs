@@ -95,6 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 foreach (var combo in tab.GetLogicalDescendants().OfType<SplitFeatureCard>()) combo.RefreshFx();
                 ApplyVaultCtaBreath();
                 ApplyBrowserFx();
+                tab.SyncMysteryGiftFx();
                 // WPF ApplyLogoDrift (:753): the logo animates under the chrome gate; BeatLoop parks it hidden.
                 if (tab.FindControl<AnimatedLogoImage>("ImgLogo") is { } logo)
                     logo.AmbientAllowed = Env.AllowAmbientLoops && IsActive && WindowState != WindowState.Minimized;
