@@ -131,6 +131,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SetPauseButton(true);
         }
 
+        // WPF MainWindow.RemoteControl.cs:1341,1385. Voice bypasses the button's XP dialog.
+        internal void PauseSessionFromRemote()
+        {
+            if (App.Sessions is not { IsRunning: true, IsPaused: false } runner) return;
+            runner.Pause();
+            PinkFilterOverlay.Refresh(this);
+            SpiralOverlay.Refresh(this);
+            SetPauseButton(true);
+        }
+
+        internal void ResumeSessionFromRemote()
+        {
+            // Keep the base's panic engine hold. Only the user's Start or Resume releases it.
+            if (ConditioningControlPanel.Services.Safety.PanicAftermath.HoldsEngineRestart) return;
+            if (App.Sessions is not { IsRunning: true, IsPaused: true }) return;
+            StartEffect(() =>
+            {
+                if (ConditioningControlPanel.Services.Safety.PanicAftermath.HoldsEngineRestart
+                    || App.Sessions is not { IsRunning: true, IsPaused: true } runner) return;
+                runner.Resume();
+                PinkFilterOverlay.Refresh(this);
+                SpiralOverlay.Refresh(this);
+                SetPauseButton(false);
+                OnSessionTick();
+            });
+        }
+
         /// <summary>WPF TxtPauseIcon + BtnPauseSession.ToolTip: "\u25B6" + resume while paused, else "\u23F8" + the count.</summary>
         internal void SetPauseButton(bool paused)
         {
