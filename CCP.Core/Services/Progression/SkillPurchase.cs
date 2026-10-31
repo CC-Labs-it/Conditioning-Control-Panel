@@ -45,9 +45,7 @@ public sealed class SkillPurchase
     internal void ApplySkillEffects(AppSettings settings, string skillId)
     {
         if (skillId == "good_girl_streak")
-        {
             (settings.StreakShieldsRemaining, settings.LastStreakShieldResetDate) = (1, DateTime.UtcNow.Date);
-        }
         else if (skillId == "oopsie_insurance") { settings.StreakFixCharges++; Save(); }
     }
     private async Task<(bool Success, string? Error)> RequestAsync(AppSettings settings, SkillDefinition skill, bool afterSync)
@@ -67,46 +65,35 @@ public sealed class SkillPurchase
             using var first = await SendOnce();
             var (response, json) = (first, await first.Content.ReadAsStringAsync());
             if (settings.UnifiedId != id) return (false, Loc.Get("skill_err_login_required"));
-            if (!response.IsSuccessStatusCode && V2AuthService.MergedRecovery is { } merged && await merged(response, json))
-                return (false, Loc.Get("account_merged_retry_hint"));
-            if (!response.IsSuccessStatusCode && await Unauthorized(response) && !string.IsNullOrEmpty(settings.AuthToken) && settings.UnifiedId == id)
-                response = await SendOnce();
+            if (!response.IsSuccessStatusCode && V2AuthService.MergedRecovery is { } merged && await merged(response, json)) return (false, Loc.Get("account_merged_retry_hint"));
+            if (!response.IsSuccessStatusCode && await Unauthorized(response) && !string.IsNullOrEmpty(settings.AuthToken) && settings.UnifiedId == id) response = await SendOnce();
             using var recovered = ReferenceEquals(response, first) ? null : response;
             if (!ReferenceEquals(response, first)) json = await response.Content.ReadAsStringAsync();
             if (settings.UnifiedId != id) return (false, Loc.Get("skill_err_login_required"));
             if (!response.IsSuccessStatusCode)
             {
-                if (response.StatusCode == HttpStatusCode.Unauthorized) return (false, Loc.Get("login_session_expired"));
+                if (response.StatusCode == HttpStatusCode.Unauthorized) return (false, Loc.GetF("skill_err_purchase_session_expired", Loc.Get("nav_door_settings")));
                 var error = Loc.Get("dialog_purchase_failed") + $" ({(int)response.StatusCode})";
                 try { error = JsonConvert.DeserializeObject<PurchaseSkillResponse>(json)?.Error ?? error; }
                 catch (JsonException) { }
                 return (false, error);
             }
-            var result = JsonConvert.DeserializeObject<PurchaseSkillResponse>(json);
-            if (result == null) return (false, Loc.Get("skill_err_invalid_response"));
+            if (JsonConvert.DeserializeObject<PurchaseSkillResponse>(json) is not { } result) return (false, Loc.Get("skill_err_invalid_response"));
             if (!result.Success)
             {
                 if (SparklePoints.AfterBalanceRefusal(settings.SkillPoints, result.SkillPoints, skill.Cost, afterSync) == SparklePoints.RefusalStep.SyncAndRetry)
                 {
                     if (SyncBeforeRetry is { } sync && await sync())
-                    {
-                        if (settings.UnifiedId != id) return (false, Loc.Get("skill_err_login_required"));
-                        return await RequestAsync(settings, skill, afterSync: true);
-                    }
+                        return settings.UnifiedId == id ? await RequestAsync(settings, skill, afterSync: true) : (false, Loc.Get("skill_err_login_required"));
                     return (false, result.Error ?? Loc.Get("dialog_purchase_failed"));
                 }
-                if (SparklePoints.AdoptAfterRefusal(settings.SkillPoints, result.SkillPoints, skill.Cost) is { } adopted)
-                {
-                    settings.SkillPoints = adopted;
-                    Save();
-                }
+                if (SparklePoints.AdoptAfterRefusal(settings.SkillPoints, result.SkillPoints, skill.Cost) is { } adopted) { settings.SkillPoints = adopted; Save(); }
                 return (false, result.Error ?? Loc.Get("dialog_purchase_failed"));
             }
             if (result.SkillPoints.HasValue) settings.SkillPoints = result.SkillPoints.Value;
             if (result.UnlockedSkills != null) settings.UnlockedSkills = (settings.UnlockedSkills ?? new List<string>()).Union(result.UnlockedSkills).ToList();
             PointsSpent?.Invoke(skill.Cost);
-            if (skill.Cost > 0 && string.IsNullOrEmpty(settings.SeasonStatsSeason))
-                settings.SeasonStatsSeason = EnhancementAnalytics.CurrentSeasonKey(settings, DateTime.UtcNow);
+            if (skill.Cost > 0 && string.IsNullOrEmpty(settings.SeasonStatsSeason)) settings.SeasonStatsSeason = EnhancementAnalytics.CurrentSeasonKey(settings, DateTime.UtcNow);
             settings.SeasonPointsSpent += skill.Cost;
             if (result.LifetimePointsSpent.HasValue) LifetimeSpentReconciled?.Invoke(result.LifetimePointsSpent.Value);
             Save();

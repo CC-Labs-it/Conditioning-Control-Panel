@@ -3860,6 +3860,7 @@
   "rank_perfect": "{0} senza difetti",
   "btn_yes": "Sì",
   "btn_no": "No",
+  "skill_err_purchase_session_expired": "La sessione è scaduta. Apri {0} → Account e accedi di nuovo per acquistare abilità.",
   "skill_err_invalid_response": "Risposta del server non valida.",
   "skill_err_cannot_purchase": "Non puoi acquistare questa abilità",
   "skill_err_settings_unavailable": "Impostazioni non disponibili",

@@ -146,18 +146,22 @@ public class SkillPurchaseTests : IDisposable
         }
         finally { sync.Reset(); store.SaveImmediate(); (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider) = (oldSettings, oldLogin); }
     }
-    [Fact]
-    public async Task ClientFailuresUseLocalizedMessages()
+    [Theory]
+    [InlineData("en", "Account", "sign in again")]
+    [InlineData("fr", "Compte", "reconnectez-vous")]
+    public async Task ClientFailuresUseLocalizedMessages(string locale, string account, string recovery)
     {
         var language = LocalizationManager.Instance.CurrentLanguage;
-        LocalizationManager.Instance.SetLanguage("fr");
+        LocalizationManager.Instance.SetLanguage(locale);
         try
         {
-            foreach (var (status, json, key) in new[] { (401, "{}", "login_session_expired"), (500, "{}", "dialog_purchase_failed"), (200, "null", "skill_err_invalid_response"), (200, "{'success':false}", "dialog_purchase_failed"), (0, "", "wizard_connect_failed") })
+            foreach (var (status, json, key) in new[] { (401, "{}", "skill_err_purchase_session_expired"), (500, "{}", "dialog_purchase_failed"), (200, "null", "skill_err_invalid_response"), (200, "{'success':false}", "dialog_purchase_failed"), (0, "", "wizard_connect_failed") })
             {
                 var (service, http, _) = Make(Settings(Skill.Cost));
                 http.Answers.Enqueue(status == 0 ? () => throw new HttpRequestException() : Json((HttpStatusCode)status, json));
-                Assert.StartsWith(Loc.Get(key), (await service.PurchaseSkillAsync(Skill.Id)).Error!);
+                var error = (await service.PurchaseSkillAsync(Skill.Id)).Error!;
+                Assert.StartsWith(Loc.GetF(key, Loc.Get("nav_door_settings")), error);
+                if (status == 401) Assert.All(new[] { Loc.Get("nav_door_settings") + " → " + account, recovery }, text => Assert.Contains(text, error));
             }
         }
         finally { LocalizationManager.Instance.SetLanguage(language); }

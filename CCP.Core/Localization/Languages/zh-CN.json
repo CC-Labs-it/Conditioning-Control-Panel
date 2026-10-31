@@ -3655,6 +3655,7 @@
   "rank_advanced": "高级 {0}",
   "rank_perfect": "完美 {0}",
   "account_merged_retry_hint": "你的账户已合并。请重新登录后再试一次。",
+  "skill_err_purchase_session_expired": "你的会话已过期。请打开{0} → 账户并重新登录以购买技能。",
   "skill_err_invalid_response": "服务器响应无效。",
   "skill_err_cannot_purchase": "无法购买此技能",
   "skill_err_settings_unavailable": "设置不可用",

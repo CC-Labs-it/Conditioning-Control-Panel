@@ -4035,6 +4035,7 @@
   "rank_devoted": "Devoted {0}",
   "rank_advanced": "Advanced {0}",
   "rank_perfect": "Perfect {0}",
+  "skill_err_purchase_session_expired": "Your session has expired. Open {0} → Account and sign in again to purchase skills.",
   "skill_err_invalid_response": "Invalid server response.",
   "skill_err_cannot_purchase": "Cannot purchase this skill",
   "skill_err_settings_unavailable": "Settings unavailable",

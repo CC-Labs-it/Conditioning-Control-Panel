@@ -2871,6 +2871,7 @@
   "rank_advanced": "アドバンスド {0}",
   "rank_perfect": "パーフェクト {0}",
   "account_merged_retry_hint": "アカウントが統合されました。再度ログインしてから、もう一度お試しください。",
+  "skill_err_purchase_session_expired": "セッションの有効期限が切れました。{0} → アカウントを開き、再度ログインしてスキルを購入してください。",
   "skill_err_invalid_response": "サーバーからの応答が無効です。",
   "skill_err_cannot_purchase": "このスキルは購入できません",
   "skill_err_settings_unavailable": "設定は利用できません",
