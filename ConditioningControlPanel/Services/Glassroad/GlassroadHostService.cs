@@ -92,6 +92,7 @@ internal static class GlassroadHostService
             _pinged = _earlyInitSent = false;
             _lastProgressUtc = _lastHeartbeatUtc = DateTime.UtcNow;
             var webRoot = Path.Combine(AppContext.BaseDirectory, "Resources", "web");
+            try { Directory.CreateDirectory(SongWords.SongWordsService.SongsDir); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = new ChaosWebViewHost(new ChaosWebViewHost.Options
             {
                 StartUrl = join?.AbsoluteUri ?? Lobby.RaceJoinLink.Base,
@@ -102,6 +103,8 @@ internal static class GlassroadHostService
                     ("ccp.game", webRoot, CoreWebView2HostResourceAccessKind.Deny),
                     // Local media copies, drawn into canvases: Allow, as every host.
                     ("ccp.assets", App.EffectiveAssetsPath, CoreWebView2HostResourceAccessKind.Allow),
+                    // The player's own songs (chart + audio copy) written by SongWordsService; fetched by the page.
+                    (SongWords.SongWordsService.HostName, SongWords.SongWordsService.SongsDir, CoreWebView2HostResourceAccessKind.Allow),
                 },
                 // Own profile; the argument string is a constant, as WebView2 needs per folder.
                 UserDataFolderName = "browser_data_glassroad",
@@ -146,6 +149,7 @@ internal static class GlassroadHostService
         {
             try { _watch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _watch = null;
+            try { SongWords.SongWordsService.Cancel(); } catch (Exception ex) { Diag.Swallowed(ex); }
             bool had = _host != null;
             try { if (_core != null) _core.DOMContentLoaded -= OnDomContentLoaded; } catch (Exception ex) { Diag.Swallowed(ex); }
             _core = null;
@@ -197,8 +201,19 @@ internal static class GlassroadHostService
         _lastHeartbeatUtc = _lastProgressUtc = DateTime.UtcNow;
         _pinged = false;
         PostInitNow();
+        PostSongRows();
         _host?.FocusWeb();
     }
+
+    /// <summary>The player's own songs for the garage dialog (solo only; rooms keep the signed catalog).</summary>
+    private static void PostSongRows()
+    {
+        try { _host?.Post(new JObject { ["type"] = "song-words", ["status"] = "rows", ["rows"] = SongWords.SongWordsService.Rows() }); }
+        catch (Exception ex) { App.Logger?.Debug("Glassroad: song rows post failed: {E}", ex.Message); }
+    }
+
+    /// <summary>Song-words frames come from a worker thread; the host posts on the UI thread.</summary>
+    private static void PostFromWorker(object msg) => RunOnUi(() => { try { _host?.Post(msg); } catch (Exception ex) { Diag.Swallowed(ex); } });
 
     // ============================ page messages ============================
 
@@ -232,6 +247,14 @@ internal static class GlassroadHostService
                     break;
                 case "race-result":
                     OnRaceResult(o);
+                    break;
+                case "song-pick":
+                    // The garage's "Choose music file" on desktop: file dialog on the UI thread, then whisper in the background.
+                    RunOnUi(() => SongWords.SongWordsService.Pick((string?)o["trackId"], _host?.Window, PostFromWorker));
+                    break;
+                case "song-forget":
+                    SongWords.SongWordsService.Forget((string?)o["id"]);
+                    PostSongRows();
                     break;
                 case "exit":
                 case "menu-back":

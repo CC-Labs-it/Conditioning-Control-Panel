@@ -93,6 +93,9 @@
     <!-- Audio Control -->
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <!-- Race your own song: whisper.cpp on the CPU (Services/Glassroad/SongWords), model fetched on first use -->
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
 
     <!-- Offline speech recognition (Takeover "repeat after me" mechanic).
          Vosk = local, closed-grammar STT; native libvosk ships in the package's
