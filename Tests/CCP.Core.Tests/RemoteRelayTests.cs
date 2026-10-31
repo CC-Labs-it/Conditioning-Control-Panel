@@ -48,6 +48,31 @@ public sealed class RemoteRelayTests
         f.Answer = path => path == "/v2/remote/poll" ? Json(HttpStatusCode.OK, json) : Json(HttpStatusCode.OK, "{}");
 
     [Fact]
+    public async Task LeashCutStillStopsTheWearersEngineBeforeRemoteCleanup()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.AudioOnlySession, s.TotalSessions);
+        try
+        {
+            s.AudioOnlySession = true;
+            CoreEngine.Start();
+            bool? runningAtCleanup = null;
+            using var relay = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9",
+                (_, _) => null, _ => runningAtCleanup = CoreEngine.IsRunning, new FakeRelay()) { AutoPoll = false };
+            await relay.StartAsync("full");
+            relay.EndSessionNow();
+            Assert.False(CoreEngine.IsRunning);
+            Assert.Equal(false, runningAtCleanup);
+            Assert.False(relay.IsActive);
+        }
+        finally
+        {
+            CoreEngine.Stop();
+            (s.AudioOnlySession, s.TotalSessions) = saved;
+        }
+    }
+
+    [Fact]
     public void A_sandbox_never_reaches_the_real_relay()
     {
         Assert.Null(RemoteRelay.ResolveBaseUrl(null, sandboxed: true));

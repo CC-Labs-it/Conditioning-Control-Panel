@@ -170,7 +170,7 @@ namespace ConditioningControlPanel.Services
         {
             if (!IsActive) return;
             var uid = _unifiedId();
-            Cleanup();
+            Cleanup(leashCut: true);
             Log.Information("[RemoteControl] Session ended locally (leash cut)");
             if (string.IsNullOrEmpty(uid)) return;
             _ = Task.Run(async () =>
@@ -181,7 +181,7 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF CleanupSession: everything the controller started stops; the subject's own run stays.</summary>
-        private void Cleanup()
+        private void Cleanup(bool leashCut = false)
         {
             if (!IsActive) return;
             _loop?.Cancel();
@@ -196,6 +196,8 @@ namespace ConditioningControlPanel.Services
             // session's snapshot and its recovery file go.
             void StopEffects()
             {
+                // Keep the full leash teardown on the same UI dispatch as remote cleanup.
+                if (leashCut) CoreEngine.Stop();
                 try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
                 Remote.RemoteWearer.Drop();
             }
