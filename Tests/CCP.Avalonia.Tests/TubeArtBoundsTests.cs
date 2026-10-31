@@ -56,13 +56,16 @@ public sealed class TubeArtBoundsTests
     });
 
     // WPF Windowing.cs:927,1044-1074,2263: right dock flips frame only, about her centre; detach resets.
-    [Fact]
-    public Task RightDockMirrorsFrameAboutAvatarAndUsesReflectedInset() => Run((main, tube) =>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(10)] // Sets 2+ translate her right; WPF Windowing.cs:1068 includes that transform.
+    public Task RightDockMirrorsFrameAboutAvatarAndUsesReflectedInset(double avatarTranslation) => Run((main, tube) =>
     {
         var frame = tube.FindControl<Image>("ImgTubeFrame")!;
         var avatar = tube.FindControl<Border>("AvatarBorder")!;
         var sprite = tube.FindControl<Image>("ImgAvatar")!;
         var spriteTransform = sprite.RenderTransform;
+        avatar.RenderTransform = new TranslateTransform(avatarTranslation, 0);
         using var art = Art(10, 70);
         frame.Source = art;
         Dispatcher.UIThread.RunJobs();
@@ -71,7 +74,7 @@ public sealed class TubeArtBoundsTests
         Dispatcher.UIThread.RunJobs();
         tube.UpdatePosition();
         Assert.Equal(-1, Assert.IsType<ScaleTransform>(frame.RenderTransform).ScaleX);
-        Assert.Equal(avatar.Bounds.Center.X - frame.Bounds.X, frame.RenderTransformOrigin.Point.X, 6);
+        Assert.Equal(avatar.Bounds.Center.X + avatarTranslation - frame.Bounds.X, frame.RenderTransformOrigin.Point.X, 6);
         int mirrored = Math.Max(0, (int)Math.Round(2 * axis - ((int)Math.Round(tube.Width) - right)) - 3);
         Assert.Equal(main.Position.X + (int)Math.Round(main.ClientSize.Width) - mirrored, tube.Position.X);
         Assert.Equal(mirrored, tube.InputRect!.Value.X);

@@ -20,9 +20,10 @@ public partial class AvatarTubeWindow
 
     private double TubeFlipAxis()
     {
-        if (_avatarBorder.Bounds.Width > 0 && _avatarBorder.Parent is Visual parent
-            && _imgTubeFrame.Parent == parent)
-            return _avatarBorder.Bounds.Center.X - _imgTubeFrame.Bounds.X;
+        // WPF Windowing.cs:1068-1071 includes her RenderTransform, but ignores the frame's mirror.
+        if (_avatarBorder.Bounds.Width > 0 && _imgTubeFrame.Parent is Visual parent
+            && _avatarBorder.TranslatePoint(new Point(_avatarBorder.Bounds.Width / 2, 0), parent) is { } center)
+            return center.X - _imgTubeFrame.Bounds.X;
         return _imgTubeFrame.Bounds.Width / 2;
     }
 
