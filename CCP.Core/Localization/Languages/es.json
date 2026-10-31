@@ -1,4 +1,13 @@
 {
+  "mod_barks_text_help": "Edita identificadores, eventos y textos. Se conservan los ajustes y el audio cargados.",
+  "mod_barks_add": "Añadir regla",
+  "mod_barks_override": "Reemplazar regla base",
+  "mod_barks_id": "Identificador",
+  "mod_barks_trigger": "Evento",
+  "mod_barks_variant": "Añadir variante",
+  "mod_barks_line": "Texto",
+  "mod_barks_remove": "Eliminar",
+  "mod_barks_load_error": "No se pudo leer bark_rules.json.",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
   "deeper_submission_badge_pending": "Pendiente",

@@ -1,4 +1,13 @@
 {
+  "mod_barks_text_help": "编辑规则 ID、触发器和文本。保留已加载的设置和音频。",
+  "mod_barks_add": "添加规则",
+  "mod_barks_override": "覆盖基础规则",
+  "mod_barks_id": "规则 ID",
+  "mod_barks_trigger": "触发器",
+  "mod_barks_variant": "添加变体",
+  "mod_barks_line": "文本",
+  "mod_barks_remove": "移除",
+  "mod_barks_load_error": "无法读取 bark_rules.json。",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",

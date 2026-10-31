@@ -1,4 +1,13 @@
 {
+  "mod_barks_text_help": "Изменяйте ID, события и тексты. Загруженные настройки и аудио сохраняются.",
+  "mod_barks_add": "Добавить правило",
+  "mod_barks_override": "Заменить базовое правило",
+  "mod_barks_id": "ID правила",
+  "mod_barks_trigger": "Событие",
+  "mod_barks_variant": "Добавить вариант",
+  "mod_barks_line": "Текст",
+  "mod_barks_remove": "Удалить",
+  "mod_barks_load_error": "Не удалось прочитать bark_rules.json.",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",

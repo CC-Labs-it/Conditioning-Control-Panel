@@ -1,4 +1,13 @@
 {
+  "mod_barks_text_help": "Edit rule ids, triggers and variant text. Loaded settings and audio are retained.",
+  "mod_barks_add": "Add rule",
+  "mod_barks_override": "Override base rule",
+  "mod_barks_id": "Rule id",
+  "mod_barks_trigger": "Trigger",
+  "mod_barks_variant": "Add variant",
+  "mod_barks_line": "Variant text",
+  "mod_barks_remove": "Remove",
+  "mod_barks_load_error": "Could not read bark_rules.json.",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",

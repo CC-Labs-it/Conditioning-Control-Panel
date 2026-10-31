@@ -1,4 +1,13 @@
 {
+  "mod_barks_text_help": "Regel-IDs, Auslöser und Variantentext bearbeiten. Geladene Einstellungen und Audio bleiben erhalten.",
+  "mod_barks_add": "Regel hinzufügen",
+  "mod_barks_override": "Basisregel überschreiben",
+  "mod_barks_id": "Regel-ID",
+  "mod_barks_trigger": "Auslöser",
+  "mod_barks_variant": "Variante hinzufügen",
+  "mod_barks_line": "Variantentext",
+  "mod_barks_remove": "Entfernen",
+  "mod_barks_load_error": "bark_rules.json konnte nicht gelesen werden.",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",

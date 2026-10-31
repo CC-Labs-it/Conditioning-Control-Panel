@@ -1,4 +1,13 @@
 {
+  "mod_barks_text_help": "규칙 ID, 트리거와 텍스트를 편집합니다. 불러온 설정과 오디오는 유지됩니다.",
+  "mod_barks_add": "규칙 추가",
+  "mod_barks_override": "기본 규칙 덮어쓰기",
+  "mod_barks_id": "규칙 ID",
+  "mod_barks_trigger": "트리거",
+  "mod_barks_variant": "변형 추가",
+  "mod_barks_line": "텍스트",
+  "mod_barks_remove": "삭제",
+  "mod_barks_load_error": "bark_rules.json을 읽을 수 없습니다.",
   "deeper_submission_badge_published": "게시됨",
   "deeper_submission_badge_published_tip": "이 인핸스먼트는 커뮤니티 카탈로그에 게시되어 있습니다.",
   "deeper_submission_badge_pending": "대기 중",
