@@ -61,9 +61,17 @@ namespace ConditioningControlPanel
             }
             CoreSettings.Save();
             foreach (var l in levels) LevelUp?.Invoke(l);
-            XPAwarded?.Invoke(new XpAward(adjusted,
-                Enum.TryParse<XPSource>(source, out var parsed) ? parsed : XPSource.Other, levels.Count > 0));
             Awarded?.Invoke(amount, source);
+            // WPF ProgressionService.cs:120,125-126,240-249: presentation runs last and cannot break an award.
+            try
+            {
+                XPAwarded?.Invoke(new XpAward(adjusted,
+                    Enum.TryParse<XPSource>(source, out var parsed) ? parsed : XPSource.Other, levels.Count > 0));
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("XPAwarded subscriber failed: {E}", ex.Message);
+            }
         }
     }
 }

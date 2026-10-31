@@ -40,12 +40,53 @@ public sealed class BankAwardTests
             Assert.Equal(expectedSource, observed.Source);
             Assert.Equal(levels, observed.LeveledUp);
             Assert.Equal(amount, baseAward);
-            Assert.Equal(new[] { "display", "quest" }, events);
+            Assert.Equal(new[] { "quest", "display" }, events);
         }
         finally
         {
             ProgressionBank.XPAwarded -= display;
             ProgressionBank.Awarded -= quest;
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = previous;
+        }
+    }
+
+    // WPF ProgressionService.cs:120,125-126,240-249: decoration cannot break the award.
+    [Fact]
+    public void ThrowingPresentationCannotBreakTheAwardOrSkipQuestCredit()
+    {
+        var previous = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.OfflineMode = true;
+        s.OfflineUsername = "bank-core-test";
+        s.PlayerXP = 0;
+        s.PlayerLevel = 10;
+        double baseAward = 0;
+        double expectedXp = 5 * ConditioningControlPanel.Models.PinkRushRules.XpFactor(s)
+            * ConditioningControlPanel.Services.Descent.DescentCycleXp.XpBonusFor(s);
+        bool displayCalled = false;
+        Action<double, string> quest = (amount, _) => baseAward = amount;
+        Action<ProgressionBank.XpAward> display = _ =>
+        {
+            displayCalled = true;
+            throw new InvalidOperationException("Test presentation failure");
+        };
+        ProgressionBank.Awarded += quest;
+        ProgressionBank.XPAwarded += display;
+        try
+        {
+            var error = Record.Exception(() => ProgressionBank.Add(5, "Quest"));
+            Assert.Null(error);
+            Assert.True(displayCalled);
+            Assert.Equal(5, baseAward);
+            Assert.Equal(expectedXp, s.PlayerXP);
+        }
+        finally
+        {
+            ProgressionBank.Awarded -= quest;
+            ProgressionBank.XPAwarded -= display;
             service.SaveImmediate();
             CoreSettings.ServiceProvider = previous;
         }
