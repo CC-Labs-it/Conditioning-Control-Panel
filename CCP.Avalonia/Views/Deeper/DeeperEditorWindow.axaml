@@ -45,13 +45,8 @@
         DragDrop.AllowDrop="True">
 
     <Window.Resources>
-        <!-- ponytail: local copies of DeeperEditorWindow.xaml:EditorTextBox / EditorLabel /
-             EditorComboBox / EditorComboBoxItem. Every one exists in WPF only because WPF's
-             default chrome is a near-white system control on a dark window; Fluent's dark theme
-             already is dark, so each keeps ONLY the property setters and inherits the real
-             template through BasedOn. Hand-porting the WPF ControlTemplates (Popup + Track +
-             ContentPresenter) is exactly traps 4 and 6 in CLAUDE.md. Hoist when a second Avalonia
-             view needs the Deeper editor input chrome. -->
+        <!-- Local Deeper input themes, WPF DeeperEditorWindow.xaml. TextBox and ComboBox
+             retain Fluent templates; EditorComboBoxItem replaces the row template as WPF does. -->
         <ControlTheme x:Key="EditorTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
             <Setter Property="Background" Value="{DynamicResource PanelBgBrush}"/>
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
@@ -74,14 +69,29 @@
             <Setter Property="Margin" Value="0,0,0,4"/>
         </ControlTheme>
 
-        <ControlTheme x:Key="EditorComboBoxItem" TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+        <!-- WPF DeeperEditorWindow.xaml:433-460: keyed rows replace implicit dot rows. -->
+        <ControlTheme x:Key="EditorComboBoxItem" TargetType="ComboBoxItem">
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Padding" Value="8,5"/>
-            <Setter Property="MinHeight" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="Bd" CornerRadius="4" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#Bd">
+                <Setter Property="Background" Value="{DynamicResource DeeperMenuItemHoverBgBrush}"/>
+            </Style>
+            <Style Selector="^:selected /template/ Border#Bd">
+                <Setter Property="Background" Value="{DynamicResource DeeperAccentTransparent40Brush}"/>
+            </Style>
         </ControlTheme>
 
         <ControlTheme x:Key="EditorComboBox" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="ItemContainerTheme" Value="{StaticResource EditorComboBoxItem}"/>
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
             <Setter Property="Background" Value="{DynamicResource PanelBgBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource DeeperAccentTransparent40Brush}"/>
