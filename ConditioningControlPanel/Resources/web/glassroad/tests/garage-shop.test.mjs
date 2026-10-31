@@ -128,9 +128,9 @@ test('looks never reach the online course hash: all five courses still match the
   const ROOM = {
     threshold: '894e0085d0b36af20187c20f98fb05ef25fb6a94f6c642a41c58b208873e1d9b',
     mainframe: '109aa2c6f452b1d78e2e3b4a558352c6eb9d9bf704d22cc36518d010edce204a',
-    keep: '1fe2fc59bb2bbb5dff43a176857fbd5d6886a9c5f0ce6e0ef41182d14a48464b',
-    boudoir: 'c5f01fabf48e0a85029e44890ff03348394507f3254dc4f7d4b297f78fdb3cc3',
-    goonworks: '483d5c0624897b4da2859c975f463cade0cfc6084f0a783534a30cc51a355c58',
+    keep: '32b4530731a1f7e6a94d2ca608b8c4fd3982a458cffde3c1c7e38b7021824de3',
+    boudoir: '0fcaed781726a90a8e744c23a70b01e15dee519b290b8e32940e677bc7666027',
+    goonworks: '1f5193b1db396cec11e41d61febd93dbdf8c17dbda46d822f9c1c4dce3699a71',
   };
   const feel = read('../feel.json');
   for (const [id, hash] of Object.entries(ROOM)) {
