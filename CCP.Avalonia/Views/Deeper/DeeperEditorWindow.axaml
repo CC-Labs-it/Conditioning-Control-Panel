@@ -82,7 +82,7 @@
                     </Border>
                 </ControlTemplate>
             </Setter>
-            <Style Selector="^:pointerover /template/ Border#Bd">
+            <Style Selector="^:pointerover /template/ Border#Bd, ^:focus /template/ Border#Bd">
                 <Setter Property="Background" Value="{DynamicResource DeeperMenuItemHoverBgBrush}"/>
             </Style>
             <Style Selector="^:selected /template/ Border#Bd">

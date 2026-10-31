@@ -8,9 +8,8 @@ using Avalonia.Media;
 
 namespace ConditioningControlPanel.Avalonia.Controls;
 
-/// <summary>WPF Inputs.xaml:121 PopupAnimation=Slide. Animate each opening, cancel on close
-/// or detach so a fast reopen cannot inherit an old animation. WPF uses system timing;
-/// this head configures 150ms. Native compositor timing is not measured here.</summary>
+/// <summary>WPF Inputs.xaml:121 Slide: restart on open, cancel on close/detach.
+/// Configured 150ms; native compositor timing is not measured.</summary>
 public static class InputPopupFx
 {
     public static readonly AttachedProperty<bool> SlideProperty =
@@ -38,7 +37,6 @@ public static class InputPopupFx
     }
 
     internal static bool IsSliding(Popup popup) => Runs.TryGetValue(popup, out _);
-
     internal static Animation CreateSlideAnimation(double height) => new()
     {
         Duration = TimeSpan.FromMilliseconds(150),
@@ -51,8 +49,7 @@ public static class InputPopupFx
 
     private static async void Opened(object? sender, EventArgs e)
     {
-        var popup = (Popup)sender!;
-        Stop(popup);
+        var popup = (Popup)sender!; Stop(popup);
         if (popup.Child is not { } child) return;
         var run = new CancellationTokenSource();
         Runs.Add(popup, run);
@@ -71,7 +68,6 @@ public static class InputPopupFx
     private static void Stop(Popup popup)
     {
         if (!Runs.TryGetValue(popup, out var run)) return;
-        Runs.Remove(popup);
-        run.Cancel();
+        Runs.Remove(popup); run.Cancel();
     }
 }
