@@ -39,7 +39,7 @@ release, Sparkles by place (B1), Lobby race rows and the friends race invite (A3
 </ul>
 <p><span class="counts"></span></p>
 <p>Under the 7.2 plan these lanes are A5 work and go as PRs of 600 lines or less against <code>port/7.2</code> after A1 lands.
-Sparkles waits for the B1 DECISIONS file; Lobby/invite waits for the A3 server half.</p>
+Sparkles W1 is ported; per-game hosts and slip delivery remain open; Lobby/invite waits for the A3 server half.</p>
 <h2 id="needs-port-lanes">needs-port lanes</h2>
 
 <table>
@@ -63,7 +63,7 @@ rules from <code>5121933ee</code> are already in <code>PanicPolicy.KeptEscapePag
 must post <code>{type:'owned', grants}</code> on Core <code>OwnershipService.OwnershipChanged</code> while the window is up, unsubscribing on close.
 Without it the Linux garage offers no owned bodies (the page falls back to the free ones). Test to port: <code>GlassroadHostTests.Init_CarriesOnlyKartGrants_AndTheOwnedPushMatches</code>.</li>
 <li><code>sync9-sparkles</code>: claim service, per-game claims (Arcademy, DtRH, Caucus, Intake, chess, Goon, Breakout, Glassroad) and the
-results slip, host side. The web halves (<code>sparkles-slip.js</code> in every tree) merged. WPF-only today (<code>ConditioningControlPanel/Services/Sparkles</code>).</li>
+results slip, host side. The web halves (<code>sparkles-slip.js</code> in every tree) merged. W1 claim service and receipt wallet adoption are ported to Core and Avalonia (sparkles-claim). W2-W5 host delivery remains open.</li>
 <li><code>sync9-lobby-invite</code>: open race rows in the Lobby (Core <code>LobbyModel</code>/<code>RaceOpenApi</code>, now in Core), the in-app <code>?join=</code> door
 and the friends race invite.</li>
 <li><code>sync9-fixes</code>: JustDrop refused handoff (#1499), subliminal font pick on the Avalonia card (#1493; the Core layer now takes
@@ -632,9 +632,9 @@ the face through <code>SubliminalLayer.BundledFaceStream</code>), browser fullsc
 <tr><td>557</td><td><code>007a2c1aa</code></td><td>fix(glassroad): speed edge blur reaches the shader; intro sound fade no longer clicks</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
 <tr><td>558</td><td><code>eaee8fc3d</code></td><td>fix(glassroad): Gentle music floors fade section and bar steps</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
 <tr><td>559</td><td><code>b1d4c57bc</code></td><td>fix(glassroad): the phone's loopback server no longer hides the lobby songs</td><td>ConditioningControlPanel/Resources/web</td><td>ported-by-merge</td></tr>
-<tr><td>560</td><td><code>3930199ac</code></td><td>feat(sparkles): claim service + wallet adoption (B1 W1)</td><td>WPF: App.xaml.cs, SparklesClaim.cs, SparklesClaimService.cs, SparklesReceipt.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
-<tr><td>561</td><td><code>9d7d5406e</code></td><td>test(sparkles): fold the claim tests to keep the PR under the line cap</td><td>WPF: SparklesClaimService.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
-<tr><td>562</td><td><code>28c334234</code></td><td>fix(sparkles): a place receipt only raises the wallet</td><td>WPF: SparklesClaimService.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
+<tr><td>560</td><td><code>3930199ac</code></td><td>feat(sparkles): claim service + wallet adoption (B1 W1)</td><td>WPF: App.xaml.cs, SparklesClaim.cs, SparklesClaimService.cs, SparklesReceipt.cs</td><td>ported (<code>sparkles-claim</code>; W1 only)</td></tr>
+<tr><td>561</td><td><code>9d7d5406e</code></td><td>test(sparkles): fold the claim tests to keep the PR under the line cap</td><td>WPF: SparklesClaimService.cs</td><td>ported (<code>sparkles-claim</code>; W1 only)</td></tr>
+<tr><td>562</td><td><code>28c334234</code></td><td>fix(sparkles): a place receipt only raises the wallet</td><td>WPF: SparklesClaimService.cs</td><td>ported (<code>sparkles-claim</code>; W1 only)</td></tr>
 <tr><td>563</td><td><code>21873bc05</code></td><td>feat(sparkles): Arcademy, DtRH, Caucus and Intake claim Sparkles (B1 W2)</td><td>WPF: ArcademyHostService.cs, CaucusHostService.cs, DtrhHostService.cs, IntakeHostService.cs, SparklesGameEnd.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
 <tr><td>564</td><td><code>48d232dd9</code></td><td>feat(sparkles): Racing Thoughts 3D claims Sparkles by place (B1 W4)</td><td>WPF: GlassroadHostService.cs, GlassroadRules.cs, SparklesGameEnd.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>
 <tr><td>565</td><td><code>a568665e0</code></td><td>feat(sparkles): chess, Goon and Breakout claim Sparkles (B1 W3)</td><td>WPF: BackRoomHostService.cs, GoonHostService.cs, PieceByPieceHostService.cs, SparklesGameEnd.cs, SparklesPageResults.cs</td><td>needs-port (<code>sync9-sparkles</code>)</td></tr>

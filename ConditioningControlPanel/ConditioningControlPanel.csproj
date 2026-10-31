@@ -69,6 +69,8 @@
     <!-- Platform-agnostic engine (net10.0). Types moved there keep their original namespaces,
          so consuming files here need no changes. -->
     <ProjectReference Include="..\CCP.Core\CCP.Core.csproj" />
+    <!-- Sparkles W1 wire/models now compile in Core; the dispatcher factory stays in this head. -->
+    <Compile Remove="Services\Sparkles\SparklesClaim.cs;Services\Sparkles\SparklesReceipt.cs;Services\Sparkles\SparklesClaimService.cs" />
   </ItemGroup>
 
   <ItemGroup>

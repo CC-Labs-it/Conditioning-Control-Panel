@@ -2850,7 +2850,7 @@ namespace ConditioningControlPanel
                     Settings.Save();
                 })));
             // Sparkles by place (B1). Pure constructor: nothing is sent until a game host claims.
-            Sparkles = Services.Sparkles.SparklesClaimService.CreateForApp();
+            Sparkles = Services.Sparkles.SparklesApp.CreateForApp();
             Roadmap = new RoadmapService();
             // Needs Settings, Progression and Quests (all above); Patreon is constructed above too.
             Programs = new Services.Program.ProgramService();
