@@ -11,15 +11,16 @@ using Xunit;
 namespace CCP.Core.Tests;
 
 // Text-level cross-head contract, not a substitute for a real Windows upgrade (part B).
-public class InstallerHandoffContractTests
+public partial class InstallerHandoffContractTests
 {
-    private static string Read(string path)
+    private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "installer.iss"))) dir = dir.Parent;
         Assert.NotNull(dir);
-        return File.ReadAllText(Path.Combine(dir!.FullName, path));
+        return dir!.FullName;
     }
+    private static string Read(string path) => File.ReadAllText(Path.Combine(RepoRoot(), path));
     private static string Define(string source, string name) =>
         Regex.Match(source, "#define " + name + " \"([^\"]+)\"").Groups[1].Value;
     private static string Directive(string source, string name) =>
