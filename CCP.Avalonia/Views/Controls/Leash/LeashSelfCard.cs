@@ -23,6 +23,7 @@ public sealed class LeashSelfCard : Border
     private readonly Func<ILeashService?> _service;
     private readonly StackPanel _body = new();
     private MyLeash _me;
+    private bool _preview;
 
     // RenderProof constructs every control in Views with a no-argument sample constructor.
     internal LeashSelfCard() : this(new MyLeash(new LeashPerson("sample", "Juno", null),
@@ -41,7 +42,7 @@ public sealed class LeashSelfCard : Border
         Padding = new Thickness(12);
         Margin = new Thickness(0, 4, 0, 6);
         Child = _body;
-        // ponytail: holder preview, sticker artwork, help and LeashFx need the remaining drawer lane.
+        // ponytail: sticker artwork, help and LeashFx need the remaining drawer lane.
         Render();
     }
 
@@ -101,6 +102,19 @@ public sealed class LeashSelfCard : Border
         ToolTip.SetTip(cap, Loc.Get("leash_video_max_hint"));
         cap.Committed += m => _ = SetVideoMaxAsync(m);
         _body.Children.Add(cap);
+        // WPF LeashSelfCard.cs:267-299: the local report, read-only, with no guessed week strip.
+        var preview = Button(Loc.GetF(_preview ? "leash_self_preview_hide" : "leash_self_preview", _me.Holder.Name),
+            "leash-preview-toggle", F.Raised, F.Text, IconKind.Eye);
+        preview.Click += (_, _) => { _preview = !_preview; Render(); };
+        _body.Children.Add(preview);
+        if (_preview)
+        {
+            var report = (_service() as LeashService)?.LastReport;
+            _body.Children.Add(new LeashHolderCard(new HeldLeash(new LeashPerson("me", Loc.Get("leash_you"), null), true,
+                _me.Intensity, _me.Since, _me.Day, _me.DndUntil, report, Array.Empty<WeekDay>(), _me.Pending, _me.Assignment, 0),
+                () => null, true) { IsHitTestVisible = false, Opacity = 0.92 });
+            _body.Children.Add(Label(Loc.GetF("leash_self_preview_note", _me.Holder.Name), 11, F.Dim));
+        }
         // ponytail: do not advertise WPF's panic-key hold-to-cut until this head owns that route.
     }
 
