@@ -39,16 +39,49 @@ public sealed class LockdownTests
         {
             EnsureApp();
             var tab = new LockdownTabView();
-            var side = tab.FindControl<Image>("ImgLockdownFeature");
-            Assert.NotNull(side);
-            Assert.NotNull(side.Source);
-            Assert.True(ConditioningControlPanel.Avalonia.Controls.HoverPop.GetIsEnabled(side));
-            Assert.Equal(new Thickness(10), side.Margin);
-            var hero = Assert.IsType<global::Avalonia.Media.ImageBrush>(
-                tab.FindControl<Border>("LockdownHeroArt")!.Background);
-            Assert.Same(side.Source, hero.Source);
-            Assert.NotNull(Assert.IsType<global::Avalonia.Media.ImageBrush>(
-                tab.FindControl<Border>("EEFacePlate")!.Background).Source);
+            var win = new Window { Content = tab };
+            win.Show();
+            try
+            {
+                var side = tab.FindControl<Image>("ImgLockdownFeature");
+                Assert.NotNull(side);
+                Assert.NotNull(side.Source);
+                Assert.True(ConditioningControlPanel.Avalonia.Controls.HoverPop.GetIsEnabled(side));
+                Assert.Equal(new Thickness(10), side.Margin);
+                var hero = Assert.IsType<global::Avalonia.Media.ImageBrush>(
+                    tab.FindControl<Border>("LockdownHeroArt")!.Background);
+                Assert.Same(side.Source, hero.Source);
+                Assert.NotNull(Assert.IsType<global::Avalonia.Media.ImageBrush>(
+                    tab.FindControl<Border>("EEFacePlate")!.Background).Source);
+            }
+            finally { win.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task ArtworkWaitsForAttachAndResolvesTheSideOnlyOnceOnFirstShow()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var previous = CoreModArt.OverridePathProvider;
+            var reads = 0;
+            CoreModArt.OverridePathProvider = path => { reads++; return null; };
+            Window? win = null;
+            try
+            {
+                var tab = new LockdownTabView();
+                Assert.Equal(0, reads);
+                Assert.Null(tab.FindControl<Image>("ImgLockdownFeature")!.Source);
+                win = new Window { Content = tab };
+                win.Show();
+                Assert.Equal(1, reads);
+                Assert.NotNull(tab.FindControl<Image>("ImgLockdownFeature")!.Source);
+                Assert.NotNull(Assert.IsType<global::Avalonia.Media.ImageBrush>(
+                    tab.FindControl<Border>("EEFacePlate")!.Background).Source);
+            }
+            finally { win?.Close(); CoreModArt.OverridePathProvider = previous; }
             return Task.CompletedTask;
         });
     }
@@ -193,6 +226,31 @@ public sealed class LockdownTests
                     Step(5000); Step(5140);
                 }
                 else Step(3140);
+                ScaleIs(1.0);
+
+                // WPF LockdownTabView.xaml:466: MouseLeave releases even under capture.
+                win.MouseDown(p, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Step(6000); Step(6030);
+                ScaleIs(0.97375);
+                win.MouseMove(new Point(1, 1), RawInputModifiers.LeftMouseButton);
+                Dispatcher.UIThread.RunJobs();
+                Step(7000); Step(7140);
+                ScaleIs(1.0);
+                win.MouseMove(p, RawInputModifiers.LeftMouseButton);
+                Dispatcher.UIThread.RunJobs();
+                Step(8000); Step(8060);
+                ScaleIs(1.0); // MouseEnter does not start another WPF press
+                win.MouseUp(p, MouseButton.Left);
+                win.MouseDown(p, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Step(9000); Step(9030);
+                ScaleIs(0.97375); // a new mouse-down arms the press again
+                Step(9060);
+                ScaleIs(0.965);
+                win.MouseUp(p, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Step(10000); Step(10140);
                 ScaleIs(1.0);
             }
             finally

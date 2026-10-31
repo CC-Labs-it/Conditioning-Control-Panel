@@ -116,8 +116,8 @@
     <!-- The Emergency Exit slab's press sink. WPF ran it from
          PreviewMouseLeftButtonDown/Up on the Button; on Avalonia the Button's own class handler
          marks PointerPressed/Released handled before an instance handler sees them, so a ported
-         handler pair would be silently dead. A :pressed descendant selector is the idiom, needs
-         no code, and drives the TransformOperationsTransition already on EERoot. EERoot must NOT
+         handler pair would be silently dead. The :pressed selector drives the transition;
+         ee-released holds the WPF MouseLeave release until the next left press. EERoot must NOT
          carry a local RenderTransform or it outranks these setters. Set transitions before scale to avoid cancelling the tween. -->
     <UserControl.Styles>
         <Style Selector="Grid#EERoot">
@@ -130,7 +130,7 @@
             </Setter>
             <Setter Property="RenderTransform" Value="scale(1)"/>
         </Style>
-        <Style Selector="Button#BtnEmergencyExit:pressed Grid#EERoot">
+        <Style Selector="Button#BtnEmergencyExit:pressed:not(.ee-released) Grid#EERoot">
             <Setter Property="Transitions">
                 <Transitions>
                     <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.06">
@@ -537,8 +537,8 @@
                                                                      Image: Border does not clip its children, so the only
                                                                      way to get the art's own corners rounded is to make it
                                                                      the background. Reads as an inset plate instead of a
-                                                                     square pasted onto the slab. The brush itself waits
-                                                                     for the art to move to avares://. -->
+                                                                     square pasted onto the slab. RefreshArtwork supplies
+                                                                     the shipped avares:// face-plate brush. -->
                                                                 <Border Grid.Column="0" x:Name="EEFacePlate"
                                                                         Width="128" Margin="14,10,8,10" CornerRadius="10"
                                                                         Background="#33000000"

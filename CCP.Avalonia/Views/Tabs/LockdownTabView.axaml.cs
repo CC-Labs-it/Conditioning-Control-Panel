@@ -44,9 +44,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // x:Name fields this code-behind reads.
             InitializeComponent();
 
+            // WPF LockdownTabView.xaml:464-466: MouseLeave releases the press until a new down.
+            BtnEmergencyExit.PointerExited += (_, _) => BtnEmergencyExit.Classes.Set("ee-released", true);
+            BtnEmergencyExit.AddHandler(PointerPressedEvent, (_, e) =>
+            {
+                if (e.GetCurrentPoint(BtnEmergencyExit).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed)
+                    BtnEmergencyExit.Classes.Set("ee-released", false);
+            }, RoutingStrategies.Bubble, handledEventsToo: true);
+
             LoadPossessionSettings();
             UpdateQuestHint();
-            RefreshArtwork();
 
             // Tabs are shown and hidden rather than rebuilt, so the first attach fires once.
             // Re-read on every show for the same reason BambiTakeoverTabView does: something else
