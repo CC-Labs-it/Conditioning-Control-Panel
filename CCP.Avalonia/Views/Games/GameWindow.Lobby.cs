@@ -1,4 +1,3 @@
-using System.Linq;
 using ConditioningControlPanel.Services.PieceByPiece;
 using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Avalonia.Views.Games;
@@ -8,8 +7,7 @@ internal sealed partial class GameWindow
     private string? _spectateInit;
     internal static GameWindow? OpenChessLobby(string mode, string? key = null)
     {
-        if (mode == "join" && !(key is { Length: > 2 and <= 64 } && key.StartsWith("p_", System.StringComparison.Ordinal)
-            && key.Skip(2).All(c => char.IsAsciiLetterOrDigit(c) || c == '_' || c == '-'))) return null;
+        if (mode == "join" && !PbpWatchRules.IsTableId(key)) return null;
         if (mode == "spectate" && !PbpWatchRules.IsMatchId(key)) return null;
         if (mode != "join" && mode != "spectate" && mode != "host") return null;
         var window = Launch(PbpId);

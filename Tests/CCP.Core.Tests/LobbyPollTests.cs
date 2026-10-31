@@ -7,10 +7,17 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.GoonGame;
 using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Services.PieceByPiece;
 using Xunit;
 namespace CCP.Core.Tests;
-public sealed class LobbyServiceTests
+public sealed class LobbyPollTests
 {
+    [Fact]
+    public void TableIdsMatchWpfBoundaries()
+    {
+        foreach (var id in new[] { "p_a", "p_Az09_-", "p_" + new string('a', 62) }) Assert.True(PbpWatchRules.IsTableId(id));
+        foreach (var id in new string?[] { null, "", "p_", "P_a", "m_a", "p_é", "p_a/", "p_a b", "p_a\n", "p_" + new string('a', 63) }) Assert.False(PbpWatchRules.IsTableId(id));
+    }
     private sealed class Timer : IUiTimer
     {
         public TimeSpan Interval { get; set; }
@@ -26,7 +33,7 @@ public sealed class LobbyServiceTests
     {
         var timer = new Timer();
         var calls = 0;
-        using var lobby = new LobbyService(timer, () => false, () => Array.Empty<Friend>(),
+        using var lobby = new LobbyPoll(timer, () => false, () => Array.Empty<Friend>(),
             () => { calls++; return Task.FromResult(PbpLobbyReply.Empty); },
             () => throw new Exception(), () => throw new Exception());
         var a = lobby.Watch(); var b = lobby.Watch();
@@ -44,7 +51,7 @@ public sealed class LobbyServiceTests
         var pending = new TaskCompletionSource<PbpLobbyReply>(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
         var fail = false;
-        using var lobby = new LobbyService(timer, () => true, () => Array.Empty<Friend>(),
+        using var lobby = new LobbyPoll(timer, () => true, () => Array.Empty<Friend>(),
             () => { calls++; return fail ? Task.FromResult(PbpLobbyReply.Empty) : pending.Task; },
             () => Task.FromResult(new OpenTablesReply(false, true, new[] { new OpenTable("CODE", "Goon", 1, null, false, null, false, 0, false, 0) }, null)),
             () => Task.FromResult(((IReadOnlyList<RemoteSeat>)new[] { new RemoteSeat("r", "Remote", 1, "light", Array.Empty<string>(), true) }, !fail)));
@@ -69,7 +76,7 @@ public sealed class LobbyServiceTests
     {
         var timer = new Timer(); var signedIn = true; var changed = 0;
         var pending = new TaskCompletionSource<PbpLobbyReply>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var lobby = new LobbyService(timer, () => signedIn, () => Array.Empty<Friend>(), () => pending.Task,
+        var lobby = new LobbyPoll(timer, () => signedIn, () => Array.Empty<Friend>(), () => pending.Task,
             () => Task.FromResult(OpenTablesReply.Empty),
             () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
         lobby.Changed += _ => changed++;

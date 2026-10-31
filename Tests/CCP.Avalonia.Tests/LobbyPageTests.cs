@@ -113,7 +113,6 @@ public sealed class LobbyPageTests
         }
         finally { shell.Close(); }
     });
-
     [Fact]
     public void SignedOutChessRowAsksForSignIn() => Run(() =>
     {
@@ -130,7 +129,6 @@ public sealed class LobbyPageTests
         }
         finally { foreach (var w in shell.OwnedWindows.ToArray()) w.Close(); shell.Close(); }
     });
-
     private sealed class LobbyTimer : IUiTimer
     {
         public TimeSpan Interval { get; set; }
@@ -140,13 +138,12 @@ public sealed class LobbyPageTests
         public void Stop() => Running = false;
         public void OnUiThread(Action action) => action();
     }
-
     [Fact]
     public void OpeningHidingAndDetachingTabOwnsDiscoveryLeaseAndPaintsRealSnapshot() => Run(() =>
     {
         var timer = new LobbyTimer();
         var calls = 0;
-        var service = new LobbyService(timer, () => true, () => Array.Empty<Friend>(),
+        var service = new LobbyPoll(timer, () => true, () => Array.Empty<Friend>(),
             () => { calls++; return Task.FromResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p_table", "Live", 300000, 0, 0) }, Array.Empty<PbpPlayingGame>(), true)); },
             () => Task.FromResult(OpenTablesReply.Empty),
             () => Task.FromResult(((System.Collections.Generic.IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
@@ -168,12 +165,11 @@ public sealed class LobbyPageTests
         }
         finally { window.Close(); }
     });
-
     [Fact]
     public void ReopeningTheTabAfterAFailedRoundKeepsTheErrorPanel() => Run(() =>
     {
         var timer = new LobbyTimer();
-        var service = new LobbyService(timer, () => true, () => Array.Empty<Friend>(),
+        var service = new LobbyPoll(timer, () => true, () => Array.Empty<Friend>(),
             () => Task.FromResult(new PbpLobbyReply(Array.Empty<PbpOpenSeat>(), Array.Empty<PbpPlayingGame>(), false)),
             () => Task.FromResult(OpenTablesReply.Empty),
             () => Task.FromResult(((System.Collections.Generic.IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), false)));
@@ -187,12 +183,10 @@ public sealed class LobbyPageTests
             page.IsVisible = true;
             Assert.False(service.LastRoundOk);
             page.Repaint(); // tier change / reopen path: repaints without a new round
-
             Assert.True(Named<Border>(page, "AvailableSubjectsErrorPanel").IsVisible);
         }
         finally { window.Close(); }
     });
-
     [Fact]
     public void HostLocksFollowTheirOwnGates() => Run(() =>
     {
@@ -211,7 +205,6 @@ public sealed class LobbyPageTests
             }
         }
     });
-
     [Fact]
     public void ShowingTheTabAgainRedrawsSignInGateAndLanguage() => Run(() =>
     {

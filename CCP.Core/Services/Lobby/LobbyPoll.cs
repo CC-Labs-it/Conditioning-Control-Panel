@@ -7,7 +7,7 @@ using ConditioningControlPanel.Services.GoonGame;
 namespace ConditioningControlPanel.Services.Lobby;
 /// <summary>Adapted from WPF LobbyService: one poll while watched, shared rounds, 10 to 60s backoff.
 /// Call Watch/Dispose on the timer's UI thread. Changed is delivered on that thread too.</summary>
-public sealed class LobbyService : IDisposable
+public sealed class LobbyPoll : IDisposable
 {
     private readonly IUiTimer _timer;
     private readonly Func<bool> _signedIn;
@@ -22,7 +22,7 @@ public sealed class LobbyService : IDisposable
     public LobbySnapshot Snapshot { get; private set; } = LobbySnapshot.Empty;
     public bool LastRoundOk { get; private set; } = true;
     public event Action<LobbySnapshot>? Changed;
-    public LobbyService(IUiTimer timer, Func<bool> signedIn, Func<IReadOnlyList<Friend>> friends,
+    public LobbyPoll(IUiTimer timer, Func<bool> signedIn, Func<IReadOnlyList<Friend>> friends,
         Func<Task<PbpLobbyReply>> chess, Func<Task<OpenTablesReply>> goon,
         Func<Task<(IReadOnlyList<RemoteSeat> Seats, bool Ok)>> remote)
     {
@@ -104,9 +104,9 @@ public sealed class LobbyService : IDisposable
         _disposed = true; _watchers = 0;
         _timer.Stop(); _timer.Tick -= OnTick;
     }
-    private sealed class Lease(LobbyService? owner) : IDisposable
+    private sealed class Lease(LobbyPoll? owner) : IDisposable
     {
-        private LobbyService? _owner = owner;
+        private LobbyPoll? _owner = owner;
         public void Dispose()
         {
             var service = Interlocked.Exchange(ref _owner, null);

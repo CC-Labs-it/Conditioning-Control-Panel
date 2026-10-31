@@ -168,7 +168,7 @@ public sealed class SubjectsFxTests
     {
         view.ReadGates = () => LobbyGates.From(true, false, false);
         // Keep the fixture roster while exercising real watch ownership; no network or completed refresh.
-        view.CreateLobby = () => new LobbyService(new ConditioningControlPanel.Avalonia.Platform.FriendsHead.Timer(),
+        view.CreateLobby = () => new LobbyPoll(new ConditioningControlPanel.Avalonia.Platform.FriendsHead.Timer(),
             () => true, () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>(),
             () => new TaskCompletionSource<PbpLobbyReply>().Task, () => throw new InvalidOperationException(),
             () => throw new InvalidOperationException());

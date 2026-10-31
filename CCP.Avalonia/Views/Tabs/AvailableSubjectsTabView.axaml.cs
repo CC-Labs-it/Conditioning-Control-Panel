@@ -22,8 +22,8 @@ public partial class AvailableSubjectsTabView : UserControl
     internal int SelectedColumn { get; private set; }
     internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
-    internal Func<LobbyService>? CreateLobby;
-    private LobbyService? _lobby;
+    internal Func<LobbyPoll>? CreateLobby;
+    private LobbyPoll? _lobby;
     private IDisposable? _lease;
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
 
@@ -55,11 +55,10 @@ public partial class AvailableSubjectsTabView : UserControl
             SubjectsAmbientFx.Stop();
         };
     }
-
-    private static LobbyService BuildLobby()
+    private static LobbyPoll BuildLobby()
     {
         var remote = new RemoteLobbyApi();
-        return new LobbyService(new Platform.FriendsHead.Timer(),
+        return new LobbyPoll(new Platform.FriendsHead.Timer(),
             () => Platform.FriendsHead.Identity() != null,
             () => Platform.FriendsHead.Service?.Snapshot.Friends ?? Array.Empty<Friend>(),
             () => new PbpLobbyApi().FetchAsync(), () => GoonOpenTables.RefreshAsync(), () => remote.FetchAsync());
@@ -70,7 +69,6 @@ public partial class AvailableSubjectsTabView : UserControl
         if (IsVisible && _lobby != null) _lease ??= _lobby.Watch();
         else { _lease?.Dispose(); _lease = null; }
     }
-
     private void OnLobbyChanged(LobbySnapshot snapshot)
     {
         var gates = ReadGates();
