@@ -51,6 +51,17 @@ rows are needs-port in the A5 lane group (<code>a5-glassroad-sync10</code>).</li
 <p>Lanes go as PRs of 600 lines or less against <code>port/7.2</code>. The Rain lanes wait for <code>sync9-rain</code> and must keep
 <code>RainV2Gate</code> off as on WPF. The equip lanes (cosmetics, desk items, chess wardrobe, lobby looks) wear items owned on any
 platform; none of them opens or needs the shop.</p>
+<h2 id="sync10-rain-bake-review-scope">sync10-rain-bake review scope</h2>
+<p>PR #3860 (<code>avalonia-port/cloud-r72-sync10-rain-bake</code>) is an incremental lane on
+<code>avalonia-port/main-20261031-compat</code>, pinned at <code>6121afbebda83bbbb3fe81c610c7c84a03c7e05c</code>.
+Use <code>6121afbeb..HEAD</code> for this lane's code review and 600 changed-line cap, including its CI and review fixes.</p>
+<p>The inherited range <code>74ac6ce3d..6121afbeb</code> belongs to the separate main sync #10 release-import review.
+The full <code>74ac6ce3d..HEAD</code> comparison includes that import and is not this lane's review range.
+This separates review scopes; it grants no exemption for changes made by this lane.</p>
+<pre><code>git diff --stat 6121afbeb HEAD
+git diff --check 6121afbeb HEAD</code></pre>
+<p>The Rain rows 85, 87, 93 and 94 remain <code>needs-port</code>: their host work still waits for
+<code>sync9-rain</code>. This review scope does not mark them complete or change WPF behaviour.</p>
 <h2 id="needs-port-lanes">needs-port lanes</h2>
 
 <table>
