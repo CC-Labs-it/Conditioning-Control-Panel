@@ -25,7 +25,7 @@ public sealed class ShellTrayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
@@ -100,7 +100,7 @@ public sealed class ShellTrayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
@@ -158,7 +158,7 @@ public sealed class ShellTrayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var shell = new MainShellWindow();
@@ -180,6 +180,56 @@ public sealed class ShellTrayTests
                 Assert.False(MainShellWindow.IsDeniedBusName(null));
                 Assert.False(MainShellWindow.IsDeniedBusName(new Tmds.DBus.Protocol.DBusErrorReplyException(
                     "org.freedesktop.DBus.Error.Failed", "org.kde.StatusNotifierItem-2-4")));
+            }
+            finally
+            {
+                shell.Tray?.Dispose();
+                shell.MarkExitRequestedForTest();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF TrayIconService.ShowWindow and MainWindow.WindowChrome.OnClosing: keep the panel reachable.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeniedTrayWithWatcherKeepsTheShellReachable(bool alreadyHidden)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.CreateTray();
+                shell.TrayHostPresent = () => true;
+                Assert.True(shell.CanHideToTray);
+                if (alreadyHidden)
+                {
+                    shell.Show();
+                    shell.Hide();
+                    Assert.False(shell.IsVisible);
+                }
+                else shell.StartMinimizedToTray(); // Denial races the pending Opened callback.
+                Dispatcher.UIThread.Post(() => throw new Tmds.DBus.Protocol.DBusErrorReplyException(
+                    "org.freedesktop.DBus.Error.AccessDenied", "Not allowed to own org.kde.StatusNotifierItem-2-4"));
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(shell.CanHideToTray); // Watcher presence alone cannot make an icon usable.
+                if (!alreadyHidden)
+                {
+                    Assert.False(shell.IsVisible); // Denial must not open a shell before startup does.
+                    shell.Show();
+                }
+                Assert.True(shell.IsVisible);
+                var closed = false;
+                shell.Closed += (_, _) => closed = true;
+                shell.Close();
+                Assert.True(closed); // X exits rather than hiding behind the refused registration.
             }
             finally
             {
