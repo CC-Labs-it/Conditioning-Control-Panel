@@ -34,6 +34,62 @@ public sealed class FriendsDrawerFinishTests
     private static void Click(Control d, string tag) =>
         Assert.IsType<Button>(Find<Button>(d, tag)).RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
 
+    // WPF FriendsDrawer.Blocked.cs:66-73: asking Remove/Block clears the picker, even after Keep.
+    [Theory]
+    [InlineData("remove")]
+    [InlineData("block")]
+    public Task ConfirmationForgetsTheSendPicker(string what) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        var (svc, wire) = FriendsDrawerTests.Service();
+        using (svc)
+        {
+            await svc.RefreshAsync();
+            var d = new FriendsDrawer(svc);
+            d.Toggle("u_on");
+            Click(d, "friends-action:poke");
+            Assert.Equal("poke", d.OpenPicker);
+            // Use the real row menu handler, without opening a native popup.
+            var row = Find<Border>(d, "friends-row:u_on")!;
+            var menu = row.ContextMenu!;
+            menu.ItemsSource!.OfType<MenuItem>().Single(i => i.Tag as string == "friends-menu-item:" + what)
+                .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.NotNull(Find<Border>(d, "friends-confirm:" + what));
+            Assert.Null(d.OpenPicker);
+            Assert.Null(Find<WrapPanel>(d, "friends-picker:poke"));
+            Click(d, "friends-confirm-keep");
+            Assert.Null(Find<Border>(d, "friends-confirm:" + what));
+            Assert.Null(Find<WrapPanel>(d, "friends-picker:poke"));
+            Assert.DoesNotContain(what, wire.Ops);
+            Assert.Empty(wire.Sends);
+        }
+    });
+
+    // WPF FriendsDrawer.cs:668-700,714: actions stay visible; a question suppresses their picker.
+    [Fact]
+    public Task ConfirmationKeepsActionsAboveTheQuestion() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        var (svc, wire) = FriendsDrawerTests.Service();
+        using (svc)
+        {
+            await svc.RefreshAsync();
+            var d = new FriendsDrawer(svc);
+            await d.RunMenuAsync(svc.Snapshot.Friends.Single(f => f.Id == "u_on"), "block");
+            var card = Find<StackPanel>(d, "friends-card")!;
+            Assert.IsType<global::Avalonia.Controls.Primitives.UniformGrid>(card.Children[0]);
+            Assert.Same(Find<Button>(d, "friends-action:more"), card.Children[1]);
+            Assert.Same(Find<Border>(d, "friends-confirm:block"), card.Children[2]);
+            Click(d, "friends-action:poke");
+            Assert.NotNull(Find<Border>(d, "friends-confirm:block"));
+            Assert.Null(Find<WrapPanel>(d, "friends-picker:poke"));
+            Click(d, "friends-confirm-keep");
+            Assert.NotNull(Find<WrapPanel>(d, "friends-picker:poke"));
+            Assert.DoesNotContain("block", wire.Ops);
+            Assert.Empty(wire.Sends);
+        }
+    });
+
     [Fact]
     public Task LockDayAndTierPlatesAppearOnTheRealRows() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
