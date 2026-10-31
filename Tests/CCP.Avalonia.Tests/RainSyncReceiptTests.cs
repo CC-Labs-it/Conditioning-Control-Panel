@@ -9,9 +9,9 @@ public sealed partial class AccountSeedTests
 {
     [Theory]
     [InlineData(true, HttpStatusCode.OK, 1)]
-    [InlineData(false, HttpStatusCode.OK, 0)]
+    [InlineData(false, HttpStatusCode.OK, 1)]
     [InlineData(true, HttpStatusCode.Unauthorized, 0)]
-    public void Rain_sync_receipt_forwards_only_authenticated_prize_snapshots(bool snapshot, HttpStatusCode status, int expected)
+    public void Rain_sync_receipt_forwards_authenticated_readiness_even_without_prizes(bool snapshot, HttpStatusCode status, int expected)
         => WithFreshInstall(async () =>
         {
             var (wire, sync, _) = SignIn("u1", null);
@@ -24,8 +24,13 @@ public sealed partial class AccountSeedTests
             {
                 calls++;
                 Assert.Equal("u1", id);
-                Assert.Equal(7, prizes.Revision);
-                Assert.Equal(new[] { "cos.rain.dress.rose-flare" }, prizes.Grants);
+                if (snapshot)
+                {
+                    Assert.NotNull(prizes);
+                    Assert.Equal(7, prizes.Revision);
+                    Assert.Equal(new[] { "cos.rain.dress.rose-flare" }, prizes.Grants);
+                }
+                else Assert.Null(prizes);
             };
             sync.MarkLoaded(Array.Empty<string>());
             await sync.PushAsync("rain test");

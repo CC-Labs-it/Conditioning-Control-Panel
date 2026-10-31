@@ -68,7 +68,7 @@ internal static class RainLookSyncHead
 
     internal static void ApplyPrizes(string? requested, string? answered, PrizesBlock? prizes, string source)
     {
-        if (prizes?.Grants == null || string.IsNullOrEmpty(requested) || requested != answered) return;
+        if (string.IsNullOrEmpty(requested) || requested != answered) return;
         var token = _run.Token;
         Dispatcher.UIThread.Post(() =>
         {
