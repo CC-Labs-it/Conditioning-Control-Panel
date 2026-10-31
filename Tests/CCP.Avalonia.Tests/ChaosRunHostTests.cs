@@ -715,6 +715,109 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    /// <summary>WPF OnDefused (:1984-2052): the first snap banks its first-time bonus with a feed line
+    /// (OnFirstTimeAwarded :209), each snap raises this loop's snap_field (ChaosLessonHooks :161) and
+    /// feeds Slow Recovery (CountRegenPop :2427); last_breath counts only a held brink snap.
+    /// Combo milestones are lane fin2-chaos-fx-window's.</summary>
+    [Fact]
+    public async Task Snaps_bank_the_first_time_raise_snap_field_and_regrow_resistance()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                state.ShieldRegenPops = 2;
+                state.StartShields = 3; state.Shields = 2;
+                long sparks0 = ChaosMeta.State.Sparks;
+                void Snap() { log.Clear(); BubbleOverlay.SpawnChaos(LiveSpec()); BubbleOverlay.Field.DefuseAllLive(); }
+
+                Snap();
+                Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Snap));
+                Assert.Equal(sparks0 + ChaosFirstTimes.Amounts[ChaosFirstTimes.Snap], ChaosMeta.State.Sparks);
+                Assert.Contains($"+10 {ChaosGlyphs.Drops} first snap", state.RecentEvents);
+                Assert.Equal(1, ChaosLessons.Progress("snap_field"));
+                Assert.Equal(2, state.Shields);
+                Snap();
+                Assert.Equal(sparks0 + 10, ChaosMeta.State.Sparks);   // once
+                Assert.Equal(2, ChaosLessons.Progress("snap_field"));
+                Assert.Equal(3, state.Shields);   // the second pop regrows one
+                Assert.Contains("pulse:120,220,160@0.18", log);
+                Assert.Contains("\u2665 resistance regrows", state.RecentEvents);
+
+                // last_breath (ChaosLessonHooks :159): only a HELD snap started with <= 0.8 s of fuse.
+                Assert.Equal(0, ChaosLessons.Progress("last_breath"));   // free snaps never count
+                state.Focus = 100;
+                var t = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => t = t.AddMilliseconds(32);
+                var brink = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "pink", IsLive = true, FuseMs = 700, SizePx = 200, Payload = new FlashPayload() });
+                BubbleOverlay.Press(brink, brink.CenterX, brink.CenterY);
+                for (int i = 0; i < 40 && !brink.Popping; i++) BubbleOverlay.Field.Step();
+                Assert.True(brink.DefusedViaChannel);
+                Assert.Equal(1, ChaosLessons.Progress("last_breath"));
+            }
+            finally { Unjuice(); ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF ChaosModeService :1768/:1844/:2427: treats share the snap counter,
+    // full resistance clears partial credit, and a fresh run starts at zero.
+    [Fact]
+    public async Task Treats_bank_once_and_regen_discards_full_shield_and_previous_run_credit()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            try
+            {
+                void Start()
+                {
+                    ChaosRunHost.StartRun(Cfg());
+                    ChaosRunHost.Overlay!.FinishCountdown();
+                    ChaosRunHost.State!.ShieldRegenPops = 2;
+                    ChaosRunHost.State.StartShields = 3;
+                    ChaosRunHost.State.Shields = 2;
+                }
+                void Pop() => BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(
+                    new EffectBubbleSpec { VariantId = "flash", SizePx = 200, Payload = new FlashPayload() }));
+                Start();
+                long before = ChaosMeta.State.Sparks;
+                Pop();
+                Assert.Equal(before + 5, ChaosMeta.State.Sparks);
+                Assert.Contains("label:+5 " + ChaosGlyphs.Drops + " first taste", log);
+                var state = ChaosRunHost.State!;
+                Assert.Equal(2, state.Shields);
+                state.Shields = 3;
+                Pop();  // full clears partial credit
+                state.Shields = 2;
+                Pop();
+                Assert.Equal(2, state.Shields);
+                Pop();
+                Assert.Equal(3, state.Shields);
+                Assert.Equal(before + 5, ChaosMeta.State.Sparks);
+                state.Shields = 2;
+                Pop();  // leave one credit behind
+                ChaosRunHost.ForceShutdown();
+                Start();
+                Pop();
+                Assert.Equal(2, ChaosRunHost.State!.Shields);
+                Pop();
+                Assert.Equal(3, ChaosRunHost.State.Shields);
+            }
+            finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF Pulse/Shake (:1672) honour the run's flash and shake toggles; panic clears a live
     /// field without a label, cue or effect (EndChaosMode fires nothing).</summary>
     [Fact]
