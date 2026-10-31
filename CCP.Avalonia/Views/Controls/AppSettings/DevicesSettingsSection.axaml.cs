@@ -296,7 +296,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         // WPF LabTab diagnostics: subscriptions belong to this visible section, never the singleton.
         private bool _diagnosticsSubscribed, _gazeSet, _monitorPopulating;
-        private int _blinks;
+        private int _blinks, _mouthOpens;
         private WebcamTrackingState _debugState;
         private string _face = "—";
         private GazeSide _gaze;
@@ -306,8 +306,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             if (_diagnosticsSubscribed == subscribe) return;
             _diagnosticsSubscribed = subscribe;
             var t = Platform.WebcamTracker.Instance;
-            if (subscribe) { _debugState = t.State; t.OnFaceFound += DebugFaceFound; t.OnFaceLost += DebugFaceLost; t.OnBlink += DebugBlink; t.OnGazeSide += DebugGaze; t.StateChanged += DebugState; }
-            else { t.OnFaceFound -= DebugFaceFound; t.OnFaceLost -= DebugFaceLost; t.OnBlink -= DebugBlink; t.OnGazeSide -= DebugGaze; t.StateChanged -= DebugState; }
+            if (subscribe) { _debugState = t.State; t.OnFaceFound += DebugFaceFound; t.OnFaceLost += DebugFaceLost; t.OnBlink += DebugBlink; t.OnMouthOpen += DebugMouthOpen; t.OnGazeSide += DebugGaze; t.StateChanged += DebugState; }
+            else { t.OnFaceFound -= DebugFaceFound; t.OnFaceLost -= DebugFaceLost; t.OnBlink -= DebugBlink; t.OnMouthOpen -= DebugMouthOpen; t.OnGazeSide -= DebugGaze; t.StateChanged -= DebugState; }
         }
         private void DebugState()
         {
@@ -319,6 +319,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         private void DebugFaceFound() { _face = "yes"; PaintDebugCounters(); AppendWebcamDebugLog("Face FOUND"); }
         private void DebugFaceLost() { _face = "lost"; PaintDebugCounters(); AppendWebcamDebugLog("Face LOST"); }
         private void DebugBlink() { _blinks++; PaintDebugCounters(); AppendWebcamDebugLog($"Blink #{_blinks}"); }
+        // WPF MainWindow.LabTab.cs:691-695,720,732: one log per detector event.
+        private void DebugMouthOpen() => AppendWebcamDebugLog(Loc.GetF("webcam_debug_mouth_open_fmt", ++_mouthOpens));
+
         private void DebugGaze(GazeSide side)
         {
             if (_gazeSet && _gaze == side) return;
@@ -441,6 +444,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                     if (!Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current)) { AppendWebcamDebugLog("Consent declined or dialog cancelled."); return; }
                     AppendWebcamDebugLog("Consent granted.");
                 }
+                // WPF MainWindow.LabTab.cs:517-523: a new Start begins a fresh diagnostic session.
+                SubscribeWebcamDiagnostics(true);
+                _blinks = _mouthOpens = 0;
+                _gazeSet = false;
+                _face = "—";
+                PaintDebugCounters();
                 AppendWebcamDebugLog("Starting webcam (camera open + model load can take a few seconds)…");
                 BtnWebcamDebugStart.IsEnabled = false;
                 bool started = await tracker.StartAsync();
