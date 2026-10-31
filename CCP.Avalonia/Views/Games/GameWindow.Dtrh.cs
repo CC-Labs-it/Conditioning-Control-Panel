@@ -4,8 +4,8 @@
 // DtrhRunWire), run-started / run-progress / run-ended with the one-payout latch (:360, :583) and the
 // close-mid-run booking (:1002 DtrhRunCloseRule). The kept Escape (:119) is posted by the panic key's pause
 // claim (MainShellWindow.PanicKey.cs, Core PanicPolicy.KeptEscapePage.Dtrh); a full panic closes it with
-// every other game (PanicSurfaces "games"). Shell frames (boot-error, exit's 1200 ms close, exit-done)
-// stay in GameWindow.HandleMessage.
+// every other game (PanicSurfaces "games"). Exit frames stay in GameWindow.HandleMessage;
+// boot-error now reaches the classic fallback below (WPF :924-953).
 // Slice B: the manifest's online half (Core DtrhRemoteMedia: online media copied to this machine, re-posted as
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
 // ponytail: slice game-dtrh-host-c, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
@@ -34,6 +34,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF LauncherCatalogue.cs:241: Lab tier, or the server's daily-free DtRH drop; refused with
         /// the tier toast (TierGate.DemandLab).</summary>
         internal static bool DtrhGate() => TierGate.DemandLab(Loc.Get("launcher_game_dtrh_title"), DtrhId);
+
+        // WPF DtrhHostService.cs:924-953: a failed 3D boot uses the classic game
+        // for the rest of the session. The normal Lab gate still owns each new launch.
+        internal static bool DtrhBootFailedThisSession;
+        internal static Chaos.ChaosHubWindow? DtrhClassicHub => Chaos.ChaosHubWindow.Current;
+
+        private static void LaunchDtrhClassic()
+        {
+            if (Chaos.ChaosRunHost.IsActive) return;
+            if (ChaosMeta.State.RunsCompleted == 0)
+            {
+                Chaos.ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
+                return;
+            }
+            if (DtrhClassicHub is { } live) { live.Activate(); return; }
+            var hub = new Chaos.ChaosHubWindow();
+            if (Windows.MainShellWindow.Current is { IsVisible: true } owner) hub.Show(owner);
+            else hub.Show();
+        }
 
         /// <summary>The launcher's padlock probe for the same door, without the toast.</summary>
         internal static bool DtrhLocked() => !TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), DtrhId).Allowed;
@@ -68,6 +87,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             switch ((string?)o["type"])
             {
+                case "boot-error":
+                    if (_closing) return true;
+                    DtrhBootFailedThisSession = true;
+                    Close(); // dispose the web host before the classic surface opens
+                    LaunchDtrhClassic();
+                    return true;
                 case "ready":
                     IsReady = true;
                     OnDtrhPageReady();

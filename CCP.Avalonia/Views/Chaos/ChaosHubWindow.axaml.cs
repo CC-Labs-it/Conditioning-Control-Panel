@@ -106,12 +106,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private T Part<T>(string name) where T : Control => this.FindControl<T>(name)
             ?? throw new InvalidOperationException($"ChaosHubWindow: no '{name}' in the XAML");
 
+        // WPF ChaosHubWindow.xaml.cs:30, :37, :45: one hub shared by all entry paths.
+        internal static ChaosHubWindow? Current { get; private set; }
+
         public ChaosHubWindow()
         {
             // Init runs WPF's on-load refunds/sanitize, which can save. A render draws the
             // in-memory state instead, so --render-all never writes a real profile.
             if (!RenderProof.Rendering) ChaosMeta.Init();
             AvaloniaXamlLoader.Load(this);
+            Current = this;
+            Closed += (_, _) => { if (ReferenceEquals(Current, this)) Current = null; };
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
