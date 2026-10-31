@@ -174,3 +174,12 @@ html.pad-nav #race-garage button:focus,html.pad-nav #race-garage input:focus{out
 @keyframes g-bubble-ring{from{opacity:1;transform:scale(.85)}to{opacity:0;transform:scale(1.35)}}
 @keyframes g-bubble-drop{from{opacity:1;transform:none}to{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.4)}}
 @keyframes g-bubble-fade{to{opacity:0}}
+/* Kart stats (hud/kartBars.js): a paper tag under the kart's name, ink pips. No clicks, no focus. Fills fade both ways, except when calm. */
+.g-bars{display:inline-block;min-width:204px;margin:0 0 10px;padding:6px 10px 7px;border:2px solid #10101b;border-radius:7px;background:#fff4df;color:#251b30;box-shadow:0 3px #10101b;text-align:left;transform:rotate(-.6deg);pointer-events:none}
+.g-bars-peek{border-style:dashed;box-shadow:none}
+.g-bars-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:0 0 3px;font:italic 14px/1.2 Georgia,serif}.g-bars-head b{font-weight:400;margin-left:auto}.g-bars-name{color:#b8296a}
+.g-bars-rows{display:grid;gap:2px}.g-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;line-height:1.2}
+.g-pips{display:flex;gap:2px;flex:none}.g-pips i{display:block;width:10px;height:8px;border:1.5px solid #10101b;border-radius:1px;transition:background .18s ease}.g-pips i.on{background:#d44380}
+#race-garage.g-calm .g-pips i{transition:none}#race-garage.g-calm .g-bars{transform:none}
+@media(prefers-reduced-motion:reduce){.g-pips i{transition:none}.g-bars{transform:none}}
+@media(max-width:699px),(max-height:650px){.g-bars{min-width:0;margin-bottom:6px;padding:4px 8px 5px}.g-bars-head{font-size:12px;margin-bottom:2px}.g-bars-rows{grid-template-columns:1fr 1fr;gap:1px 10px}.g-bar{font-size:10px;gap:5px}.g-pips i{width:6px;height:7px}}

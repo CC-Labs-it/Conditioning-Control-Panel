@@ -632,7 +632,7 @@ async function boot(course, options, lifetime, isCurrent) {
   showLoading('Getting the garage ready', 0.56);
   await paintGap();
   if (!lifetime.alive) return;
-  const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas,
+  const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas, feel,
     track: trackName, laps, trackId: track.id, online: course.online, owned: () => shared.owned.grants, counter: hostCounter(shared.bridge, init),
     onProgress: (d, n) => showLoading('Getting the garage ready', 0.56 + 0.36 * d / Math.max(1, n)) });
   if (!lifetime.alive) { garage?.dispose(); return; }
