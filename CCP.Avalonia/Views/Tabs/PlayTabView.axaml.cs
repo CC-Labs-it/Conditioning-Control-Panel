@@ -100,18 +100,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// plate, the Resources-relative art, and the Stretch each one was authored with.
         /// <c>lockdown_icon.png</c> sits at the RESOURCE ROOT, the path a mod keys its override against.
         /// </summary>
-        private static readonly (string Plate, string Art, Stretch Fit)[] HeroPlates =
+        // WPF MainWindow/MainWindow.xaml.cs:2933 sizes Play hero decodes.
+        // Chess stays full size as in WPF Views/Tabs/PlayTabView.xaml:447.
+        private static readonly (string Plate, string Art, Stretch Fit, int? DecodeWidth)[] HeroPlates =
         {
-            ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill),
-            ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill),
-            ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill),
-            ("PlayGazeHeroPlate",     "features/lab_gaze_hero.png",     Stretch.UniformToFill),
-            ("PlayFocusHeroPlate",    "features/lab_focusgaze_hero.png",Stretch.UniformToFill),
-            ("PlayBlinkHeroPlate",    "features/blink_trainer.png",     Stretch.UniformToFill),
-            ("PlayIntakeHeroPlate",   "features/lab_quiz_hero.png",     Stretch.UniformToFill),
-            ("PlayFypHeroPlate",      "features/fyp.png",               Stretch.UniformToFill),
-            ("PlayLockdownHeroPlate", "lockdown_icon.png",              Stretch.UniformToFill),
-            ("PlayLoomHeroPlate",     "features/loom.png",              Stretch.UniformToFill),
+            ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill, 512),
+            ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill, null),
+            ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill, 768),
+            ("PlayGazeHeroPlate",     "features/lab_gaze_hero.png",     Stretch.UniformToFill, 512),
+            ("PlayFocusHeroPlate",    "features/lab_focusgaze_hero.png",Stretch.UniformToFill, 512),
+            ("PlayBlinkHeroPlate",    "features/blink_trainer.png",     Stretch.UniformToFill, 512),
+            ("PlayIntakeHeroPlate",   "features/lab_quiz_hero.png",     Stretch.UniformToFill, 512),
+            ("PlayFypHeroPlate",      "features/fyp.png",               Stretch.UniformToFill, 512),
+            ("PlayLockdownHeroPlate", "lockdown_icon.png",              Stretch.UniformToFill, 1024),
+            ("PlayLoomHeroPlate",     "features/loom.png",              Stretch.UniformToFill, 512),
         };
 
         private void OnModChangedRepaintArt(object? sender, ModPackage? mod) =>
@@ -123,12 +125,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         private void RefreshHeroArt()
         {
-            foreach (var (plateName, art, fit) in HeroPlates)
+            foreach (var (plateName, art, fit, decodeWidth) in HeroPlates)
             {
                 try
                 {
                     if (this.FindControl<Border>(plateName) is not { } plate) continue;
-                    if (ModArt.TryLoad(art) is not { } bmp) continue;
+                    if (ModArt.TryLoad(art, decodeWidth) is not { } bmp) continue;
                     plate.Background = new ImageBrush(bmp) { Stretch = fit };
                 }
                 catch (Exception ex)

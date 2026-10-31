@@ -358,7 +358,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (e.Art == null) continue;                 // art-less module: nothing to resolve
 
                 Bitmap? bmp;
-                try { bmp = ModArt.TryLoad("features/" + e.Art); }
+                // WPF StudioTabView.xaml.cs:204/:361/:760: tile and chip share 256px art.
+                try { bmp = ModArt.TryLoad("features/" + e.Art, 256); }
                 catch (Exception ex)
                 {
                     Log.Debug(ex, "[Studio] feature art {Art} would not load", e.Art);
@@ -405,7 +406,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (ImgStudioDoorArt == null) return;
 
             Bitmap? bmp;
-            try { bmp = ModArt.TryLoad("nav/door_studio.png"); }
+            // WPF StudioTabView.xaml.cs:375 decodes the medallion at 128px.
+            try { bmp = ModArt.TryLoad("nav/door_studio.png", 128); }
             catch (Exception ex)
             {
                 Log.Debug(ex, "[Studio] the door medallion would not load");
