@@ -193,16 +193,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         // Services — App.KeywordPresets and App.Settings, both now in Core
         // ============================================================
 
-        /// <summary>
-        /// WPF's <c>App.KeywordPresets</c>. The service is stateless — every read and write goes
-        /// through <see cref="CoreSettings.Current"/> — so a local instance installs, uninstalls
-        /// and clones exactly as the head-owned one does.
-        ///
-        /// ponytail: its <c>PresetsChanged</c> event therefore fires only on this instance. Nothing
-        /// on this head subscribes yet (the Awareness tab refreshes off <see cref="Changed"/>);
-        /// give the head one shared instance if a listener ever needs it.
-        /// </summary>
-        private static readonly KeywordTriggerPresetService Presets = new();
+        /// <summary>WPF App.KeywordPresets: share install/uninstall notifications with the tab.</summary>
+        private static KeywordTriggerPresetService Presets => App.KeywordPresets;
 
         private string LiveClonePrefix => "preset:" + _preset.Id + ":";
 

@@ -21,6 +21,9 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>In-app corner toasts (WPF App.Notifications). Queues until the shell attaches it.</summary>
         public static Helpers.NotificationService Notifications { get; } = new();
 
+        /// <summary>Shared preset events, as WPF App.xaml.cs:1254,3230.</summary>
+        internal static KeywordTriggerPresetService KeywordPresets { get; } = new();
+
         /// <summary>Weekly free-tier pass for the Graded Intake (WPF App.IntakePass).</summary>
         public static IntakePassService IntakePass { get; } = new();
 
