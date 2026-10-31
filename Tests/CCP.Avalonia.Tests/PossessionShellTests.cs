@@ -20,9 +20,11 @@ public sealed class PossessionShellTests
     [Fact] public void ConsentUsesSelectedLanguage()
     {
         var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
-        var language = loc.CurrentLanguage;
-        try { foreach (var code in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" }) {
-            loc.SetLanguage(code); Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("lockdown_possession_warning"), global::ConditioningControlPanel.Avalonia.Views.Tabs.LockdownTabView.LockdownWarning(10, new() { LockdownPossessionEnabled = true })); } }
+        var language = loc.CurrentLanguage; const string warningKey = "lockdown_possession_warning";
+        try { loc.SetLanguage("en"); var english = loc.Get(warningKey); Assert.Contains("on purpose", english); Assert.Contains("not a bug", english); foreach (var code in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" }) {
+            loc.SetLanguage(code); var text = loc.Get(warningKey); Assert.NotEqual(warningKey, text); if (code != "en") Assert.NotEqual(english, text);
+            foreach (var (intensity, key) in new[] { (0, "lockdown_poss_intensity_gentle"), (1, "lockdown_poss_intensity_eerie"), (2, "lockdown_poss_intensity_fulldoki") })
+                Assert.Contains(loc.GetF(warningKey, loc.Get(key)), global::ConditioningControlPanel.Avalonia.Views.Tabs.LockdownTabView.LockdownWarning(10, new() { LockdownPossessionEnabled = true, LockdownPossessionIntensity = intensity })); } }
         finally { loc.SetLanguage(language); }
     }
     private static void Setup()
@@ -37,8 +39,7 @@ public sealed class PossessionShellTests
     {
         Setup();
         var previous = LockdownService.Current; using var lockdown = new LockdownService();
-        LockdownService.Current = lockdown;
-        var shell = new MainShellWindow();
+        LockdownService.Current = lockdown; var shell = new MainShellWindow();
         Assert.True(PossessionTree.GetExclude(shell.Named<Border>("LockdownBadge")!)); // WPF MainWindow.xaml Exclude
         var button = Button("BtnVictim");
         var inner = new Border { Name = "Inner", Width = 180, Height = 80, Background = Brushes.Gray,
@@ -97,17 +98,14 @@ public sealed class PossessionShellTests
     {
         Setup();
         var s = CoreSettings.Current; var previous = LockdownService.Current; using var lockdown = new LockdownService();
-        var now = DateTime.UtcNow;
-        lockdown.UtcNow = () => now;
+        var now = DateTime.UtcNow; lockdown.UtcNow = () => now;
         LockdownService.Current = lockdown;
-        var frames = new Frames();
-        MainShellWindow.PossessionFramesForTests = frames;
+        var frames = new Frames(); MainShellWindow.PossessionFramesForTests = frames;
         var shell = new MainShellWindow();
         Control label = effectId == "breathe" ? Button("BtnVictim") : new TextBlock { Name = "TxtVictim", Text = "drifting", Width = 100, Height = 30, FontSize = 14 };
         var prior = new ScaleTransform(1.1, 1.1); label.RenderTransform = prior;
-        shell.Content = new StackPanel { Children = { label } };
-        shell.Show(); Dispatcher.UIThread.RunJobs();
-        s = CoreSettings.Current;
+        shell.Content = new StackPanel { Children = { label } }; shell.Show(); Dispatcher.UIThread.RunJobs();
+        s = CoreSettings.Current; var saved = (s.LockdownPossessionEnabled, s.LockdownPossessionIntensity, s.LockdownPhotosafe);
         s.LockdownPossessionEnabled = true; s.LockdownPossessionIntensity = (int)PossessionIntensity.FullDoki; s.LockdownPhotosafe = true;
         try
         {
@@ -151,9 +149,9 @@ public sealed class PossessionShellTests
         finally
         {
             lockdown.Deactivate(); Dispatcher.UIThread.RunJobs(); shell.Close(); LockdownService.Current = previous;
-            MainShellWindow.PossessionFramesForTests = null;
+            MainShellWindow.PossessionFramesForTests = null; (s.LockdownPossessionEnabled, s.LockdownPossessionIntensity, s.LockdownPhotosafe) = saved;
         }
-        return Task.CompletedTask;
+        Assert.Equal(saved, (s.LockdownPossessionEnabled, s.LockdownPossessionIntensity, s.LockdownPhotosafe)); return Task.CompletedTask;
     });
     private sealed class Frames : global::ConditioningControlPanel.Avalonia.Controls.Fx.IFrameSource
     {

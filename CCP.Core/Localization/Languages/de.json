@@ -4429,7 +4429,7 @@
   "browser_enhance_tooltip": "Wenn aktiviert, spielt eine Videoseite, die zu einem gespeicherten Enhancement passt, dessen Effekte darüber ab.",
   "browser_show_bambicloud_label": "BambiCloud anzeigen",
   "browser_show_bambicloud_tooltip": "Blendet den BambiCloud-Seitenschalter auch bei Mods ein, die ihn sonst verbergen. Die Standardseite des Mods bleibt ausgewählt; das macht BambiCloud nur zum Umschalten verfügbar.",
-  "lockdown_possession_warning": "- Possession ist AN: Die Bedienoberfläche bewegt sich. Ein Glutleuchten kennzeichnet dies. Nichts davon ist ein echter Schaden.",
+  "lockdown_possession_warning": "- Possession ist AN ({0}): Die Bedienoberfläche wird sich absichtlich ungewöhnlich verhalten.\n  Glutleuchten bedeutet: Das war Lockdown, kein Fehler. Nichts davon ist ein echter Schaden.",
   "browser_toast_offline_blocked": "Der Offline-Modus ist aktiv, daher bleibt der Browser getrennt. Schalte ihn in den Einstellungen aus, um zu surfen.",
   "companion_prompt_too_long_notice": "Der Prompt deiner Begleiterin ist zu lang für die Cloud-KI, daher antwortet sie mit weniger Kontext. Kürze die Wissensdatenbank-Links oder wähle eine kürzere Persönlichkeit.",
   "browser_enhance_match_none": "Kein gespeichertes Enhancement für diese Seite.",

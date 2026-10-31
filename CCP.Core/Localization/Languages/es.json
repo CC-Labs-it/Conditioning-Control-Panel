@@ -4429,7 +4429,7 @@
   "browser_enhance_tooltip": "Cuando está activado, al navegar a una página de video que coincida con una mejora guardada se reproducen sus efectos por encima.",
   "browser_show_bambicloud_label": "Mostrar BambiCloud",
   "browser_show_bambicloud_tooltip": "Revela el selector del sitio BambiCloud en los mods que normalmente lo ocultan. El sitio predeterminado del mod sigue seleccionado; esto solo hace que puedas cambiar a BambiCloud.",
-  "lockdown_possession_warning": "- Possession está ACTIVADO: la interfaz se moverá. Un brillo de brasas lo indica. Nada de lo que ves es daño real.",
+  "lockdown_possession_warning": "- Possession está ACTIVADO ({0}): la interfaz se comportará de forma extraña, a propósito.\n  El brillo de brasas indica que fue Lockdown, no un error. Nada de lo que ves es daño real.",
   "browser_toast_offline_blocked": "El Modo Sin Conexión está activado, así que el navegador sigue desconectado. Desactívalo en Ajustes para navegar.",
   "companion_prompt_too_long_notice": "El prompt de tu compañera es demasiado largo para la IA en la nube, así que responde con menos contexto. Recorta los enlaces de la base de conocimientos o elige una personalidad más corta.",
   "browser_enhance_match_none": "No hay ninguna mejora guardada para esta página.",

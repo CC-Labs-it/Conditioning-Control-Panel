@@ -1238,7 +1238,7 @@
   "browser_enhance_tooltip": "Se attivo, aprendo una pagina video che corrisponde a un enhancement salvato, i suoi effetti partono sopra il video.",
   "browser_show_bambicloud_label": "Mostra BambiCloud",
   "browser_show_bambicloud_tooltip": "Mostra il sito BambiCloud nelle mod che di solito lo nascondono. Il sito predefinito della mod resta selezionato; così puoi passare a BambiCloud se vuoi.",
-  "lockdown_possession_warning": "- Possession è ATTIVO: l’interfaccia si muoverà. Un bagliore di brace lo segnala. Nulla di ciò che vedi è un danno reale.",
+  "lockdown_possession_warning": "- Possession è ATTIVO ({0}): l’interfaccia si comporterà in modo strano, di proposito.\n  Il bagliore di brace indica che era Lockdown, non un errore. Nulla di ciò che vedi è un danno reale.",
   "browser_toast_offline_blocked": "La Modalità Offline è attiva, quindi il browser resta scollegato. Disattivala nelle Impostazioni per navigare.",
   "companion_prompt_too_long_notice": "Il prompt del tuo companion è troppo lungo per l'AI cloud, quindi risponde con meno contesto. Accorcia i link della knowledge base o scegli una personalità più breve.",
   "browser_enhance_match_none": "Nessun enhancement salvato per questa pagina.",

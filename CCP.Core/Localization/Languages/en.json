@@ -1261,7 +1261,7 @@
   "browser_enhance_tooltip": "When enabled, navigating to a video page that matches a saved enhancement plays its effects on top.",
   "browser_show_bambicloud_label": "Show BambiCloud",
   "browser_show_bambicloud_tooltip": "Reveal the BambiCloud site toggle on mods that normally hide it. The mod's default site stays selected; this just makes BambiCloud available to switch to.",
-  "lockdown_possession_warning": "- Possession is ON: the app UI will move. Ember glow marks it. Nothing you see is real damage.",
+  "lockdown_possession_warning": "- Possession is ON ({0}): the app's own UI will misbehave, on purpose.\n  Ember glow = it was Lockdown, not a bug. Nothing you see is real damage.",
   "browser_toast_offline_blocked": "Offline Mode is on, so the browser stays disconnected. Turn it off in Settings to browse.",
   "companion_prompt_too_long_notice": "Your companion prompt is too long for cloud AI, so she is answering with less context. Trim knowledge-base links or pick a shorter personality.",
   "browser_enhance_match_none": "No saved enhancement for this page.",

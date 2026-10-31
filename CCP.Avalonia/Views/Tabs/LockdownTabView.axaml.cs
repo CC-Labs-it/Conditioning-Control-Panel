@@ -339,7 +339,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ? "  (or Ctrl+Alt+Del → Task Manager as a safety valve)"   // WPF's line verbatim
                 : "  (or ending the app from a system monitor / terminal as a safety valve)");
             if (cfg.LockdownPossessionEnabled) // WPF MainWindow.Lab.cs:94-104, only the reachable transforms
-                warn.Append("\n").Append(Loc.Get("lockdown_possession_warning"));
+                warn.Append("\n").Append(Loc.GetF("lockdown_possession_warning", Loc.Get(cfg.LockdownPossessionIntensity switch { 0 => "lockdown_poss_intensity_gentle", 2 => "lockdown_poss_intensity_fulldoki", _ => "lockdown_poss_intensity_eerie" })));
             return warn.ToString();
         }
 
