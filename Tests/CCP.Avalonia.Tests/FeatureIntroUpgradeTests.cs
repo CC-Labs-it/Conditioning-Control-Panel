@@ -31,6 +31,17 @@ public sealed class FeatureIntroUpgradeTests
     });
 
     [Fact]
+    public Task ShellOpenedStampsVersionlessWelcomedProfileWithoutNotes() => Run("", shell =>
+    {
+        CoreReleaseContent.AppVersionProvider = () => "9.8.7";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("9.8.7", CoreSettings.Current.LastSeenVersion);
+        Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
+        Assert.False(MainShellWindow.IsStartupDialogShowing);
+        return Task.CompletedTask;
+    }, detachStartup: false);
+
+    [Fact]
     public Task UpgradeHoldsCardsAndStampsOnlyAfterDismissal() => Run("old-version", async shell =>
     {
         var showing = shell.ShowWhatsNewIfNeeded();

@@ -98,6 +98,7 @@ public sealed class LanguageSelectorTests
 
             try
         {
+            Assert.Equal(CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
             Assert.Equal("ja", LocalizationManager.Instance.CurrentLanguage);
             Assert.Equal("ja", SelectedCode(Pill(shell)));
             Assert.Equal("ja", SelectedCode(General(shell)));
@@ -469,6 +470,10 @@ public sealed class LanguageSelectorTests
         settings.Current.Language = "ja";
         settings.Current.SessionRackSourceFilter = "all";
         settings.Current.Welcomed = true;
+        // A current-version profile has no upgrade bookkeeping (WPF MainWindow.Marquee.cs:311-325).
+        // Versionless startup is separately exercised by FeatureIntroUpgradeTests.
+        var version = typeof(App).Assembly.GetName().Version!; // the provider is seeded only by StartApp
+        settings.Current.LastSeenVersion = $"{version.Major}.{version.Minor}.{version.Build}";
         // The Dashboard's launch cards spend their seen-flag (a real save) when they open, like WPF;
         // spent here so the no-startup-save assertion keeps measuring startup itself.
         settings.Current.SeenFeatureIntros.AddRange(new[] { "daily-free", "one-account" });
@@ -534,6 +539,9 @@ public sealed class LanguageSelectorTests
         };
 
         AppBuilder.Configure<CatalogueTestApp>(() => new CatalogueTestApp(customFolder, builtInFolder))
+            .WithInterFont()
+            .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+            .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .SetupWithLifetime(lifetime);
