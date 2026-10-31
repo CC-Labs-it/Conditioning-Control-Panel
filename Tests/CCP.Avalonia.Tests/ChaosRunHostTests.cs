@@ -90,6 +90,86 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    /// <summary>WPF ChaosModeService.cs:2735-2750, :2780, :2948, :3021:
+    /// snap pays lives, capstone pays treats too, and a successful use awards first play once.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Snap_field_pays_the_field_once_and_glows_for_one_second(bool maxed)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var log = Juice();
+            try
+            {
+                var meta = ChaosMeta.State;
+                meta.ToyPockets = 1;
+                meta.ActiveLifetimeBoons.Add("snap_field");
+                meta.LifetimeBoonLevels["snap_field"] = 1;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                if (maxed) state.MaxedBoons.Add("snap_field");
+                state.Focus = 0;   // sweeps cost no focus, even during an in-progress hold
+                var toy = Assert.Single(ChaosRunHost.ToyButtons).Toy;
+                var live = BubbleOverlay.SpawnChaos(LiveSpec());
+                var treat = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { VariantId = "flash" });
+                var immune = new[]
+                {
+                    new EffectBubbleSpec { IsLive = true, IsBrittle = true },
+                    new EffectBubbleSpec { IsTease = true },
+                    new EffectBubbleSpec { IsDarter = true },
+                    new EffectBubbleSpec { IsFreeze = true },
+                    new EffectBubbleSpec { IsLive = true, IsChaperoneLive = true },
+                }.Select(BubbleOverlay.SpawnChaos).ToArray();
+                int sparks = meta.Sparks;
+                log.Clear();
+                ChaosRunHost.ToggleManualPause();
+                ChaosRunHost.UseToyById("snap_field");
+                Assert.False(live.Popping);
+                Assert.False(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
+                ChaosRunHost.ToggleManualPause();
+                ChaosRunHost.UseToyById("snap_field");   // same entry as the hero click
+                Assert.True(live.Popping);
+                Assert.Equal(maxed, treat.Popping);
+                Assert.All(immune, b => Assert.False(b.Popping));
+                Assert.Equal((1, 0, maxed ? 10.0 : 0.0), (state.Defused, state.Detonated, state.Focus));
+                Assert.True(state.Score > 0);
+                Assert.Equal(sparks + 15, meta.Sparks);
+                Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
+                Assert.Contains("sfx:freeze_trigger", log);
+                Assert.Contains("pulse:150,220,255@0.35", log);
+                Assert.Equal(maxed ? "✋ snapped. all of it." : "✋ snapped. every live one let go", state.RecentEvents.First());
+                double score = state.Score;
+                ChaosRunHost.UseToyById("snap_field");   // cooling: no second pay or award
+                Assert.Equal(score, state.Score);
+                Assert.Equal(sparks + 15, meta.Sparks);
+                Assert.True(toy.IsEffectActive);
+                Ticks(3);
+                Assert.True(toy.IsEffectActive);
+                Ticks(1);
+                Assert.False(toy.IsEffectActive);
+                Assert.Equal(59, toy.CooldownRemainingSec);
+                Ticks(220);
+                toy.CooldownRemainingSec = 0;
+                ChaosRunHost.UseToyById("snap_field");
+                Assert.Equal(sparks + 15, meta.Sparks);
+                ChaosRunHost.ForceShutdown();
+                Assert.Empty(ChaosRunHost.ToyButtons);
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                Ticks(1);
+                Assert.False(Assert.Single(ChaosRunHost.ToyButtons).Toy.IsEffectActive);
+            }
+            finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF ChaosToyButtonWindow: one hero button per equipped toy; a real click fires the
     /// toy (cooldown starts, the status counts down on the run clock); the toy key rides the panic
     /// key's listener; panic closes every button and unhooks the key.</summary>
