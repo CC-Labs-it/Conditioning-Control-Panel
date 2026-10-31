@@ -259,6 +259,8 @@ internal static class FriendsLanding
         if (item.Kind != SendKind.Invite) { StartupLadder.Inbox.Remove("friends:" + item.Id); return; }
         if (!CanJoin(item)) { OnKnockDone(item, KnockOutcome.Later); return; }   // never a Joined receipt for nothing
         StartupLadder.Inbox.Remove("friends:" + item.Id);
+        if (item.Destination == InviteDestination.Race && !OpenRace(item.Room))
+        { FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Declined)); return; }
         FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Joined));
         Sfx("chaos/reveal_chime.mp3", 0.20f, "friends-join");   // WPF FriendsSfx.Join
         Join(item);
@@ -282,30 +284,23 @@ internal static class FriendsLanding
     {
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
-        else if (item.Destination == InviteDestination.Race) OpenRace();
     }
 
-    internal static Action OpenRace { get; set; } = async () =>
+    internal static Func<string?, bool> OpenRace { get; set; } = room =>
     {
-        try
-        {
-            var owner = Anchor();
-            if (!await ExternalOpener.OpenAsync(owner, InviteDestination.RaceWebUrl) && owner != null)
-                await Views.Dialogs.MessageDialog.ShowLinkCopiedAsync(owner, InviteDestination.RaceWebUrl,
-                    Str("friends_land_dest_race", "Racing Thoughts"));
-        }
-        catch (Exception ex) { Log.Warning(ex, "[Friends] race launch failed"); }
+        try { return GameWindow.LaunchFriendRace(room) != null; }
+        catch (Exception ex) { Log.Warning(ex, "[Friends] race launch failed"); return false; }
     };
 
     private static readonly FriendsSfxGate SfxGate = new();
 
     /// <summary>WPF FriendsSfx.Play: master volume, the 1.5 s incoming gap, half level in a session.</summary>
-    private static void Sfx(string rel, float scale, string tag, bool incoming = false)
+    internal static void Sfx(string rel, float scale, string tag, bool incoming = false)
     {
         try
         {
             var s = CoreSettings.Current;
-            if (s.MasterVolume <= 0) return;
+            if (s.MasterVolume <= 0 || CoreAudio.IsOutputSuppressed || CoreEngine.Video?.IsPlaying == true || ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.HoldActive) return;
             lock (SfxGate) if (!SfxGate.TryPass(DateTime.UtcNow, incoming)) return;
             var path = CoreModArt.AudioOverridePath(rel)
                 ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel.Replace('/', Path.DirectorySeparatorChar)));

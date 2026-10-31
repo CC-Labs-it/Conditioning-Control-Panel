@@ -6,7 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Threading;
-using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
 
@@ -54,7 +54,8 @@ public sealed partial class FriendsDrawer
             try { link = await _svc.GetLinkAsync(); } catch { }
             var (text, isLink) = FriendsLinkRules.CopyChoice(link, _svc.Snapshot.MyCode);
             if (text == null || !await WriteClipboard(text))
-            { SetLinkNote(Loc.Get("friends_add_try_later"), false); return false; }
+            { LinkSound("denied"); SetLinkNote(Loc.Get("friends_add_try_later"), false); return false; }
+            LinkSound("click");
             if (isLink)
             {
                 var (key, left, uses) = FriendsLinkRules.CopiedNote(link!, LinkClock());
@@ -65,8 +66,7 @@ public sealed partial class FriendsDrawer
             Dispatcher.UIThread.Post(() =>
             {
                 if (_linkPill is not { } pill) return;
-                HoverPop.Enter(pill);
-                DispatcherTimer.RunOnce(() => HoverPop.Leave(pill), TimeSpan.FromMilliseconds(220));
+                PlayLinkFx(pill, false);
             });
             return isLink;
         }
@@ -95,6 +95,7 @@ public sealed partial class FriendsDrawer
             FriendLink? link = null;
             try { link = await _svc.NewLinkAsync(); } catch { }
             bool good = link != null && await WriteClipboard(link.Url);
+            LinkSound(good ? "click" : "denied");
             _addResult.Text = Loc.Get(good ? "friends_link_new_done" : "friends_add_try_later");
             _addResult.Foreground = good ? Mint : Gold;
             return good;
@@ -111,7 +112,8 @@ public sealed partial class FriendsDrawer
         bool good = FriendsLinkRules.IsGood(result);
         _addResult.Text = Loc.Get(FriendsLinkRules.ClaimResultKey(result));
         _addResult.Foreground = good ? Mint : Gold;
-        if (good) _codeBox.Text = "";
+        LinkSound(good ? "accepted" : "denied");
+        if (good) { PlayLinkFx(_addGo, true); _codeBox.Text = ""; }
         else _addGo.IsEnabled = true;
         return result switch
         {
@@ -127,7 +129,11 @@ public sealed partial class FriendsDrawer
         _linkNoteTimer?.Dispose();
         _linkNoteTimer = DispatcherTimer.RunOnce(() =>
         {
-            if (_note != null) _note.Opacity = 0;
+            if (_note != null)
+            {
+                ((global::Avalonia.Animation.DoubleTransition)_note.Transitions![0]).Duration = TimeSpan.FromMilliseconds(Services.Safety.GentleVisuals.FadeMs(260));
+                _note.Opacity = 0;
+            }
             _linkNoteTimer = DispatcherTimer.RunOnce(() => { _linkNoteText = null; Render(); },
                 TimeSpan.FromMilliseconds(Services.Safety.GentleVisuals.FadeMs(260)));
         }, TimeSpan.FromSeconds(4));
@@ -141,7 +147,7 @@ public sealed partial class FriendsDrawer
         note.Transitions = new global::Avalonia.Animation.Transitions
         {
             new global::Avalonia.Animation.DoubleTransition { Property = OpacityProperty,
-                Duration = TimeSpan.FromMilliseconds(Services.Safety.GentleVisuals.FadeMs(260)) },
+                Duration = TimeSpan.FromMilliseconds(Services.Safety.GentleVisuals.RiseMs(180)) },
         };
         if (_noteFresh)
         {
@@ -152,4 +158,52 @@ public sealed partial class FriendsDrawer
         return _note = note;
     }
 
+    private readonly Canvas _linkFx = new() { IsHitTestVisible = false, ClipToBounds = false };
+    internal Action<string> LinkSound { get; set; } = cue => FriendsLanding.Sfx("chaos/" +
+        (cue == "click" ? "ui_click.mp3" : cue == "accepted" ? "ui_unlock.mp3" : "ui_denied.mp3"),
+        cue == "click" ? .12f : cue == "accepted" ? .18f : .14f, "friends-" + cue);
+    internal void PlayLinkFx(Control from, bool wave)
+    {
+        var k = global::ConditioningControlPanel.CoreSettings.Current.MotionLevel switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => .5, _ => 1.0 };
+        if (k == 0) return;
+        var fx = new LinkBurst(from, wave, k, from.TranslatePoint(new Point(from.Bounds.Width / 2, from.Bounds.Height / 2), _linkFx) ?? default);
+        _linkFx.Children.Add(fx);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        timer.Tick += (_, _) => { fx.Step(watch.Elapsed.TotalMilliseconds); if (fx.Done) { timer.Stop(); _linkFx.Children.Remove(fx); } };
+        timer.Start();
+    }
+    // WPF FriendsDrawer.Juice.cs: Pop 380/110 ms, 12 sparks; Shockwave two rings 120 ms apart, 14 sparks.
+    internal sealed class LinkBurst : Control
+    {
+        private readonly Control _from; private readonly Point _center; private readonly double _k;
+        internal bool Wave { get; } internal double Age { get; private set; }
+        internal int Sparks => (int)Math.Round((Wave ? 14 : 12) * _k);
+        internal bool Done => Age >= (Wave ? 620 / _k + 120 : 680);
+        internal LinkBurst(Control from, bool wave, double k, Point center)
+        { _from = from; Wave = wave; _k = k; _center = center; Effect = new DropShadowEffect { Color = ((ISolidColorBrush)(wave ? Mint : Lilac)).Color, BlurRadius = wave ? 12 : 6, Opacity = .9, OffsetX = 0, OffsetY = 0 }; Width = Height = 1; Tag = wave ? "friends-link-wave" : "friends-link-pop"; Step(0); }
+        internal static double PopScale(double ms, double k) => ms >= 380 ? 1 : ms <= 110
+            ? 1 + .22 * k * (1 - Math.Pow(1 - ms / 110, 2))
+            : 1 + .22 * k * Math.Exp(-4 * (ms - 110) / 270) * Math.Cos(2.5 * Math.PI * (ms - 110) / 270);
+        internal void Step(double ms)
+        {
+            Age = ms;
+            if (!Wave) { var scale = PopScale(ms, _k); _from.RenderTransformOrigin = new RelativePoint(.5, .5, RelativeUnit.Relative); _from.RenderTransform = new ScaleTransform(scale, scale); }
+            InvalidateVisual();
+        }
+        public override void Render(DrawingContext dc)
+        {
+            var brush = Wave ? Mint : Lilac;
+            for (int i = 0; i < Sparks; i++)
+            {
+                double t = Math.Clamp(Age / (420 + i * 19 % 260), 0, 1), angle = i * 2.39996, distance = (24 + i * 7 % 30) * _k * (1 - (1 - t) * (1 - t));
+                using (dc.PushOpacity(1 - t)) dc.DrawEllipse(brush, null, _center + new Vector(Math.Cos(angle) * distance, Math.Sin(angle) * distance + 6 * t), 1.5 + i % 3 * .5, 1.5 + i % 3 * .5);
+            }
+            if (Wave) for (int i = 0; i < 2; i++)
+            {
+                double t = Math.Clamp((Age - i * 120) / (620 / _k), 0, 1), radius = 10 * (.4 + (.6 + 9 * _k) * (1 - Math.Pow(1 - t, 3)));
+                using (dc.PushOpacity(Age < i * 120 ? 0 : .95 * (1 - t))) dc.DrawEllipse(null, new Pen(brush, 2.5), _center, radius, radius);
+            }
+        }
+    }
 }

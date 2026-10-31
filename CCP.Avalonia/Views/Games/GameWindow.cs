@@ -7,6 +7,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.JustDrop;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Fyp.Online;
@@ -75,13 +76,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
+            return LaunchCore(spec, null);
+        }
+        internal static GameWindow? LaunchFriendRace(string? room) =>
+            TierGate.DemandLab(Loc.Get("launcher_game_race_title")) ? LaunchCore(Games[GlassroadId] with { Gate = null }, room) : null;
+        private static GameWindow? LaunchCore(Game spec, string? room)
+        {
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
-            if (live != null) { live.Activate(); return live; }
+            if (live != null) { if (InviteDestination.IsRoomId(room)) live.Post(new { type = "join-room", roomId = room }); live.Activate(); return live; }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
-            catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
+            catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", spec.Id); return null; }
             var window = new GameWindow(spec);
-            window.Load(Server());
+            window.Load(Server(), room);
             window.Show();
             return window;
         }
@@ -116,14 +123,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private WebAssetServer? _server;
         private Lazy<GameMediaManifest.Manifest>? _library;   // single-flight: concurrent sit-downs share one walk
 
-        internal void Load(WebAssetServer server)
+        internal void Load(WebAssetServer server, string? room = null)
         {
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
             if (Spec.Id == "loom") DirectoryForLoom();
-            PageUrl = new Uri(server.Url(Spec.Page, Spec.Query));
+            PageUrl = new Uri(server.Url(Spec.Page, RaceQuery(Spec, room)));
             Web.Navigate(PageUrl);
         }
+
+        internal static string? RaceQuery(Game spec, string? room) => spec.Id == GlassroadId && InviteDestination.IsRoomId(room) ? "join=" + room : spec.Query;
 
         internal static bool SameOrigin(Uri a, Uri b) =>
             a.IsAbsoluteUri && b.IsAbsoluteUri && a.Scheme == b.Scheme && a.Authority == b.Authority;
