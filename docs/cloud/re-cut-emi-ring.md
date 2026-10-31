@@ -24,7 +24,7 @@ Paths below are relative to the repository. WPF is unchanged.
 
 - Her-book offer and ask UI: WPF Services/EmiDesk/EmiCodex.cs:656,694; EmiDeskService.cs:870; Windows/EmiDesk/EmiDeskWindow.Bubble.cs:580. Avalonia still lacks EmiDeskService.Offers.cs and EmiDeskWindow.Ask.cs; reuse codex-b versions. Core probes remain unset (CCP.Core/Services/EmiDesk/EmiLineEngine.cs:68,74) so no dead offer chips are enabled.
 - Pin and ambient onboarding: WPF Services/EmiDesk/EmiDeskService.cs:1205,1250,1304,1505. Avalonia EmiDeskService.RingMoments.cs contains only the moment bus, no nudge scheduler. Reuse ring-c's RingMoments.cs poll and delayed pin recheck, retaining base safety.
-- Follow-up book-side bubble arbitration: WPF Windows/EmiDesk/EmiDeskWindow.Bubble.cs:356. Avalonia EmiDeskWindow.Speech.cs:164 currently passes false; EmiBookWindow.axaml.cs:1183 still lacks the side-change bridge.
+- Book-side bubble arbitration: fixed in the review follow-up below.
 - External-open scoring and ringPick/pinAdded speech: WPF Services/EmiDesk/EmiTargets.cs:279 and EmiDeskService.cs:1505. Avalonia EmiTargets.cs still lacks the lane's moment bridge; coordinate with PR #3373's pin rebuild to avoid duplication.
 - Cue suppression follow-up: WPF Services/EmiDesk/EmiSfx.cs:156,161 gates suppressed output and holds. Base Avalonia EmiSfx.cs:97 currently gates only master volume. The ring-c stricter gate remains part B.
 - Named body/FX chains and voice remain outside this self-contained speech cut. Avalonia EmiDeskWindow.axaml.cs:892 is still a named-chain stub.
@@ -44,7 +44,7 @@ No new language keys. No safety or Scrolller code imported from old lanes. Core 
 - python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
 - git diff --check: passed.
 
-Focused tests: Tests/CCP.Avalonia.Tests/EmiRingSpeechTests.cs:28 (cadence, cancellation and hide), :61 (hold cut and rest), :81 (ring events, live engine draw, first-dot cooldown acknowledgement, panic surface and away hold).
+Focused tests: Tests/CCP.Avalonia.Tests/EmiRingSpeechTests.cs:89 (cadence, cancellation and hide), :122 (hold cut and rest), :142 (ring events, live engine draw, first-dot cooldown acknowledgement, panic surface and away hold).
 
 Fail-proof: temporarily removed frame bubble painting, the hold face draw, and the ringOpen emission. All three EmiRingSpeechTests failed at their corresponding assertions (3 failed, 0 passed). Both implementation files were restored immediately. No tests were skipped or weakened.
 
@@ -52,6 +52,7 @@ Fail-proof: temporarily removed frame bubble painting, the hold face draw, and t
 
 - CCP.Avalonia/CCP.Avalonia.csproj
 - CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskService.RingMoments.cs
+- CCP.Avalonia/Views/Windows/EmiDesk/EmiBookWindow.axaml.cs
 - CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskService.cs
 - CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskWindow.Ring.cs
 - CCP.Avalonia/Views/Windows/EmiDesk/EmiDeskWindow.Speech.cs
@@ -61,3 +62,15 @@ Fail-proof: temporarily removed frame bubble painting, the hold face draw, and t
 - Tests/CCP.Avalonia.Tests/PanicSurfacesTests.cs
 - docs/avalonia-parity.html
 - docs/cloud/re-cut-emi-ring.md
+
+## Review follow-up
+
+P2 accepted: WPF Windows/EmiDesk/EmiDeskWindow.Bubble.cs:356 reads EmiBook.SideOfHer, with the Core screen-edge rule retaining final say. WPF Windows/EmiDesk/EmiBookWindow.xaml.cs:1093 announces placement changes; Services/EmiDesk/EmiBook.cs:147,179,190 announces open/close changes. Avalonia EmiDeskWindow.Speech.cs:166 now reads its owned book; EmiBookWindow.axaml.cs:1183 notifies its owner on placement side changes, and EmiDeskWindow.axaml.cs relayouts on open and both close paths. No new language keys or WPF/Core changes.
+
+Focused test: EmiRingSpeechTests.BubbleDodgesBookOnBothSidesAndStaysInTheWorkArea checks a live bubble across right/left book placement, opening and both close paths, and clamps long lines at both monitor edges.
+
+Review fail-proofs: replacing the book-side preference with false failed the focused test at line 60; independently removing the book placement notification failed it at line 66. Both runs: 1 failed, 0 passed, 0 skipped. Both implementation files restored afterwards. The test invokes the book's real follow-move handler because the headless Position setter does not raise the widget's drag-only Moved event.
+
+Review checks: Core build 0 errors; Avalonia build 0 errors; Core tests 4635 passed, 6 pre-existing skips, 0 failed; Core guards passed; avalonia_docs self-check OK; git diff --check passed. Ledger statuses remain stub. No new language keys.
+
+Restored review build: 0 errors. Final affected Avalonia run (speech, book navigation, ring wiring, pat feedback, panic surfaces, isolation): Failed 0, Passed 36, Skipped 0, Total 36.

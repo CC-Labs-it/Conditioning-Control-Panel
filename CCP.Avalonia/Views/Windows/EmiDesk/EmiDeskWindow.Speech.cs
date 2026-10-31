@@ -144,7 +144,7 @@ public partial class EmiDeskWindow
         if (_speechTail != null) _speechTail.IsVisible = false;
     }
 
-    private void PlaceSpeechBubble()
+    internal void PlaceSpeechBubble()
     {
         if (_speechBubble?.IsVisible != true || _speechText == null) return;
         var bw = BodyWidth;
@@ -162,9 +162,9 @@ public partial class EmiDeskWindow
             workLeft = this.PointToClient(new PixelPoint(area.X, area.Y)).X;
             workRight = this.PointToClient(new PixelPoint(area.Right, area.Y)).X;
         }
-        // ponytail: the book-side arbitration awaits the book's SideOfHer event bridge.
+        // WPF Bubble.cs:356: prefer the side opposite the book; screen edges still win.
         var (left, flip) = EmiBubblePlacement.Resolve(OverlayPadX + bw * .58,
-            OverlayPadX + bw * .42 - w, w, false, Width, workLeft, workRight);
+            OverlayPadX + bw * .42 - w, w, _book?.SideOfHer == 1, Width, workLeft, workRight);
         var top = Math.Max(2, OverlayPad + bw * BodyAspect * .04 - h);
         Canvas.SetLeft(_speechBubble, Math.Round(left));
         Canvas.SetTop(_speechBubble, Math.Round(top));

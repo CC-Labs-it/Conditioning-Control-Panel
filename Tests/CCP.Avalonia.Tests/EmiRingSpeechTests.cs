@@ -25,6 +25,67 @@ public sealed class EmiRingSpeechTests
     }
 
     [Fact]
+    public Task BubbleDodgesBookOnBothSidesAndStaysInTheWorkArea() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var desk = new EmiDeskWindow();
+        try
+        {
+            desk.Show();
+            var area = desk.Screens.Primary!.WorkingArea;
+            var scale = desk.RenderScaling;
+            void MoveBodyTo(double x)
+            {
+                desk.Position = new PixelPoint((int)(x - (EmiDeskWindow.OverlayPadX + desk.BodyWidth / 2) * scale), area.Y + 250);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                // The headless Position setter does not raise the widget's drag-only Moved event.
+                if (desk.Book is { } book)
+                    typeof(EmiBookWindow).GetMethod("OnOwnerMoved", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                        .Invoke(book, new object?[] { desk, EventArgs.Empty });
+            }
+            Border Bubble() => Assert.Single(desk.BubbleHost.Children.OfType<Border>());
+            double Left() => Canvas.GetLeft(Bubble());
+            double Centre() => EmiDeskWindow.OverlayPadX + desk.BodyWidth / 2;
+            void InsideWorkArea()
+            {
+                var bubble = Bubble();
+                var x = desk.PointToScreen(new Point(Left(), 0)).X;
+                Assert.True(x >= area.X, $"bubble starts off screen at {x}");
+                Assert.True(x + bubble.DesiredSize.Width * scale <= area.Right + 1, "bubble ends off screen");
+            }
+            MoveBodyTo(area.X + area.Width / 2);
+            desk.Say("short line");
+            desk.OpenBook();
+            Assert.Equal(1, desk.Book!.SideOfHer);
+            Assert.True(Left() + Bubble().DesiredSize.Width / 2 < Centre());
+            desk.CloseBook();
+            Assert.True(Left() > Centre()); // closing is also a side change
+            desk.OpenBook();
+            MoveBodyTo(area.Right - 250 * scale);
+            Assert.Equal(-1, desk.Book!.SideOfHer);
+            Assert.True(Left() > Centre()); // live bubble moved after the book changed side
+            InsideWorkArea();
+            desk.CloseBook();
+            MoveBodyTo(area.X + area.Width / 2);
+            desk.OpenBook();
+            Assert.True(Left() + Bubble().DesiredSize.Width / 2 < Centre());
+            desk.Book!.Close(); // external close must restore the preference too
+            Assert.True(Left() > Centre());
+            foreach (var edge in new[] { area.X + 110 * scale, area.Right - 110 * scale })
+            {
+                MoveBodyTo(edge);
+                desk.Say(new string('w', 100));
+                desk.StepSpeech(); desk.StepSpeech(); desk.StepSpeech();
+                desk.OpenBook();
+                InsideWorkArea();
+                desk.CloseBook();
+            }
+        }
+        finally { desk.ShutDown(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task SayUsesCoreCadenceAndCancellationDropsTheContinuation() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
