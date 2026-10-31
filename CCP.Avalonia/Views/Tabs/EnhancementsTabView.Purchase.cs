@@ -66,6 +66,8 @@ public partial class EnhancementsTabView
                     achievements.Save();
                 }
                 CoreSettings.Save();
+                // WPF SkillTreeService.cs:106 -> BarkService.cs:810-812.
+                Platform.BarkHead.Engine?.Raise("SkillUnlocked", c => c.Set("skill", skill.Id));
                 owner.CelebrateEnhancementPurchase(card, 1 + spentBefore / 100, PrestigeAnchor);
             }
             else if (!string.IsNullOrEmpty(result.Error))

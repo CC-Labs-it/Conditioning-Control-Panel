@@ -236,6 +236,36 @@ public sealed class ShellEventFxTests
         finally { PinkRushHost.Stop(); }
     });
 
+    [Theory]
+    [InlineData(true, true, 1)]
+    [InlineData(false, true, 0)]
+    [InlineData(true, false, 0)]
+    public void PurchaseRaisesSkillBarkOnlyAfterSuccess(bool confirmed, bool success, int expected) => WithShell((shell, _, _) =>
+    {
+        CoreSettings.Current.SkillPoints = 100;
+        var tab = shell.Named<EnhancementsTabView>("EnhancementsTab")!;
+        var old = ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine;
+        var rule = new ConditioningControlPanel.Services.Bark.BarkRule
+        {
+            Id = "purchase-test", Trigger = "SkillUnlocked", VariantPool = new() { new("{skill}") },
+            ClassRaw = "safety", // bypass cooldowns so duplicates cannot hide
+        };
+        var bark = new ConditioningControlPanel.Services.Bark.BarkEngine(() => new(new[] { rule }));
+        var spoken = new List<string>();
+        bark.Speak = speech => spoken.Add(speech.Text);
+        bark.Start();
+        ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = bark;
+        try
+        {
+            tab.ConfirmPurchase = (_, _, _) => System.Threading.Tasks.Task.FromResult(confirmed);
+            tab.Purchase = _ => System.Threading.Tasks.Task.FromResult((success, (string?)null, (long?)null));
+            tab.BuyAsync(tab, SkillDefinition.All.Single(x => x.Id == "pink_hours")).GetAwaiter().GetResult();
+            Assert.Equal(expected, spoken.Count);
+            if (expected > 0) Assert.Equal("pink_hours", spoken.Single());
+        }
+        finally { ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = old; }
+    });
+
     // Reading the existing EventBurstLayer counter lets the same behavior test fail on the old
     // shell, which has no burst layer at all, before the implementation is applied.
     internal static int Bursts(MainShellWindow shell) =>

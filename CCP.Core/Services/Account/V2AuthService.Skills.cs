@@ -51,6 +51,9 @@ public partial class V2AuthService
                     // A sign-out/account switch while awaiting the server cannot mutate another wallet.
                     if (!ReferenceEquals(s, _settings()) || s.UnifiedId != (string?)JObject.Parse(body)["unified_id"])
                         return (false, Loc.Get("skill_err_login_required"), null);
+                    // WPF ProfileSyncService.cs:4024-4033: after recovery, point at Settings > Account.
+                    if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                        return (false, Loc.GetF("skill_err_session_expired", Loc.Get("nav_door_settings"), Loc.Get("set2_section_account")), null);
                     if (!response.IsSuccessStatusCode) return (false, ServerError(json, response.StatusCode), null);
                     var result = JObject.Parse(json);
                     int? points = (int?)result["skill_points"];
