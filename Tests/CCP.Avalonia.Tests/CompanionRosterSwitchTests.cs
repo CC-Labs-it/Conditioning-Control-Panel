@@ -154,6 +154,7 @@ public sealed class CompanionRosterSwitchTests
         var inform = MainShellWindow.InformPrompt;
         MainShellWindow.InformPrompt = (_, _, _) => Task.CompletedTask;
         var s = CoreSettings.Current;
+        s.SetCompanionPromptId(2, null);
         var previous = s.CompanionPrompt;
         var count = s.InstalledCommunityPromptIds.Count;
         try
@@ -296,6 +297,45 @@ public sealed class CompanionRosterSwitchTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task RosterFixtureRestoresPromptStateAcrossConsecutiveRuns() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var previous = CoreSettings.ServiceProvider;
+        var seed = new SettingsService();
+        CoreSettings.ServiceProvider = () => seed;
+        try
+        {
+            seed.Current.CompanionPromptAssignments = new() { [0] = "before-zero", [2] = "before-two" };
+            seed.Current.CompanionPrompt = new() { Personality = "before-voice" };
+            seed.Current.ActiveCommunityPromptId = "before-active";
+            seed.Current.InstalledCommunityPromptIds = new() { "before-active", "before-installed" };
+            seed.SaveImmediate();
+            // No fact boundary between these calls: the assembly isolation hook cannot mask a leak.
+            await WithRoster((shell, room, roster) =>
+            {
+                var s = CoreSettings.Current;
+                s.SetCompanionPromptId(0, "after-zero");
+                s.SetCompanionPromptId(2, "after-two");
+                s.SetCompanionPromptId(3, "after-three");
+                s.CompanionPrompt = new() { Personality = "after-voice" };
+                s.ActiveCommunityPromptId = "after-active";
+                s.InstalledCommunityPromptIds.Clear();
+                s.InstalledCommunityPromptIds.Add("after-installed");
+            });
+            await WithRoster((shell, room, roster) =>
+            {
+                var s = CoreSettings.Current;
+                Assert.Equal(2, s.CompanionPromptAssignments.Count);
+                Assert.Equal("before-zero", s.GetCompanionPromptId(0));
+                Assert.Equal("before-two", s.GetCompanionPromptId(2));
+                Assert.Equal("before-voice", s.CompanionPrompt.Personality);
+                Assert.Equal("before-active", s.ActiveCommunityPromptId);
+                Assert.Equal(new[] { "before-active", "before-installed" }, s.InstalledCommunityPromptIds);
+            });
+        }
+        finally { CoreSettings.ServiceProvider = previous; }
+    });
+
     private static Task WithRoster(Action<MainShellWindow, CompanionRoomView, WorkshopRosterCell> test) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
@@ -314,6 +354,10 @@ public sealed class CompanionRosterSwitchTests
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
+        var oldAssignments = new System.Collections.Generic.Dictionary<int, string>(s.CompanionPromptAssignments);
+        var oldPrompt = s.CompanionPrompt;
+        var oldPromptId = s.ActiveCommunityPromptId;
+        var oldInstalled = s.InstalledCommunityPromptIds.ToList();
         var oldMotion = s.MotionLevel;
         var oldActive = s.ActiveCompanionId;
         var oldAvatar = s.AvatarEnabled;
@@ -357,6 +401,10 @@ public sealed class CompanionRosterSwitchTests
             s.SlutModeEnabled = oldSlutMode;
             s.CompanionProgressData = oldProgress;
             s.MotionLevel = oldMotion;
+            s.CompanionPromptAssignments = oldAssignments;
+            s.CompanionPrompt = oldPrompt;
+            s.ActiveCommunityPromptId = oldPromptId;
+            s.InstalledCommunityPromptIds = oldInstalled;
             service.SaveImmediate();
             CoreSettings.ServiceProvider = previous;
         }
