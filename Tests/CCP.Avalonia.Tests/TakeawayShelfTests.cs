@@ -239,7 +239,10 @@ public sealed class TakeawayShelfTests
         var usage = new Dictionary<string, int>(state.Usage);
         var score = new Dictionary<string, double>(state.OpenScore);
         var usageAt = new Dictionary<string, long>(state.UsageAt);
+        var motion = CoreSettings.Current.MotionLevel;
+        var getHandle = NativeWindowOwner.HandleForTests;
         var nativeOwner = NativeWindowOwner.SetForTests;
+        NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "HWND");
         NativeWindowOwner.SetForTests = (_, _) => true;
         var get = CoreSecrets.RetrieveProvider;
         var id = CoreAccount.UnifiedUserId;
@@ -260,6 +263,8 @@ public sealed class TakeawayShelfTests
         finally
         {
             GameWindow.CloseAllForPanic(); shell?.Close();
+            CoreSettings.Current.MotionLevel = motion;
+            NativeWindowOwner.HandleForTests = getHandle;
             NativeWindowOwner.SetForTests = nativeOwner;
             state.Usage.Clear(); foreach (var entry in usage) state.Usage[entry.Key] = entry.Value;
             state.OpenScore.Clear(); foreach (var entry in score) state.OpenScore[entry.Key] = entry.Value;

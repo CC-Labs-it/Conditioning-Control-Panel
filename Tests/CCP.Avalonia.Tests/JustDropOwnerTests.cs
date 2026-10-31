@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -50,16 +51,34 @@ public sealed class JustDropOwnerTests
             Assert.Equal(WindowState.Maximized, player.WindowState);
         });
 
+    [Theory]
+    [InlineData("XID", 42, false)]
+    [InlineData("NSWindow", 42, false)]
+    [InlineData("HWND", 0, false)]
+    [InlineData("HWND", 42, true)]
+    public Task BackendGateRunsBeforeTheNativeOwnershipOperation(string descriptor, long handle, bool supported) =>
+        WithWindows((player, owner, _) =>
+        {
+            int operations = 0;
+            NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(handle), descriptor);
+            NativeWindowOwner.SetForTests = (_, _) => { operations++; return true; };
+            Assert.Equal(supported, NativeWindowOwner.Set(player, owner));
+            Assert.Equal(supported, NativeWindowOwner.Set(player, null));
+            Assert.Equal(supported ? 2 : 0, operations);
+        });
+
     private static Task WithWindows(Action<GameWindow, Window, System.Collections.Generic.List<Window>> body) =>
         AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var getHandle = NativeWindowOwner.HandleForTests;
             var set = NativeWindowOwner.SetForTests;
             var visible = NativeWindowOwner.NativeVisibleForTests;
             var show = NativeWindowOwner.ShowForTests;
             var shown = new System.Collections.Generic.List<Window>();
+            NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "HWND");
             NativeWindowOwner.SetForTests = (_, _) => true;
             NativeWindowOwner.NativeVisibleForTests = _ => true;
             NativeWindowOwner.ShowForTests = shown.Add;
@@ -75,6 +94,7 @@ public sealed class JustDropOwnerTests
             finally
             {
                 player.Close(); owner.Close(); Dispatcher.UIThread.RunJobs();
+                NativeWindowOwner.HandleForTests = getHandle;
                 NativeWindowOwner.SetForTests = set;
                 NativeWindowOwner.NativeVisibleForTests = visible;
                 NativeWindowOwner.ShowForTests = show;

@@ -10,6 +10,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class NativeWindowOwner
 {
     // Headless tests record ownership requests; they must never touch the real desktop.
+    internal static Func<Window, IPlatformHandle?>? HandleForTests;
     internal static Func<Window, Window?, bool>? SetForTests;
     internal static Func<Window, bool>? NativeVisibleForTests;
     internal static Action<Window>? ShowForTests;
@@ -26,12 +27,12 @@ internal static class NativeWindowOwner
 
     internal static bool Set(Window window, Window? owner)
     {
-        if (SetForTests is { } test) return test(window, owner);
-        var handle = window.TryGetPlatformHandle();
+        var handle = HandleForTests is { } getHandle ? getHandle(window) : window.TryGetPlatformHandle();
         try
         {
             if (X11Overlay.BackendOf(handle) != OverlayBackend.Win32)
-                return X11Overlay.SetTransientOwner(window, owner);
+                return false; // X11 ownership needs taskbar and minimize evidence on KWin and GNOME.
+            if (SetForTests is { } test) return test(window, owner);
             var parent = owner?.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
             Marshal.SetLastPInvokeError(0);
             if (IntPtr.Size == 8) SetWindowLongPtr(handle!.Handle, -8, parent); // GWL_HWNDPARENT
@@ -95,6 +96,5 @@ internal static class NativeWindowOwner
         if (ShowForTests is { } show) { show(window); return; }
         if (SetForTests is not null) return;
         if (win32) ShowWindow(handle!.Handle, 8); // SW_SHOWNA
-        else X11Overlay.MapOwnedWindow(window);
     }
 }

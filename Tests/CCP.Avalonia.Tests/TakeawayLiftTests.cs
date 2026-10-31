@@ -26,7 +26,7 @@ public sealed class TakeawayLiftTests
             if (Application.Current is null)
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            var motion = CoreSettings.Current.MotionLevel;
             var chip = new Border();
             MainShellWindow.PrepareTakeawayLift(chip);
             var shelf = new TakeawayShelfPanel();
@@ -34,6 +34,7 @@ public sealed class TakeawayLiftTests
             var window = new Window();
             try
             {
+                CoreSettings.Current.MotionLevel = MotionLevel.Off;
                 if (attach) { window.Content = shelf; window.Show(); Dispatcher.UIThread.RunJobs(); }
                 Assert.Equal(attach, chip.IsAttachedToVisualTree());
                 chip.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, chip,
@@ -47,7 +48,7 @@ public sealed class TakeawayLiftTests
                 Assert.Equal(1, scale.ScaleY);
                 Assert.Null(scale.Transitions);
             }
-            finally { window.Close(); }
+            finally { window.Close(); CoreSettings.Current.MotionLevel = motion; }
             return Task.CompletedTask;
         });
 }
