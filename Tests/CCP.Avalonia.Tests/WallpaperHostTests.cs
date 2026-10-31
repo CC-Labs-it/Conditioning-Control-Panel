@@ -13,6 +13,36 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 public sealed class WallpaperHostTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GnomePartialWriteRollsBack(bool rollbackFails)
+    {
+        var folder = Directory.CreateTempSubdirectory("wallpaper-").FullName;
+        var original = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, "one.png"), "fixture");
+            CoreSettings.Current.WallpaperSourceFolder = folder;
+            CoreSettings.Current.WallpaperOriginalPath = "";
+            var before = "'" + new Uri(original).AbsoluteUri + "'";
+            var current = before;
+            var writes = 0;
+            var host = new WallpaperHost(new LinuxWallpaperPlatform((_, args) =>
+            {
+                if (args[0] == "get") return args[2] == "picture-options" ? "'scaled'" : before;
+                if (++writes == 2 || (rollbackFails && writes > 3)) return null;
+                if (args[2] == "picture-uri") current = args[3];
+                return "";
+            }, "GNOME"));
+            Assert.False(await host.ShuffleAsync());
+            Assert.Equal(6, writes); // three apply writes, then all three snapshot writes
+            Assert.Equal(!rollbackFails, before == current);
+            Assert.Equal(rollbackFails, host.IsActive);
+            Assert.Equal(rollbackFails, CoreSettings.Current.WallpaperOriginalPath.Length > 0);
+        }
+        finally { Directory.Delete(folder, true); File.Delete(original); }
+    }
     [Fact]
     public void GnomePreservesLightDarkAndOptionsAndPropagatesFailure()
     {
@@ -78,10 +108,7 @@ public sealed class WallpaperHostTests
     [Fact]
     public Task AutonomyPulseReplacesTimerHonorsKeepAndStopRestores() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
         var file = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(file);
         File.WriteAllText(Path.Combine(file, "fixture.png"), "fixture");
@@ -106,8 +133,16 @@ public sealed class WallpaperHostTests
             timers[0]();
             await WallpaperHead.Service.WhenIdle;
             Assert.True(WallpaperHead.Service.IsActive); // older revert is cancelled
-            s.WallpaperEnabled = true;
+            File.Delete(Path.Combine(file, "fixture.png"));
+            await shell.TriggerWallpaperChangeAsync();
+            Assert.Equal(2, timers.Count);
             timers[1]();
+            await WallpaperHead.Service.WhenIdle;
+            Assert.False(WallpaperHead.Service.IsActive); // failed shuffle kept the previous revert
+            File.WriteAllText(Path.Combine(file, "fixture.png"), "fixture");
+            await shell.TriggerWallpaperChangeAsync();
+            s.WallpaperEnabled = true;
+            timers[2]();
             await WallpaperHead.Service.WhenIdle;
             Assert.True(WallpaperHead.Service.IsActive); // Keep switched on mid-pulse
             s.WallpaperEnabled = false;

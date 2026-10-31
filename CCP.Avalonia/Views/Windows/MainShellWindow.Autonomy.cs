@@ -155,13 +155,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// session runs (it owns the overlays). <see cref="PinkFilterOverlay.PulseHold"/> is WPF's
         /// "pulse started the overlay service" (#1180): it shows the tint with the engine off and
         /// is released, not left on, when the pulse ends.</summary>
-        private int _wallpaperGen;
+        private int _wallpaperGen, _wallpaperStopGen;
         internal async System.Threading.Tasks.Task TriggerWallpaperChangeAsync()
         {
             var host = Platform.WallpaperHead.Service;
             if (host == null) return;
+            var stopGen = _wallpaperStopGen;
+            if (!await host.ShuffleAsync() || stopGen != _wallpaperStopGen) return;
             var gen = ++_wallpaperGen;
-            if (!await host.ShuffleAsync() || gen != _wallpaperGen) return;
             if (CoreSettings.Current.WallpaperEnabled) return;
             PulseTimer(() =>
             {
@@ -246,6 +247,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _pulseGen++;
             _wallpaperGen++;
+            _wallpaperStopGen++;
             if (!CoreSettings.Current.WallpaperEnabled) _ = Platform.WallpaperHead.Service?.DeactivateAsync();
             if (_bubblesPulse) { _bubblesPulse = false; CoreBubbles.Stop(); }
             if (_bouncingPulse) { _bouncingPulse = false; CoreBouncingText.Stop(); }

@@ -53,9 +53,12 @@ public sealed class WallpaperHost
         }
         var choices = pool.Where(p => p != _current).ToArray();
         var image = choices.Length > 0 ? choices[Random.Shared.Next(choices.Length)] : pool[0];
-        if (!_platform.Apply(image)) return false;
+        IsActive = true; // A failed write may still have changed part of the desktop.
+        var applied = false;
+        try { applied = _platform.Apply(image); }
+        finally { if (!applied) Restore(); }
+        if (!applied) return false;
         _current = image;
-        IsActive = true;
         return true;
     });
     public Task<bool> DeactivateAsync() => Queue(() => Restore());
