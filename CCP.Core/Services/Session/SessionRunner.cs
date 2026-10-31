@@ -45,6 +45,9 @@ namespace ConditioningControlPanel.Services
         public int CurrentPhaseIndex { get; private set; }
         public bool IsPaused { get; private set; }
         public int PauseCount { get; private set; }
+        /// <summary>WPF OnSessionStarted's run counter (MainWindow.Presets.cs:1976).
+        /// Distinguishes repeated runs of the same Session for PanicAftermath.</summary>
+        public int RunNumber { get; private set; }
         public int XPPenalty => PauseCount * SessionXp.PausePenalty;
 
         /// <summary>SessionEngine._randomizedPinkStartMinute: the preset's start ±3 min (RandomizeStartTimes).</summary>
@@ -117,6 +120,7 @@ namespace ConditioningControlPanel.Services
             var s = CoreSettings.Current;
             CurrentSession = session;
             IsRunning = true;
+            RunNumber++;
             CurrentPhaseIndex = 0;
             IsPaused = false;
             PauseCount = 0;

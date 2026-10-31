@@ -131,6 +131,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SetPauseButton(true);
         }
 
+        // WPF MainWindow.RemoteControl.cs:1341,1385. Voice bypasses the button's XP dialog.
+        internal void PauseSessionFromRemote()
+        {
+            if (App.Sessions is not { IsRunning: true, IsPaused: false } runner) return;
+            runner.Pause();
+            PinkFilterOverlay.Refresh(this);
+            SpiralOverlay.Refresh(this);
+            SetPauseButton(true);
+        }
+
+        private ConditioningControlPanel.Services.Safety.PanicAftermath.PanicPause? _panicPause;
+        private SessionRunner? _panicPauseRunner;
+
+        // WPF MainWindow.xaml.cs:1898 and MainWindow.RemoteControl.cs:1364.
+        internal void NoteLocalPanicPause()
+        {
+            var runner = App.Sessions;
+            _panicPauseRunner = runner;
+            _panicPause = ConditioningControlPanel.Services.Safety.PanicAftermath.MarkPause(
+                runner?.CurrentSession, runner?.RunNumber ?? 0,
+                runner?.IsRunning == true, runner?.IsPaused == true, runner?.PauseCount ?? 0);
+        }
+
+        // WPF MainWindow.RemoteControl.cs:1373: only this run's specific local-panic pause.
+        internal bool LocalPanicHoldsSession =>
+            App.Sessions is { IsRunning: true } runner && ReferenceEquals(runner, _panicPauseRunner)
+            && ConditioningControlPanel.Services.Safety.PanicAftermath.RemoteResumeRefused(
+                _panicPause, runner.CurrentSession, runner.RunNumber, runner.IsPaused, runner.PauseCount);
+
+        internal void ResumeSessionFromRemote()
+        {
+            // WPF :1392: a remote or voice resume cannot undo a local panic's pause.
+            if (LocalPanicHoldsSession) return;
+            if (App.Sessions is not { IsRunning: true, IsPaused: true }) return;
+            StartEffect(() =>
+            {
+                if (LocalPanicHoldsSession
+                    || App.Sessions is not { IsRunning: true, IsPaused: true } runner) return;
+                runner.Resume();
+                PinkFilterOverlay.Refresh(this);
+                SpiralOverlay.Refresh(this);
+                SetPauseButton(false);
+                OnSessionTick();
+            });
+        }
+
         /// <summary>WPF TxtPauseIcon + BtnPauseSession.ToolTip: "\u25B6" + resume while paused, else "\u23F8" + the count.</summary>
         internal void SetPauseButton(bool paused)
         {
