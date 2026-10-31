@@ -136,4 +136,58 @@ public sealed class ShellTrayTests
             return Task.CompletedTask;
         });
     }
+
+    [Fact]
+    public void OnlyDeniedTrayNamesMatchTheFilter()
+    {
+        var denied = new Tmds.DBus.Protocol.DBusErrorReplyException(
+            "org.freedesktop.DBus.Error.AccessDenied", "Not allowed to own org.kde.StatusNotifierItem-2-4");
+        Assert.True(MainShellWindow.IsDeniedBusName(denied));
+        Assert.True(MainShellWindow.IsDeniedBusName(new InvalidOperationException("wrapped", denied)));
+        Assert.False(MainShellWindow.IsDeniedBusName(null));
+        Assert.False(MainShellWindow.IsDeniedBusName(new InvalidOperationException("org.kde.StatusNotifierItem-2-4")));
+        Assert.False(MainShellWindow.IsDeniedBusName(new Tmds.DBus.Protocol.DBusErrorReplyException(
+            "org.freedesktop.DBus.Error.Failed", "org.kde.StatusNotifierItem-2-4")));
+        Assert.False(MainShellWindow.IsDeniedBusName(new Tmds.DBus.Protocol.DBusErrorReplyException(
+            "org.freedesktop.DBus.Error.AccessDenied", "Unrelated service refused access")));
+    }
+
+    [Fact]
+    public async Task DeniedTrayBusNameDoesNotEndTheApp()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.CreateTray();
+                var denied = new Tmds.DBus.Protocol.DBusErrorReplyException(
+                    "org.freedesktop.DBus.Error.AccessDenied", "Not allowed to own org.kde.StatusNotifierItem-2-4");
+                Dispatcher.UIThread.Post(() => throw denied);
+                Dispatcher.UIThread.RunJobs();
+                Dispatcher.UIThread.Post(() => throw new InvalidOperationException("wrapped", denied));
+                Dispatcher.UIThread.RunJobs();
+                var other = new Tmds.DBus.Protocol.DBusErrorReplyException(
+                    "org.freedesktop.DBus.Error.AccessDenied", "Unrelated service refused access");
+                Dispatcher.UIThread.Post(() => throw other);
+                Assert.Same(other, Assert.Throws<Tmds.DBus.Protocol.DBusErrorReplyException>(() => Dispatcher.UIThread.RunJobs()));
+                Dispatcher.UIThread.Post(() => throw new InvalidOperationException("other"));
+                Assert.Throws<InvalidOperationException>(() => Dispatcher.UIThread.RunJobs());
+                Assert.False(MainShellWindow.IsDeniedBusName(null));
+                Assert.False(MainShellWindow.IsDeniedBusName(new Tmds.DBus.Protocol.DBusErrorReplyException(
+                    "org.freedesktop.DBus.Error.Failed", "org.kde.StatusNotifierItem-2-4")));
+            }
+            finally
+            {
+                shell.Tray?.Dispose();
+                shell.MarkExitRequestedForTest();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
 }

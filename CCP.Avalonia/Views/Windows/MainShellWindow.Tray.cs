@@ -40,8 +40,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF TrayIconService._hasShownFirstMinimizeNotification.
         private bool _shownFirstMinimizeNotification;
 
+        // WPF TrayIconService.cs:145-148 keeps tray initialization failure from ending the app.
+        // Avalonia requests SNI names asynchronously; Flatpak can refuse one after watcher restarts.
+        internal static bool IsDeniedBusName(Exception? error)
+        {
+            for (; error is not null; error = error.InnerException)
+                if (error is DBusErrorReplyException { ErrorName: "org.freedesktop.DBus.Error.AccessDenied" }
+                    && error.Message.Contains("org.kde.StatusNotifierItem-", StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        private static void SwallowDeniedBusName(object? sender, global::Avalonia.Threading.DispatcherUnhandledExceptionEventArgs e)
+        {
+            if (!IsDeniedBusName(e.Exception)) return;
+            Serilog.Log.Warning("Tray: D-Bus name refused, tray icon unavailable: {E}", e.Exception.Message);
+            e.Handled = true;
+        }
+
         internal TrayIcon CreateTray()
         {
+            // Idempotent across tray recreation. Do not swallow unrelated D-Bus access failures.
+            global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException -= SwallowDeniedBusName;
+            global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException += SwallowDeniedBusName;
             Tray = new TrayIcon
             {
                 ToolTipText = "Conditioning Control Panel",
