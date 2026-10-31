@@ -37,6 +37,105 @@ public class FavoritesRailParityTests
         s.RailRecent.Clear();
     }
 
+    // WPF PageFavoritesDrawer.cs:185-214; MainWindow.xaml:2065;
+    // MainWindow.FavoritesRail.cs:151-184,474: real off-Home pin, unpin and navigation.
+    [Fact]
+    public Task EveryPageDrawerSharesChipsAndClosesOnNavigation() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var s = CoreSettings.Current;
+        bool savedOpen = s.FavoritesDrawerOpen;
+        var motionBefore = s.MotionLevel;
+        s.MotionLevel = MotionLevel.Off; // Assert settled widths; the next test checks the Full slide.
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var drawer = shell.PageFavorites!;
+            Assert.False(drawer.IsVisible);
+            shell.ShowTab("haptics");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(drawer.IsVisible);
+            Assert.False(drawer.IsOpen);
+            Assert.Equal(0, drawer.Body.Width);
+            Assert.True(drawer.FavoritesEmpty.IsVisible);
+            Assert.Contains(drawer.RecentList.Children.OfType<Button>(), b => Equals(b.Tag, "tab.haptics"));
+            Assert.Equal(1, Grid.GetColumn(drawer));
+            Assert.Equal("Auto", ((Grid)drawer.Parent!).ColumnDefinitions[1].Width.ToString());
+            drawer.Handle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(drawer.IsOpen);
+            Assert.Equal(92, drawer.Body.Width);
+            Assert.Equal(savedOpen, s.FavoritesDrawerOpen);
+            drawer.Handle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(drawer.IsOpen);
+            // Pin through the actual page pill menu.
+            var row = shell.PageStrip!.PillFor("haptics")!;
+            row.RaiseEvent(new global::Avalonia.Input.ContextRequestedEventArgs());
+            Dispatcher.UIThread.RunJobs();
+            ((MenuItem)Assert.Single(row.ContextMenu!.Items)!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            row.ContextMenu.Close();
+            Assert.True(drawer.IsOpen);
+            var chip = Assert.IsType<Button>(Assert.Single(drawer.FavoritesList.Children));
+            Assert.Equal("tab.haptics", chip.Tag);
+            Assert.DoesNotContain(drawer.RecentList.Children.OfType<Button>(), b => Equals(b.Tag, "tab.haptics"));
+            Assert.NotSame(chip, Assert.Single(shell.SettingsPage!.FindControl<StackPanel>("FavoritesList")!.Children));
+            Assert.IsType<ImageBrush>(chip.Background);
+            shell.ShowTab("play");
+            Assert.False(drawer.IsOpen);
+            Assert.Equal(0, drawer.Body.Width);
+            Assert.Null(drawer.Body.Transitions);
+            drawer.Handle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("haptics", shell.CurrentTab);
+            Assert.False(drawer.IsOpen);
+            chip = (Button)Assert.Single(drawer.FavoritesList.Children);
+            chip.RaiseEvent(new global::Avalonia.Input.ContextRequestedEventArgs());
+            Dispatcher.UIThread.RunJobs();
+            var unpin = (MenuItem)Assert.Single(chip.ContextMenu!.Items)!;
+            Assert.Equal(global::ConditioningControlPanel.Localization.Loc.Get("rail_unpin"), unpin.Header);
+            unpin.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            chip.ContextMenu.Close();
+            Assert.Empty(drawer.FavoritesList.Children);
+            Assert.True(drawer.FavoritesEmpty.IsVisible);
+            shell.ShowTab("settings");
+            Assert.False(drawer.IsVisible);
+            Assert.False(drawer.IsOpen);
+        }
+        finally { shell.Close(); s.MotionLevel = motionBefore; }
+        return Task.CompletedTask;
+    });
+
+    // WPF PageFavoritesDrawer.cs:159-214: paint and motion gate independent of saved Home state.
+    [Fact]
+    public Task PageDrawerPaintAndMotionFollowWpf() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var s = CoreSettings.Current;
+        var before = s.MotionLevel;
+        try
+        {
+            var drawer = new global::ConditioningControlPanel.Avalonia.Views.Controls.PageFavoritesDrawer();
+            drawer.OnNavigated("play");
+            s.MotionLevel = MotionLevel.Full;
+            drawer.SetOpen(true, true);
+            var slide = Assert.IsType<global::Avalonia.Animation.DoubleTransition>(Assert.Single(drawer.Body.Transitions!));
+            Assert.Equal(System.TimeSpan.FromMilliseconds(200), slide.Duration);
+            Assert.IsType<global::Avalonia.Animation.Easings.CubicEaseOut>(slide.Easing);
+            s.MotionLevel = MotionLevel.Off;
+            drawer.SetOpen(false, true);
+            Assert.Null(drawer.Body.Transitions);
+            Assert.Equal(0, drawer.Body.Width);
+            var hue = Color.FromRgb(10, 20, 30);
+            drawer.Paint(hue);
+            Assert.Equal(Color.FromArgb(0x80, 10, 20, 30), Assert.IsType<SolidColorBrush>(drawer.Rail.BorderBrush).Color);
+            drawer.OnNavigated(null);
+            Assert.False(drawer.IsVisible);
+        }
+        finally { s.MotionLevel = before; }
+        return Task.CompletedTask;
+    });
+
     // WPF MainWindow.FavoritesRail.cs:92-93,256-265: a live grant repaints the Studio chip.
     [Fact]
     public Task OwnedPillRepaintsAndChipStillNavigates() => AvaloniaTestDispatcher.RunAsync(() =>
