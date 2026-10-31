@@ -13,14 +13,13 @@ public partial class MainShellWindow
 {
     private static Action? _stopLevelUpSound;
 
-    // Preserve the base panic quiet policy, including work already queued when panic wins.
+    // Cancel work overtaken by panic or shell close; fresh level events still follow WPF.
     private void PostLevelNotice(Action show)
     {
         var panic = PanicAftermath.PanicCount;
         global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            if (_heroClosed || panic != PanicAftermath.PanicCount
-                || PanicAftermath.TriggersSilenced()) return;
+            if (_heroClosed || panic != PanicAftermath.PanicCount) return;
             show();
         });
     }

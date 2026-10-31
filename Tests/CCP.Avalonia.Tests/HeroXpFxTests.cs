@@ -198,7 +198,7 @@ public sealed class HeroXpFxTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task PanicQuietSuppressesNoticesAndSoundButPreservesLevelVisuals() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task PanicQuietPreservesLevelNoticesSoundAndVisuals() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -229,8 +229,8 @@ public sealed class HeroXpFxTests
             Assert.Equal(11, s.PlayerLevel);
             Assert.True(shell.LevelChipPopping);
             Assert.StartsWith("0 / ", shell.FindControl<TextBlock>("TxtXP")!.Text);
-            Assert.Equal(0, notices);
-            Assert.Equal(0, sounds);
+            Assert.Equal(1, notices);
+            Assert.Equal(1, sounds);
         }
         finally
         {

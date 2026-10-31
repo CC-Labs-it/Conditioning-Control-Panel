@@ -64,6 +64,13 @@ public sealed class ShellLevelCallerTests
             ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(seen); // a queued event cannot restart audio after panic
+            // WPF MainWindow.Companion.cs:48-77: a fresh milestone still notifies during quiet.
+            progress.Level = 29;
+            progress.CurrentXP = 0;
+            ConditioningControlPanel.Services.Companion.CompanionCore.AddCompanionXP(progress.XPForNextLevel, "test");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+            Assert.Equal(new[] { "other-notice", "sound" }, seen);
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             int stops = 0;
             CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => () => stops++;
