@@ -48,7 +48,6 @@ correction (row 2) is in scope because the chip shows that balance.</li>
 
 <table>
 <tr><th>lane</th><th>commits</th><th>rows</th><th>ledger #</th></tr>
-<tr><td><code>sync11-compat</code></td><td>1</td><td><code>b127d4d96</code></td><td>11</td></tr>
 <tr><td><code>sync11-dtrh-basic</code></td><td>1</td><td><code>bc242aeb6</code></td><td>9</td></tr>
 <tr><td><code>sync11-profile-equip</code></td><td>1</td><td><code>570b562da</code></td><td>6</td></tr>
 <tr><td><code>sync11-race-pictures</code></td><td>1</td><td><code>009c34bee</code></td><td>21</td></tr>
@@ -65,7 +64,6 @@ and lock band, EMI desk target, launcher tile); about 180 WPF lines with tests.<
 <li><code>sync11-profile-equip</code>: frame and avatar through <code>/v2/equip</code> (about 590 WPF lines with tests); after <code>sync10-cosmetics</code>.</li>
 <li><code>sync11-wallet-net</code>: the sync reply's <code>wallet_net</code> correction on the Avalonia account sync (about 280 WPF lines, 216 of them tests).</li>
 <li><code>sync11-xp-tip</code>: drop the XP bar meniscus and its pulse from the Avalonia header (about 150 WPF lines, mostly removals).</li>
-<li><code>sync11-compat</code>: done on the -compat branch of this sync.</li>
 </ul>
 <h2 id="rows">Rows</h2>
 
@@ -81,7 +79,7 @@ and lock band, EMI desk target, launcher tile); about 180 WPF lines with tests.<
 <tr><td>8</td><td><code>7333b7210</code></td><td>fix(prize-counter): a host that does not send rainV2 shows no Rain</td><td><code>web/prizecounter</code> (3)</td><td>-</td><td>n/a (B3: shop is WPF desktop only in 7.2 (handoff-1029/B3-SHOP-DECISIONS.md))</td><td>web only; the tree stays in <code>Assets/web/prizecounter</code> so the layout matches WPF, the Avalonia head never hosts it</td></tr>
 <tr><td>9</td><td><code>bc242aeb6</code></td><td>feat(dtrh): Down the Rabbit Hole moves to Basic</td><td><code>App.xaml.cs</code>, <code>VaultGateDialog.cs</code>, <code>MainWindow.PlayTab.cs</code>, <code>MainWindow.Presets.cs</code>, <code>PlayTabView.xaml</code>, <code>DtrhHostService.cs</code>, <code>EmiTargets.cs</code>, <code>LauncherCatalogue.cs</code>, <code>PatreonService.cs</code> + 3 tests; Core <code>ExclusiveFeature</code>, <code>TierGate</code>, <code>DailyFreeService</code>, languages, <code>web/dtrh</code> merged</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Dtrh.cs</code> (<code>DtrhGate</code>/<code>DtrhLocked</code>), Play tab DTRH card, <code>Views/Windows/EmiDesk/EmiTargets.cs</code>, launcher tile</td><td>needs-port (<code>sync11-dtrh-basic</code>)</td><td>owner call 2026-10-31: DTRH is Basic, keyed premium gate; the vault perk lists (<code>vaultgate_prime_2</code> left the languages) are fixed in -compat with row 11; the Avalonia payout-result has no <code>plan</code>/<code>daily_gift</code> yet</td></tr>
 <tr><td>10</td><td><code>96a9f7522</code></td><td>fix(hud): remove the white dot at the tip of the XP bar</td><td><code>MainWindow.xaml</code>, <code>MainWindow.HeroFx.cs</code>, <code>MainWindow.HudDepth.cs</code>, <code>MainWindow.ChromeFx.cs</code>, <code>Theme/Depth.xaml</code> + tests</td><td><code>CCP.Avalonia/Views/Windows/MainShellWindow.HeroFx.cs</code> (meniscus pulse) + <code>MainShellWindow.axaml</code> (XP bar)</td><td>needs-port (<code>sync11-xp-tip</code>)</td><td>the Avalonia header still draws the meniscus and pulses it</td></tr>
-<tr><td>11</td><td><code>b127d4d96</code></td><td>feat(vault): the Prime list names Racing Thoughts 3D</td><td><code>Dialogs/VaultGateDialog.cs</code>; languages (<code>vaultgate_prime_8</code>)</td><td><code>CCP.Avalonia/Views/Dialogs/VaultGateDialog.cs</code></td><td>needs-port (<code>sync11-compat</code>)</td><td>perk arrays as WPF (with row 9's <code>vaultgate_basic_10</code>, without the removed <code>vaultgate_prime_2</code>)</td></tr>
+<tr><td>11</td><td><code>b127d4d96</code></td><td>feat(vault): the Prime list names Racing Thoughts 3D</td><td><code>Dialogs/VaultGateDialog.cs</code>; languages (<code>vaultgate_prime_8</code>)</td><td><code>CCP.Avalonia/Views/Dialogs/VaultGateDialog.cs</code></td><td>ported (-compat, <code>avalonia-port/main-20261031b-compat</code>)</td><td>perk arrays as WPF (with row 9's <code>vaultgate_basic_10</code>, without the removed <code>vaultgate_prime_2</code>)</td></tr>
 <tr><td>12</td><td><code>5518b09c8</code></td><td>fix(prize-counter): the click after an opening tap leaves the card open</td><td><code>web/prizecounter</code> (2)</td><td>-</td><td>n/a (B3: shop is WPF desktop only in 7.2 (handoff-1029/B3-SHOP-DECISIONS.md))</td><td>web only; the tree stays in <code>Assets/web/prizecounter</code> so the layout matches WPF, the Avalonia head never hosts it</td></tr>
 <tr><td>13</td><td><code>b8394d39d</code></td><td>fix(glassroad): course tables fit the GPU, so the road is not white on a 4096 limit</td><td><code>web/glassroad</code> (3)</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>ported-by-merge</td><td>web only (shared <code>Assets/web</code>); no feel.json or track change, course hash unchanged</td></tr>
 <tr><td>14</td><td><code>f3575e851</code></td><td>feat(glassroad): phone Scrolller pictures on the real world screens</td><td><code>web/glassroad</code> (7, new <code>host/devicePictures.js</code>)</td><td><code>CCP.Avalonia/Views/Games/GameWindow.Glassroad.cs</code>, <code>GlassroadHostRules.cs</code></td><td>ported-by-merge</td><td>phone (device origin) pictures, web only; the desktop host side is row 21; the new files move to <code>Assets/web/glassroad</code> in the merge</td></tr>
@@ -107,6 +105,38 @@ and lock band, EMI desk target, launcher tile); about 180 WPF lines with tests.<
 <p>Older open port debt that still applies (not repeated here): the needs-port rows of syncs 8, 9 and 10
 (<a href="avalonia-main-sync-20261024.html"><code>20261024</code></a>, <a href="avalonia-main-sync-20261030.html"><code>20261030</code></a>,
 <a href="avalonia-main-sync-20261031.html"><code>20261031</code></a>).</p>
+<h2 id="merge-notes-avalonia-portmain-20261031b">Merge notes (<code>avalonia-port/main-20261031b</code>, merge <code>1abe0e8c6</code>)</h2>
+<p>Conflict resolutions only. Checked: the merge tree differs from <code>git merge-tree --write-tree</code>'s automatic result only in
+the 3 content-conflicted files below.</p>
+<ul>
+<li>File location: <code>web/glassroad/host/devicePictures.js</code>, <code>web/glassroad/tests/device-pictures.test.mjs</code>,
+<code>web/glassroad/tests/garage-sync.test.mjs</code>, <code>web/prizecounter/tests/hide-rain.test.mjs</code>,
+<code>web/prizecounter/tests/hud-scrim.test.mjs</code> kept where directory-rename detection put them (<code>Assets/web/...</code>);
+<code>Services/Prizes/V2WalletNet.cs</code> kept at <code>CCP.Core/Services/Prizes/V2WalletNet.cs</code> (pure: Newtonsoft and
+<code>SparklePoints</code> only, no <code>App.*</code>, no WPF types).</li>
+<li><code>PatreonService.cs</code>: the stack's <code>ProviderSubscription.HasLabAccess</code> delegation and <code>EntitlementResolved</code>
+kept; main only changed the doc comment of the body the stack moved to Core.</li>
+<li><code>EmiTargets.cs</code> and <code>LauncherCatalogue.cs</code>: the stack's door tables (<code>D(...)</code> switch, host dictionary over
+Core <code>LauncherCards</code>) kept; main's DTRH Basic gate (<code>PremiumOk</code> / <code>RequiresPremium</code> / <code>DemandPremium</code>)
+applied to their <code>dtrh</code> entries. Main's new <code>LauncherCatalogue.PremiumOk</code> helper auto-merged.</li>
+<li>Auto-merged into Core: <code>AppSettings</code> (<code>WalletNetSeen</code>, <code>ProfileEquip*</code>, <code>GlassroadPictures</code>),
+<code>ExclusiveFeature</code>, <code>TierGate</code>, <code>DailyFreeService</code>, <code>GoonOnlineMedia</code>, <code>SparklePoints</code>,
+<code>V2WalletAdoption</code>, the language files and <code>Tests/CCP.Core.Tests/Board/BoardTilesTests.cs</code>.</li>
+<li>No csproj or <code>build.yml</code> change: the new web files are tests (already excluded by <code>tests\**</code>) or under existing
+trees.</li>
+</ul>
+<h2 id="-compat-avalonia-portmain-20261031b-compat">-compat (<code>avalonia-port/main-20261031b-compat</code>)</h2>
+<ul>
+<li>Core <code>CloudSettingsBackup</code>: <code>ProfileEquipAccount</code>/<code>ProfileEquipUpdatedMs</code>/<code>ProfileEquipPushOwed</code> and
+<code>WalletNetSeen</code> stay out of the backup and survive a restore, as in WPF <code>ProfileSyncService</code>
+(<code>CloudSettingsBackupTests</code> reads the WPF list and fails without it).</li>
+<li>Avalonia <code>VaultGateDialog</code>: the perk lists as WPF (row 11): <code>vaultgate_basic_10</code> added, the deleted
+<code>vaultgate_prime_2</code> gone, <code>vaultgate_prime_8</code> first under Prime.</li>
+</ul>
+<p>Checks: glassroad <code>node --test</code> 3145/3145 (incl. <code>course-hash</code> and &quot;looks never reach the online course
+hash&quot;; the sync #10 known red <code>moving-grid</code> is fixed upstream by row 17), prizecounter 133/133, dtrh 113/113;
+<code>CCP.Core.Tests</code> 4641/4641; Avalonia tests (Glassroad, PrizeCounter, Haptic, Rain, Cosmetic, EmiBook, Sparkles, VaultGate,
+Dtrh, Loc, TestIsolation) 326/326; WPF test project compiles on Linux; <code>core-guards.sh</code> and <code>ledger-check</code> clean.</p>
 
 <h2 id="how-a-row-gets-closed">How a row gets closed</h2>
 <p>A needs-port row is closed when its lane's PR lands on <code>port/7.2</code>. Change the status cell to
