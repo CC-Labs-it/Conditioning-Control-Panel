@@ -126,6 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
+            RefreshVault();   // XAML has assigned PlansMode before Loaded.
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged += UpdateMotion;
@@ -181,7 +182,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.
             var rows = new List<object>();
-            var cards = (PlansMode ? Enumerable.Empty<ExclusiveFeature>() : ExclusiveFeature.All).Where(f => f.Shown()).Select(f => new ExclusiveCardRow(f));
+            var cards = (IsLoaded && !PlansMode ? ExclusiveFeature.All : Enumerable.Empty<ExclusiveFeature>()).Where(f => f.Shown()).Select(f => new ExclusiveCardRow(f));
             foreach (var (group, items) in Services.UI.PremiumShelfOrder.Arrange(cards, r => r.Feature.Key, r => r.Tier, r => !r.IsLocked))
             {
                 rows.Add(new ExclusiveGroupRow(group, items.Count(r => !r.IsLocked), items.Count));
@@ -189,40 +190,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             this.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource = rows;
 
-            var spot = new ExclusiveCardRow(ExclusiveFeature.All[0]);
-            this.FindControl<TextBlock>("TxtSpotArtGlyph")!.Text = spot.Art == null ? spot.Feature.Emoji : "";
-            var spotArt = this.FindControl<Image>("SpotArtImage")!;
-            var banner = ModArt.TryLoad(ArtName(spot.Feature.BannerArtResource), 1400);
-            spotArt.Source = banner ?? spot.Art;
-            // WPF ApplySpotlightArt: the Ken Burns zoom centres on a banner, on the focal point of card art.
-            spotArt.RenderTransformOrigin = banner != null
-                ? RelativePoint.Center
-                : new RelativePoint(spot.Feature.FocalX, spot.Feature.FocalY, RelativeUnit.Relative);
-            this.FindControl<TextBlock>("TxtSpotTitle")!.Text = spot.Title;
-            this.FindControl<TextBlock>("TxtSpotTagline")!.Text = spot.Tagline;
-            this.FindControl<Border>("SpotBadge")!.IsVisible = spot.HasBadge;
-            this.FindControl<TextBlock>("TxtSpotBadge")!.Text = spot.BadgeText;
-            this.FindControl<Border>("SpotVeil")!.IsVisible = spot.IsLocked;
-            this.FindControl<TextBlock>("TxtSpotFreeToday")!.Text = Loc.Get("mosaic_free_today");
-            this.FindControl<Border>("SpotFreeToday")!.IsVisible = spot.HasFreePill;
-            var badge = this.FindControl<TierBadge>("SpotTierBadge")!;
-            badge.Tier = spot.Tier;
-            badge.FreeToday = spot.BadgeFreeToday;
-            var card = this.FindControl<Border>("SpotlightCard")!;
-            // WPF VaultLivery.Apply at hero weight: tiered = livery + 4px living rim; untiered = resting/gold edge.
-            TierFxBorder.SetRimThickness(card, 4);
-            TierFxBorder.SetTier(card, spot.Tier);
-            card.BorderBrush = spot.Tier > 0 ? ExclusiveCardRow.Livery(spot.Tier) : spot.FreeToday ? ExclusiveCardRow.EdgeFree : new SolidColorBrush(WithAlpha(VaultAccent(), 0x66));
-            card.BorderThickness = new Thickness(spot.Tier > 0 ? 4 : spot.FreeToday ? 2 : 1);
-            card.Cursor = spot.Cursor;
-            ToolTip.SetTip(card, spot.UnavailableTip);
-            var open = this.FindControl<Button>("BtnSpotOpen")!;
-            open.IsEnabled = spot.IsAvailable;
-            ToolTip.SetTip(open, spot.UnavailableTip);
-            ToolTip.SetShowOnDisabled(open, true);
+            // WPF MainWindow.Exclusives.cs:1017 paints the spotlight only on the Premium page.
+            // Wait for Loaded so XAML can set PlansMode before any page art is decoded.
+            if (!PlansMode && IsLoaded)
+            {
+                var spot = new ExclusiveCardRow(ExclusiveFeature.All[0]);
+                this.FindControl<TextBlock>("TxtSpotArtGlyph")!.Text = spot.Art == null ? spot.Feature.Emoji : "";
+                var spotArt = this.FindControl<Image>("SpotArtImage")!;
+                var banner = ModArt.TryLoad(ArtName(spot.Feature.BannerArtResource), 1400);
+                spotArt.Source = banner ?? spot.Art;
+                // WPF ApplySpotlightArt: the Ken Burns zoom centres on a banner, on the focal point of card art.
+                spotArt.RenderTransformOrigin = banner != null
+                    ? RelativePoint.Center
+                    : new RelativePoint(spot.Feature.FocalX, spot.Feature.FocalY, RelativeUnit.Relative);
+                this.FindControl<TextBlock>("TxtSpotTitle")!.Text = spot.Title;
+                this.FindControl<TextBlock>("TxtSpotTagline")!.Text = spot.Tagline;
+                this.FindControl<Border>("SpotBadge")!.IsVisible = spot.HasBadge;
+                this.FindControl<TextBlock>("TxtSpotBadge")!.Text = spot.BadgeText;
+                this.FindControl<Border>("SpotVeil")!.IsVisible = spot.IsLocked;
+                this.FindControl<TextBlock>("TxtSpotFreeToday")!.Text = Loc.Get("mosaic_free_today");
+                this.FindControl<Border>("SpotFreeToday")!.IsVisible = spot.HasFreePill;
+                var badge = this.FindControl<TierBadge>("SpotTierBadge")!;
+                badge.Tier = spot.Tier;
+                badge.FreeToday = spot.BadgeFreeToday;
+                var card = this.FindControl<Border>("SpotlightCard")!;
+                // WPF VaultLivery.Apply at hero weight: tiered = livery + 4px living rim; untiered = resting/gold edge.
+                TierFxBorder.SetRimThickness(card, 4);
+                TierFxBorder.SetTier(card, spot.Tier);
+                card.BorderBrush = spot.Tier > 0 ? ExclusiveCardRow.Livery(spot.Tier) : spot.FreeToday ? ExclusiveCardRow.EdgeFree : new SolidColorBrush(WithAlpha(VaultAccent(), 0x66));
+                card.BorderThickness = new Thickness(spot.Tier > 0 ? 4 : spot.FreeToday ? 2 : 1);
+                card.Cursor = spot.Cursor;
+                ToolTip.SetTip(card, spot.UnavailableTip);
+                var open = this.FindControl<Button>("BtnSpotOpen")!;
+                open.IsEnabled = spot.IsAvailable;
+                ToolTip.SetTip(open, spot.UnavailableTip);
+                ToolTip.SetShowOnDisabled(open, true);
+                Dress(this.FindControl<Control>("SpotFreeToday")!);
+                Dress(this.FindControl<Control>("SpotVeilLock")!);
+            }
             RefreshTierPlates();
-            Dress(this.FindControl<Control>("SpotFreeToday")!);
-            Dress(this.FindControl<Control>("SpotVeilLock")!);   // WPF :799 breathes only under a shown veil
         }
 
         /// <summary>WPF ModTileVariant: built-in fork first; external mods override the base path.</summary>

@@ -56,6 +56,9 @@ public sealed class ExclusivesCompletionTests
             shell.OpenAppSettingsSection("account"); Settle();
             var plans = shell.PlansVault!;
             Assert.True(plans.PlansMode);
+            Assert.Null(plans.FindControl<Image>("SpotArtImage")!.Source);
+            plans.RefreshVault();
+            Assert.Null(plans.FindControl<Image>("SpotArtImage")!.Source);
             // WPF ExclusivesTabView.xaml:48 and .xaml.cs:133 retain the room in PlansMode.
             var backdrop = plans.FindControl<Image>("VaultBackdrop")!;
             Assert.True(backdrop.IsEffectivelyVisible);
@@ -68,6 +71,7 @@ public sealed class ExclusivesCompletionTests
             Assert.Equal(Loc.Get("plans_header_title"), plans.FindControl<TextBlock>("TxtVaultTitle")!.Text);
             LocalizationManager.Instance.SetLanguage("de"); Settle();
             Assert.Equal(Loc.Get("plans_header_sub"), plans.FindControl<TextBlock>("TxtVaultSub")!.Text);
+            Assert.Null(plans.FindControl<Image>("SpotArtImage")!.Source);
             Assert.NotNull(((ImageBrush)plans.FindControl<Border>("VaultHeroPlate")!.Background!).Source);
             Assert.IsType<Image>(plans.FindControl<Border>("TierPlate1")!.Child);
             plans.FindControl<Button>("BtnSeePremium")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -78,9 +82,11 @@ public sealed class ExclusivesCompletionTests
             Assert.False(page.FindControl<Border>("InvitesWrap")!.IsVisible);
             Assert.Null(page.InvitesPanel);
             Assert.NotEmpty(page.FindControl<ItemsControl>("ExclusivesShelf")!.Items);
+            Assert.NotNull(page.FindControl<Image>("SpotArtImage")!.Source);
             shell.OpenInvitesCard();
             Assert.Equal("appsettings", shell.CurrentTab);
             Assert.True(plans.MotionRunning);
+            Assert.Null(plans.FindControl<Image>("SpotArtImage")!.Source);
             shell.OpenAppSettingsSection("general"); Settle();
             Assert.False(plans.MotionRunning);
         }
