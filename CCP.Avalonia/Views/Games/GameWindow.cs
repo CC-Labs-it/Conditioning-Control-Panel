@@ -54,8 +54,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
             // WPF DtrhHostService.cs:196 StartUrl behind the Lab door (GameWindow.Dtrh.cs).
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
-            // WPF 7.2: Racing Thoughts 3D is open to everyone (GameWindow.Glassroad.cs).
-            [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html"),
+            // WPF 7.2: Racing Thoughts 3D requires Prime (GameWindow.Glassroad.cs).
+            [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
         };
 
         private static readonly List<GameWindow> Open = new();
@@ -77,7 +77,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
-            if (live != null) { live.Activate(); return live; }
+            if (live != null)
+            {
+                // WPF checks Prime before refocusing too: entitlement can change while the race is open.
+                if (spec.Id == GlassroadId && !GlassroadGate()) return null;
+                live.Activate();
+                return live;
+            }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             var window = new GameWindow(spec);

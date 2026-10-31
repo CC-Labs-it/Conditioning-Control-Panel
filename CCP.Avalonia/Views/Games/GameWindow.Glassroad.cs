@@ -1,5 +1,5 @@
 // PORTED from ConditioningControlPanel/Services/Glassroad/GlassroadHostService.cs (feat/glassroad-a 5121933ee):
-// Racing Thoughts 3D (Assets/web/glassroad/index.html), open to everyone since 7.2.
+// Racing Thoughts 3D (Assets/web/glassroad/index.html), Prime only, matching the current WPF gate.
 // Every public Racing Thoughts door opens this page (GameWindow.Launch).
 // INIT GOES OUT BEFORE READY: the page awaits init at boot (3 s, then defaults with no net) but says ready only once
 // shaders are warm, so init is posted at the page's load (NavigationCompleted, this engine's nearest seam to WPF's
@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
@@ -26,9 +27,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     {
         internal const string GlassroadId = "glassroad";
 
-        /// <summary>7.2: every public Racing Thoughts door opens the 3D race, with no purchase or env gate.</summary>
+        /// <summary>7.2: every public Racing Thoughts door opens the 3D race; launch checks Prime.</summary>
         internal static string ResolveDoor(string id) =>
             string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) ? GlassroadId : id;
+
+        /// <summary>WPF GlassroadHostService.DemandPrime: tier 2, with the shared refusal toast.</summary>
+        internal static bool GlassroadGate() => TierGate.DemandLab(Loc.Get("launcher_game_race_title"));
+
+        /// <summary>The same Prime bar for the launcher padlock, without a toast or daily-free bypass.</summary>
+        internal static bool GlassroadLocked() => !TierGate.RequiresLab(Loc.Get("launcher_game_race_title")).Allowed;
 
         private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
         private bool _grOpen, _grEarlyInitSent, _grPinged;

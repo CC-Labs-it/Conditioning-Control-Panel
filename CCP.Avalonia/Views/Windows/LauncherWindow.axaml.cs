@@ -37,8 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ["breakoutdemo"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
                 // WPF PieceByPieceHostService.Launch: free, no account (LauncherCards RequiresAccount: false).
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
-                // WPF 7.2: Racing Thoughts 3D, always revealed and available.
-                ["race"] = (() => false, _ => Games.GameWindow.Launch("race")),
+                // WPF 7.2: Racing Thoughts 3D, always revealed; locked below Prime.
+                ["race"] = (Games.GameWindow.GlassroadLocked, _ => Games.GameWindow.Launch("race")),
                 // WPF LauncherCatalogue :241: Lab tier (or the daily-free drop); GameWindow.Launch runs DemandLab.
                 [Games.GameWindow.DtrhId] = (Games.GameWindow.DtrhLocked, _ => Games.GameWindow.Launch(Games.GameWindow.DtrhId)),
             };

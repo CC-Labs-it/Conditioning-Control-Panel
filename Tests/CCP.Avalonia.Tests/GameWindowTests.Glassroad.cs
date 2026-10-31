@@ -6,6 +6,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Race;
 using ConditioningControlPanel.Services.Safety;
@@ -44,6 +45,7 @@ public sealed partial class GameWindowTests
         using var http = new System.Net.Http.HttpClient(fake);
         try
         {
+            CoreEntitlement.HasLabProvider = () => true;
             RacingAccess.IsGrantedProvider = _ => false;
             GameWindow.PbpHttpClient = () => http;
             GameWindow.PbpServerBase = () => GrBase;
@@ -71,8 +73,57 @@ public sealed partial class GameWindowTests
     public void Glassroad_PublicDoorIsAlways3d(string id, string expected)
     {
         Assert.Equal(expected, GameWindow.ResolveDoor(id));
-        Assert.Null(GameWindow.Games[GameWindow.GlassroadId].Gate);
     }
+
+    [Theory]
+    [InlineData(-1, true)]
+    [InlineData(0, true)]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    public void Glassroad_TileLocksBelowPrime(int tier, bool locked)
+    {
+        CoreEntitlement.HasLabProvider = tier < 0 ? null : () => tier == 2;
+        Assert.Equal(locked, LauncherWindow.Destinations["race"].Locked());
+        Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
+    }
+
+    [Theory]
+    [InlineData("race", -1)]
+    [InlineData("race", 0)]
+    [InlineData("race", 1)]
+    [InlineData("race", 2)]
+    [InlineData("glassroad", -1)]
+    [InlineData("glassroad", 0)]
+    [InlineData("glassroad", 1)]
+    [InlineData("glassroad", 2)]
+    public void Glassroad_PrimeIsRequiredBeforeOpeningOrRefocusing(string door, int tier) => RunGlassroad((_, _, _) =>
+    {
+        CoreEntitlement.HasLabProvider = tier < 0 ? null : () => tier == 2;
+        CoreEntitlement.HasPremiumProvider = () => tier >= 1;
+        CoreEntitlement.IsFreeTodayProvider = _ => true; // the race has no daily-free bypass
+        var denied = new List<TierVerdict>();
+        CoreEntitlement.ShowDeniedHandler = denied.Add;
+        if (tier != 2)
+        {
+            Assert.Null(GameWindow.Launch(door));
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        else
+        {
+            var w = GameWindow.Launch(door);
+            Assert.NotNull(w);
+            Assert.Equal(GameWindow.GlassroadId, w.Spec.Id);
+            Assert.Same(w, GameWindow.Launch(door));
+            Assert.Single(GameWindow.OpenWindowsForTests());
+            Assert.Empty(denied);
+            CoreEntitlement.HasLabProvider = () => false;
+            Assert.Null(GameWindow.Launch(door)); // an existing window must not bypass the gate
+            Assert.Same(w, Assert.Single(GameWindow.OpenWindowsForTests()));
+        }
+        var refusal = Assert.Single(denied);
+        Assert.Equal(ConditioningControlPanel.Models.PatreonTier.Level2, refusal.Required);
+        Assert.Equal(Loc.Get("launcher_game_race_title"), refusal.Feature);
+    });
 
     [Fact]
     public void Glassroad_RaceTileIsVisibleWithoutPurchase()

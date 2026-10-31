@@ -649,6 +649,7 @@ public sealed partial class GameWindowTests
     {
         RunRace(null, (launcher, _, _) =>
         {
+            CoreEntitlement.HasLabProvider = () => true;
             Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
             launcher.Hide();
             int gates = 0;
