@@ -127,7 +127,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AccountStrip.IsVisible = linked;
             AddedRow.IsVisible = linked;
             PaperTag.IsVisible = linked;
-            HeroContent.Margin = new Thickness(26, 14, linked ? 380 : 26, 14);
             NumbersPanel.IsVisible = linked;
             MenuPanel.IsVisible = linked; // WPF: the menu and limits sit inside LinkedPanel (ChasterTabView.xaml:642)
             if (linked) { RefreshNumbers(); RefreshPresets(); }
