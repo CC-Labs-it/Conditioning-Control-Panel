@@ -110,3 +110,12 @@ test('the phone app\'s own loopback server is a host, so the lobby songs are not
   for(const platform of ['web','desktop',undefined]) assert.equal(isPreviewSongHost(new URL('http://127.0.0.1:8790'),platform),true,String(platform));
   assert.equal(isPreviewSongHost(new URL('https://app.cclabs.app'),'web'),false);
 });
+
+test('Electron ccpHost is an additive bridge when Chromium owns window.chrome', async () => {
+  const { win, posted } = fakeWin(false), listeners = [];
+  win.chrome = {}; win.ccpHost = { postMessage: m => posted.push(m), addEventListener: (_t, fn) => listeners.push(fn) };
+  const b = createBridge({ win });
+  assert.equal(b.hosted, true); b.ready(); assert.deepEqual(posted.at(-1), { type: 'ready', protocol: 2 });
+  listeners[0]({ data: { type: 'init', caps: { forceRenderer: 'webgl2' } } });
+  assert.equal((await b.init).caps.forceRenderer, 'webgl2'); b.dispose();
+});
