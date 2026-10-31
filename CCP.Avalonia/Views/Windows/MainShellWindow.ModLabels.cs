@@ -55,6 +55,20 @@ public partial class MainShellWindow
             dash.ComboMindDrain.TitleA = CardLabel("Mind Wipe", "label_mind_wipe");
             dash.ComboMindDrain.TitleB = CardLabel("Brain Drain", "label_brain_drain");
         }
+        // WPF MainWindow.UiUpdates.cs:164-189: explicit mod tooltip, then mod-aware
+        // English replacement, then localized fallback. Re-run for mod and language changes.
+        void StatTip(string name, string skill, string english, string key)
+        {
+            if (Named<Border>(name) is { } pill)
+                ToolTip.SetTip(pill, App.Mods?.GetStatPillTooltip(skill) ?? ModAwareLabel(english, key));
+        }
+        StatTip("PillConditioningTime", "pink_hours", "Total conditioning time (Pink Hours skill)",
+            "tooltip_total_conditioning_time_pink_hours_skill");
+        StatTip("PillOnlineUsers", "hive_mind", "Bimbos online now (Hive Mind skill)",
+            "tooltip_bimbos_online_now_hive_mind_skill");
+        StatTip("PillRankPercentile", "popular_girl", "Your rank percentile (Popular Girl skill)",
+            "tooltip_your_rank_percentile_popular_girl_skill");
+        UpdateLevelDisplay();
         var takeover = Named<Tabs.BambiTakeoverTabView>("BambiTakeoverTab");
         void Label(string name, string english, string key)
         {
