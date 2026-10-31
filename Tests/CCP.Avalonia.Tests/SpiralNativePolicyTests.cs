@@ -21,9 +21,21 @@ public class SpiralNativePolicyTests
         public bool IsZoomControlEnabled { get; set; } = true;
         public bool IsBuiltInErrorPageEnabled { get; set; } = true;
         public bool IsWebMessageEnabled { get; set; }
-        public event Action<string>? ProcessFailed;
-        public void Crash() => ProcessFailed?.Invoke("RenderProcessExited");
-        public bool Subscribed => ProcessFailed != null;
+        private Action<string>? _processFailed;
+        public bool ThrowOnRemove { get; set; }
+        public int RemoveAttempts { get; private set; }
+        public event Action<string>? ProcessFailed
+        {
+            add => _processFailed += value;
+            remove
+            {
+                RemoveAttempts++;
+                if (ThrowOnRemove) throw new InvalidOperationException("dead browser");
+                _processFailed -= value;
+            }
+        }
+        public void Crash() => _processFailed?.Invoke("RenderProcessExited");
+        public bool Subscribed => _processFailed != null;
     }
 
     // WPF SpiralEmbedView.cs:178-190. Start with the opposite of every required switch.
@@ -100,4 +112,43 @@ public class SpiralNativePolicyTests
         Assert.Equal(1, failures);
         return Task.CompletedTask;
     });
+
+    // WPF SpiralEmbedView.cs:320-325,334-353: teardown errors never suppress failure reporting.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ThrowingNativeUnsubscribeStillRemovesTheHost(bool crash) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var core = new Core { ThrowOnRemove = true };
+        var host = new WebHost { ScriptInvoker = _ => Task.FromResult<string?>(null) };
+        using var embed = new SpiralEmbedView("map") { CreateHost = () => host };
+        embed.Start();
+        host.ConfigureWindowsCore = _ => SpiralWebView2Policy.Apply(core, host.OnBrowserProcessFailed);
+        host.OnWindowsCore((IntPtr)1);
+        embed.Receive("{\"type\":\"spiral:ready\"}");
+        Assert.True(embed.IsReady);
+        int failures = 0;
+        embed.Failed += (_, _) => { Assert.Empty(embed.Children); failures++; };
+        Assert.Null(Record.Exception(() => { if (crash) core.Crash(); else embed.Dispose(); }));
+        Assert.Equal(1, core.RemoveAttempts);
+        Assert.Null(host.ConfigureWindowsCore);
+        Assert.Null(host.Source);
+        Assert.Null(embed.Host);
+        Assert.Empty(embed.Children);
+        Assert.False(embed.IsReady);
+        Assert.Equal(crash, embed.HasFailed);
+        Assert.Equal(crash ? 1 : 0, failures);
+        // Removal threw before detaching the event. The disposed lease must make late events inert.
+        core.Crash();
+        host.NewScrolllerEngine();
+        embed.Dispose();
+        Assert.Equal(1, core.RemoveAttempts);
+        Assert.Equal(crash ? 1 : 0, failures);
+        return Task.CompletedTask;
+    });
+
 }

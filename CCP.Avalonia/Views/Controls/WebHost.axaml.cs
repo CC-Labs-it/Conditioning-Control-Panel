@@ -84,17 +84,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             get => _configureWindowsCore;
             set
             {
-                _windowsCoreLease?.Dispose();
-                _windowsCoreLease = null;
+                ReleaseWindowsCore();
                 _configureWindowsCore = value;
             }
         }
         private IDisposable? _windowsCoreLease;
+        // WPF SpiralEmbedView.cs:334-353: a dead browser must not interrupt teardown/failure reporting.
+        private void ReleaseWindowsCore()
+        {
+            var lease = _windowsCoreLease;
+            _windowsCoreLease = null;
+            try { lease?.Dispose(); }
+            catch (Exception ex) { Log.Debug("WebHost: native unsubscribe failed: {Error}", ex.Message); }
+        }
         internal event Action<string>? BrowserProcessFailed;
         internal void OnBrowserProcessFailed(string reason) => BrowserProcessFailed?.Invoke(reason);
         internal void OnWindowsCore(IntPtr core)
         {
-            _windowsCoreLease?.Dispose();
+            ReleaseWindowsCore();
             _windowsCoreLease = ConfigureWindowsCore?.Invoke(core);
         }
 
@@ -461,8 +468,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// and a late report from an older engine is dropped. Returns that engine's report.</summary>
         internal Action<bool> NewScrolllerEngine()
         {
-            _windowsCoreLease?.Dispose();
-            _windowsCoreLease = null;
+            ReleaseWindowsCore();
             _scrolllerGate = null;
             _loadedOnThisEngine = false;
             var engine = ++_scrolllerEngine;
