@@ -187,6 +187,18 @@ public sealed class PossessionHostTests
         Assert.NotSame(next, shell.GetPossessionTargets());
     });
     [Fact]
+    public void UnownedIntakePausesHostUntilItCloses() => Run((shell, panel) =>
+    {
+        Assert.True(((IPossessionHost)shell).IsUsable);
+        var intake = new IntakeHostWindow();
+        try {
+            intake.Show();
+            Assert.Null(intake.Owner);
+            Assert.False(((IPossessionHost)shell).IsUsable);
+        } finally { intake.Close(); }
+        Assert.True(((IPossessionHost)shell).IsUsable);
+    });
+    [Fact]
     public void UsabilityAndBoundsFollowWindowStateAndScale() => Run((shell, panel) =>
     {
         var button = Button("Scaled");

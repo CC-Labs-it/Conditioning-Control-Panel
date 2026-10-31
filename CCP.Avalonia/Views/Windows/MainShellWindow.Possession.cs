@@ -27,24 +27,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             Opened += (_, _) => EnsurePossessionLayers();
             // WPF PossessionPointer.cs:62 uses Preview (tunnel) move + down, so handled child events still count.
-            AddHandler(PointerMovedEvent, (_, e) => _possessionPointer = e.GetPosition(this),
-                RoutingStrategies.Tunnel, handledEventsToo: true);
-            AddHandler(PointerPressedEvent, (_, e) => _possessionPointer = e.GetPosition(this),
-                RoutingStrategies.Tunnel, handledEventsToo: true);
-            Closed += (_, _) =>
-            {
-                _possessionClosed = true;
-                _possessionTargetCache = null;
-            };
+            AddHandler(PointerMovedEvent, (_, e) => _possessionPointer = e.GetPosition(this), RoutingStrategies.Tunnel, handledEventsToo: true);
+            AddHandler(PointerPressedEvent, (_, e) => _possessionPointer = e.GetPosition(this), RoutingStrategies.Tunnel, handledEventsToo: true);
+            Closed += (_, _) => { _possessionClosed = true; _possessionTargetCache = null; };
         }
-        internal Canvas PossessionGhostLayer
-        {
-            get { EnsurePossessionLayers(); return _possessionGhostLayer ??= new Canvas { IsHitTestVisible = false }; }
-        }
-        internal Canvas PossessionRubbleFloor
-        {
-            get { EnsurePossessionLayers(); return _possessionRubbleFloor ??= new Canvas { IsHitTestVisible = false }; }
-        }
+        internal Canvas PossessionGhostLayer { get { EnsurePossessionLayers(); return _possessionGhostLayer ??= new Canvas { IsHitTestVisible = false }; } }
+        internal Canvas PossessionRubbleFloor { get { EnsurePossessionLayers(); return _possessionRubbleFloor ??= new Canvas { IsHitTestVisible = false }; } }
         internal Point PossessionPointOf(Control element) =>
             element.TranslatePoint(default, PossessionGhostLayer) ?? default;
         internal void EnsurePossessionLayers()
@@ -72,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
         }
         bool IPossessionHost.IsUsable => !_possessionClosed && IsVisible
-            && WindowState != WindowState.Minimized && !LockCardWindow.IsAnyOpen()
+            && WindowState != WindowState.Minimized && !LockCardWindow.IsAnyOpen() && !IntakeHostWindow.IsAnyOpen()
             && !OwnedWindows.Any(w => w.IsVisible);
         private List<PossessionTarget>? _possessionTargetCache;
         private DateTime _possessionCacheAt = DateTime.MinValue, _possessionLayoutSeenAt = DateTime.MinValue;
@@ -330,12 +318,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
         private static string FallbackDisplayName(PossessionRole role) => role switch
         {
-            PossessionRole.Button => "that button",
-            PossessionRole.Card => "that card",
-            PossessionRole.Toggle => "that toggle",
-            PossessionRole.Title => "the title",
-            PossessionRole.Label => "that label",
-            PossessionRole.TabHeader => "that tab",
+            PossessionRole.Button => "that button", PossessionRole.Card => "that card",
+            PossessionRole.Toggle => "that toggle", PossessionRole.Title => "the title",
+            PossessionRole.Label => "that label", PossessionRole.TabHeader => "that tab",
             PossessionRole.Timer => "the timer",
             PossessionRole.Slider => "that slider",
             PossessionRole.Combo => "that dropdown",
