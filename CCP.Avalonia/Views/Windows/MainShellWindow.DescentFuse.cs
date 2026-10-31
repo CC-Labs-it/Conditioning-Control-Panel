@@ -140,5 +140,51 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             return DescentFuseWindow.Open(DescentShowKind.Live);
         }
+        /// <summary>
+        /// WPF DescentShowDirector.RunFirstLightReveal (:428-475): bring the shell forward, then
+        /// <see cref="BeginSpiralFirstLight"/>. No arguments, no server; since the ceremony retired
+        /// the owner's capture rig is its only caller there too. No window = the reveal is skipped,
+        /// the unlock is not lost.
+        /// </summary>
+        internal static void RunFirstLightReveal()
+        {
+            if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(RunFirstLightReveal);
+                return;
+            }
+            try
+            {
+                Log.Information("[Fuse] First light: the spiral is being revealed to this account for the first time.");
+                if (Current is not { IsLoaded: true } main)
+                {
+                    Log.Debug("[Fuse] First light: no main window - the spiral is unlocked, the reveal is skipped.");
+                    return;
+                }
+                try
+                {
+                    if (main.WindowState == WindowState.Minimized) main.WindowState = WindowState.Normal;
+                    main.Activate();
+                }
+                catch (Exception ex) { Log.Debug("[Fuse] First light could not bring the window forward: {Error}", ex.Message); }
+                main.BeginSpiralFirstLight();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[Fuse] The first-light reveal failed on the way to the spiral room. The spiral itself is unlocked.");
+            }
+        }
+
+        /// <summary>WPF MainWindow.SpiralRoom.cs:96: navigate through the real door FIRST (the
+        /// tab's entry repaint must not stomp the reveal), then let the room play it.</summary>
+        internal void BeginSpiralFirstLight()
+        {
+            try
+            {
+                ShowTab(SpiralRoom.TabKey);
+                Named<Tabs.SpiralTabView>("SpiralTab")?.BeginFirstLight();
+            }
+            catch (Exception ex) { Log.Warning(ex, "[Spiral] the first light could not open in the room"); }
+        }
     }
 }
