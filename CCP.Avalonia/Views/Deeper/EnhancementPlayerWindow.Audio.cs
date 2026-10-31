@@ -140,7 +140,7 @@ public partial class EnhancementPlayerWindow
         foreach (var window in AudioWindows.ToArray())
         {
             if (!window._isVideoMode) window.BtnStop_Click();
-            else window._audioGeneration++; // an audio load may still be awaiting video teardown
+            else window._audioGeneration++; // defensive invalidation while the video pane is active
         }
     }
 }
