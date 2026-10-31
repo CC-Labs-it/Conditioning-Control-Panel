@@ -81,7 +81,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             var window = new GameWindow(spec);
-            window.Load(Server());
+            if (spec.Id == GlassroadId && UseLinuxRaceCard()) window.ShowRaceCard();
+            else window.Load(Server());
             window.Show();
             return window;
         }
@@ -102,7 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
-            Closing += (_, _) => _closing = true;
+            Closing += (_, _) => { _closing = true; CancelRaceFetch(); };
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == JustDropId) Closed += (_, _) =>
@@ -110,7 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 JustDropOrdersService.Invalidate();
                 Windows.MainShellWindow.Current?.RefreshTakeawayShelf();
             };
-            if (spec.Id == GlassroadId) Opened += (_, _) => OpenGlassroad();
+            if (spec.Id == GlassroadId) Opened += (_, _) => { if (!_raceCard) OpenGlassroad(); };
         }
 
         private WebAssetServer? _server;
