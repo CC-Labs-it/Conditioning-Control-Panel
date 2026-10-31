@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -159,16 +162,49 @@ public sealed partial class AccountSeedTests
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
                 Dispatcher.UIThread.RunJobs();
+                w.CompleteTabTransition();
+                w.UpdateLayout();
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                var clicks = new List<int>();
+                board.AddHandler(InputElement.PointerPressedEvent, (_, e) => clicks.Add(e.ClickCount),
+                    RoutingStrategies.Tunnel, handledEventsToo: true);
+                // Headless mouse helpers render between events. Pin the input timestamps so slow
+                // rendering cannot turn this double-click into two single clicks.
+                var platform = w.PlatformImpl!;
+                // Avalonia 12 exposes this backend callback as protected on its reference interface.
+                const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance
+                    | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+                var inputProperty = typeof(global::Avalonia.Platform.ITopLevelImpl).GetProperty("Input", flags)!;
+                var typeProperty = typeof(RawPointerEventArgs).GetProperty("Type", flags)!;
+                var timeProperty = typeof(RawInputEventArgs).GetProperty("Timestamp", flags)!;
+                var forward = (Action<RawInputEventArgs>)inputProperty.GetValue(platform)!;
+                ulong? firstAt = null;
+                ulong elapsed = 0;
+                Action<RawInputEventArgs> timedInput = input =>
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    if (input is RawPointerEventArgs && typeProperty.GetValue(input) is RawPointerEventType.LeftButtonDown or RawPointerEventType.LeftButtonUp)
+                    {
+                        firstAt ??= (ulong)timeProperty.GetValue(input)!;
+                        timeProperty.SetValue(input, firstAt.Value + elapsed);
+                        elapsed += 10;
+                    }
+                    forward(input);
+                };
+                inputProperty.SetValue(platform, timedInput);
+                try
+                {
+                    for (var i = 0; i < 2; i++)
+                    {
+                        w.MouseDown(at, MouseButton.Left);
+                        w.MouseUp(at, MouseButton.Left);
+                    }
                 }
+                finally { inputProperty.SetValue(platform, forward); }
+                Assert.Equal(new[] { 1, 2 }, clicks);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
