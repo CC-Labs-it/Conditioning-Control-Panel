@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _preroll;
+        private ITimer? _scheduler, _preroll, _bubbleWait;
         private volatile bool _running, _playing;
         private int _retryGeneration, _noVideosShown;
 
@@ -314,11 +314,18 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
-        /// pre-roll. False when nothing was started (no clip, or one is already playing).
+        /// pre-roll. True for a started or queued request. False for no clip or a duplicate request.
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
         public bool Trigger(bool? strictOverride = null, string? path = null)
         {
-            if (_playing) return false;
+            if (_playing || _bubbleWait != null) return false;
+            // WPF VideoService.cs:2304-2313: queue before picking a clip or stopping effects.
+            // Keep one request while Bubble Count owns the screen, including its lead-in/results.
+            if (CoreEngine.BubbleCount?.IsBusy == true)
+            {
+                WaitForBubbleCount(strictOverride, path);
+                return true; // accepted; the scheduled tick must not arm a second request
+            }
             path ??= PickNext();
             if (path == null)
             {
@@ -356,6 +363,21 @@ namespace ConditioningControlPanel.Services
             created.Change(PreRoll, Timeout.InfiniteTimeSpan);
             Log.Information("VideoService: playing {File} (strict={Strict})", Path.GetFileName(path), strict);
             return true;
+        }
+
+        private void WaitForBubbleCount(bool? strictOverride, string? path)
+        {
+            ITimer? created = null;
+            created = _time.CreateTimer(_ => { var mine = created; CoreDispatch.Post(() =>
+            {
+                if (!ReferenceEquals(mine, _bubbleWait)) return;
+                Dispose(ref _bubbleWait);
+                if (CoreEngine.BubbleCount?.IsBusy == true) WaitForBubbleCount(strictOverride, path);
+                else if (!Trigger(strictOverride, path) && _running) ScheduleNext();
+            }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            _bubbleWait = created;
+            // Same bounded handover lag as BubbleCountScheduler.QueueBehind.
+            created.Change(BubbleCountScheduler.QueuePoll, Timeout.InfiniteTimeSpan);
         }
 
         /// <summary>WPF Cleanup: the natural end or an Esc dismiss. The flash resumes and, while the
@@ -412,6 +434,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            Dispose(ref _bubbleWait); // WPF InteractionQueue.ForceReset: panic drops pending work
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
