@@ -11,8 +11,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     private static object? _owner;
     internal static bool StoodDown;
     internal static bool SessionActive => _owner != null;
-    internal static Func<BrowserVideoSurface?> Create = () =>
-    {
+    internal static Func<BrowserVideoSurface?> Create = () => {
         try
         {
             var surface = new BrowserVideoSurface();
@@ -24,8 +23,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     };
     internal static void Seed() => BrowserVideoGate.EngineAccepts = (path, key) =>
         !StoodDown && WebHost.IsAvailable && !BrowserUnsafeVideoCache.Contains(path, key) && Map(path) != null;
-    internal static string? Map(string path)
-    {
+    internal static string? Map(string path) {
         try
         {
             var server = WebAssetServer.Shared;
@@ -47,7 +45,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     internal static void Release(object owner) { if (ReferenceEquals(_owner, owner)) _owner = null; }
     internal WebHost View { get; } = new();
     internal event Action<JsonElement>? Message;
-    internal event Action? Failed;
+    internal event Action<bool>? Failed;
     internal bool Playing { get; private set; }
     internal double Volume { get; private set; }
     private readonly Func<string, Task<string?>> _execute;
@@ -107,9 +105,8 @@ internal sealed class BrowserVideoSurface : IDisposable
     private void Fail(bool mediaFailure = false)
     {
         if (_closed) return;
-        if (!mediaFailure) StoodDown = true;
         _startup?.Stop();
-        Failed?.Invoke();
+        Failed?.Invoke(mediaFailure);
     }
     internal async void Pause()
     {

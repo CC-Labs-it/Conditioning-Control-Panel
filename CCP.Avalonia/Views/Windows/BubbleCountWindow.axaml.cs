@@ -431,7 +431,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var url = BrowserVideoSurface.Map(_videoPath);
             if (url == null) return false;
-            if ((_browser = BrowserVideoSurface.Create()) == null) { BrowserVideoSurface.StoodDown = true; return false; }
+            if ((_browser = BrowserVideoSurface.Create()) == null) { if (_isPrimary) BrowserVideoSurface.StoodDown = true; return false; }
             _videoImage.IsVisible = false;
             _videoContainer.Children.Add(_browser.View);
             _browser.Message += OnBrowserMessage;
@@ -442,10 +442,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // WPF BubbleCountWindow.xaml.cs:1053-1065: latch and snapshot before posting.
-        private void OnBrowserFailure()
+        private void OnBrowserFailure(bool mediaFailure)
         {
             if (!_isPrimary || _closed || _gameCompleted || _videoEnded || _browserFailed) return;
             _browserFailed = true;
+            if (!mediaFailure) BrowserVideoSurface.StoodDown = true;
             var played = _browser?.Playing == true;
             Dispatcher.UIThread.Post(() =>
             {

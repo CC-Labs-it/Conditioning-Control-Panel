@@ -16,8 +16,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class BubbleCountBrowserTests
 {
     [Fact]
-    public Task Browser_gate_rejects_competing_owner_unmapped_file_and_missing_provider() => AvaloniaTestDispatcher.RunAsync(() =>
-    {
+    public Task Browser_gate_rejects_competing_owner_unmapped_file_and_missing_provider() => AvaloniaTestDispatcher.RunAsync(() => {
         EnsureApp();
         using var game = new BrowserGame();
         Assert.True(BubbleCountHost.Instance.CanPlayPath(game.Clip));
@@ -40,8 +39,7 @@ public sealed class BubbleCountBrowserTests
     [Theory]
     [InlineData("ended")]
     [InlineData("error")]
-    public Task PlayedTerminalOpensOneAnswerAndLateCallbacksDoNothing(string terminal) => AvaloniaTestDispatcher.RunAsync(() =>
-    {
+    public Task PlayedTerminalOpensOneAnswerAndLateCallbacksDoNothing(string terminal) => AvaloniaTestDispatcher.RunAsync(() => {
         EnsureApp();
         using var game = new BrowserGame();
         BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true, _ => game.Completed++);
@@ -68,25 +66,35 @@ public sealed class BubbleCountBrowserTests
     [InlineData(102, false)]
     [InlineData(103, false)]
     [InlineData(0, false)]
-    public Task Browser_only_primary_media_failures_make_the_file_unsafe(int code, bool unsafeFile) => AvaloniaTestDispatcher.RunAsync(() =>
-    {
+    [InlineData(-1, false)] // mirror construction failure
+    [InlineData(-2, false)] // mirror startup timeout
+    public Task Browser_only_primary_media_failures_make_the_file_unsafe(int code, bool unsafeFile) => AvaloniaTestDispatcher.RunAsync(() => {
         EnsureApp();
         using var game = new BrowserGame();
         BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
             ok => { Assert.False(ok); game.Completed++; });
         var primary = Assert.Single(BubbleCountWindow.OpenWindows);
-        var browser = primary.Browser!;
+        var (browser, create) = (primary.Browser!, BrowserVideoSurface.Create);
         browser.View.OnNavigationCompleted(new Uri("about:blank"));
         var secondary = new BubbleCountWindow(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
             _ => game.Completed++, isPrimary: false);
         typeof(BubbleCountWindow).GetField("_useBrowser", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(secondary, true);
+        BrowserVideoSurface.Create = code == -1 ? () => null : create;
         secondary.Show();
-        secondary.Browser!.View.OnNavigationCompleted(new Uri("about:blank"));
-        Assert.Equal(0, secondary.Browser!.Volume);
-        Send(secondary.Browser, "error", code: code);
+        BrowserVideoSurface.Create = create;
+        if (code != -1) {
+            secondary.Browser!.View.OnNavigationCompleted(new Uri("about:blank"));
+            Assert.Equal(0, secondary.Browser!.Volume);
+            if (code == -2) typeof(BrowserVideoSurface).GetMethod("Fail", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(secondary.Browser, new object[] { false });
+            else Send(secondary.Browser, "error", code: code);
+        }
+        else Assert.Null(secondary.Browser);
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Assert.False(BrowserUnsafeVideoCache.Contains(game.Clip));
         Assert.True(primary.IsVisible);
+        Assert.False(BrowserVideoSurface.StoodDown);
+        BrowserVideoSurface.Release(primary);
+        Assert.True(BrowserVideoSurface.TryAcquire(primary, game.Clip));
         Send(browser, "error", code: code);
         Send(browser, "playing"); Send(browser, "ended");
         Send(browser, "error", code: 4); // first failure wins before dispatcher drain
@@ -102,8 +110,7 @@ public sealed class BubbleCountBrowserTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task FailedInitializationAndNativeCloseResolveOnce(bool nativeClose) => AvaloniaTestDispatcher.RunAsync(async () =>
-    {
+    public Task FailedInitializationAndNativeCloseResolveOnce(bool nativeClose) => AvaloniaTestDispatcher.RunAsync(async () => {
         EnsureApp();
         using var game = new BrowserGame();
         var pending = new TaskCompletionSource<string?>();
@@ -128,8 +135,7 @@ public sealed class BubbleCountBrowserTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task BrowserEscapeUsesTheStrictPolicy(bool strict) => AvaloniaTestDispatcher.RunAsync(() =>
-    {
+    public Task BrowserEscapeUsesTheStrictPolicy(bool strict) => AvaloniaTestDispatcher.RunAsync(() => {
         EnsureApp();
         using var game = new BrowserGame();
         game.Settings.Current.PanicKeyEnabled = true;
@@ -144,8 +150,7 @@ public sealed class BubbleCountBrowserTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task MissingNativeAndFailedBrowserConstructionCompletesOnceThenSkips() => AvaloniaTestDispatcher.RunAsync(async () =>
-    {
+    public Task MissingNativeAndFailedBrowserConstructionCompletesOnceThenSkips() => AvaloniaTestDispatcher.RunAsync(async () => {
         EnsureApp();
         using var game = new BrowserGame();
         var host = BubbleCountHost.Instance;
@@ -173,8 +178,7 @@ public sealed class BubbleCountBrowserTests
     });
     private static void Send(BrowserVideoSurface surface, string type, double durationMs = 0, int code = 0) =>
         surface.View.OnWebMessage(JsonSerializer.Serialize(new { session = surface.SessionId, type, durationMs, code }));
-    private static void EnsureApp()
-    {
+    private static void EnsureApp() {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
@@ -189,8 +193,7 @@ public sealed class BubbleCountBrowserTests
         internal readonly SettingsService Settings = new();
         internal int Completed, Skipped;
         internal string Clip => Path.Combine(_dir, "clip.mp4");
-        internal BrowserGame()
-        {
+        internal BrowserGame() {
             File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4"), Clip);
             CorePaths.EffectiveAssetsProvider = () => _dir;
             CoreSettings.ServiceProvider = () => Settings;
@@ -199,8 +202,7 @@ public sealed class BubbleCountBrowserTests
             BrowserVideoGate.EngineAccepts = (p, k) => !BrowserUnsafeVideoCache.Contains(p, k) && BrowserVideoSurface.Map(p) != null;
             BrowserVideoSurface.Create = () => { return new BrowserVideoSurface(_ => Task.FromResult<string?>("true")); };
         }
-        public void Dispose()
-        {
+        public void Dispose() {
             BubbleCountWindow.ForceCloseAll();
             BubbleCountResultWindow.ForceCloseAll();
             (BrowserVideoSurface.Create, BrowserVideoGate.EngineAccepts, CorePaths.EffectiveAssetsProvider, CoreSettings.ServiceProvider) = (_create, _gate, _assets, _settings);
