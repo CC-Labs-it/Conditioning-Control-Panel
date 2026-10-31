@@ -11,6 +11,45 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class AmbientBubblesTests
 {
+    // WPF BubbleService.cs:3277-3286, ContainsPx :3023-3027.
+    [Theory]
+    [InlineData(false, 1.25, false, 250)]
+    [InlineData(true, 1.25, true, 350)]
+    [InlineData(false, 1.25, true, 250)]
+    [InlineData(true, 4, true, 400)]
+    [InlineData(true, 0.5, false, 200)]
+    public void Chaos_hit_disc_samples_boon_and_live_magnet_without_growing_the_sprite(bool live, double scale, bool magnet, double expected)
+    {
+        var spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { SizePx = 200, IsLive = live };
+        var b = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1, spec, scale, magnet);
+        Assert.Equal(200, b.Size);
+        Assert.Equal(expected, b.HitSize);
+        Assert.True(b.Contains(b.CenterX + expected / 2, b.CenterY));
+        Assert.False(b.Contains(b.CenterX + expected / 2 + 0.01, b.CenterY));
+    }
+
+    [Theory]
+    [InlineData("darter")]
+    [InlineData("freeze")]
+    [InlineData("golden")]
+    [InlineData("heart")]
+    [InlineData("droplet")]
+    [InlineData("prism")]
+    [InlineData("escort")]
+    [InlineData("tease")]
+    [InlineData("brittle")]
+    public void Precision_pickups_keep_the_natural_hit_disc(string kind)
+    {
+        var spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec {
+            SizePx = 200, IsLive = true, IsDarter = kind == "darter", IsFreeze = kind == "freeze",
+            IsGolden = kind == "golden", IsHeart = kind == "heart", IsDroplet = kind == "droplet",
+            IsPrism = kind == "prism", IsEscort = kind == "escort", IsTease = kind == "tease", IsBrittle = kind == "brittle"
+        };
+        var b = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1, spec, 2, true);
+        Assert.Equal(200, b.HitSize);
+        Assert.False(b.Contains(b.CenterX + 101, b.CenterY));
+    }
+
     [Fact]
     public void Bucket_pays_up_to_300_a_day_then_the_remainder_then_nothing()
     {
