@@ -128,40 +128,25 @@
                 <!-- Gentle visuals (photosensitivity, 2026-10-14): one switch; its two choices show
                      only while it is on. Item lists are filled from GentleVisuals.FadeChoices /
                      SpeedChoices in code so the steps live in one place. -->
-                <Grid MinHeight="34" Margin="0,2,0,0" ToolTip.Tip="{loc:Str tooltip_gentle_visuals}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+                <Grid MinHeight="34" Margin="0,2,0,0" ToolTip.Tip="{loc:Str tooltip_gentle_visuals}" ColumnDefinitions="*,Auto">
                     <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
-                               Text="{loc:Str setting_gentle_visuals}"
-                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                               Text="{loc:Str setting_gentle_visuals}" Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
                     <CheckBox Grid.Column="1" x:Name="ChkGentleVisuals"
                               Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                               IsCheckedChanged="ChkGentleVisuals_Changed"/>
                 </Grid>
                 <StackPanel x:Name="PnlGentleChoices" IsVisible="False" Margin="14,0,0,0">
-                    <Grid MinHeight="34" Margin="0,2,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                    <Grid MinHeight="34" Margin="0,2,0,0" ColumnDefinitions="*,Auto">
                         <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
-                                   Text="{loc:Str setting_gentle_fade}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                                   Text="{loc:Str setting_gentle_fade}" Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
                         <ComboBox Grid.Column="1" x:Name="CmbGentleFade"
                                   Theme="{StaticResource DarkComboBoxStyle}" FontSize="11"
                                   Width="110" MinHeight="28" VerticalAlignment="Center"
                                   SelectionChanged="CmbGentle_SelectionChanged"/>
                     </Grid>
-                    <Grid MinHeight="34" Margin="0,2,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                    <Grid MinHeight="34" Margin="0,2,0,0" ColumnDefinitions="*,Auto">
                         <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
-                                   Text="{loc:Str setting_gentle_speed}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                                   Text="{loc:Str setting_gentle_speed}" Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
                         <ComboBox Grid.Column="1" x:Name="CmbGentleSpeed"
                                   Theme="{StaticResource DarkComboBoxStyle}" FontSize="11"
                                   Width="110" MinHeight="28" VerticalAlignment="Center"

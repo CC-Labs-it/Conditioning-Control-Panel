@@ -17,16 +17,9 @@ namespace CCP.Avalonia.Tests;
 public sealed class PerformanceGentleVisualsTests
 {
     [Theory]
-    [InlineData("switch")]
-    [InlineData("visibility")]
-    [InlineData("refresh")]
-    [InlineData("save")]
-    [InlineData("fade")]
-    [InlineData("speed")]
-    [InlineData("fadeSave")]
-    [InlineData("speedSave")]
-    [InlineData("fadeChoices")]
-    [InlineData("speedChoices")]
+    [InlineData("switch"), InlineData("visibility"), InlineData("refresh"), InlineData("save")]
+    [InlineData("fade"), InlineData("speed"), InlineData("fadeSave"), InlineData("speedSave")]
+    [InlineData("fadeChoices"), InlineData("speedChoices")]
     public Task GentleActionsReachLiveSettings(string action) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)

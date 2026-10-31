@@ -22,6 +22,7 @@ public sealed class FlashGentleRenderingTests
     {
         public long Now;
         public override long GetTimestamp() => Now;
+        public override DateTimeOffset GetUtcNow() => DateTimeOffset.UnixEpoch.AddMilliseconds(Now);
         public override long TimestampFrequency => 1000;
     }
 
@@ -90,6 +91,60 @@ public sealed class FlashGentleRenderingTests
             clock.Now += 1000; w.FadeFrame(); Assert.Equal(0.75, w.CurrentOpacity);
         }
         finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(0.25, 0), InlineData(0.25, 4), InlineData(1, 4)]
+    public Task PopTakesTheSelectedDuration(double alpha, double ordinary) => OnUi(clock =>
+    {
+        (CoreSettings.Current.GentleVisuals, CoreSettings.Current.GentleFadeSeconds) = (true, 2);
+        var w = new FlashOverlayWindow { IsHitTestVisible = true }; w.Show();
+        FlashOverlay.Active.Add((w, default));
+        w.Run(alpha, TimeSpan.FromSeconds(ordinary), TimeSpan.FromMinutes(1));
+        clock.Now += 10000; w.FadeFrame(); FlashOverlay.Pop(w);
+        clock.Now += 1000; w.FadeFrame(); Assert.Equal(alpha / 2, w.CurrentOpacity, 6); Assert.True(w.IsVisible); Assert.False(w.IsHitTestVisible);
+        clock.Now += 999; w.FadeFrame(); Assert.True(w.IsVisible);
+        clock.Now++; w.FadeFrame(); Assert.False(w.IsVisible);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(true, false, true, false), InlineData(true, true, true, false)]
+    [InlineData(false, true, true, false), InlineData(true, false, false, false)]
+    [InlineData(true, true, true, true)]
+    public Task VideoCurtainsFollowPlayingNaturalEndAndForcedStop(bool gentle, bool force, bool playing, bool forceBefore) => OnUi(clock =>
+    {
+        var o = MandatoryVideoOverlay.Instance; var old = o.Scheduler;
+        o.Time = clock; MandatoryVideoOverlay.SkipGentlePlatformChecks = true;
+        o.Scheduler = new ConditioningControlPanel.Services.MandatoryVideoScheduler(o, clock);
+        (CoreSettings.Current.GentleVisuals, CoreSettings.Current.GentleFadeSeconds, CoreSettings.Current.AttentionChecksEnabled) = (gentle, 2, false);
+        try
+        {
+            Assert.True(o.Scheduler.Trigger(path: "test.mp4"));
+            ((System.Collections.Generic.ICollection<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(o.Build(null, false));
+            o.CoverGentle(o.Windows, waiting: true);
+            if (gentle) Assert.Single(o.GentleCurtains); else Assert.Empty(o.GentleCurtains);
+            if (forceBefore) { o.LiftGentle(); clock.Now += 1000; o.GentleFrame();
+                o.Scheduler.Stop(); Assert.Empty(o.Windows); Assert.Empty(o.GentleCurtains); return Task.CompletedTask;
+            }
+            byte Alpha() { Assert.Single(o.GentleCurtains); Assert.True(o.GentleCurtains[0].IsVisible); return ((global::Avalonia.Media.SolidColorBrush)((global::Avalonia.Controls.Border)o.GentleCurtains[0].Content!).Background!).Color.A; }
+            if (gentle)
+            {
+                clock.Now += 1000; o.GentleFrame(); Assert.Equal(255, Alpha());
+                if (playing) o.LiftGentle(); else clock.Now += 2000;
+                clock.Now += 1000; o.GentleFrame(); Assert.InRange(Alpha(), (byte)127, (byte)128);
+                clock.Now += 1000; o.GentleFrame(); Assert.Empty(o.GentleCurtains);
+            }
+            o.Ended(); Assert.Empty(o.Windows);
+            if (gentle) { Assert.Single(o.GentleCurtains); Assert.Equal(255, Alpha()); }
+            if (force) o.Scheduler.Stop();
+            else { o.GentleCurtains[0].Closed += (_, _) => o.Scheduler.Stop();
+                clock.Now += 1000; o.GentleFrame(); Assert.InRange(Alpha(), (byte)127, (byte)128); clock.Now += 1000; o.GentleFrame();
+            }
+            Assert.Empty(o.GentleCurtains);
+        }
+        finally { o.CloseAll(); o.Scheduler = old; o.Time = TimeProvider.System; }
         return Task.CompletedTask;
     });
 

@@ -413,6 +413,7 @@ namespace ConditioningControlPanel.Services
         public void ForceCleanup()
         {
             _retryGeneration++;
+            if (!_playing) { try { _host.CloseAll(); } catch (Exception ex) { Log.Warning(ex, "VideoService: close failed"); } return; } // WPF VideoService.cs:7413: also drop post-end curtains.
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
             if (!Finish()) return;

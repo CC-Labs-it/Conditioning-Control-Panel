@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private TimeSpan _fade;
         private DispatcherTimer? _fadeTimer, _gifTimer;
         private Action? _fadeDone;
-        private double _fadeTarget, _lastAppliedOpacity = double.NaN;
+        private double _popSpan, _fadeTarget, _lastAppliedOpacity = double.NaN;
         private long _fadeStamp, _animationStart;
         private TimeSpan _ramp;
         private bool _closed;
@@ -85,6 +85,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _lifetimeTimer?.Stop(); _lifetimeTimer = null;
             IsFadingOut = true;
             Fade(CurrentOpacity, 0, _fade, Close);
+        }
+        // WPF FlashService.cs:4865: the full selected duration, independent of alpha/ordinary fade.
+        internal void GentlePop()
+        {
+            _lifetimeTimer?.Stop(); IsFadingOut = true; _popSpan = CurrentOpacity;
+            IsHitTestVisible = false; X11Overlay.SetClickThrough(this, true);
+            Fade(CurrentOpacity, 0, TimeSpan.FromSeconds(GentleVisuals.FadeSeconds), Close);
         }
         private DispatcherTimer? _exitTimer;
         private long _lastExitTick;
@@ -404,9 +411,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var now = FlashOverlay.Clock.GetTimestamp();
             var dt = FlashOverlay.Clock.GetElapsedTime(_fadeStamp, now).TotalSeconds;
             _fadeStamp = now;
-            var seconds = GentleVisuals.Fade(_ramp).TotalSeconds;
-            var step = seconds > 0 ? dt / seconds : 1;
+            var seconds = _popSpan > 0 ? _ramp.TotalSeconds : GentleVisuals.Fade(_ramp).TotalSeconds;
+            var step = seconds > 0 ? dt / seconds * (_popSpan > 0 ? _popSpan : 1) : 1;
             CurrentOpacity += Math.Sign(_fadeTarget - CurrentOpacity) * Math.Min(step, Math.Abs(_fadeTarget - CurrentOpacity));
+            if (Math.Abs(CurrentOpacity - _fadeTarget) < 1e-12) CurrentOpacity = _fadeTarget;
             // Retain the base 1/32 native-alpha write budget, even during a long gentle ramp.
             if (double.IsNaN(_lastAppliedOpacity) || Math.Abs(CurrentOpacity - _lastAppliedOpacity) >= 1.0 / 32 || CurrentOpacity == _fadeTarget)
             {

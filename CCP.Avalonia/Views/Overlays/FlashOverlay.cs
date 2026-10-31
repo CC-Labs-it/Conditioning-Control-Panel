@@ -393,7 +393,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 Exiting.Add(w);
                 w.Closed += (_, _) => Exiting.Remove(w);
-                w.Expire();
+                w.GentlePop();
                 return;
             }
             if (FlashShatter.DecidesClick(s.FlashShatterEnabled, PrizeOwnership.OwnsFlashV2())
