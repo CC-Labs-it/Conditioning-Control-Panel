@@ -4,8 +4,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.PieceByPiece.Wardrobe;
-internal static class PbpLookRules
-{
+internal static class PbpLookRules {
     public const string OwnedType = "owned";
     public const string LookType = "pbp:look";
     public const string CounterType = "open-prize-counter";

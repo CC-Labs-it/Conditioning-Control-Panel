@@ -205,6 +205,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 : !osAnimations ? MotionLevel.Reduced : s.MotionLevel;
             var frame = PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds,
                 withoutGentle != MotionLevel.Full || s.GentleVisuals, PbpWhispers());
+            frame["prizeCounter"] = false;
             frame["letPeopleWatch"] = PbpWatchRules.LetPeopleWatch(s);
             frame["watchEffects"] = PbpWatchRules.WatchEffects(s);
             frame["watchAmount"] = PbpWatchRules.WatchAmount(s);
