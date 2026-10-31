@@ -137,6 +137,44 @@ public sealed class BillboardCtaTests
         host.StepCtaFx(0.8816); Assert.Equal(0.95625, host.CtaPose.X, 5); // final segment at 25 percent
     });
 
+    [Fact]
+    public Task SustainedHoverShinesOnceAndHoldsAtTheEnd() => WithCta((host, window) =>
+    {
+        host.StepCtaFx(3.2); host.SetCtaHover(true);
+        host.StepCtaFx(3.5);
+        Assert.Equal(1, host.CtaShineOpacity);
+        Assert.InRange(Math.Abs(host.CtaShineX), 0, 0.01);
+        host.StepCtaFx(3.9);
+        Assert.Equal(0, host.CtaShineOpacity);
+        var end = host.CtaShineX;
+        Assert.True(end > 0);
+        foreach (var t in new[] { 6.1, 10.7, 15.3 })
+        {
+            host.StepCtaFx(t);
+            Assert.Equal(0, host.CtaShineOpacity);
+            Assert.Equal(end, host.CtaShineX, 5);
+        }
+    });
+
+    [Fact]
+    public Task HoverExitRestartsThePeriodicShineDelay() => WithCta((host, window) =>
+    {
+        host.StepCtaFx(3.2); host.SetCtaHover(true); host.StepCtaFx(6.1);
+        host.SetCtaHover(false);
+        foreach (var t in new[] { 6.1, 6.4, 7.299 })
+        {
+            host.StepCtaFx(t);
+            Assert.Equal(0, host.CtaShineOpacity); // wait 1.2 s from exit, not the original card epoch
+        }
+        host.StepCtaFx(7.6);
+        Assert.Equal(1, host.CtaShineOpacity);
+        Assert.InRange(Math.Abs(host.CtaShineX), 0, 0.01); // half-way through the first resumed sweep
+        host.StepCtaFx(7.91); Assert.Equal(0, host.CtaShineOpacity);
+        host.StepCtaFx(12.2); // the next sweep is 4.6 s later
+        Assert.Equal(1, host.CtaShineOpacity);
+        Assert.InRange(Math.Abs(host.CtaShineX), 0, 0.01);
+    });
+
     private Task WithCta(Action<BillboardCardHost, Window> check) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)

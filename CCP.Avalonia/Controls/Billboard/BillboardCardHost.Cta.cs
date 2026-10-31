@@ -25,6 +25,7 @@ internal sealed partial class BillboardCardHost
     private BeatLoop? _ctaBeat;
     private bool _ctaHovered, _ctaDown, _ctaReleasing, _ctaReleaseTravel, _ctaOnScreen;
     private double _ctaNow, _hoverAt, _pressAt, _travelAt, _glowAt = double.NegativeInfinity, _ctaShineAt = double.NegativeInfinity, _ctaLandAt = double.NegativeInfinity;
+    private double _ctaSweepAt;
     private double _fromScale = 1, _fromX = 1, _fromY = 1, _fromTravel, _travelTarget, _fromGlow;
 
     internal bool CtaLoopsRunning => _ctaBeat != null;
@@ -62,7 +63,7 @@ internal sealed partial class BillboardCardHost
         };
         _ctaHovered = _ctaDown = _ctaReleasing = false;
         _ctaLandAt = _ctaShineAt = landed && Env.AllowTransitions ? _ctaNow : double.NegativeInfinity;
-        _hoverAt = _pressAt = _travelAt = _ctaNow;
+        _hoverAt = _pressAt = _travelAt = _ctaSweepAt = _ctaNow;
         _glowAt = double.NegativeInfinity;
         _ctaReleaseTravel = false; _travelTarget = 0;
         _fromScale = _ctaScale.ScaleX; _fromX = _ctaSquash.ScaleX;
@@ -80,6 +81,7 @@ internal sealed partial class BillboardCardHost
             _travelTarget = on ? -DepthLaw.HoverLiftPx : 0; _ctaReleaseTravel = false;
         }
         if (on && Env.AllowTransitions) _ctaShineAt = _ctaNow;
+        else { _ctaShineAt = double.NegativeInfinity; _ctaSweepAt = _ctaNow; }
         RefreshCtaFx(_ctaOnScreen);
     }
 
@@ -152,7 +154,13 @@ internal sealed partial class BillboardCardHost
             : land > 0 ? idle + (0.95 - idle) * land
             : Env.AllowAmbientLoops && glowElapsed < 0.26 ? _fromGlow + (0.32 - _fromGlow) * (glowElapsed / 0.26) : idle;
         double shine = (t - _ctaShineAt) / speed;
-        if (shine >= 0.6 && Env.AllowAmbientLoops) shine = (t + 4.6 - 1.2) % 4.6;
+        // WPF hover replaces the periodic track with ShineOnce, held at its end.
+        // Leaving installs a fresh track whose first sweep starts 1.2 seconds later.
+        if (shine >= 0.6 && !_ctaHovered && Env.AllowAmbientLoops)
+        {
+            double loop = t - _ctaSweepAt - 1.2;
+            shine = loop >= 0 ? loop % 4.6 : double.PositiveInfinity;
+        }
         _ctaShine.Opacity = shine >= 0 && shine < 0.6 ? 1 : 0;
         double q = Math.Clamp(shine / 0.6, 0, 1);
         q = q < 0.5 ? 2 * q * q : 1 - Math.Pow(-2 * q + 2, 2) / 2;
