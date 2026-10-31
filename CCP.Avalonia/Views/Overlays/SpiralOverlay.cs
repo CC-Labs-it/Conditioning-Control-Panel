@@ -73,6 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!IsShowing && Decoding is not { IsCompleted: false })
             {
                 _sourcePath = null;
+                _randomizeAtStart = null; // WPF OverlayService.cs:416 rereads policy on restart.
                 _repicked = false;
                 if (_frames.Count == 0) _framesKey = "";
             }
@@ -130,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 CloseWindows();
                 _sourcePath = null;
+                _randomizeAtStart = null; // WPF OverlayService.cs:416 rereads policy on restart.
                 _repicked = false;
             }
             _layout = layout;

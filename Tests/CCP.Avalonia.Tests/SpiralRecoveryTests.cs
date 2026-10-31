@@ -73,6 +73,55 @@ public sealed class SpiralRecoveryTests
             Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.IsReconciling);
         });
 
+    // WPF OverlayService.cs:416,759-765,797-802 reads the current policy on each restart.
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public Task Restart_reads_changed_randomize_policy(bool initiallyRandom, bool retry)
+        => WithOverlay(async (host, first, second) =>
+        {
+            // BMP is valid configured media but outside SpiralPool's random image extensions.
+            // One eligible GIF makes both policy transitions deterministic, with no random seam.
+            File.Delete(second);
+            var configured = Path.Combine(Path.GetDirectoryName(first)!, "fixed.bmp");
+            var bmp = Convert.FromHexString("424D3A0000000000000036000000280000000100000001000000010018000000000004000000000000000000000000000000000000000000FF00");
+            File.WriteAllBytes(configured, bmp);
+            var s = CoreSettings.Current;
+            s.SpiralPath = configured;
+            s.SpiralRandomize = initiallyRandom;
+            if (retry)
+            {
+                File.WriteAllText(configured, "broken");
+                File.WriteAllText(first, "broken");
+            }
+            SpiralOverlay.Refresh(host);
+            await Settle();
+            Assert.Equal(!retry, SpiralOverlay.IsShowing);
+            Assert.Equal(initiallyRandom ? first : configured, SpiralOverlay.SourcePath());
+
+            s.SpiralRandomize = !initiallyRandom;
+            if (retry)
+            {
+                File.WriteAllBytes(configured, bmp);
+                File.WriteAllBytes(first, Gif);
+            }
+            else
+            {
+                // A policy edit alone still waits for restart, as the feature card promises.
+                var window = SpiralOverlay.Shown[0];
+                SpiralOverlay.Refresh(host);
+                Assert.Same(window, SpiralOverlay.Shown[0]);
+                Assert.Equal(initiallyRandom ? first : configured, SpiralOverlay.SourcePath());
+                s.DualMonitorEnabled = !s.DualMonitorEnabled;
+            }
+            SpiralOverlay.Reconcile(host);
+            await Settle();
+            Assert.True(SpiralOverlay.IsShowing);
+            Assert.Equal(initiallyRandom ? configured : first, SpiralOverlay.SourcePath());
+        });
+
     private static Screen MakeScreen(int width)
     {
         // Same synthetic PlatformScreen seam as MultiMonitorResultTests; no native handles used.
