@@ -14,32 +14,27 @@ using ConditioningControlPanel.Avalonia.Platform;
 using Newtonsoft.Json.Linq;
 using Xunit;
 namespace CCP.Avalonia.Tests;
-public sealed class RainGenerationTests
-{
-    private static Task Run(Func<Task> action) => AvaloniaTestDispatcher.RunAsync(() =>
-    {
+public sealed class RainGenerationTests {
+    private static Task Run(Func<Task> action) => AvaloniaTestDispatcher.RunAsync(() => {
         if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().WithInterFont()
             .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
             .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         return action();
     });
     private static Task Run(Action action) => Run(() => { action(); return Task.CompletedTask; });
-    private static byte[] Asset(string name)
-    {
+    private static byte[] Asset(string name) {
         using var s = global::Avalonia.Platform.AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/" + (name.EndsWith(".gif") ? "avatar0_emotes/" : "rain_emotes/") + name));
         using var m = new MemoryStream(); s.CopyTo(m); return m.ToArray();
     }
     [Fact]
-    public Task PillFlipsGlobalGenerationWithoutAddingAvatarSets() => Run(() =>
-    {
+    public Task PillFlipsGlobalGenerationWithoutAddingAvatarSets() => Run(() => {
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         CoreMods.ActiveModIdProvider = () => "builtin-bambisleep";
         CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = "builtin-bambisleep" }, null, false);
         service.Current.AvatarGeneration = "v1";
         var tube = new AvatarTubeWindow(null);
-        try
-        {
+        try {
             var sets = tube.PickableAvatarSets();
             Assert.Equal(new[] { 1 }, sets);
             tube.UpdateGenerationPill();
@@ -66,11 +61,9 @@ public sealed class RainGenerationTests
         finally { tube.StopEmoteGeneration(); tube.Close(); }
     });
     [Fact]
-    public Task WebpAdvancesOnceAndHoldsLastFrameAtAuthoredTiming() => Run(() =>
-    {
+    public Task WebpAdvancesOnceAndHoldsLastFrameAtAuthoredTiming() => Run(() => {
         var timing = JObject.Parse(System.Text.Encoding.UTF8.GetString(Asset("clip_timing.json")));
-        foreach (var clip in new[] { "talk_a", "joy", "surprise", "affection", "confidence", "disappointment", "idle.gif" })
-        {
+        foreach (var clip in new[] { "talk_a", "joy", "surprise", "affection", "confidence", "disappointment", "idle.gif" }) {
             using var player = new EmoteClipPlayer(new Image()) { ManualClock = true, Now = () => 0 };
             var decoded = EmoteClipPlayer.Decode(Asset(clip.EndsWith(".gif") ? clip : clip + ".webp"));
             Assert.NotNull(decoded);
@@ -86,8 +79,7 @@ public sealed class RainGenerationTests
             player.Stop(); Assert.False(player.IsReady); Assert.Equal(0, player.FrameCount);
         }
     });
-    private static Task WithLocalSet(Func<AvatarTubeWindow, string, Task> test) => Run(async () =>
-    {
+    private static Task WithLocalSet(Func<AvatarTubeWindow, string, Task> test) => Run(async () => {
         string root = Path.Combine(TestUserDataProfile.Root, "rain-test"), folder = Path.Combine(root, "resources", "emotes", "set1");
         Directory.CreateDirectory(folder);
         File.WriteAllText(Path.Combine(folder, "emotes.json"), "{idleRotation:[{clip:'idle',weight:100},{clip:'alt',weight:0},{clip:'third',weight:-2}],talking:{pool:['talk_a','talk_b']},minClipMs:0,layout:{scale:0.8,offsetX:11,offsetY:13,detachedX:17,detachedY:19},clipScale:{idle:0.5},mood:{soft:'alt'},stemPrefix:{greeting:'third'}}");
@@ -101,16 +93,14 @@ public sealed class RainGenerationTests
         try { await test(tube, folder); } finally { tube.StopEmoteGeneration(); tube.Close(); }
     });
     [Fact]
-    public Task FailedClipFallsBackToIdleWithoutRetryingFailedIdle() => WithLocalSet(async (tube, folder) =>
-    {
+    public Task FailedClipFallsBackToIdleWithoutRetryingFailedIdle() => WithLocalSet(async (tube, folder) => {
         await tube.PlayEmote("absent"); Assert.Equal("idle", tube.CurrentEmoteClip);
         using (File.Open(Path.Combine(folder, "idle.gif"), FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
         File.Delete(Path.Combine(folder, "idle.gif")); await tube.PlayEmote("idle");
         Assert.Equal("idle", tube.CurrentEmoteClip);
     });
     [Fact]
-    public Task IdleExcludesCurrentAndFloorsWeights() => WithLocalSet(async (tube, _) =>
-    {
+    public Task IdleExcludesCurrentAndFloorsWeights() => WithLocalSet(async (tube, _) => {
         await tube.PlayEmote("idle");
         Assert.False(tube.FindControl<Image>("ImgAvatar")!.IsVisible);
         Assert.True(new[] { "ImgAvatarAnimated", "ImgAvatarAnimatedB" }.Any(n => tube.FindControl<Image>(n) is { IsVisible: true, Source: not null }));
@@ -118,8 +108,7 @@ public sealed class RainGenerationTests
         Assert.DoesNotContain("idle", picks); Assert.Contains("alt", picks); Assert.Contains("third", picks);
     });
     [Fact]
-    public Task TextTalkUsesAuthoredJoinsAndOptionalTimingFallback() => WithLocalSet(async (tube, folder) =>
-    {
+    public Task TextTalkUsesAuthoredJoinsAndOptionalTimingFallback() => WithLocalSet(async (tube, folder) => {
         var events = new System.Collections.Generic.List<(int ms, Action fire)>(); tube.EmoteSchedule = (ms, fire) => events.Add((ms, fire));
         File.WriteAllText(Path.Combine(folder, "clip_timing.json"), "{talk_a:{speakStartMs:120,speakEndMs:2400},talk_b:{speakStartMs:120,speakEndMs:2400}}");
         const string text = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen";
@@ -137,8 +126,7 @@ public sealed class RainGenerationTests
         Assert.Null(tube.CurrentEmoteClip); Assert.Null(tube.CurrentEmoteFolder);
     });
     [Fact]
-    public Task EmotesComposeWithModLayoutAndSurviveRefresh() => WithLocalSet(async (tube, _) =>
-    {
+    public Task EmotesComposeWithModLayoutAndSurviveRefresh() => WithLocalSet(async (tube, _) => {
         await tube.PlayEmote("idle"); tube.Attach();
         var border = tube.FindControl<Border>("AvatarBorder")!;
         Assert.Equal(new Thickness(5, 100, 95, 227), border.Margin);
@@ -148,8 +136,7 @@ public sealed class RainGenerationTests
         Assert.Equal(0.6, Assert.IsType<global::Avalonia.Media.ScaleTransform>(image.RenderTransform).ScaleX, 6);
     });
     [Fact]
-    public Task ImmediateAndQueuedPresetsReplaceTalkAfterSuppression() => WithLocalSet(async (tube, _) =>
-    {
+    public Task ImmediateAndQueuedPresetsReplaceTalkAfterSuppression() => WithLocalSet(async (tube, _) => {
         var events = new System.Collections.Generic.List<Action>(); tube.EmoteSchedule = (_, fire) => events.Add(fire);
         tube.Giggle("one two three four five six seven eight nine ten");
         Assert.NotEmpty(events); var stale = events.ToArray(); events.Clear();

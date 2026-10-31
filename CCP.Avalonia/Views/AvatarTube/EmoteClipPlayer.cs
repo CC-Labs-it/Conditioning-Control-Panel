@@ -8,8 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using SkiaSharp;
-namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
-{
+namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
     internal sealed class EmoteClipPlayer : IDisposable
     {
         private const int MinFrameMs = 20;
@@ -164,4 +163,3 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         }
         public void Dispose() => Stop();
     }
-}

@@ -11,6 +11,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -151,6 +152,7 @@ public sealed partial class AccountSeedTests
             {
                 if (global::Avalonia.Application.Current is null)
                     global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -161,9 +163,13 @@ public sealed partial class AccountSeedTests
                 Dispatcher.UIThread.RunJobs();
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
+                w.CompleteTabTransition(); w.UpdateLayout(); // settle hit geometry before pointer input
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
+                var platform = w.PlatformImpl!;
+                var inputClock = (System.Diagnostics.Stopwatch)platform.GetType().GetField("_st", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(platform)!;
+                inputClock.Stop(); // event timestamps only; the original raw pointer path stays intact
                 for (var i = 0; i < 2; i++)
                 {
                     w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);

@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -32,6 +33,7 @@ public sealed class SectionStripDepthFxShellTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var w = new MainShellWindow();
@@ -114,11 +116,13 @@ public sealed class SectionStripDepthFxShellTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            CoreSettings.Current.MotionLevel = MotionLevel.Full;   // restored by the isolation hook
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;   // restored by the isolation hook
             MainShellWindow? w = null;
             try
             {
                 (w, var strip) = Open("presets");
+                strip.AmbientTierOverride = false; CoreSettings.Current.MotionLevel = MotionLevel.Full;
+                strip.UpdateSheenClock(); Assert.False(strip.SheenClockRunning);
 
                 // The real pointer path (P04): moving onto a rest pill lifts it, pressing drops
                 // its face, releasing springs it back and chooses it.
