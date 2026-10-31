@@ -11,6 +11,8 @@ internal static class NativeWindowOwner
 {
     // Headless tests record ownership requests; they must never touch the real desktop.
     internal static Func<Window, Window?, bool>? SetForTests;
+    internal static Func<Window, bool>? NativeVisibleForTests;
+    internal static Action<Window>? ShowForTests;
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
     private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
@@ -18,6 +20,7 @@ internal static class NativeWindowOwner
     private static extern int SetWindowLong(IntPtr hwnd, int index, int value);
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
     private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
@@ -82,9 +85,16 @@ internal static class NativeWindowOwner
 
     internal static void RepairVisibility(Window window)
     {
-        if (SetForTests is not null) return;
+        // WPF ChaosWebViewHost.cs:1106-1110: deliberate hide/minimize is not a cascade to heal.
+        if (!window.IsVisible || window.WindowState == WindowState.Minimized) return;
         var handle = window.TryGetPlatformHandle();
-        if (X11Overlay.BackendOf(handle) == OverlayBackend.Win32) ShowWindow(handle!.Handle, 8); // SW_SHOWNA
+        bool win32 = X11Overlay.BackendOf(handle) == OverlayBackend.Win32;
+        bool nativeVisible = NativeVisibleForTests?.Invoke(window)
+            ?? (win32 && IsWindowVisible(handle!.Handle));
+        if (nativeVisible) return;
+        if (ShowForTests is { } show) { show(window); return; }
+        if (SetForTests is not null) return;
+        if (win32) ShowWindow(handle!.Handle, 8); // SW_SHOWNA
         else X11Overlay.MapOwnedWindow(window);
     }
 }

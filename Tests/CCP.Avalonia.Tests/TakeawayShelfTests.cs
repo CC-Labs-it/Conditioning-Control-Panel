@@ -113,12 +113,11 @@ public sealed class TakeawayShelfTests
         Assert.Same(shell, owners[^1]);
         shop.WindowState = WindowState.Maximized;
         shell.WindowState = WindowState.Minimized;
-        shop.WindowState = WindowState.Minimized; // the native owner cascade the repair undoes
         Dispatcher.UIThread.RunJobs();
         Assert.False(shop.JustDropOwnerLinked);
         Assert.Null(owners[^1]);
         Assert.True(shop.IsVisible);
-        Assert.Equal(WindowState.Maximized, shop.WindowState); // back to its last un-minimized state
+        Assert.Equal(WindowState.Maximized, shop.WindowState); // owner changes preserve the player state
         shop.WindowState = WindowState.Normal;
         shell.WindowState = WindowState.Normal;
         Assert.True(shop.JustDropOwnerLinked);
