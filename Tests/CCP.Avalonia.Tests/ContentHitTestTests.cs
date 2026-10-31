@@ -44,7 +44,13 @@ public sealed class ContentHitTestTests
             var misses = new List<string>();
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
+                var sinceShow = Stopwatch.StartNew();
                 w.ShowTab(tab);
+                // The entrance (fade, slide, card stagger) runs on wall time; land it so runner speed cannot put a
+                // probe mid-entrance. Suspected, not reproduced: CI misses only ever hit the first awareness probes,
+                // inside the 620 ms entrance (hero hit ScrollContentPresenter, Windows CI 2026-10-30).
+                w.CompleteTabTransition();
+                Assert.Null(w.EnteringTab);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
@@ -64,6 +70,8 @@ public sealed class ContentHitTestTests
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
                     var hit = w.InputHitTest(p) as Visual;
+                    // Suspected-not-reproduced cause: say on a recurrence whether an entrance was in flight and what the frame held.
+                    var probe = $"entering {w.EnteringTab?.Name ?? "none"} {sinceShow.ElapsedMilliseconds} ms after ShowTab, under {string.Join(">", w.GetVisualsAt(p).Take(6).Select(v => $"{v.GetType().Name}/{(v as Control)?.Name}"))}";
                     bool pressed = false;
                     void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
                     b.AddHandler(InputElement.PointerPressedEvent, Swallow, RoutingStrategies.Tunnel);
@@ -72,7 +80,7 @@ public sealed class ContentHitTestTests
                     Dispatcher.UIThread.RunJobs();
                     b.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Swallow);
                     if (hit is null || (hit != b && !b.IsVisualAncestorOf(hit)) || !pressed)
-                        misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");
+                        misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}; {probe}");
                 }
                 Assert.True(tested >= 3, $"{tab}: only {tested} buttons on screen to test");
             }
