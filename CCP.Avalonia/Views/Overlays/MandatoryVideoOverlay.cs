@@ -34,9 +34,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// The Esc grace pause (WPF #735) draws its Paused/Resume card inside each video window, not as a
     /// separate topmost window; the clip guards (Core <see cref="MandatoryVideoScheduler.Guard"/>) run
     /// on a 1 s UI timer: a dead (8 s) or lost (5 s without frames) output replays the clip once, as
-    /// WPF's vout heal, but on the same shared LibVLC (docs/avalonia-decisions.html). Ambient bubbles
+    /// WPF's vout heal, with fresh-instance recovery after an overrun in native Stop. Ambient bubbles
     /// are paused by the Core scheduler.
-    /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and shared LibVLC retirement, the gaze
+    /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and retirement for other shared consumers, the gaze
     /// attention input, no-activate z-order, and the remote-media offer after the "no videos" dialog.
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
@@ -92,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static VideoMetadataCache? _lengths;
         private static double? LengthOf(string path)
         {
-            if (_lengths == null && LibVlcAudio.Shared is { } vlc) _lengths = new VideoMetadataCache(vlc);
+            if (_lengths == null && (Instance._videoVlc ?? LibVlcAudio.Shared) is { } vlc) _lengths = new VideoMetadataCache(vlc);
             var d = _lengths?.TryGetDuration(path);
             if (d == null && _lengths != null) _ = _lengths.GetOrComputeDurationAsync(path);
             return d;
@@ -123,10 +123,66 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Play(path, strict);
         });
 
-        private void Play(string path, bool strict)
+        private int _playGeneration;
+        private LibVLC? _videoVlc;
+        private Task<LibVLC?>? _recovery;
+        private readonly List<object> _retiredVideoInstances = new();
+
+        // WPF AwaitPendingStops (:7844): never build a replacement on a stopping instance.
+        internal static async Task<T> AfterReleaseAsync<T>(Task release, Func<T> reuse,
+            Func<Task<T>> recover, TimeSpan budget)
+        {
+            try { await release.WaitAsync(budget); }
+            catch (TimeoutException) { return await recover().WaitAsync(budget); }
+            return reuse();
+        }
+
+        private Task<LibVLC?> RecoverVideo(LibVLC? owner)
+        {
+            if (_recovery != null) return _recovery;
+            if (owner == null || _retiredVideoInstances.Count >= VideoWedgeLadder.MaxRetiresPerSession * 2)
+                throw new InvalidOperationException("Video recovery limit reached");
+            _retiredVideoInstances.Add(owner); // never dispose an instance with an outstanding Stop
+            _recovery = Task.Run<LibVLC?>(() => new LibVLC(LibVlcAudio.WithOutput(new[] { "--quiet" }, OperatingSystem.IsWindows())));
+            _retiredVideoInstances.Add(_recovery); // also root late construction after a timeout
+            return _recovery;
+        }
+
+        private async void Play(string path, bool strict)
+        {
+            try { await PlayAsync(path, strict); }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "VideoService: failed to start playback");
+                Scheduler.End();
+            }
+        }
+
+        internal async Task PlayAsync(string path, bool strict)
         {
             var muted = _userMuted;
             if (_surfaces.Count > 0) CloseAll();
+            var generation = ++_playGeneration;
+            var owner = _videoVlc ?? LibVlcAudio.Shared;
+            LibVLC? vlc;
+            try
+            {
+                vlc = await AfterReleaseAsync(NativeRelease, () => owner, () => generation == _playGeneration ? RecoverVideo(owner) : Task.FromResult(owner), TimeSpan.FromSeconds(2));
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "VideoService: replacement playback unavailable");
+                if (generation == _playGeneration) Scheduler.End();
+                return;
+            }
+            if (generation != _playGeneration) return; // Stop, panic or a newer request won
+            if (!ReferenceEquals(vlc, owner))
+            {
+                NativeRelease = Task.CompletedTask;
+                _videoVlc = vlc;
+                _recovery = null;
+                _lengths = null;
+            }
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
@@ -145,7 +201,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
             foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
 
-            var vlc = LibVlcAudio.Shared;
             if (vlc == null)
             {
                 Log.Warning("VideoService: LibVLC is not available - cannot play {Path}", path);
@@ -885,8 +940,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         // Small native seam: tests hold Stop to prove teardown never blocks the dispatcher.
-        // ponytail: a native call that never returns retains its player/media/sink; fresh-instance
-        // retirement and its session budget remain separate work. Never free a live decoder buffer.
+        // A native call that never returns retains its player/media/sink. Never free a live decoder buffer.
         internal static Task ReleaseNativeAsync(Action stop, Action dispose, Action free)
             => Task.Run(() =>
             {
@@ -903,10 +957,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
 
         private static readonly List<(Action Stop, Action Dispose, Action Free)> QuarantinedReleases = new();
-        internal Task NativeRelease { get; private set; } = Task.CompletedTask;
+        internal Task NativeRelease { get; set; } = Task.CompletedTask;
 
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
+            _playGeneration++;
             _closing = true;
             try
             {

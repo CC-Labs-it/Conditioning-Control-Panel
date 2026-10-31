@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using ConditioningControlPanel.Services.Subliminals;
+using ConditioningControlPanel.Services;
 using Xunit;
 
 namespace CCP.Core.Tests
@@ -21,6 +21,21 @@ namespace CCP.Core.Tests
         private static readonly IntPtr Mon2 = new(2);
 
         private static readonly (IntPtr, IntPtr)[] OneVideo = { (Video1, Mon1) };
+
+        [Theory]
+        [InlineData(false, false, false, false)]
+        [InlineData(false, false, true, false)]
+        [InlineData(false, true, false, false)]
+        [InlineData(false, true, true, false)]
+        [InlineData(true, false, false, true)]
+        [InlineData(true, false, true, false)]
+        [InlineData(true, true, false, false)]
+        [InlineData(true, true, true, false)]
+        public void BothHeadsUseTheOriginalCompositorRule(bool compositor, bool focus, bool video, bool expected)
+        {
+            Assert.Equal("CCP.Core", typeof(SubliminalOverVideo).Assembly.GetName().Name);
+            Assert.Equal(expected, SubliminalOverVideo.UsesCompositorCard(compositor, focus, video));
+        }
 
         [Fact]
         public void WithNoVideoTheCardGoesToTheTopOfTheBandAsBefore()

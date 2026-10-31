@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using ConditioningControlPanel.Services.Subliminals;
+using ConditioningControlPanel.Services;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Avalonia.Controls;
