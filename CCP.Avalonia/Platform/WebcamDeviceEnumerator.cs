@@ -109,7 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     var moniker = monikers[0];
                     if (moniker == null) continue;
 
-                    string name = "(unnamed device)";
+                    var device = CameraList.ResolveName(idx, -1, null);
                     object? propBagObj = null;
                     try
                     {
@@ -118,10 +118,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                         if (propBagObj is IPropertyBag pb)
                         {
                             object value = string.Empty;
-                            if (pb.Read("FriendlyName", ref value, IntPtr.Zero) == 0 && value is string s && !string.IsNullOrWhiteSpace(s))
-                            {
-                                name = s;
-                            }
+                            int result = pb.Read("FriendlyName", ref value, IntPtr.Zero);
+                            device = CameraList.ResolveName(idx, result, value);
                         }
                     }
                     catch (Exception ex)
@@ -137,7 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                         try { Marshal.ReleaseComObject(moniker); } catch { }
                     }
 
-                    devices.Add(new WebcamDevice(idx, name));
+                    devices.Add(new WebcamDevice(device.Index, device.Name));
                     idx++;
                 }
             }

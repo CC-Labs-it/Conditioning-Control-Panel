@@ -5,6 +5,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using OpenCvSharp;
 using Xunit;
@@ -14,7 +15,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class WebcamCaptureTests
 {
     // COM cannot be exercised on Linux. Keep the port identical to the WPF
-    // enumerator, including index order, failed-name fallback and COM release.
+    // enumerator, with localized name resolution, retaining index order and COM release.
     [Fact]
     public void DirectShowEnumeratorRetainsWpfImplementation()
     {
@@ -22,8 +23,42 @@ public sealed class WebcamCaptureTests
         string wpf = File.ReadAllText(Path.Combine(root, "ConditioningControlPanel/Services/Webcam/WebcamDeviceEnumerator.cs"))
             .Replace("namespace ConditioningControlPanel.Services", "namespace ConditioningControlPanel.Avalonia.Platform")
             .Replace("public static class WebcamDeviceEnumerator", "[System.Runtime.Versioning.SupportedOSPlatform(\"windows\")]\n    internal static class WebcamDeviceEnumerator")
-            .Replace("App.Logger?.Warning", "Log.Warning").ReplaceLineEndings("\n");
+            .Replace("App.Logger?.Warning", "Log.Warning").ReplaceLineEndings("\n")
+            .Replace("string name = \"(unnamed device)\";", "var device = CameraList.ResolveName(idx, -1, null);")
+            .Replace("new WebcamDevice(idx, name)", "new WebcamDevice(device.Index, device.Name)");
+        int start = wpf.IndexOf("                            if (pb.Read(", StringComparison.Ordinal);
+        int end = wpf.IndexOf("\n                        }", start, StringComparison.Ordinal);
+        wpf = wpf[..start] + "                            int result = pb.Read(\"FriendlyName\", ref value, IntPtr.Zero);\n                            device = CameraList.ResolveName(idx, result, value);" + wpf[end..];
         Assert.Equal(wpf, File.ReadAllText(Path.Combine(root, "CCP.Avalonia/Platform/WebcamDeviceEnumerator.cs")).ReplaceLineEndings("\n"));
+    }
+
+    [Theory]
+    [InlineData("en", "(unnamed device)")]
+    [InlineData("de", "(Gerät ohne Namen)")]
+    [InlineData("es", "(dispositivo sin nombre)")]
+    [InlineData("fr", "(appareil sans nom)")]
+    [InlineData("it", "(dispositivo senza nome)")]
+    [InlineData("ja", "(名前のないデバイス)")]
+    [InlineData("ko", "(이름 없는 장치)")]
+    [InlineData("pt-BR", "(dispositivo sem nome)")]
+    [InlineData("ru", "(устройство без имени)")]
+    [InlineData("zh-CN", "(未命名设备)")]
+    public void FailedOrEmptyFriendlyNamesAreLocalizedWithoutDroppingIndices(string language, string expected)
+    {
+        var localization = LocalizationManager.Instance;
+        string previous = localization.CurrentLanguage;
+        try
+        {
+            localization.SetLanguage(language);
+            var devices = new[] { CameraList.ResolveName(0, 0, "USB camera"),
+                CameraList.ResolveName(1, -1, "ignored"), CameraList.ResolveName(2, 0, ""),
+                CameraList.ResolveName(3, 0, "  "), CameraList.ResolveName(4, 0, null),
+                CameraList.ResolveName(5, 0, 42) };
+            Assert.Equal(Enumerable.Range(0, 6), devices.Select(d => d.Index));
+            Assert.Equal("USB camera", devices[0].Name);
+            Assert.All(devices.Skip(1), d => Assert.Equal(expected, d.Name));
+        }
+        finally { localization.SetLanguage(previous); }
     }
 
     private static string RepoRoot([CallerFilePath] string here = "") =>
