@@ -78,7 +78,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static double _lastHeatTint = -1;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused;
 
-        static ChaosRunHost() => ChaosLessons.LessonCompleted += OnLessonCompleted;
+        static ChaosRunHost()
+        {
+            ChaosLessons.LessonCompleted += OnLessonCompleted;
+            // WPF ChaosModeService.cs:126,210-224. One subscription for this static host.
+            ChaosFirstTimes.Awarded += OnFirstTimeAwarded;
+        }
+
+        private static void OnFirstTimeAwarded(string bonusId, int amount)
+        {
+            // Capture the run so a queued award cannot land in a later descent after panic.
+            var run = _state;
+            if (run == null) return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    if (_state != run) return;
+                    string key = "chaos_bonus_" + bonusId;
+                    string label = ChaosFirstTimes.Labels.ContainsKey(bonusId)
+                        ? ConditioningControlPanel.Localization.Loc.Get(key) : bonusId;
+                    string text = $"+{amount} {ChaosGlyphs.Drops} {label}";
+                    run.PushEvent(text);
+                    (PopText ?? ChaosPopText.Show)(BubbleOverlay.ChaosLastPopX,
+                        BubbleOverlay.ChaosLastPopY - 30, text, Color.FromRgb(0xC8, 0xA8, 0xFF));
+                }
+                catch (Exception ex) { Log.Debug(ex, "Chaos first-time feedback failed"); }
+            });
+        }
         private static readonly List<ChaosToyButtonWindow> _toyButtons = new();
         internal static IReadOnlyList<ChaosToyButtonWindow> ToyButtons => _toyButtons;
 

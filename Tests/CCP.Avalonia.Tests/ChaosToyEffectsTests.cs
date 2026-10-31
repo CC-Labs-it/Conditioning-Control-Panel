@@ -7,6 +7,7 @@ using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
@@ -39,6 +40,107 @@ public sealed class ChaosToyEffectsTests
 
     private static AmbientBubble Spawn(bool live) => BubbleOverlay.SpawnChaos(new EffectBubbleSpec
         { VariantId = "pink", IsLive = live, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
+
+    // WPF ChaosModeService.cs:210-224: the banked bonus reaches the feed and pop point.
+    [Theory]
+    [InlineData("en")][InlineData("de")][InlineData("es")][InlineData("fr")][InlineData("it")]
+    [InlineData("ja")][InlineData("ko")][InlineData("pt-BR")][InlineData("ru")][InlineData("zh-CN")]
+    public async Task First_time_award_toasts_once_in_the_current_language(string language)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var meta = ChaosMeta.State;
+            var awarded = meta.FirstTimesAwarded.ToArray();
+            int sparks = meta.Sparks;
+            var oldPop = ChaosRunHost.PopText;
+            var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+            string prior = loc.CurrentLanguage;
+            var calls = new System.Collections.Generic.List<(double X, double Y, string Text, Color Color)>();
+            ChaosRunHost.PopText = (x, y, t, c) => calls.Add((x, y, t, c));
+            try
+            {
+                loc.SetLanguage(language);
+                BubbleOverlay.ChaosLastPopX = 123;
+                BubbleOverlay.ChaosLastPopY = 456;
+                meta.FirstTimesAwarded.Clear();
+                foreach (var id in ChaosFirstTimes.Amounts.Keys)
+                {
+                    Assert.True(ChaosFirstTimes.TryAward(id));
+                    Assert.False(ChaosFirstTimes.TryAward(id));
+                }
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Equal(5, calls.Count);
+                foreach (var pair in ChaosFirstTimes.Amounts)
+                {
+                    string label = loc.Get("chaos_bonus_" + pair.Key);
+                    Assert.NotEqual("chaos_bonus_" + pair.Key, label);
+                    if (language != "en") Assert.NotEqual(ChaosFirstTimes.Labels[pair.Key], label);
+                    string text = $"+{pair.Value} {ChaosGlyphs.Drops} {label}";
+                    var call = Assert.Single(calls.Where(c => c.Text == text));
+                    Assert.Equal(123, call.X);
+                    Assert.Equal(426, call.Y);
+                    Assert.Equal(Color.FromRgb(0xC8, 0xA8, 0xFF), call.Color);
+                    Assert.Single(ChaosRunHost.State!.RecentEvents.Where(e => e == text));
+                }
+                // A queued award belongs to this run, even if another run starts before dispatch.
+                meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+                Assert.True(ChaosFirstTimes.TryAward(ChaosFirstTimes.Play));
+                ChaosRunHost.ForceShutdown();
+                Setup();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Equal(5, calls.Count);
+                Assert.DoesNotContain(ChaosRunHost.State!.RecentEvents, e => e.Contains("+15"));
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosRunHost.PopText = oldPop;
+                loc.SetLanguage(prior);
+                meta.Sparks = sparks;
+                meta.FirstTimesAwarded.Clear();
+                foreach (var id in awarded) meta.FirstTimesAwarded.Add(id);
+                ChaosMeta.Save();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task First_time_award_uses_the_real_pop_text_when_no_hook_is_installed()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var old = (ChaosRunHost.PopText, ChaosPopText.Prepare, ChaosPopText.PlatformCanShow,
+                CoreSettings.Current.ChaosAnnouncerEnabled);
+            var meta = ChaosMeta.State;
+            bool awarded = meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+            int sparks = meta.Sparks;
+            try
+            {
+                ChaosRunHost.PopText = null;
+                ChaosPopText.Prepare = (w, r) => { w.Position = r.Position; return true; };
+                ChaosPopText.PlatformCanShow = () => true;
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                Assert.True(ChaosFirstTimes.TryAward(ChaosFirstTimes.Play));
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(Assert.Single(ChaosPopText.Pool.All).IsVisible);
+                ChaosRunHost.ForceShutdown();
+                Assert.Empty(ChaosPopText.Pool.All);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                (ChaosRunHost.PopText, ChaosPopText.Prepare, ChaosPopText.PlatformCanShow,
+                    CoreSettings.Current.ChaosAnnouncerEnabled) = old;
+                meta.Sparks = sparks;
+                if (!awarded) meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+                ChaosMeta.Save();
+            }
+            return Task.CompletedTask;
+        });
+    }
 
     [Theory]
     [InlineData("snap_field")]

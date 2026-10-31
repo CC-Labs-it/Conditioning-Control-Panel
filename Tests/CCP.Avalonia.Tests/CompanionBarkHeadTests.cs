@@ -110,6 +110,16 @@ public sealed class CompanionBarkHeadTests
         }
     });
 
+    [Fact] // WPF App.xaml.cs:2745 and BarkService.cs:583.
+    public void FirstTimeBarkPassesTheBonusIdToTheEngine() => WithSeamsRestored(_ =>
+    {
+        Seeded(Rule("ChaosFirstTime", "first play", ("bonus_id", "first_play")), out var spoken);
+        ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark!("first_taste");
+        Assert.Null(spoken());
+        ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark!("first_play");
+        Assert.Equal("first play", spoken());
+    });
+
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()
     {
         Id = "t_" + trigger, Trigger = trigger, VariantPool = new() { new BarkVariant(line) },
@@ -136,6 +146,7 @@ public sealed class CompanionBarkHeadTests
         var s = CoreSettings.Current;
         var hooks = (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion, CoreModsHooks.ReloadBarkRules,
             CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked);
+        var firstTimeBark = ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark;
         var chaos = (CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider);
         var state = (s.AvatarEnabled, s.BarkChatSuppressionMs, new Dictionary<string, List<string>>(s.BarkVariantRotation));
         try
@@ -147,6 +158,7 @@ public sealed class CompanionBarkHeadTests
         {
             (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion, CoreModsHooks.ReloadBarkRules,
                 CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked) = hooks;
+            ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark = firstTimeBark;
             (CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider) = chaos;
             (s.AvatarEnabled, s.BarkChatSuppressionMs) = (state.AvatarEnabled, state.BarkChatSuppressionMs);
             s.BarkVariantRotation.Clear();
