@@ -571,12 +571,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var completionTime = (DateTime.Now - _startTime).TotalSeconds;
 
             // The XP award, WPF's body verbatim including the !_isTest gate and the strict 1.5x
-            // multiplier. App.Progression is CoreProgression here; the WPF call is already a
-            // null-conditional fire-and-forget, and unseeded (this head today) the seam is the same
-            // no-op, so restoring it cannot mis-award - it only starts working the day a head seeds
-            // progression. XPSource.LockCard crosses as its member NAME: the enum is declared inside
-            // Services/Companion/CompanionService.cs, which cannot move, so CoreProgression takes a
-            // string and the seeding head parses it.
+            // multiplier. CoreProgression keeps its string-based provider contract, so the shared
+            // CCP.Core/Services/XPSource.cs member LockCard crosses as its name.
             if (!_isTest)
             {
                 var xpAmount = (50 * _requiredRepeats) + 200;

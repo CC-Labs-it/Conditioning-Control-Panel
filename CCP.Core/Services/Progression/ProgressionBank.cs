@@ -21,6 +21,10 @@ namespace ConditioningControlPanel
         /// <summary>Amount and source after the award (WPF XPAwarded; the sync nudge listens).</summary>
         public static event Action<double, string>? Awarded;
 
+        // WPF Services/Progression/ProgressionService.cs:123-126: display gets adjusted XP and the level-loop result.
+        public sealed record XpAward(double Amount, XPSource Source, bool LeveledUp);
+        public static event Action<XpAward>? XPAwarded;
+
         public static void Add(double amount, string source)
         {
             var s = CoreSettings.Current;
@@ -58,6 +62,16 @@ namespace ConditioningControlPanel
             CoreSettings.Save();
             foreach (var l in levels) LevelUp?.Invoke(l);
             Awarded?.Invoke(amount, source);
+            // WPF ProgressionService.cs:120,125-126,240-249: presentation runs last and cannot break an award.
+            try
+            {
+                XPAwarded?.Invoke(new XpAward(adjusted,
+                    Enum.TryParse<XPSource>(source, out var parsed) ? parsed : XPSource.Other, levels.Count > 0));
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("XPAwarded subscriber failed: {E}", ex.Message);
+            }
         }
     }
 }
