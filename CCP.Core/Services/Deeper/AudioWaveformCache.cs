@@ -144,8 +144,20 @@ namespace ConditioningControlPanel.Services.Deeper
                 if (id == 0x20746d66 && size >= 16 && size <= wav.Length - start)
                 {
                     int format = reader.ReadUInt16(); channels = reader.ReadUInt16(); rate = reader.ReadInt32();
-                    reader.ReadUInt32(); int align = reader.ReadUInt16(), bits = reader.ReadUInt16();
-                    if (format != 1 || channels < 1 || rate < 1 || bits != 16 || align != channels * 2)
+                    uint byteRate = reader.ReadUInt32(); int align = reader.ReadUInt16(), bits = reader.ReadUInt16();
+                    if (format == 0xfffe)
+                    {
+                        if (size < 40) throw new InvalidDataException("Truncated extensible format");
+                        int extra = reader.ReadUInt16(), validBits = reader.ReadUInt16();
+                        uint mask = reader.ReadUInt32();
+                        var subtype = new Guid(reader.ReadBytes(16));
+                        if (extra < 22 || extra > size - 18 || validBits != 16 ||
+                            subtype != new Guid("00000001-0000-0010-8000-00aa00389b71") ||
+                            (mask != 0 && System.Numerics.BitOperations.PopCount(mask) != channels))
+                            throw new InvalidDataException("Expected extensible PCM16");
+                        format = 1;
+                    }
+                    if (format != 1 || channels < 1 || rate < 1 || bits != 16 || align != channels * 2 || byteRate != (long)rate * align)
                         throw new InvalidDataException("Expected PCM16");
                 }
                 else if (id == 0x61746164 && channels > 0)

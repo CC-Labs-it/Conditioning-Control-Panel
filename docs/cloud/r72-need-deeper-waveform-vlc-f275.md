@@ -23,31 +23,22 @@ Read each lane's own diff, without cherry-picking its ancestry:
 | Mod Creator section navigation | `Windows/ModCreatorWindow.xaml.cs:249` | Covered by PR #3345: Avalonia Mod Creator `axaml.cs:329`; not copied. |
 | Editor interactions | WPF editor partials | PR #3316 still leaves `StartEditorTutorial` as a log stub at editor `axaml.cs:599`; this cut supplies help and first-run coachmarks. |
 
-Review follow-up: both P2 findings accepted (WPF MediaDurationProbe.cs:37;
-DeeperEditorWindow.xaml.cs:1198). LibVLC no longer mixes channels or resamples
-for peaks. A decoder cache tag bypasses previously cached mono peaks without
-changing WPF's cache keys. Waveform duration and timeline visuals load before
-playback; unavailable playback or zero parsed duration retains that duration.
+Review fixes follow WPF `Services/Deeper/MediaDurationProbe.cs:37` and editor
+`xaml.cs:1198`: source-rate/channel PCM, waveform duration before playback,
+and a cache tag bypassing old mono peaks. Core now accepts validated extensible
+PCM16 from LibVLC for 5.1 audio. The six-channel fixture checks duration and
+each channel's peak; malformed extension/subtype/format fields are rejected.
 No WPF source changes or new translation keys. Native codec execution is unrun.
-
-Review fix locations:
-
-- P2 channel/rate preservation: `CCP.Avalonia/Views/Games/RaceTrackPlayer.cs:249`, `:251`; `CCP.Core/Services/Deeper/AudioWaveformCache.cs:133`, `:155`.
-- P2 duration fallback: `CCP.Avalonia/Views/Deeper/DeeperEditorWindow.axaml.cs:962`, `:987`, `:1009`.
-- Tests: Core `AudioWaveformCacheTests.cs:163`, `:176`; Avalonia `RaceTrackPlayerTests.cs:18`, `DeeperRowsTests.cs:131`.
-- Cache-version regression also proves old mono peaks are bypassed. The old mono bucket test retains its count, duration, peak and neighbour assertions through the new WAV adapter.
-- Production font bootstrap in DeeperRowsTests and TutorialFlashDemoTests removes order-dependent Inter failures; every transport assertion remains.
-
-Validation: Core suite 4638 passed, 6 existing skips, 0 failed; initial affected
-Avalonia run after font bootstrap 46 passed. All three projects built with
-0 errors. Stereo/downsample mutation failed both Core regressions (exit 1).
-Mono transcode options plus discarded duration failed the options and both
-playback fallback cases (3 failed, exit 1). All mutations were restored.
-Final restored validation: builds Core/Avalonia/tests each 0 errors;
-waveform cache filter 13 passed; affected Avalonia and race tests 47 passed,
-3 existing LibVLC skips, 0 failed. Core guards and docs self-check passed.
-Removing the cache tag failed the migration test (expected 2 decodes, actual 1);
-restored Core rebuilt with 0 errors and all 13 waveform tests passed again.
+Earlier validation: Core 4638 passed/6 existing skips; waveform filter 13 passed;
+affected Avalonia/race 47 passed/3 existing native skips. Earlier fail-proofs
+covered stereo/rate, duration fallback, transcode options and cache migration.
+LibVLC `modules/mux/wav.c:198` selects extensible headers for more than two channels.
+Extensible validation: full Core suite 4640 passed/6 existing skips; waveform
+filter 15 passed; all three builds 0 errors; affected Avalonia/race/isolation
+22 passed/3 existing native skips. Removing extensible support failed the
+six-channel test; bypassing validation failed the malformed-header test.
+Both mutations restored; Core rebuilt and all 15 waveform tests passed again.
+Core guards, docs self-check and git diff --check passed.
 
 ## Part B
 

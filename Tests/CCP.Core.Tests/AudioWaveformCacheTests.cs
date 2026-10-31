@@ -184,14 +184,36 @@ public class AudioWaveformCacheTests : IDisposable
         Assert.All(result.Peaks, p => Assert.Equal(0.75f, p));
     }
 
-    private static MemoryStream Wave(int channels, int rate, Func<int, short> sample)
+    [Fact]
+    public void ExtensiblePcm16PreservesSixChannelPeaksAndDuration()
+    {
+        using var wav = Wave(6, 48000, i => i / 6 == i % 6 * 8000 + 10 ? (short)(-4096 * (i % 6 + 1)) : (short)0, true);
+        var result = AudioWaveformCache.FromPcm16Wave(wav);
+        Assert.Equal(20, result.DurationSeconds, 3); Assert.Equal(120, result.Peaks.Length);
+        for (int c = 0; c < 6; c++) Assert.Equal((c + 1) / 8f, result.Peaks[c]);
+        for (int i = 6; i < result.Peaks.Length; i++) Assert.Equal(0f, result.Peaks[i]);
+    }
+
+    [Fact]
+    public void ExtensiblePcm16RejectsInvalidFormatFields()
+    {
+        using var wav = Wave(6, 48000, _ => 0, true);
+        foreach (var (offset, value) in new[] { (16, 39), (29, 0), (32, 1), (34, 8), (36, 21), (36, 23), (38, 8), (40, 1), (44, 3) })
+        {
+            var bytes = wav.GetBuffer(); byte saved = bytes[offset]; bytes[offset] = (byte)value; wav.Position = 0;
+            Assert.Throws<InvalidDataException>(() => AudioWaveformCache.FromPcm16Wave(wav)); bytes[offset] = saved;
+        }
+    }
+
+    private static MemoryStream Wave(int channels, int rate, Func<int, short> sample, bool extensible = false)
     {
         var wav = new MemoryStream();
         using var w = new BinaryWriter(wav, System.Text.Encoding.UTF8, leaveOpen: true);
         int bytes = channels * rate * 20 * 2;
-        w.Write(0x46464952); w.Write(36 + bytes); w.Write(0x45564157);
-        w.Write(0x20746d66); w.Write(16); w.Write((short)1); w.Write((short)channels);
+        w.Write(0x46464952); w.Write(36 + bytes + (extensible ? 24 : 0)); w.Write(0x45564157);
+        w.Write(0x20746d66); w.Write(extensible ? 40 : 16); w.Write((ushort)(extensible ? 0xfffe : 1)); w.Write((short)channels);
         w.Write(rate); w.Write(rate * channels * 2); w.Write((short)(channels * 2)); w.Write((short)16);
+        if (extensible) { w.Write((ushort)22); w.Write((ushort)16); w.Write(0x3fu); w.Write(new Guid("00000001-0000-0010-8000-00aa00389b71").ToByteArray()); }
         w.Write(0x61746164); w.Write(bytes);
         for (int i = 0; i < bytes / 2; i++) w.Write(sample(i));
         wav.Position = 0;
