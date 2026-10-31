@@ -10,6 +10,28 @@ namespace CCP.Avalonia.Tests;
 /// seams that leaked before (PLAYBOOK P02) and really puts each one back.</summary>
 public class TestIsolationTests
 {
+    [Fact]
+    public void AssemblyBootstrapProvidesPortableFontsBeforeAnyFixtureSetup() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            Assert.Contains("Inter", global::Avalonia.Media.FontManager.Current.DefaultFontFamily.Name);
+            foreach (var family in new[] { "Segoe UI Black, Segoe UI", "Fredoka, Segoe UI" })
+            {
+                var text = new global::Avalonia.Controls.TextBlock
+                {
+                    Text = "Lobby 123",
+                    FontFamily = new global::Avalonia.Media.FontFamily(family),
+                    FontWeight = global::Avalonia.Media.FontWeight.Black,
+                };
+                text.Measure(global::Avalonia.Size.Infinity);
+                Assert.True(text.DesiredSize.Width > 0, family);
+                Assert.True(text.DesiredSize.Height > 0, family);
+            }
+            Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(
+                new global::Avalonia.Media.Typeface("Fredoka"), out var display));
+            Assert.Equal("Fredoka Light", display!.FamilyName);
+        });
+
     /// <summary>The first test in a testhost decides the Avalonia platform for every later one. A setup
     /// with headless drawing (no Skia) made later text measure differently and bitmaps read garbage, so
     /// ChasterRaffleCardLayout, BlinkTrainerSession and EmiBookDemo failed only after it (flake-layout).</summary>
