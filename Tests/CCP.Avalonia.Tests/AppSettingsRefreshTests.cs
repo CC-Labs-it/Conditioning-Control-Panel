@@ -28,6 +28,7 @@ public sealed class AppSettingsRefreshTests
                     .SetupWithoutStarting();
             var root = Directory.CreateTempSubdirectory("ccp-settings-refresh-").FullName;
             var oldCameras = V4l2Cameras.Root;
+            var oldCameraProvider = CameraList.Provider;
             var oldStartup = XdgAutostart.DirectoryOverride;
             var oldWinStartup = WindowsStartupShortcut.DirectoryOverride;
             var oldAvailable = CoreWebcam.IsAvailableProvider;
@@ -40,6 +41,7 @@ public sealed class AppSettingsRefreshTests
             try
             {
                 V4l2Cameras.Root = root;
+                CameraList.Provider = V4l2Cameras.Enumerate; // Use the synthetic tree on Windows too.
                 XdgAutostart.DirectoryOverride = Path.Combine(root, "autostart");
                 WindowsStartupShortcut.DirectoryOverride = Path.Combine(root, "startup");   // Windows reads a Startup .lnk (port/7.2)
                 CoreWebcam.IsAvailableProvider = () => true;
@@ -92,6 +94,7 @@ public sealed class AppSettingsRefreshTests
             {
                 shell?.Close();
                 V4l2Cameras.Root = oldCameras;
+                CameraList.Provider = oldCameraProvider;
                 XdgAutostart.DirectoryOverride = oldStartup;
                 WindowsStartupShortcut.DirectoryOverride = oldWinStartup;
                 CoreWebcam.IsAvailableProvider = oldAvailable;

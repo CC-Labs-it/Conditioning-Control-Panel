@@ -5980,6 +5980,7 @@
   "rf_skill_night_shift_req": "자정 이후에 앱을 10번 사용하기",
   "rf_skill_early_bird_bimbo_req": "오전 7시 전에 앱을 10번 사용하기",
   "rf_skill_eternal_doll_req": "레벨 50 달성하기",
+  "webcam_device_unnamed": "(이름 없는 장치)",
   "webcam_debug_mouth_fmt": "입 벌림 #{0}",
   "webcam_debug_tongue_fmt": "혀 내밀기 #{0}",
   "rf_webcam_stopped": "중지됨",
