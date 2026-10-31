@@ -2005,7 +2005,7 @@
 
                 <!-- Remember: snapshot current setup / recall it. Right-click to re-save. -->
                 <Button x:Name="BtnRemember" Grid.Column="0" Width="68" Height="50" Margin="0,0,8,0"
-                        Theme="{StaticResource PinkButton}" FontSize="20" Click="BtnRemember_Click"
+                        Theme="{StaticResource PinkButton}" fx:HudPlank.Kind="Plank" FontSize="20" Click="BtnRemember_Click"
                         PointerReleased="BtnRemember_RightClick"
                         ToolTip.Tip="Remember my current setup">
                     <TextBlock x:Name="TxtRememberIcon" Text="☆" FontSize="24" VerticalAlignment="Center" TextAlignment="Center"/>
@@ -2061,7 +2061,7 @@
                 <!-- StartPressScale is the ignition dip (Velvet Kit 2). It is the button's only
                      RenderTransform and nothing else may claim it - HoverPop deliberately refuses
                      named transforms, so this stays a lane-B-only surface. -->
-                <Button x:Name="BtnStart" Grid.Column="1" Theme="{StaticResource PinkButton}"
+                <Button x:Name="BtnStart" Grid.Column="1" Theme="{StaticResource PinkButton}" fx:HudPlank.Kind="Chunky"
                         Background="{DynamicResource AccentGradientBrush}"
                         Height="50" FontSize="18" Click="BtnStart_Click"
                         RenderTransformOrigin="0.5,0.5"
@@ -2114,6 +2114,7 @@
                      sliver glued to it. -->
                 <Button x:Name="BtnStartMenu" Grid.Column="2" Width="68" Height="50" Margin="8,0,0,0"
                         Theme="{StaticResource PinkButton}" Background="{DynamicResource AccentGradientBrush}"
+                        fx:HudPlank.Kind="Plank"
                         FontSize="22" Click="BtnStartMenu_Click"
                         ToolTip.Tip="Start options">
                     <TextBlock Text="▼" FontSize="18" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center"/>
@@ -2154,6 +2155,7 @@
                      right next to it, so the action bar had two primaries and no hierarchy. It is
                      the house SecondaryButton now; START is the only filled pink on the bar. -->
                 <Button x:Name="BtnSaveAll" Grid.Column="5" Content="{loc:Str btn_save_2}" Theme="{StaticResource SecondaryButton}"
+                        fx:HudPlank.Kind="Plank"
                         Height="50" FontSize="16" Margin="0,0,10,0" Click="BtnSave_Click"
                         ToolTip.Tip="{loc:Str tooltip_save_all_settings_to_disk}"/>
                 <!-- Save "absorb" (Velvet Kit 2, FX lane B): one ripple ring off the button's edge and
@@ -2179,7 +2181,10 @@
                      rest of the app uses for destructive actions (PANIC STOP does use the real
                      red). Quiet outline at rest, fills on hover: still findable, no longer
                      competing with the primary action for the eye. -->
-                <Button Grid.Column="6" Content="{loc:Str btn_exit}" Height="50" FontSize="16" Click="BtnExit_Click"
+                <!-- Depth (wave 10, lane B): Exit is a raised plank too. The red outline stays the
+                     signal; the lamp's bevel sits just inside it, the sheen over the face. -->
+                <Button x:Name="BtnExit" Grid.Column="6" Content="{loc:Str btn_exit}" Height="50" FontSize="16" Click="BtnExit_Click"
+                        fx:HudPlank.Kind="Plank"
                         ToolTip.Tip="{loc:Str tooltip_exit_the_application_completely}">
                     <Button.Theme>
                         <ControlTheme TargetType="Button">
@@ -2189,18 +2194,32 @@
                             <Setter Property="Cursor" Value="Hand"/>
                             <Setter Property="Template">
                                     <ControlTemplate TargetType="Button">
-                                        <Border x:Name="b" Background="{TemplateBinding Background}"
-                                                BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1"
-                                                CornerRadius="6" Padding="20,10">
-                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                             Content="{TemplateBinding Content}"
-                                                             ContentTemplate="{TemplateBinding ContentTemplate}"/>
-                                        </Border>
-                                        <!-- ponytail: WPF ControlTemplate.Triggers (IsMouseOver) dropped. Avalonia writes these as
-                                             Style selectors outside the template (":pointerover /template/ Border#x"); the
-                                             rest state renders correctly and only the hover/press/tag skins are lost. -->
+                                        <Grid>
+                                            <Border x:Name="DepthDrop" VerticalAlignment="Bottom" Height="5" Margin="6,0,6,-5"
+                                                    CornerRadius="0,0,5,5" Background="{DynamicResource DepthDropBand}"
+                                                    IsHitTestVisible="False"/>
+                                            <Grid x:Name="DepthFace">
+                                                <Border x:Name="b" Background="{TemplateBinding Background}"
+                                                        BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1"
+                                                        CornerRadius="6" Padding="20,10">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                     Content="{TemplateBinding Content}"
+                                                                     ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                                                </Border>
+                                                <Border Margin="1" CornerRadius="5" Background="{DynamicResource DepthRaisedSheen}"
+                                                        IsHitTestVisible="False"/>
+                                                <Border Margin="1" CornerRadius="5" BorderThickness="1"
+                                                        BorderBrush="{DynamicResource DepthRaisedBevel}" IsHitTestVisible="False"/>
+                                            </Grid>
+                                        </Grid>
                                     </ControlTemplate>
                             </Setter>
+                            <Style Selector="^:pointerover /template/ Border#b">
+                                <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
+                            </Style>
+                            <Style Selector="^:pointerover">
+                                <Setter Property="Foreground" Value="White"/>
+                            </Style>
                         </ControlTheme>
                     </Button.Theme>
                 </Button>
