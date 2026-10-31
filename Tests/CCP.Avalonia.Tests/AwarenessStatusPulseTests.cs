@@ -20,6 +20,41 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class AwarenessStatusPulseTests
 {
+    // WPF MainWindow.Awareness.cs:52,78: arrival reflects the already-enabled master.
+    [Fact]
+    public void EnabledMasterPulsesOnAwarenessArrival() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var old = (s.KeywordTriggersEnabled, s.MotionLevel, s.PerformanceMode);
+        ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow? host = null;
+        try
+        {
+            s.KeywordTriggersEnabled = true;
+            s.MotionLevel = MotionLevel.Full;
+            s.PerformanceMode = false;
+            host = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            host.Show(); host.Activate();
+            host.ShowTab("awareness"); Dispatcher.UIThread.RunJobs();
+            var view = host.FindControl<AwarenessTabView>("AwarenessTab")!;
+            var glow = view.FindControl<Border>("AwarenessStatusGlow")!;
+            Assert.True(view.FindControl<CheckBox>("ChkAwarenessMaster")!.IsChecked);
+            Assert.Equal("Live", view.FindControl<TextBlock>("TxtAwarenessStatus")!.Text);
+            Assert.True(glow.IsVisible);
+            Assert.Single(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
+            host.Close(); Dispatcher.UIThread.RunJobs();
+            Assert.False(glow.IsVisible);
+            Assert.DoesNotContain(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
+        }
+        finally
+        {
+            host?.Close(); Dispatcher.UIThread.RunJobs();
+            (s.KeywordTriggersEnabled, s.MotionLevel, s.PerformanceMode) = old;
+        }
+    });
+
     [Fact]
     public void LiveStatusBreathesBehindTheSteadyDotAndParksWithItsHost() => AvaloniaTestDispatcher.Run(() =>
     {
