@@ -262,9 +262,9 @@ internal static class FriendsLanding
         Join(item);
     }
 
-    /// <summary>Destinations this head can open. ponytail: Back Room / Goon / chess hosts are not on this head
-    /// (GameWindow has the Breakout demo only), so their cards carry Not now and the x only.</summary>
-    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp;
+    /// <summary>Destinations this head can open. Back Room and Goon still wait for their hosts.</summary>
+    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp ||
+        item.Destination == InviteDestination.Chess && InviteDestination.IsChallengeId(item.Code);
 
     /// <summary>WPF LauncherHost.OpenPanelTab: the panel up (it may be hidden behind the launcher), then the tab.
     /// Tests replace it.</summary>
@@ -275,11 +275,12 @@ internal static class FriendsLanding
         mw.ShowTab(tab);
     };
 
-    /// <summary>WPF Join :522. Ramp: link to Ramp lives on the Ramp card in the Studio tab.</summary>
+    /// <summary>WPF Services/Friends/FriendsLanding.cs:558-562. Chess accepts a validated challenge. Ramp: link to Ramp lives on the Ramp card in the Studio tab.</summary>
     private static void Join(InboxItem item)
     {
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
+        if (item.Destination == InviteDestination.Chess) GameWindow.JoinPbpChallenge(item.Code!);
     }
 
     private static readonly FriendsSfxGate SfxGate = new();
