@@ -8,14 +8,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// <summary>
     /// WPF AchievementService.TrackTimeBasedProgress :226-275: while an overlay is on screen, a 1 s
     /// tick credits the minutes since the last tick (achievement totals, then App.Quests.TrackPinkFilterMinutes /
-    /// TrackSpiralMinutes). Keeps this head's existing strict 6 s RunningTimeCredit ceiling.
+    /// TrackSpiralMinutes). Uses WPF's default three-minute RunningTimeCredit ceiling.
     /// The tick runs only while the overlay shows; hiding resets the stamp and continuous run.
     /// </summary>
     internal sealed class OverlayQuestMinutes
     {
         private readonly Action<double> _track;
         private readonly Action? _hidden;
-        private readonly RunningTimeCredit _credit = new(TimeSpan.FromSeconds(6) - TimeSpan.FromTicks(1));   // WPF: elapsed < 0.1 min, so exactly 6 s counts nothing
+        private readonly RunningTimeCredit _credit = new();
         private readonly Stopwatch _watch = Stopwatch.StartNew();
         private DispatcherTimer? _tick;
 

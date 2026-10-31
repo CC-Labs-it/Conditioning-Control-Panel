@@ -186,6 +186,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _randomizeAtStart = null;
             _repicked = false;
             CloseWindows();
+            QuestMinutes.Follow(false);   // WPF AchievementService.cs:250-253: actual deactivation resets the run.
         }
 
         private static void CloseWindows()
@@ -200,13 +201,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             Windows.Clear();
             _shownOn = Array.Empty<int>();
-            QuestMinutes.Follow(false);
+            // Rebuilding windows keeps the logical run and minute clock (WPF AchievementService.cs:203,246-253).
             // WPF OverlayService.cs:2094: the fullscreen spiral left, so a session may raise its corner GIF again.
             App.Sessions?.RefreshCornerGifPolicy();
         }
 
         /// <summary>WPF AchievementService:249-275 - achievement and quest minutes while the spiral is on
-        /// screen; going off screen restarts the continuous run (spiral_eyes).</summary>
+        /// screen or rebuilding; deactivation restarts the continuous run (spiral_eyes).</summary>
         internal static readonly OverlayQuestMinutes QuestMinutes = new(
             m => { App.Achievements?.TrackSpiralMinutes(m); App.Quests?.TrackSpiralMinutes(m); },
             () => App.Achievements?.ResetContinuousSpiral());

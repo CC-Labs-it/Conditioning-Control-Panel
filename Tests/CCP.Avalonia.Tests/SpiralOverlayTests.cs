@@ -191,6 +191,67 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
             Assert.Equal(new PixelSize(8, 8), ((global::Avalonia.Media.Imaging.Bitmap)SpiralOverlay.Shown[0].Spiral.Source!).PixelSize);
         });
 
+    // WPF AchievementService.cs:203,246-274: enabled + running survives window replacement.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RebuildsPreserveContinuousMinutesButStopAndPanicReset(bool panic)
+        => WithShell(async (shell, s, gif) =>
+        {
+            var property = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("Achievements",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            var oldEngine = property.GetValue(null);
+            var oldClock = SpiralOverlay.QuestMinutes.Clock;
+            var oldQuery = ScreenList.QueryOverride;
+            var oldDual = s.DualMonitorEnabled;
+            var now = TimeSpan.Zero;
+            var engine = new AchievementEngine(new AchievementStore(Path.Combine(Path.GetDirectoryName(gif)!, "achievements.json")));
+            try
+            {
+                property.SetValue(null, engine);
+                SpiralOverlay.CloseAll();
+                SpiralOverlay.QuestMinutes.Clock = () => now;
+                var screen = ScreenList.Enumerate(shell)[0];
+                ScreenList.QueryOverride = _ => new[] { screen, screen };
+                s.DualMonitorEnabled = true;
+                s.SpiralTargetMonitor = 0;
+                shell.StartEngine();
+                await Settle();
+                Assert.True(SpiralOverlay.IsShowing && SpiralOverlay.QuestMinutes.TickRunning);
+                engine.Progress.ContinuousSpiralMinutes = 19.5;
+                var window = SpiralOverlay.Shown[0];
+                s.SpiralTargetMonitor = 1;
+                SpiralOverlay.Refresh(shell);
+                Assert.NotSame(window, SpiralOverlay.Shown[0]);
+                Assert.Equal(19.5, engine.Progress.ContinuousSpiralMinutes);
+
+                var other = Path.Combine(Path.GetDirectoryName(gif)!, "replacement.gif");
+                File.Copy(gif, other);
+                s.SpiralPath = other;
+                SpiralOverlay.Refresh(shell);
+                Assert.True(SpiralOverlay.QuestMinutes.TickRunning); // decode is still part of the run
+                await Settle();
+                Assert.True(SpiralOverlay.IsShowing);
+                Assert.Equal(19.5, engine.Progress.ContinuousSpiralMinutes);
+                now += TimeSpan.FromSeconds(30);
+                SpiralOverlay.QuestMinutes.Sample(true);
+                Assert.True(engine.Progress.IsUnlocked("spiral_eyes"));
+
+                if (panic) PanicSurfaces.StopAll("test", shell);
+                else MainShellWindow.StopEngine();
+                Assert.False(SpiralOverlay.QuestMinutes.TickRunning);
+                Assert.Equal(0, engine.Progress.ContinuousSpiralMinutes);
+            }
+            finally
+            {
+                SpiralOverlay.CloseAll();
+                SpiralOverlay.QuestMinutes.Clock = oldClock;
+                ScreenList.QueryOverride = oldQuery;
+                s.DualMonitorEnabled = oldDual;
+                property.SetValue(null, oldEngine);
+            }
+        });
+
     /// <summary>WPF PauseSession -> App.Overlay.Stop(), ResumeSession -> Start(); StartSession starts it.</summary>
     [Fact]
     public async Task Session_start_shows_it_pause_hides_it_resume_brings_it_back()
