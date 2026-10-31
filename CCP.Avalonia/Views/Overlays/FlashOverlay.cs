@@ -297,10 +297,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.Closed += (_, _) =>
             {
                 Drifting.Remove(entry);
-                StopClockIfIdle();
+                if (Drifting.Count == 0) { _driftTimer?.Stop(); _driftTimer = null; }
             };
             if (w is FlashOverlayWindow flash && m.Style == FlashMotionStyle.Pendulum) flash.ApplyMotion(m);
-            EnsureClock();
+            if (_driftTimer != null) return;
+            _lastDriftTick = Clock.GetTimestamp();
+            _driftTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => DriftTick());
+            _driftTimer.Start();
         }
 
         /// <summary>WPF EnsureDragMotion: a still flash gets a rect state when first grabbed.</summary>
@@ -318,21 +321,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         internal static bool OwnsMotion => PrizeOwnership.IsGranted(PrizeOwnership.FlashDriftBounce)
             || PrizeOwnership.IsGranted(Services.Prizes.PrizeGrants.FlashPendulum);
-
-        private static void StopClockIfIdle()
-        {
-            if (Drifting.Count != 0) return;
-            _driftTimer?.Stop();
-            _driftTimer = null;
-        }
-
-        private static void EnsureClock()
-        {
-            if (_driftTimer != null) return;
-            _lastDriftTick = Clock.GetTimestamp();
-            _driftTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => DriftTick());
-            _driftTimer.Start();
-        }
 
         /// <summary>True while the shared drift tick is running.</summary>
         internal static bool DriftRunning => _driftTimer != null;

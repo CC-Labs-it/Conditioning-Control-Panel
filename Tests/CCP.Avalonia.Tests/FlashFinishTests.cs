@@ -190,10 +190,25 @@ public sealed class FlashFinishTests
             FlashOverlay.StartDrift(w, m);
             clock.Now += TimeSpan.TicksPerSecond / 10;
             FlashOverlay.DriftTick();
-            Assert.Equal(m.AngleRad * 180 / Math.PI, ((RotateTransform)w.PictureTransform!).Angle, 6);
+            Assert.Equal(m.AngleRad * 180 / Math.PI, ((TransformGroup)w.PictureTransform!).Children.OfType<RotateTransform>().Single().Angle, 6);
+            var transform = w.PictureTransform;
+            w.SetGazeDwellProgress(0.5);
+            clock.Now += TimeSpan.TicksPerSecond / 10;
+            FlashOverlay.DriftTick();
+            Assert.Same(transform, w.PictureTransform);
+            Assert.Equal(m.AngleRad * 180 / Math.PI, ((TransformGroup)w.PictureTransform!).Children.OfType<RotateTransform>().Single().Angle, 6);
+            Assert.Equal(1.05, w.DwellScale, 6);
+            var dwell = ((TransformGroup)w.PictureTransform!).Children.OfType<ScaleTransform>().Single();
+            Assert.Equal((1.05, 1.05), (dwell.ScaleX, dwell.ScaleY));
             Assert.Equal(m.W, w.Width, 6);
             Assert.Equal(m.H, w.Height, 6);
             Assert.Equal(new PixelPoint((int)Math.Round(m.X), (int)Math.Round(m.Y)), w.Position);
+            Assert.True(w.TryBeginShatter(MotionLevel.Full, new Random(3)));
+            var shards = ((Panel)w.Content!).Children.OfType<Panel>().Last();
+            Assert.Equal(m.AngleRad, w.Shatter!.FrozenAngleRad, 6);
+            Assert.Equal(m.AngleRad * 180 / Math.PI, ((RotateTransform)shards.RenderTransform!).Angle, 6);
+            Assert.Equal(new Point((m.PivotX - w.Shatter.RectX), (m.PivotY - w.Shatter.RectY)), shards.RenderTransformOrigin.Point);
+            Assert.Equal((m.PivotX - m.MediaW / 2, m.PivotY + m.Rope - m.MediaH / 2), (w.Shatter.RectX, w.Shatter.RectY));
             w.Close();
             Assert.False(FlashOverlay.DriftRunning);
         }

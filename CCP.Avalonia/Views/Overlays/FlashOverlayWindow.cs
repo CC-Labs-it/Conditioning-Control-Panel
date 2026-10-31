@@ -33,7 +33,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     {
         private readonly Image _image;
         private bool _closed;
-        private double _motionAngle;
+        private readonly RotateTransform _motionRotate = new();
+        private readonly ScaleTransform _dwellScale = new();
 
         internal void ApplyCorners(bool rounded, bool owned, bool glow, double width, double height)
         {
@@ -47,9 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var k = DesktopScaling > 0 ? DesktopScaling : 1;
             _card.Width = m.MediaW / k;
             _card.Height = m.MediaH / k;
-            _motionAngle = m.AngleRad * 180 / Math.PI;
-            if (_card.RenderTransform is not RotateTransform) _card.RenderTransform = new RotateTransform();
-            ((RotateTransform)_card.RenderTransform).Angle = _motionAngle;
+            _motionRotate.Angle = m.AngleRad * 180 / Math.PI;
             Width = m.W / k + 2 * GlowPadPx / k;
             Height = m.H / k + 2 * GlowPadPx / k;
             Position = new PixelPoint((int)Math.Round(m.X) - GlowPadPx, (int)Math.Round(m.Y) - GlowPadPx);
@@ -67,13 +66,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private long _expiresAt;
         internal long ExpiresAt => _expiresAt;
         internal bool IsFadingOut { get; private set; }
-        internal double DwellScale => (_card.RenderTransform as ScaleTransform)?.ScaleX ?? 1;
+        internal double DwellScale => _dwellScale.ScaleX;
         internal void SetGazeDwellProgress(double progress)
         {
             if (IsFadingOut || Exit != null) return;
-            var scale = 1 + Math.Clamp(progress, 0, 1) * 0.10;
-            if (_card.RenderTransform is ScaleTransform st) st.ScaleX = st.ScaleY = scale;
-            else _card.RenderTransform = new ScaleTransform(scale, scale);
+            _dwellScale.ScaleX = _dwellScale.ScaleY = 1 + Math.Clamp(progress, 0, 1) * 0.10;
         }
         internal void BoostLifetime(int extraMs)
         {
@@ -121,8 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var p = this.PointToScreen(e.GetPosition(this));
                 FlashDrag.Begin(m, p.X, p.Y, NowMs());
                 MotionStyle = FlashMotionStyle.DriftBounce;
-                _motionAngle = 0;
-                _card.RenderTransform = null;
+                _motionRotate.Angle = 0;
                 var k = DesktopScaling > 0 ? DesktopScaling : 1;
                 _card.Width = m.MediaW / k;
                 _card.Height = m.MediaH / k;
@@ -193,6 +189,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var state = FlashShatter.Create(x, y, fit.Width * scale, fit.Height * scale,
                 bounds.X, bounds.Y, bounds.Width, bounds.Height, motion, rng);
             if (state.Shards.Length == 0) return false; // Motion Off falls through to FlashExit, like WPF.
+            // WPF FlashLayer.cs:194-196: break the hanging media at its frozen tilt.
+            if (FlashOverlay.Drifting.Find(e => e.Window == this).Motion is { Style: FlashMotionStyle.Pendulum } pend)
+                FlashShatter.TakeOverHangingRect(state, pend.PivotX, pend.PivotY, pend.Rope, pend.AngleRad, pend.MediaW, pend.MediaH);
+            (x, y, fit) = (state.RectX, state.RectY, new Size(state.RectW / scale, state.RectH / scale));
             Shatter = state;
             IsHitTestVisible = false;
             X11Overlay.SetClickThrough(this, true);
@@ -204,6 +204,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _shards = new Panel
             {
                 Width = fit.Width, Height = fit.Height,
+                RenderTransformOrigin = new RelativePoint((state.PivotX - x) / scale, (state.PivotY - y) / scale, RelativeUnit.Absolute),
+                RenderTransform = new RotateTransform(state.FrozenAngleRad * 180 / Math.PI),
                 HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
                 VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
                 Margin = new Thickness((x - bounds.X) / scale, (y - bounds.Y) / scale, 0, 0),
@@ -321,7 +323,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _card.RenderTransformOrigin = new RelativePoint(0.5, s.PivotY, RelativeUnit.Relative);
             _exitScale!.ScaleX = s.ScaleX;
             _exitScale.ScaleY = s.ScaleY;
-            _exitRotate!.Angle = _motionAngle + s.RotationDeg;
+            _exitRotate!.Angle = _motionRotate.Angle + s.RotationDeg;
             _exitShift!.Y = s.OffsetY * _card.Bounds.Height;
             // TV off: the picture burns white as it collapses (FlashLayer: white at Whiten x alpha).
             _whiten.Opacity = Math.Clamp(s.Whiten, 0, 1);
@@ -409,6 +411,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _card = new Panel
             {
                 Children = { _glow, _image, _whiten },
+                RenderTransform = new TransformGroup { Children = { _dwellScale, _motionRotate } },
                 HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
                 VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
             };
