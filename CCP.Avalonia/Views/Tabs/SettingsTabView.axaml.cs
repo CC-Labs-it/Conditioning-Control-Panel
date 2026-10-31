@@ -63,6 +63,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AttachedToVisualTree += (_, _) => NotifyShellVisibility();
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { NotifyShellVisibility(); SyncFoldArrowBreath(); } };
 
+            // WPF SettingsTabView.xaml.cs:60-61,424-435; MainWindow.Presets.cs:1147.
+            Loaded += (_, _) => { Services.Prizes.PrizeGrants.GrantsChanged += RefreshV2Badges; RefreshV2Badges(); };
+            Unloaded += (_, _) => Services.Prizes.PrizeGrants.GrantsChanged -= RefreshV2Badges;
             WireStubs();
             InitializeClickChoice();
             InitFavoritesDrawer();
@@ -73,6 +76,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ------------------------------------------------------------------------------
         // The real ports.
         // ------------------------------------------------------------------------------
+
+        internal void RefreshV2Badges() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            CardFlash.ShowV2Badge = Services.Prizes.V2Badges.FlashOwned();
+            CardBubblePop.ShowV2Badge = Services.Prizes.V2Badges.BubbleOwned();
+        });
 
         private void NotifyShellVisibility()
         {

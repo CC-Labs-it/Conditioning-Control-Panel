@@ -178,6 +178,186 @@ public sealed class FeatureCardFxTests
         Assert.False(card.IsBreathing);
     });
 
+    [Fact]
+    public void InactiveArtUsesGreyTwinAndRestoresForLockTeasePreviewAndHover() => WithCard((window, host, card) =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        using var art = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(640, 320), new Vector(96, 96),
+            global::Avalonia.Platform.PixelFormat.Bgra8888, global::Avalonia.Platform.AlphaFormat.Premul);
+        card.Icon = art;
+        card.DimWhenInactive = true;
+        var grey = card.FindControl<Border>("ImgIconMute")!;
+        var content = card.FindControl<Grid>("ContentRoot")!;
+        var title = card.FindControl<TextBlock>("TxtTitle")!;
+        Assert.Equal(new PixelSize(320, 160), ((global::Avalonia.Media.Imaging.Bitmap)((ImageBrush)grey.Background!).Source!).PixelSize);
+        Assert.Same(grey.Parent, card.FindControl<Border>("ImgIconHost"));
+        Assert.Equal(1, grey.Opacity);
+        Assert.Equal(0.62, content.Opacity);
+        Assert.Equal(0.72, title.Opacity);
+        Hover(card, window, true);
+        Assert.Equal(0, grey.Opacity);
+        Assert.Equal(1, content.Opacity);
+        card.DashboardDepth = true;
+        Assert.Equal(1, grey.Opacity); // dashboard hover keeps off art muted
+        card.IsActive = true;
+        Assert.Equal(0, grey.Opacity);
+        Assert.Equal(1, content.Opacity);
+        card.IsActive = false;
+        card.IsLocked = true;
+        Assert.Equal(0, grey.Opacity);
+        Assert.Equal(0.35, content.Opacity);
+        card.IsLocked = false;
+        card.TeaseTier = 1;
+        Assert.Equal(0, grey.Opacity);
+        card.TeaseTier = 0;
+        Assert.Equal(1, grey.Opacity);
+        card.SetTutorialPreview(true);
+        Assert.Equal(0, grey.Opacity);
+        card.SetTutorialPreview(false);
+        Assert.Equal(1, grey.Opacity);
+        card.Icon = null;
+        Assert.Null(grey.Background);
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        Env.RaiseMotionGateChanged();
+        Assert.Equal(TimeSpan.FromMilliseconds(200), ((global::Avalonia.Animation.DoubleTransition)grey.Transitions!.Single()).Duration);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        Env.RaiseMotionGateChanged();
+        Assert.Null(grey.Transitions);
+    });
+
+    [Fact]
+    public void DepthFaceTravelsAndReleasesWhileSocketStaysFixed() => WithCard((window, host, card) =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        card.DashboardDepth = card.DimWhenInactive = true;
+        var face = card.FindControl<Panel>("PressFace")!;
+        var transforms = (TransformGroup)face.RenderTransform!;
+        var travel = transforms.Children.OfType<TranslateTransform>().Single();
+        var socket = card.FindControl<Border>("DepthSocket")!;
+        var bevel = card.FindControl<Border>("DepthBevel")!;
+        Assert.True(socket.IsVisible && bevel.IsVisible);
+        Assert.Null(socket.RenderTransform);
+        Assert.Equal(-1, travel.Y);
+        Hover(card, window, true);
+        Assert.Equal(-2, travel.Y);
+        Assert.Equal(1, ((ScaleTransform)card.FindControl<Border>("RootBorder")!.RenderTransform!).ScaleX);
+        var point = card.TranslatePoint(new Point(60, 60), window)!.Value;
+        window.MouseDown(point, MouseButton.Left);
+        Assert.Equal(2, travel.Y);
+        Assert.Equal(1, bevel.Opacity);
+        window.MouseUp(point, MouseButton.Left);
+        Assert.Equal(-2, travel.Y);
+        card.IsActive = true;
+        Assert.Equal(1, travel.Y);
+        Assert.Equal(0.75, bevel.Opacity);
+        card.IsLocked = true;
+        Assert.Equal(-2, travel.Y);
+        window.MouseDown(point, MouseButton.Left);
+        Assert.Equal(-2, travel.Y);
+        window.MouseUp(point, MouseButton.Left);
+        host.IsVisible = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(-1, travel.Y);
+        card.DashboardDepth = false;
+        Assert.Equal(0, travel.Y);
+        Assert.False(socket.IsVisible || bevel.IsVisible);
+    });
+
+    [Fact]
+    public void DepthMotionUsesReleaseSpringPointerTiltAndLiveGates() => WithCard((window, host, card) =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        card.DashboardDepth = card.DimWhenInactive = card.IsActive = true;
+        var transforms = (TransformGroup)card.FindControl<Panel>("PressFace")!.RenderTransform!;
+        var travel = transforms.Children.OfType<TranslateTransform>().Single();
+        var tilt = transforms.Children.OfType<RotateTransform>().Single();
+        Assert.Equal(1, travel.Y);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        Env.RaiseMotionGateChanged();
+        card.IsActive = false;
+        var spring = (global::Avalonia.Animation.DoubleTransition)travel.Transitions!.Single();
+        Assert.Equal(TimeSpan.FromMilliseconds(140), spring.Duration);
+        Assert.Equal(1.5, spring.Easing.Ease(0.65), 3); // WPF: 1 px beyond the -1 rest, from +1
+        window.MouseMove(card.TranslatePoint(new Point(card.Bounds.Width * 0.75, card.Bounds.Height * 0.25), window)!.Value);
+        Assert.Equal(0.3, tilt.GetBaseValue(RotateTransform.AngleProperty).Value, 3);
+        Assert.Equal(TimeSpan.FromMilliseconds(120), ((global::Avalonia.Animation.DoubleTransition)tilt.Transitions!.Single()).Duration);
+        CoreSettings.Current.PerformanceMode = true;
+        Env.RaiseMotionGateChanged();
+        Assert.Equal(0, tilt.GetBaseValue(RotateTransform.AngleProperty).Value);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        Env.RaiseMotionGateChanged();
+        Assert.Equal(-2, travel.Y); // hovered off face snaps
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        Env.RaiseMotionGateChanged();
+        card.IsActive = true;
+        Assert.Equal(TimeSpan.FromMilliseconds(70), ((global::Avalonia.Animation.DoubleTransition)travel.Transitions!.Single()).Duration);
+    });
+
+    [Theory]
+    [InlineData(140, 120)]
+    [InlineData(212, 190)]
+    [InlineData(424, 190)]
+    [InlineData(424, 380)]
+    public void BadgeColumnStacksMarksAwayFromHelp(double width, double height) => WithCard((window, host, card) =>
+    {
+        card.Width = width; card.Height = height;
+        card.ShowV2Badge = true;
+        card.TierBadge = "TIER 1";
+        card.HelpSectionId = "BubblePop";
+        window.UpdateLayout();
+        var tier = card.FindControl<Border>("TierBadgeHost")!;
+        var pill = card.FindControl<Border>("V2BadgeHost")!;
+        var help = card.FindControl<Button>("BtnHelp")!;
+        Rect Box(Control c) => new(c.TranslatePoint(default, card)!.Value, c.Bounds.Size);
+        Assert.True(pill.IsVisible && help.IsVisible);
+        Assert.True(Box(pill).Top >= Box(tier).Bottom + 4);
+        Assert.Equal(Box(tier).Left, Box(pill).Left);
+        Assert.False(Box(pill).Intersects(Box(help)));
+        double top = Box(tier).Top;
+        card.TierBadge = null;
+        window.UpdateLayout();
+        Assert.Equal(top, Box(pill).Top);
+        Assert.False(card.FindControl<StackPanel>("BadgeColumn")!.IsHitTestVisible);
+        card.ShowV2Badge = false;
+        Assert.False(pill.IsVisible);
+    });
+
+    [Fact]
+    public void WallBadgesFollowOwnershipChangesAndReattach() => WithCard((window, host, card) =>
+    {
+        var field = typeof(ConditioningControlPanel.Services.Prizes.PrizeGrants)
+            .GetField("_service", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var saved = (ConditioningControlPanel.Services.Prizes.OwnershipService?)field.GetValue(null);
+        var ownership = new ConditioningControlPanel.Services.Prizes.OwnershipService(() => "test-card", null, a => a());
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.Attach(ownership);
+        var wall = new ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView();
+        try
+        {
+            host.Children.Add(wall);
+            Dispatcher.UIThread.RunJobs();
+            var flash = wall.FindControl<FeatureCard>("CardFlash")!;
+            var bubble = wall.FindControl<FeatureCard>("CardBubblePop")!;
+            Assert.False(flash.ShowV2Badge || bubble.ShowV2Badge);
+            ownership.ApplySnapshot("test-card", 1, new[] { ConditioningControlPanel.Services.Prizes.PrizeGrants.BubbleRain });
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(bubble.ShowV2Badge);
+            Assert.False(flash.ShowV2Badge);
+            ownership.ApplySnapshot("test-card", 2, new[] { ConditioningControlPanel.Services.Prizes.PrizeGrants.FlashPendulum });
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(flash.ShowV2Badge);
+            Assert.False(bubble.ShowV2Badge);
+            host.Children.Remove(wall);
+            Dispatcher.UIThread.RunJobs();
+            ownership.ApplySnapshot("test-card", 3, Array.Empty<string>());
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(flash.ShowV2Badge); // detached view unsubscribed
+            host.Children.Add(wall);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(flash.ShowV2Badge || bubble.ShowV2Badge);
+        }
+        finally { host.Children.Remove(wall); ConditioningControlPanel.Services.Prizes.PrizeGrants.Attach(saved); }
+    });
+
     private static void Hover(FeatureCard card, Window window, bool on) => card.RaiseEvent(new PointerEventArgs(
         on ? InputElement.PointerEnteredEvent : InputElement.PointerExitedEvent, card,
         new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), window, default, 0, PointerPointProperties.None, KeyModifiers.None));

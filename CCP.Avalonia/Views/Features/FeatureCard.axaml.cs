@@ -59,6 +59,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             AvaloniaProperty.Register<FeatureCard, string?>(nameof(HelpSectionId));
         public static readonly StyledProperty<string?> TierBadgeProperty =
             AvaloniaProperty.Register<FeatureCard, string?>(nameof(TierBadge));
+        public static readonly StyledProperty<bool> ShowV2BadgeProperty =
+            AvaloniaProperty.Register<FeatureCard, bool>(nameof(ShowV2Badge));
+        public static readonly StyledProperty<bool> DimWhenInactiveProperty =
+            AvaloniaProperty.Register<FeatureCard, bool>(nameof(DimWhenInactive));
+        public static readonly StyledProperty<bool> DashboardDepthProperty =
+            AvaloniaProperty.Register<FeatureCard, bool>(nameof(DashboardDepth));
+        public bool ShowV2Badge { get => GetValue(ShowV2BadgeProperty); set => SetValue(ShowV2BadgeProperty, value); }
+        public bool DimWhenInactive { get => GetValue(DimWhenInactiveProperty); set => SetValue(DimWhenInactiveProperty, value); }
+        public bool DashboardDepth { get => GetValue(DashboardDepthProperty); set => SetValue(DashboardDepthProperty, value); }
+
         public static readonly StyledProperty<int> TeaseTierProperty =
             AvaloniaProperty.Register<FeatureCard, int>(nameof(TeaseTier));
 
@@ -156,6 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 RefreshHelpTooltip();
             };
 
+            InitializeDepth();
             ApplyLockState();
             RefreshHelpTooltip();
         }
@@ -167,10 +178,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (change.Property == TitleProperty) _txtTitle.Text = Title ?? "";
             else if (change.Property == IconProperty || change.Property == GlyphProperty) ApplyArt();
             else if (change.Property == LockLevelProperty || change.Property == IsLockedProperty) ApplyLockState();
-            else if (change.Property == IsActiveProperty) ApplyActiveState();
+            else if (change.Property == IsActiveProperty || change.Property == DimWhenInactiveProperty || change.Property == DashboardDepthProperty) ApplyActiveState();
             else if (change.Property == HelpSectionIdProperty) RefreshHelpTooltip();
             else if (change.Property == TierBadgeProperty) ApplyTierBadge();
-            else if (change.Property == TeaseTierProperty) ApplyTeaseState();
+            else if (change.Property == TeaseTierProperty) { ApplyTeaseState(); ApplyRestAppearance(); }
+            else if (change.Property == ShowV2BadgeProperty) this.FindControl<Border>("V2BadgeHost")!.IsVisible = ShowV2Badge;
         }
 
         private void ApplyArt()
@@ -180,6 +192,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _imgIconHost.Background = src is null
                 ? null
                 : new ImageBrush(src) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
+            var grey = CardArtDesaturate.Of(src);
+            this.FindControl<Border>("ImgIconMute")!.Background = grey is null ? null
+                : new ImageBrush(grey) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
             _imgIconHost.IsVisible = src is not null;
             _glyphHost.IsVisible = src is null && !string.IsNullOrEmpty(Glyph);
         }
@@ -274,14 +289,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             var showActive = (IsActive || TutorialPreview) && !IsLocked;
             _activeBorder.IsVisible = showActive;
             ApplyActiveBreath(showActive);
+            ApplyRestAppearance();
         }
 
         /// <summary>WPF FeatureCard.RefreshFx (:613): re-reads the motion/tier/focus gates. Called by
         /// the shell's ApplyDashboardFxLoops on a motion/performance change and window activation.</summary>
         internal void RefreshFx()
         {
+            if (!IsEffectivelyVisible) { _hovered = false; _pressed = false; }
             ApplyActiveState();
             RefreshHover();
+            RefreshDepth();
             TierFxBorder.Resume(_rootBorder);
         }
 
@@ -386,7 +404,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             RefreshHover();
             // A locked tile is not an affordance; lighting it up promises a click that does nothing.
             if (IsLocked) on = false;
-            if (on) HoverPop.Enter(_imgIconHost); else HoverPop.Leave(_imgIconHost);
+            if (on && !DashboardDepth) HoverPop.Enter(_imgIconHost); else HoverPop.Leave(_imgIconHost);
         }
 
         private void RefreshHover()
@@ -396,12 +414,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _rootScale.Transitions = Env.AllowTransitions ? _hoverTransitions : null;
             _rimLight.Transitions = Env.AllowTransitions ? _rimTransitions : null;
             bool on = _hovered && !IsLocked;
-            _rootScale.ScaleX = _rootScale.ScaleY = on ? HoverLiftScale : 1;
+            ApplyRestAppearance();
+            _rootScale.ScaleX = _rootScale.ScaleY = on && !DashboardDepth ? HoverLiftScale : 1;
             _rimLight.Opacity = on ? RimLightOpacity : 0;
         }
-
-        public bool DashboardDepth { get; set; }
-        public bool DimWhenInactive { get; set; }
 
         private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
         {
