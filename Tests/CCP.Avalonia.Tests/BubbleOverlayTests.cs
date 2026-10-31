@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
@@ -24,7 +25,7 @@ public sealed class BubbleOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var dir = System.IO.Directory.CreateTempSubdirectory("ccp-bubble-");
             var png = System.IO.Path.Combine(dir.FullName, "pill.png");
@@ -56,7 +57,7 @@ public sealed class BubbleOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var s = CoreSettings.Current;
             var (dayKey, paid) = (s.AmbientBubbleXpDayKey, s.AmbientBubbleXpPaidToday);   // process-global: put it back
@@ -84,6 +85,104 @@ public sealed class BubbleOverlayTests
                 BubbleOverlay.Field.Bubbles.Clear(); w.Close(); host.Close();
                 s.AmbientBubbleXpDayKey = dayKey; s.AmbientBubbleXpPaidToday = paid;
             }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
+    [InlineData(1.0, 0, 0, 20)]
+    [InlineData(1.5, -1920, -240, 20)]
+    [InlineData(1.25, -1920, 0, -20)]
+    [InlineData(2.0, 0, 0, 260)]
+    public async Task Native_region_matches_the_hit_disc_including_transparent_corners(double scale, int left, int top, int offset)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var bounds = new PixelRect(left, top, 300, 300);
+            var w = new BubbleOverlayWindow(0, bounds, scale);
+            var b = new AmbientBubble { Screen = 0, X = (left + offset) / scale, Y = (top + offset) / scale, Size = 100 / scale, Clickable = true };
+            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.Field.Bubbles.Add(b);
+            try
+            {
+                w.Sync();
+                // Every native pixel must agree with Core's WPF-style disc decision, including
+                // the exact radius, negative screen origin and mixed DPI conversion.
+                for (var y = 0; y < bounds.Height; y++)
+                    for (var x = 0; x < bounds.Width; x++)
+                        Assert.Equal(b.Contains((left + x) / scale, (top + y) / scale),
+                            Win32Overlay.Hits(w.Rects, w.InputRectCount, x, y));
+                b.Popping = true;
+                w.Sync();
+                Assert.False(Win32Overlay.Hits(w.Rects, w.InputRectCount, 70, 70));
+            }
+            finally { BubbleOverlay.Field.Bubbles.Clear(); w.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Dense_field_keeps_input_for_bubbles_after_the_first_64()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 1600, 100), 1);
+            BubbleOverlay.Field.Bubbles.Clear();
+            for (var i = 0; i < 70; i++)
+                BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Screen = 0, X = i * 20, Y = 20, Size = 10, Clickable = true });
+            try
+            {
+                w.Sync();
+                for (var i = 0; i < 70; i++)
+                    Assert.True(Win32Overlay.Hits(w.Rects, w.InputRectCount, i * 20 + 5, 25));
+                // A different screen, a non-clickable bubble and a popping bubble must all
+                // leave the native input region when the field shrinks.
+                BubbleOverlay.Field.Bubbles[0].Screen = 1;
+                BubbleOverlay.Field.Bubbles[1].Clickable = false;
+                BubbleOverlay.Field.Bubbles[2].Popping = true;
+                BubbleOverlay.Field.Bubbles.RemoveRange(3, 67);
+                w.Sync();
+                Assert.False(Win32Overlay.Hits(w.Rects, w.InputRectCount, 5, 25));
+                Assert.False(Win32Overlay.Hits(w.Rects, w.InputRectCount, 25, 25));
+                Assert.False(Win32Overlay.Hits(w.Rects, w.InputRectCount, 45, 25));
+                Assert.False(Win32Overlay.Hits(w.Rects, w.InputRectCount, 69 * 20 + 5, 25));
+            }
+            finally { BubbleOverlay.Field.Bubbles.Clear(); w.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Dense_chaos_field_region_stays_bounded_and_cheap()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            // 120 large bubbles at 150 %: r = 112 px, so ~225 pixel rows per bubble before coalescing.
+            var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 2560, 1440), 1.5);
+            BubbleOverlay.Field.Bubbles.Clear();
+            for (var i = 0; i < 120; i++)
+                BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Screen = 0, X = (i % 12) * 140 + 0.37 * i, Y = (i / 12) * 90 + 0.21 * i, Size = 150, Clickable = true });
+            try
+            {
+                w.Sync();
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                for (var k = 0; k < 20; k++) w.Sync();
+                var ms = sw.Elapsed.TotalMilliseconds / 20;
+                var report = $"120 bubbles @150%: {w.InputRectCount} rects, {ms:F3} ms/sync";
+                // Identical adjacent rows coalesce, so the region stays well under one rect per row.
+                Assert.True(w.InputRectCount is >= 120 and <= 120 * 160, report);
+                Assert.True(ms < 30, report + " (budget 30 ms = one step)");
+            }
+            finally { BubbleOverlay.Field.Bubbles.Clear(); w.Close(); }
             return Task.CompletedTask;
         });
     }
