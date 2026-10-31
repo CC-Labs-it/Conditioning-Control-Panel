@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Safety;
 using Xunit;
@@ -27,17 +28,24 @@ public sealed class PanicAftermathPortTests
         finally { PanicSurfaces.All = saved; PanicAftermath.EndQuiet(); }
     }
 
-    [Fact]
-    public void AlreadyArmedKeyDoesNotCountTwice()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ProductionStopPassCountsEachPanicOnce(bool keyAlreadyArmed)
     {
         var saved = PanicSurfaces.All;
         try
         {
-            PanicSurfaces.All = Array.Empty<PanicSurfaces.Surface>();
-            PanicAftermath.ArmQuiet();
+            // Keep any production quiet action: an empty registry hid duplicate arming.
+            // Other surface stops are unrelated to this contract and may require a desktop.
+            PanicSurfaces.All = saved.Select(s => s.Id == "panic-quiet"
+                ? s : s with { Stop = _ => { } }).ToArray();
+            PanicAftermath.EndQuiet();
             var count = PanicAftermath.PanicCount;
-            PanicSurfaces.StopAll("panic key", aftermathArmed: true);
-            Assert.Equal(count, PanicAftermath.PanicCount);
+            if (keyAlreadyArmed) PanicAftermath.ArmQuiet();
+            PanicSurfaces.StopAll(keyAlreadyArmed ? "panic key" : "tray/voice",
+                aftermathArmed: keyAlreadyArmed);
+            Assert.Equal(count + 1, PanicAftermath.PanicCount);
             Assert.True(PanicAftermath.TriggersSilenced());
         }
         finally { PanicSurfaces.All = saved; PanicAftermath.EndQuiet(); }

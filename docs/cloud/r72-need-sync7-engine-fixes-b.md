@@ -14,7 +14,7 @@ All three requested lanes were fetched and their own ranges read:
 | No-video advice, scheduled once per launch, manual each attempt | `ConditioningControlPanel/Services/BubbleCountService.cs:469-473,538-546` | Already: `CCP.Core/Services/BubbleCountScheduler.cs:84-86,206-213`, `CCP.Avalonia/Views/Windows/BubbleCountHost.cs:45`. |
 | Guarded clock and teardown steps, first failure per named step, repeat counts | `ConditioningControlPanel/Services/Session/SessionEngine.cs:360-392,665-718` | Covered by fetched PR #3421 head `d3411aaf83711eaf96fc1bf189bc4423846fedb6`: `CCP.Core/Services/Session/SessionRunner.cs:33-37,341-383,520-561`. This includes row 230 despite the earlier triage. |
 | Explicit START resumes parked session and reasserts delayed starts | `ConditioningControlPanel/MainWindow/MainWindow.StartStop.cs:129`, `ConditioningControlPanel/Services/Session/SessionClockRules.cs:50-67` | Covered by PR #3421: `CCP.Core/Services/Session/SessionRunner.cs:300-321` and head StartStop/SessionRun changes. |
-| Quiet before direct tray/voice stop surfaces, continuation after a throwing stop | `ConditioningControlPanel/MainWindow/MainWindow.xaml.cs:1670`, shared `CCP.Core/Services/Safety/PanicAftermath.cs:53-60` | Ported: `CCP.Avalonia/Views/Windows/PanicSurfaces.cs:122-131`. Key passes its existing arm at `MainShellWindow.PanicKey.cs:122`, preserving one generation increment. Tray reaches it at `MainShellWindow.Tray.cs:121`. |
+| Quiet before direct tray/voice stop surfaces, continuation after a throwing stop | `ConditioningControlPanel/MainWindow/MainWindow.xaml.cs:1670`, shared `CCP.Core/Services/Safety/PanicAftermath.cs:53-60` | Ported: `CCP.Avalonia/Views/Windows/PanicSurfaces.cs:119-128`. Key passes its existing arm at `MainShellWindow.PanicKey.cs:122`, preserving one generation increment. Tray reaches it at `MainShellWindow.Tray.cs:121`. |
 | Key early rungs arm quiet; palette-only Escape does not | `ConditioningControlPanel/MainWindow/MainWindow.xaml.cs:1670` | Already: `CCP.Avalonia/Views/Windows/MainShellWindow.PanicKey.cs:99-101`. |
 | Remote panic arms quiet, watchdog fallback arms quiet | `ConditioningControlPanel/MainWindow/MainWindow.RemoteControl.cs:1484`, WPF key ordering above | Already: `CCP.Core/Services/RemoteControl/RemoteCommands.cs:120`, `CCP.Avalonia/Platform/PanicWatchdog.cs:115`. |
 | Explicit local START and Resume release quiet | `ConditioningControlPanel/MainWindow/MainWindow.StartStop.cs:129`, `MainWindow.Presets.cs:2131` | Already: `CCP.Avalonia/Views/Windows/MainShellWindow.StartStop.cs:49`, `MainShellWindow.SessionRun.cs:112`. |
@@ -43,3 +43,18 @@ SDK: `dotnet-install --channel 10.0` could not discover a build (HTTP 403 from c
 - `git diff --check`: exit 0.
 - Restored production rebuilds: `dotnet build CCP.Avalonia -c Release` exit 0, 201 warnings, 0 errors; `dotnet build Tests/CCP.Avalonia.Tests -c Release` exit 0, 144 warnings, 0 errors. Focused tests are `SessionRunWireTests.cs:26` (font-independent projection), `:65` (shell wiring, font-blocked), and `PanicAftermathPortTests.cs:11,31` (stop ordering and one generation).
 - Final restored `dotnet test Tests/CCP.Avalonia.Tests -c Release --no-build --filter 'FullyQualifiedName~Bottom_bar_projection|FullyQualifiedName~PanicAftermathPortTests'`: exit 0, 3 passed, 0 failed, 0 skipped.
+
+
+## Review P2 correction
+
+The review is accepted. The first port overlooked the base's late `panic-quiet` registry action and the empty-registry count test hid it. Direct stops armed twice, and the key's early arm was repeated during teardown. WPF arms once before rung handling (`ConditioningControlPanel/MainWindow/MainWindow.xaml.cs:1666-1670`). Remove that registry action and keep `PanicSurfaces.StopAll` as the sole pre-teardown arm; the key still supplies `aftermathArmed: true`.
+
+The generation-count test now covers direct stops and an already-armed key. It retains any production `panic-quiet` action and replaces only unrelated desktop teardown actions with no-ops, so reintroducing that action fails the test. The existing quiet-ordering test now observes quiet at every production stop position. The structural safety list no longer requires a registry action for a preamble; quiet coverage moves to these stronger behavior assertions. No WPF/Core changes or new localization keys.
+
+Review validation uses SDK 10.0.403 at `/tmp/dotnet/dotnet`:
+
+- Fail-proof before the production fix: `dotnet test Tests/CCP.Avalonia.Tests -c Release --filter 'FullyQualifiedName~ProductionStopPassCountsEachPanicOnce'` exited 1. Both cases failed with an extra generation (expected 1 / actual 2; expected 3 / actual 4). The actual production registry quiet action was retained.
+- Final Core, Avalonia and Avalonia test-project builds: exit 0 each, 0 errors (0, 201 and 144 warnings respectively).
+- Focused Avalonia filter covering the 3 port cases, quiet-before-every-stop, registry ids/order and failing-stop continuation: exit 0, 7 passed, 0 failed, 0 skipped. These tests ran without constructing a font-dependent shell.
+- Core guards: exit 0, `All Core guards passed.` Documentation self-check: exit 0, `avalonia_docs self-check OK`. `git diff --check`: exit 0. Ledger rows remain stub, with no live verification claimed.
+- Full `dotnet test Tests/CCP.Core.Tests -c Release`: exit 0, 4636 passed, 5 existing Vosk skips, 0 failed, 42 seconds.
