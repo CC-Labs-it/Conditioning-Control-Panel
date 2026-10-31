@@ -49,6 +49,16 @@ public sealed class TabAmbientRegistryTests
             Assert.Same(room, Assert.Single(registry["premium"]));
             Assert.True(room.IsTicking);
             Assert.False(mosaic.IsTicking);
+            Assert.True(room.Layers.HasFlag(AmbientFxLayers.VaultMotes));
+            view.UpdateVaultZones();
+            var zones = (VaultZone[])typeof(AmbientFxCanvas).GetField("_vaultZones", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(room)!;
+            Assert.NotEmpty(zones);
+            Assert.All(zones, z => Assert.True(z.Bounds.Bottom >= 0 && z.Bounds.Top <= room.Bounds.Height));
+            var card = view.GetVisualDescendants().OfType<Control>().First(c => c.Name == "ExCard" &&
+                c.TranslatePoint(default, room) is { Y: >= 0 } at && at.Y <= room.Bounds.Height);
+            var cardRect = new Rect(card.TranslatePoint(default, room)!.Value, card.Bounds.Size);
+            Assert.Equal(((ExclusiveCardRow)card.DataContext!).IsLocked ? 1 : 2, zones.Count(z => z.Bounds == cardRect));
+            Assert.Contains(zones, z => !z.Diamond && z.Color == global::Avalonia.Media.Color.Parse("#FFC85A"));
 
             shell.ShowTab("settings"); Settle();
             Assert.False(room.IsTicking);
@@ -61,6 +71,10 @@ public sealed class TabAmbientRegistryTests
             Assert.Single(registry["premium"]);
 
             settings.MotionLevel = MotionLevel.Reduced;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.True(room.IsTicking); // Reduced runs only the few slow vault motes.
+            Assert.Equal(AmbientFxLayers.VaultMotes, room.Layers);
+            settings.MotionLevel = MotionLevel.Off;
             AmbientFxCanvas.Env.RaiseMotionGateChanged();
             Assert.False(room.IsTicking);
             settings.MotionLevel = MotionLevel.Full;
