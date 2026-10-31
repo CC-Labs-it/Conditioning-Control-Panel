@@ -1,6 +1,6 @@
 {
   "scheduler_started_title": "计划已启用",
-  "scheduler_started_body": "会话已按计划开始。",
+  "scheduler_started_body": "会话已按计划自动开始。",
   "scheduler_ended_title": "计划",
   "scheduler_ended_body": "计划会话已结束。",
   "deeper_submission_badge_published": "已发布",

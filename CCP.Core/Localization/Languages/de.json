@@ -1,6 +1,6 @@
 {
   "scheduler_started_title": "Zeitplan aktiv",
-  "scheduler_started_body": "Sitzung nach Zeitplan gestartet.",
+  "scheduler_started_body": "Sitzung automatisch nach Zeitplan gestartet.",
   "scheduler_ended_title": "Zeitplan",
   "scheduler_ended_body": "Geplante Sitzung beendet.",
   "deeper_submission_badge_published": "Veröffentlicht",

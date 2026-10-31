@@ -1,6 +1,6 @@
 {
   "scheduler_started_title": "スケジュール有効",
-  "scheduler_started_body": "スケジュールに従ってセッションを開始しました。",
+  "scheduler_started_body": "スケジュールに従ってセッションを自動的に開始しました。",
   "scheduler_ended_title": "スケジュール",
   "scheduler_ended_body": "予定されたセッションが終了しました。",
   "deeper_submission_badge_published": "公開済み",

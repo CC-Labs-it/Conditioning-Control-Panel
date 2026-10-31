@@ -1,6 +1,6 @@
 {
-  "scheduler_started_title": "Scheduler active",
-  "scheduler_started_body": "Session started on schedule.",
+  "scheduler_started_title": "Scheduler Active",
+  "scheduler_started_body": "Session auto-started based on schedule.",
   "scheduler_ended_title": "Scheduler",
   "scheduler_ended_body": "Scheduled session ended.",
   "Sparkles_Slip_Paid": "Paid",

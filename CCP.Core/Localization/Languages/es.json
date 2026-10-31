@@ -1,6 +1,6 @@
 {
   "scheduler_started_title": "Programación activa",
-  "scheduler_started_body": "Sesión iniciada según el horario.",
+  "scheduler_started_body": "Sesión iniciada automáticamente según el horario.",
   "scheduler_ended_title": "Programación",
   "scheduler_ended_body": "La sesión programada terminó.",
   "deeper_submission_badge_published": "Publicado",
