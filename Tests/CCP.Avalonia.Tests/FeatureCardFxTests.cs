@@ -276,6 +276,30 @@ public sealed class FeatureCardFxTests
     });
 
     [Fact]
+    public void ContinuousPointerMovesRetargetOneTiltTransition() => WithCard((window, host, card) =>
+    {
+        card.DashboardDepth = true;
+        var face = card.FindControl<Panel>("PressFace")!;
+        var tilt = (RotateTransform)((TransformGroup)face.RenderTransform!).Children[0];
+        int sets = 0;
+        tilt.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == global::Avalonia.Animation.Animatable.TransitionsProperty && e.NewValue != null) sets++;
+        };
+        void Move(double x, double y) => window.MouseMove(card.TranslatePoint(new Point(x, y), window)!.Value);
+        Move(20, 20);
+        var transition = tilt.Transitions;
+        Assert.NotNull(transition);
+        Move(40, 25);
+        Move(60, 30);
+        Assert.Same(transition, tilt.Transitions); // changing targets must retain the running tween
+        Assert.Equal(1, sets);
+        Move(60, 30);
+        Assert.Same(transition, tilt.Transitions); // repeated target does not restart it either
+        Assert.Equal(1, sets);
+    });
+
+    [Fact]
     public void V2BadgeIsOptInAndReversible() => WithCard((window, host, card) =>
     {
         var badge = card.FindControl<Border>("V2BadgeHost")!;

@@ -35,6 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private bool _pressed;
         private bool _hovered;
         private double _target = double.NaN;
+        private double _tiltTarget = double.NaN;
 
         internal double Travel => _travel.Y;
         internal double TiltAngle => _tilt.Angle;
@@ -91,11 +92,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (!_hovered || _pressed || !_enabled() || !TiltAllowed || size.Width <= 0 || size.Height <= 0) return;
             double nx = at.X / size.Width * 2 - 1;
             double ny = at.Y / size.Height * 2 - 1;
-            Move(_tilt, RotateTransform.AngleProperty, TiltFor(nx, ny), DepthLaw.Ms(DepthLaw.HoverMs, Env.Level), new LinearEasing());
+            double angle = TiltFor(nx, ny);
+            if (angle == _tiltTarget) return;
+            _tiltTarget = angle;
+            Move(_tilt, RotateTransform.AngleProperty, angle, DepthLaw.Ms(DepthLaw.HoverMs, Env.Level), new LinearEasing());
         }
 
         private void SettleTilt()
         {
+            _tiltTarget = 0;
             int ms = DepthLaw.Ms(DepthLaw.HoverMs, Env.Level);
             Move(_tilt, RotateTransform.AngleProperty, 0, _owner.IsLoaded ? ms : 0, new QuadraticEaseOut());
         }
@@ -129,9 +134,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
         private static void Move(Animatable t, StyledProperty<double> property, double to, int ms, Easing easing)
         {
-            t.Transitions = ms > 0
-                ? new Transitions { new DoubleTransition { Property = property, Duration = TimeSpan.FromMilliseconds(ms), Easing = easing } }
-                : null;
+            var duration = TimeSpan.FromMilliseconds(ms);
+            // WPF DashboardCardDepth.cs:81 retargets from the current angle. Replacing the
+            // transition cancels it; keep one for continuous pointer motion (as SplitFeatureCard does).
+            if (ms <= 0) t.Transitions = null;
+            else if (t is not RotateTransform || t.Transitions is not [DoubleTransition current]
+                || current.Property != property || current.Duration != duration || current.Easing.GetType() != easing.GetType())
+                t.Transitions = new Transitions { new DoubleTransition { Property = property, Duration = duration, Easing = easing } };
             t.SetValue(property, to);
         }
 

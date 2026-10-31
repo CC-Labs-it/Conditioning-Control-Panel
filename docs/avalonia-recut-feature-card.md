@@ -11,7 +11,7 @@ No WPF or Core source changes. No new localization keys.
 | Inactive opacity and grey art | Features/FeatureCard.xaml.cs:563,584 | Views/Features/FeatureCard.axaml.cs:315,329, ported; Core CardMuteRule and Helpers/CardArtDesaturate reused |
 | Hover restores art except on dashboard | Features/FeatureCard.xaml.cs:784 | Views/Features/FeatureCard.axaml.cs:443, ported |
 | Lock and tease override grey; tutorial lights art | Features/FeatureCard.xaml.cs:589 | Views/Features/FeatureCard.axaml.cs:331, ported |
-| Dashboard socket, travel, bevel, tilt, release | Services/UI/DashboardCardDepth.cs:32,65 | Views/Features/DashboardCardDepth.cs:43,109, ported; Core DashboardDepthLaw reused |
+| Dashboard socket, travel, bevel, tilt, release | Services/UI/DashboardCardDepth.cs:32,65 | Views/Features/DashboardCardDepth.cs:44,114, ported; Core DashboardDepthLaw reused |
 | Dashboard does not scale or pop art | Features/FeatureCard.xaml.cs:784 | Views/Features/FeatureCard.axaml.cs:453,463, ported |
 | Opt-in v2 pill | Features/FeatureCard.xaml.cs:264; Features/FeatureCard.xaml:214 | Views/Features/FeatureCard.axaml:175; FeatureCard.axaml.cs:197, ported control API; ownership wiring remains part B |
 | Inverted dashboard toggle gesture | Features/FeatureCard.xaml.cs:810 | Views/Features/FeatureCard.axaml.cs:475, already present, preserved Core DashboardClickRules |
@@ -34,8 +34,8 @@ PR coverage is the supplied triage assignment, not an independent review of PR h
 
 FeatureCardFxTests.cs:183 covers opt-in dim, grey pixels, live hover, active,
 lock, tease, fade and motion Off. :228 covers dashboard hold, no scale,
-press/release, active sink, lock rejection, preserved click inversion. :279 covers the reversible v2 pill.
-:291 covers tilt clamping, release overshoot and endpoints. Existing tests stay intact.
+press/release, active sink, lock rejection, preserved click inversion. :303 covers the reversible v2 pill.
+:315 covers tilt clamping, release overshoot and endpoints. Existing tests stay intact.
 Mystery and Vault opt into depth (WPF Views/Tabs/SettingsTabView.xaml:933,1041;
 Avalonia Views/Tabs/SettingsTabView.axaml:806,897). Toggle tiles already opted in.
 The older Just Drop tile is now the Deeper Editor in WPF (:627); that caller
@@ -65,3 +65,15 @@ opening rows and star. Keep asset/preset recuts and privacy/sweep with their
 assigned PRs. Prize-service ownership of ShowV2Badge is still absent; this
 commit ports the opt-in visual API, matching the old lane's scope.
 No WPF side-by-side verification was performed.
+
+## Review P2 follow-up
+
+WPF Services/UI/DashboardCardDepth.cs:81 retargets tilt from its current angle.
+DashboardCardDepth now reuses the tilt transition and ignores unchanged targets,
+following SplitFeatureCard.SetDepthValue/TiltTo; travel easing remains unchanged.
+FeatureCardFxTests.ContinuousPointerMovesRetargetOneTiltTransition sends changing
+and repeated pointer positions through the real headless window. It failed with
+Assert.Same on reviewed commit 2a25232c7 before the fix. No new copy keys.
+Review validation: all three required builds had 0 errors; Core tests: 4635
+passed, 6 skipped, 0 failed. FeatureCardFxTests plus SplitFeatureCardDepthTests:
+13 passed, 0 skipped, 0 failed. Core guards and avalonia_docs self-check passed.
