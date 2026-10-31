@@ -1,7 +1,7 @@
 // PORTED-IN-PART from ConditioningControlPanel/MainWindow/MainWindow.Browser.cs.
 // Navigation, offline gating, profile clearing, tray restoration and the HTTPS-only missing-engine
 // escape hatch are live. WebHost also has a script channel and the card reapplies its mute script.
-// Missing: native engine mute (cross-origin frames), crash/init retry, document-created scripts,
+// Missing: crash/init retry, document-created scripts,
 // media/audio-sync reporting, remote video takeover, autoplay, pop-out and fullscreen/mirroring.
 // Profile account/art work belongs to its separate ledger rows. Site-radio mod sync lives on the card.
 
