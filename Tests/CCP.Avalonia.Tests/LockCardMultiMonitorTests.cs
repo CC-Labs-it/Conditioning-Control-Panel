@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -19,7 +19,7 @@ namespace CCP.Avalonia.Tests;
 /// landscape 1.0x primary; the bottom stayed clickable. Live X geometry showed the primary card at
 /// 2496x1404+1440+178 instead of +480: it was shown first, covered the monitor it spawned on, then
 /// moved while mapped and KWin clamped the move. Every card must therefore already sit on its own
-/// screen, full size, in the pixel space Position uses, at the moment it is shown.
+/// screen in pixel coordinates when shown, and cover its full pixel bounds after layout.
 /// </summary>
 public sealed class LockCardMultiMonitorTests
 {
@@ -39,9 +39,10 @@ public sealed class LockCardMultiMonitorTests
     // DP-3 landscape primary 2496x1404+1440+480. XWayland reports one scale (Xft.dpi 124 -> 1.2917)
     // for both; a per-monitor backend would report kscreen's 1.3 and 1.0.
     [Theory]
-    [InlineData(124.0 / 96, 124.0 / 96)]
-    [InlineData(1.3, 1.0)]
-    public void EveryCardIsShownCoveringItsWholeScreen(double portraitScale, double landscapeScale) => AvaloniaTestDispatcher.Run(() =>
+    [InlineData(124.0 / 96, 124.0 / 96, true)]
+    [InlineData(1.3, 1.0, true)]
+    [InlineData(1.3, 1.0, false)]
+    public void EveryCardIsShownCoveringItsWholeScreen(double portraitScale, double landscapeScale, bool dual) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current == null)
             ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -52,19 +53,37 @@ public sealed class LockCardMultiMonitorTests
         var oldQuery = ScreenList.QueryOverride;
         var oldDual = CoreSettings.Current.DualMonitorEnabled;
         ScreenList.QueryOverride = _ => new[] { portrait, landscape };
-        CoreSettings.Current.DualMonitorEnabled = true;
-        var atShow = new List<(LockCardWindow Window, PixelRect Rect)>();
+        CoreSettings.Current.DualMonitorEnabled = dual;
+        var atShow = new List<(LockCardWindow Window, PixelPoint Position)>();
         // Geometry at Show: a window moved after it is mapped is placed by the WM, not by us.
-        using var hook = Window.WindowOpenedEvent.AddClassHandler<LockCardWindow>((w, _) => atShow.Add((w, PixelRectOf(w))));
+        using var hook = Window.WindowOpenedEvent.AddClassHandler<LockCardWindow>((w, _) => atShow.Add((w, w.Position)));
         try
         {
             LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);
-            Dispatcher.UIThread.RunJobs();
-
             Assert.Equal(2, atShow.Count);
-            var primaryRect = atShow.Single(s => s.Window == LockCardWindow.Primary).Rect;
-            Assert.Equal(landscape.Bounds, primaryRect);   // the typing card is on the primary, all of it
-            Assert.Equal(portrait.Bounds, atShow.Single(s => s.Window != LockCardWindow.Primary).Rect);
+            foreach (var (window, position) in atShow)
+            {
+                var screen = window == LockCardWindow.Primary ? landscape : portrait;
+                Assert.Equal(screen.Bounds.Position, position);
+                // Headless has no monitor DPI transition. Simulate the backend notification;
+                // measure the actual client pixels after layout, not Width * target scale.
+                var changed = (Action<double>)typeof(ITopLevelImpl)
+                    .GetProperty("ScalingChanged", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!
+                    .GetValue(window.PlatformImpl)!;
+                changed(screen.Scaling);
+            }
+            Dispatcher.UIThread.RunJobs();
+            foreach (var (window, _) in atShow)
+            {
+                var bounds = (window == LockCardWindow.Primary ? landscape : portrait).Bounds;
+                var actual = PixelRectOf(window);
+                Assert.Equal(bounds.Position, actual.Position);
+                // Headless rounds client DIPs upward: permit up to one DIP of overshoot,
+                // but never an uncovered pixel along either edge.
+                var rounding = (int)Math.Ceiling(window.RenderScaling);
+                Assert.InRange(actual.Width, bounds.Width, bounds.Width + rounding);
+                Assert.InRange(actual.Height, bounds.Height, bounds.Height + rounding);
+            }
         }
         finally
         {
@@ -75,9 +94,37 @@ public sealed class LockCardMultiMonitorTests
 
         PixelRect PixelRectOf(LockCardWindow w)
         {
-            // Width/Height are DIPs of the target screen; Position is in that same pixel space.
-            var k = w == LockCardWindow.Primary ? landscape.Scaling : portrait.Scaling;
-            return new PixelRect(w.Position, new PixelSize((int)Math.Round(w.Width * k), (int)Math.Round(w.Height * k)));
+            return new PixelRect(w.Position, new PixelSize(
+                (int)Math.Round(w.ClientSize.Width * w.RenderScaling),
+                (int)Math.Round(w.ClientSize.Height * w.RenderScaling)));
+        }
+    });
+
+    [Fact]
+    public void OpenedFallbackDoesNotOverwritePreparedCoverage() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current == null)
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var target = MakeScreen(1, new PixelRect(-1920, 480, 1920, 1080), primary: true);
+        var oldQuery = ScreenList.QueryOverride;
+        ScreenList.QueryOverride = _ => new[] { target };
+        try
+        {
+            LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);
+            Dispatcher.UIThread.RunJobs();
+            var card = LockCardWindow.Primary!;
+            // The real headless screen differs from our prepared target. Without _covered,
+            // the CLR Opened fallback replaces it even though the at-Show check still passes.
+            Assert.NotEqual(target.Bounds, card.Screens.Primary!.Bounds);
+            Assert.Equal(target.Bounds.Position, card.Position);
+            Assert.Equal(new Size(1920, 1080), card.ClientSize);
+        }
+        finally
+        {
+            LockCardWindow.ForceCloseAll();
+            ScreenList.QueryOverride = oldQuery;
         }
     });
 }

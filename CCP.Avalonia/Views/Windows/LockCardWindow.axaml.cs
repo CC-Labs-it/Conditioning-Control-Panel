@@ -209,7 +209,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Apply per-session configuration: phrase, repeat count, strict/voice mode, and reset every
         /// transient piece of card state. The WPF original also positioned the window on a specific
         /// <c>System.Windows.Forms.Screen</c> in device pixels via <c>SetWindowPos</c>; here the
-        /// window is simply <c>WindowState="Maximized"</c> on its screen.
+        /// window is placed and sized by <c>CoverScreen</c> before it is shown.
         /// </summary>
         private void Configure(string phrase, int repeats, bool strictMode, bool voiceMode)
         {
@@ -1090,18 +1090,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var primary = Build(phrase, repeats, strictMode, voiceMode, isTest, isPrimary: true);
                 var all = Features.ScreenList.Enumerate(primary);
                 var primaryScreen = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
-                primary.CoverScreen(primaryScreen);   // the keyboard card sits on the primary (WPF :1635)
+                primary.CoverScreen(primaryScreen);   // the keyboard card sits on the primary (WPF :1705-1717)
                 primary.Show();
 
-                // One cover per monitor when the user asked for it.
-                if (CoreSettings.Current.DualMonitorEnabled)
+                // Lock cards always cover every monitor, as WPF does (:1705-1717).
+                foreach (var screen in all.Where(s => s != primaryScreen))
                 {
-                    foreach (var screen in all.Where(s => s != primaryScreen))
-                    {
-                        var mirror = Build(phrase, repeats, strictMode, voiceMode, isTest, isPrimary: false);
-                        mirror.CoverScreen(screen);
-                        mirror.Show();
-                    }
+                    var mirror = Build(phrase, repeats, strictMode, voiceMode, isTest, isPrimary: false);
+                    mirror.CoverScreen(screen);
+                    mirror.Show();
                 }
 
                 // Last, so the card that can be typed into owns the foreground.
