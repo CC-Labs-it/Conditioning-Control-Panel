@@ -92,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF GigglePriority / PanicSilence: drop every waiting line and the pending gap.</summary>
         private void ClearSpeechQueue()
         {
+            CancelTriggerAnimation(); // panic, close and priority speech retire pending lead-in and typing
             _speechQueue.Clear();
             _cancelSpeechDelay();
             _cancelSpeechDelay = static () => { };
@@ -112,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>The bubble's auto-hide (WPF Speech.cs:588-596): collapse it, then the next line.</summary>
         internal void EndSpeechBubble()
         {
+            CancelTriggerAnimation();
             _speechTimer?.Stop();
             _speechBubble.IsVisible = false;
             _isShowingAiBubble = false;

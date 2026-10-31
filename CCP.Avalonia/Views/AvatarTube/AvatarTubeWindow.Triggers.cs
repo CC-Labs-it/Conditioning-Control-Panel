@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/AvatarTube/AvatarTubeWindow.Speech.cs (WPF 7.2): Trigger mode -
 // StartTriggerTimer :1630, StopTriggerTimer :1656, RestartTriggerTimer :1666, OnTriggerTick :2086,
-// ShowTriggerBubble :2112 and ShowTriggerBubbleImmediate :2152. Deviations: no lead-in or slow
-// typewriter (neither ported to this tube, see ShowSpeech), and Stop also cancels the 2 s first tick.
+// ShowTriggerBubble :2110 and ShowTriggerBubbleImmediate :2147. Lead-in and slow typing follow
+// Speech.cs:2173-2247,2938-3042. Stop also cancels the 2 s first tick.
 
 using System;
 using System.ComponentModel;
@@ -128,8 +128,30 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 Log.Information("TriggerMode: Haptic only (avatar not visible)");
                 return;
             }
-            SubliminalWhisperShow.PlayTriggerAudio(trigger);
-            ShowSpeech(trigger, playSound: false, aiGenerated: false, null, false, preset: true, trigger: true);
+            CancelTriggerAnimation();
+            _isGiggling = true;
+            var generation = _triggerAnimationGeneration;
+            _cancelTriggerAnimation = SpeechDelayScheduler(TimeSpan.FromSeconds(0.6), () =>
+            {
+                if (generation != _triggerAnimationGeneration || !_triggersAttached) return;
+                if (PanicAftermath.TriggersSilenced()) { PanicSilence(); return; }
+                SubliminalWhisperShow.PlayTriggerAudio(trigger);
+                ShowSpeech(trigger, playSound: false, aiGenerated: false, null, false, preset: true, trigger: true);
+                // WPF strips markdown links for intermediate frames; the final pass uses the full text.
+                var plain = System.Text.RegularExpressions.Regex.Replace(trigger,
+                    @"\[([^\]]+)\]\((https?://[^\)]+)\)", "$1", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                _txtSpeech.Text = "";
+                if (plain.Length == 0) { _txtSpeech.Text = trigger; return; }
+                var index = 0;
+                _cancelTriggerAnimation = TriggerLoopScheduler(TimeSpan.FromMilliseconds(TriggerTypewriterStepMs(plain.Length)), () =>
+                {
+                    if (generation != _triggerAnimationGeneration || !_triggersAttached) return;
+                    if (PanicAftermath.TriggersSilenced()) { PanicSilence(); return; }
+                    index = Math.Min(plain.Length, index + Math.Max(1, plain.Length / 100));
+                    _txtSpeech.Text = index == plain.Length ? trigger : plain[..index];
+                    if (index == plain.Length) _cancelTriggerAnimation();
+                });
+            });
         }
 
         // WPF Windowing.cs:2210-2233. The head's parent visibility handler also hides the dock.
@@ -137,7 +159,21 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             && WindowState != WindowState.Minimized
             && (!_isAttached || _parentWindow is { IsVisible: true, WindowState: not WindowState.Minimized });
 
-        /// <summary>WPF: 5 s plus 0.05 s a character, clamped to 5-14 s.</summary>
-        internal static double TriggerDisplaySeconds(string trigger) => Math.Clamp(5.0 + trigger.Length * 0.05, 5.0, 14.0);
+        private int _triggerAnimationGeneration;
+        private Action _cancelTriggerAnimation = static () => { };
+        private void CancelTriggerAnimation()
+        {
+            _triggerAnimationGeneration++;
+            _cancelTriggerAnimation();
+            _cancelTriggerAnimation = static () => { };
+        }
+
+        // WPF Speech.cs:2938-2965: slow profile, batched ticks, plus readable time after typing.
+        private static int TriggerTypewriterStepMs(int length) => Math.Clamp(7000 / Math.Max(1, length), 24, 75);
+        internal static int TriggerTypingMs(int length) => length <= 0 ? 0 :
+            TriggerTypewriterStepMs(length) * (int)Math.Ceiling((double)length / Math.Max(1, length / 100));
+        internal TimeSpan? SpeechHideDelay => _speechTimer?.Interval;
+        internal static double TriggerDisplaySeconds(string trigger) =>
+            Math.Clamp(5.0 + trigger.Length * 0.05, 5.0, 14.0) + TriggerTypingMs(trigger.Length) / 1000.0;
     }
 }

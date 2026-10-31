@@ -19,19 +19,23 @@ namespace CCP.Avalonia.Tests;
 /// tick unless a line is up, haptic-only while muted, and restarted/stopped by the setting.</summary>
 public sealed class TubeTriggerModeTests
 {
-    [Fact]
-    public Task TriggerLoopShowsCustomTriggersAndFollowsTheSetting() => AvaloniaTestDispatcher.RunAsync(() =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task TriggerLoopShowsCustomTriggersAndFollowsTheSetting(bool closeDuringTyping) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         PanicAftermath.EndQuiet();
         var s = CoreSettings.Current;
         var (on, interval, triggers, muted) = (s.TriggerModeEnabled, s.TriggerIntervalSeconds, s.CustomTriggers, s.AvatarMuted);
         var provider = CoreAudio.PlayStoppableProvider;
-        CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => static () => { };
-        s.TriggerModeEnabled = true; s.TriggerIntervalSeconds = 45; s.CustomTriggers = new List<string> { "SLEEP" }; s.AvatarMuted = false;
+        var audio = 0;
+        CoreAudio.PlayStoppableProvider = (_, _, tag, _, _) => { if (tag == "whisper") audio++; return static () => { }; };
+        s.SubAudioEnabled = true; s.SubAudioMuted = false;
+        s.TriggerModeEnabled = true; s.TriggerIntervalSeconds = 45; s.CustomTriggers = new List<string> { "freeze" }; s.AvatarMuted = false;
         var (detached, enabled) = (s.AvatarTubeDetached, s.AvatarEnabled);
         s.AvatarTubeDetached = true; s.AvatarEnabled = true;
         var tube = new AvatarTubeWindow(null);
@@ -50,14 +54,27 @@ public sealed class TubeTriggerModeTests
             var text = tube.FindControl<TextBlock>("TxtSpeech")!;
             delays[0].Fire();
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal("SLEEP", text.Text);
+            Assert.NotEqual("freeze", text.Text); // no immediate trigger text or audio
+            Assert.Equal(0, audio);
+            Assert.Equal(0.6, delays[^1].Delay.TotalSeconds);
+            delays[^1].Fire();
+            Assert.Equal(1, audio);
+            Assert.Equal("", text.Text);
+            var typing = loops[^1];
+            Assert.Equal(75, typing.Interval.TotalMilliseconds);
+            typing.Tick();
+            Assert.Equal("f", text.Text);
+            for (var i = 1; i < 6; i++) typing.Tick();
+            Assert.Equal("freeze", text.Text);
+            Assert.True(typing.Stopped());
+            Assert.Equal(TimeSpan.FromSeconds(5.75), tube.SpeechHideDelay); // 5.3 + 0.45 typing
             Assert.True(tube.IsSpeaking);
             text.Text = "";
             loop.Tick();                                   // a line is up: the tick is skipped, not queued
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, tube.QueuedSpeechCount);
             Assert.Equal("", text.Text);
-            Assert.Equal(5.25, AvatarTubeWindow.TriggerDisplaySeconds("SLEEP"), 3);
+            Assert.Equal(5.75, AvatarTubeWindow.TriggerDisplaySeconds("freeze"), 3);
 
             tube.EndSpeechBubble();
             ((Stepped)tube.SpeechClock).Now += TimeSpan.FromSeconds(3);
@@ -75,7 +92,36 @@ public sealed class TubeTriggerModeTests
             PanicAftermath.EndQuiet();
             s.AvatarMuted = false;
             loop.Tick();
-            Assert.Equal("SLEEP", text.Text);
+            delays[^1].Fire();
+            for (var i = 0; i < 6; i++) loops[^1].Tick();
+            Assert.Equal("freeze", text.Text);
+            tube.EndSpeechBubble();
+            ((Stepped)tube.SpeechClock).Now += TimeSpan.FromSeconds(3);
+            loop.Tick();
+            var pendingLead = delays[^1];
+            var beforePanic = audio;
+            tube.PanicSilence();
+            pendingLead.Fire();
+            Assert.Equal(beforePanic, audio); // fail-proof: a cancelled lead-in cannot play
+            ((Stepped)tube.SpeechClock).Now += TimeSpan.FromSeconds(3);
+            loop.Tick();
+            delays[^1].Fire();
+            var interruptedTyping = loops[^1];
+            interruptedTyping.Tick();
+            tube.PanicSilence();
+            var afterPanic = text.Text;
+            interruptedTyping.Tick();
+            Assert.True(interruptedTyping.Stopped());
+            Assert.Equal(afterPanic, text.Text); // fail-proof: even an already dispatched tick is stale
+
+            ((Stepped)tube.SpeechClock).Now += TimeSpan.FromSeconds(3);
+            loop.Tick();
+            delays[^1].Fire();
+            var replacedTyping = loops[^1];
+            tube.GigglePriority("replacement", playSound: false);
+            replacedTyping.Tick();
+            Assert.True(replacedTyping.Stopped());
+            Assert.Equal("replacement", text.Text);
             tube.EndSpeechBubble();
 
             s.TriggerIntervalSeconds = 120; // the settings event alone must restart the loop
@@ -87,13 +133,21 @@ public sealed class TubeTriggerModeTests
             Assert.True(loops[^1].Stopped());
             Assert.False(tube.TriggerLoopRunning);
             s.TriggerModeEnabled = true;
+            ((Stepped)tube.SpeechClock).Now += TimeSpan.FromSeconds(3);
+            delays[^1].Fire(); // first tick schedules the lead-in
             var pending = delays[^1];
+            if (closeDuringTyping) pending.Fire();
+            var closingAnimation = loops[^1];
+            var beforeClose = audio;
             tube.Close();
             Assert.True(loops[^1].Stopped());
             text.Text = "closed";
             pending.Fire();
+            closingAnimation.Tick();
+            Assert.True(closingAnimation.Stopped());
             loop.Tick();
             Assert.Equal("closed", text.Text);
+            Assert.Equal(beforeClose, audio);
             Assert.False(tube.TriggerLoopRunning);
         }
         finally
@@ -106,6 +160,18 @@ public sealed class TubeTriggerModeTests
         }
         return Task.CompletedTask;
     });
+
+    [Theory]
+    [InlineData(0, 0, 5)]
+    [InlineData(6, 450, 5.75)]
+    [InlineData(100, 7000, 17)]
+    [InlineData(200, 3500, 17.5)]
+    [InlineData(1000, 2400, 16.4)]
+    public void SlowTypingUsesTheWpfProfile(int length, int expectedMs, double displaySeconds)
+    {
+        Assert.Equal(expectedMs, AvatarTubeWindow.TriggerTypingMs(length));
+        Assert.Equal(displaySeconds, AvatarTubeWindow.TriggerDisplaySeconds(new string('x', length)), 3);
+    }
 
     private sealed class Stepped : TimeProvider
     {
