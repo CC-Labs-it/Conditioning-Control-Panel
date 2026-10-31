@@ -59,21 +59,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private readonly HashSet<VaultCardAura> _auras = new();
-        private BeatLoop? _reducedAuraMotion;
-        private long _reducedAuraStart;
+        private BeatLoop? _auraMotion;
+        private long _auraStart;
         private bool _vaultLoaded;
-        internal bool ReducedAuraRunning => _reducedAuraMotion?.IsRunning == true;
+        internal bool AuraRunning => _auraMotion?.IsRunning == true;
 
-        internal void ReducedAuraFrame()
+        internal void AuraFrame()
         {
-            if (!ReducedAuraRunning) return;
-            double t = FxAdorner.Time.GetElapsedTime(_reducedAuraStart).TotalSeconds;
-            foreach (var aura in _auras) if (aura.IsVisible) aura.Frame(t, full: false);
+            if (!AuraRunning) return;
+            double t = FxAdorner.Time.GetElapsedTime(_auraStart).TotalSeconds;
+            foreach (var aura in _auras) if (aura.IsVisible) aura.Frame(t, full: AmbientFxCanvas.Env.Level == MotionLevel.Full);
         }
 
         private void Aura_Loaded(object? sender, RoutedEventArgs e)
         {
-            if (sender is VaultCardAura aura && _auras.Add(aura) && _motion == null && _reducedAuraMotion == null) aura.Rest();
+            if (sender is VaultCardAura aura && _auras.Add(aura) && _motion == null && _auraMotion == null) aura.Rest();
         }
 
         private void Aura_Unloaded(object? sender, RoutedEventArgs e)
@@ -261,7 +261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Shelf cards currently wearing a sheen. Test seam.</summary>
         internal int SheenCount => _sheens.Values.Count(s => s != null);
 
-        /// <summary>The only start/stop: visible, attached and MotionFx.AllowAmbientLoops (PLAYBOOK P01).</summary>
+        /// <summary>Starts/stops ambient and aura clocks while visible and attached (PLAYBOOK P01).</summary>
         private void UpdateMotion()
         {
             bool want = IsVisible && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
@@ -284,17 +284,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _kenBurns.ScaleX = _kenBurns.ScaleY = 1;
                 if (LitPlate != null) LitPlate.Opacity = 1;
             }
-            // WPF VaultCardAura.cs:140-152: Reduced breathing is independent of ambient loops.
-            bool reduced = _vaultLoaded && IsVisible && this.IsAttachedToVisualTree()
-                && AmbientFxCanvas.Env.Level == MotionLevel.Reduced;
-            if (!reduced) { _reducedAuraMotion?.Stop(); _reducedAuraMotion = null; }
-            else if (_reducedAuraMotion == null)
+            // WPF MainWindow.Exclusives.Flair.cs:107-110: aura motion ignores the performance tier.
+            bool auraOnly = _vaultLoaded && IsVisible && this.IsAttachedToVisualTree()
+                && AmbientFxCanvas.Env.Level != MotionLevel.Off && !want;
+            if (!auraOnly) { _auraMotion?.Stop(); _auraMotion = null; }
+            else if (_auraMotion == null)
             {
-                _reducedAuraStart = FxAdorner.Time.GetTimestamp();
-                _reducedAuraMotion = new BeatLoop(this, _ => ReducedAuraFrame());
-                _reducedAuraMotion.Start();
+                _auraStart = FxAdorner.Time.GetTimestamp();
+                _auraMotion = new BeatLoop(this, _ => AuraFrame());
+                _auraMotion.Start();
             }
-            if (!want && !reduced) foreach (var aura in _auras) aura.Rest();
+            if (!want && !auraOnly) foreach (var aura in _auras) aura.Rest();
             foreach (var part in _fxParts) Dress(part);
         }
 

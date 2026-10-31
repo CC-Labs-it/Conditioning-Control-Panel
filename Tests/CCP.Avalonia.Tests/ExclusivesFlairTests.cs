@@ -67,7 +67,7 @@ public sealed class ExclusivesFlairTests
         CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
         Assert.False(view.MotionRunning);
-        Assert.True(view.ReducedAuraRunning);
+        Assert.True(view.AuraRunning);
         Assert.True(aura.Breathing);
         Assert.Equal(0, aura.GlintOpacity);
         Assert.Equal(0.5, aura.Opacity, 6);
@@ -92,25 +92,51 @@ public sealed class ExclusivesFlairTests
         Step(view, 0.2);
         Assert.True(aura.Breathing);
         shell.ShowTab("settings"); Settle();
-        Assert.False(view.ReducedAuraRunning);
+        Assert.False(view.AuraRunning);
         Assert.False(aura.Breathing);
         Assert.Equal(0.6, aura.Opacity);
         shell.ShowTab("premium"); Settle();
-        Assert.True(view.ReducedAuraRunning);
+        Assert.True(view.AuraRunning);
         aura = Parts<VaultCardAura>(view).First(a => a.IsVisible);
         Step(view, 0.2);
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
-        Assert.False(view.ReducedAuraRunning);
+        Assert.False(view.AuraRunning);
         Assert.False(aura.Breathing);
         Assert.Equal(0.6, aura.Opacity);
         CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
-        Assert.True(view.ReducedAuraRunning);
+        Assert.True(view.AuraRunning);
         shell.Content = null; Settle();
-        Assert.False(view.ReducedAuraRunning);
+        Assert.False(view.AuraRunning);
         Assert.False(aura.Breathing);
         Assert.Equal(0.6, aura.Opacity);
+    });
+
+    [Fact]
+    public Task FullAuraAnimatesInPerformanceModeAndCleansUp() => WithPremiumPage((shell, view) =>
+    {
+        var aura = Parts<VaultCardAura>(view).First(a => a.IsVisible);
+        aura.Seed = 0;
+        CoreSettings.Current.PerformanceMode = true;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.False(view.MotionRunning);
+        Assert.True(view.AuraRunning);
+        Assert.True(aura.Breathing);
+        Step(view, 0.74); // WPF begin 600 ms, glint peak 140 ms later
+        Assert.Equal(1, aura.GlintOpacity, 6);
+        Assert.InRange(aura.Opacity, 0.32, 0.95);
+        shell.ShowTab("settings"); Settle();
+        Assert.False(view.AuraRunning);
+        Assert.False(aura.Breathing);
+        Assert.Equal(0.6, aura.Opacity);
+        Assert.Equal(0, aura.GlintOpacity);
+        shell.ShowTab("premium"); Settle();
+        Assert.True(view.AuraRunning);
+        CoreSettings.Current.PerformanceMode = false;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.False(view.AuraRunning);
+        Assert.True(view.MotionRunning);
     });
 
     [Fact]
@@ -232,7 +258,7 @@ public sealed class ExclusivesFlairTests
     {
         Clock.Now += (long)(seconds * TimeSpan.TicksPerSecond);
         view.MotionFrame();
-        view.ReducedAuraFrame();
+        view.AuraFrame();
     }
 
     private static void Settle()
