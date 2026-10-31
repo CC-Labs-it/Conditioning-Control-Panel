@@ -1,7 +1,6 @@
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Companion;
-using ConditioningControlPanel.Models;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -15,10 +14,9 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// </summary>
 internal static class CompanionHead
 {
-    private static IDisposable? _activeTimer;
-    private static DispatcherTimer? _drainTimer;
+    private static IDisposable? _drainTimer, _activeTimer;
 
-    internal static bool Started => _activeTimer != null;
+    internal static bool Started => _drainTimer != null;
 
     internal static void Start()
     {
@@ -26,45 +24,18 @@ internal static class CompanionHead
         try { CompanionCore.Start(); } catch (Exception ex) { Log.Warning(ex, "CompanionCore start failed"); }
         CoreModsHooks.ActiveCompanionProvider = () => CompanionCore.ActiveCompanion;
         CoreModsHooks.SwitchCompanion = id => CompanionCore.SwitchCompanion(id);
-        // WPF CompanionService.cs:183-209: every real switch restarts/stops drain, including the roster.
-        CompanionCore.Switched += OnSwitched;
 
+        // ponytail: WPF runs this timer only under Brain Parasite; here DrainTick returns at once for other perks.
+        _drainTimer = DispatcherTimer.Run(() => { try { CompanionCore.DrainTick(DateTime.UtcNow); } catch (Exception ex) { Log.Debug("Drain tick: {E}", ex.Message); } return true; },
+            TimeSpan.FromSeconds(CompanionCore.DrainIntervalSeconds));
         _activeTimer = DispatcherTimer.Run(() => { try { CompanionCore.UpdateActiveTime(); } catch { } return true; }, TimeSpan.FromMinutes(1));
-        UpdateDrainTimer();
-    }
-
-    /// <summary>WPF SetPerk: persist an allowed choice, then restart its drain cadence.</summary>
-    internal static bool SetPerk(CompanionBonusType perk)
-    {
-        if (!CompanionPerks.TrySelect(CoreSettings.Current, perk)) return false;
-        CoreSettings.Save();
-        UpdateDrainTimer();
-        return true;
-    }
-
-    private static void OnSwitched(CompanionId _) => UpdateDrainTimer();
-
-    private static void UpdateDrainTimer()
-    {
-        _drainTimer?.Stop();
-        _drainTimer = null;
-        if (!Started || CompanionCore.ActivePerk != CompanionBonusType.XPDrain) return;
-        _drainTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(CompanionCore.DrainIntervalSeconds) };
-        _drainTimer.Tick += (_, _) =>
-        {
-            try { CompanionCore.DrainTick(DateTime.UtcNow); }
-            catch (Exception ex) { Log.Debug("Drain tick: {E}", ex.Message); }
-        };
-        _drainTimer.Start();
     }
 
     /// <summary>Stops both timers (tests; the hooks are the caller's to restore).</summary>
     internal static void Stop()
     {
-        CompanionCore.Switched -= OnSwitched;
-        _drainTimer?.Stop();
+        _drainTimer?.Dispose();
         _activeTimer?.Dispose();
-        _drainTimer = null;
-        _activeTimer = null;
+        _drainTimer = _activeTimer = null;
     }
 }
