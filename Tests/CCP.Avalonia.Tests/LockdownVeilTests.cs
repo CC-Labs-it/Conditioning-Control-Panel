@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -36,6 +37,7 @@ public sealed class LockdownVeilTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<AvApp>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -491,6 +493,10 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        // A real render on a loaded runner can outlast the entire 600 ms flash. Freeze its
+        // monotonic clock so rendering cannot consume the frames this test inspects.
+        Assert.Same(TimeProvider.System, shell.LockdownFlashTime);
+        shell.LockdownFlashTime = new SteppedTime();
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -503,6 +509,9 @@ public sealed class LockdownVeilTests
 
         ld.Activate(TimeSpan.FromMinutes(30));
         Frame();
+        // Reproduce a UI-thread stall longer than the flash before pumping the real timer again.
+        System.Threading.Thread.Sleep(700);
+        Frame();
         Assert.True(res.TryGetResource("PinkBrush", null, out pb));
         Assert.Equal("ffdc143c", Hex(pb));
         Assert.Equal("ff8b0000", Hex(titleBar.Background));
@@ -510,7 +519,8 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
+        Assert.Equal(1, flash.Opacity);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
         shell.PaintLockdownFlash(300);
