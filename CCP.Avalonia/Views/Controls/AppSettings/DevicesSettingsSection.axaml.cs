@@ -259,7 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// Platform/WebcamTracker). Privacy info, Start tracking and Revoke are live.
         ///
         /// Quick Recal and Tracker Test are live over the tracker's gaze feed.
-        /// The camera picker is live over <see cref="Platform.V4l2Cameras"/>.
+        /// The camera picker is live over <see cref="Platform.CameraList"/>.
         /// <para>ponytail: the debug cursor stays disabled until its overlay is ported.
         /// The status pill follows the real tracker's state transitions.</para>
         /// </summary>
@@ -357,11 +357,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         private bool _webcamDevicePopulating;   // Items.Clear()/SelectedItem raise SelectionChanged
 
-        /// <summary>WPF PopulateWebcamCombo (MainWindow.LabTab.cs:1372), over sysfs instead of DirectShow.
+        /// <summary>WPF PopulateWebcamCombo (MainWindow.LabTab.cs:1372), over the shared platform camera list.
         /// Selection matches the saved /dev/videoN number, since V4L2 numbers are not contiguous.</summary>
         private int PopulateWebcamDevices()
         {
-            var devices = Platform.V4l2Cameras.Enumerate();
+            var devices = Platform.CameraList.Enumerate();
             _webcamDevicePopulating = true;
             try
             {

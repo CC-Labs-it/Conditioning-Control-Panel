@@ -50,40 +50,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
     }
 
-    /// <summary>V4L2 capture through OpenCV. <c>CCP_WEBCAM_DEVICE</c> (an index) overrides the saved camera
-    /// index; live checks point it at one with no /dev/videoN so no real camera is opened.</summary>
-    internal sealed class OpenCvFrameSource : IFrameSource
-    {
-        private VideoCapture? _cap;
-
-        public bool Open()
-        {
-            int index = int.TryParse(Environment.GetEnvironmentVariable("CCP_WEBCAM_DEVICE"), out var i)
-                ? Math.Max(0, i) : ResolveSavedIndex();
-            _cap = new VideoCapture(index, OperatingSystem.IsLinux() ? VideoCaptureAPIs.V4L2 : VideoCaptureAPIs.ANY);
-            if (!_cap.IsOpened()) return false;
-            // WPF's default mode (WebcamTrackingService CaptureWidth/Height/TargetFps).
-            _cap.Set(VideoCaptureProperties.FrameWidth, 640);
-            _cap.Set(VideoCaptureProperties.FrameHeight, 480);
-            _cap.Set(VideoCaptureProperties.Fps, 30);
-            return true;
-        }
-
-        /// <summary>The saved /dev/videoN when it is listed, else the first listed camera - the one the
-        /// Settings picker shows in that case (V4L2 numbers have gaps, so "0" may not exist).</summary>
-        internal static int ResolveSavedIndex()
-        {
-            int saved = CoreSettings.Current.WebcamDeviceIndex;
-            var cams = V4l2Cameras.Enumerate();
-            foreach (var c in cams) if (c.Index == saved) return saved;
-            return cams.Count > 0 ? cams[0].Index : Math.Max(0, saved);
-        }
-
-        public bool Read(Mat bgr) => _cap != null && _cap.Read(bgr) && !bgr.Empty();
-
-        public void Dispose() { _cap?.Release(); _cap?.Dispose(); _cap = null; }
-    }
-
     /// <summary>
     /// The Linux webcam engine: frame source -> Core BlazeFace/FaceMesh/Iris detectors -> Core
     /// BlinkDetector + GazeEngine, the same pipeline WebcamTrackingService.ProcessFrame runs on WPF:
@@ -270,8 +236,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 bool opened;
                 try
                 {
-                    opened = run.Source.Open();
-                    if (!opened) failureState = WebcamTrackingState.CameraDenied; // WPF Open returned false on every backend
+                    opened = run.Source is OpenCvFrameSource camera
+                        ? camera.Open(() => Volatile.Read(ref _gen) != gen) : run.Source.Open();
+                    if (!opened) failureState = run.Source is OpenCvFrameSource failed
+                        ? failed.FailureState : WebcamTrackingState.CameraDenied;
                 }
                 catch (UnauthorizedAccessException ex)
                 {
