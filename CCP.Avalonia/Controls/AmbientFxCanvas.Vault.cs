@@ -51,10 +51,10 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 return;
             }
             var level = Env.Level;
-            int target = _fogOnly ? 0 : VaultMoteMath.Target(level, _liveBudget);
-            if (_vault.Length < VaultMoteMath.Cap(MotionLevel.Full)) _vault = new VMote[VaultMoteMath.Cap(MotionLevel.Full)];
+            int target = _fogOnly ? 0 : VaultMoteRules.Target(level, _liveBudget);
+            if (_vault.Length < VaultMoteRules.Cap(MotionLevel.Full)) _vault = new VMote[VaultMoteRules.Cap(MotionLevel.Full)];
 
-            float speed = (float)VaultMoteMath.SpeedScale(level);
+            float speed = (float)VaultMoteRules.SpeedScale(level);
             for (int i = _vaultN - 1; i >= 0; i--)
             {
                 var m = _vault[i];
@@ -67,7 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             }
             if (_vaultN > target) _vaultN = target;
 
-            double every = 1.0 / Math.Max(0.001, VaultMoteMath.SpawnPerSecond(level));
+            double every = 1.0 / Math.Max(0.001, VaultMoteRules.SpawnPerSecond(level));
             _vaultT = _vaultN >= target ? Math.Min(_vaultT + dt, (float)every) : _vaultT + dt;
             double w = Bounds.Width, h = Bounds.Height;
             if (w <= 1 || h <= 1) return;
@@ -90,10 +90,10 @@ namespace ConditioningControlPanel.Avalonia.Controls
             Point at;
             Color c;
             bool diamond;
-            if (_vaultZones.Length > 0 && _rng.NextDouble() < VaultMoteMath.ZoneShare)
+            if (_vaultZones.Length > 0 && _rng.NextDouble() < VaultMoteRules.ZoneShare)
             {
                 var z = _vaultZones[_rng.Next(_vaultZones.Length)];
-                var p = VaultMoteMath.SpawnOnRing(z.Bounds.X, z.Bounds.Y, z.Bounds.Width, z.Bounds.Height,
+                var p = VaultMoteRules.SpawnOnRing(z.Bounds.X, z.Bounds.Y, z.Bounds.Width, z.Bounds.Height,
                     _rng.NextDouble(), _rng.NextDouble(), _rng.NextDouble());
                 at = new Point(p.X, p.Y);
                 c = z.Color;
@@ -108,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             }
             if (at.X < 0 || at.X > w || at.Y < 0 || at.Y > h) return;
 
-            float life = (float)(VaultMoteMath.LifeMin + _rng.NextDouble() * (VaultMoteMath.LifeMax - VaultMoteMath.LifeMin));
+            float life = (float)(VaultMoteRules.LifeMin + _rng.NextDouble() * (VaultMoteRules.LifeMax - VaultMoteRules.LifeMin));
             _vault[_vaultN++] = new VMote
             {
                 X = (float)(at.X / w),

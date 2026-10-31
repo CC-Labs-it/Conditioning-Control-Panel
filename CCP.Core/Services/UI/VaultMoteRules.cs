@@ -3,7 +3,7 @@ using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services.UI;
 
-public static class VaultMoteMath
+public static class VaultMoteRules
 {
     /// <summary>Hard ceiling on motes alive at once, before the tier's own budget.</summary>
     public static int Cap(MotionLevel level) => level switch
