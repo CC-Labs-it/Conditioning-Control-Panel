@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// and write <c>AppSettings</c> for real and save.</para>
     ///
     /// <para>The master and keyboard switches drive the Windows keyboard/audio runtime.
-    /// ponytail: ScreenOcr, highlight windows, other response actions and recent-app chips remain
+    /// ponytail: ScreenOcr, highlight windows, other response actions remain
     /// wire-shell-keyword-triggers-b; Linux has no keyword source yet.</para>
     /// </summary>
     public partial class AwarenessTabView : UserControl
@@ -148,6 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 UpdateStatusIndicator(masterOn);
                 RefreshAwarenessPresetCards();
+                RefreshSeenApps();
             }
             catch (Exception ex)
             {
@@ -301,6 +302,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
         }
 
+        // WPF MainWindow.Awareness.cs:575-642. Cursor and tooltip match the WPF chips.
+        private void RefreshSeenApps()
+        {
+            AwarenessSeenAppsPanel.Children.Clear();
+            var listed = CoreSettings.Current.KeywordTriggerApps;
+            var seen = Platform.KeywordTriggerHead.RecentApps.Snapshot()
+                .Where(a => !AwarenessAppScopeRules.MatchesAppList(listed, a)).ToArray();
+            TxtAwarenessSeenAppsLabel.IsVisible = seen.Length > 0;
+            foreach (var app in seen)
+            {
+                var chip = new Button
+                {
+                    Content = new TextBlock { Text = "+ " + app }, Tag = app, FontSize = 10,
+                    Padding = new Thickness(7, 3), Margin = new Thickness(0, 0, 5, 5),
+                    Foreground = Brushes.White,
+                    Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x44)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x5A)),
+                    BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                };
+                ToolTip.SetTip(chip, string.Format(ConditioningControlPanel.Localization.Loc.Get("awareness_add_app_tip"), app));
+                chip.Click += (_, _) =>
+                {
+                    var s = CoreSettings.Current;
+                    var apps = (s.KeywordTriggerApps ?? new()).ToList();
+                    if (!AwarenessAppScopeRules.MatchesAppList(apps, app)) apps.Add(app);
+                    s.KeywordTriggerApps = apps;
+                    CoreSettings.Save();
+                    TxtAwarenessAppList.Text = string.Join(", ", apps);
+                    RefreshSeenApps();
+                };
+                AwarenessSeenAppsPanel.Children.Add(chip);
+            }
+        }
+
         // ------------------------------------------------------------------ app scope
 
         /// <summary>
@@ -328,9 +363,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Log.Warning(ex, "Awareness tab: failed to write KeywordTriggerAppScope");
             }
 
-            // ponytail: WPF also rebuilds the "recently focused" chips from
-            // KeywordTriggerService.GetRecentForegroundApps(). That ring is fed by a foreground-
-            // window poll (Win32) and lives with the service, so the chip row stays empty here.
+            RefreshSeenApps();
         }
 
         private void TxtAwarenessAppList_LostFocus(object? sender, RoutedEventArgs e) => CommitAppList();
@@ -354,6 +387,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 settings.KeywordTriggerApps = parsed;
                 CoreSettings.Save();
                 TxtAwarenessAppList.Text = string.Join(", ", parsed);
+                RefreshSeenApps();
                 Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
                     parsed.Count, settings.KeywordTriggerAppScope);
             }

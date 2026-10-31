@@ -1,5 +1,7 @@
 using System;
+using ForegroundInput = (uint ProcessId, bool Observe);
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -18,6 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
+    internal static RecentForegroundApps RecentApps => Engine.RecentApps;
     private static bool _subscribed;
     private static int _generation;
     internal static void Sync()
@@ -64,23 +67,33 @@ internal static class KeywordTriggerHead
             };
             var generation = Volatile.Read(ref _generation);
             var ch = special == null ? Translate(vk) : null;
-            uint processId = 0;
-            var needsForeground = KeywordMatchRules.NeedsForeground(CoreSettings.Current);
-            if (needsForeground) GetWindowThreadProcessId(GetForegroundWindow(), out processId);
+            var foreground = Engine.CaptureInput();
+            if (foreground == null) return;
             Dispatcher.UIThread.Post(() =>
             {
                 if (generation != Volatile.Read(ref _generation)) return;
-                var foreground = needsForeground ? Foreground(processId) : (null, false);
-                if (special is { } key) Engine.Key(key, foreground.Process, foreground.Own);
-                else if (ch is { } c) Engine.Character(c, foreground.Process, foreground.Own);
-                else Engine.Key(KeywordInputKey.None, foreground.Process, foreground.Own);
+                if (special is { } key) Engine.Key(key, snapshot: foreground);
+                else if (ch is { } c) Engine.Character(c, snapshot: foreground);
+                else Engine.Key(KeywordInputKey.None, snapshot: foreground);
             });
         }
         catch (Exception ex) { Log.Debug(ex, "Keyword input failed"); }
     }
 
-    private static (string? Process, bool Own) Foreground(uint id)
+    internal static uint ReadForegroundProcessId()
     {
+        if (!OperatingSystem.IsWindows() || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"))) return 0;
+        try
+        {
+            GetWindowThreadProcessId(GetForegroundWindow(), out var id);
+            return id;
+        }
+        catch { return 0; }
+    }
+
+    internal static (string? Process, bool Own) Foreground(uint id)
+    {
+        if (id == 0) return (null, false);
         try
         {
             using var p = Process.GetProcessById((int)id);
@@ -114,6 +127,10 @@ internal static class KeywordTriggerHead
 
 internal sealed class KeywordAudioRuntime
 {
+    internal Func<uint> ForegroundId = KeywordTriggerHead.ReadForegroundProcessId;
+    internal Func<uint, (string? Process, bool Own)> ResolveForeground = KeywordTriggerHead.Foreground;
+    internal RecentForegroundApps RecentApps { get; } = new();
+    private DateTime _lastAppSample = DateTime.MinValue;
     private readonly KeywordTextInput _input = new();
     private readonly KeywordCooldowns _cooldowns = new();
     private CancellationTokenSource? _audio;
@@ -125,26 +142,43 @@ internal sealed class KeywordAudioRuntime
     internal void Start() { IsActive = true; _input.Clear(); }
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
 
-    private bool Accept(string? process, bool own)
+    private bool HasInputAccess => IsActive && CoreSettings.Current.KeywordTriggersEnabled &&
+        (CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"));
+    // WPF KeywordTriggerService.cs:218-219,650-668: capture before dispatch, after access.
+    internal ForegroundInput? CaptureInput()
     {
-        var s = CoreSettings.Current;
-        if (!IsActive || !s.KeywordTriggersEnabled ||
-            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return false;
-        if (KeywordMatchRules.AppAllowed(s, process, own)) return true;
+        if (!HasInputAccess) return null;
+        var now = Now().ToUniversalTime();
+        var restricted = KeywordMatchRules.NeedsForeground(CoreSettings.Current);
+        if (!restricted && (now - _lastAppSample).TotalSeconds < 2) return (0, false);
+        if (!restricted) _lastAppSample = now;
+        return (ForegroundId(), true);
+    }
+    private bool Accept(string? process, bool own, ForegroundInput? snapshot)
+    {
+        if (!HasInputAccess) return false;
+        if (snapshot != null || process == null)
+        {
+            var input = snapshot ?? CaptureInput().GetValueOrDefault();
+            (process, own) = input.ProcessId == 0 ? (null, false) : ResolveForeground(input.ProcessId);
+            if (input.Observe) RecentApps.Remember(process, own);
+        }
+        else RecentApps.Remember(process, own);
+        if (KeywordMatchRules.AppAllowed(CoreSettings.Current, process, own)) return true;
         _input.Clear(); // never join text typed on either side of a blocked app
         return false;
     }
 
-    internal void Character(char ch, string? process = null, bool own = false)
+    internal void Character(char ch, string? process = null, bool own = false, ForegroundInput? snapshot = null)
     {
-        if (!Accept(process, own)) return;
+        if (!Accept(process, own, snapshot)) return;
         _input.Append(ch, Now(), CoreSettings.Current.KeywordBufferTimeoutMs);
         Check();
     }
 
-    internal void Key(KeywordInputKey key, string? process = null, bool own = false)
+    internal void Key(KeywordInputKey key, string? process = null, bool own = false, ForegroundInput? snapshot = null)
     {
-        if (Accept(process, own) && _input.Key(key, Now(), CoreSettings.Current.KeywordBufferTimeoutMs)) Check();
+        if (Accept(process, own, snapshot) && _input.Key(key, Now(), CoreSettings.Current.KeywordBufferTimeoutMs)) Check();
     }
 
     private void Check()
@@ -242,4 +276,25 @@ internal sealed class KeywordAudioRuntime
             catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); }
         }
     }
+}
+// WPF KeywordTriggerService.cs:489-520,582,618-622. Session-only process names.
+internal sealed class RecentForegroundApps
+{
+    private readonly LinkedList<string> _apps = new();
+    internal Func<(string? Process, bool Own)> Source = () => KeywordTriggerHead.Foreground(KeywordTriggerHead.ReadForegroundProcessId());
+    internal string[] Snapshot() => _apps.ToArray();
+    internal void Sample()
+    {
+        try { var (name, own) = Source(); Remember(name, own); }
+        catch { /* Foreground processes may exit during lookup. */ }
+    }
+    internal void Remember(string? name, bool own)
+    {
+        if (own || string.IsNullOrWhiteSpace(name)) return;
+        var existing = _apps.FirstOrDefault(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
+        if (existing != null) _apps.Remove(existing);
+        _apps.AddFirst(existing ?? name);
+        while (_apps.Count > 8) _apps.RemoveLast();
+    }
+    internal void Clear() => _apps.Clear();
 }

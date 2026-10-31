@@ -63,3 +63,21 @@ a disabled comment between the two enabled comments is skipped. No new UI copy.
 Review validation: all three required builds passed (0 errors); 25 selected Avalonia
 tests passed, including TestIsolationTests. Full Core suite: 4635 passed, 6 existing
 skips. Core guards and avalonia_docs.py passed. No full Avalonia suite or live devices.
+
+## Part B local gate fixes
+
+PR #3554 targets 884cbc282726dbb2f4b2bb4c2f21078c442e5b29; reviewed parent 0f1d7823c65940721f4ad1af3a337e787b2164b7. Earlier 600-line reports used the older whole-stack base 74ac6ce3d and hid churn in this PR. The PR diff is now measured against its actual base.
+
+- P1 fixed: KeywordTriggerHead.CaptureInput captures only the access/throttle decision and PID. Accept resolves that captured PID after dispatch, with access rechecked and explicit PID zero preserved as unknown. No Process.GetProcessById or ProcessName runs in capture. This keeps Win32PanicKey.cs:69-70's return-at-once contract; :201 raises keyword handlers before :203 invokes panic. WPF Services/Input/GlobalKeyboardHook.cs:165-166 invokes panic first; Services/KeywordTriggerService.cs:218-219 resolves foreground during input. A window-name cache is not needed to protect this hook because name resolution is deferred.
+- P2 diff fixed: AwarenessFinishRuntimeTests.cs, AwarenessFinishViewTests.cs and KeywordAvatarComment.cs match the PR base byte for byte. Only AwarenessRecentAppsTests remains in the new test file. This cloud document retains all base evidence and appends this section.
+- P2 chip fixed: AwarenessTabView.axaml.cs RefreshSeenApps uses TextBlock content, preserving literal process names such as bg3_dx11. WPF MainWindow/MainWindow.Awareness.cs:598-611 uses literal chip text; Avalonia access-key parsing is documented in root CLAUDE.md trap 1.
+- Recent-app picker, click/save, cursor and ten-language tooltip remain ported. All remaining awareness work listed above still remains part B. The shell-awareness row stays stub; local evidence is appended to its existing notes.
+- Tests retain all earlier access, throttle, ring, dispatch, persistence and translation assertions. PID capture is checked on a worker thread; the resolver asserts UI-thread execution. The chip test runs for firefox and bg3_dx11, including saved settings and literal TextBlock text.
+
+Local validation: all three required builds had 0 errors; Core tests 4635 passed with 6 existing skips; 28 affected Avalonia tests passed, including Win32PanicKeyTests. Core guards and avalonia_docs self-check passed. All ten tooltip translations passed placeholder and punctuation checks.
+
+Fail-proofs: eager name lookup on capture, re-reading PID after dispatch, and string chip content each failed the focused tests; all mutations were restored before final validation. The two base test files and KeywordAvatarComment.cs were checked byte for byte against 884cbc282. The cloud audit retains the entire base prefix; the ledger retains its parent notes and only appends new evidence. No live desktop, native foreground lookup, AI provider, audio device or OCR capture validation; full Avalonia suite compiled, not fully run.
+
+## Part B review r2 size finding
+
+Rejected. The r2 review measured 74ac6ce3d..c946ff654 (748 lines), the whole stack under this PR. This is a stacked part B lane: gh pr view 3554 reports base avalonia-port/cloud-r72-fin-shell-awareness, which is 884cbc282 and is also the merge base. git diff --shortstat 884cbc282...HEAD gives 15 files, 304 insertions, 22 deletions (326 lines), within the 600-line cap. The parent lane carries its own 74ac6ce3d-based count. No code change; the shell-awareness row stays stub.
