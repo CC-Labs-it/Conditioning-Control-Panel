@@ -14,6 +14,13 @@ namespace CCP.Avalonia.Tests;
 /// Real libvlc with the dummy output: no device, no network.</summary>
 public sealed class RaceTrackPlayerTests
 {
+    [Fact]
+    public void WaveformTranscodeKeepsSourceChannelsAndRate()
+    {
+        Assert.Equal(":sout=#transcode{vcodec=none,acodec=s16l}:std{access=file,mux=wav,dst='clip.wav'}", RaceTrackPlayer.WaveformSoutFor("clip.wav"));
+        Assert.Contains("channels=1,samplerate=16000", RaceTrackPlayer.SoutFor("clip.wav"));
+    }
+
     private static void NeedVlc()
     {
         try { _ = new LibVlcAudio("--aout=dummy"); }

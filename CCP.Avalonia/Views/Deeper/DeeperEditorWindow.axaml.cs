@@ -20,6 +20,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
@@ -65,9 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         pinned to that one path, and the engine's own media document supplies the
     ///         &lt;video&gt; element that <see cref="PollBrowserTimeAsync"/> already reads and
     ///         drives - so duration, playhead, play/pause and seek describe the file. LOCAL AUDIO
-    ///         is not: <see cref="InitializeAudioAsync"/> still needs a decoder (NAudio, or
-    ///         whatever replaces it) for both the waveform peaks and a duration, and until one
-    ///         lands the transport REFUSES on that branch rather than miming a clock.</item>
+    ///         uses LibVLC for playback and Core AudioWaveformCache for peaks.</item>
     ///   <item><b>The browser preview.</b> Real: the https pre-flight, a per-navigation host
     ///         fence, and the page's own &lt;video&gt; driven and read back through
     ///         <c>WebHost.InvokeScriptAsync</c>, so duration, playhead, play/pause and seek
@@ -84,8 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         partial.</item>
     ///   <item><b>App services.</b> App.DeeperPlayer / App.DeeperHost and the haptics bus.
     ///         GazePickerWindow is NOT one - it is ported, beside this file, and now wired.
-    ///         App.Tutorial is the CoreTutorial seam and TutorialOverlay is ported; what stops the
-    ///         tutorial here is that nothing SEEDS that seam on this head - see
+    ///         App.Tutorial uses the seeded CoreTutorial seam for editor coachmarks - see
     ///         <see cref="StartEditorTutorial"/>. App.EnhancementLibrary is
     ///         head-only too, but the five members the editor needs from it are inlined in the
     ///         file-ops region, so Save / Save As / Export / Swap / Change media / drag-drop are
@@ -109,9 +107,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool _isDirty;
         private bool _suppressDirty;
 
-        // ponytail: the waveform peaks still need a decoder (WPF AudioWaveformCache, NAudio). Local
-        // audio PLAYBACK is real (_localAudio); remote AND local video poll the page's media element.
-        private double[]? _waveformPeaks;
+        // Core caches peaks decoded through LibVLC. Playback uses _localAudio.
+        private float[]? _waveformPeaks;
         private IDeeperLocalAudio? _localAudio;
 
         /// <summary>Open editors (UI thread): the panic sweep and the player's one-editor-per-file
@@ -232,6 +229,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             Closed += (_, _) => { try { (Owner as Window)?.Activate(); } catch { } };
             Opened += (_, _) => s_open.Add(this);
             Closed += (_, _) => s_open.Remove(this);
+            Closed += (_, _) => { _editorIntroPending = false; _editorTutorialOverlay?.Close(); };
 
             Loaded += DeeperEditorWindow_Loaded;
             KeyDown += DeeperEditorWindow_KeyDown;
@@ -554,21 +552,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
             _ = InitializePreviewAsync();
 
-            // ponytail: the WPF Loaded handler dispatched the interactive tutorial's Part 2 (queued
-            // by the New Enhancement dialog) and, failing that, auto-launched the first-run editor
-            // coachmarks once. THREE of the four things that note used to name have arrived and are
-            // not the blocker any more: App.Settings is CoreSettings, App.Tutorial is CoreTutorial,
-            // and TutorialOverlay is ported (CCP.Avalonia/Views/Windows/TutorialOverlay.axaml.cs,
-            // live ctor TutorialOverlay(Window)). What is actually left is two things:
-            //   1. CoreTutorial is UNSEEDED on this head - see CCP.Avalonia/App.axaml.cs:71. The
-            //      step lists live in ConditioningControlPanel/Services/TutorialService.cs, so
-            //      CoreTutorial.Start(name) is a silent no-op and a live overlay would open a dim
-            //      sheet over a blank card. See StartEditorTutorial for the shape to restore.
-            //   2. The Part 2 hand-off needs TutorialEventBus.PendingPart2Tutorial
-            //      (ConditioningControlPanel/Services/TutorialEventBus.cs) and CoreTutorial
-            //      deliberately carries no event bus, so there is no seam to read it from.
-            // The first-run auto-launch's "shown once" flag is NOT a blocker: WPF used
-            // AppSettings.HasSeenDeeperEditorIntro and that is in Core (AppSettings.cs:7938).
+            // WPF DeeperEditorWindow.xaml.cs:350-362: once-only coachmarks yield to Part 2.
+            if (!RenderProof.Rendering && !CoreSettings.Current.HasSeenDeeperEditorIntro &&
+                !CoreTutorial.IsActive && CoreTutorialEvents.PendingPart2Tutorial == null)
+            {
+                CoreSettings.Current.HasSeenDeeperEditorIntro = true;
+                CoreSettings.Save();
+                _editorIntroPending = true;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_editorIntroPending) return;
+                    _editorIntroPending = false;
+                    if (IsVisible && !CoreTutorial.IsActive) StartEditorTutorial();
+                }, DispatcherPriority.Loaded);
+            }
         }
 
         private void BtnEditorHelp_Click(object? sender, RoutedEventArgs e)
@@ -576,29 +573,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             StartEditorTutorial();
         }
 
-        /// <summary>
-        /// ponytail: the "?" button is present and hit-testable and opens nothing. The old note here
-        /// said this waits on "App.Tutorial + TutorialOverlay, wired when the tutorial service moves
-        /// to Core" and BOTH halves of that are now wrong: <c>CoreTutorial</c> is the seam and
-        /// <c>CCP.Avalonia/Views/Windows/TutorialOverlay.axaml.cs</c> is the ported overlay, with a
-        /// live <c>TutorialOverlay(Window)</c> constructor that walks whatever tour the seam runs.
-        ///
-        /// <para>The single blocker is that NOTHING SEEDS the seam on this head - see
-        /// <c>CCP.Avalonia/App.axaml.cs:71</c>. The twenty-two step lists are sentences about WPF
-        /// controls and stay in <c>ConditioningControlPanel/Services/TutorialService.cs</c>, so
-        /// <c>CoreTutorial.Start("DeeperEditorTutorial")</c> is a silent no-op today. Showing the
-        /// overlay anyway is the failure to avoid: it would dim the editor behind an empty card.
-        /// The four lines to write once a tour exists, WPF's shape with that one guard added:</para>
-        /// <code>
-        /// if (CoreTutorial.IsActive) CoreTutorial.Skip();
-        /// CoreTutorial.Start("DeeperEditorTutorial");
-        /// if (!CoreTutorial.IsActive) return;   // unseeded seam: do not dim over nothing
-        /// new TutorialOverlay(this).Show();
-        /// </code>
-        /// </summary>
+        private TutorialOverlay? _editorTutorialOverlay;
+        private bool _editorIntroPending;
+
+        internal static void StopTutorialsForPanic()
+        {
+            foreach (var editor in s_open.ToArray())
+            {
+                editor._editorIntroPending = false;
+                try { editor._editorTutorialOverlay?.Close(); } catch { /* cancel the other editors too */ }
+            }
+        }
+
+        // WPF DeeperEditorWindow.xaml.cs:378: manual editor coachmarks.
         private void StartEditorTutorial()
         {
-            Log.Debug("DeeperEditor: editor tutorial requested; CoreTutorial is unseeded on this head");
+            if (_editorTutorialOverlay != null) return;
+            try
+            {
+                if (CoreTutorial.IsActive) CoreTutorial.Skip();
+                CoreTutorial.Start("DeeperEditor");
+                if (!CoreTutorial.IsActive) return;
+                var overlay = new TutorialOverlay(this);
+                _editorTutorialOverlay = overlay;
+                overlay.Closed += (_, _) => _editorTutorialOverlay = null;
+                overlay.Show();
+            }
+            catch (Exception ex)
+            {
+                _editorTutorialOverlay = null;
+                CoreTutorial.Skip();
+                Log.Warning(ex, "DeeperEditor: editor tutorial could not open");
+            }
         }
 
         private void LoadEnhancement(Enhancement enhancement, string? filePath)
@@ -653,6 +659,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // keeps playing behind the waveform this method is about to show.
                 StopBrowserPreview();
                 DisposeLocalAudio();
+                _waveformPeaks = null;
+                UpdateWaveformPath();
 
                 var source = _enhancement.MediaSource;
 
@@ -943,15 +951,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         }
 
         /// <summary>WPF DeeperEditorWindow.xaml.cs:1189. Playback, duration, seek and end-of-clip
-        /// are real through <see cref="DeeperLocalAudio"/>. ponytail: the waveform peak extractor
-        /// (AudioWaveformCache) is not; wiring peaks in later is one assignment to
-        /// <c>_waveformPeaks</c>.</summary>
+        /// use LibVLC; Core AudioWaveformCache supplies the peaks beside playback.</summary>
         private async Task InitializeAudioAsync(string path)
         {
             BrowserPreview.IsVisible = false;
             VideoPreview.IsVisible = false;
             PreviewPlaceholder.IsVisible = false;
             WaveformCanvas.IsVisible = true;
+            _waveformLoad = LoadWaveformAsync(path);
+            await _waveformLoad;
+            if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
 
             IDeeperLocalAudio? audio = null;
             try { audio = await DeeperLocalAudio.Open(path); }
@@ -975,7 +984,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 UpdatePlayheadPosition();
                 PlayPauseGlyph.Kind = IconKind.Play;
             });
-            _totalSeconds = audio.DurationSeconds;
+            if (audio.DurationSeconds > 0) _totalSeconds = audio.DurationSeconds;
             TxtTotalTime.Text = FormatTime(_totalSeconds);
             UpdateWaveformPath();
             RebuildTimelineRuler();
@@ -984,6 +993,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             RebuildEffectVisuals();
             RebuildRuleVisuals();
             UpdatePlayheadPosition();
+        }
+
+        internal Task? _waveformLoad;
+
+        /// <summary>WPF DeeperEditorWindow.xaml.cs:1196-1211: peaks from AudioWaveformCache, then the
+        /// waveform path and timeline duration before playback. Decode failure leaves a flat strip.</summary>
+        private async Task LoadWaveformAsync(string path)
+        {
+            try
+            {
+                var data = await AudioWaveformCache.LoadAsync(path);
+                if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
+                _waveformPeaks = data.Peaks;
+                _totalSeconds = data.DurationSeconds;
+                TxtTotalTime.Text = FormatTime(_totalSeconds);
+                UpdateWaveformPath();
+                RebuildTimelineRuler();
+                RebuildRegionVisuals();
+                RebuildHapticVisuals();
+                RebuildEffectVisuals();
+                RebuildRuleVisuals();
+                UpdatePlayheadPosition();
+            }
+            catch (Exception ex) { Log.Warning(ex, "DeeperEditor: waveform decode failed"); }
         }
 
         private void DisposeLocalAudio()

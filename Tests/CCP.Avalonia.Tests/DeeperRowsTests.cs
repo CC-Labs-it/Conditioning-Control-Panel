@@ -25,7 +25,7 @@ public sealed class DeeperRowsTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
@@ -70,7 +70,7 @@ public sealed class DeeperRowsTests
     }
 
     [Fact]
-    public Task EditorLocalAudioPlaysSeeksEndsAndStopsOnPanic() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task EditorLocalAudioPlaysSeeksEndsAndStopsOnPanic() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var dir = Directory.CreateTempSubdirectory("ccp-deeper-audio-").FullName;
@@ -83,6 +83,8 @@ public sealed class DeeperRowsTests
         try
         {
             editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            await editor._waveformLoad!.WaitAsync(TimeSpan.FromSeconds(10));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("1:35", editor.TxtTotalTime.Text);   // duration from the transport
 
@@ -117,7 +119,59 @@ public sealed class DeeperRowsTests
             Directory.Delete(dir, true);
         }
         Assert.True(fake.Disposed);
-        return Task.CompletedTask;
+    });
+
+    /// <summary>Ledger #12 (WPF DeeperEditorWindow.xaml.cs:1196-1211): an audio clip's peaks come from
+    /// AudioWaveformCache and become the editor's waveform; a failed decode leaves the flat strip.</summary>
+    [Theory]
+    [InlineData(false, true, 95)]
+    [InlineData(true, true, 95)]
+    [InlineData(false, false, 0)]
+    [InlineData(false, true, 0)]
+    public Task EditorAudioClipDrawsTheCachedWaveformPeaks(bool decodeFails, bool playbackAvailable, double playbackDuration) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-deeper-wave-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var peaks = new[] { 0.1f, 0.9f, 0.4f };
+        string? decoded = null, decodedAtOpen = null;
+        var originalOpen = DeeperLocalAudio.Open;
+        var originalDecoder = AudioWaveformCache.Decoder;
+        DeeperLocalAudio.Open = _ =>
+        {
+            decodedAtOpen = decoded;
+            return Task.FromResult<IDeeperLocalAudio?>(playbackAvailable ? new FakeAudio { DurationSeconds = playbackDuration } : null);
+        };
+        AudioWaveformCache.Decoder = p => { decoded = p; if (decodeFails) throw new InvalidOperationException("decode failed"); return new AudioWaveformResult { Peaks = peaks, DurationSeconds = 95 }; };
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = path }, null);
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            var load = editor._waveformLoad;
+            Assert.NotNull(load);
+            await load!.WaitAsync(TimeSpan.FromSeconds(10));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(path, decodedAtOpen);
+            Assert.Equal(path, decoded);
+            var field = typeof(DeeperEditorWindow).GetField("_waveformPeaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            if (decodeFails) Assert.Null(field.GetValue(editor));
+            else Assert.Equal(peaks, (float[]?)field.GetValue(editor));
+            var audio = (FakeAudio?)typeof(DeeperEditorWindow).GetField("_localAudio", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor);
+            if (playbackAvailable) Assert.Equal(playbackDuration, audio!.DurationSeconds);
+            else Assert.Null(audio);
+            Assert.Equal(95d, (double)typeof(DeeperEditorWindow).GetField("_totalSeconds", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor)!);
+            Assert.Equal("1:35", editor.TxtTotalTime.Text);
+            if (!decodeFails) Assert.NotEmpty((System.Collections.IEnumerable)typeof(DeeperEditorWindow).GetField("_rulerVisuals", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor)!);
+        }
+        finally
+        {
+            editor.Close();
+            DeeperLocalAudio.Open = originalOpen;
+            AudioWaveformCache.Decoder = originalDecoder;
+            Directory.Delete(dir, true);
+        }
     });
 
     /// <summary>MediaPlayer as the transport sees it: Playing fires on every start AND resume.</summary>
