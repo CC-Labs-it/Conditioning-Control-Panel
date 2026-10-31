@@ -12,6 +12,7 @@
 
 using System;
 using System.Collections.Generic;
+using Avalonia.Controls;
 using ConditioningControlPanel.Services.Possession;
 
 namespace ConditioningControlPanel.Avalonia.Possession
@@ -31,6 +32,10 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         protected PossessionLease Lease = null!;
         private Random _rng = Random.Shared;
+        protected Random Rng => _rng;
+        internal virtual bool CanApply(Control target) => true;
+        internal virtual double UndoMs => PossessionRuntime.ReturnMs;
+        internal virtual void Release() { }
         private bool _photosafe;
 
         internal void Begin(PossessionLease lease, Random rng, bool photosafe)
