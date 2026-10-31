@@ -1,5 +1,5 @@
 using System;
-using ForegroundInput = (string? Process, bool Own, bool Observe);
+using ForegroundInput = (uint ProcessId, bool Observe);
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
@@ -80,19 +80,20 @@ internal static class KeywordTriggerHead
         catch (Exception ex) { Log.Debug(ex, "Keyword input failed"); }
     }
 
-    internal static (string? Process, bool Own) ReadForegroundProcess()
+    internal static uint ReadForegroundProcessId()
     {
-        if (!OperatingSystem.IsWindows() || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"))) return (null, false);
+        if (!OperatingSystem.IsWindows() || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"))) return 0;
         try
         {
             GetWindowThreadProcessId(GetForegroundWindow(), out var id);
-            return id == 0 ? (null, false) : Foreground(id);
+            return id;
         }
-        catch { return (null, false); }
+        catch { return 0; }
     }
 
-    private static (string? Process, bool Own) Foreground(uint id)
+    internal static (string? Process, bool Own) Foreground(uint id)
     {
+        if (id == 0) return (null, false);
         try
         {
             using var p = Process.GetProcessById((int)id);
@@ -126,6 +127,8 @@ internal static class KeywordTriggerHead
 
 internal sealed class KeywordAudioRuntime
 {
+    internal Func<uint> ForegroundId = KeywordTriggerHead.ReadForegroundProcessId;
+    internal Func<uint, (string? Process, bool Own)> ResolveForeground = KeywordTriggerHead.Foreground;
     internal RecentForegroundApps RecentApps { get; } = new();
     private DateTime _lastAppSample = DateTime.MinValue;
     private readonly KeywordTextInput _input = new();
@@ -147,17 +150,21 @@ internal sealed class KeywordAudioRuntime
         if (!HasInputAccess) return null;
         var now = Now().ToUniversalTime();
         var restricted = KeywordMatchRules.NeedsForeground(CoreSettings.Current);
-        if (!restricted && (now - _lastAppSample).TotalSeconds < 2) return (null, false, false);
+        if (!restricted && (now - _lastAppSample).TotalSeconds < 2) return (0, false);
         if (!restricted) _lastAppSample = now;
-        var (process, own) = RecentApps.Source();
-        return (process, own, true);
+        return (ForegroundId(), true);
     }
     private bool Accept(string? process, bool own, ForegroundInput? snapshot)
     {
         if (!HasInputAccess) return false;
-        var input = snapshot ?? (process == null ? CaptureInput().GetValueOrDefault() : (process, own, true));
-        if (input.Observe) RecentApps.Remember(input.Process, input.Own);
-        if (KeywordMatchRules.AppAllowed(CoreSettings.Current, input.Process, input.Own)) return true;
+        if (snapshot != null || process == null)
+        {
+            var input = snapshot ?? CaptureInput().GetValueOrDefault();
+            (process, own) = input.ProcessId == 0 ? (null, false) : ResolveForeground(input.ProcessId);
+            if (input.Observe) RecentApps.Remember(process, own);
+        }
+        else RecentApps.Remember(process, own);
+        if (KeywordMatchRules.AppAllowed(CoreSettings.Current, process, own)) return true;
         _input.Clear(); // never join text typed on either side of a blocked app
         return false;
     }
@@ -274,7 +281,7 @@ internal sealed class KeywordAudioRuntime
 internal sealed class RecentForegroundApps
 {
     private readonly LinkedList<string> _apps = new();
-    internal Func<(string? Process, bool Own)> Source = KeywordTriggerHead.ReadForegroundProcess;
+    internal Func<(string? Process, bool Own)> Source = () => KeywordTriggerHead.Foreground(KeywordTriggerHead.ReadForegroundProcessId());
     internal string[] Snapshot() => _apps.ToArray();
     internal void Sample()
     {
