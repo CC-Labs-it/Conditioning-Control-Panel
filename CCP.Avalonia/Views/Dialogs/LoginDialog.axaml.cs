@@ -134,6 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
         public class LoginResult
         {
+            public bool? ServerNeedsDisplayName { get; set; }
             public bool Success { get; set; }
             public bool IsLegacyUser { get; set; }
             public bool ShouldShowOgWelcome { get; set; }
@@ -781,6 +782,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 ShouldShowOgWelcome = legacy && CoreSettings.Current.HasShownOgWelcome != true,
                 UnifiedId = user.UnifiedId,
                 DisplayName = user.DisplayName,
+                ServerNeedsDisplayName = user.NeedsDisplayName,
                 Provider = provider,
             };
             Close(true);
@@ -986,6 +988,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 UnifiedId = result.UnifiedId,
                 DisplayName = s.UserDisplayName,
                 Provider = "device_code",
+                ServerNeedsDisplayName = result.NeedsDisplayName,
             };
             Close(true);
         }

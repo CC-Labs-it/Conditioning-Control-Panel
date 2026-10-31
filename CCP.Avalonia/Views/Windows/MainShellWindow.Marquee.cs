@@ -44,6 +44,7 @@
 //   Banner message sheens are ported in MainShellWindow.ChromeFx.cs.
 
 using System;
+using ConditioningControlPanel.Avalonia.Platform;
 using System.Linq;
 using System.Collections.Generic;
 using Avalonia.Animation;
@@ -190,13 +191,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
-            // ponytail: WPF falls back to App.Patreon/App.Discord DisplayName when the unified
-            // name is blank. Neither provider exists on this head, so a user who linked an
-            // account but has no UserDisplayName written back gets the generic line.
-            var displayName = s.UserDisplayName;
-            secondary.Text = string.IsNullOrEmpty(displayName)
-                ? Loc.Get("label_welcome_consider_logging_in_with_patreon_for")
-                : Loc.GetF("label_welcome_back_0", displayName!);
+            var displayName = ConditioningControlPanel.Services.NeedsDisplayNameRule.FirstName(s.UserDisplayName,
+                AccountSeed.Patreon?.DisplayName, AccountSeed.Discord?.DisplayName, AccountSeed.SubscribeStar?.DisplayName);
+            secondary.Text = displayName != null ? Loc.GetF("label_welcome_back_0", displayName)
+                : CoreAccount.IsLoggedIn ? Loc.Get("banner_signed_in_no_name")
+                : Loc.Get("label_welcome_consider_logging_in_with_patreon_for");
         }
 
         private void BannerRotationTimer_Tick(object? sender, EventArgs e)
