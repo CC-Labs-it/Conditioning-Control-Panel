@@ -40,8 +40,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (owned) _ = Task.Run(() => ListenAsync(pipe, show, () => _startupPhase, _cts.Token));
         }
 
-        /// <summary>WPF App.xaml.cs:4069-4074: called on the first dispatcher pump. Until then the listener acks
-        /// before the show runs (WPF 2177-2185), so a relaunch during a slow cold start does not kill a healthy
+        /// <summary>WPF App.xaml.cs:4069-4074: called after successful desktop initialization. Until then the listener
+        /// acks before the show runs (WPF 2177-2185), so a relaunch during a slow cold start does not kill a healthy
         /// primary whose UI thread is not pumping yet; afterwards the ack waits for the show, so a wedged
         /// dispatcher reads as wedged again.</summary>
         public void EndStartupPhase() => _startupPhase = false;

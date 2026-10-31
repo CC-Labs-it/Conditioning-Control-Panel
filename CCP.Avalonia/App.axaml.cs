@@ -419,6 +419,7 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>Set by Program.Main: a real launch shows the splash. Every other desktop setup
         /// (tests, PanicCheck, VideoCheck) starts synchronously without one, as before.</summary>
         internal static bool SplashOnStartup;
+        internal static Action? DesktopStartupCompleted;
 
         public override void OnFrameworkInitializationCompleted()
         {
@@ -430,7 +431,7 @@ namespace ConditioningControlPanel.Avalonia
             var splash = SplashOnStartup && ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
                 ? Views.Windows.SplashScreen.ShowOnOwnThread() : null;
             var start = StartBehindSplash(splash, StartDesktop,
-                () => (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow);
+                () => (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow, DesktopStartupCompleted);
             // Without a splash every step completed inline, so a startup failure throws here as before;
             // behind one it is rethrown on the UI thread.
             if (start.IsCompleted) start.GetAwaiter().GetResult();
@@ -448,9 +449,9 @@ namespace ConditioningControlPanel.Avalonia
         internal static System.Runtime.ExceptionServices.ExceptionDispatchInfo? StartupFailure;
 
         internal static async Task StartBehindSplash(Views.Windows.SplashScreen? splash,
-            Func<Func<double, string, Task>, Task> start, Func<global::Avalonia.Controls.Window?> shell)
+            Func<Func<double, string, Task>, Task> start, Func<global::Avalonia.Controls.Window?> shell, Action? completed = null)
         {
-            if (splash is null) { await start(static (_, _) => Task.CompletedTask); return; }
+            if (splash is null) { await start(static (_, _) => Task.CompletedTask); completed?.Invoke(); return; }
             try
             {
                 await start((progress, status) => { splash.ShowStep(progress, status); return splash.NextFrame(); });
@@ -467,6 +468,7 @@ namespace ConditioningControlPanel.Avalonia
             window?.Show();
             splash.SetProgress(1.0, "Ready!");
             splash.FadeOutAndClose(() => { if (window is { IsVisible: true }) window.Activate(); });
+            completed?.Invoke(); // WPF App.xaml.cs:4069-4074: initialization has finished successfully.
         }
 
         private async Task StartDesktop(Func<double, string, Task> step)
