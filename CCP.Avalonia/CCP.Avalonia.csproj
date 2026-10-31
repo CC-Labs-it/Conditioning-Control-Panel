@@ -219,6 +219,7 @@
                       Link="Resources\descent\%(RecursiveDir)%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\exclusives\**\*"
                       Link="Resources\exclusives\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AvaloniaResource Include="..\Assets\Patreon tier1.png;..\Assets\Patreon tier2.png" Link="Resources\%(Filename)%(Extension)" />
     <!-- Home dashboard billboard posters (WPF csproj :411, Core DashboardBillboard roster). -->
     <AvaloniaResource Include="..\Assets\billboard\*.png"
                       Link="Resources\billboard\%(Filename)%(Extension)" />

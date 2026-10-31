@@ -189,6 +189,9 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The mod service (WPF App.Mods), or null on the headless render path.</summary>
         internal static ModService? Mods { get; private set; }
 
+        // WPF MainWindow.Exclusives.cs:1022 refreshes the same startup rotation on repaint.
+        internal static DailyFreeService? DailyFree { get; set; }
+
         /// <summary>
         /// WPF App.OnStartup's mod block (App.xaml.cs, "Initialize mod system"): one service, seeded
         /// into CoreMods, initialised from the saved ActiveModId. Desktop lifetime only, so a headless
@@ -628,6 +631,7 @@ namespace ConditioningControlPanel.Avalonia
                 // A sandbox never reaches the real proxy (the SkipStartupFetch rule); the seeded pick still works.
                 var dailyFree = new DailyFreeService(
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
+                DailyFree = dailyFree;
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
                 // WPF App.xaml.cs:494: the weekly Graded Intake pass. Its TierChanged hooks are

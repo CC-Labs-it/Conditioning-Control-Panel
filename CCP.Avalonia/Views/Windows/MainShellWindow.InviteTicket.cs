@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The ticket's server read (tests swap the wire).</summary>
         internal Func<IInviteApi> InviteTicketApi { get; set; } = () => new InviteApi();
 
-        private InvitePanel? InvitesCard => Named<Tabs.ExclusivesTabView>("ExclusivesTab")?.FindControl<InvitePanel>("InvitesHost");
+        private InvitePanel? InvitesCard => PlansVault?.InvitesPanel;
 
         /// <summary>WPF InitializeInviteTicket: one delayed read, then every 30 min and on account change;
         /// every read the invites card makes repaints the ticket too.</summary>
@@ -118,12 +118,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void BtnInviteTicket_Click(object? sender, RoutedEventArgs e) => OpenInvitesCard();
 
-        /// <summary>WPF OpenInvitesCard: the Premium tab, a forced read, and the card scrolled into view.
+        /// <summary>WPF OpenInvitesCard: Account & Plans, a forced read, and the card scrolled into view.
         /// Refused under Lockdown (no veil on this head yet).</summary>
         internal void OpenInvitesCard()
         {
             if (LockdownActive) return;
-            ShowTab("premium");
+            OpenAppSettingsSection("account");
             DispatcherTimer.RunOnce(async () =>
             {
                 try

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -35,6 +36,51 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class ExclusivesTabView : UserControl
     {
         private readonly AmbientFxCanvas _ambientFx;
+
+        private bool _plansMode, _contentLifted, _plansActive;
+        internal Controls.Invites.InvitePanel? InvitesPanel { get; private set; }
+
+        /// <summary>WPF PlansMode: header, tier plates, Premium link and invites, inside Settings' scroller.</summary>
+        public bool PlansMode
+        {
+            get => _plansMode;
+            set
+            {
+                _plansMode = value;
+                this.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible = !value;
+                this.FindControl<Border>("SpotlightCard")!.IsVisible = !value;
+                this.FindControl<Button>("BtnSeePremium")!.IsVisible = value;
+                this.FindControl<Border>("InvitesWrap")!.IsVisible = value;
+                if (value && InvitesPanel == null)
+                    this.FindControl<ContentControl>("InvitesSlot")!.Content = InvitesPanel = new Controls.Invites.InvitePanel();
+                BindLoc("TxtVaultTitle", value ? "plans_header_title" : "premium_page_title");
+                BindLoc("TxtVaultSub", value ? "plans_header_sub" : "premium_page_sub");
+                var scroll = this.FindControl<ScrollViewer>("ContentScroll")!;
+                if (value && !_contentLifted && scroll.Parent is Panel host && scroll.Content is Control content)
+                {
+                    int at = host.Children.IndexOf(scroll);
+                    scroll.Content = null;
+                    host.Children.RemoveAt(at);
+                    host.Children.Insert(at, content);
+                    _contentLifted = true;
+                }
+                RefreshVault();
+                UpdateMotion();
+            }
+        }
+
+        private void BindLoc(string name, string key) => this.FindControl<TextBlock>(name)!
+            .Bind(TextBlock.TextProperty, (Binding)new Localization.StrExtension(key).ProvideValue(null!));
+
+        internal void SetPlansActive(bool active)
+        {
+            _plansActive = active;
+            if (active) { RefreshVault(); _ = InvitesPanel?.RefreshAsync(); }
+            UpdateMotion();
+        }
+
+        private void SeePremium_Click(object? sender, RoutedEventArgs e) =>
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.ShowTab("premium");
 
         public ExclusivesTabView()
         {
@@ -80,6 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
+            RefreshVault();   // XAML has assigned PlansMode before Loaded.
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged += UpdateMotion;
@@ -129,11 +176,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void RefreshVault()
         {
             RetintVaultChrome();
+            ApplyHeroArt();
+            _ = App.DailyFree?.RefreshAsync();
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.
             var rows = new List<object>();
-            var cards = ExclusiveFeature.All.Where(f => f.Shown()).Select(f => new ExclusiveCardRow(f));
+            var cards = (IsLoaded && !PlansMode ? ExclusiveFeature.All : Enumerable.Empty<ExclusiveFeature>()).Where(f => f.Shown()).Select(f => new ExclusiveCardRow(f));
             foreach (var (group, items) in Services.UI.PremiumShelfOrder.Arrange(cards, r => r.Feature.Key, r => r.Tier, r => !r.IsLocked))
             {
                 rows.Add(new ExclusiveGroupRow(group, items.Count(r => !r.IsLocked), items.Count));
@@ -141,40 +190,73 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             this.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource = rows;
 
-            var spot = new ExclusiveCardRow(ExclusiveFeature.All[0]);
-            this.FindControl<TextBlock>("TxtSpotArtGlyph")!.Text = spot.Art == null ? spot.Feature.Emoji : "";
-            var spotArt = this.FindControl<Image>("SpotArtImage")!;
-            var banner = ModArt.TryLoad(ArtName(spot.Feature.BannerArtResource), 1400);
-            spotArt.Source = banner ?? spot.Art;
-            // WPF ApplySpotlightArt: the Ken Burns zoom centres on a banner, on the focal point of card art.
-            spotArt.RenderTransformOrigin = banner != null
-                ? RelativePoint.Center
-                : new RelativePoint(spot.Feature.FocalX, spot.Feature.FocalY, RelativeUnit.Relative);
-            this.FindControl<TextBlock>("TxtSpotTitle")!.Text = spot.Title;
-            this.FindControl<TextBlock>("TxtSpotTagline")!.Text = spot.Tagline;
-            this.FindControl<Border>("SpotBadge")!.IsVisible = spot.HasBadge;
-            this.FindControl<TextBlock>("TxtSpotBadge")!.Text = spot.BadgeText;
-            this.FindControl<Border>("SpotVeil")!.IsVisible = spot.IsLocked;
-            this.FindControl<TextBlock>("TxtSpotFreeToday")!.Text = Loc.Get("mosaic_free_today");
-            this.FindControl<Border>("SpotFreeToday")!.IsVisible = spot.HasFreePill;
-            var badge = this.FindControl<TierBadge>("SpotTierBadge")!;
-            badge.Tier = spot.Tier;
-            badge.FreeToday = spot.BadgeFreeToday;
-            var card = this.FindControl<Border>("SpotlightCard")!;
-            // WPF VaultLivery.Apply at hero weight: tiered = livery + 4px living rim; untiered = resting/gold edge.
-            TierFxBorder.SetRimThickness(card, 4);
-            TierFxBorder.SetTier(card, spot.Tier);
-            card.BorderBrush = spot.Tier > 0 ? ExclusiveCardRow.Livery(spot.Tier) : spot.FreeToday ? ExclusiveCardRow.EdgeFree : new SolidColorBrush(WithAlpha(VaultAccent(), 0x66));
-            card.BorderThickness = new Thickness(spot.Tier > 0 ? 4 : spot.FreeToday ? 2 : 1);
-            card.Cursor = spot.Cursor;
-            ToolTip.SetTip(card, spot.UnavailableTip);
-            var open = this.FindControl<Button>("BtnSpotOpen")!;
-            open.IsEnabled = spot.IsAvailable;
-            ToolTip.SetTip(open, spot.UnavailableTip);
-            ToolTip.SetShowOnDisabled(open, true);
+            // WPF MainWindow.Exclusives.cs:1017 paints the spotlight only on the Premium page.
+            // Wait for Loaded so XAML can set PlansMode before any page art is decoded.
+            if (!PlansMode && IsLoaded)
+            {
+                var spot = new ExclusiveCardRow(ExclusiveFeature.All[0]);
+                this.FindControl<TextBlock>("TxtSpotArtGlyph")!.Text = spot.Art == null ? spot.Feature.Emoji : "";
+                var spotArt = this.FindControl<Image>("SpotArtImage")!;
+                var banner = ModArt.TryLoad(ArtName(spot.Feature.BannerArtResource), 1400);
+                spotArt.Source = banner ?? spot.Art;
+                // WPF ApplySpotlightArt: the Ken Burns zoom centres on a banner, on the focal point of card art.
+                spotArt.RenderTransformOrigin = banner != null
+                    ? RelativePoint.Center
+                    : new RelativePoint(spot.Feature.FocalX, spot.Feature.FocalY, RelativeUnit.Relative);
+                this.FindControl<TextBlock>("TxtSpotTitle")!.Text = spot.Title;
+                this.FindControl<TextBlock>("TxtSpotTagline")!.Text = spot.Tagline;
+                this.FindControl<Border>("SpotBadge")!.IsVisible = spot.HasBadge;
+                this.FindControl<TextBlock>("TxtSpotBadge")!.Text = spot.BadgeText;
+                this.FindControl<Border>("SpotVeil")!.IsVisible = spot.IsLocked;
+                this.FindControl<TextBlock>("TxtSpotFreeToday")!.Text = Loc.Get("mosaic_free_today");
+                this.FindControl<Border>("SpotFreeToday")!.IsVisible = spot.HasFreePill;
+                var badge = this.FindControl<TierBadge>("SpotTierBadge")!;
+                badge.Tier = spot.Tier;
+                badge.FreeToday = spot.BadgeFreeToday;
+                var card = this.FindControl<Border>("SpotlightCard")!;
+                // WPF VaultLivery.Apply at hero weight: tiered = livery + 4px living rim; untiered = resting/gold edge.
+                TierFxBorder.SetRimThickness(card, 4);
+                TierFxBorder.SetTier(card, spot.Tier);
+                card.BorderBrush = spot.Tier > 0 ? ExclusiveCardRow.Livery(spot.Tier) : spot.FreeToday ? ExclusiveCardRow.EdgeFree : new SolidColorBrush(WithAlpha(VaultAccent(), 0x66));
+                card.BorderThickness = new Thickness(spot.Tier > 0 ? 4 : spot.FreeToday ? 2 : 1);
+                card.Cursor = spot.Cursor;
+                ToolTip.SetTip(card, spot.UnavailableTip);
+                var open = this.FindControl<Button>("BtnSpotOpen")!;
+                open.IsEnabled = spot.IsAvailable;
+                ToolTip.SetTip(open, spot.UnavailableTip);
+                ToolTip.SetShowOnDisabled(open, true);
+                Dress(this.FindControl<Control>("SpotFreeToday")!);
+                Dress(this.FindControl<Control>("SpotVeilLock")!);
+            }
             RefreshTierPlates();
-            Dress(this.FindControl<Control>("SpotFreeToday")!);
-            Dress(this.FindControl<Control>("SpotVeilLock")!);   // WPF :799 breathes only under a shown veil
+        }
+
+        /// <summary>WPF ModTileVariant: built-in fork first; external mods override the base path.</summary>
+        private void ApplyHeroArt()
+        {
+            var art = ModArt.FirstOf(Services.UI.ModTileArt.Candidates("vault", CoreMods.ActiveModId), 480);
+            var plate = this.FindControl<Border>("VaultHeroPlate")!;
+            if (art != null)
+            {
+                if (plate.Background is not ImageBrush brush) plate.Background = brush = new ImageBrush { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right, Opacity = 0.9 };
+                brush.Source = art;
+                if (plate.Child != null) plate.Child.IsVisible = false;
+            }
+            // WPF's pack images: commerce art never resolves through a mod override.
+            for (int i = 1; i <= 2; i++)
+            {
+                var tierPlate = this.FindControl<Border>($"TierPlate{i}")!;
+                if (tierPlate.Child is Image) continue;
+                try
+                {
+                    using var stream = global::Avalonia.Platform.AssetLoader.Open(new Uri($"avares://CCP.Avalonia/Resources/Patreon tier{i}.png"));
+                    tierPlate.Child = new Image { Source = Bitmap.DecodeToWidth(stream, 160), Stretch = Stretch.Uniform };
+                    tierPlate.Width = double.NaN;
+                    tierPlate.Background = tierPlate.BorderBrush = null;
+                    tierPlate.BorderThickness = default;
+                }
+                catch (Exception ex) { Serilog.Log.Debug("Vault tier plate art: {E}", ex.Message); }
+            }
         }
 
         // WPF RetintVaultChrome: only decor follows the mod; gold free-day and tier commerce do not.
@@ -237,7 +319,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The only start/stop: visible, attached and MotionFx.AllowAmbientLoops (PLAYBOOK P01).</summary>
         private void UpdateMotion()
         {
-            bool want = IsVisible && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
+            _ambientFx.IsVisible = !PlansMode || _plansActive;
+            bool want = IsVisible && (!PlansMode || _plansActive) && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
             // Re-dressed either way: a glow-gate change (performance tier) alone must re-apply the glows.
             if (want == (_motion != null)) { }
             else if (want)
