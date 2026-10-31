@@ -91,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             border.Opacity = 1;
         }
 
-        private Border BuildToast(string message, NotificationType type, string? stickyKey,
+        internal Border BuildToast(string message, NotificationType type, string? stickyKey,
             string? actionLabel, Action? action, string? secondaryActionLabel = null, Action? secondaryAction = null)
         {
             var accent = new SolidColorBrush(Color.Parse(type switch
@@ -213,7 +213,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             return border;
         }
 
-        private void FadeOutAndRemove(Border border)
+        internal void FadeOutAndRemove(Border border)
         {
             if (!border.IsHitTestVisible) return; // a fading toast cannot run its action twice
             (border.Tag as DispatcherTimer)?.Stop();
