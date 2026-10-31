@@ -58,7 +58,7 @@ namespace ConditioningControlPanel.Services
         public bool Clickable, Popping, Lucky;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
-        private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
+        private double _startX, _top, _bottom, _speed, _wobbleOffset, _timeAlive;
         private int _animType;
 
         // ---- live chaos bubble (WPF Bubble _fuseRemainingMs / _isChanneling / TickChannel) ----
@@ -137,22 +137,49 @@ namespace ConditioningControlPanel.Services
             return Result.Defused;
         }
 
+        /// <summary>The concrete Bubbles v2 motion this bubble flies (never Mix).</summary>
+        public BubbleMotionStyle Motion { get; private set; } = BubbleMotionStyle.FloatUp;
+        /// <summary>WPF _spiralFade: opacity multiplier over the last stretch of a Spiral In path.</summary>
+        public double MotionFade { get; private set; } = 1.0;
+        private double _spiralCx, _spiralCy, _spiralR0, _spiralRadial, _spiralTurns, _spiralDir;
+        private BubbleSpiralPath.State _spiral;
+
         /// <summary>WPF Bubble ctor for a plain ambient bubble. <paramref name="area"/> is the screen's
         /// working area in px, <paramref name="scaling"/> its DPI scale.</summary>
         public static AmbientBubble Spawn(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
-            double scaling, AppSettings s, double? modScale, bool clickable)
+            double scaling, AppSettings s, double? modScale, bool clickable,
+            BubbleMotionStyle motion = BubbleMotionStyle.FloatUp)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = clickable };
             b.Size = BubbleSizing.Scale(r.Next(BubbleSizing.BaseMinDip, BubbleSizing.BaseMaxDip), s.BubblesSize, modScale);
             b._speed = 1.0 + r.NextDouble();   // 1.0 to 2.0 DIP/step
             var boost = s.BubbleSpeedBoost;      // dashboard speed slider, up to +500%
             if (boost > 0) b._speed *= 1.0 + Math.Clamp(boost, 0, 500) / 100.0;
+            // Bubbles v2: the owned styles honour MotionLevel.Reduced at half speed (FloatUp untouched).
+            if (motion == BubbleMotionStyle.Mix) motion = BubbleMotionStyle.FloatUp;
+            b.Motion = motion;
+            if (motion != BubbleMotionStyle.FloatUp) b._speed *= BubbleMotionRoll.SpeedMult(s.MotionLevel);
             b._animType = r.Next(4);
             b._wobbleOffset = r.NextDouble() * 100;
             b.Angle = r.Next(360);
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
-            b.Y = (areaY + areaH) / scaling;   // start at the bottom
+            b._bottom = (areaY + areaH) / scaling + 50;
+            b.Y = motion == BubbleMotionStyle.Rain
+                ? areaY / scaling - b.Size          // Rain: start just above the top
+                : (areaY + areaH) / scaling;        // start at the bottom
+            if (motion == BubbleMotionStyle.SpiralIn)
+            {
+                // WPF: spawn on a ring around the screen centre at a random angle, either direction.
+                b._spiralCx = (areaX + areaW / 2.0) / scaling;
+                b._spiralCy = (areaY + areaH / 2.0) / scaling;
+                b._spiralR0 = BubbleSpiralPath.StartRadius(Math.Min(areaW, areaH) / scaling);
+                b._spiralRadial = b._speed * BubbleSpiralPath.RadialPerSpeed;
+                b._spiralTurns = BubbleSpiralPath.Turns(s.MotionLevel);
+                b._spiralDir = r.Next(2) == 0 ? 1 : -1;
+                b._spiral = BubbleSpiralPath.Start(b._spiralR0, r.NextDouble() * Math.PI * 2);
+                b.PlaceOnSpiral();
+            }
             return b;
         }
 
@@ -264,10 +291,30 @@ namespace ConditioningControlPanel.Services
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
-            Y -= _speed;
-            X = _startX + offset;
-            if (Y >= _top) return Result.Alive;
-            return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
+            switch (Motion)
+            {
+                case BubbleMotionStyle.SpiralIn:
+                    // Reaching the core is an exit like floating off the top: never a pop.
+                    _spiral = BubbleSpiralPath.Step(_spiral, _spiralR0, _spiralRadial, _spiralTurns, _spiralDir, 1);
+                    PlaceOnSpiral();
+                    MotionFade = _spiral.Fade;
+                    return _spiral.Done ? Result.Missed : Result.Alive;
+                case BubbleMotionStyle.Rain:
+                    Y += _speed;
+                    X = _startX + offset;
+                    return Y > _bottom ? Result.Missed : Result.Alive;
+                default:
+                    Y -= _speed;
+                    X = _startX + offset;
+                    if (Y >= _top) return Result.Alive;
+                    return Spec is { IsLive: true } ? GoOff(null) : Result.Missed; // WPF :4212: a live that escapes detonates
+            }
+        }
+
+        private void PlaceOnSpiral()
+        {
+            X = _startX = _spiralCx + Math.Cos(_spiral.Angle) * _spiral.Radius - Size / 2.0;
+            Y = _spiralCy + Math.Sin(_spiral.Angle) * _spiral.Radius - Size / 2.0;
         }
     }
 

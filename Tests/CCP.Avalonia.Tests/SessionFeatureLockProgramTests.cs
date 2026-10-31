@@ -25,7 +25,15 @@ public sealed class SessionFeatureLockProgramTests
     public Task ProgramReasonPaintsTheRibbonAndOwnedDialsThenPresetUsesGenericCopy() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions
+                {
+                    DefaultFamilyName = "fonts:Inter#Inter",
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily>
+                    {
+                        ["Segoe UI"] = new("fonts:Inter#Inter"), ["Segoe UI Black"] = new("fonts:Inter#Inter")
+                    }
+                }).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var dir = Directory.CreateTempSubdirectory("ccp-session-lock-program-").FullName;

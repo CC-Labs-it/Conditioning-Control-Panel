@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -45,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             ChkTriggers.IsCheckedChanged += ChkTriggers_Changed;
             SliderTriggerChance.ValueChanged += SliderTriggerChance_Changed;
             foreach (var box in TriggerTypeBoxes()) box.IsCheckedChanged += TriggerType_Changed;
+            CmbMotion.SelectionChanged += CmbMotion_Changed;
 
             LoadFromSettings();
 
@@ -76,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
             CoreMods.ModChanged += OnModChanged;
+            Platform.PrizeOwnership.Changed += OnGrantsChanged;
             Overlays.BubbleOverlay.XpBudgetChanged += UpdateAmbientXpBudgetLine;   // WPF AmbientXpBudgetChanged
             RebindToCurrentSettings();
         }
@@ -84,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             CoreMods.ModChanged -= OnModChanged;
+            Platform.PrizeOwnership.Changed -= OnGrantsChanged;
             Overlays.BubbleOverlay.XpBudgetChanged -= UpdateAmbientXpBudgetLine;
             Unhook();
             base.OnDetachedFromVisualTree(e);
@@ -96,6 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             Unhook();
             _hooked = CoreSettings.Current;
             _hooked.PropertyChanged += OnSettingsPropertyChanged;
+            OnGrantsChanged();
             LoadFromSettings();
         }
 
@@ -147,9 +153,76 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 var ids = s.BubbleTriggerVariants ?? new List<string>();
                 foreach (var box in TriggerTypeBoxes())
                     box.IsChecked = box.Tag is string id && ids.Contains(id);
+                // WPF builds the items on GrantsChanged and only calls SelectMotion on a settings tick.
+                if (CmbMotion.Items.Count == 0) RebuildMotionPicker();
+                SelectMotion(s.BubbleMotionStyle);
                 UpdateAmbientXpBudgetLine();
             }
             finally { _isLoading = false; }
+        }
+
+        // ---- Bubbles v2 motion picker (WPF BubblePopFeatureControl.xaml.cs:310-396) -----------
+        // WPF BubblePopFeatureControl.xaml.cs:299-337: refresh after a grant snapshot.
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            var wasLoading = _isLoading;
+            _isLoading = true;
+            try { RebuildMotionPicker(); SelectMotion(CoreSettings.Current.BubbleMotionStyle); }
+            finally { _isLoading = wasLoading; }
+        });
+
+        /// <summary>Float up always; Rain / Spiral In only when owned (each with its v2 pill); Mix once
+        /// any v2 style is owned. With nothing owned the box stays hidden. Caller holds _isLoading.</summary>
+        private void RebuildMotionPicker()
+        {
+            bool rain = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleRain);
+            bool spiral = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleSpiralIn);
+            // ponytail: WPF also keeps the box up for the V2GetItRow (RowGetBubblesV2) and shows
+            // ChkBrainDrainBubble with the same grants; neither is ported (feat-bubble-pop).
+            V2Box.IsVisible = MotionRow.IsVisible = rain || spiral;
+            CmbMotion.Items.Clear();
+            AddMotionChoice(BubbleMotionStyle.FloatUp, "bubble_motion_float_up", v2: false);
+            if (rain) AddMotionChoice(BubbleMotionStyle.Rain, "bubble_motion_rain", v2: true);
+            if (spiral) AddMotionChoice(BubbleMotionStyle.SpiralIn, "bubble_motion_spiral_in", v2: true);
+            if (rain || spiral) AddMotionChoice(BubbleMotionStyle.Mix, "bubble_motion_mix", v2: false);
+        }
+
+        private void SelectMotion(BubbleMotionStyle current)
+        {
+            // An unowned (absent) style shows as Float up, which is how it plays.
+            CmbMotion.SelectedItem = CmbMotion.Items.OfType<ComboBoxItem>()
+                .FirstOrDefault(i => i.Tag is BubbleMotionStyle t && t == current) ?? CmbMotion.Items[0];
+        }
+
+        private void AddMotionChoice(BubbleMotionStyle style, string key, bool v2)
+        {
+            var row = new StackPanel { Orientation = global::Avalonia.Layout.Orientation.Horizontal };
+            row.Children.Add(new TextBlock { Text = Loc.Get(key), VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center });
+            if (v2)
+                row.Children.Add(new Border
+                {
+                    // WPF V2Pill: the FeatureCard tier-badge family in neon purple.
+                    Margin = new Thickness(7, 0, 0, 0), Padding = new Thickness(5, 1, 6, 2), CornerRadius = new CornerRadius(7),
+                    Background = new SolidColorBrush(Color.FromArgb(0xD9, 0x1A, 0x1A, 0x2E)),
+                    BorderBrush = V2Purple, BorderThickness = new Thickness(1), IsHitTestVisible = false,
+                    VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+                    Child = new TextBlock { Text = Loc.Get("fx_v2_badge"), Foreground = V2Purple, FontSize = 9, FontWeight = FontWeight.Bold },
+                });
+            CmbMotion.Items.Add(new ComboBoxItem { Content = row, Tag = style });
+        }
+
+        private static IBrush V2Purple =>
+            global::Avalonia.Application.Current?.TryFindResource("NeonPurpleBrush", out var v) == true && v is IBrush b ? b : Brushes.MediumPurple;
+
+        private void CmbMotion_Changed(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading) return;
+            if (CmbMotion.SelectedItem is not ComboBoxItem { Tag: BubbleMotionStyle style }) return;
+            var s = CoreSettings.Current;
+            if (s.BubbleMotionStyle == style) return;
+            s.BubbleMotionStyle = style;
+            CoreSettings.Save();
+            // No service bounce: every spawn resolves the picker, so the next bubble uses it.
         }
 
         /// <summary>
@@ -172,7 +245,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.BubbleGazePopEnabled) ||
                 e.PropertyName == nameof(AppSettings.BubbleTriggersEnabled) ||
                 e.PropertyName == nameof(AppSettings.BubbleTriggerChance) ||
-                e.PropertyName == nameof(AppSettings.BubbleTriggerVariants))
+                e.PropertyName == nameof(AppSettings.BubbleTriggerVariants) ||
+                e.PropertyName == nameof(AppSettings.BubbleMotionStyle))
             {
                 Dispatcher.UIThread.Post(LoadFromSettings);
             }

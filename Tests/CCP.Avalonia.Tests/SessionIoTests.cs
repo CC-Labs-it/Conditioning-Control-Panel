@@ -27,7 +27,15 @@ public sealed class SessionIoTests
     public Task RecapUnderACoverOpensPassiveAndKeepsOnlyOne() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions
+                {
+                    DefaultFamilyName = "fonts:Inter#Inter",
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily>
+                    {
+                        ["Segoe UI"] = new("fonts:Inter#Inter"), ["Segoe UI Black"] = new("fonts:Inter#Inter")
+                    }
+                }).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -59,7 +67,15 @@ public sealed class SessionIoTests
     public Task SessionLockGreysOwnedDialsAndRestoresTheirTooltips() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions
+                {
+                    DefaultFamilyName = "fonts:Inter#Inter",
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily>
+                    {
+                        ["Segoe UI"] = new("fonts:Inter#Inter"), ["Segoe UI Black"] = new("fonts:Inter#Inter")
+                    }
+                }).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -103,7 +119,15 @@ public sealed class SessionIoTests
     public Task RefusedChangePulsesTheLockRibbon() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions
+                {
+                    DefaultFamilyName = "fonts:Inter#Inter",
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily>
+                    {
+                        ["Segoe UI"] = new("fonts:Inter#Inter"), ["Segoe UI Black"] = new("fonts:Inter#Inter")
+                    }
+                }).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -139,7 +163,15 @@ public sealed class SessionIoTests
     public Task DroppedSessionIsImportedAndItsRowDeleteButtonRemovesIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions
+                {
+                    DefaultFamilyName = "fonts:Inter#Inter",
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily>
+                    {
+                        ["Segoe UI"] = new("fonts:Inter#Inter"), ["Segoe UI Black"] = new("fonts:Inter#Inter")
+                    }
+                }).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var root = Path.Combine(Path.GetTempPath(), "ccp-session-io-" + Guid.NewGuid().ToString("N"));
@@ -197,7 +229,15 @@ public sealed class SessionIoTests
     public Task BadSessionDropIsRejectedAndSavesNothing() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions
+                {
+                    DefaultFamilyName = "fonts:Inter#Inter",
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily>
+                    {
+                        ["Segoe UI"] = new("fonts:Inter#Inter"), ["Segoe UI Black"] = new("fonts:Inter#Inter")
+                    }
+                }).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var root = Path.Combine(Path.GetTempPath(), "ccp-session-bad-" + Guid.NewGuid().ToString("N"));
@@ -236,7 +276,15 @@ public sealed class SessionIoTests
     public Task RenamedCataloguePresetDropImports() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions
+                {
+                    DefaultFamilyName = "fonts:Inter#Inter",
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily>
+                    {
+                        ["Segoe UI"] = new("fonts:Inter#Inter"), ["Segoe UI Black"] = new("fonts:Inter#Inter")
+                    }
+                }).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var settings = ConditioningControlPanel.CoreSettings.Current;
