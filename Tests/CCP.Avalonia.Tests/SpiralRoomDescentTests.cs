@@ -23,34 +23,38 @@ public sealed class SpiralRoomDescentTests
     [InlineData(true)]
     public void ServerBlockFlowsThroughTheRealDoor_AndExitReleasesTheReader(bool detach) => AvaloniaTestDispatcher.Run(() =>
     {
+        var old = (Settings: CoreSettings.ServiceProvider, Secrets: CoreSecrets.RetrieveProvider,
+            Fuse: Head.DescentCountdown, Reader: Head.Descent,
+            Engine: SpiralTabView.EngineAvailable, Start: SpiralTabView.StartEmbed);
         var settings = new SettingsService();
-        CoreSettings.ServiceProvider = () => settings;
-        var s = settings.Current;
-        s.UnifiedId = "spiral-test";
-        CoreSecrets.RetrieveProvider = _ => "test-token";
-        s.OfflineMode = false;
-        s.DescentMigrationOffered = false;
-        s.DescentMigrationCompleted = false;
-        s.PendingDescentMigrationChoice = null;
         using var fuse = new DescentCountdownService();
-        Head.DescentCountdown = fuse;
         JObject? reply = Profile(3);
         var reader = new DescentService(_ => Task.FromResult(reply));
-        Head.Descent = reader;
-        var embeds = new List<SpiralEmbedView>();
-        var states = new List<JObject>();
-        SpiralTabView.EngineAvailable = () => true;
-        SpiralTabView.StartEmbed = embed =>
-        {
-            embeds.Add(embed);
-            embed.SendJson = json => { states.Add(JObject.Parse(json)); return Task.CompletedTask; };
-            embed.Receive("{\"type\":\"spiral:ready\"}");
-        };
-        void Read() { Assert.True(reader.RefreshAsync("test", force: true).GetAwaiter().GetResult()); Dispatcher.UIThread.RunJobs(); }
-        Read(); // the server truth can precede entry
-        var shell = new MainShellWindow();
+        MainShellWindow? shell = null;
         try
         {
+            CoreSettings.ServiceProvider = () => settings;
+            var s = settings.Current;
+            s.UnifiedId = "spiral-test";
+            CoreSecrets.RetrieveProvider = _ => "test-token";
+            s.OfflineMode = false;
+            s.DescentMigrationOffered = false;
+            s.DescentMigrationCompleted = false;
+            s.PendingDescentMigrationChoice = null;
+            Head.DescentCountdown = fuse;
+            Head.Descent = reader;
+            var embeds = new List<SpiralEmbedView>();
+            var states = new List<JObject>();
+            SpiralTabView.EngineAvailable = () => true;
+            SpiralTabView.StartEmbed = embed =>
+            {
+                embeds.Add(embed);
+                embed.SendJson = json => { states.Add(JObject.Parse(json)); return Task.CompletedTask; };
+                embed.Receive("{\"type\":\"spiral:ready\"}");
+            };
+            void Read() { Assert.True(reader.RefreshAsync("test", force: true).GetAwaiter().GetResult()); Dispatcher.UIThread.RunJobs(); }
+            Read(); // the server truth can precede entry
+            shell = new MainShellWindow();
             shell.Show();
             fuse.ApplyCeremonyAt(DateTime.UtcNow.AddMinutes(30).ToString("yyyy-MM-ddTHH:mm:ssZ"));
             Dispatcher.UIThread.RunJobs();
@@ -107,7 +111,23 @@ public sealed class SpiralRoomDescentTests
             Assert.Single(host.Children);
             Assert.Equal(6, (int)states[^1]["devotion_days"]!);
         }
-        finally { shell.Close(); reader.Reset(); }
+        finally
+        {
+            try { shell?.Close(); reader.Reset(); }
+            finally
+            {
+                (CoreSettings.ServiceProvider, CoreSecrets.RetrieveProvider,
+                    Head.DescentCountdown, Head.Descent,
+                    SpiralTabView.EngineAvailable, SpiralTabView.StartEmbed) = old;
+            }
+        }
+        // Check before the assembly hook runs, so it cannot mask a missing local restore.
+        Assert.Same(old.Settings, CoreSettings.ServiceProvider);
+        Assert.Same(old.Secrets, CoreSecrets.RetrieveProvider);
+        Assert.Same(old.Fuse, Head.DescentCountdown);
+        Assert.Same(old.Reader, Head.Descent);
+        Assert.Same(old.Engine, SpiralTabView.EngineAvailable);
+        Assert.Same(old.Start, SpiralTabView.StartEmbed);
     });
 
     private static JObject Profile(int days) => JObject.Parse(
