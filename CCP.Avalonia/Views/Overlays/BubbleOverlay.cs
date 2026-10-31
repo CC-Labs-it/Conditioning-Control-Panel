@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// Core <see cref="AmbientBubbleField"/> moves and scores, this draws. WPF's default render is
     /// the shared host (one click-through surface, pops from a hook); here that is one override-
     /// redirect window per targeted screen whose X11 input region is exactly the live bubbles'
-    /// hit squares, so the desktop stays clickable everywhere else. Reached through
+    /// hit discs, so the desktop stays clickable everywhere else. Reached through
     /// <see cref="CoreBubbles"/>, which App seeds.
     ///
     /// <para>Hot path is allocation-free: one cached frame delegate, one Render pass over the
@@ -34,11 +34,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>Chaos runs share the field: ChaosRunHost spawns treat bubbles here (BeginChaos/
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
-    /// <para>ponytail: FloatUp bubbles only. Not here yet: live chaos bubbles (fuses, defuse,
-    /// detonation), the dashboard's ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
-    /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, the lucky gold glow and
-    /// sparkles, pop haptics, mod pop-sound overrides, Discord presence, and the achievement
-    /// (no AchievementService on this head; quests are credited).</para>
+    /// <para>ponytail: ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In),
+    /// Brain Drain, Natasha's red bubble, the avatar egg, lucky gold glow/sparkles
+    /// and the milestone popup remain unported.
+    /// Gaze pops, pop haptics, mod pop audio and achievement credit are wired.
+    /// See the feat-bubble-pop ledger row for the current parity evidence.</para>
     /// </summary>
     internal static class BubbleOverlay
     {
@@ -364,7 +364,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
     /// <summary>One screen of the field: draws its bubbles (WPF Bubble visuals: bubble.png, or the
     /// gradient ellipse fallback, scaled and rotated about the centre at the pop fade) and takes
-    /// presses only inside their hit squares.</summary>
+    /// presses only inside their hit discs.</summary>
     internal sealed class BubbleOverlayWindow : Window
     {
         private static readonly IBrush FallbackFill = new RadialGradientBrush
