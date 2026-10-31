@@ -16,13 +16,13 @@ using RowItem = ConditioningControlPanel.Services.Startup.InboxItem;
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>
-/// PORTED (invites only) from ConditioningControlPanel/Services/Friends/FriendsLanding.cs: what a delivery
+/// PORTED (invites and pokes) from ConditioningControlPanel/Services/Friends/FriendsLanding.cs: what a delivery
 /// does when it lands. Core's <see cref="FriendsLandingRouter"/> decides (hold, Inbox, knock); this sink
 /// knocks an invite with a <see cref="KnockCard"/>, files Inbox rows, and throws the words a delivery or a send
 /// leaves through <see cref="FloatingWord"/> (poke received with Emi's line, the sent beat, Say/Tell from outside
 /// the drawer). Nothing here plays or joins by itself. A light timer re-attaches to <see cref="FriendsHead.Service"/>
 /// and releases the held queue (WPF :28-82).
-/// Request corner notices are in FriendsLanding.Notices.cs; poke and watch notices remain unported.
+/// Request and poke corner notices are in FriendsLanding.Notices.cs; watch notices remain unported.
 /// </summary>
 internal static partial class FriendsLanding
 {
@@ -162,19 +162,8 @@ internal static partial class FriendsLanding
 
     private sealed class Sink : ILandingSink
     {
-        /// <summary>WPF Sink.Poke :229: Emi says it and the word floats over the panel, pink for a tease.
-        /// Bell off, over a game, or nothing on screen: the Inbox row (the corner toast is not on this head).</summary>
-        public void Poke(InboxItem item, bool inGame)
-        {
-            var game = inGame ? ActiveGameWindow() : null;
-            var anchor = Anchor();
-            if (!LandingRules.PokeThrowsWord(NoticesOn, game != null) || anchor == null) { Inbox(item); return; }
-            var word = Str("friends_poke_" + item.PokeId, LandingRules.PokeFallback(item.PokeId));
-            FriendsSeen.Shared.Seen(Service(), item.Id);
-            EmiSays(string.Format(Str("friends_land_emi_poke", "{0} says {1}"), item.FromName, word),
-                LandingRules.PokeFace(item.PokeId));
-            FloatingWord.Throw(anchor, word, LandingRules.PokeIsPink(item.PokeId));
-        }
+        // WPF Services/Friends/FriendsLanding.cs:230-257.
+        public void Poke(InboxItem item, bool inGame) => AnnouncePoke(item, inGame);
 
         public void Knock(InboxItem item, bool inGame)
         {
@@ -222,16 +211,21 @@ internal static partial class FriendsLanding
     private static bool NoticesOn => CoreSettings.Current.FriendNotificationsEnabled;
 
     /// <summary>An Inbox row opened later: the card again while it is still answerable (WPF Reopen :465).
-    /// Opened by hand, so it comes up whatever the bell says.</summary>
+    /// An invite opened by hand comes up whatever the bell says; pokes follow the bell.</summary>
     private static void Reopen(InboxItem item)
     {
-        if (item.IsExpired(KnockCard.Clock())) return;   // ponytail: WPF's Emi "that one already left" line
+        if (item.IsExpired(KnockCard.Clock()))
+        {
+            EmiSays(Str("friends_land_too_late", "that one already left"), ";_;");
+            return;
+        }
+        if (item.Kind == SendKind.Poke) { TheSink.Poke(item, inGame: false); return; }
         if (item.Kind == SendKind.Invite)
         {
             if (Anchor() is { } anchor) ShowCard(anchor, item);
             else TheSink.Inbox(item);   // WPF :478 Knock -> no anchor -> the row again
         }
-        // ponytail: a poke/watch row reopens as its corner notice in WPF (FriendNotices, not on this head).
+        // ponytail: watch rows still lack dispatch and reopening on this head.
     }
 
     /// <summary>How a card ended (WPF OnKnockDone :487).</summary>

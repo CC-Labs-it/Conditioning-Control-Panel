@@ -99,6 +99,119 @@ public sealed class FriendsLandingTests
         await Task.CompletedTask;
     });
 
+    // WPF FriendsLanding.cs:230-257,475-490: game-only notice, missed Inbox, reopen and expiry.
+    [Fact]
+    public Task PokeNoticeOverGameFilesUnseenAndReopensFromInbox() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Platform();
+        var (svc, _) = FriendsDrawerTests.Service();
+        var panel = new Window();
+        var game = new Window();
+        var emi = new List<(string Line, string Face)>();
+        var restore = Seams(svc, panel, game, emi);
+        try
+        {
+            panel.Show(); game.Show();
+            CoreSettings.Current.FriendNotificationsEnabled = true;
+            FriendsLanding.Router!.OnDelivered(Poke("game-poke", "hi"));
+            var w = FriendNotices.Current!;
+            Assert.Equal(NoticeKind.Poke, Assert.Single(w.Stack.All).Kind);
+            Assert.Empty(panel.OwnedWindows); Assert.Empty(game.OwnedWindows); Assert.Empty(emi);
+            w.Advance(100000);
+            var row = Assert.Single(StartupLadder.Inbox.Items, r => r.Key == "friends:game-poke");
+            StartupLadder.Inbox.Open(row);
+            Assert.NotNull(FriendNotices.Current);
+            Assert.Single(emi);
+            Assert.Equal(Loc.Get("friends_poke_hi"), Word(panel).Text);
+            FriendNotices.CloseAll();
+            CoreSettings.Current.FriendNotificationsEnabled = false;
+            FriendsLanding.Router.OnDelivered(Poke("silent-poke", "hi"));
+            Assert.Null(FriendNotices.Current);
+            Assert.True(StartupLadder.Inbox.Contains("friends:silent-poke"));
+            StartupLadder.Inbox.Open(StartupLadder.Inbox.Items.Single(r => r.Key == "friends:silent-poke"));
+            Assert.Null(FriendNotices.Current); // WPF reopen uses the poke arrival path, including the bell.
+            CoreSettings.Current.FriendNotificationsEnabled = true;
+            var expired = Poke("expired-poke", "hi") with { ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1) };
+            FriendsLanding.AnnouncePoke(expired, true);
+            FriendNotices.Current!.Advance(100000);
+            StartupLadder.Inbox.Open(StartupLadder.Inbox.Items.Single(r => r.Key == "friends:expired-poke"));
+            Assert.Null(FriendNotices.Current);
+            Assert.Equal((Loc.Get("friends_land_too_late"), ";_;"), emi.Last());
+        }
+        finally { restore(); CloseOwned(panel, game); }
+        await Task.CompletedTask;
+    });
+
+    // WPF FriendsLanding.cs:245-248,419-433: real notice action and body navigation.
+    [Fact]
+    public Task PokeNoticeActionSendsSamePokeAndBodyOpensSender() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Platform();
+        var (svc, wire) = FriendsDrawerTests.Service();
+        var panel = new Window();
+        var restore = Seams(svc, panel, null, new());
+        var drawer = FriendsLanding.OpenDrawer;
+        string? opened = null;
+        try
+        {
+            panel.Show(); await svc.RefreshAsync();
+            CoreSettings.Current.FriendNotificationsEnabled = true;
+            FriendsLanding.OpenDrawer = id => opened = id;
+            FriendsLanding.Router!.OnDelivered(Poke("action-poke", "tut"));
+            var w = FriendNotices.Current!;
+            w.Dismiss(Assert.Single(w.Stack.All), true);
+            await FriendsDrawerTests.Until(() => wire.Sends.Count == 1);
+            Assert.Contains("\"poke\":\"tut\"", Assert.Single(wire.Sends));
+            Assert.Contains("\"to\":\"u_on\"", wire.Sends[0]);
+            FriendsLanding.Router.OnDelivered(Poke("body-poke", "hi"));
+            w = FriendNotices.Current!;
+            w.Dismiss(Assert.Single(w.Stack.All), false, open: true);
+            Assert.Equal("u_on", opened);
+            Assert.False(StartupLadder.Inbox.Contains("friends:body-poke"));
+        }
+        finally { FriendsLanding.OpenDrawer = drawer; restore(); CloseOwned(panel); }
+    });
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public Task PokeBackDefaultsToHi(string? poke) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Platform();
+        var (svc, wire) = FriendsDrawerTests.Service();
+        var restore = Seams(svc, null, null, new());
+        try
+        {
+            await svc.RefreshAsync();
+            await FriendsLanding.PokeBack(Poke("fallback", poke!));
+            Assert.Contains("\"poke\":\"hi\"", Assert.Single(wire.Sends));
+            await FriendsLanding.PokeBack(Poke("no-sender", "hi") with { FromId = "" });
+            Assert.Single(wire.Sends);
+        }
+        finally { restore(); }
+    });
+
+    // WPF FriendsLanding.cs:427-431: a refused send needs words; successful sends use SentBeat.
+    [Fact]
+    public Task PokeBackRefusalShowsTheCoreResult() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Platform();
+        var (svc, wire) = FriendsDrawerTests.Service();
+        var panel = new Window();
+        var restore = Seams(svc, panel, null, new());
+        try
+        {
+            panel.Show(); await svc.RefreshAsync();
+            await FriendsLanding.PokeBack(Poke("first", "hi"));
+            foreach (var o in panel.OwnedWindows.ToArray()) o.Close();
+            await FriendsLanding.PokeBack(Poke("second", "hi"));
+            Assert.Single(wire.Sends);
+            Assert.Equal(Loc.Get(FriendsDrawerRules.SendResultKey(SendResult.TooFast)), Word(panel).Text);
+            Assert.Equal(Pink, ((ISolidColorBrush)Word(panel).Foreground!).Color);
+        }
+        finally { restore(); CloseOwned(panel); }
+    });
+
     /// <summary>WPF Sink.SentBeat: a good poke from the drawer leaves a small mint "sent" over the panel;
     /// nothing while a session holds the screen.</summary>
     [Theory]

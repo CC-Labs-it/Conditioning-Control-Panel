@@ -24,6 +24,42 @@ internal static partial class FriendsLanding
         if (LauncherWindow.Instance is { } launcher) launcher.OpenPanel(Shown);
         else { LauncherWindow.OpenPanel(panel); Shown(panel); }
     }
+    // WPF Services/Friends/FriendsLanding.cs:230-257: silent bell, game notice, missed Inbox.
+    internal static void AnnouncePoke(InboxItem item, bool inGame)
+    {
+        if (!NoticesOn) { TheSink.Inbox(item); return; }
+        var word = Str("friends_poke_" + item.PokeId, LandingRules.PokeFallback(item.PokeId));
+        var pink = LandingRules.PokeIsPink(item.PokeId);
+        Sfx("bubbles/Pop3.mp3", inGame ? 0.10f : 0.16f, "friends-poke-in", true);
+        var game = inGame ? ActiveGameWindow() : null;
+        FriendNotices.Present(game ?? Anchor(), Notice(NoticeKind.Poke, item.FromId, item.FromName, item, item.At), new NoticeLook
+        {
+            Line = Str("friends_notice_poked", "poked you:"), Word = word, Pink = pink,
+            AvatarUrl = item.FromAvatarUrl, ActionLabel = Str("friends_notice_poke_back", "Poke back"),
+            Act = async p => { if (p is InboxItem i) await PokeBack(i); },
+            Open = p => OpenDrawer((p as InboxItem)?.FromId),
+            Missed = p => { if (p is InboxItem i) TheSink.Inbox(i); },
+        });
+        FriendsSeen.Shared.Seen(Service(), item.Id);
+        if (game != null) return;
+        EmiSays(string.Format(Str("friends_land_emi_poke", "{0} says {1}"), item.FromName, word),
+            LandingRules.PokeFace(item.PokeId));
+        if (Anchor() is { } anchor) FloatingWord.Throw(anchor, word, pink);
+    }
+    // WPF Services/Friends/FriendsLanding.cs:419-433: same poke back, fallback hi, refusal only.
+    internal static async System.Threading.Tasks.Task PokeBack(InboxItem item)
+    {
+        try
+        {
+            if (Service() is not { } svc || string.IsNullOrEmpty(item.FromId)) return;
+            SfxClick();
+            var result = await svc.PokeAsync(item.FromId, string.IsNullOrEmpty(item.PokeId) ? "hi" : item.PokeId);
+            if (FriendsDrawerRules.IsGood(result)) return;
+            SfxDenied();
+            Tell(Loc.Get(FriendsDrawerRules.SendResultKey(result)), false);
+        }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Friends poke back"); }
+    }
     // WPF FriendsSfx (Services/Friends/FriendsSfx.cs:25-39).
     private static void SfxClick() => Sfx("chaos/ui_click.mp3", 0.12f, "friends-click");
     private static void SfxDenied() => Sfx("chaos/ui_denied.mp3", 0.14f, "friends-denied");
