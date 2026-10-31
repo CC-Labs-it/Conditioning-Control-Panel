@@ -32,6 +32,8 @@ var root = args[0];
 var input = JObject.Parse(File.ReadAllText(root + "Tests/CCP.Core.Tests/Fixtures/mod_activation_golden.json").Replace("stamped-during-run", "2026-10-01T12:00:00Z"));
 // Model-derived established profile: onboarding and one-time migrations already completed.
 foreach(var key in new[]{"Welcomed", "FirstRunAssetsPromptShown", "MarqueeNeutralDefaultMigrated", "CirceNeutralTextMigrated", "LoudnessThresholdRelaxed", "MigratedUnifiedOverlayHostOn", "MigratedCompositorOffThreadOn"}) input[key] = true;
+foreach(var key in new[]{"HasSeenProgramsTab", "HasSeenProgramsIntro", "HasSeenDeeperTab", "HasSeededDeeperDemos", "HasSeenDeeperWelcome", "HasSeenDeeperEditorIntro", "HasSeenDeeperHTInteractiveTutorial"}) input[key] = true;
+input["InstallDate"] = "2025-01-01";
 input["LastSeenVersion"] = "7.1.15";
 input["LastDailyQuestDate"] = "2025-03-12T23:00:00+00:00";
 input["CompanionPerk"] = 0;
@@ -53,6 +55,6 @@ with tempfile.TemporaryDirectory(prefix="ccp-wpf-model-") as folder:
     subprocess.run([sys.argv[1] if len(sys.argv) > 1 else "dotnet", "run", "--project", str(temp / "generate.csproj"), "--", str(ROOT) + "/", str(output)], check=True)
     data = json.loads(output.read_text())
     properties = [json.dumps(k) + ":" + json.dumps(v, ensure_ascii=False, separators=(",", ":")) for k, v in data.items()]
-    # Four top-level keys per line: reviewable while keeping the PR below 600 changed lines.
-    lines = [",".join(properties[i:i+4]) for i in range(0, len(properties), 4)]
+    # Eight top-level keys per line: reviewable while keeping the PR below 600 changed lines.
+    lines = [",".join(properties[i:i+8]) for i in range(0, len(properties), 8)]
     Path(__file__).with_name("wpf72_settings.json").write_text("{\n" + ",\n".join(lines) + "\n}\n")

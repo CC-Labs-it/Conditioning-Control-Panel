@@ -4,7 +4,7 @@ ConditioningControlPanel/Models/AppSettings.cs; fetched 2026-10-30.
 Serialized with Newtonsoft.Json 13.0.4 using the actual WPF model and defaults.
 Input values: mod_activation_golden.json, with stamped-during-run replaced by
 2026-10-01T12:00:00Z. Deserialization uses WPF model types; serialization expands
-all writable WPF settings/defaults, including fields absent from the port fixture.
+WPF settings/defaults, including fields absent from the port fixture.
 This is a model-derived sample, not a capture from a running Windows GUI.
 Linux generation adapted only platform service hooks: App.Bark to CoreSettingsHooks,
 App.Mods display name to CoreMods, SecureApiKeyStore/SecureAuthTokenStore to
@@ -21,7 +21,10 @@ Core's extracted nested model defaults are equivalent (mixer constants relocated
 These are explicit input choices, not allowances in the comparison or captured Avalonia output.
 The migration test sets drawer state and PatreonTier explicitly for handoff coverage.
 Unknown keys are NOT silently allowed: the comparison fails by key name. No WPF
-persisted keys at this revision are unknown to Core. No intentionally dropped keys.
+persisted keys at this revision are unknown to Core. Coverage exceptions: SeasonResetPending and PendingSkillsResetAck remain at their
+ignored defaults because non-default values trigger destructive resets on startup.
+They are absent from this fixture and their loss is NOT covered. No other intentional
+key omissions; the seven HasSeen*/HasSeeded* flags are true and InstallDate is 2025-01-01.
 Run default migration tests for in-place coverage; CCP_MIGRATION_COPIED=1 dotnet test
 Tests/CCP.Avalonia.Migration.Tests exercises the copied variant in its own testhost.
 Windows covers real DPAPI; Linux covers the isolated OS-store seam, not DPAPI decryption.

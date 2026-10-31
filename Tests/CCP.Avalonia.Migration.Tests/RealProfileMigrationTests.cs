@@ -166,12 +166,34 @@ public sealed class RealProfileMigrationTests
         }
     }
 
+    // WPF Services/Progression/AchievementService.cs:17 uses AchievementStore.DefaultPath too.
     [Fact]
-    public void ProductionRoamingRootMatchesWpf()
+    public void RoamingRootRemainsWithTheProcessProfileWhenEnvironmentChanges()
     {
-        Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ConditioningControlPanel"), CorePaths.RoamingDataFor(null));
-        Assert.NotEqual(CorePaths.UserData, CorePaths.RoamingData);
+        var before = CorePaths.RoamingData;
+        var original = Environment.GetEnvironmentVariable("CCP_USERDATA_DIR");
+        try
+        {
+            Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", Path.Combine(MigrationTestProfile.Root, "other"));
+            Assert.Equal(before, CorePaths.RoamingData);
+        }
+        finally { Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", original); }
+    }
+
+    [Fact]
+    public void EstablishedWpfKeysArePresentAndTheirLossFailsComparison()
+    {
+        var sample = ReadJson(Fixture("wpf72_settings.json"));
+        foreach (var key in new[] { "HasSeenProgramsTab", "HasSeenProgramsIntro", "HasSeenDeeperTab",
+            "HasSeededDeeperDemos", "HasSeenDeeperWelcome", "HasSeenDeeperEditorIntro",
+            "HasSeenDeeperHTInteractiveTutorial", "InstallDate" })
+        {
+            Assert.True(sample.ContainsKey(key), "fixture missing: " + key);
+            var saved = (JObject)sample.DeepClone();
+            saved.Remove(key);
+            Assert.Contains("key dropped with a non-default value: " + key,
+                CompareSettings(sample, saved, _ => { }));
+        }
     }
 
     [Fact]

@@ -26,12 +26,9 @@ namespace ConditioningControlPanel
         public static string UserData { get; } = ResolveUserData();
 
         /// <summary>WPF's roaming data location; sandbox runs stay under their isolated root.</summary>
-        public static string RoamingData => RoamingDataFor(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"));
-
-        public static string RoamingDataFor(string? sandbox) =>
-            !string.IsNullOrWhiteSpace(sandbox) && Path.IsPathRooted(sandbox)
-                ? Path.Combine(sandbox, "roaming", "ConditioningControlPanel")
-                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ConditioningControlPanel");
+        public static string RoamingData => UserData == UserDataFor(null)
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ConditioningControlPanel")
+            : Path.Combine(UserData, "roaming", "ConditioningControlPanel");
 
         private static string ResolveUserData()
         {
