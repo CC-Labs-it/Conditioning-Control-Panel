@@ -82,7 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// head's services: a service that is not up (null) leaves its provider silent. A provider's
         /// Changed may come from any thread; the deck is marked dirty on the UI thread (WPF
         /// MainWindow.DashboardBillboard ProvidersChanged). Everything holds the shell weakly.</summary>
-        private static IBillboardProvider[] BillboardProviders(WeakReference<MainShellWindow> weak)
+        internal static IBillboardProvider[] BillboardProviders(WeakReference<MainShellWindow> weak)
         {
             MainShellWindow? Shell() => weak.TryGetTarget(out var s) ? s : null;
             var head = new BillboardHead
@@ -110,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF ShowcaseArtRegistration.Register, once per process.</summary>
         private static readonly Lazy<bool> ShowcaseArt = new(() =>
         {
+            BillboardArt.Register(BuiltInArtKeys.Quests, data => new QuestsArtView(data));
             BillboardArt.Register(ShowcaseRules.ArtKey, data => new ClipArtView(data as ShowcaseClipArt));
             return true;
         });
