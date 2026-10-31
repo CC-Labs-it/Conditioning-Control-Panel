@@ -132,7 +132,7 @@ public sealed class ChaosBoonBarOverlayTests
                 });
                 var settings = CoreSettings.Current;
                 Assert.Equal((float)System.Math.Pow(settings.MasterVolume / 100f * (settings.BubblesVolume / 100f), 1.5) * 0.25f, Assert.Single(chimes));
-                Assert.Contains(Loc.Get("chaos_welcome_shower_event"), ChaosRunHost.State.RecentEvents);
+                Assert.Contains(global::ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("chaos_welcome_shower_event"), ChaosRunHost.State.RecentEvents);
                 ChaosRunHost.ForceShutdown();
                 var scripted = Cfg();
                 scripted.ScriptedFirstRun = true;

@@ -142,7 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 _state.ApplyBoon(boon);
                 ChaosMeta.MarkDiscovered("boon:" + boon.Id);
-                ChaosAnnouncerOverlay.Announce($"◈ {boon.Name}", ChaosAnnounceKind.Mantra, artKey: boon.Id);
+                ChaosAnnouncerOverlay.Announce(boon.Name, ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
             if (_state.WelcomeShowerEnabled) SpawnWelcomeShower(); // WPF :438-440, before lifetime modifiers
             ChaosRunEffects.ApplyLifetimeBoons(_state);
@@ -179,7 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     _state.FuseTimeMult, ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale));
             }
             BubbleOverlay.PlayChime(0.25f);
-            _state.PushEvent(ConditioningControlPanel.Localization.Loc.Get("chaos_welcome_shower_event"));
+            _state.PushEvent(ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("chaos_welcome_shower_event"));
         }
         /// <summary>WPF SpawnTick (:1101), the treat half. Re-times its own timer like WPF.</summary>
         internal static void SpawnTick()

@@ -2,6 +2,8 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -27,7 +29,7 @@ public sealed class ChaosAnnouncerOverlayTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -66,6 +68,8 @@ public sealed class ChaosAnnouncerOverlayTests
             var w = ChaosAnnouncerOverlay.Active!;
             Assert.True(w.IsVisible);
             Assert.Equal("first", w.Current!.Text);
+            var icon = Assert.Single(w.GetVisualDescendants().OfType<IconGlyph>());
+            Assert.Equal(FluentIcons.Common.Symbol.Diamond, icon.Kind); Assert.Equal(FluentIcons.Common.IconVariant.Filled, icon.Variant);
             Assert.Equal(1, ChaosAnnouncerOverlay.QueuedCount);
             Assert.Equal(0.85, w.ContentScale, 3);
 
@@ -76,6 +80,7 @@ public sealed class ChaosAnnouncerOverlayTests
             Step(clock, 1);     // 1000 ms = IN + HOLD + OUT: the next line takes over the same window
             Assert.Same(w, ChaosAnnouncerOverlay.Active);
             Assert.Equal("second", w.Current!.Text);
+            Assert.Empty(w.GetVisualDescendants().OfType<IconGlyph>());
             Assert.True(w.IsVisible);
 
             Step(clock, ChaosAnnounceTiming.TotalMs(ChaosAnnounceTiming.TeachHoldMs));
