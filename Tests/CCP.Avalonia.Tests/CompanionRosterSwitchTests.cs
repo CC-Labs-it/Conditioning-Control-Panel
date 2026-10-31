@@ -172,6 +172,34 @@ public sealed class CompanionRosterSwitchTests
         Assert.Equal(0, CoreSettings.Current.ActiveCompanionId);
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RosterFixtureRestoresActiveModProvidersBeforeTheIsolationHook(bool fail) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var original = (CoreMods.ActiveModPackageProvider, CoreMods.ActiveModIdProvider);
+        var mod = new ModPackage(new ModManifest { Id = "roster-restore-sentinel" }, null, false);
+        Func<ModPackage?> package = () => mod;
+        Func<string> id = () => mod.Id;
+        CoreMods.ActiveModPackageProvider = package;
+        CoreMods.ActiveModIdProvider = id;
+        try
+        {
+            Task Exercise() => WithRoster((_, _, _) =>
+            {
+                // The emote theory replaces these again inside the fixture body.
+                CoreMods.ActiveModPackageProvider = () => null;
+                CoreMods.ActiveModIdProvider = () => "roster-inner";
+                if (fail) throw new InvalidOperationException("roster fixture probe");
+            });
+            if (fail) await Assert.ThrowsAsync<InvalidOperationException>(Exercise);
+            else await Exercise();
+            Assert.Same(package, CoreMods.ActiveModPackageProvider);
+            Assert.Same(id, CoreMods.ActiveModIdProvider);
+        }
+        finally { (CoreMods.ActiveModPackageProvider, CoreMods.ActiveModIdProvider) = original; }
+    });
+
     private static Task WithRoster(Action<MainShellWindow, CompanionRoomView, WorkshopRosterCell> test) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
@@ -195,6 +223,7 @@ public sealed class CompanionRosterSwitchTests
         s.AvatarEnabled = false;
         s.SlutModeEnabled = false;
         for (int i = 0; i < 5; i++) s.CompanionProgressData[i] = new CompanionProgress { Level = i + 2 };
+        var oldMods = (CoreMods.ActiveModPackageProvider, CoreMods.ActiveModIdProvider);
         // This fixture exercises the static roster looks. Single-emote cases override this mod.
         var mod = new ModPackage(new ModManifest { Id = "roster-static", SupportedAvatarSets = new() { 1, 2, 3, 4, 5, 6, 7 } }, null, false);
         CoreMods.ActiveModPackageProvider = () => mod;
@@ -227,6 +256,7 @@ public sealed class CompanionRosterSwitchTests
             s.MotionLevel = oldMotion;
             service.SaveImmediate();
             CoreSettings.ServiceProvider = previous;
+            (CoreMods.ActiveModPackageProvider, CoreMods.ActiveModIdProvider) = oldMods;
         }
         return Task.CompletedTask;
     });
