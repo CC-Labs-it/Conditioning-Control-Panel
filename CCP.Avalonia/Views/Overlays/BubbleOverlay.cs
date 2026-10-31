@@ -283,6 +283,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        /// <summary>WPF BubbleService.cs:325-340: paid DVD sweep, darters/freeze exempt.
+        /// Use the existing pop/snap callbacks so payloads, score and lessons still run.</summary>
+        internal static void PopChaosInRect(Rect rect)
+        {
+            if (Field.HoldChaos) return;
+            for (int i = Field.Bubbles.Count - 1; i >= 0; i--)
+            {
+                if (i >= Field.Bubbles.Count) continue;
+                var b = Field.Bubbles[i];
+                // WPF BubbleService.cs:4652-4660: instant sweeps cannot end Tease or Brittle.
+                if (b.Popping || b.Spec == null || b.Spec.IsDarter || b.Spec.IsFreeze || b.Spec.IsTease || b.Spec.IsBrittle) continue;
+                if (!rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
+                if (b.IsLiveThreat)
+                {
+                    if (b.Snap()) { Field.ChaosDefused?.Invoke(b); RequestFrame(); }
+                }
+                else PopChaos(b);
+            }
+        }
+
         private static string ChaosCuePath(string name) =>
             ContentLocator.Resolve(Path.Combine("Resources", "sounds", "chaos", name + ".mp3"));   // as ChaosSfx
 
