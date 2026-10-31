@@ -1,105 +1,240 @@
-// PORTED-AS-A-STUB from ConditioningControlPanel/MainWindow/MainWindow.ProfileFaucet.cs (1146 lines).
-//
-// The blanket header this file shipped with is replaced: nothing here reaches WebView2 or Win32,
-// and the file is not uniformly blocked.
-//
-// THE FAUCET IS THE TAP ON THE VAT. It holds the XP the Descent earned and pours it into the glass
-// jar when the user presses and HOLDS it - a charge with rungs, a ring that fills, a thud and a
-// shiver on release. Two things block it:
-//   * VatFaucetHold - now CCP.Core/Services/Descent/VatFaucetHold.cs (moved in descent-core-a)
-//     with its AppSettingsVatPourLedger. It owns how much XP is held and what a completed charge
-//     is worth; re-deriving the hold here would be a second copy of the number the vat's fill is
-//     agreed on, so the port uses that Core copy.
-//   * MotionFx.AllowTransitions / AllowAmbientLoops - ConditioningControlPanel/Services/MotionFx.cs.
-//     StartFaucetWobble, StartFaucetSparkle and StartChipBreath are ambient loops and must not run
-//     under reduced motion; the only copy of that gate on this head is AmbientFxCanvas's private
-//     Env, which a non-canvas loop cannot reach (same finding as MainShellWindow.DeeperFx.cs).
-// PlayChargeRung and PlayFaucetSfx map onto CoreAudio, FireFaucetPourHaptic onto the haptics
-// service, and BuildChargeArc is a StreamGeometry either way; none of those is what holds it up.
-//
-// ITS CALLERS ARE THE TWO ponytail LINES IN MainShellWindow.ProfileVat.cs. ArmVat and DisarmVat are
-// live there and arm/disarm the JAR only; each carries the one-line note saying where
-// ArmFaucet(glass, jarW, jarH) and DisarmFaucet() belong. PositionVatTickGlyphs and
-// OnFaucetVatOffScreen are named in that file's header too. So restoring this file is an edit in
-// exactly two known places; VatFaucetHold is in Core now, MotionFx is what still blocks it.
-//
-// Members dropped (71):
-//   private const double FaucetSpoutXInBox
-//   private const double FaucetSpoutYInBox
-//   private const double FaucetBoxWidth
-//   private const double FaucetBoxHeight
-//   private const double FaucetRingBox
-//   private const double FaucetRingRadius
-//   private const double ChargeFloorMs
-//   private const double ChargeCapMs
-//   private const double ChargeXpPerMs
-//   private const int ChargeRungs
-//   private const int ChargeCompactAfter
-//   private readonly VatFaucetHold _faucetHold
-//   private bool _faucetWired
-//   private bool _faucetWobbling
-//   private bool _faucetSparkling
-//   private bool _faucetChipBreathing
-//   private DispatcherTimer? _faucetTickTimer
-//   private DispatcherTimer? _faucetSettleTimer
-//   private DispatcherTimer? _faucetChargeTimer
-//   private DateTime _faucetChargeStart
-//   private double _faucetChargeBudgetMs
-//   private int _faucetChargeRungsPlayed
-//   private bool _faucetCharging
-//   private bool _faucetChargeCompact
-//   private int _faucetPoursToday
-//   private string _faucetPourDayUtc
-//   private static readonly Random FaucetRng
-//   private void ArmFaucet(…)
-//   private void PositionVatTickGlyphs(…)
-//   private void DisarmFaucet(…)
-//   private void OnFaucetVatOffScreen(…)
-//   private void WireFaucet(…)
-//   private void UpdateFaucetPresentation(…)
-//   private static ToolTip BuildFaucetTooltip(…)
-//   private void StartFaucetWobble(…)
-//   private void StopFaucetWobble(…)
-//   private DispatcherTimer CreateFaucetTickTimer(…)
-//   private void StartFaucetSparkle(…)
-//   private void StopFaucetSparkle(…)
-//   private void StartChipBreath(…)
-//   private void StopChipBreath(…)
-//   private void OnFaucetMouseEnter(…)
-//   private void OnFaucetMouseLeave(…)
-//   private void AnimateFaucetScale(…)
-//   private void OnFaucetMouseDown(…)
-//   private void OnFaucetMouseUp(…)
-//   private void OnFaucetLostCapture(…)
-//   private void OnFaucetKeyDown(…)
-//   private void OnFaucetKeyUp(…)
-//   private void OnFaucetLostFocus(…)
-//   private void BeginFaucetCharge(…)
-//   private DispatcherTimer CreateFaucetChargeTimer(…)
-//   private void CancelFaucetCharge(…)
-//   private void CompleteFaucetCharge(…)
-//   private void ShowChargeRing(…)
-//   private void UpdateChargeRing(…)
-//   private void HideChargeRing(…)
-//   private static Geometry BuildChargeArc(…)
-//   private void FaucetThud(…)
-//   private void FaucetShiver(…)
-//   private void FaucetDrip(…)
-//   private void SpawnFaucetSparkles(…)
-//   private void AnimateFaucetTilt(…)
-//   private void StartFaucetSettleWatch(…)
-//   private void StopFaucetSettleWatch(…)
-//   private DispatcherTimer CreateFaucetSettleTimer(…)
-//   private int FaucetPourCountToday(…)
-//   private void NoteFaucetPourToday(…)
-//   private static void PlayChargeRung(…)
-//   private static void PlayFaucetSfx(…)
-//   private static void FireFaucetPourHaptic(…)
-
+// Charge/pour host: WPF MainWindow.ProfileFaucet.cs:135-348, 544-844, 1067-1144.
+// Coordinator wiring and decorative motion remain part B.
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
+using Avalonia.Input;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Descent;
+using ConditioningControlPanel.Services.Haptics.Core;
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // No member of this partial is referenced from MainShellWindow.axaml.
+        private readonly VatFaucetHold _faucetHold = new(new AppSettingsVatPourLedger());
+        private readonly VatFaucetChargePolicy _faucetChargePolicy = new();
+        private BeatLoop? _faucetChargeTimer;
+        private DateTime _faucetChargeStart;
+        private double _faucetChargeBudgetMs;
+        private int _faucetChargeRungsPlayed;
+        private bool _faucetCharging, _faucetChargeCompact, _faucetKeyHeld, _faucetWired;
+        private IPointer? _faucetPointer;
+        private T? Vat<T>(string name) where T : Control => ProfilePage?.FindControl<T>(name);
+        internal int FaucetHeldXp => _faucetHold.HeldXp;
+        internal bool FaucetCharging => _faucetCharging;
+        internal VatFaucetHold FaucetHold => _faucetHold;
+        private void ArmFaucet(VatGlassCanvas glass, double jarW, double jarH)
+        {
+            var faucet = Vat<Grid>("ProfileVatFaucet");
+            if (faucet == null) return;
+            WireFaucet(faucet);
+            double left = Math.Round(jarW * .10 - 8), top = Math.Round(jarH * .175 - 36);
+            faucet.Margin = new Thickness(left, top, 0, 0);
+            faucet.IsVisible = true;
+            if (Vat<Grid>("ProfileVatChargeRing") is { } ring)
+                ring.Margin = new Thickness(left + 15 - 17, top + 18 - 17, 0, 0);
+            if (Vat<Canvas>("ProfileVatSparks") is { } sparks) { sparks.Width = jarW; sparks.Height = jarH; }
+            if (Vat<Border>("ProfileVatChip") is { } chip) chip.Margin = new Thickness(0, Math.Round(jarH * .175) + 8, 0, 0);
+            glass.ExternalSpoutXFraction = (left + 27) / jarW;
+            PositionVatTickGlyphs();
+            UpdateFaucetPresentation();
+        }
+        private void PositionVatTickGlyphs()
+        {
+            if (VatGlass is not { } glass) return;
+            Place("ProfileVatTickDrain", VatGlassCanvas.VatTickMark.Drain);
+            Place("ProfileVatTickCap", VatGlassCanvas.VatTickMark.Cap);
+            Place("ProfileVatTickMax", VatGlassCanvas.VatTickMark.Max);
+            void Place(string name, VatGlassCanvas.VatTickMark mark)
+            {
+                if (Vat<IconGlyph>(name) is not { } glyph) return;
+                var y = glass.TickCenterY(mark);
+                glyph.IsVisible = y != null && glass.TickInnerX > 0;
+                if (glyph.IsVisible)
+                    glyph.Margin = new Thickness(Math.Round(glass.TickInnerX - 3 - glyph.Size), Math.Round(y!.Value - glyph.Size / 2), 0, 0);
+            }
+        }
+        private void DisarmFaucet()
+        {
+            CancelFaucetCharge(silent: true);
+            _faucetHold.Reset();
+            foreach (string name in new[] { "ProfileVatFaucet", "ProfileVatChip", "ProfileVatChargeRing", "ProfileVatTickDrain", "ProfileVatTickCap", "ProfileVatTickMax" })
+                if (Vat<Control>(name) is { } control) control.IsVisible = false;
+            Vat<Canvas>("ProfileVatSparks")?.Children.Clear();
+            if (VatGlass is { } glass) glass.ExternalSpoutXFraction = null;
+        }
+
+        private void WireFaucet(Grid faucet)
+        {
+            if (_faucetWired) return;
+            _faucetWired = true;
+            faucet.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(faucet).Properties.IsLeftButtonPressed) return;
+                e.Handled = true;
+                faucet.Focus();
+                _faucetPointer = e.Pointer;
+                e.Pointer.Capture(faucet);
+                BeginFaucetCharge();
+            };
+            faucet.PointerReleased += (_, e) =>
+            {
+                if (e.InitialPressMouseButton != MouseButton.Left) return;
+                e.Handled = true;
+                CancelFaucetCharge(silent: false);
+                e.Pointer.Capture(null);
+            };
+            faucet.PointerExited += (_, _) => { if (_faucetCharging) CancelFaucetCharge(silent: false);  };
+            faucet.PointerCaptureLost += (_, _) => CancelFaucetCharge(silent: true);
+            faucet.LostFocus += (_, _) => { _faucetKeyHeld = false; CancelFaucetCharge(silent: true); };
+            faucet.KeyDown += (_, e) =>
+            {
+                if (e.Key != Key.Space && e.Key != Key.Enter) return;
+                e.Handled = true;
+                if (_faucetKeyHeld) return;
+                _faucetKeyHeld = true;
+                BeginFaucetCharge();
+            };
+            faucet.KeyUp += (_, e) =>
+            {
+                if (e.Key != Key.Space && e.Key != Key.Enter) return;
+                e.Handled = true;
+                _faucetKeyHeld = false;
+                CancelFaucetCharge(silent: false);
+            };
+            if (ProfilePage is { } page)
+                page.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !page.IsVisible) OnFaucetVatOffScreen(); };
+            if (VatGlass is { } glass)
+            {
+                glass.FillPercentChanged += OnVatFillPercentChanged;
+                glass.SizeChanged += (_, _) => PositionVatTickGlyphs();
+            }
+            Deactivated += (_, _) => OnFaucetVatOffScreen();
+            Closed += (_, _) => CancelFaucetCharge(silent: true);
+        }
+        private void OnFaucetVatOffScreen()
+        {
+            _faucetKeyHeld = false;
+            CancelFaucetCharge(silent: true);
+        }
+
+        private void UpdateFaucetPresentation()
+        {
+            var tap = Vat<Grid>("ProfileVatFaucet");
+            if (tap == null || !tap.IsVisible) return;
+            int held = _faucetHold.HeldXp;
+            bool waiting = held > 0 && VatGlass?.IsPouring != true && !_faucetCharging;
+            var tip = new StackPanel { MaxWidth = 320 };
+            tip.Children.Add(new TextBlock { Text = held > 0 ? Loc.GetF("profile_faucet_tip_held", held) : Loc.Get("profile_faucet_tip_empty"), TextWrapping = TextWrapping.Wrap, FontWeight = FontWeight.SemiBold });
+            tip.Children.Add(new TextBlock { Text = Loc.Get("profile_vat_help_tip"), TextWrapping = TextWrapping.Wrap, FontSize = 11, Opacity = .72, Margin = new Thickness(0, 5, 0, 0) });
+            ToolTip.SetTip(tap, tip);
+            if (Vat<Border>("ProfileVatChip") is { } chip) chip.IsVisible = waiting;
+            if (Vat<TextBlock>("ProfileVatChipText") is { } text) text.Text = Loc.GetF("profile_vat_chip", held);
+            if (Vat<Control>("ProfileVatFaucetBadge") is { } badge) badge.IsVisible = held > 0 && !AmbientFxCanvas.Env.AllowAmbientLoops;
+        }
+
+        internal void BeginFaucetCharge()
+        {
+            if (!VatGlassCanvas.WindowIsPresenting(this) || ProfilePage?.IsEffectivelyVisible != true || _faucetCharging || !_vatArmed || VatGlass?.IsPouring != false || _faucetHold.HeldXp <= 0) return;
+            try { StartFaucetCharge(); }
+            catch (Exception ex) { Serilog.Log.Debug("BeginFaucetCharge: {E}", ex.Message); CancelFaucetCharge(silent: true); }
+        }
+
+        private void StartFaucetCharge()
+        {
+            _faucetCharging = true;
+            _faucetChargeRungsPlayed = 1;
+            _faucetChargeCompact = _faucetChargePolicy.IsCompact(DateTime.UtcNow);
+            _faucetChargeBudgetMs = VatFaucetChargePolicy.BudgetMilliseconds(_faucetHold.HeldXp, _faucetChargeCompact);
+            _faucetChargeStart = DateTime.UtcNow;
+            bool fade = AmbientFxCanvas.Env.AllowTransitions;
+            if (Vat<Grid>("ProfileVatChargeRing") is { } ring) { ring.IsVisible = true; ring.Opacity = fade ? 0 : 1; }
+            UpdateChargeRing(AmbientFxCanvas.Env.Level == MotionLevel.Full ? 0 : 1, force: true);
+            PlayFaucetSfx("faucet_charge_1.wav", .15f);
+            UpdateFaucetPresentation();
+            if (_faucetChargeTimer == null && Vat<Grid>("ProfileVatChargeRing") is { } owner)
+                _faucetChargeTimer = new BeatLoop(owner, t =>
+                {
+                    if (AmbientFxCanvas.Env.AllowTransitions) owner.Opacity = Math.Clamp(t / .12, 0, 1);
+                    if (t > 0) AdvanceFaucetCharge((DateTime.UtcNow - _faucetChargeStart).TotalMilliseconds / _faucetChargeBudgetMs);
+                });
+            _faucetChargeTimer?.Start();
+        }
+        internal void AdvanceFaucetCharge(double progress)
+        {
+            try { StepFaucetCharge(progress); }
+            catch (Exception ex) { Serilog.Log.Debug("Faucet charge: {E}", ex.Message); CancelFaucetCharge(silent: true); }
+        }
+
+        private void StepFaucetCharge(double progress)
+        {
+            if (!_faucetCharging || !double.IsFinite(progress)) return;
+            if (!VatGlassCanvas.WindowIsPresenting(this) || ProfilePage?.IsEffectivelyVisible != true) { CancelFaucetCharge(silent: true); return; }
+            progress = Math.Clamp(progress, 0, 1);
+            UpdateChargeRing(progress);
+            int want = VatFaucetChargePolicy.RungsAt(progress);
+            while (_faucetChargeRungsPlayed < want)
+                PlayFaucetSfx($"faucet_charge_{++_faucetChargeRungsPlayed}.wav", .15f);
+            if (progress < 1) return;
+            _faucetCharging = false;
+            HideChargeRing();
+            if (!_vatArmed || VatGlass is not { } glass || _faucetHold.HeldXp <= 0) { UpdateFaucetPresentation(); return; }
+            bool wasOver = glass.IsPastBrim(glass.Fill);
+            var step = _faucetHold.PourAll();
+            PlayFaucetSfx("faucet_pour.wav", .35f);
+            glass.PourTo(step.Fill, userGesture: true);
+            var rule = CoreSettings.Current.Haptics?.V2?.Rule(HapticEventKind.LevelUp);
+            if (rule is { Enabled: true, Intensity: > 0 } && CoreHaptics.Service is { } haptics)
+                _ = haptics.PostEvent(HapticEventKind.LevelUp, Math.Clamp(rule.Intensity * .35, 0, 1));
+            if (!wasOver && glass.IsPastBrim(step.Fill)) { glass.PulseOverflow(); PlayFaucetSfx("faucet_brim.wav", .30f); }
+            _faucetChargePolicy.NotePour(DateTime.UtcNow);
+            UpdateFaucetPresentation();
+        }
+
+        internal void CancelFaucetCharge(bool silent)
+        {
+            bool wasCharging = _faucetCharging;
+            _faucetCharging = false;
+            HideChargeRing();
+            var pointer = _faucetPointer;
+            _faucetPointer = null;
+            pointer?.Capture(null);
+            if (wasCharging && !silent) { PlayFaucetSfx("faucet_charge_drop.wav", .15f); }
+            UpdateFaucetPresentation();
+        }
+        private void HideChargeRing()
+        {
+            _faucetChargeTimer?.Stop();
+            if (Vat<Grid>("ProfileVatChargeRing") is { } ring) { ring.IsVisible = false; ring.Opacity = 0; }
+            if (Vat<Path>("ProfileVatChargeArc") is { } arc) arc.Data = null;
+        }
+
+        private void UpdateChargeRing(double progress, bool force = false)
+        {
+            if (!force && AmbientFxCanvas.Env.Level != MotionLevel.Full) return;
+            if (Vat<Path>("ProfileVatChargeArc") is not { } arc) return;
+            if (progress <= .002) { arc.Data = null; return; }
+            if (progress >= .999) { arc.Data = new EllipseGeometry(new Rect(2, 2, 30, 30)); return; }
+            double angle = progress * 2 * Math.PI;
+            var geometry = new StreamGeometry();
+            using (var ctx = geometry.Open())
+            {
+                ctx.BeginFigure(new Point(17, 2), false);
+                ctx.ArcTo(new Point(17 + 15 * Math.Sin(angle), 17 - 15 * Math.Cos(angle)), new Size(15, 15), 0, progress > .5, SweepDirection.Clockwise);
+                ctx.EndFigure(false);
+            }
+            arc.Data = geometry;
+        }
+        private static void PlayFaucetSfx(string file, float scale)
+        {
+            float volume = Math.Clamp((float)CoreSettings.Current.MasterVolume / 100 * scale, 0, 1);
+            try { if (volume > 0) CoreAudio.PlayOneShot(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "sounds", file), volume, "vat-faucet"); }
+            catch (Exception ex) { Serilog.Log.Debug("Faucet sound: {E}", ex.Message); }
+        }
     }
 }
