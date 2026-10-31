@@ -27,7 +27,7 @@ import { createNetItems } from './items.js';
 const KEEP_WAIT_MS = 1000;   // a kept bot with no record: wait this long for one before driving it from where it stands
 const SIM_EVENTS = new Set(['checkpoint', 'lap', 'finish', 'drop', 'hop', 'land', 'boost-start', 'airborne', 'trick']);
 
-export function createRoomSession({ track, feel, courseHash = '', lobby = null, platform = 'web', WS = globalThis.WebSocket, now = () => Date.now(),
+export function createRoomSession({ track, feel, courseHash = '', lobby = null, platform = 'web', loads = false, WS = globalThis.WebSocket, now = () => Date.now(),
   timers = globalThis, log = () => {} } = {}) {
   const plat = PLATFORMS.includes(platform) ? platform : 'web';
   const clock = createServerClock({ now });
@@ -37,8 +37,10 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
   const S0 = { roomId: null, seat: -1, cfg: null, seed: 0, seats: [], keep: [], phase: 'lobby', countAt: 0, startAt: 0, goTick: 0 };
   const st = { ...S0 };
   let sock = null, joinInfo = null, look = normLook(null), leaving = false, downAt = 0, tries = 0, retryT = 0;
-  let racers = null, race = null, items = null, connectWait = null;
+  let racers = null, race = null, items = null, connectWait = null, isLoaded = false;
   const keepWait = new Map();   // kept bot seat -> ms after which it is driven without a record
+  const STAMP_SLACK_TICKS = 2, VIEW_LEAN = 0.02, VIEW_SNAP_MS = 100;
+  let stampLag = null, viewAt = null, viewFrame = null;
 
   const emit = (name, m) => { const set = handlers.get(name); if (set) for (const fn of [...set]) { try { fn(m); } catch (e) { log('warn', `net ${name}: ${e}`); } } };
   function on(name, fn) { let set = handlers.get(name); if (!set) handlers.set(name, (set = new Set())); set.add(fn); return () => set.delete(fn); }
@@ -51,7 +53,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     joinInfo = j;
     sock = openSocket(j.wsUrl, {
       WS,
-      onOpen() { clock.restartPings(); send({ t: 'hello', v: NET_V, ticket: j.ticket, clientMs: now(), ...(courseHash ? { courseHash } : {}) }); pingNow(); },
+      onOpen() { clock.restartPings(); send({ t: 'hello', v: NET_V, ticket: j.ticket, clientMs: now(), ...(courseHash ? { courseHash } : {}), ...(loads ? { loads: true } : {}) }); pingNow(); },
       onMsg,
       onBatch(f) {
         for (const k of f.karts) {
@@ -101,6 +103,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
         downAt = 0;
         applyKeep(m.keep);
         syncRacers();
+        if (loads && isLoaded) send({ t: 'loaded' });   // a new socket is a new seat to the room's load hold
         if (connectWait) { connectWait.res(m); connectWait = null; }
         break;
       case 'pong': clock.pong(m.c, m.s); break;
@@ -227,7 +230,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
   /** Wire the racers in: remote driver, kept bots, online items. @returns the items object for boot.js */
   function mount(rs, rc, q) {
     racers = rs; race = rc;
-    racers.remote = createRemoteDriver(interp, () => clock.serverNow(), q).drive;
+    racers.remote = createRemoteDriver(interp, viewNow, q).drive;
     items = createNetItems(track, feel, q, { send, tick: raceTick });
     const keep = st.keep; st.keep = []; applyKeep(keep);
     syncRacers();
@@ -245,18 +248,42 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
     if (clock.serverNow(t) < st.countAt || !uplink.due(t)) return;
     const rows = [{ seat: st.seat, r: racers.player, bot: false, paused, assist: !!assist || paused }];
     for (const s of st.keep) { const r = racerOf(s); if (r && r.kind !== 'remote' && !r.meta.left) rows.push({ seat: s, r, bot: true, paused: false, assist: false }); }
-    sock.upload(Math.max(0, Math.round(clock.roomMs(t))), uplink.build(rows, clock.tick(t), t));
+    sock.upload(Math.max(0, Math.round(clock.roomMs(t))), uplink.build(rows, recordTick(t), t));
+  }
+
+  /** The tick a record is stamped with. While racing it counts the sim's own steps, so equal travel carries equal
+   * time: the wall clock is a frame's phase off at each upload, and one tick is 67 cm at 40 m/s on every rival's
+   * screen. The wall clock only re-anchors it when they part (dropped sim time, a pause). */
+  function recordTick(t) {
+    const wall = clock.tick(t);
+    if (!race || race.phase !== 'racing') { stampLag = null; return wall; }
+    const sim = st.goTick + Math.round(race.timeS * 60);
+    if (stampLag === null || Math.abs(wall - sim - stampLag) > STAMP_SLACK_TICKS) stampLag = wall - sim;
+    return Math.max(0, sim + stampLag);
+  }
+
+  /** The server time remote karts are drawn at: it runs on the frame clock and leans toward serverNow, which reads
+   * Date.now wherever the frame's work has got to (2 ms of that is 8 cm at 40 m/s). */
+  function viewNow() {
+    const server = clock.serverNow();
+    return viewAt === null || Math.abs(server - viewAt) > VIEW_SNAP_MS ? server : viewAt;
+  }
+  function stepView(frameMs) {
+    const server = clock.serverNow();
+    const next = viewAt === null || frameMs === undefined || viewFrame === null ? server : viewAt + Math.max(0, frameMs - viewFrame);
+    viewAt = Math.abs(server - next) > VIEW_SNAP_MS ? server : next + (server - next) * VIEW_LEAN;
+    viewFrame = frameMs === undefined ? null : frameMs;
   }
 
   /** After racers.interpolate(alpha): remote karts drawn at this frame's server time (smooth at any frame rate,
-   * whatever number of sim steps the frame ran). */
-  function drawRemotes() {
+   * whatever number of sim steps the frame ran). `frameMs` = the frame's requestAnimationFrame stamp. */
+  function drawRemotes(frameMs) {
     if (!racers) return;
-    const t = clock.serverNow();
+    stepView(frameMs);
     for (const r of racers.list) {
       if (r.kind !== 'remote' || !interp.has(r.meta.seat)) continue;
       r.view.set(r.st);
-      interp.sample(r.meta.seat, t, r.view, true);
+      interp.sample(r.meta.seat, viewAt, r.view);
     }
   }
 
@@ -284,6 +311,8 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
       rows.sort((a, b) => (a.seat === st.seat ? -1 : b.seat === st.seat ? 1 : a.seat - b.seat));
       return rows.map((x) => ({ seat: x.seat, kind: x.kind, name: x.name, look: normLook(x.look), local: x.seat === st.seat || st.keep.includes(x.seat) }));
     },
+    /** This page can race now: the room's start waits for it (NET.md, the load hold). */
+    markLoaded() { isLoaded = true; if (loads) send({ t: 'loaded' }); },
     ready: (on2 = true) => send({ t: 'ready', on: !!on2 }),
     start: () => send({ t: 'start' }),
     setLook(l) { look = normLook(l); return send({ t: 'look', ...roomLook(look) }); },
