@@ -4,12 +4,18 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -30,6 +36,8 @@ public sealed class RainHelpTests
         var button = row.Descendants().Single(e => (string?)e.Attribute(x + "Name") == "BtnHelpRain");
         Assert.Equal("{loc:Str help_read_btn}", (string?)button.Attribute("Content"));
         Assert.Null(button.Attribute("Click"));
+        var icon = row.Descendants().Single(e => e.Name.LocalName == "IconGlyph");
+        Assert.Equal("Wand", (string?)icon.Attribute("Kind"));
         Assert.DoesNotContain(shell.Descendants(), e => (string?)e.Attribute(x + "Name") == "BtnHelpPrizeCounter");
     }
 
@@ -51,19 +59,34 @@ public sealed class RainHelpTests
     [Fact]
     public Task ReadAttachesLocalizedRainPage() => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var button = new Button { Name = "BtnHelpRain" };
+        var host = new Window { Content = button };
         try
         {
+            host.Show();
             MainShellWindow.AttachHelpButton(button);
             Assert.Equal("RainV2", HelpPopover.SectionOf(button));
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(HelpPopover.IsOpen(button));
+            var icon = Assert.Single(HelpPopover.PopupContent(button)!.GetVisualDescendants()
+                .OfType<IconGlyph>().Where(g => g.Kind == IconKind.Wand));
+            Assert.False(icon.IsFallback);
             var content = MainShellWindow.BuildRainHelpContent();
             Assert.Equal(Loc.Get("help_rain_title"), content.Title);
             Assert.Equal(Loc.Get("help_rain_what"), content.WhatItDoes);
             Assert.Equal(new[] { Loc.Get("help_rain_tip1"), Loc.Get("help_rain_tip2"), Loc.Get("help_rain_tip3") }, content.Tips);
             Assert.Equal(Loc.Get("help_rain_how"), content.HowItWorks);
         }
-        finally { HelpPopover.Clear(button); }
+        finally { HelpPopover.Clear(button); host.Close(); }
         return Task.CompletedTask;
     });
 }
