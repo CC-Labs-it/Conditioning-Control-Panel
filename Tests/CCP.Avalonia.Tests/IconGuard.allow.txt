@@ -120,3 +120,5 @@ Platform/FriendsLanding.cs :: ? "✨" : item.Kind == SendKind.Invite ? "🚪" : 
 
 # --- verbatim imports (Stack rule 4); each follow-up converts the file and deletes its entry ---
 Tours/TutorialService.cs :: * :: verbatim: import (Stack rule 4, trunk 557d9aac3c0aabdedc9280218757373970439ed4); step Icon strings are data mapped via IconMap at render; follow-up tutorials-icons converts the data and removes this exemption
+
+Views/Windows/MainShellWindow.IntakeNudge.cs :: Glyph = "🎟️" :: InboxItem.Glyph is row data copied from WPF Marquee.cs:1087; InboxFlyout owns the icon rendering

@@ -658,6 +658,7 @@ namespace ConditioningControlPanel.Avalonia
                 // A sandbox never reaches the real proxy (the dailyFree rule above).
                 if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
                 {
+                    Views.Windows.MainShellWindow.IntakeNudgeArmed = true;
                     Views.Windows.MainShellWindow.AnnouncementClient = () => new V2AuthService();
                     // WPF MainWindow.JustDrop.cs:66: the Just Drop door flag, 9 s after startup.
                     Views.Windows.MainShellWindow.JustDropAvailabilityCheck = Services.JustDrop.JustDropService.RefreshAvailabilityAsync;
