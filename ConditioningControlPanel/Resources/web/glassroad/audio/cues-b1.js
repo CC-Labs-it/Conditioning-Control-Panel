@@ -238,5 +238,5 @@ export const UI_CUES = {
   'ready-off'(syn) { syn.tone(syn.semis(14), { type: 'sine', dur: 0.08, vol: 0.04, glide: syn.semis(9) }); },
   'lobby-tick'(syn) { syn.tone(syn.semis(-3), { type: 'sine', dur: 0.1, vol: 0.07 }); },
   // the garage's bubbles (hud/garageBubbles.js): a menu cue, so the first press of a page is heard
-  'bubble-pop'(syn) { pop(syn, 12, 0.08); },
+  'menu-bubble-pop'(syn) { pop(syn, 12, 0.08); },
 };
