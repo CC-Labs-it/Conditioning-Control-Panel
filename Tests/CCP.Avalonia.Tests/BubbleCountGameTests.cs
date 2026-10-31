@@ -56,13 +56,16 @@ public sealed class BubbleCountGameTests
                 await AvaloniaTestDispatcher.RunAsync(async () =>
                 {
                     if (Application.Current is null)
-                        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                             .UseSkia()
                             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                             .SetupWithoutStarting();
 
                     async Task<BubbleCountWindow> Open(bool strict)
                     {
+                        var visibleOnFrame = new TaskCompletionSource<bool>(); // WPF BubbleCountWindow.xaml.cs:1398-1401 hides the game at completion.
+                        using var opened = Window.WindowOpenedEvent.AddClassHandler<BubbleCountWindow>((w, _) =>
+                            w.VideoImage.PropertyChanged += (_, e) => { if (e.Property == Image.SourceProperty && w.VideoImage.Source != null) visibleOnFrame.TrySetResult(w.Topmost && w.IsVisible); });
                         s.BubbleCountStrictLock = strict;
                         b.Trigger(forceTest: true);
                         Assert.True(b.IsBusy);
@@ -73,7 +76,7 @@ public sealed class BubbleCountGameTests
                         var w = Assert.Single(BubbleCountWindow.OpenWindows);
                         Assert.True(BubbleCountWindow.Sink!.FrameCount >= 3, "frames decoded");
                         Assert.Same(BubbleCountWindow.Sink.Bitmap, w.VideoImage.Source);
-                        Assert.True(w.Topmost && w.IsVisible);
+                        Assert.True(await visibleOnFrame.Task.WaitAsync(TimeSpan.FromSeconds(20)), "visible and topmost at the first decoded frame");
                         return w;
                     }
 
@@ -81,6 +84,7 @@ public sealed class BubbleCountGameTests
                     await Open(strict: false);
                     for (var i = 0; i < 400 && BubbleCountResultWindow.OpenWindows.Count == 0; i++) await Task.Delay(50);
                     var r = Assert.Single(BubbleCountResultWindow.OpenWindows);
+                    Assert.All(BubbleCountWindow.OpenWindows, w => Assert.False(w.IsVisible));
                     Assert.Equal(2, BubbleCountWindow.LastVideoDurationSeconds, 0);   // LengthChanged replaced the 30 s fallback
                     r.FindControl<TextBox>("TxtAnswer")!.Text = r.CorrectAnswer.ToString();
                     r.FindControl<TextBox>("TxtAnswer")!.Focus();

@@ -130,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static MantraService Mantra { get; } = new();
         /// <summary>WPF App.MantraVoice: the active mod's Spoken Mantras (mantras.json).</summary>
         internal static MantraVoiceService MantraVoice { get; } = new();
+        internal static Platform.MantraChantHost MantraChant { get; } = new();
 
         /// <summary>WPF App.xaml.cs:2527-2536 plus the CoreQuests seeds of :398-421. Seeded where this
         /// head has the service. The streak shield is WPF SkillTreeService.UseStreakShield (:378) over
@@ -514,6 +515,8 @@ namespace ConditioningControlPanel.Avalonia
                 // folder's subdirs (#391), before anything resolves the assets folder.
                 Platform.InstallerAssetsPath.Apply(Settings);
                 CorePaths.EnsureCustomAssetsDirectories(Settings.Current.CustomAssetsPath);
+                // WPF ConditioningControlPanel/App.xaml.cs:3494-3503: never auto-start.
+                MantraChant.StopAndDisarm();
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
@@ -1266,6 +1269,7 @@ namespace ConditioningControlPanel.Avalonia
 
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
             try { Platform.KeywordTriggerHead.Stop(); } catch { }
+            try { MantraChant.Dispose(); } catch { } // WPF App.xaml.cs:6529
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }
