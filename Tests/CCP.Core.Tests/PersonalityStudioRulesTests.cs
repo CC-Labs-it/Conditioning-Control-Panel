@@ -45,6 +45,20 @@ public sealed class PersonalityStudioRulesTests
         Assert.NotSame(source.PromptSettings, draft.PromptSettings);
     }
 
+    // Architectural regression: the Windows entry points must not keep independent rules.
+    [Fact]
+    public void WindowsStudioForwardsEveryRuleToCore()
+    {
+        var source = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            ConditioningControlPanel.Tests.SourceRoots.RepoRoot,
+            "ConditioningControlPanel", "Services", "Companion", "PersonalityStudio.cs"));
+        foreach (var forward in new[] { "=> PersonalityStudioRules.Draft(source, activeOverride);",
+            "=> PersonalityStudioRules.FieldCap(max, text);",
+            "FieldHeadroom = PersonalityStudioRules.FieldHeadroom;",
+            "=> PersonalityStudioRules.OwnPreset(source, userPresets);" })
+            Assert.Contains(forward, source);
+    }
+
     [Theory]
     [InlineData(60, 0, 400)]
     [InlineData(3600, 5000, 5400)]

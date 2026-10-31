@@ -184,10 +184,10 @@ public sealed class PersonalityStudioTests
                 var studio = owner.OwnedWindows.Single();
                 Click(Button(studio, L("delete")));
                 var confirmation = Assert.IsType<MessageDialog>(studio.OwnedWindows.Single());
-                Assert.NotEqual("btn_no", Loc.Get("btn_no"));
-                Assert.NotEqual("label_yes", Loc.Get("label_yes"));
-                Assert.Equal(Loc.Get("label_yes"), Assert.IsType<TextBlock>(confirmation.FindControl<Button>("BtnOk")!.Content).Text);
-                Assert.Equal(Loc.Get("btn_no"), Assert.IsType<TextBlock>(confirmation.FindControl<Button>("BtnCancel")!.Content).Text);
+                Assert.NotEqual("dialog_no", Loc.Get("dialog_no"));
+                Assert.NotEqual("dialog_yes", Loc.Get("dialog_yes"));
+                Assert.Equal(Loc.Get("dialog_yes"), Assert.IsType<TextBlock>(confirmation.FindControl<Button>("BtnOk")!.Content).Text);
+                Assert.Equal(Loc.Get("dialog_no"), Assert.IsType<TextBlock>(confirmation.FindControl<Button>("BtnCancel")!.Content).Text);
                 confirmation.Close(false);
                 await Task.Yield();
                 Click(Button(studio, L("cancel")));
