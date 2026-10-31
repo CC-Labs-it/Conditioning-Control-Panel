@@ -56,6 +56,10 @@ public sealed class ExclusivesCompletionTests
             shell.OpenAppSettingsSection("account"); Settle();
             var plans = shell.PlansVault!;
             Assert.True(plans.PlansMode);
+            // WPF ExclusivesTabView.xaml:48 and .xaml.cs:133 retain the room in PlansMode.
+            var backdrop = plans.FindControl<Image>("VaultBackdrop")!;
+            Assert.True(backdrop.IsEffectivelyVisible);
+            Assert.NotNull(backdrop.Source);
             Assert.NotNull(plans.InvitesPanel);
             Assert.False(plans.FindControl<Border>("SpotlightCard")!.IsVisible);
             Assert.Empty(plans.FindControl<ItemsControl>("ExclusivesShelf")!.Items);

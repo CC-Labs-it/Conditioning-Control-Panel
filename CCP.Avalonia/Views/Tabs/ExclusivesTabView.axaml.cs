@@ -53,7 +53,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 this.FindControl<Border>("InvitesWrap")!.IsVisible = value;
                 if (value && InvitesPanel == null)
                     this.FindControl<ContentControl>("InvitesSlot")!.Content = InvitesPanel = new Controls.Invites.InvitePanel();
-                this.FindControl<Image>("VaultBackdrop")!.IsVisible = !value;
                 BindLoc("TxtVaultTitle", value ? "plans_header_title" : "premium_page_title");
                 BindLoc("TxtVaultSub", value ? "plans_header_sub" : "premium_page_sub");
                 var scroll = this.FindControl<ScrollViewer>("ContentScroll")!;
