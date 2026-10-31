@@ -71,6 +71,7 @@ Controls/Icons/ :: * :: path: IconGlyph's spiral extension glyph (decisions 2026
 Controls/PremiumSpark.cs :: * :: path: D6 art - animated sparkle/particle effect, not an icon slot
 
 # --- art, D6 "keep as art" inside files that also hold icon Paths ---
+Controls/Billboard/CalendarArtView.Fx.cs :: Geometry.Parse("M0,-1 Q.12,-.12 1,0 Q.12,.12 0,1 Q-.12,.12 -1,0 Q-.12,-.12 0,-1 Z") :: path: D6 art - animated calendar glint and progress spark, WPF Controls/Billboard/BillboardVectorArt.cs:262-287
 Views/AvatarTube/AvatarTubeWindow.axaml :: <Path x:Name="FuseCandleFlame" :: path: D6 art - AvatarTube fuse candle flame
 Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: _curvePath = new Path :: path: D6 art - rule-editor curve
 Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: canvas.Children.Add(new Path :: path: D6 art - rule-editor keyframe curve (one site)
