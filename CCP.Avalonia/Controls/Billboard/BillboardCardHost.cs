@@ -409,7 +409,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
                 HorizontalAlignment = HorizontalAlignment.Left, Focusable = true, Margin = new Thickness(0, 12, 0, 0),
             };
             button.PointerEntered += (_, _) => SetCtaHover(true);
-            button.PointerExited += (_, _) => SetCtaHover(false);
+            button.PointerExited += (_, _) => { SetCtaPressed(false); SetCtaHover(false); };
             button.AddHandler(PointerPressedEvent, (_, e) => { if (e.GetCurrentPoint(button).Properties.IsLeftButtonPressed) SetCtaPressed(true); }, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             button.AddHandler(PointerReleasedEvent, (_, _) => SetCtaPressed(false), global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             button.PointerCaptureLost += (_, _) => SetCtaPressed(false);

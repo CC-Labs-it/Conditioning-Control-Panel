@@ -1,5 +1,6 @@
 using System;
 using Avalonia;
+using ConditioningControlPanel.Services.Billboard;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
@@ -22,9 +23,9 @@ internal sealed partial class BillboardCardHost
     private readonly ScaleTransform _ctaScale = new(1, 1), _ctaSquash = new(1, 1);
     private readonly TranslateTransform _ctaTravel = new();
     private BeatLoop? _ctaBeat;
-    private bool _ctaHovered, _ctaDown, _ctaReleasing, _ctaOnScreen;
-    private double _ctaNow, _ctaInputAt, _ctaShineAt = double.NegativeInfinity, _ctaLandAt = double.NegativeInfinity;
-    private double _fromScale = 1, _fromX = 1, _fromY = 1, _fromTravel;
+    private bool _ctaHovered, _ctaDown, _ctaReleasing, _ctaReleaseTravel, _ctaOnScreen;
+    private double _ctaNow, _hoverAt, _pressAt, _travelAt, _glowAt = double.NegativeInfinity, _ctaShineAt = double.NegativeInfinity, _ctaLandAt = double.NegativeInfinity;
+    private double _fromScale = 1, _fromX = 1, _fromY = 1, _fromTravel, _travelTarget, _fromGlow;
 
     internal bool CtaLoopsRunning => _ctaBeat != null;
     internal double CtaGlowOpacity => _ctaGlow.Opacity;
@@ -61,19 +62,23 @@ internal sealed partial class BillboardCardHost
         };
         _ctaHovered = _ctaDown = _ctaReleasing = false;
         _ctaLandAt = _ctaShineAt = landed && Env.AllowTransitions ? _ctaNow : double.NegativeInfinity;
-        _ctaInputAt = _ctaNow;
-        CaptureCtaPose();
-    }
-
-    private void CaptureCtaPose()
-    {
+        _hoverAt = _pressAt = _travelAt = _ctaNow;
+        _glowAt = double.NegativeInfinity;
+        _ctaReleaseTravel = false; _travelTarget = 0;
         _fromScale = _ctaScale.ScaleX; _fromX = _ctaSquash.ScaleX;
         _fromY = _ctaSquash.ScaleY; _fromTravel = _ctaTravel.Y;
     }
 
     internal void SetCtaHover(bool on)
     {
-        CaptureCtaPose(); _ctaInputAt = _ctaNow; _ctaHovered = on;
+        _fromScale = _ctaScale.ScaleX; _fromGlow = _ctaGlow.Opacity;
+        _hoverAt = _glowAt = _ctaNow; _ctaHovered = on;
+        // WPF Lift leaves a depressed face to PressUp; hover never restarts the squash spring.
+        if (!_ctaDown && _ctaTravel.Y <= 0)
+        {
+            _fromTravel = _ctaTravel.Y; _travelAt = _ctaNow;
+            _travelTarget = on ? -DepthLaw.HoverLiftPx : 0; _ctaReleaseTravel = false;
+        }
         if (on && Env.AllowTransitions) _ctaShineAt = _ctaNow;
         RefreshCtaFx(_ctaOnScreen);
     }
@@ -81,7 +86,9 @@ internal sealed partial class BillboardCardHost
     internal void SetCtaPressed(bool down)
     {
         if (_ctaDown == down) return; // release and capture-lost may both arrive for one press
-        CaptureCtaPose(); _ctaInputAt = _ctaNow; _ctaReleasing = _ctaDown && !down; _ctaDown = down;
+        _fromX = _ctaSquash.ScaleX; _fromY = _ctaSquash.ScaleY; _fromTravel = _ctaTravel.Y;
+        _pressAt = _travelAt = _ctaNow; _ctaReleasing = _ctaReleaseTravel = !down; _ctaDown = down;
+        _travelTarget = down ? DepthLaw.PressTravelPx : 0;
         RefreshCtaFx(_ctaOnScreen);
     }
 
@@ -92,9 +99,9 @@ internal sealed partial class BillboardCardHost
         {
             _ctaLandAt = _ctaShineAt = double.NegativeInfinity;
             _ctaScale.ScaleX = _ctaScale.ScaleY = _ctaSquash.ScaleX = _ctaSquash.ScaleY = 1;
-            _ctaTravel.Y = 0;
+            _ctaTravel.Y = 0; _ctaReleasing = _ctaReleaseTravel = false;
         }
-        bool oneShot = Env.AllowTransitions && (_ctaNow - _ctaInputAt < 0.3 ||
+        bool oneShot = Env.AllowTransitions && (_ctaNow - _hoverAt < 0.3 || _ctaNow - _pressAt < 0.3 || _ctaNow - _glowAt < 0.3 ||
             _ctaNow - _ctaShineAt < 0.6 || _ctaNow - _ctaLandAt < 0.7);
         if (onScreen && (Env.AllowAmbientLoops || oneShot))
         {
@@ -118,26 +125,32 @@ internal sealed partial class BillboardCardHost
     {
         _ctaNow = t;
         if (!Env.AllowTransitions) { RefreshCtaFx(_ctaOnScreen); return; }
-        double elapsed = Math.Max(0, t - _ctaInputAt);
         double speed = Env.Level == global::ConditioningControlPanel.Models.MotionLevel.Reduced ? 0.5 : 1;
-        double p = Math.Clamp(elapsed / ((_ctaDown ? DepthLaw.PressMs : 260) * speed / 1000), 0, 1);
-        double ease = _ctaDown ? p : 1 - Math.Pow(1 - p, 3);
-        double Mix(double a, double b) => a + (b - a) * ease;
-        _ctaScale.ScaleX = _ctaScale.ScaleY = Mix(_fromScale, _ctaHovered ? 1.05 : 1);
-        double travelP = Math.Clamp(elapsed / (DepthLaw.Ms(_ctaDown ? DepthLaw.PressMs : DepthLaw.HoverMs, Env.Level) / 1000d), 0, 1);
-        double travel = DepthLaw.TravelFor(true, _ctaDown, false, _ctaHovered);
-        _ctaTravel.Y = _ctaReleasing ? BeatLoop.Keys(elapsed, new[]
+        double hover = Math.Clamp((t - _hoverAt) / ((_ctaHovered ? 0.26 : 0.16) * speed), 0, 1);
+        double hoverEase = _ctaHovered ? BillboardTiming.Thud(hover) : QuadOut(hover);
+        _ctaScale.ScaleX = _ctaScale.ScaleY = _fromScale + ((_ctaHovered ? 1.05 : 1) - _fromScale) * hoverEase;
+        double elapsed = Math.Max(0, t - _pressAt);
+        double press = Math.Clamp(elapsed / (DepthLaw.PressMs * speed / 1000), 0, 1);
+        double Spring(double from, double past) => ReleaseAt(elapsed / (DepthLaw.ReleaseMs * 1.6 * speed / 1000), from, past, 1, 0.45);
+        _ctaSquash.ScaleX = _ctaDown ? _fromX + (1.07 - _fromX) * press : _ctaReleasing ? Spring(_fromX, 0.95) : 1;
+        _ctaSquash.ScaleY = _ctaDown ? _fromY + (0.86 - _fromY) * press : _ctaReleasing ? Spring(_fromY, 1.07) : 1;
+        if (elapsed >= DepthLaw.ReleaseMs * 1.6 * speed / 1000) _ctaReleasing = false;
+        double travelElapsed = Math.Max(0, t - _travelAt);
+        double travelP = Math.Clamp(travelElapsed / (DepthLaw.Ms(_ctaDown ? DepthLaw.PressMs : DepthLaw.HoverMs, Env.Level) / 1000d), 0, 1);
+        _ctaTravel.Y = _ctaReleaseTravel
+            ? ReleaseAt(travelElapsed / (DepthLaw.ReleaseMs * speed / 1000), _fromTravel, -DepthLaw.ReleaseOvershootPx, 0, 0.6)
+            : _fromTravel + (_travelTarget - _fromTravel) * travelP;
+        if (_ctaReleaseTravel && travelElapsed >= DepthLaw.ReleaseMs * speed / 1000)
         {
-            (0d, _fromTravel), (DepthLaw.ReleaseMs * 0.6 * speed / 1000, -DepthLaw.ReleaseOvershootPx),
-            (DepthLaw.ReleaseMs * speed / 1000, 0d),
-        }, sine: true) : _fromTravel + (travel - _fromTravel) * travelP;
-        double Spring(double from, double past) => BeatLoop.Keys(elapsed,
-            new[] { (0d, from), (DepthLaw.ReleaseMs * 1.6 * 0.45 * speed / 1000, past), (DepthLaw.ReleaseMs * 1.6 * speed / 1000, 1d) }, sine: true);
-        _ctaSquash.ScaleX = _ctaDown ? Mix(_fromX, 1.07) : _ctaReleasing ? Spring(_fromX, 0.95) : 1;
-        _ctaSquash.ScaleY = _ctaDown ? Mix(_fromY, 0.86) : _ctaReleasing ? Spring(_fromY, 1.07) : 1;
-        double idle = Env.AllowAmbientLoops ? 0.32 + 0.30 * BeatLoop.Breath(t, 1.6) : 0.32;
+            _ctaReleaseTravel = false; _fromTravel = _travelTarget = 0;
+        }
+        double glowElapsed = Math.Max(0, t - _glowAt);
+        double idleTime = double.IsFinite(_glowAt) ? Math.Max(0, glowElapsed - 0.26) : t;
+        double idle = Env.AllowAmbientLoops ? 0.32 + 0.30 * BeatLoop.Breath(idleTime, 1.6) : 0.32;
         double land = Math.Clamp(1 - (t - _ctaLandAt) / (0.7 * speed), 0, 1);
-        _ctaGlow.Opacity = _ctaHovered ? 0.95 : idle + (0.95 - idle) * land;
+        _ctaGlow.Opacity = _ctaHovered ? _fromGlow + (0.95 - _fromGlow) * Math.Clamp(glowElapsed / 0.16, 0, 1)
+            : land > 0 ? idle + (0.95 - idle) * land
+            : Env.AllowAmbientLoops && glowElapsed < 0.26 ? _fromGlow + (0.32 - _fromGlow) * (glowElapsed / 0.26) : idle;
         double shine = (t - _ctaShineAt) / speed;
         if (shine >= 0.6 && Env.AllowAmbientLoops) shine = (t + 4.6 - 1.2) % 4.6;
         _ctaShine.Opacity = shine >= 0 && shine < 0.6 ? 1 : 0;
@@ -146,4 +159,11 @@ internal sealed partial class BillboardCardHost
         _ctaShineMove.X = (-1.2 + 2.4 * q) * _ctaFace.Bounds.Width;
         RefreshCtaFx(_ctaOnScreen);
     }
+    private static double QuadOut(double p) => 1 - (1 - p) * (1 - p);
+    private static double QuadInOut(double p) => p < 0.5 ? 2 * p * p : 1 - Math.Pow(-2 * p + 2, 2) / 2;
+    // WPF EasingDoubleKeyFrame: first segment quadratic Out, final segment quadratic InOut.
+    private static double ReleaseAt(double p, double from, double past, double end, double split) =>
+        p < split ? from + (past - from) * QuadOut(Math.Clamp(p / split, 0, 1))
+            : past + (end - past) * QuadInOut(Math.Clamp((p - split) / (1 - split), 0, 1));
+
 }

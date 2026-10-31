@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -86,6 +87,74 @@ public sealed class BillboardCtaTests
             host.IsVisible = true; host.RefreshMotion(); Assert.True(host.CtaLoopsRunning);
             window.Close(); Assert.False(host.CtaLoopsRunning);
             host.SetCtaHover(true); Assert.False(host.CtaLoopsRunning);
+        }
+        finally { window.Close(); host.ReleaseArt(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task HoverAfterReleaseDoesNotReplaySpring() => WithCta((host, window) =>
+    {
+        host.SetCtaHover(true); host.StepCtaFx(0.5);
+        host.SetCtaPressed(true); host.StepCtaFx(0.59);
+        host.SetCtaPressed(false); host.StepCtaFx(0.9);
+        host.SetCtaHover(false); host.StepCtaFx(1.1);
+        host.SetCtaHover(true); host.StepCtaFx(1.4);
+        Assert.Equal((1.05, 1d, 1d, -2d), host.CtaPose);
+        // A hover during a release must not rewind its squash clock either.
+        host.SetCtaPressed(true); host.StepCtaFx(1.49);
+        host.SetCtaPressed(false); host.StepCtaFx(1.5152);
+        host.SetCtaHover(false); host.StepCtaFx(1.5404);
+        Assert.Equal(0.98, host.CtaPose.X, 5); // half the first quadratic segment
+    });
+
+    [Fact]
+    public Task RoutedPointerExitReleasesHeldPress() => WithCta((host, window) =>
+    {
+        var pointer = new Pointer(4, PointerType.Mouse, true);
+        host.Cta.RaiseEvent(new PointerPressedEventArgs(host.Cta, pointer, host.Cta, default, 0,
+            new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), default, 1));
+        host.StepCtaFx(0.1); Assert.Equal(0.86, host.CtaPose.Y, 5);
+        host.Cta.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, host.Cta, pointer,
+            host.Cta, default, 1, new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.Other), default));
+        host.StepCtaFx(0.4);
+        Assert.Equal((1d, 1d, 1d, 0d), host.CtaPose);
+    });
+
+    [Fact]
+    public Task IntermediateFramesMatchWpfTimingAndQuadraticSegments() => WithCta((host, window) =>
+    {
+        host.StepCtaFx(0); host.SetCtaHover(true); host.StepCtaFx(0.08);
+        Assert.Equal(0.635, host.CtaGlowOpacity, 5); // linear 160 ms glow fade
+        host.StepCtaFx(0.13); Assert.InRange(host.CtaPose.Hover, 1.05, 1.075); // WPF thud overshoots
+        host.StepCtaFx(0.5); host.SetCtaHover(false); host.StepCtaFx(0.58);
+        Assert.Equal(1.0125, host.CtaPose.Hover, 5); // half of 160 ms, quadratic Out
+        Assert.Equal(0.95 + (0.32 - 0.95) * (0.08 / 0.26), host.CtaGlowOpacity, 5);
+        host.StepCtaFx(0.66); Assert.Equal(1, host.CtaPose.Hover, 5);
+        host.SetCtaPressed(true); host.StepCtaFx(0.75); host.SetCtaPressed(false);
+        host.StepCtaFx(0.7752); Assert.Equal(1.0175, host.CtaPose.X, 5); // first segment at 25 percent
+        host.StepCtaFx(0.792); Assert.Equal(-0.25, host.CtaPose.Travel, 5);
+        host.StepCtaFx(0.8816); Assert.Equal(0.95625, host.CtaPose.X, 5); // final segment at 25 percent
+    });
+
+    private Task WithCta(Action<BillboardCardHost, Window> check) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        CoreSettings.ServiceProvider = () => settings;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = CoreSettings.Current.AutoPerformanceMode = false;
+        var deck = new BillboardDeck(() => new[] { new Cards() },
+            () => new BillboardContext(BillboardTier.Free, DateTime.UtcNow, DateTime.Now), new Dictionary<string, DateTime>(), () => { });
+        var host = new BillboardCardHost(deck);
+        var window = new Window { Width = 640, Height = 320, Content = host, FontFamily = new FontFamily("DejaVu Sans") };
+        try
+        {
+            host.Begin();
+            foreach (var text in host.GetLogicalDescendants().OfType<TextBlock>()) text.FontFamily = window.FontFamily;
+            window.Show(); Dispatcher.UIThread.RunJobs(); host.StepCtaFx(0);
+            check(host, window);
         }
         finally { window.Close(); host.ReleaseArt(); }
         return Task.CompletedTask;
