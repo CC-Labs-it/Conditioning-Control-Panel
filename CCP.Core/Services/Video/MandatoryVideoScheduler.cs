@@ -427,7 +427,11 @@ namespace ConditioningControlPanel.Services
             _host.ShowMessage(mercy ? AttentionVerdict.Mercy : verdict, mercy ? 2500 : 2000, () =>
             {
                 if (gen != _retryGeneration) return;   // stopped or replaced while the message was up
-                if (mercy || !Trigger(strict)) AfterEnd();
+                if (mercy) { AfterEnd(); return; }
+                // WPF VideoService.cs:5964-5965: retry directly, retaining strictness and the prior clip fallback.
+                // An attention retry is part of the current run, so it must not enter the feed hold.
+                var retryPath = PickNext() ?? LastVideoPath;
+                if (retryPath == null || !Trigger(strict, retryPath)) AfterEnd();
             });
         }
 

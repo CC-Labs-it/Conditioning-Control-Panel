@@ -16,11 +16,13 @@ public sealed class FypFeedDeferTests
     private sealed class VideoHost : IMandatoryVideoHost
     {
         public readonly List<string> Shown = new();
+        public readonly List<bool> Strictness = new();
+        public Action? Then;
         public Func<bool> Feed = () => true;
         public bool FeedOwnsTheScreen => Feed();
-        public void Show(string path, bool strict) => Shown.Add(path);
+        public void Show(string path, bool strict) { Shown.Add(path); Strictness.Add(strict); }
         public double CloseAll() => 0;
-        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => Then = then;
     }
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
@@ -102,6 +104,58 @@ public sealed class FypFeedDeferTests
             Assert.Empty(host.Shown);
         });
     }
+
+    // WPF VideoService.cs:5964-5965: a failed check selects a clip and plays it directly.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Failed_check_retries_over_feed_with_retained_strictness_and_bubble_cleanup(bool emptyLibrary)
+        => WithSettings(_ =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.AttentionChecksEnabled, s.MercySystemEnabled, s.StrictLockEnabled,
+            CoreBubbles.PauseAction, CoreBubbles.ResumeAction);
+        var paused = false;
+        var resumes = 0;
+        var clock = new FakeClock(); var host = new VideoHost(); // feed stays on screen throughout
+        var v = new MandatoryVideoScheduler(host, clock,
+            () => emptyLibrary ? Array.Empty<string>() : new[] { Clips[1] });
+        try
+        {
+            s.AttentionChecksEnabled = true;
+            s.MercySystemEnabled = false;
+            s.StrictLockEnabled = false; // the explicit strict run must retain its override on retry
+            CoreBubbles.PauseAction = () => paused = true;
+            CoreBubbles.ResumeAction = () => { paused = false; resumes++; };
+            Assert.True(v.Trigger(strictOverride: true, path: Clips[0]));
+            clock.Advance(TimeSpan.FromSeconds(1.3));
+            Assert.True(paused);
+            v.NoteSpawn(); v.Ended(); // missed target, waiting for the verdict message
+            Assert.Equal(1, v.Penalties);
+            Assert.Equal(0, resumes);
+            Assert.NotNull(host.Then);
+            host.Then!();
+            clock.Advance(TimeSpan.FromSeconds(1.3));
+            Assert.Equal(new[] { Clips[0], emptyLibrary ? Clips[0] : Clips[1] }, host.Shown);
+            Assert.All(host.Strictness, Assert.True);
+            Assert.True(v.IsStrict);
+            clock.Advance(TimeSpan.FromSeconds(91)); // no feed expiry may abandon the retry
+            Assert.True(v.IsPlaying);
+            Assert.True(paused);
+            Assert.Equal(0, resumes);
+            s.AttentionChecksEnabled = false;
+            v.Ended();
+            Assert.False(v.IsPlaying);
+            Assert.False(paused);
+            Assert.Equal(1, resumes);
+        }
+        finally
+        {
+            v.Stop();
+            (s.AttentionChecksEnabled, s.MercySystemEnabled, s.StrictLockEnabled,
+                CoreBubbles.PauseAction, CoreBubbles.ResumeAction) = saved;
+        }
+    });
 
     [Theory]
     [InlineData(false)]
