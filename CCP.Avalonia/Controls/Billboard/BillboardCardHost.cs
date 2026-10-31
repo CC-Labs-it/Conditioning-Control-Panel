@@ -452,6 +452,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             catch (Exception ex) { Log.Debug("Billboard art {Key} did not build: {E}", card.Spec.ArtKey, ex.Message); }
             if (art != null)
             {
+                if (art is CalendarArtView calendar) calendar.Accent = HueOf(card);
                 root.Children.Add(art);
                 root.Tag = art as IBillboardArtView;
             }
