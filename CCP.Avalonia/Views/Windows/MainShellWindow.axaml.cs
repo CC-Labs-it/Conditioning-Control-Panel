@@ -125,6 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeProfileVat();
             InitializeProfileFx();     // MainShellWindow.ProfileFx.cs: search glow + OG border loop gate
             InitializeInboxBadge(); // MainShellWindow.Inbox.cs (WPF MainWindow.Inbox.cs:27)
+            InitializeIntakePassNudge();
             InitializeServerAnnouncement(); // MainShellWindow.Announcement.cs (WPF MainWindow.Marquee.cs:688)
             InitializeServerBanners(); // MainShellWindow.ServerBanners.cs (WPF MainWindow.Marquee.cs:649-826)
             InitializeJustDropDoor(); // MainShellWindow.JustDrop.cs (WPF MainWindow.xaml.cs:3793)
