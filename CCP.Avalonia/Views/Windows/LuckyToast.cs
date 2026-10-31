@@ -60,7 +60,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         popup.Show();
                         popup.Opacity = 1;
                     }
-                    else popup.Opacity = 1;
+                    else
+                    {
+                        var transitions = popup.Transitions;
+                        popup.Transitions = null; // WPF MainWindow.Enhancements.cs:2141 cancels the active animation.
+                        popup.Opacity = 1;
+                        popup.Transitions = transitions;
+                    }
                     Place(popup);
                     _hold!.Stop();
                     _hold.Start();

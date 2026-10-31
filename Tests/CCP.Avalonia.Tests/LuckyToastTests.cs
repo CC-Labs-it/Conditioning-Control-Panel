@@ -52,10 +52,18 @@ public sealed class LuckyToastTests
             Assert.Equal(Color.FromRgb(0xFF, 0x69, 0xB4), ((ISolidColorBrush)title.Foreground!).Color);
             Assert.Contains(Loc.GetF("lucky_toast_xp", 20), popup.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text));
 
+            var clock = new SharedDeeperThemeTests.StepClock();
+            popup.SetValue(SharedDeeperThemeTests.StepClock.Property, clock.Instance);
+            popup.Transitions = null; popup.Opacity = 1; popup.Transitions = new Transitions { fade };
             LuckyToast.HoldElapsed();                              // 3 s after the last proc: fade, then hide
+            clock.Step(0); clock.Step(150);
+            Assert.InRange(popup.Opacity, 0.49, 0.51);
             Assert.Equal(TimeSpan.FromMilliseconds(300), fade.Duration);
             LuckyToast.Proc("Lucky Bubble", 20);
             Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1.0, popup.Opacity);
+            clock.Step(300);
+            Assert.Equal(1.0, popup.Opacity);
             LuckyToast.FadeOutDone();
             Assert.True(popup.IsVisible); // proc during fade cancels the pending hide
             LuckyToast.HoldElapsed();
