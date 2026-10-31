@@ -136,3 +136,11 @@ bash .github/scripts/core-guards.sh: All Core guards passed. python3 .github/scr
 ```
 
 Navigation limitation: --nav-check exits 1 with "OpenDeviceSettings reveals Devices (saw data)" and "an unknown section still opens the door and changes nothing". Rebuilding the exact reviewed 1c947d1e5 production XAML in an isolated profile reproduces the same two failures. The fixed XAML was restored and rebuilt, and the 28 focused/isolation cases were then rerun green. No unrelated Devices/data routing changes were made.
+
+## Windows CI pointer readiness
+
+Run 41214528475, avalonia-windows (0), job 124576160384 failed two tests: ContentButtonsReceiveThePointerAtTheirCentre (awareness tutorial hit ScrollContentPresenter, despite receiving its press) and PromptEditor_is_reachable_from_make_her_yours_links (editor never opened after the sampled click). Artifact upload succeeded and was not the cause. The other four Windows shards and all five Linux shards passed.
+
+The pointer tests sampled live geometry without consistently finishing the finite tab entrance and publishing that layout to the compositor. ContentHitTestTests.RenderLiveTree now completes the actual entrance using MainShellWindow.CompleteTabTransition (the existing pointer-test seam at MainShellWindow.TabTransitions.cs:63), then waits for its rendered batch. The companion test reuses that barrier after BringIntoView before measuring/clicking either link. ContentHitTestTests also uses the shipped font bootstrap. Assertions, tested buttons, physical MouseDown/MouseUp paths, timeouts, shard filters and animation coverage remain unchanged; no test is weakened or skipped. There are no production, Core, WPF, localization or ledger changes.
+
+The isolated Linux tests did not reproduce the Windows timing failure; Windows CI provides the failing evidence. Release verification: dotnet test Tests/CCP.Avalonia.Tests -c Release --no-restore --filter 'FullyQualifiedName~ContentHitTestTests|FullyQualifiedName~CompanionEditorsTests|FullyQualifiedName~TabTransitionsTests|FullyQualifiedName~TestIsolationTests' --logger 'console;verbosity=normal': 29 passed, 0 failed. This includes both formerly failing pointer paths and Full/Reduced/Off entrance tests. Windows verification runs on GitHub CI.
