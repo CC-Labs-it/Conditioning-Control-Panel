@@ -1,5 +1,6 @@
 using System;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.UI.EdgeEffects;
 using Xunit;
 namespace CCP.Core.Tests;
 public class EdgeDriftTests

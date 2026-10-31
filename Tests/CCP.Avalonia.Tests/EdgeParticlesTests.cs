@@ -10,6 +10,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.UI.EdgeEffects;
 using Xunit;
 namespace CCP.Avalonia.Tests;
 public class EdgeParticlesTests

@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using Serilog;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.UI.EdgeEffects;
 using ModPackage = ConditioningControlPanel.Models.ModPackage;
 using MotionLevel = ConditioningControlPanel.Models.MotionLevel;
 using PerformanceTier = ConditioningControlPanel.Models.PerformanceTier;

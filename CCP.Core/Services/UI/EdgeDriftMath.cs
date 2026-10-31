@@ -1,5 +1,5 @@
 using System;
-namespace ConditioningControlPanel.Services.UI
+namespace ConditioningControlPanel.Services.UI.EdgeEffects
 {
     public enum EdgeSide
     {

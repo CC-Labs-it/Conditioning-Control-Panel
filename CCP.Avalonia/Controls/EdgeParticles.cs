@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.UI.EdgeEffects;
 namespace ConditioningControlPanel.Avalonia.Controls
 {
     public class EdgeParticles : Grid
