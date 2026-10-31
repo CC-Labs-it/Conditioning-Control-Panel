@@ -345,7 +345,8 @@ public sealed class ChaosEStimOverlayTests
         var root = AppContext.BaseDirectory;
         while (!File.Exists(Path.Combine(root, "CCP.Avalonia/Views/Overlays/MandatoryVideoOverlay.cs")))
             root = Directory.GetParent(root)?.FullName ?? throw new InvalidOperationException("repository root missing");
-        var source = File.ReadAllText(Path.Combine(root, "CCP.Avalonia/Views/Overlays/MandatoryVideoOverlay.cs"));
+        // Git checkouts can use LF or CRLF; caller placement has the same meaning in both.
+        var source = File.ReadAllText(Path.Combine(root, "CCP.Avalonia/Views/Overlays/MandatoryVideoOverlay.cs")).ReplaceLineEndings("\n");
         Assert.Contains("WireChaosRestacking(w);", source);
         Assert.Contains("RestoreChaosLayerAfterStart(w);\n            return new Surface", source);
     }
