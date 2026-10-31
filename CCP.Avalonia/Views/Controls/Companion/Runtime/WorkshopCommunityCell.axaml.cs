@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             foreach (var dialog in Dialogs.ToArray()) dialog.Close(false);
         }
 
-        internal static async Task<bool> ShowPromptDialogAsync(Window owner, Window dialog)
+        internal static async Task<bool> ShowPromptDialogAsync(Window? owner, Window dialog)
         {
             Dialogs.Add(dialog);
             try { return await dialog.ShowDialogSafe<bool?>(owner) == true; }
