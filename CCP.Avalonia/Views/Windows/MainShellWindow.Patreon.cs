@@ -323,13 +323,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var current = Platform.EntitlementRefresh.EffectiveTier;
             var verdict = Services.TierOnNotice.Decide(s.LastKnownEffectiveTier, current,
                 Platform.EntitlementRefresh.ServerAnsweredThisRun);
-            if (verdict.Record != s.LastKnownEffectiveTier) { s.LastKnownEffectiveTier = verdict.Record; CoreSettings.Save(); }
+            if (verdict.Record != s.LastKnownEffectiveTier)
+            {
+                // The first cached reading joins the next user save or desktop exit. Startup must not write migrations.
+                var hadReading = s.LastKnownEffectiveTier.HasValue;
+                s.LastKnownEffectiveTier = verdict.Record;
+                if (hadReading) CoreSettings.Save();
+            }
             if (!verdict.Owed || TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
             var title = Loc.Get(Services.TierOnNotice.TitleKey(current));
             var body = Loc.Get("tier_on_body");
             Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
             {
-                Key = "tier-on:" + current, Glyph = "💖", Title = title, Summary = body,
+                Key = "tier-on:" + current, IconKey = "Heart", Title = title, Summary = body,
                 Open = () => Dialogs.InboxNoticeCard.Present(this, title, body, null, null),
             });
         }

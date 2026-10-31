@@ -1,4 +1,8 @@
 using System;
+using System.Linq;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -63,4 +67,24 @@ public class InboxNoticeCardTests
         }
         finally { card?.Close(); }
     });
+    [Fact]
+    public void InboxRendersSemanticIconAndPreservesLegacyGlyph() => WithOwner(owner =>
+    {
+        var symbol = new InboxItem { Key = "symbol", IconKey = "Heart", Title = "Prime is on" };
+        var legacy = new InboxItem { Key = "legacy", Glyph = "old", Title = "Legacy" };
+        StartupLadder.Inbox.File(symbol);
+        StartupLadder.Inbox.File(legacy);
+        var flyout = new InboxFlyout();
+        owner.Content = flyout;
+        owner.Width = 400; owner.Height = 300;
+        owner.UpdateLayout();
+        var icons = flyout.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Name == "InboxRowIcon").ToArray();
+        var heart = Assert.Single(icons, g => ReferenceEquals(g.DataContext, symbol));
+        Assert.True(heart.IsVisible);
+        Assert.Equal("Heart", heart.Kind.ToString());
+        Assert.False(heart.IsFallback);
+        Assert.False(Assert.Single(icons, g => ReferenceEquals(g.DataContext, legacy)).IsVisible);
+        Assert.Contains(flyout.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "old" && t.IsVisible);
+    });
+
 }
