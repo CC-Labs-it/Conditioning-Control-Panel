@@ -16,9 +16,10 @@ public sealed class QuestsArtView : Control, IBillboardArtView
     private readonly BeatLoop _beat;
     private double _time = 1.6, _held;
     private bool _released;
-    private static readonly Color Ink = Color.Parse("#2a1c44"), Mint = Color.Parse("#3ce67d"), Pink = Color.Parse("#ff4fa8");
+    private static readonly Color Ink = Color.Parse("#2a1c44"), Mint = Color.Parse("#3ce67d"), Pink = Color.Parse("#ff4fa8"), Accent = Color.Parse(CardHues.Waiting);
     private static readonly Geometry Check = Geometry.Parse("M -0.52,0.02 L -0.14,0.38 L 0.52,-0.38");
     private static readonly Geometry Gem = Geometry.Parse("M 0,-1 L 0.75,0 L 0,1 L -0.75,0 Z");
+    private static readonly Geometry SparkShape = Geometry.Parse("M 0,-1 Q 0.12,-0.12 1,0 Q 0.12,0.12 0,1 Q -0.12,0.12 -1,0 Q -0.12,-0.12 0,-1 Z");
     private static readonly Geometry Arrow = Geometry.Parse("M -1,-0.34 L 0.1,-0.34 L 0.1,-0.82 L 1,0 L 0.1,0.82 L 0.1,0.34 L -1,0.34 Z");
 
     public QuestsArtView(object? data)
@@ -36,6 +37,8 @@ public sealed class QuestsArtView : Control, IBillboardArtView
     internal double Seconds => _time;
     internal bool Running => _beat.IsRunning;
     internal void Frame(double t) { _time = t; InvalidateVisual(); }
+    // WPF BillboardVectorArt.Particles: a still frame keeps its particles.
+    private bool Particles => !_beat.IsRunning || Env.AllowParticles;
     public void Run()
     {
         if (_released) return;
@@ -48,11 +51,7 @@ public sealed class QuestsArtView : Control, IBillboardArtView
 
     private static SolidColorBrush Fill(Color c, double a = 1) => new(c, Math.Clamp(a, 0, 1));
     private static double Ease(double k) => 1 - Math.Pow(1 - Math.Clamp(k, 0, 1), 3);
-    private static double Back(double k)
-    {
-        k = Math.Clamp(k, 0, 1) - 1;
-        return 1 + 2.70158 * k * k * k + 1.70158 * k * k;
-    }
+    private static double Back(double k) { k = Math.Clamp(k, 0, 1) - 1; return 1 + 2.70158 * k * k * k + 1.70158 * k * k; }
     private static LinearGradientBrush Face(Color a, Color b) => new()
     {
         StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0.4, 1, RelativeUnit.Relative),
@@ -83,39 +82,73 @@ public sealed class QuestsArtView : Control, IBillboardArtView
         d.DrawRectangle(null, Bevel(th, pressed), inner, Math.Max(0, radius - th / 2), Math.Max(0, radius - th / 2));
     }
     internal static void PaintHalo(DrawingContext d, double sw, double sh, double t) =>
-        d.DrawRectangle(null, new Pen(Fill(Color.Parse(CardHues.Waiting), 0.25 + 0.35 * (0.5 + 0.5 * Math.Sin(t * 3.1))), sh * 0.05), new Rect(-sw / 2 - sh * 0.06, -sh * 0.56, sw + sh * 0.12, sh * 1.12), sh * 0.2, sh * 0.2);
+        d.DrawRectangle(null, new Pen(Fill(Accent, 0.25 + 0.35 * (0.5 + 0.5 * Math.Sin(t * 3.1))), sh * 0.05), new Rect(-sw / 2 - sh * 0.06, -sh * 0.56, sw + sh * 0.12, sh * 1.12), sh * 0.2, sh * 0.2);
     private static void Mark(DrawingContext d, Point c, double r, double alpha = 1)
     {
         using var pose = d.PushTransform(new Matrix(r, 0, 0, r, c.X, c.Y));
         d.DrawGeometry(null, new Pen(Fill(Colors.White, alpha), 0.26, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), Check);
     }
-    private static void Sparks(DrawingContext d, Point c, double size, double k)
+    private static double Hash(int seed, int i, int salt) { double x = Math.Sin(seed * 12.9898 + i * 78.233 + salt * 37.719) * 43758.5453; return x - Math.Floor(x); }
+    private static void Spark(DrawingContext d, Point c, double r, Color hue, double a, double turn)
     {
-        if (!Env.AllowParticles || k < 0 || k >= 1) return;
+        if (a <= 0.02 || r <= 0.3) return;
+        double cs = Math.Cos(turn) * r, sn = Math.Sin(turn) * r;
+        using (d.PushTransform(new Matrix(cs, sn, -sn, cs, c.X, c.Y))) d.DrawGeometry(Fill(hue, a), null, SparkShape);
+    }
+    private static void Sparks(DrawingContext d, Point box, double br, double sh, double f)
+    {
+        if (f >= 0.7) return;
+        double k = Ease(f / 0.7);
         for (int i = 0; i < 8; i++)
         {
-            double a = i * Math.PI / 4 + 0.3, r = size * (1 + 2 * Ease(k));
-            var p = new Point(c.X + Math.Cos(a) * r, c.Y + Math.Sin(a) * r * 0.8);
-            d.DrawLine(new Pen(Fill(i % 2 == 0 ? Colors.White : Pink, 1 - k), size * 0.12), p, p + new Vector(Math.Cos(a), Math.Sin(a)) * size * 0.4);
+            double a = i * Math.PI / 4 + 0.3, dist = br * (1.3 + 2.4 * k) * (0.8 + 0.4 * Hash(13, i, 2));
+            Spark(d, new Point(box.X + Math.Cos(a) * dist, box.Y + Math.Sin(a) * dist * 0.8), sh * 0.13 * (1 - k * 0.6), i % 2 == 0 ? Colors.White : Accent, 1 - k, a);
         }
     }
+    private static void Motes(DrawingContext d, double w, double h, double t, Color hue, int count, int seed, Rect area, double speed, double size, double alpha)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            double hx = Hash(seed, i, 1), hy = Hash(seed, i, 2), hs = Hash(seed, i, 3), life = (hy + t * speed * (0.6 + 0.8 * hs)) % 1.0;
+            double a = alpha * Math.Sin(life * Math.PI) * (0.55 + 0.45 * Math.Sin(t * (2 + hs * 3) + i)), r = size * h * (0.6 + 0.8 * hs);
+            if (a > 0.02) d.DrawEllipse(Fill(hue, a), null, new Point((area.X + hx * area.Width + Math.Sin(t * 0.9 + i * 1.7) * 0.012) * w, (area.Bottom - life * area.Height) * h), r, r);
+        }
+    }
+    private static void Twinkles(DrawingContext d, double w, double h, double t, Color hue, int count, int seed, Rect area, double size)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            double u = t / (2.2 + Hash(seed, i, 4) * 2.4) + Hash(seed, i, 5), ph = u - Math.Floor(u);
+            int at = i * 7 + (int)Math.Floor(u);
+            if (ph >= 0.35) continue;
+            double life = Math.Sin(ph / 0.35 * Math.PI);
+            Spark(d, new Point((area.X + Hash(seed, at, 6) * area.Width) * w, (area.Y + Hash(seed, at, 7) * area.Height) * h), size * h * (0.5 + 0.5 * life), i % 3 == 0 ? Colors.White : hue, life, ph * 1.2);
+        }
+    }
+    private static RadialGradientBrush Radial(double cx, double cy, double rx, double ry, GradientStop a, GradientStop b) => new()
+    {
+        Center = new RelativePoint(cx, cy, RelativeUnit.Relative), GradientOrigin = new RelativePoint(cx, cy, RelativeUnit.Relative),
+        RadiusX = new RelativeScalar(rx, RelativeUnit.Relative), RadiusY = new RelativeScalar(ry, RelativeUnit.Relative), GradientStops = { a, b },
+    };
 
     public override void Render(DrawingContext d)
     {
         base.Render(d);
         double w = Bounds.Width, h = Bounds.Height, t = _time;
         if (w <= 0 || h <= 0) return;
-        d.DrawRectangle(Face(Color.Parse("#211329"), Color.Parse("#090914")), null, new Rect(Bounds.Size));
-        if (Env.AllowParticles)
-        {
-            for (int i = 0; i < 12; i++)
-            {
-                double x = w * (0.5 + 0.48 * ((i * 0.61803398875) % 1));
-                double y = h * (1 - ((i * 0.371 + t * 0.005) % 1));
-                double a = 0.06 + 0.04 * Math.Sin(t * 0.7 + i);
-                d.DrawEllipse(Fill(i % 3 == 0 ? Colors.White : Pink, a), null, new Point(x, y), h * 0.004, h * 0.004);
-            }
-        }
+        // WPF Ground(Deep(Accent)) plus CachedGround's vignette; Deep(#ffc94a) = #3b2922.
+        d.DrawRectangle(Radial(0.72, 0.45, 0.75, 0.75 * w / Math.Max(1, h), new GradientStop(Color.Parse("#3b2922"), 0), new GradientStop(Color.Parse("#0c0d1a"), 1)), null, new Rect(Bounds.Size));
+        d.DrawRectangle(Radial(0.62, 0.48, 0.85, 0.85, new GradientStop(Color.FromArgb(0, 6, 6, 14), 0.55), new GradientStop(Color.FromArgb(0x70, 6, 6, 14), 1)), null, new Rect(Bounds.Size));
+        bool fx = Particles;
+        if (fx) Motes(d, w, h, t, Accent, 12, 23, new Rect(0.5, 0.08, 0.48, 0.86), 0.05, 0.005, 0.4);
+        Board(d, w, h, t, fx);
+        if (!fx) return;
+        Twinkles(d, w, h, t, Color.Parse("#ffdb89"), 4, 29, new Rect(0.52, 0.1, 0.44, 0.8), 0.028); // Mix(Accent, White, 0.35)
+        Motes(d, w, h, t, Colors.White, 5, 31, new Rect(0.55, 0.2, 0.42, 0.8), 0.1, 0.008, 0.3);
+    }
+
+    private void Board(DrawingContext d, double w, double h, double t, bool fx)
+    {
         double bw = Math.Min(w * 0.36, h * 0.85), bh = QuestClipboard.BoardHeight(h, _shown);
         double intro = Back(t / 0.7), cy = h * 0.52 + Math.Sin(t) * h * 0.008 + (1 - intro) * h * 0.4;
         using var opacity = d.PushOpacity(Math.Clamp(intro * 1.5, 0, 1));
@@ -163,11 +196,11 @@ public sealed class QuestsArtView : Control, IBillboardArtView
                 if (i == target && p >= 1.62 && p < 2.82)
                 {
                     double f = p - 1.62, flare = Math.Exp(-f * 2.6);
-                    d.DrawEllipse(Fill(Mint, flare * 0.85), null, box, sh * 0.27, sh * 0.27);
-                    Mark(d, box, sh * 0.27 * (0.9 + 0.4 * Math.Exp(-f * 7)));
+                    d.DrawEllipse(Fill(Mint, flare * 0.85), null, box, sh * 0.27 * (1 + 0.25 * flare), sh * 0.27 * (1 + 0.25 * flare));
+                    Mark(d, box, sh * 0.27 * (0.9 + 0.4 * Math.Exp(-f * 7)), Math.Min(1, 0.85 + flare));
                     double e = Ease(f / 0.55);
                     d.DrawEllipse(null, new Pen(Fill(Mint, 0.8 * (1 - e)), sh * 0.06 * (1 - e) + 0.6), box, sh * 0.27 * (1.2 + 1.6 * e), sh * 0.27 * (1.2 + 1.6 * e));
-                    Sparks(d, box, sh * 0.35, f / 0.7);
+                    if (fx) Sparks(d, box, sh * 0.27, sh, f);
                 }
             }
         }

@@ -124,13 +124,15 @@ public sealed class QuestClipboardArtTests
         EnsureUi(); var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings;
         settings.Current.MotionLevel = MotionLevel.Off;
         var art = new QuestsArtView(null);
+        art.Measure(new Size(200, 240)); art.Arrange(new Rect(0, 0, 200, 240));
         try
         {
             art.Run(); Assert.Equal(1.6, art.Seconds);
             settings.Current.MotionLevel = MotionLevel.Full; settings.Current.PerformanceMode = false;
-            art.Run(); art.Frame(3.25);
+            art.Run(); art.Frame(3.25); var played = Raster(art.Render);
             settings.Current.MotionLevel = MotionLevel.Off;
             art.Run(); Assert.False(art.Running); Assert.Equal(3.25, art.Seconds);
+            Assert.Equal(played, Raster(art.Render)); // WPF BillboardVectorArt.Particles: the held frame keeps its motes.
             art.Run(); Assert.Equal(3.25, art.Seconds);
             settings.Current.MotionLevel = MotionLevel.Full;
             art.Run(); Assert.True(art.Running); Assert.Equal(3.25, art.Seconds);
