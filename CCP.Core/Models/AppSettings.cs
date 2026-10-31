@@ -6108,7 +6108,7 @@ namespace ConditioningControlPanel.Models
         /// <summary>
         /// ccp-bugs #1468: false (default) keeps the idle-timer lines quiet while neither the engine
         /// nor a session runs; the bubble and text still show. True speaks them as before. Lines that
-        /// answer a player action are never affected. Rule: Services.Companion.CompanionIdleVoice.
+        /// answer a player action are never affected. Rule: Services.Companion.CompanionVoicePolicy.
         /// </summary>
         [JsonProperty]
         public bool CompanionSpeaksIdleWhenEngineOff

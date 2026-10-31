@@ -34,6 +34,21 @@ public sealed class BarkEngineTests : IDisposable
         return e;
     }
 
+    [Theory]
+    [InlineData("FaceLost", true)]
+    [InlineData("FaceFound", true)]
+    [InlineData("Blink", true)]
+    [InlineData("TrackingStateChanged", true)]
+    [InlineData("IdleStateChanged", true)]
+    [InlineData("ActivityChanged", true)]
+    [InlineData("StillOnActivity", true)]
+    [InlineData("TongueOut", false)]
+    public void SensingClassificationReachesTheMouth(string trigger, bool unprompted)
+    {
+        Assert.True(Engine(Rule(trigger, "line")).Raise(trigger, guaranteed: true));
+        Assert.Equal(unprompted, Assert.Single(_said).Unprompted);
+    }
+
     [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()
     {
