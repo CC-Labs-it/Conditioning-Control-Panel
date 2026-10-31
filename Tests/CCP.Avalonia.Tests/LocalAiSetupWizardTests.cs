@@ -80,6 +80,15 @@ public sealed class LocalAiSetupWizardTests
         }
     }
 
+    private sealed class HardwareLogCapture : Serilog.Core.ILogEventSink
+    {
+        public Serilog.Events.LogEvent? Entry;
+        public void Emit(Serilog.Events.LogEvent entry)
+        {
+            if (entry.MessageTemplate.Text.StartsWith("[LocalAI] RAM ", StringComparison.Ordinal)) Entry = entry;
+        }
+    }
+
     private static void Setup()
     {
         if (Application.Current is null)
@@ -106,27 +115,42 @@ public sealed class LocalAiSetupWizardTests
     }
 
     [Theory]
-    [InlineData(8L, 4L, "label_local_ai_perf_title_below")]
-    [InlineData(16L, 8L, "label_local_ai_perf_title")]
-    [InlineData(0L, 0L, "label_local_ai_perf_title")]
-    public Task ConsentExplainsLocalCostWithoutBlocking(long ram, long vram, string title) => AvaloniaTestDispatcher.RunAsync(() =>
+    [InlineData(8L, 4L, "label_local_ai_perf_title_below", "Below")]
+    [InlineData(16L, 8L, "label_local_ai_perf_title", "Ok")]
+    [InlineData(0L, 0L, "label_local_ai_perf_title", "Unknown")]
+    public Task ConsentExplainsLocalCostWithoutBlocking(long ram, long vram, string title, string expectedFit) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         using var fakes = new Fakes(canAutoInstall: false);
-        var w = new LocalAiSetupWizard();
+        var capture = new HardwareLogCapture();
+        var previousLogger = Serilog.Log.Logger;
+        using var logger = new Serilog.LoggerConfiguration().WriteTo.Sink(capture).CreateLogger();
+        Serilog.Log.Logger = logger;
+        LocalAiSetupWizard? w = null;
         try
         {
+            w = new LocalAiSetupWizard();
             w.UpdatePerfCard(ram << 30, vram << 30);
             w.Show();
             Pump();
             Assert.True(C<Border>(w, "PerfCard").IsVisible);
             Assert.Equal(Loc.Get(title), C<TextBlock>(w, "TxtPerfTitle").Text);
-            Assert.Contains(Loc.Get("label_local_ai_perf_recommended"), C<TextBlock>(w, "TxtPerfFound").Text);
+            var expectedFound = (ram == 0 ? "" : Loc.GetF("label_local_ai_perf_found", $"{ram} GB", $"{vram} GB") + " ")
+                + Loc.Get("label_local_ai_perf_recommended");
+            Assert.Equal(expectedFound, C<TextBlock>(w, "TxtPerfFound").Text);
+            var entry = Assert.IsType<Serilog.Events.LogEvent>(capture.Entry);
+            Assert.Equal(ram << 30, Assert.IsType<Serilog.Events.ScalarValue>(entry.Properties["Ram"]).Value);
+            Assert.Equal(vram << 30, Assert.IsType<Serilog.Events.ScalarValue>(entry.Properties["Vram"]).Value);
+            Assert.Equal(expectedFit, Assert.IsType<Serilog.Events.ScalarValue>(entry.Properties["Fit"]).Value?.ToString());
             Assert.True(C<Button>(w, "BtnPrimary").IsEnabled);
             Assert.True(ConditioningControlPanel.Avalonia.Platform.LocalAiHardware.TotalRamBytes() >= 0);
             Assert.True(ConditioningControlPanel.Avalonia.Platform.LocalAiHardware.LargestVramBytes() >= 0);
         }
-        finally { w.Close(); }
+        finally
+        {
+            try { w?.Close(); }
+            finally { Serilog.Log.Logger = previousLogger; }
+        }
         return Task.CompletedTask;
     });
 

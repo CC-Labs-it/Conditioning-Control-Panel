@@ -124,6 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         internal void UpdatePerfCard(long ram, long vram)
         {
             var fit = LocalAiHardwareRules.Judge(ram, vram);
+            Serilog.Log.Information("[LocalAI] RAM {Ram} B, VRAM {Vram} B, fit {Fit}", ram, vram, fit);
             var title = this.FindControl<TextBlock>("TxtPerfTitle")!;
             title.Text = Loc.Get(fit == LocalAiHardwareRules.Fit.Below
                 ? "label_local_ai_perf_title_below" : "label_local_ai_perf_title");

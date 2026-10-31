@@ -4,45 +4,9 @@ using Microsoft.Win32;
 
 namespace ConditioningControlPanel.Services.AIService
 {
-    /// <summary>
-    /// How well this PC can carry a local AI model (owner, 2026-10-14: "many users find their
-    /// midrange pc slowed down"). The setup wizard shows the result on its consent page so nobody
-    /// installs Ollama without being told it runs on their own graphics card and memory.
-    /// <para>Reads are best effort and never throw: an unknown figure reads as 0 and never blocks
-    /// the install, it only changes what the card says.</para>
-    /// </summary>
+    /// <summary>Best-effort Windows hardware reads. Core LocalAiHardwareRules owns the verdict.</summary>
     public static class LocalAiHardware
     {
-        public const long Gb = 1L << 30;
-        public const long RecommendedRamBytes = 16 * Gb;
-        public const long RecommendedVramBytes = 8 * Gb;
-
-        public enum Fit
-        {
-            /// <summary>Nothing could be read.</summary>
-            Unknown,
-            /// <summary>Under the recommendation: expect the whole PC to slow down while it thinks.</summary>
-            Below,
-            /// <summary>At or over the recommendation (it still costs the PC while it thinks).</summary>
-            Ok
-        }
-
-        /// <summary>
-        /// The verdict. Windows reports a little less than the installed memory (a 16 GB machine
-        /// reads about 15.8 GB), so each figure gets 10% slack. A missing graphics figure does not
-        /// count against the PC; a missing memory figure means nothing is known.
-        /// </summary>
-        public static Fit Judge(long ramBytes, long vramBytes)
-        {
-            if (ramBytes > 0 && ramBytes < RecommendedRamBytes * 0.9) return Fit.Below;
-            if (vramBytes > 0 && vramBytes < RecommendedVramBytes * 0.9) return Fit.Below;
-            return ramBytes > 0 ? Fit.Ok : Fit.Unknown;
-        }
-
-        /// <summary>Whole gigabytes for the card ("16 GB"); "?" when unknown.</summary>
-        public static string FormatGb(long bytes)
-            => bytes > 0 ? Math.Round(bytes / (double)Gb).ToString("0") + " GB" : "?";
-
         // ---- live reads ----
 
         public static long TotalRamBytes()

@@ -217,6 +217,8 @@ public sealed class DashboardFoldBillboardTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        var previousSettings = CoreSettings.ServiceProvider;
+        var previousTime = BillboardCardHost.Time;
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
@@ -254,7 +256,15 @@ public sealed class DashboardFoldBillboardTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(4, host.ChipButtons.Count);
         }
-        finally { window.Close(); }
+        finally
+        {
+            try { window.Close(); }
+            finally
+            {
+                BillboardCardHost.Time = previousTime;
+                CoreSettings.ServiceProvider = previousSettings;
+            }
+        }
         return Task.CompletedTask;
     });
 

@@ -1,6 +1,6 @@
 using ConditioningControlPanel.Services.AIService;
 using Xunit;
-using static ConditioningControlPanel.Services.AIService.LocalAiHardware;
+using static ConditioningControlPanel.Services.AIService.LocalAiHardwareRules;
 
 namespace ConditioningControlPanel.Tests;
 
@@ -38,7 +38,7 @@ public class LocalAiHardwareTests
     [Fact]
     public void LiveReads_NeverThrow()
     {
-        Assert.True(TotalRamBytes() >= 0);
-        Assert.True(LargestVramBytes() >= 0);
+        Assert.True(LocalAiHardware.TotalRamBytes() >= 0);
+        Assert.True(LocalAiHardware.LargestVramBytes() >= 0);
     }
 }
