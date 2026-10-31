@@ -102,6 +102,76 @@ public sealed class ChaosPopTextTests
         });
     }
 
+    // WPF ChaosPopText.cs:80-93: teardown follows pending displays and leaves no windows.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Teardown_invalidates_a_pop_queued_before_dispatch(bool panic)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var prepare = ChaosPopText.Prepare;
+            var canShow = ChaosPopText.PlatformCanShow;
+            var hook = ChaosRunHost.PopText;
+            bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            bool tasted = ChaosMeta.State.FirstTimesAwarded.Contains(ChaosFirstTimes.Taste);
+            ChaosMeta.State.FirstTimesAwarded.Add(ChaosFirstTimes.Taste);
+            int prepared = 0;
+            ChaosPopText.Prepare = (w, r) => { prepared++; w.Position = r.Position; return true; };
+            ChaosPopText.PlatformCanShow = () => true;
+            ChaosRunHost.PopText = ChaosPopText.Show;
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                ChaosRunHost.State!.ShowPopScores = false;
+                ChaosRunHost.State.Focus = 100;
+                ChaosPopText.Show(400, 300, "existing", Colors.Red);
+                Dispatcher.UIThread.RunJobs();
+                var existing = Assert.Single(ChaosPopText.Pool.All);
+                Assert.True(existing.IsVisible);
+                Assert.Equal(1, prepared);
+
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                {
+                    VariantId = "flash", SizePx = 100, Payload = new FlashPayload()
+                });
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Assert.True(b.Popping);
+                // No dispatcher drain between the real pop and teardown.
+                if (panic) ChaosRunHost.ForceShutdown(); else ChaosPopText.ShutdownPool();
+                Assert.False(existing.IsVisible);
+                Assert.Empty(ChaosPopText.Pool.All);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Empty(ChaosPopText.Pool.All);
+                Assert.Equal(1, prepared); // the queued word never even prepares a window
+
+                // A later run can still display text after the invalidated generation.
+                ChaosPopText.Show(400, 300, "fresh", Colors.Red);
+                Dispatcher.UIThread.RunJobs();
+                var fresh = Assert.Single(ChaosPopText.Pool.All);
+                Assert.True(fresh.IsVisible);
+                Assert.Equal("FRESH", fresh.LabelText);
+                Assert.Equal(2, prepared);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosPopText.ShutdownPool();
+                Dispatcher.UIThread.RunJobs();
+                ChaosRunHost.PopText = hook;
+                ChaosPopText.Prepare = prepare;
+                ChaosPopText.PlatformCanShow = canShow;
+                CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+                if (!tasted) ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Taste);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     // WPF ChaosModeService.cs:1844/:2002 and :208-225. Repeating the action pays once.
     [Theory]
     [InlineData(false, true)]
