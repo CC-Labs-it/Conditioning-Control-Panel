@@ -288,6 +288,77 @@ public sealed class V2GetItRowTests
         });
     }
 
+    [Fact]
+    public async Task Seeded_provider_feed_applies_snapshots_and_rejects_stale_or_wrong_accounts()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var s = CoreSettings.Current;
+            var (id, token, offline, seam) = (s.UnifiedId, s.AuthToken, s.OfflineMode, PrizeOwnership.IsGranted);
+            var unified = CoreAccount.UnifiedUserId;
+            var sink = ConditioningControlPanel.Services.ProviderSubscription.PrizesSink;
+            var backRoom = ConditioningControlPanel.Services.BackRoom.BackRoomApi.DefaultApplyPrizes;
+            var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
+            var secrets = new System.Collections.Generic.Dictionary<string, string?>();
+            CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
+            CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+            try
+            {
+                (s.UnifiedId, s.AuthToken, s.OfflineMode) = ("u-feed", "t-feed", false);
+                CoreAccount.UnifiedUserId = "u-feed";
+                PrizeOwnership.IsGranted = PrizeOwnership.Held;
+                PrizeOwnership.ResetHeld();
+                PrizeOwnership.Seed(); // AccountSeed startup path, before provider restore/validate
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(PrizeOwnership.Held(PrizeOwnership.FlashDriftBounce));
+                void Feed(string requested, string answered, long rev, params string[] grants) =>
+                    ConditioningControlPanel.Services.ProviderSubscription.PrizesSink!(requested, answered,
+                        new ConditioningControlPanel.Models.PrizesBlock { Revision = rev, Grants = grants.ToList() }, "validate");
+                Feed("u-feed", "other", 50, PrizeOwnership.FlashDriftBounce);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(PrizeOwnership.Held(PrizeOwnership.FlashDriftBounce));
+                Feed("u-feed", "u-feed", 5, PrizeOwnership.FlashDriftBounce);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(PrizeOwnership.Held(PrizeOwnership.FlashDriftBounce));
+                Feed("u-feed", "u-feed", 4); // old revoke cannot undo the snapshot
+                ConditioningControlPanel.Services.ProviderSubscription.PrizesSink!("u-feed", "u-feed", null, "validate");
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(PrizeOwnership.Held(PrizeOwnership.FlashDriftBounce)); // absent block keeps ownership
+                Feed("u-feed", "u-feed", 6);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(PrizeOwnership.Held(PrizeOwnership.FlashDriftBounce)); // explicit empty grants revoke
+                ConditioningControlPanel.Services.BackRoom.BackRoomApi.DefaultApplyPrizes!(
+                    "u-feed", 7, new[] { PrizeOwnership.FlashDriftBounce });
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(PrizeOwnership.Held(PrizeOwnership.FlashDriftBounce)); // default Back Room clients use the same ownership
+                Feed("u-feed", "u-feed", 8, PrizeOwnership.FlashPendulum);
+                (s.UnifiedId, s.AuthToken) = ("other", "t-other");
+                CoreAccount.UnifiedUserId = "other";
+                Dispatcher.UIThread.RunJobs(); // late queued reply must be discarded
+                Assert.False(PrizeOwnership.Held(PrizeOwnership.FlashPendulum));
+                (s.UnifiedId, s.AuthToken) = ("u-feed", "t-feed");
+                CoreAccount.UnifiedUserId = "u-feed";
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(PrizeOwnership.Held(PrizeOwnership.FlashDriftBounce)); // logout forgot it
+                Feed("u-feed", "u-feed", 1, PrizeOwnership.FlashPendulum);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(PrizeOwnership.Held(PrizeOwnership.FlashPendulum)); // new session accepts lower revision
+            }
+            finally
+            {
+                CoreAccount.UnifiedUserId = unified;
+                Dispatcher.UIThread.RunJobs();
+                PrizeOwnership.ResetHeld();
+                (s.UnifiedId, s.AuthToken, s.OfflineMode, PrizeOwnership.IsGranted) = (id, token, offline, seam);
+                ConditioningControlPanel.Services.ProviderSubscription.PrizesSink = sink;
+                ConditioningControlPanel.Services.BackRoom.BackRoomApi.DefaultApplyPrizes = backRoom;
+                (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>Scripted proxy: one reply per request, in order; never a socket.</summary>
     private sealed class FakeProxy : System.Net.Http.HttpMessageHandler
     {

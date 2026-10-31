@@ -106,6 +106,26 @@ public sealed partial class AccountSeedTests
     }
 
     [Fact]
+    public void Successful_sync_feeds_prizes_for_the_sent_account_only() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u-prizes", L40Profile("u-prizes"));
+        string? sentFor = null;
+        PrizesBlock? block = null;
+        var calls = 0;
+        sync.ApplyPrizes = (id, prizes) => { sentFor = id; block = prizes; calls++; };
+        wire.SyncReply = """{"success":true,"prizes":{"revision":12,"grants":["fx.flash.pendulum"]}}""";
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Equal(1, calls);
+        Assert.Equal("u-prizes", sentFor);
+        Assert.Equal(12, block!.Revision);
+        Assert.Equal(new[] { "fx.flash.pendulum" }, block.Grants);
+        sync.UtcNow = () => T0.AddMinutes(1);
+        wire.SyncStatus = HttpStatusCode.InternalServerError;
+        Assert.False(await sync.PushAsync("failed"));
+        Assert.Equal(1, calls); // error bodies must never grant or revoke
+    });
+
+    [Fact]
     public void NoPush_BeforeASuccessfulLoad_NorAfterLogout_UntilTheNextLoad() => WithFreshInstall(async () =>
     {
         var (wire, sync, _) = SignIn("u1", profile: null);

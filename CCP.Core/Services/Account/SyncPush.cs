@@ -22,6 +22,10 @@ namespace ConditioningControlPanel.Services
     /// </summary>
     public sealed class SyncPush
     {
+        /// <summary>WPF ProfileSyncService.cs:1874: complete prize snapshot from a successful sync.
+        /// Unset on heads that already own their sync feed.</summary>
+        public Action<string, PrizesBlock?>? ApplyPrizes { get; set; }
+
         public const SyncBody.Field Sent = SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
             | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements;
         public const SyncBody.Field Privacy = SyncBody.Field.AllowDiscordDm | SyncBody.Field.ShowOnlineStatus
@@ -291,6 +295,8 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    // WPF applies prizes first so later flag adoption cannot skip the snapshot.
+                    ApplyPrizes?.Invoke(id, reply["prizes"]?.ToObject<PrizesBlock>());
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.
