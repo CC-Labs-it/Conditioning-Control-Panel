@@ -72,6 +72,7 @@ Controls/PremiumSpark.cs :: * :: path: D6 art - animated sparkle/particle effect
 
 # --- art, D6 "keep as art" inside files that also hold icon Paths ---
 Views/AvatarTube/AvatarTubeWindow.axaml :: <Path x:Name="FuseCandleFlame" :: path: D6 art - AvatarTube fuse candle flame
+Views/Windows/MainShellWindow.NavCoin.cs :: coin.Specular = new Path :: path: D6 art - nav coin specular crescent (depth wave 10), not an icon slot
 Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: _curvePath = new Path :: path: D6 art - rule-editor curve
 Views/Deeper/DeeperEditorWindow.RuleEditor.cs :: canvas.Children.Add(new Path :: path: D6 art - rule-editor keyframe curve (one site)
 Views/Deeper/DeeperEditorWindow.axaml :: <Path x:Name="WaveformPath" :: path: D6 art - waveform
