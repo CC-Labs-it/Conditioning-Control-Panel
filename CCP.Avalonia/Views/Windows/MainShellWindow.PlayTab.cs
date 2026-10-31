@@ -6,14 +6,16 @@
 //                         MainShellWindow.Patreon.cs, which is WPF's three call sites).
 //   StartMantraSession    PORTED below. Its one caller is the Programs Mantra-task door.
 //   LaunchPlayBreakoutDemo / LaunchPlayChess reuse the launcher's existing GameWindow hosts.
-//   LaunchPlayBreakout / LaunchPlayGoon remain unported; their buttons refuse honestly.
+//   LaunchPlayBreakout uses the shared game host and its Lab gate. Goon remains unported.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // WPF MainWindow.PlayTab.cs: both doors are free and focus an existing game.
+        // WPF MainWindow.PlayTab.cs:55-59: demo and Chess are free; full Breakout uses its host gate.
         internal void LaunchPlayBreakoutDemo() => Games.GameWindow.Launch("breakoutdemo");
+
+        internal void LaunchPlayBreakout() => Games.GameWindow.Launch("breakout");
 
         internal void LaunchPlayChess() => Games.GameWindow.Launch("piecebypiece");
 

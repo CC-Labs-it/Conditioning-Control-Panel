@@ -229,8 +229,7 @@
         <!-- ===================== ZONE: GAMES =====================
              WPF PlayTabView.xaml:339-455 (the 2026-09-18 relayout: the descent hero, the Goon card
              and the Arcademy strip left this wall for the CC Labs launcher). The two free games share
-             the existing GameWindow hosts. Full Breakout and Goon stay disabled honestly until
-             their hosts and gates land. -->
+             the existing GameWindow hosts. Full Breakout uses the Lab gate. Goon remains disabled until its host lands. -->
         <Grid x:Name="ZoneGames" Margin="2,4,2,8" ColumnDefinitions="Auto,*">
           <TextBlock Grid.Column="0" Text="{loc:Str rf_play_zone_games}" Theme="{StaticResource PlayZoneTag}"/>
           <Border Grid.Column="1" Theme="{StaticResource PlayZoneRule}"/>
@@ -266,8 +265,8 @@
                   </Border>
                   <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_breakout_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
                   <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_breakout_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
-                  <Button Grid.Row="3" x:Name="BtnPlayBreakout" IsEnabled="False" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13"
-                          ToolTip.Tip="{loc:Str exclusives_not_on_this_build}" ToolTip.ShowOnDisabled="True">
+                  <Button Grid.Row="3" x:Name="BtnPlayBreakout" Cursor="Hand" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13"
+                          Click="BtnPlayBreakout_Click">
                     <TextBlock Text="{loc:Str launcher_play}"/>
                   </Button>
                 </Grid>
