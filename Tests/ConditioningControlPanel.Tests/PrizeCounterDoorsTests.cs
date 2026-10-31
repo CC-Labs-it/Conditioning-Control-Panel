@@ -156,7 +156,7 @@ public class PrizeCounterDoorsTests
         Assert.Contains("launch(\"rain-wardrobe\",",
             Read("ConditioningControlPanel", "Services", "Companion", "RainWardrobeHostService.cs"));
         // Every Rain row the wardrobe sends to the counter lands on a Rain tab.
-        var items = Read("ConditioningControlPanel", "Resources", "web", "rain-wardrobe", "items.json");
+        var items = Read("Assets", "web", "rain-wardrobe", "items.json");
         foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(items, "\"tab\"\\s*:\\s*\"([^\"]+)\""))
             Assert.StartsWith("rain-", PrizeCounterHostService.CounterTab(m.Groups[1].Value));
     }

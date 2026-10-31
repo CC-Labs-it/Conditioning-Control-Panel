@@ -50,14 +50,7 @@ public sealed class RainBakeProgressTests
         Assert.Equal(new[] { "applying", "baking", "bakeHint" }, RainWardrobeHostService.PageStringKeys.Keys.ToArray());
     }
 
-    private static string LanguagesDir()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Localization", "Languages")))
-            dir = dir.Parent;
-        Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
-        return Path.Combine(dir!.FullName, "ConditioningControlPanel", "Localization", "Languages");
-    }
+    private static string LanguagesDir() => SourceRoots.LanguagesDirectory;
 
     [Fact]
     public void Every_bake_line_is_in_all_ten_languages_with_its_placeholders_and_house_punctuation()

@@ -32,10 +32,19 @@ namespace ConditioningControlPanel.Services
             catch { return None; }
         }
 
+        /// <summary>The ids this head can draw: avatars (preset plus shop) and shop frames. The WPF head seeds it
+        /// from <c>CosmeticsCatalog.AllAvatarIds</c> and <c>ShopCosmetics.FrameIds</c>; unseeded means the Core
+        /// preset avatars and no frames.</summary>
+        public static volatile Func<(ISet<string> Avatars, ISet<string>? Frames)>? KnownIdsProvider;
+
         /// <summary>The app's read: preset plus shop avatars, shop frames.</summary>
         public static PlayerLook From(JToken? cosmetics)
         {
-            try { return From(cosmetics, CosmeticsCatalog.AllAvatarIds(), ShopCosmetics.FrameIds()); }
+            try
+            {
+                var known = KnownIdsProvider?.Invoke() ?? (CosmeticsPool.AvatarIds, null);
+                return From(cosmetics, known.Avatars, known.Frames);
+            }
             catch { return None; }
         }
 

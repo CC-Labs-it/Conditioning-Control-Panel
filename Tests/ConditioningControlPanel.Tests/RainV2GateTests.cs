@@ -31,7 +31,7 @@ public class RainV2GateTests
         => File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", Path.Combine(parts)));
 
     private static JObject SampleState() => JObject.Parse(File.ReadAllText(Path.Combine(RepoRoot(),
-        "ConditioningControlPanel", "Resources", "web", "prizecounter", "mock", "state.sample.json")));
+        "Assets", "web", "prizecounter", "mock", "state.sample.json")));
 
     [Fact]
     public void TheGate_IsOneReleaseConstant()
@@ -164,7 +164,7 @@ public class RainV2GateTests
     {
         // The counter hides the Rain bay and the portrait unless the host says otherwise.
         Assert.Contains("rainV2 = Companion.RainV2Gate.On,", Src("Services", "PrizeCounter", "PrizeCounterHostService.cs"));
-        Assert.Contains("windowShelves(scene.items, { rain: init.rainV2 === true })", Src("Resources", "web", "prizecounter", "main.js"));
+        Assert.Contains("windowShelves(scene.items, { rain: init.rainV2 === true })", File.ReadAllText(Path.Combine(RepoRoot(), "Assets", "web", "prizecounter", "main.js")));
     }
 
     [Fact]
