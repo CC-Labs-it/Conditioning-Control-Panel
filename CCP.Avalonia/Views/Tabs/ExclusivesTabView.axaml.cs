@@ -68,7 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 this.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible = !value;
                 this.FindControl<Border>("SpotlightCard")!.IsVisible = !value;
                 this.FindControl<Button>("BtnSeePremium")!.IsVisible = value;
-                this.FindControl<Controls.Invites.InvitePanel>("InvitesHost")!.IsVisible = value;
+                this.FindControl<Border>("InvitesWrapper")!.IsVisible = value;
                 BindHeader("TxtVaultTitle", value ? "plans_header_title" : "premium_page_title");
                 BindHeader("TxtVaultSub", value ? "plans_header_sub" : "premium_page_sub");
                 var scroll = this.FindControl<ScrollViewer>("ContentScroll")!;
@@ -94,7 +94,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void SetPlansActive(bool active)
         {
             _plansActive = active;
-            if (active) RefreshVault();
+            if (active)
+            {
+                RefreshVault();
+                // WPF RefreshVaultCore: the card owns eligibility and the 30-second throttle.
+                _ = this.FindControl<Controls.Invites.InvitePanel>("InvitesHost")!.RefreshAsync();
+            }
             UpdateMotion();
         }
 

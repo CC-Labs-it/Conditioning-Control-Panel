@@ -27,7 +27,8 @@ public sealed class NavPlansRehomeTests
         Assert.False(plans.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible);
         Assert.False(plans.FindControl<Border>("SpotlightCard")!.IsVisible);
         Assert.True(plans.FindControl<Button>("BtnSeePremium")!.IsVisible);
-        Assert.True(plans.FindControl<InvitePanel>("InvitesHost")!.IsVisible);
+        Assert.True(plans.FindControl<Border>("InvitesWrapper")!.IsVisible);
+        Assert.False(plans.FindControl<InvitePanel>("InvitesHost")!.IsVisible);
         Assert.NotNull(plans.FindControl<Control>("TierPlate1"));
         Assert.NotNull(plans.FindControl<Control>("TierPlate2"));
         var scroll = plans.FindControl<ScrollViewer>("ContentScroll")!;
@@ -37,6 +38,7 @@ public sealed class NavPlansRehomeTests
         var full = new ExclusivesTabView();
         Assert.False(full.PlansMode);
         Assert.True(full.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible);
+        Assert.False(full.FindControl<Border>("InvitesWrapper")!.IsVisible);
         Assert.False(full.FindControl<InvitePanel>("InvitesHost")!.IsVisible);
     });
 

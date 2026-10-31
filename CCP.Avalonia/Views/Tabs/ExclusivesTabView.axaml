@@ -492,7 +492,9 @@
 
                     <!-- Invites (WPF Controls/Invites/InvitePanel, InvitesHost). Hidden until the
                          server answers /v2/invites/mine; read on every show of the tab. -->
-                    <inv:InvitePanel x:Name="InvitesHost" IsVisible="False" Margin="0,18,0,0"/>
+                    <Border x:Name="InvitesWrapper" IsVisible="False" Margin="0,18,0,0">
+                        <inv:InvitePanel x:Name="InvitesHost"/>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
         </Grid>
