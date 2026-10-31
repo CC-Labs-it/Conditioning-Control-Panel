@@ -34,7 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct WaveHdr
+        internal struct WaveHdr
         {
             public IntPtr lpData;
             public uint dwBufferLength, dwBytesRecorded;
@@ -117,36 +117,52 @@ namespace ConditioningControlPanel.Avalonia.Platform
             nBlockAlign = 2, wBitsPerSample = 16, cbSize = 0,
         };
 
-        private sealed class Session : IDisposable
+        // Same checked WinMM calls used by WPF's NAudio WaveInEvent (SpeechService.cs:85-106).
+        internal class CaptureApi
         {
+            public virtual int Open(out IntPtr h, uint id, ref WaveFormatEx fmt, AutoResetEvent ready) => waveInOpen(out h, id, ref fmt, ready.SafeWaitHandle.DangerousGetHandle(), IntPtr.Zero, CallbackEvent);
+            public virtual int Prepare(IntPtr h, IntPtr p) => waveInPrepareHeader(h, p, HdrSize);
+            public virtual int Add(IntPtr h, IntPtr p) => waveInAddBuffer(h, p, HdrSize);
+            public virtual int Unprepare(IntPtr h, IntPtr p) => waveInUnprepareHeader(h, p, HdrSize);
+            public virtual int Start(IntPtr h) => waveInStart(h);
+            public virtual int Reset(IntPtr h) => waveInReset(h);
+            public virtual int Close(IntPtr h) => waveInClose(h);
+        }
+
+        internal sealed class Session : IDisposable
+        {
+            private readonly CaptureApi _api;
             private readonly IntPtr _hwi;
             private readonly IntPtr[] _hdrs = new IntPtr[BufferCount];
+            private readonly bool[] _prepared = new bool[BufferCount];
             private readonly AutoResetEvent _ready = new(false);
-            private readonly Thread _reader;
+            private readonly Thread? _reader;
             private volatile bool _stopping;
-            private int _disposed;
+            private int _released;
+            internal bool IsStopping => _stopping;
 
-            internal Session(uint device, Action<byte[], int> onPcm)
+            internal Session(uint device, Action<byte[], int> onPcm, CaptureApi? api = null)
             {
+                _api = api ?? new CaptureApi();
                 var fmt = CaptureFormat;
-                var rc = waveInOpen(out _hwi, device, ref fmt, _ready.SafeWaitHandle.DangerousGetHandle(), IntPtr.Zero, CallbackEvent);
-                if (rc != 0) { _ready.Dispose(); throw new InvalidOperationException($"waveInOpen failed ({rc})"); }
                 try
                 {
+                    Check(_api.Open(out _hwi, device, ref fmt, _ready), "open");
                     for (var i = 0; i < BufferCount; i++)
                     {
-                        var hdr = new WaveHdr { lpData = Marshal.AllocHGlobal(BufferBytes), dwBufferLength = BufferBytes };
                         _hdrs[i] = Marshal.AllocHGlobal((int)HdrSize);
+                        Marshal.StructureToPtr(default(WaveHdr), _hdrs[i], false);
+                        var hdr = new WaveHdr { lpData = Marshal.AllocHGlobal(BufferBytes), dwBufferLength = BufferBytes };
                         Marshal.StructureToPtr(hdr, _hdrs[i], false);
-                        Check(waveInPrepareHeader(_hwi, _hdrs[i], HdrSize), "prepare");
-                        Check(waveInAddBuffer(_hwi, _hdrs[i], HdrSize), "add");
+                        Check(_api.Prepare(_hwi, _hdrs[i]), "prepare");
+                        _prepared[i] = true;
+                        Check(_api.Add(_hwi, _hdrs[i]), "add");
                     }
-                    Check(waveInStart(_hwi), "start");
+                    Check(_api.Start(_hwi), "start");
+                    _reader = new Thread(() => Pump(onPcm)) { IsBackground = true, Name = "WinMmMic" };
+                    _reader.Start();
                 }
-                catch { Dispose(); throw; }
-
-                _reader = new Thread(() => Pump(onPcm)) { IsBackground = true, Name = "WinMmMic" };
-                _reader.Start();
+                catch { Release(); throw; }
             }
 
             private static void Check(int rc, string what)
@@ -156,49 +172,55 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
             private void Pump(Action<byte[], int> onPcm)
             {
-                while (!_stopping)
+                try
                 {
-                    _ready.WaitOne(200);
-                    foreach (var p in _hdrs)
+                    while (!_stopping)
                     {
-                        if (_stopping) return;
-                        var hdr = Marshal.PtrToStructure<WaveHdr>(p);
-                        if ((hdr.dwFlags & WhdrDone) == 0) continue;
-                        var n = (int)hdr.dwBytesRecorded;
-                        if (n > 0)
+                        _ready.WaitOne(200);
+                        foreach (var p in _hdrs)
                         {
-                            var buf = new byte[n];
-                            Marshal.Copy(hdr.lpData, buf, 0, n);
-                            try { onPcm(buf, n); }
-                            catch (Exception ex) { Log.Debug(ex, "WinMmMicSource: consumer threw"); }
+                            if (_stopping) return;
+                            var hdr = Marshal.PtrToStructure<WaveHdr>(p);
+                            if ((hdr.dwFlags & WhdrDone) == 0) continue;
+                            var n = (int)hdr.dwBytesRecorded;
+                            if (n > 0)
+                            {
+                                var buf = new byte[n];
+                                Marshal.Copy(hdr.lpData, buf, 0, n);
+                                try { onPcm(buf, n); }
+                                catch (Exception ex) { Log.Debug(ex, "WinMmMicSource: consumer threw"); }
+                            }
+                            if (!_stopping) Check(_api.Add(_hwi, p), "requeue");
                         }
-                        if (!_stopping) waveInAddBuffer(_hwi, p, HdrSize);   // back in the queue (stays prepared)
                     }
                 }
+                catch (Exception ex) { Log.Warning(ex, "WinMmMicSource: capture stopped"); }
+                finally { _stopping = true; Release(); }
             }
 
             public void Dispose()
             {
-                if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
                 _stopping = true;
-                try { if (_hwi != IntPtr.Zero) waveInReset(_hwi); } catch { }
-                try { _ready.Set(); } catch { }
-                try { if (_reader is { IsAlive: true } && Thread.CurrentThread != _reader) _reader.Join(); } catch { }
-                // A buffer the reader re-queued as the stop landed is pulled back before its memory goes.
-                try { if (_hwi != IntPtr.Zero) waveInReset(_hwi); } catch { }
-                foreach (var p in _hdrs)
+                try { _ready.Set(); } catch (ObjectDisposedException) { }
+                // The worker returns native buffers only after the active callback has finished.
+                // A callback may itself dispose: its worker's finally then performs the cleanup.
+                if (_reader != null && Thread.CurrentThread != _reader) _reader.Join();
+            }
+
+            private void Release()
+            {
+                if (Interlocked.Exchange(ref _released, 1) != 0) return;
+                try { if (_hwi != IntPtr.Zero) _api.Reset(_hwi); } catch { }
+                for (var i = 0; i < BufferCount; i++)
                 {
+                    var p = _hdrs[i];
                     if (p == IntPtr.Zero) continue;
-                    try
-                    {
-                        var hdr = Marshal.PtrToStructure<WaveHdr>(p);
-                        waveInUnprepareHeader(_hwi, p, HdrSize);
-                        if (hdr.lpData != IntPtr.Zero) Marshal.FreeHGlobal(hdr.lpData);
-                    }
-                    catch { }
+                    var hdr = Marshal.PtrToStructure<WaveHdr>(p);
+                    try { if (_prepared[i]) _api.Unprepare(_hwi, p); } catch { }
+                    if (hdr.lpData != IntPtr.Zero) Marshal.FreeHGlobal(hdr.lpData);
                     Marshal.FreeHGlobal(p);
                 }
-                try { if (_hwi != IntPtr.Zero) waveInClose(_hwi); } catch { }
+                try { if (_hwi != IntPtr.Zero) _api.Close(_hwi); } catch { }
                 _ready.Dispose();
             }
         }
