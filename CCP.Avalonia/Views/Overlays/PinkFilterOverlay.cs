@@ -41,6 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool SkipPlatformChecksForTests;
         internal static IReadOnlyList<TintOverlayWindow> Shown => Windows;
         private static double? _pulseWeight;
+        private static double _pulseBase, _pulsePeak;
 
         private static double PaintedOpacity
         {
@@ -48,13 +49,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var s = CoreSettings.Current;
                 var steady = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;
-                var peak = Math.Min(s.PinkFilterOpacity * 2, 100) / 100.0;
-                return Math.Clamp(steady + (peak - steady) * (_pulseWeight ?? 0), 0, 1);
+                return Math.Clamp(_pulseWeight is { } k ? _pulseBase + (_pulsePeak - _pulseBase) * k : steady, 0, 1);
             }
         }
 
         internal static void SetPulse(double? weight)
         {
+            // WPF OverlayService.cs:657-660 captures endpoints before the gentle timer starts.
+            if (_pulseWeight == null && weight != null)
+            {
+                _pulseBase = (App.Sessions?.PinkOpacity ?? CoreSettings.Current.PinkFilterOpacity) / 100.0;
+                _pulsePeak = Math.Min(CoreSettings.Current.PinkFilterOpacity * 2, 100) / 100.0;
+            }
             _pulseWeight = weight;
             var (r, g, b) = EffectiveColor();
             foreach (var w in Windows) w.SetTint(r, g, b, PaintedOpacity);

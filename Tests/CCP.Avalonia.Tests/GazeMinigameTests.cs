@@ -365,6 +365,77 @@ public sealed class GazeMinigameTests
         Assert.Equal((byte)(0.25 * 255), tint.Color.A);
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GentlePulse_CapturesEndpointsAcrossSettingsAndRampChanges_RestoresLiveValues(bool ramp) => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var service = new SettingsService();
+        var s = service.Current;
+        var clock = new SteppedClock();
+        var host = new global::Avalonia.Controls.Window();
+        var gif = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(Gif));
+        var old = (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, OverlayPulse.Clock,
+            AvApp.Sessions, CoreSession.IsSessionRunningProvider);
+        var skip = (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests);
+        SessionRunner? runner = null;
+        using var cleanup = new Callback(() =>
+        {
+            OverlayPulse.Cancel();
+            PinkFilterOverlay.CloseAll();
+            SpiralOverlay.CloseAll();
+            runner?.Stop();
+            host.Close();
+            File.Delete(gif);
+            (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, OverlayPulse.Clock,
+                AvApp.Sessions, CoreSession.IsSessionRunningProvider) = old;
+            (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests) = skip;
+        });
+        CoreSettings.ServiceProvider = () => service;
+        CoreSession.IsEngineRunningProvider = () => true;
+        AvApp.Sessions = null;
+        OverlayPulse.Clock = clock;
+        PinkFilterOverlay.SkipPlatformChecksForTests = SpiralOverlay.SkipPlatformChecksForTests = true;
+        s.PinkFilterEnabled = s.SpiralEnabled = s.GentleVisuals = true;
+        s.GentleFadeSeconds = 0.3;
+        s.PinkFilterOpacity = s.SpiralOpacity = 20;
+        s.SpiralPath = gif;
+        if (ramp)
+        {
+            runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            var session = new ConditioningControlPanel.Models.Session { Id = "pulse_ramp", DurationMinutes = 20 };
+            session.Settings.RampCurve = ConditioningControlPanel.Models.RampCurve.Linear;
+            session.Settings.PinkFilterEnabled = session.Settings.SpiralEnabled = true;
+            session.Settings.PinkFilterStartOpacity = session.Settings.SpiralOpacity = 10;
+            session.Settings.PinkFilterEndOpacity = session.Settings.SpiralOpacityEnd = 50;
+            runner.Start(session);
+            runner.Tick(TimeSpan.FromMinutes(5));
+        }
+        host.Show();
+        PinkFilterOverlay.Refresh(host);
+        SpiralOverlay.Refresh(host);
+        Assert.True(SpinUntil(() => SpiralOverlay.IsShowing));
+        var tint = (SolidColorBrush)((Border)PinkFilterOverlay.Shown[0].Content!).Background!;
+        OverlayPulse.PulseOverlays();
+        clock.Now += TimeSpan.FromMilliseconds(100);
+        OverlayPulse.Tick();
+        var before = (tint.Color.A, SpiralOverlay.Shown[0].Spiral.Opacity);
+        s.PinkFilterOpacity = s.SpiralOpacity = 2;
+        runner?.Tick(TimeSpan.FromMinutes(15));
+        PinkFilterOverlay.Refresh(host);
+        SpiralOverlay.Refresh(host);
+        OverlayPulse.Tick(); // same instant: neither a settings edit nor a moving ramp changes the envelope
+        Assert.Equal(before.Item1, tint.Color.A);
+        Assert.Equal(before.Item2, SpiralOverlay.Shown[0].Spiral.Opacity, 10);
+        clock.Now += TimeSpan.FromMilliseconds(1300);
+        OverlayPulse.Tick();
+        Assert.False(OverlayPulse.IsPulsing);
+        Assert.Equal((byte)((runner?.PinkOpacity ?? 2) / 100.0 * 255), tint.Color.A);
+        Assert.Equal(SpiralFrames.Paint((runner?.SpiralOpacity ?? 2) / 100.0), SpiralOverlay.Shown[0].Spiral.Opacity, 10);
+    });
+
     [Fact]
     public void RoundVideoUsesOneShotModeWithoutChangingLoopingAdopters() => AvaloniaTestDispatcher.Run(() =>
     {

@@ -85,11 +85,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
 
         private static double? _pulseWeight;
-        private static double PulseOpacity => Math.Clamp(PaintedOpacity +
-            (Math.Min(SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0) * 2, 1) - PaintedOpacity) * (_pulseWeight ?? 0), 0, 1);
+        private static double _pulseBase, _pulsePeak;
+        private static double PulseOpacity => _pulseWeight is { } k
+            ? Math.Clamp(_pulseBase + (_pulsePeak - _pulseBase) * k, 0, 1) : PaintedOpacity;
 
         internal static void SetPulse(double? weight)
         {
+            // WPF OverlayService.cs:659-660: ramp base, settings peak, both fixed for this pulse.
+            if (_pulseWeight == null && weight != null)
+            {
+                _pulseBase = PaintedOpacity;
+                _pulsePeak = Math.Min(SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0) * 2, 1);
+            }
             _pulseWeight = weight;
             foreach (var w in Windows) w.Spiral.Opacity = PulseOpacity;
         }
