@@ -412,8 +412,7 @@ internal static class X11Overlay
         }
     }
 
-    /// <summary>Place a subliminal immediately above the front video on its monitor (#1422).
-    /// Keep windows already above the video above the card. Headless/Wayland have no native band.</summary>
+    /// <summary>Slot above video while preserving higher windows. Native Win32/X11 only.</summary>
     internal static bool SlotAboveVideo(Window card, IReadOnlyList<Window> videos)
     {
         if (videos.Count == 0) return true;
@@ -473,7 +472,6 @@ internal static class X11Overlay
             return !_xErrored;
         }
     }
-
     private static List<IntPtr> QueryChildren(IntPtr root)
     {
         var result = new List<IntPtr>();
@@ -482,7 +480,6 @@ internal static class X11Overlay
         finally { if (children != IntPtr.Zero) XFree(children); }
         return result;
     }
-
     [StructLayout(LayoutKind.Sequential)]
     private struct StackChanges
     {

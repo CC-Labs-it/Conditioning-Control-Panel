@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Serilog;
 
 namespace ConditioningControlPanel.Services
@@ -16,6 +17,8 @@ namespace ConditioningControlPanel.Services
         /// <see cref="MandatoryVideoScheduler.End"/> at the clip's end or on Esc, and
         /// <see cref="MandatoryVideoScheduler.ForceCleanup"/> on the in-window panic key.</summary>
         void Show(string path, bool strict);
+        /// <summary>True only after successful startup; synchronous heads keep their existing path.</summary>
+        Task<bool> ShowAsync(string path, bool strict) { Show(path, strict); return Task.FromResult(true); }
         /// <summary>Close every video window; returns the seconds of the clip that were watched.</summary>
         double CloseAll();
         /// <summary>WPF ShowMessage: the attention-check verdict over every screen for
@@ -329,25 +332,32 @@ namespace ConditioningControlPanel.Services
             }
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
             _playing = true;
-            _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
+            var generation = ++_retryGeneration;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
             AttentionSpawned = AttentionHits = 0;
             CoreFlash.Stop();   // WPF PlayVideo: App.Flash?.Stop()
             var strict = IsStrict;
             Dispose(ref _preroll);
             ITimer? created = null;
-            created = _time.CreateTimer(_ => { var mine = created; CoreDispatch.Post(() =>
+            created = _time.CreateTimer(_ => { var mine = created; CoreDispatch.Post(async () =>
             {
                 // WPF ShouldStartAfterPreroll: only the run that armed it, and only while still live.
                 if (!ReferenceEquals(mine, _preroll) || !_playing) return;
                 Dispose(ref _preroll);
                 CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
-                try { _host.Show(path, strict); }
-                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
+                try
+                {
+                    if (!await _host.ShowAsync(path, strict))
+                    { if (_playing && generation == _retryGeneration) End(); return; }
+                }
+                catch (Exception ex)
+                { Log.Error(ex, "VideoService: show failed"); if (_playing && generation == _retryGeneration) End(); return; }
+                if (!_playing || generation != _retryGeneration) return;
                 LastVideoPath = path;
                 try { VideoStarted?.Invoke(); }
                 catch (Exception ex) { Log.Debug("VideoStarted handler failed: {Error}", ex.Message); }
-                // WPF VideoService.cs:3372: background vibe and the clip's funscript, once on screen.
+                if (!_playing || generation != _retryGeneration) return;
+                // WPF VideoService.cs:3403: background vibe and the clip's funscript, once on screen.
                 _ = CoreHaptics.Service?.StartVideoBackgroundVibeAsync();
                 try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
                 catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }

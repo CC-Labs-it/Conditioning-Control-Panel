@@ -111,8 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private static ref byte At(IntPtr p) => ref Unsafe.AddByteOffset(ref Unsafe.NullRef<byte>(), p);
 
-        /// <summary>UI teardown can hide the picture immediately while native Stop is still joining
-        /// the decoder off-thread. Keep its buffer alive, but ignore queued and subsequent blits.</summary>
+        /// <summary>Ignore blits while retaining the buffer until native teardown finishes.</summary>
         public void Detach() { lock (_lock) _detached = true; }
 
         /// <summary>Free the buffer and bitmap. Call after <c>MediaPlayer.Stop</c>, which joins the

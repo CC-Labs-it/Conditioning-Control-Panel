@@ -123,6 +123,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Play(path, strict);
         });
 
+        public Task<bool> ShowAsync(string path, bool strict)
+        {
+            _healUsed = false;
+            _capSpent = 0;
+            return PlayAsync(path, strict);
+        }
+
         private int _playGeneration;
         private LibVLC? _videoVlc;
         private Task<LibVLC?>? _recovery;
@@ -150,15 +157,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private async void Play(string path, bool strict)
         {
-            try { await PlayAsync(path, strict); }
+            var pending = PlayAsync(path, strict); var generation = _playGeneration;
+            try { if (!await pending && generation == _playGeneration) Scheduler.End(); }
             catch (Exception ex)
             {
                 Log.Warning(ex, "VideoService: failed to start playback");
-                Scheduler.End();
+                if (generation == _playGeneration) Scheduler.End();
             }
         }
 
-        internal async Task PlayAsync(string path, bool strict)
+        internal async Task<bool> PlayAsync(string path, bool strict)
         {
             var muted = _userMuted;
             if (_surfaces.Count > 0) CloseAll();
@@ -173,9 +181,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 Log.Warning(ex, "VideoService: replacement playback unavailable");
                 if (generation == _playGeneration) Scheduler.End();
-                return;
+                return false;
             }
-            if (generation != _playGeneration) return; // Stop, panic or a newer request won
+            if (generation != _playGeneration) return false; // Stop, panic or a newer request won
             if (!ReferenceEquals(vlc, owner))
             {
                 NativeRelease = Task.CompletedTask;
@@ -204,8 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (vlc == null)
             {
                 Log.Warning("VideoService: LibVLC is not available - cannot play {Path}", path);
-                Dispatcher.UIThread.Post(Scheduler.End);
-                return;
+                return false;
             }
             // WPF StartVideoPlayback prologue: duck other apps (one ref, released in CloseAll), sleep the
             // bouncing text, and arm the attention checks.
@@ -281,11 +288,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (ReferenceEquals(_player, live)) Scheduler.End();
             });
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
-            _player.Play(_media);
+            if (!_player.Play(_media)) { Scheduler.End(); return false; }
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _guard.Tick += (_, _) => GuardTick();
             _guard.Start();
             if (_attention) DispatcherTimer.RunOnce(SetupAttention, TimeSpan.FromSeconds(2));   // WPF: Task.Delay(2000)
+            return true;
         }
 
         /// <summary>This clip shows as a floating window (AppSettings.MandatoryVideoFloating), decided per clip.</summary>
@@ -939,8 +947,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 packs?.InstalledPackIds.Count ?? 0, packs?.GetActivePackIds().Count ?? 0);
         }
 
-        // Small native seam: tests hold Stop to prove teardown never blocks the dispatcher.
-        // A native call that never returns retains its player/media/sink. Never free a live decoder buffer.
+        // Keep decoder buffers alive until off-thread Stop and disposal finish.
         internal static Task ReleaseNativeAsync(Action stop, Action dispose, Action free)
             => Task.Run(() =>
             {

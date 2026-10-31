@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -16,6 +18,8 @@ public sealed class MandatoryVideoSchedulerTests
     private sealed class Host : IMandatoryVideoHost
     {
         public readonly List<(string Path, bool Strict)> Shown = new();
+        public Task<bool>? Startup;
+        public Task<bool> ShowAsync(string path, bool strict) { Show(path, strict); return Startup ?? Task.FromResult(true); }
         public int Closes;
         public double Watched;
         public void Show(string path, bool strict) => Shown.Add((path, strict));
@@ -66,6 +70,51 @@ public sealed class MandatoryVideoSchedulerTests
         clock.Advance(TimeSpan.FromHours(5));
         Assert.Equal(2, host.Shown.Count);
     });
+
+    private sealed class StartupContext : SynchronizationContext
+    {
+        private readonly Queue<Action> _jobs = new();
+        public override void Post(SendOrPostCallback callback, object? state) => _jobs.Enqueue(() => callback(state));
+        public void Drain() { while (_jobs.TryDequeue(out var job)) job(); }
+    }
+
+    [Theory]
+    [InlineData(0)] // successful delayed release
+    [InlineData(1)] // cancelled start, then a new pre-roll
+    [InlineData(2)] // failed recovery
+    [InlineData(3)] // host declines playback
+    public void Startup_effects_require_successful_current_playback(int outcome)
+    {
+        var context = new StartupContext(); var previousContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(context);
+        var pending = new TaskCompletionSource<bool>();
+        var clock = new FakeClock(); var host = new Host { Startup = pending.Task };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        using var haptics = new HapticService(new ConditioningControlPanel.Models.HapticSettings { VideoEnabled = true, VideoIntensity = 0.5 });
+        var previousHaptics = CoreHaptics.Service; CoreHaptics.Service = haptics;
+        var started = 0; var vibes = 0;
+        v.VideoStarted += () => started++;
+        haptics.HapticTriggered += (_, message) => { if (message.StartsWith("Video Background")) vibes++; };
+        try
+        {
+            Assert.True(v.Trigger(false, Clips[0])); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Single(host.Shown);
+            Assert.Null(v.LastVideoPath); Assert.Equal(0, started); Assert.Equal(0, vibes);
+            if (outcome == 1) { v.ForceCleanup(); Assert.True(v.Trigger(false, Clips[1])); }
+            if (outcome == 2) pending.SetException(new InvalidOperationException("recovery failed"));
+            else pending.SetResult(outcome != 3);
+            context.Drain();
+            Assert.Equal(outcome == 0 ? Clips[0] : null, v.LastVideoPath);
+            Assert.Equal(outcome == 0 ? 1 : 0, started);
+            Assert.Equal(outcome == 0 ? 1 : 0, vibes);
+            if (outcome >= 2) Assert.False(v.IsPlaying);
+        }
+        finally
+        {
+            v.ForceCleanup(); context.Drain(); CoreHaptics.Service = previousHaptics;
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
+    }
 
     [Fact]   // WPF VideoStarted (VideoService.cs:3370): once the clip is on screen, not at the trigger
     public void VideoStarted_fires_when_the_clip_is_shown() => With(20, false, () =>

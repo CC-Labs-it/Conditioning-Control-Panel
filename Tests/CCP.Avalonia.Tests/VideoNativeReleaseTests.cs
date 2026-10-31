@@ -5,9 +5,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class VideoNativeReleaseTests
 {
     [Fact]
@@ -44,7 +42,6 @@ public sealed class VideoNativeReleaseTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(freed);
         });
-
     [Fact]
     public Task Failed_stop_still_disposes_but_failed_dispose_never_frees_a_live_buffer() =>
         AvaloniaTestDispatcher.RunAsync(async () =>
@@ -95,7 +92,6 @@ public sealed class VideoNativeReleaseTests
             Assert.Equal("original", await replacement);
             Assert.True(started);
         });
-
     [Fact]
     public async Task Wedged_stop_uses_fresh_instance_and_wedged_recovery_is_bounded()
     {
@@ -109,7 +105,6 @@ public sealed class VideoNativeReleaseTests
         await Assert.ThrowsAsync<TimeoutException>(() => MandatoryVideoOverlay.AfterReleaseAsync(stuck.Task,
             () => new object(), () => stuck.Task, budget));
     }
-
     [Fact]
     public Task Stop_cancels_a_replacement_waiting_for_native_release() =>
         AvaloniaTestDispatcher.RunAsync(async () =>
@@ -120,12 +115,12 @@ public sealed class VideoNativeReleaseTests
             try
             {
                 overlay.NativeRelease = stopping.Task;
-                var replacement = overlay.PlayAsync("unused.mp4", false);
+                var replacement = overlay.ShowAsync("unused.mp4", false);
                 Assert.False(replacement.IsCompleted);
                 Assert.Empty(overlay.Surfaces);
                 overlay.CloseAll();
                 stopping.SetResult();
-                await replacement;
+                Assert.False(await replacement);
                 Assert.Empty(overlay.Surfaces);
             }
             finally
@@ -135,5 +130,4 @@ public sealed class VideoNativeReleaseTests
                 overlay.NativeRelease = saved;
             }
         });
-
 }

@@ -2,13 +2,8 @@ using System;
 using System.Collections.Generic;
 using ConditioningControlPanel.Services;
 using Xunit;
-
 namespace CCP.Core.Tests
 {
-    /// <summary>
-    /// ccp-bugs #1422: words sent by Remote Control were unreadable during a video, because the
-    /// card rode the compositor host and that host is pinned below the video window.
-    /// </summary>
     public class SubliminalOverVideoTests
     {
         private static readonly IntPtr Card = new(10);
@@ -19,9 +14,7 @@ namespace CCP.Core.Tests
         private static readonly IntPtr Host = new(40);
         private static readonly IntPtr Mon1 = new(1);
         private static readonly IntPtr Mon2 = new(2);
-
         private static readonly (IntPtr, IntPtr)[] OneVideo = { (Video1, Mon1) };
-
         [Theory]
         [InlineData(false, false, false, false)]
         [InlineData(false, false, true, false)]
@@ -36,7 +29,6 @@ namespace CCP.Core.Tests
             Assert.Equal("CCP.Core", typeof(SubliminalOverVideo).Assembly.GetName().Name);
             Assert.Equal(expected, SubliminalOverVideo.UsesCompositorCard(compositor, focus, video));
         }
-
         [Fact]
         public void WithNoVideoTheCardGoesToTheTopOfTheBandAsBefore()
         {
@@ -44,15 +36,12 @@ namespace CCP.Core.Tests
                 Array.Empty<(IntPtr, IntPtr)>(), Card, Mon1);
             Assert.Equal(SubliminalOverVideo.SlotKind.TopOfBand, slot.Kind);
         }
-
         [Fact]
         public void ACardBuriedUnderTheVideoIsLiftedDirectlyAboveIt()
         {
-            // The reported shape: the video is in front, the card somewhere under it.
             var slot = SubliminalOverVideo.ResolveSlot(new[] { Video1, Host, Card }, OneVideo, Card, Mon1);
             Assert.Equal(SubliminalOverVideo.SlotKind.TopOfBand, slot.Kind);
         }
-
         [Fact]
         public void ALockCardAboveTheVideoStaysAboveTheWords()
         {
@@ -60,7 +49,6 @@ namespace CCP.Core.Tests
             Assert.Equal(SubliminalOverVideo.SlotKind.Below, slot.Kind);
             Assert.Equal(LockCard, slot.InsertAfter);
         }
-
         [Fact]
         public void TheCardGoesUnderTheNearestWindowAboveTheVideoNotTheFrontOne()
         {
@@ -68,14 +56,12 @@ namespace CCP.Core.Tests
             Assert.Equal(SubliminalOverVideo.SlotKind.Below, slot.Kind);
             Assert.Equal(Target, slot.InsertAfter);
         }
-
         [Fact]
         public void ACardAlreadyDirectlyAboveTheVideoIsLeftAlone()
         {
             var slot = SubliminalOverVideo.ResolveSlot(new[] { LockCard, Card, Video1 }, OneVideo, Card, Mon1);
             Assert.Equal(SubliminalOverVideo.SlotKind.Keep, slot.Kind);
         }
-
         [Fact]
         public void ACardThatSatAboveALockCardComesBackDownUnderIt()
         {
@@ -83,18 +69,15 @@ namespace CCP.Core.Tests
             Assert.Equal(SubliminalOverVideo.SlotKind.Below, slot.Kind);
             Assert.Equal(LockCard, slot.InsertAfter);
         }
-
         [Fact]
         public void EachScreenAnchorsToItsOwnVideoWindow()
         {
             var videos = new[] { (Video1, Mon1), (Video2, Mon2) };
-            // Screen 2's video is deeper in the band than screen 1's; a lock card sits between.
             var band = new[] { Video1, LockCard, Video2, Card };
             var slot = SubliminalOverVideo.ResolveSlot(band, videos, Card, Mon2);
             Assert.Equal(SubliminalOverVideo.SlotKind.Below, slot.Kind);
             Assert.Equal(LockCard, slot.InsertAfter);
         }
-
         [Fact]
         public void AScreenWithNoVideoOfItsOwnStillStaysUnderWhatIsAboveTheClip()
         {
@@ -102,7 +85,6 @@ namespace CCP.Core.Tests
             Assert.Equal(SubliminalOverVideo.SlotKind.Below, slot.Kind);
             Assert.Equal(LockCard, slot.InsertAfter);
         }
-
         [Fact]
         public void AVideoHandleThatIsNotInTheBandFallsBackToTheTop()
         {
