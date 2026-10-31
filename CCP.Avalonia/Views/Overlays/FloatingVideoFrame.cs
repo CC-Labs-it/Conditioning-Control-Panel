@@ -37,7 +37,7 @@ internal sealed class FloatingVideoFrame
         window.PointerPressed += Press;
         window.PointerMoved += Move;
         window.PointerReleased += Release;
-        window.PointerCaptureLost += (_, _) => { if (_motion.Held) { _motion.Drop(); _beat.Stop(); } };
+        window.PointerCaptureLost += (_, _) => { if (_motion.Held) { _motion.Drop(); Place(); _beat.Stop(); } };
         window.Screens.Changed += DisplaysChanged;
         window.SizeChanged += (_, _) => SyncSize();
         window.Closed += (_, _) => { _beat.Stop(); _motion.Drop(); window.Screens.Changed -= DisplaysChanged; };

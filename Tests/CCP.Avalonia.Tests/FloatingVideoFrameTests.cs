@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -11,6 +12,7 @@ using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Video.Floating;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -144,6 +146,44 @@ public sealed class FloatingVideoFrameTests
             Assert.Equal(0, source.SubscriberCount);
         }
         finally { w.Close(); (s.MotionLevel, s.MandatoryVideoFloatingSpeedPercent) = saved; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Capture_loss_places_the_rehomed_window_before_the_beat_stops() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var w = new Window { Width = 300, Height = 180, Content = new Border { Background = global::Avalonia.Media.Brushes.Black } };
+        try
+        {
+            w.Show();
+            Dispatcher.UIThread.RunJobs();
+            var area = w.Screens.Primary!.WorkingArea;
+            w.Position = new PixelPoint(area.X + 100, area.Y + 100);
+            var frame = new FloatingVideoFrame(w);
+            var motion = Assert.IsType<FloatingVideoMotion>(typeof(FloatingVideoFrame)
+                .GetField("_motion", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(frame));
+            // A held window can straddle this work area on a desktop extending to the left.
+            motion.SetDesktop(area.X - area.Width, area.Y, area.Width * 2, area.Height);
+            IPointer? pointer = null;
+            w.PointerPressed += (_, e) => pointer = e.Pointer;
+            w.MouseDown(new Point(20, 20), MouseButton.Left);
+            Assert.True(motion.Held);
+            w.MouseMove(new Point(-180, 20));
+            Assert.Equal(area.X - 100, w.Position.X);
+            Assert.NotNull(pointer);
+            pointer!.Capture(null);
+            Assert.False(motion.Active);
+            Assert.Equal((double)area.X, motion.X);
+            Assert.Equal(area.X, w.Position.X);
+            Assert.Equal(0, TopLevelFrameSource.For(w).SubscriberCount);
+            Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == w);
+            frame.Tick();
+            Assert.Equal(area.X, w.Position.X);
+        }
+        finally { w.MouseUp(new Point(20, 20), MouseButton.Left); w.Close(); }
         return Task.CompletedTask;
     });
 
