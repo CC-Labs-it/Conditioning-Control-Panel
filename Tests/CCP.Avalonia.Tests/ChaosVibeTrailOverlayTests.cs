@@ -25,9 +25,28 @@ public sealed class ChaosVibeTrailOverlayTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+    }
+
+    [Fact]
+    public async Task Delayed_video_restack_posts_once_to_the_ui_thread()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            int calls = 0;
+            var fired = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            MandatoryVideoOverlay.ScheduleTrailRaise(() =>
+            {
+                calls++;
+                fired.TrySetResult(Dispatcher.UIThread.CheckAccess());
+            }, System.TimeSpan.FromMilliseconds(1));
+            Assert.Equal(0, calls);
+            Assert.True(await fired.Task.WaitAsync(System.TimeSpan.FromSeconds(5)));
+            Assert.Equal(1, calls);
+        });
     }
 
     // WPF ChaosModeService.cs:455,2696-2709,2925-2946,3017-3028.
@@ -48,9 +67,12 @@ public sealed class ChaosVibeTrailOverlayTests
             int raised = 0;
             ChaosVibeTrailOverlay.RaiseWindow = _ => raised++;
             bool equipped = meta.ActiveLifetimeBoons.Contains("vibe_popping");
+            bool hadLevel = meta.LifetimeBoonLevels.TryGetValue("vibe_popping", out int level);
             try
             {
                 meta.ActiveLifetimeBoons.Add("vibe_popping");
+                meta.LifetimeBoonLevels["vibe_popping"] = 1;
+                Assert.True(ChaosMeta.IsBoonActive("vibe_popping"));
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
                 ChaosRunHost.Overlay!.FinishCountdown();
                 ChaosRunHost.StopTimerForTests();
@@ -126,6 +148,8 @@ public sealed class ChaosVibeTrailOverlayTests
                 ChaosVibeTrailOverlay.RaiseWindow = raise;
                 MandatoryVideoOverlay.ScheduleTrailRaise = schedule;
                 if (!equipped) meta.ActiveLifetimeBoons.Remove("vibe_popping");
+                if (hadLevel) meta.LifetimeBoonLevels["vibe_popping"] = level;
+                else meta.LifetimeBoonLevels.Remove("vibe_popping");
             }
             return Task.CompletedTask;
         });

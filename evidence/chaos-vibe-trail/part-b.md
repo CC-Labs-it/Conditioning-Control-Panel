@@ -93,3 +93,21 @@ Both P2 findings accepted and fixed; no findings rejected.
 - No new UI copy. Both existing keys remain in all ten language files. No WPF
   changes. The prior font-blocked lifecycle/restacking and live platform gaps
   remain open; ledger stays wired on X11, never verified.
+
+## PR 3506 CI repair
+
+- Lifecycle failure: the fixture activated VibePopping but never unlocked it;
+  ChaosUpgrades.cs:403-408 requires level >= 1. It now sets/restores level 1 and
+  asserts IsBoonActive before starting the run. All lifecycle assertions remain.
+- The bare test bootstrap also omitted bundled fonts. Using Program.BuildAvaloniaApp
+  fixes standalone setup and supersedes the earlier font-blocked lifecycle result.
+- Restacking used DispatcherTimer.RunOnce at 50 ms, triggering the unchanged frame
+  timer ratchet. MandatoryVideoOverlay.Chaos.cs:12-29 now uses Task.Delay followed
+  by UI-thread dispatch, matching WPF VideoService.cs:5812 and ChaosModeService.cs:823.
+  The 60/50 ms kick timing and handled-click routing assertions remain intact.
+- Executed fail-proofs: level 0 makes the lifecycle precondition fail; restoring
+  DispatcherTimer.RunOnce makes NoNewFrameTimerLoop fail against the new partial.
+  Both returned exit 1 and were restored. No test skips or ratchet exemptions added.
+- Final build: 345 warnings, 0 errors. Filter: ChaosVibeTrailOverlayTests,
+  AmbientBeatLoopsTests, ChaosRunHostTests, TestIsolationTests: 45 passed, 0 skipped.
+  Core suite: 4641 passed, 6 existing skips, 0 failed. Guards and docs check passed.
