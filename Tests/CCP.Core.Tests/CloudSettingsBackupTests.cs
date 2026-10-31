@@ -71,9 +71,11 @@ public sealed class CloudSettingsBackupTests : IDisposable
         s.DisabledAssetPaths = new HashSet<string> { "images/a.png" };
         s.AssetPresets = new List<AssetPreset> { new() { Name = "p" } };
         // List settings whose items carry an absolute path (review P1/P2).
-        s.AudioLayers = new List<AudioLayerTrack> { new() { Path = "/home/me/layer.mp3" } };
-        s.CornerGifOverlays = new List<CornerGifOverlaySetting> { new() { GifPath = "/home/me/corner.gif" } };
-        s.KeywordTriggers = new List<KeywordTrigger> { new() { Keyword = "k", Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = "/home/me/k.mp3" } } } };
+        s.AudioLayers = new List<AudioLayerTrack> { new() { Path = "/home/me/layer.mp3", Volume = 42 } };
+        s.CornerGifOverlays = new List<CornerGifOverlaySetting> { new() { GifPath = "/home/me/corner.gif", Size = 222 } };
+        s.KeywordTriggers = new List<KeywordTrigger> { new() { Id = "trigger", Keyword = "k", AudioFilePath = "/home/me/legacy.mp3", Actions = new List<KeywordAction> { new PlayAudioAction { Id = "audio", FilePath = "/home/me/k.mp3" }, new AddXpAction { Amount = 17 } } } };
+        s.KeywordTriggerPresets = new List<KeywordTriggerPreset> { new() { Id = "preset", Triggers = new List<KeywordTrigger> { new() { Id = "pt", AudioFilePath = "/home/me/preset-legacy.mp3",
+            Actions = new List<KeywordAction> { new PlayAudioAction { Id = "pa", FilePath = "/home/me/preset.mp3" } } } } } };
         return s;
     }
 
@@ -93,10 +95,13 @@ public sealed class CloudSettingsBackupTests : IDisposable
         return JObject.Parse(reader.ReadToEnd());
     }
 
-    [Fact]
-    public async Task BackupUploadsNoAbsolutePathNoExcludedPropertyAndKeepsTheAssetLists()
+    [Theory]
+    [InlineData("/home/me/layer.mp3")]
+    [InlineData(@"C:\Users\me\layer.mp3")]
+    public async Task BackupUploadsNoAbsolutePathNoExcludedPropertyAndKeepsTheAssetLists(string layerPath)
     {
         var s = Signed();
+        s.AudioLayers[0].Path = layerPath;
         s.OpenRouterApiKey = "sk-secret";
         s.FlashEnabled = false;
 
@@ -113,8 +118,18 @@ public sealed class CloudSettingsBackupTests : IDisposable
         foreach (var path in CloudSettingsBackup.AbsolutePathFields) Assert.DoesNotContain(path, keys, StringComparer.OrdinalIgnoreCase);
         Assert.DoesNotContain(keys, k => CloudSettingsBackup.IsExcludedFromBackup(k));
         Assert.DoesNotContain("OpenRouterApiKey", keys);
-        foreach (var list in new[] { "AudioLayers", "CornerGifOverlays", "KeywordTriggers" }) Assert.DoesNotContain(list, keys);
+        Assert.Equal(42, (int)Assert.Single(sent["AudioLayers"]!)["Volume"]!);
+        Assert.Null(sent["AudioLayers"]![0]!["Path"]);
+        Assert.Equal(222, (int)Assert.Single(sent["CornerGifOverlays"]!)["Size"]!);
+        Assert.Null(sent["CornerGifOverlays"]![0]!["GifPath"]);
+        var trigger = Assert.Single(sent["KeywordTriggers"]!);
+        Assert.Equal("k", (string?)trigger["Keyword"]);
+        Assert.Null(trigger["AudioFilePath"]);
+        Assert.Null(trigger["Actions"]![0]!["filePath"]);
+        Assert.Equal(17, (int)trigger["Actions"]![1]!["amount"]!);
+        Assert.Equal(layerPath, s.AudioLayers[0].Path); // stripping must not mutate live settings
         Assert.DoesNotContain("/home/me", sent.ToString());
+        Assert.DoesNotContain(@"C:\", sent.ToString());
         Assert.False((bool)sent["FlashEnabled"]!);
         Assert.Contains("images/a.png", sent["DisabledAssetPaths"]!.Values<string>());
         Assert.Single(sent["AssetPresets"]!);
@@ -178,7 +193,7 @@ public sealed class CloudSettingsBackupTests : IDisposable
             DisabledAssetPaths = new HashSet<string> { "videos/w.mp4" },
             AudioLayers = new List<AudioLayerTrack> { new() { Path = @"C:\Users\me\layer.mp3" } },
             CornerGifOverlays = new List<CornerGifOverlaySetting> { new() { GifPath = @"C:\Users\me\corner.gif" } },
-            KeywordTriggers = new List<KeywordTrigger> { new() { Keyword = "w", Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = @"C:\k.mp3" } } } },
+            KeywordTriggers = new List<KeywordTrigger> { new() { Id = "trigger", Keyword = "w", Actions = new List<KeywordAction> { new PlayAudioAction { Id = "audio", FilePath = @"C:\k.mp3" } } } },
         };
         _fake.Body = new JObject
         {
@@ -211,6 +226,160 @@ public sealed class CloudSettingsBackupTests : IDisposable
     }
 
     [Fact]
+    public async Task ListRestoreMatchesIdsAcrossReorderingAndClearsBackupOnlyPaths()
+    {
+        var here = Signed();
+        here.KeywordTriggers[0].Actions.Add(new PlayAudioAction { Id = "audio2", FilePath = "/home/me/k2.mp3" });
+        here.KeywordTriggers.Add(new KeywordTrigger { Id = "other", Keyword = "other",
+            Actions = new List<KeywordAction> { new PlayAudioAction { Id = "other-audio", FilePath = "/local/other.mp3" } } });
+        var backup = JObject.FromObject(here);
+        backup["AudioLayers"]![0]!["Volume"] = 19;
+        ((JArray)backup["AudioLayers"]!).Add(JObject.FromObject(new AudioLayerTrack { Path = @"C:\foreign.mp3", Volume = 33 }));
+        ((JArray)backup["CornerGifOverlays"]!).Add(JObject.FromObject(new CornerGifOverlaySetting { GifPath = @"C:\foreign.gif", Size = 444 }));
+        var triggers = (JArray)backup["KeywordTriggers"]!;
+        var first = triggers[0]!;
+        first.Remove();
+        triggers.Add(first); // stable trigger id, not keyword or list index
+        first["Keyword"] = "renamed";
+        var actions = (JArray)first["Actions"]!;
+        var audio = actions[0]!;
+        audio.Remove();
+        actions.Add(audio); // [AddXp, audio2, audio]: the two audio actions swap places, ids must win over position
+        actions.Add(JObject.FromObject(new PlayAudioAction { Id = "new", FilePath = @"C:\new.mp3" }));
+        triggers.Add(JObject.FromObject(new KeywordTrigger { Id = "new", AudioFilePath = @"C:\legacy.mp3",
+            Actions = new List<KeywordAction> { new PlayAudioAction { Id = "audio", FilePath = @"C:\new.mp3" } } }));
+        // Local-only entries must not survive when the backup carries a list.
+        here.AudioLayers.Add(new AudioLayerTrack { Path = "/local/second.mp3" });
+        here.AudioLayers.Add(new AudioLayerTrack { Path = "/local/only.mp3" });
+        here.KeywordTriggers.Add(new KeywordTrigger { Id = "local-only" });
+        _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(backup.ToString()) } }.ToString();
+
+        var restored = (await new CloudSettingsBackup(_fake).DownloadAsync(here))!;
+
+        Assert.Equal(new[] { "/home/me/layer.mp3", "/local/second.mp3" }, restored.AudioLayers.Select(x => x.Path));
+        Assert.Equal(new[] { 19, 33 }, restored.AudioLayers.Select(x => x.Volume));
+        Assert.Equal("", restored.CornerGifOverlays[1].GifPath);
+        Assert.Equal(444, restored.CornerGifOverlays[1].Size);
+        Assert.Equal(new[] { "other", "trigger", "new" }, restored.KeywordTriggers.Select(x => x.Id));
+        Assert.Equal("/local/other.mp3", ((PlayAudioAction)restored.KeywordTriggers[0].Actions[0]).FilePath);
+        var renamed = restored.KeywordTriggers[1];
+        Assert.Equal("renamed", renamed.Keyword);
+        Assert.Equal("/home/me/k2.mp3", ((PlayAudioAction)renamed.Actions[1]).FilePath);
+        Assert.Equal("/home/me/k.mp3", ((PlayAudioAction)renamed.Actions[2]).FilePath);
+        // No local action at that id or position: the local trigger's own AudioFilePath, never the foreign one.
+        Assert.Equal("/home/me/legacy.mp3", ((PlayAudioAction)renamed.Actions[3]).FilePath);
+        Assert.Equal("", restored.KeywordTriggers[2].AudioFilePath);
+        Assert.Equal("", ((PlayAudioAction)restored.KeywordTriggers[2].Actions[0]).FilePath);
+        Assert.DoesNotContain(@"C:\", JsonConvert.SerializeObject(restored));
+        Assert.Equal(42, here.AudioLayers[0].Volume);
+    }
+
+    private async Task<AppSettings> RoundTrip(AppSettings here, Action<JObject>? edit = null)
+    {
+        var backup = JObject.FromObject(here);
+        edit?.Invoke(backup);
+        _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(backup.ToString()) } }.ToString();
+        return (await new CloudSettingsBackup(_fake).DownloadAsync(here))!;
+    }
+
+    [Fact]
+    public async Task DuplicateIdsKeepEachItemsOwnPathInsteadOfTheFirstMatch()
+    {
+        var here = Signed();
+        here.KeywordTriggers = new List<KeywordTrigger>
+        {
+            new() { Id = "dup", AudioFilePath = "/local/1.mp3", Actions = new List<KeywordAction> { new PlayAudioAction { Id = "x", FilePath = "/local/1a.mp3" }, new PlayAudioAction { Id = "x", FilePath = "/local/1b.mp3" } } },
+            new() { Id = "dup", AudioFilePath = "/local/2.mp3", Actions = new List<KeywordAction> { new PlayAudioAction { Id = "y", FilePath = "/local/2a.mp3" } } },
+        };
+        var restored = await RoundTrip(here, b =>
+        {
+            foreach (var trigger in (JArray)b["KeywordTriggers"]!)
+            {
+                trigger["AudioFilePath"] = @"C:\foreign.mp3";
+                foreach (var action in (JArray)trigger["Actions"]!) action["filePath"] = @"C:\foreign.mp3";
+            }
+        });
+        Assert.Equal(new[] { "/local/1.mp3", "/local/2.mp3" }, restored.KeywordTriggers.Select(t => t.AudioFilePath));
+        Assert.Equal(new[] { "/local/1a.mp3", "/local/1b.mp3", "/local/2a.mp3" },
+            restored.KeywordTriggers.SelectMany(t => t.Actions.OfType<PlayAudioAction>()).Select(a => a.FilePath));
+    }
+
+    [Fact]
+    public async Task PresetTriggerPathsNeverUploadAndRestoreLocalByIdOrBlank()
+    {
+        var here = Signed();
+        Assert.True(await new CloudSettingsBackup(_fake).BackupAsync(here));
+        var sent = Unpack((string)JObject.Parse(Uploads.Single().Body)["settings_data"]!);
+        var sentTrigger = sent["KeywordTriggerPresets"]![0]!["triggers"]![0]!;
+        Assert.Null(sentTrigger["AudioFilePath"]);
+        Assert.Null(sentTrigger["Actions"]![0]!["filePath"]);
+
+        var restored = await RoundTrip(here, b =>
+        {
+            var presets = (JArray)b["KeywordTriggerPresets"]!;
+            presets[0]!["triggers"]![0]!["AudioFilePath"] = @"C:\Users\foreign\legacy.mp3";
+            presets[0]!["triggers"]![0]!["Actions"]![0]!["filePath"] = @"C:\Users\foreign\nested.mp3";
+            presets.Add(JObject.FromObject(new KeywordTriggerPreset { Id = "foreign", Triggers = new List<KeywordTrigger> { new() { Id = "pt",
+                AudioFilePath = @"C:\Users\foreign\x.mp3", Actions = new List<KeywordAction> { new PlayAudioAction { Id = "pa", FilePath = @"C:\Users\foreign\y.mp3" } } } } }));
+        });
+        var local = restored.KeywordTriggerPresets[0].Triggers[0];
+        Assert.Equal("/home/me/preset-legacy.mp3", local.AudioFilePath);
+        Assert.Equal("/home/me/preset.mp3", ((PlayAudioAction)local.Actions[0]).FilePath);
+        Assert.Equal("", restored.KeywordTriggerPresets[1].Triggers[0].AudioFilePath);
+        Assert.Equal("", ((PlayAudioAction)restored.KeywordTriggerPresets[1].Triggers[0].Actions[0]).FilePath);
+        Assert.DoesNotContain(@"C:\", JsonConvert.SerializeObject(restored));
+    }
+
+    [Fact]
+    public void UploadStrippingIgnoresJsonNameCasing()
+    {
+        var old = JsonConvert.DefaultSettings;
+        JsonConvert.DefaultSettings = () => new JsonSerializerSettings { ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver() };
+        try
+        {
+            var sent = CloudSettingsBackup.StripForUpload(Signed());
+            Assert.NotNull(sent["audioLayers"]); // the camelCase policy really applied
+            Assert.DoesNotContain("/home/me", sent.ToString());
+        }
+        finally { JsonConvert.DefaultSettings = old; }
+    }
+
+    [Fact]
+    public async Task AnEditedLocalTriggerWithFreshActionIdsKeepsItsAudioPath()
+    {
+        var here = Signed();
+        var backup = JObject.FromObject(here);
+        // Every edit rebuilds the actions with new random ids (KeywordTrigger.RebuildActionsFromFlatFields).
+        here.KeywordTriggers[0].RebuildActionsFromFlatFields();
+        _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(backup.ToString()) } }.ToString();
+
+        var restored = (await new CloudSettingsBackup(_fake).DownloadAsync(here))!;
+
+        Assert.Equal("/home/me/legacy.mp3", Assert.Single(restored.KeywordTriggers[0].Actions.OfType<PlayAudioAction>()).FilePath);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MissingListsKeepLocalButExplicitEmptyListsClearThem(bool present)
+    {
+        var backup = present ? "{\"AudioLayers\":[],\"CornerGifOverlays\":[],\"KeywordTriggers\":[],\"KeywordTriggerPresets\":[]}" : "{}";
+        _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(backup) } }.ToString();
+        var here = Signed();
+        var restored = (await new CloudSettingsBackup(_fake).DownloadAsync(here))!;
+        Assert.Equal(present ? 0 : 1, restored.AudioLayers.Count);
+        Assert.Equal(present ? 0 : 1, restored.CornerGifOverlays.Count);
+        Assert.Equal(present ? 0 : 1, restored.KeywordTriggers.Count);
+        Assert.Equal(present ? 0 : 1, restored.KeywordTriggerPresets.Count);
+        if (!present)
+        {
+            Assert.Equal("/home/me/layer.mp3", restored.AudioLayers[0].Path);
+            Assert.Equal("/home/me/corner.gif", restored.CornerGifOverlays[0].GifPath);
+            Assert.Equal("/home/me/k.mp3", ((PlayAudioAction)restored.KeywordTriggers[0].Actions[0]).FilePath);
+        }
+    }
+
+    [Fact]
     public async Task OverBudgetTrimsTheAssetListsFirstAndSkipsWhenStillTooBig()
     {
         var s = Signed();
@@ -237,7 +406,7 @@ public sealed class CloudSettingsBackupTests : IDisposable
         {
             SpiralPath = @"C:\Users\me\spiral.gif", StartupVideoPath = @"C:\v.mp4",
             AudioLayers = new List<AudioLayerTrack> { new() { Path = @"C:\Users\me\layer.mp3" } },
-            KeywordTriggers = new List<KeywordTrigger> { new() { Keyword = "w", Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = @"C:\k.mp3" } } } },
+            KeywordTriggers = new List<KeywordTrigger> { new() { Id = "trigger", Keyword = "w", Actions = new List<KeywordAction> { new PlayAudioAction { Id = "audio", FilePath = @"C:\k.mp3" } } } },
             FlashEnabled = true,
         };
         _fake.BodyFor = u => u.EndsWith("/v2/user/settings-backup")
@@ -254,8 +423,48 @@ public sealed class CloudSettingsBackupTests : IDisposable
         Assert.Equal(@"C:\v.mp4", (string?)sent["StartupVideoPath"]);
         var back = sent.ToObject<AppSettings>(JsonSerializer.Create(new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace }))!;
         Assert.Equal(@"C:\Users\me\layer.mp3", Assert.Single(back.AudioLayers).Path);
-        Assert.Equal(@"C:\k.mp3", ((PlayAudioAction)Assert.Single(Assert.Single(back.KeywordTriggers).Actions)).FilePath);
+        Assert.Equal(@"C:\k.mp3", Assert.Single(Assert.Single(back.KeywordTriggers).Actions.OfType<PlayAudioAction>()).FilePath);
+        Assert.Equal("k", Assert.Single(back.KeywordTriggers).Keyword);
+        Assert.Equal(17, Assert.Single(back.KeywordTriggers[0].Actions.OfType<AddXpAction>()).Amount);
         Assert.False(back.FlashEnabled);                                    // everything else is this machine's
+    }
+
+    /// <summary>Portable list edits travel with matched slot paths, never this machine's paths.</summary>
+    [Fact]
+    public async Task UploadCarriesOnlyMatchedSlotPathsAndKeepsPortableListEdits()
+    {
+        var slot = Signed();
+        slot.AudioLayers[0].Path = @"C:\layer.mp3";
+        slot.AudioLayers[0].Volume = 7;
+        slot.CornerGifOverlays[0].GifPath = @"C:\corner.gif";
+        slot.KeywordTriggers[0].AudioFilePath = @"C:\legacy.mp3";
+        ((PlayAudioAction)slot.KeywordTriggers[0].Actions[0]).FilePath = @"C:\trigger.mp3";
+        slot.KeywordTriggerPresets[0].Triggers[0].AudioFilePath = @"C:\preset.mp3";
+        ((PlayAudioAction)slot.KeywordTriggerPresets[0].Triggers[0].Actions[0]).FilePath = @"C:\preset-action.mp3";
+        var slotJson = JObject.FromObject(slot);
+        foreach (var name in CloudSettingsBackup.AbsolutePathFields) slotJson.Remove(name);
+        _fake.BodyFor = u => u.EndsWith("/v2/user/settings-backup")
+            ? new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(slotJson.ToString()) } }.ToString() : null;
+        var here = Signed();
+        here.AudioLayers.Add(new AudioLayerTrack { Path = "/home/me/new.mp3", Volume = 23 });
+        here.KeywordTriggers[0].Keyword = "edited";
+        here.KeywordTriggerPresets[0].Triggers[0].Keyword = "preset-edited";
+        here.KeywordTriggers.Add(new KeywordTrigger { Id = "new", AudioFilePath = "/home/me/new.mp3" });
+        Assert.True(await new CloudSettingsBackup(_fake).BackupAsync(here));
+        var sent = Unpack((string)JObject.Parse(Assert.Single(Uploads).Body)["settings_data"]!);
+        Assert.DoesNotContain("/home/me", sent.ToString());
+        var back = sent.ToObject<AppSettings>(JsonSerializer.Create(new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace }))!;
+        Assert.Equal(new[] { @"C:\layer.mp3", "" }, back.AudioLayers.Select(t => t.Path));
+        Assert.Equal(new[] { 42, 23 }, back.AudioLayers.Select(t => t.Volume));
+        Assert.Equal(@"C:\corner.gif", back.CornerGifOverlays[0].GifPath);
+        Assert.Equal(222, back.CornerGifOverlays[0].Size);
+        Assert.Equal("edited", back.KeywordTriggers[0].Keyword);
+        Assert.Equal(@"C:\legacy.mp3", back.KeywordTriggers[0].AudioFilePath);
+        Assert.Equal(@"C:\trigger.mp3", ((PlayAudioAction)back.KeywordTriggers[0].Actions[0]).FilePath);
+        Assert.Equal("", back.KeywordTriggers[1].AudioFilePath);
+        Assert.Equal("preset-edited", back.KeywordTriggerPresets[0].Triggers[0].Keyword);
+        Assert.Equal(@"C:\preset.mp3", back.KeywordTriggerPresets[0].Triggers[0].AudioFilePath);
+        Assert.Equal(@"C:\preset-action.mp3", ((PlayAudioAction)back.KeywordTriggerPresets[0].Triggers[0].Actions[0]).FilePath);
     }
 
     /// <summary>When the slot cannot be read its paths cannot be kept: nothing is uploaded rather than wiping them.</summary>
