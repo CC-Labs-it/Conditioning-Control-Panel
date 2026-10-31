@@ -95,7 +95,8 @@ public sealed partial class FriendsDrawer : Border
         Grid.SetRow(_addBox, 3);
         Grid.SetRow(_foot, 4);
         root.Children.AddRange(new Control[] { _head, _ask, scroll, _addBox, _foot });
-        Child = root;
+        Child = new Grid { Children = { root, _linkFx } };
+        DetachedFromVisualTree += (_, _) => AdvanceLinkFeedback(680);
         // The add box (WPF BuildAddBox): CCP- and five letters from the code alphabet.
         (_codeBox.MaxLength, _codeBox.FontFamily, _codeBox.Tag) = (64, Mono, "friends-code-box");
         ToolTip.SetTip(_codeBox, Loc.Get("friends_add_hint"));

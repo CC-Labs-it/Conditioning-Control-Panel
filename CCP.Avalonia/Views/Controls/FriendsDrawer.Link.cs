@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
@@ -25,15 +26,15 @@ public sealed partial class FriendsDrawer
     internal Func<DateTimeOffset> LinkClock { get; set; } = () => Services.ServerClock.UtcNow;
     internal Func<string, Task<bool>>? CopyText { get; set; }
 
-    private Button LinkPill()
+    private Control LinkPill()
     {
         var pill = Pill(Loc.Get("friends_link_copy"), Raised, Text, "friends-copy-link", Line2);
         pill.Padding = new Thickness(8, 2);
-        pill.Margin = new Thickness(4, 0, 0, 0);
         pill.IsEnabled = _svc?.Available == true;
         ToolTip.SetTip(pill, Loc.Get("friends_link_copy_tip"));
         pill.Click += async (_, _) => await CopyLinkAsync();
-        return _linkPill = pill;
+        _linkPill = pill;
+        return new Border { Child = pill, Margin = new Thickness(4, 0, 0, 0), Tag = "friends-link-pop" };
     }
 
     private Control NewLinkLine()
@@ -64,9 +65,7 @@ public sealed partial class FriendsDrawer
             // Render replaced the pressed pill. Animate the replacement once it is laid out.
             Dispatcher.UIThread.Post(() =>
             {
-                if (_linkPill is not { } pill) return;
-                HoverPop.Enter(pill);
-                DispatcherTimer.RunOnce(() => HoverPop.Leave(pill), TimeSpan.FromMilliseconds(220));
+                if (_linkPill is { } pill && TopLevel.GetTopLevel(pill) != null) StartLinkFeedback((Control)pill.Parent!);
             });
             return isLink;
         }
@@ -125,23 +124,26 @@ public sealed partial class FriendsDrawer
     {
         (_linkNoteText, _linkNoteGood, _noteFresh) = (text, good, true);
         _linkNoteTimer?.Dispose();
-        _linkNoteTimer = DispatcherTimer.RunOnce(() =>
-        {
-            if (_note != null) _note.Opacity = 0;
-            _linkNoteTimer = DispatcherTimer.RunOnce(() => { _linkNoteText = null; Render(); },
-                TimeSpan.FromMilliseconds(Services.Safety.GentleVisuals.FadeMs(260)));
-        }, TimeSpan.FromSeconds(4));
+        _linkNoteTimer = DispatcherTimer.RunOnce(FadeLinkNote, TimeSpan.FromSeconds(4));
         Render();
     }
+
+    internal void FadeLinkNote()
+    {
+        if (_note != null) { SetNoteTransition(_note, GentleVisuals.FadeMs(260)); _note.Opacity = 0; }
+        _linkNoteTimer = DispatcherTimer.RunOnce(() => { _linkNoteText = null; Render(); },
+            TimeSpan.FromMilliseconds(GentleVisuals.FadeMs(260)));
+    }
+
+    private static void SetNoteTransition(Control note, int ms) => note.Transitions = new global::Avalonia.Animation.Transitions
+    {
+        new global::Avalonia.Animation.DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(ms) },
+    };
 
     private Control LinkNote()
     {
         var note = Tagged(Wrap(Label(_linkNoteText!, 10.5, _linkNoteGood ? Mint : Gold)), "friends-link-note");
-        note.Transitions = new global::Avalonia.Animation.Transitions
-        {
-            new global::Avalonia.Animation.DoubleTransition { Property = OpacityProperty,
-                Duration = TimeSpan.FromMilliseconds(Services.Safety.GentleVisuals.FadeMs(260)) },
-        };
+        SetNoteTransition(note, GentleVisuals.RiseMs(180));
         if (_noteFresh)
         {
             _noteFresh = false;
