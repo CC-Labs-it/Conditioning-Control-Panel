@@ -219,9 +219,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (on) App.Notifications.Show(Loc.Get("panic_camera_stopped"), Helpers.NotificationType.Info, TimeSpan.FromSeconds(5));
         }
 
-        // ---- Native Wayland windows: the GlobalShortcuts portal, bound only while effects run ----
+        // ---- Native Wayland windows: GlobalShortcuts while effects run or leash safety needs it ----
         // Policy C (docs/avalonia-decisions.html, panic key row): the portal grab CONSUMES the key
-        // desktop-wide, so it exists only while a desktop effect is on screen. The first effect
+        // desktop-wide, so it exists while effects run or leash safety needs it. The first effect
         // waits (<= 30 s, a KDE dialog) for the bind; refused/missing/timeout = XI2 only for this
         // run, one notice, and the effect starts anyway.
         private static Task? _portalBind;
@@ -229,7 +229,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static DispatcherTimer? _portalWatch;
 
         // The shell's live hold, not PortalPanicShortcut.IsHeld: that stays true after a lost Deactivated.
-        internal static bool KeepPortalBound => AnyEffectRunning || PortalHoldLive;
+        internal static bool KeepPortalBound =>
+            (CoreSettings.Current.PanicKeyEnabled && AnyEffectRunning) || PortalLeashSafetyNeeded;
+
+        // WPF MainWindow.Leash.cs:434-437: StopKeyboardHookUnlessLeashed preserves the
+        // key even with panic disabled. Keep both future leash presses and an ongoing hold.
+        private static bool PortalLeashSafetyNeeded => LeashHoldLeashed || PortalHoldLive;
 
         private static bool AnyEffectRunning =>
             CoreEngine.IsRunning || CoreFlash.IsRunning || CoreSubliminal.IsRunning || BouncingTextOverlay.IsRunning
@@ -294,14 +299,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // An explicit settings transition gets a fresh attempt after an earlier refusal.
                 if (!PortalPanicShortcut.IsBound) _portalBind = null;
                 _portalFailed = false;
-                if (!CoreSettings.Current.PanicKeyEnabled)
+                if (!CoreSettings.Current.PanicKeyEnabled && !PortalLeashSafetyNeeded)
                 {
                     _portalWatch?.Stop();
                     _portalWatch = null;
                     await PortalPanicShortcut.UnbindAsync();
                     _portalBind = null;
                 }
-                if (CoreSettings.Current.PanicKeyEnabled && AnyEffectRunning)
+                if (KeepPortalBound)
                     StartEffect(() => { });
             }
             finally { PanicBindingSync.Release(); }
@@ -309,7 +314,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal static void StartEffect(Action start)
         {
-            if ((!_portalAllowed && PortalPanicShortcut.BindForTests == null) || PortalPanicShortcut.IsBound || _portalFailed || !CoreSettings.Current.PanicKeyEnabled
+            if ((!_portalAllowed && PortalPanicShortcut.BindForTests == null) || PortalPanicShortcut.IsBound || _portalFailed || (!CoreSettings.Current.PanicKeyEnabled && !PortalLeashSafetyNeeded)
                 || (PortalPanicShortcut.BindForTests == null && (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))))
             {
                 start();
@@ -342,17 +347,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     App.Notifications.Show(Loc.GetF("panic_portal_bound", trigger), Helpers.NotificationType.Info, TimeSpan.FromSeconds(6));
                 else
                     App.Notifications.Show(Loc.Get("panic_portal_unavailable"), Helpers.NotificationType.Warning, TimeSpan.FromSeconds(10));
-                // ponytail: 2 s poll for "last effect stopped" rather than a hook in every stop path.
-                _portalWatch ??= new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) =>
-                {
-                    if (KeepPortalBound) return;
-                    _portalWatch!.Stop();
-                    _portalWatch = null;
-                    _portalBind = null;
-                    _ = PortalPanicShortcut.UnbindAsync();
-                });
+                // 2 s poll for the last effect/hold/leash ending rather than a hook in every stop path.
+                _portalWatch ??= new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background,
+                    (_, _) => ReleasePortalWhenUnused());
                 _portalWatch.Start();
             });
+        }
+
+        // Shared with the headless tests so they exercise the real idle-release poll.
+        internal static void ReleasePortalWhenUnused()
+        {
+            if (KeepPortalBound) return;
+            _portalWatch?.Stop();
+            _portalWatch = null;
+            _portalBind = null;
+            _ = PortalPanicShortcut.UnbindAsync();
         }
 
         /// <summary>WPF LockCardService.Stop(dismissOpenCards: true).</summary>
