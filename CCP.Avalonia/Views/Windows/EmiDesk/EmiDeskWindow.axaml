@@ -24,8 +24,8 @@
      The window is a pad bigger than EMI on every side so her FX have room; that pad is
      Background-less on purpose. On X11 a transparent window would still EAT the clicks that fell
      through the pad on Windows (layered-window alpha hit-testing), so ApplyInputRegion cuts the
-     X11 input region to BodyRoot's rect via X11Overlay.SetInputRect, re-set on every
-     ApplyBodyWidth, and gives the whole window back while the ask bubble takes clicks. -->
+     X11 input region to BodyRoot's transformed outline via X11Overlay.SetInputRects, updated
+     on layout and transform changes, and restores the whole window while the ask bubble takes clicks. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
