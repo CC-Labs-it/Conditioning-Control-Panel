@@ -100,3 +100,26 @@ git diff --check
 Windows numbers come from the PR's **perf-bench-windows** CI artifact. They were
 not measured here. Both median and p95 must satisfy WPF x 1.10 + 20 ms under
 `docs/avalonia-perf.html`; local headless stage costs are not a substitute.
+
+Review follow-up (P2, trace-output failure): both console and file sinks are now
+best-effort; a failed sink is disabled so later Mark/Dispose calls cannot abort
+startup, navigation or refresh. A different healthy file sink remains usable.
+WPF reference: `MainWindow.TabNavigation.cs:213` has no diagnostic-file dependency.
+`TabTraceFailureTests` fail-proof on reviewed commit: 2 failed / 2 cases,
+DirectoryNotFoundException; command: `dotnet test Tests/CCP.Avalonia.Tests -c Release
+--filter FullyQualifiedName~TabTraceFailureTests` (exit 1). Fixed focused suite: 19 passed / 19, exit 0, 22.7113 seconds. Core guards pass; all ten language
+JSON files parse and are byte-identical to the reviewed commit; no UI keys added.
+
+The additionally requested comparison base `74ac6ce3d5e0ae082c2871c00e864943e15aa2ad`
+is `avalonia-port/port-docs-html`. Before this lane, its original base `7a78d535`
+already differed by +731/-6845 lines across 104 files, including unrelated WPF and
+19 deleted keys in each of ten language files. Those inherited changes were not
+introduced or reverted by this review fix. Consequently the cumulative 600-line
+limit against 74ac6ce3d cannot be met while preserving this lane and WPF unchanged.
+
+```sh
+/tmp/ccp-dotnet/dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --filter 'FullyQualifiedName~TabTraceFailureTests|FullyQualifiedName~TabVisualReuseTests|FullyQualifiedName~TabSwitchReuseTests|FullyQualifiedName~ProgramsBrowseTests|FullyQualifiedName~BlinkTrainerTabLiveTests|FullyQualifiedName~SectionTabStripShellTests' --logger 'console;verbosity=normal'
+# Test Run Successful. Total tests: 19; Passed: 19; Total time: 22.7113 Seconds
+bash .github/scripts/core-guards.sh
+# All Core guards passed.
+```
