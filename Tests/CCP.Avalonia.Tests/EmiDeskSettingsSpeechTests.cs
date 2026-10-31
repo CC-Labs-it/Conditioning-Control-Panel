@@ -216,5 +216,4 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.False(done);
         return Task.CompletedTask;
     });
-
 }

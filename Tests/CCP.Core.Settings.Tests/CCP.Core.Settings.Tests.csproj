@@ -8,6 +8,7 @@
     <IsTestProject>true</IsTestProject>
     <AssemblyName>CCP.Core.Settings.Tests</AssemblyName>
     <RootNamespace>CCP.Core.Settings.Tests</RootNamespace>
+    <DefineConstants>$(DefineConstants);CCP_ASSEMBLYINFO_GUARD_ONLY</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Shared\AvaloniaTestDispatcher.cs" Link="AssemblyInfoStdoutGuard.cs" />
+    <Compile Include="..\CCP.Avalonia.Language.Tests\AssemblyInfoDiscoveryTests.cs" Link="AssemblyInfoDiscoveryTests.cs" />
     <ProjectReference Include="..\..\CCP.Core\CCP.Core.csproj" />
   </ItemGroup>
 </Project>
