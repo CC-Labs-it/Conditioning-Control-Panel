@@ -33,7 +33,7 @@ import { logPipelineLinks } from './linkLog.js';
 import { isFirefox, concreteFloatConstants, uploadVideoThroughExternalTexture } from './firefoxWebgpu.js';
 import { Q, TIERS, ORDER, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu, qualityLanding } from './quality.js';
 import { deviceClass, memoryGuard, setDevice } from './deviceClass.js';
-import { isCompatOnly, compatLimits, COMPAT_DEAD_ERRORS } from './compatAdapter.js';
+import { isCompatOnly, compatLimits, COMPAT_DEAD_ERRORS, webgl2Died } from './compatAdapter.js';
 import { createFrameGate } from '../core/clock.js';
 import { reasonOf } from '../core/failure.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
@@ -79,17 +79,32 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
       else { const i = adapter.info || {}; gpu = shortGpu([i.vendor, i.architecture, i.description].filter(Boolean).join(' ')); }
     } catch (e) { webgl2 = true; }
   }
-  const glContext = (c) => c.getContext('webgl2', { antialias: false, alpha: true, depth: true, stencil: false, powerPreference: 'high-performance' });
+  // a refusal gets one more try, on a fresh canvas with the browser's defaults; Chrome's own reason goes on the card
+  let glRefusal = '';
+  const askGl = (c, attrs) => {
+    const note = (e) => { if (e.statusMessage) glRefusal = String(e.statusMessage).slice(0, 80); };
+    c.addEventListener?.('webglcontextcreationerror', note);
+    const gl = c.getContext('webgl2', attrs);
+    c.removeEventListener?.('webglcontextcreationerror', note);
+    return gl;
+  };
+  const glContext = (c) => {
+    const gl = askGl(c, { antialias: false, alpha: true, depth: true, stencil: false, powerPreference: 'high-performance' });
+    if (gl) return gl;
+    const fresh = replaceCanvas(c), again = askGl(fresh);
+    canvas = fresh;
+    return again;
+  };
   // WebGPU on OpenGL ES (render/compatAdapter.js) reaches the same driver as WebGL2, on the path nobody tests: WebGL2
   // goes first, and this WebGPU runs only with WebGL2 refused or ?renderer=webgpu, with its limits raised by name
   const compat = !webgl2 && isCompatOnly(adapter);
-  if (compat && force !== 'webgpu') {
+  if (compat && force !== 'webgpu' && !webgl2Died()) {
     context = glContext(canvas);
     if (context) { webgl2 = true; gpu = ''; }
   } else if (webgl2) {
     context = glContext(canvas);
     // a null here is the browser's refusal, never another context: this canvas has held nothing yet
-    if (!context) throw new Error((force === 'webgl2' || firefox ? 'the browser refused a WebGL2 context on this device' : 'the browser refused both WebGPU and WebGL2 on this device') + '. After a graphics crash Chrome does this for about 2 minutes: close the tab and try again in 3 minutes.');
+    if (!context) throw new Error((force === 'webgl2' || firefox ? 'the browser refused a WebGL2 context on this device' : 'the browser refused both WebGPU and WebGL2 on this device') + (glRefusal ? ' (' + glRefusal + ')' : '') + '. After a graphics crash Chrome does this for about 2 minutes: close the tab and try again in 3 minutes.');
   }
   const limits = compat && !webgl2 ? { requiredLimits: compatLimits(adapter) } : {};
   setTier(pinOf() || capTier(pickTier({ override, coarse, webgl2: webgl2 && !firefox })));
@@ -230,6 +245,8 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
 
   const api = {
     backend,
+    /** A compat-only WebGPU adapter sits under this page, on either backend (render/compatAdapter.js). */
+    compatOnly: compat,
     three,
     /** The canvas in use (a new element after a WebGPU init fallback or a rebuild). */
     get canvas() { return canvas; },

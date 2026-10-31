@@ -29,7 +29,7 @@ const NONE = Object.freeze({ kind: 'none', t: 0, durS: 0, k: 0, strength: 0, pre
 export function createPost(three, scene, camera) {
   const pipe = new RenderPipeline(three);
   const u = { strength: uniform(LOOK.bloomStrength), aberration: uniform(0), white: uniform(0), flash: uniform(0), edge: uniform(0), side: uniform(0), submerged: uniform(0), webPictures: uniform(1), speedBlur: uniform(0) };
-  const scenePass = pass(scene, camera, { samples: Q.antialias ? 4 : 0 });
+  const scenePass = pass(scene, camera, { samples: Q.antialias && !three.backend?.compatibilityMode ? 4 : 0 });
   const col = scenePass.getTextureNode('output');
   let screen = null;
   try { screen = screenMod ? screenMod.createScreenFx(three) : null; } catch (e) { console.warn('[glassroad/post] screenfx failed: ' + (e && e.message)); }
