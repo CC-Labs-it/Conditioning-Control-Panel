@@ -4,7 +4,6 @@ using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
-using CCP.Tests.Shared;
 
 namespace CCP.Avalonia.Tests;
 
@@ -19,7 +18,7 @@ public sealed class InstallerAssetsPathTests
     [InlineData("installer-avalonia.iss")]
     public void ReadsTheExactKeyAndValueTheInstallerWrites(string installer)
     {
-        var iss = InstallerSource.Read(RepoRoot(), installer);
+        var iss = File.ReadAllText(Path.Combine(RepoRoot(), installer));
         string Define(string name) => Regex.Match(iss, "#define " + name + " \"([^\"]+)\"").Groups[1].Value;
 
         var write = Regex.Match(iss, @"RegWriteStringValue\(HKEY_CURRENT_USER,\s*'([^']+)',\s*'([^']+)',\s*SelectedAssetsPath\)");

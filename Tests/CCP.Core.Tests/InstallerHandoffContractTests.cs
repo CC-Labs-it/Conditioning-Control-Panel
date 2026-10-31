@@ -7,7 +7,6 @@ using System.Xml.Linq;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using Xunit;
-using CCP.Tests.Shared;
 
 namespace CCP.Core.Tests;
 
@@ -19,9 +18,7 @@ public class InstallerHandoffContractTests
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "installer.iss"))) dir = dir.Parent;
         Assert.NotNull(dir);
-        return path.EndsWith(".iss")
-            ? InstallerSource.Read(dir!.FullName, path)
-            : File.ReadAllText(Path.Combine(dir!.FullName, path));
+        return File.ReadAllText(Path.Combine(dir!.FullName, path));
     }
     private static string Define(string source, string name) =>
         Regex.Match(source, "#define " + name + " \"([^\"]+)\"").Groups[1].Value;
@@ -42,7 +39,7 @@ public class InstallerHandoffContractTests
         Assert.Equal("yes", Directive(iss, "UsePreviousPrivileges"));
         Assert.Equal("lowest", Directive(iss, "PrivilegesRequired"));
         Assert.Equal("dialog", Directive(iss, "PrivilegesRequiredOverridesAllowed"));
-        Assert.Equal("", Directive(iss, "UninstallFilesDir"));
+        Assert.DoesNotMatch(@"(?im)^\s*UninstallFilesDir\s*=", iss);
         Assert.Contains("Path.Combine(exeDir, \"unins000.exe\")", Read("CCP.Core/Services/Update/ReleaseFeed.cs"));
         var mutex = Directive(iss, "AppMutex");
         Assert.Equal("ConditioningControlPanel_SingleInstance_Mutex", mutex);
@@ -67,6 +64,7 @@ public class InstallerHandoffContractTests
         Assert.Contains("/IM {#MyAppExeName}", iss);
         var version = XDocument.Parse(Read("Version.props")).Descendants("Version").Single().Value;
         Assert.Equal(version, Define(iss, "MyAppVersion"));
+        Assert.Contains("set VERSION=" + version, Read("build-installer.bat"));
         var asset = Expand(iss, Directive(iss, "OutputBaseFilename")) + ".exe";
         Assert.Equal($"ConditioningControlPanel-{version}-Setup.exe", asset);
         var url = "https://example.test/" + asset;
@@ -106,26 +104,13 @@ public class InstallerHandoffContractTests
     }
 
     [Fact]
-    public void WpfPublishPathsMatchTheProjectAndIconExists()
-    {
-        var project = XDocument.Parse(Read("ConditioningControlPanel/ConditioningControlPanel.csproj"));
-        var framework = project.Descendants("TargetFramework").Single().Value;
-        var expected = @"ConditioningControlPanel\bin\Release\" + framework + @"\win-x64\publish";
-        var iss = Read("installer.iss");
-        Assert.Equal(expected, Define(iss, "PublishDir"));
-        var batch = Read("build-installer.bat");
-        Assert.Contains("set PROJECT_DIR=ConditioningControlPanel", batch);
-        Assert.Contains("set PUBLISH_DIR=" + expected.Replace("ConditioningControlPanel", "%PROJECT_DIR%"), batch);
-        Assert.Equal(@"Assets\app.ico", Directive(iss, "SetupIconFile"));
-        // Read verifies the icon exists at the repository-relative path on every OS.
-        Assert.NotEmpty(Read(Directive(iss, "SetupIconFile").Replace('\\', '/')));
-    }
-
-    [Fact]
-    public void WrapperSelectsOnlyAvaloniaAndPreservesWpfAssociations()
+    public void StandaloneAvaloniaPreservesWpfAssociations()
     {
         var wpf = Read("installer.iss");
         var ava = Read("installer-avalonia.iss");
+        Assert.DoesNotContain("#include \"installer.iss\"", ava);
+        Assert.Equal(@"Assets\app.ico", Directive(ava, "SetupIconFile"));
+        Assert.NotEmpty(Read(Directive(ava, "SetupIconFile").Replace('\\', '/')));
         Assert.Equal(@"CCP.Avalonia\bin\publish\win-x64", Define(ava, "PublishDir"));
         Assert.Contains("Name: \"fileassoc\"", wpf);
         Assert.Contains("Tasks: fileassoc", wpf);
@@ -134,7 +119,41 @@ public class InstallerHandoffContractTests
         Assert.DoesNotContain("Tasks: fileassoc", ava);
         Assert.DoesNotContain("WizardIsTaskSelected('fileassoc')", ava);
         Assert.DoesNotContain("Type: files; Name: \"{app}\\WebView2Loader.dll\"", wpf);
-        Assert.Contains("Type: files; Name: \"{app}\\WebView2Loader.dll\"", ava);
+        Assert.Matches(@"Type: files;\s+Name: ""\{app\}\\WebView2Loader.dll""", ava);
+    }
+
+    // Transcribed from origin/main aa9918833722f057079e455167cb3d1b14462340:
+    // ConditioningControlPanel/Services/Update/UpdateService.cs:775-786 (ordered patterns + regex),
+    // :1044 (relaunch exe), :1163 and :1197 (/DIR and silent arguments).
+    // No moving remote ref is fetched during tests. Recheck the shipping release in Part B.
+    [Fact]
+    public void MainWpfUpdaterSelectsProductionButRejectsUnsignedCiArtifact()
+    {
+        var version = XDocument.Parse(Read("Version.props")).Descendants("Version").Single().Value;
+        var patterns = new[] { $"-{version}-Setup.exe", $"-v{version}-Setup.exe", "Installer.exe", "Setup.exe" };
+        string? MainSelect(string response)
+        {
+            foreach (var pattern in patterns)
+            {
+                var match = Regex.Match(response, "\"browser_download_url\"\\s*:\\s*\"([^\"]*" + Regex.Escape(pattern) + "[^\"]*)\"", RegexOptions.IgnoreCase);
+                if (match.Success) return match.Groups[1].Value;
+            }
+            return null;
+        }
+        var production = $"ConditioningControlPanel-{version}-Setup.exe";
+        var unsigned = $"ConditioningControlPanel-{version}-Setup.UNSIGNED-avalonia.exe";
+        foreach (var name in new[] { production, unsigned })
+        {
+            var url = "https://example.test/" + name;
+            var feed = JsonSerializer.Serialize(new { assets = new[] { new { name, browser_download_url = url } } });
+            Assert.Equal(name == production ? url : null, MainSelect(feed));
+            Assert.Equal(MainSelect(feed), ReleaseFeed.FindSetupAssetUrl(feed, version, "v" + version));
+        }
+        Assert.Equal("ConditioningControlPanel.exe", Define(Read("installer-avalonia.iss"), "MyAppExeName"));
+        var workflow = Read(".github/workflows/build.yml");
+        Assert.Contains("Move-Item $setup -Destination $unsigned", workflow);
+        Assert.Contains("ConditioningControlPanel-$version-Setup.UNSIGNED-avalonia.exe", workflow);
+        Assert.Contains("path: installer-output/*-Setup.UNSIGNED-avalonia.exe", workflow);
     }
 
     [Fact]

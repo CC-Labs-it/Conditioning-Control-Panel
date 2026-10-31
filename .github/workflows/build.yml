@@ -304,7 +304,7 @@ jobs:
           if ($neg -eq 0) { throw '--win-panic-check F23 passed: the check cannot fail' }
 
       # Separate Avalonia installer; workflow artifact only, never a release.
-      - name: Compile WPF and Avalonia installers (ISCC)
+      - name: Compile standalone Avalonia installer (ISCC)
         timeout-minutes: 20
         run: |
           $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
@@ -313,23 +313,21 @@ jobs:
           curl.exe -L -f -o redist\VC_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           if ($LASTEXITCODE -ne 0) { throw 'VC redist download failed' }
           $version = ([xml](Get-Content Version.props)).Project.PropertyGroup.Version
-          # Also compile the default WPF entry point; never upload this check output.
-          dotnet publish ConditioningControlPanel/ConditioningControlPanel.csproj -c Release -r win-x64 --self-contained true -o C:\ccpb\wpf
-          if ($LASTEXITCODE -ne 0) { throw 'WPF publish failed' }
-          & $iscc '/DPublishDir=C:\\ccpb\\wpf' '/OC:\ccpb\wpf-installer' installer.iss
-          if ($LASTEXITCODE -ne 0) { throw 'Default WPF ISCC failed' }
           $stage = 'C:\ccpb\avalonia'
           robocopy CCP.Avalonia\bin\publish\win-x64 $stage /MIR /NJH /NJS /NDL /NFL /NP
           if ($LASTEXITCODE -ge 8) { throw 'staging failed' }
           & $iscc "/DPublishDir=$($stage -replace '\\','\\')" installer-avalonia.iss
           if ($LASTEXITCODE -ne 0) { throw 'Avalonia ISCC failed' }
-          if (-not (Test-Path "installer-output\ConditioningControlPanel-$version-Setup.exe")) { throw 'Setup asset missing or version drifted' }
+          $setup = "installer-output\ConditioningControlPanel-$version-Setup.exe"
+          if (-not (Test-Path $setup)) { throw 'Setup asset missing or version drifted' }
+          $unsigned = "installer-output\ConditioningControlPanel-$version-Setup.UNSIGNED-avalonia.exe"
+          Move-Item $setup -Destination $unsigned
           $global:LASTEXITCODE = 0
       - name: Upload unsigned Avalonia installer (workflow artifact only)
         uses: actions/upload-artifact@v4
         with:
           name: avalonia-installer-unsigned-not-for-release
-          path: installer-output/*-Setup.exe
+          path: installer-output/*-Setup.UNSIGNED-avalonia.exe
           retention-days: 3
 
   # CCP.Avalonia.Tests, one shard per job so the shards run in parallel instead of one after another.

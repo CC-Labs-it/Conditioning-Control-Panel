@@ -740,7 +740,7 @@ the stack uses and the path <code>GameWindow.Glassroad.cs</code> already expects
 <li><code>LauncherCatalogue</code>: the stack's host dictionary; the race entry is now Glassroad, Prime only (main <code>c7af815a0</code>).</li>
 <li><code>IntakeHostService</code>: the stack's Core <code>IntakeRun</code> plus main's Sparkles claim (<code>firstResult</code> read from <code>IntakeRun.ResultReceived</code>).</li>
 <li><code>LobbyRowView</code>: the stack's <code>LobbyPageRules</code> delegate.</li>
-<li>WPF csproj <code>&lt;Version&gt;</code>: stays in <code>Version.props</code>; <code>build-installer.bat</code> keeps the stack layout with <code>VERSION=7.1.15</code>.</li>
+<li>WPF csproj <code>&lt;Version&gt;</code>: stays in <code>Version.props</code>; <strong>Superseded by 2026-10-30:</strong> <code>build-installer.bat</code> now keeps origin/main bytes, including <code>VERSION=7.1.15</code>; standalone <code>installer-avalonia.iss</code> owns the experimental stack installer.</li>
 <li><code>build.yml</code>: the stack jobs plus main's <code>glassroad</code> job (working directory <code>Assets/web/glassroad</code>).</li>
 </ul>
 <h2 id="-compat-avalonia-portmain-20261030-compat">-compat (<code>avalonia-port/main-20261030-compat</code>)</h2>
@@ -756,8 +756,7 @@ the stack uses and the path <code>GameWindow.Glassroad.cs</code> already expects
 <p>Local builds: CCP.Core, CCP.Avalonia and the WPF test project (EnableWindowsTargeting) all build with 0 errors.</p>
 <p>Open for the reviewers (not changed here):</p>
 <ul>
-<li><code>build-installer.bat</code> on this line packages the Avalonia head for Windows. The 7.2 plan ships Windows as WPF from <code>main</code>,
-so this branch must not be the Windows installer source.</li>
+<li><strong>Superseded by 2026-10-30:</strong> <code>build-installer.bat</code> and <code>installer.iss</code> on this line are byte-identical to origin/main. Only standalone <code>installer-avalonia.iss</code> packages the experimental Avalonia head. Windows continues shipping WPF from main; this branch must not be the Windows release installer source. See the Windows installer decision for the path settings deferred to a future stack-to-main merge.</li>
 </ul>
 
 <script>

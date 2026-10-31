@@ -25,7 +25,4 @@
     <None Include="Assets\bubblecount-2s.mp4" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets\help-clip-audio-2s.mp4" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-  <ItemGroup>
-    <Compile Include="..\Shared\InstallerSource.cs" Link="InstallerSource.cs" />
-  </ItemGroup>
 </Project>

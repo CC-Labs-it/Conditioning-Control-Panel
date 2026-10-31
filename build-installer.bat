@@ -9,7 +9,7 @@ echo.
 :: Configuration
 set VERSION=7.1.15
 set PROJECT_DIR=ConditioningControlPanel
-set PUBLISH_DIR=%PROJECT_DIR%\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish
+set PUBLISH_DIR=%PROJECT_DIR%\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish
 set INSTALLER_OUTPUT=installer-output
 :: Short staging path for the Inno Setup compile. The publish tree sits ~131 chars
 :: deep, and some builtin-sissyhypno audio files run past MAX_PATH (260) from there,
