@@ -202,7 +202,6 @@ internal sealed class KeywordAudioRuntime
     internal Task LastDispatch { get; private set; } = Task.CompletedTask;
     private async Task DispatchAsync(List<KeywordTrigger> fired)
     {
-        // WPF KeywordTriggerService.cs:1261: keep response actions quiet after panic.
         if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
         foreach (var _ in fired)
             try { QuestCredit(); } catch (Exception ex) { Log.Warning(ex, "Keyword quest credit failed"); }
@@ -267,7 +266,6 @@ internal sealed class KeywordAudioRuntime
         _audio?.Cancel(); _audio?.Dispose(); _audio = null;
         StopClip();
     }
-    // WPF KeywordTriggerService.cs:1865 replaces the clip without cancelling dispatch/repeat delays.
     private void StopClip()
     {
         _playGeneration++;

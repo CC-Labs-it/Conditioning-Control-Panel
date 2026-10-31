@@ -242,6 +242,8 @@ internal sealed class ProcessStateSnapshot
             .Where(t => !t.ContainsGenericParameters).ToList();
         var byName = types.ToLookup(t => t.Name);
         var found = new HashSet<MemberInfo>();
+        foreach (var field in typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetFields(AnyStatic).Where(f => !f.IsInitOnly && !f.IsLiteral))
+            found.Add(field);
 
         // Whole seam classes: the head's service locator and Core's static Core* seams.
         foreach (var t in types.Where(t => t == typeof(ConditioningControlPanel.Avalonia.App)
