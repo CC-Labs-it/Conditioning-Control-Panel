@@ -253,7 +253,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Sync();
         }
 
-        /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
+        /// <summary>WPF SpawnChaosBubble, FloatUp/RainDown. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {
@@ -301,7 +301,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF BubbleService.cs:2060-2072: a random chime at the bubble volume and scale.</summary>
         internal static void PlayChime(float scale)
         {
-            var path = ContentLocator.Resolve(Path.Combine("Resources", "sounds", $"chime{Field.Random.Next(1, 4)}.mp3"));
+            var name = $"chime{Field.Random.Next(1, 4)}.mp3";
+            // WPF ModResourceResolver.cs:374-377: mod override (including WAV), then content.
+            var path = CoreModArt.AudioOverridePath(name) ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", name));
             if (!File.Exists(path)) return;
             var s = CoreSettings.Current;
             var volume = (float)Math.Pow(s.MasterVolume / 100f * (s.BubblesVolume / 100f), 1.5) * scale;
