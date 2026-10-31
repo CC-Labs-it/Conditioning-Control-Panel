@@ -66,6 +66,13 @@ namespace ConditioningControlPanel.Avalonia
             return timer;
         }
 
+        /// <summary>WPF AchievementService.cs:947-954: flush even when an autosave already cleared IsDirty.</summary>
+        internal static void SaveAchievementsOnExit(DispatcherTimer? timer, AchievementEngine? engine)
+        {
+            try { timer?.Stop(); }
+            finally { engine?.Save(); } // the store serializes this with any pending background write
+        }
+
         /// <summary>WPF App.FeatureDayLog (App.xaml.cs:1045): the per-day feature log over the same
         /// feature_day_log.json. Null on the headless render path or if its construction failed.</summary>
         internal static FeatureDayLogService? FeatureDayLog { get; private set; }
@@ -1293,10 +1300,8 @@ namespace ConditioningControlPanel.Avalonia
             var shell = (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as Views.Windows.MainShellWindow;
             SaveSettingsOnExit(shell, () => Settings?.SaveImmediate());
 
-            _achievementSaveTimer?.Stop();
-            // WPF AchievementService.Dispose saves synchronously; only when dirty here, so an idle exit
-            // never rewrites the file (or rotates its .bak) - it may be shared with the WPF head.
-            try { if (Achievements is { IsDirty: true } a) a.Save(); } catch { /* the store logs write failures */ }
+            // WPF AchievementService.Dispose always saves synchronously, including a queued autosave.
+            try { SaveAchievementsOnExit(_achievementSaveTimer, Achievements); } catch { /* the store logs write failures */ }
             try { Quests?.Dispose(); } catch { /* WPF App.OnExit:6104; saves only when dirty */ }
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
