@@ -112,7 +112,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     await three.init();
   }
   // WebGL2's MAX_TEXTURE_SIZE, or the WebGPU device's own limit: the course tables must fit it (render/spectrum.js).
-  setTrackTableLimit(webgl2 ? three.backend?.gl?.getParameter?.(0x0D33) : three.backend?.device?.limits?.maxTextureDimension2D);
+  setTrackTableLimit(three.backend?.isWebGPUBackend ? three.backend.device?.limits?.maxTextureDimension2D : three.backend?.gl?.getParameter?.(0x0D33));
   trackSceneResources(three);
   shareInstancePrograms(three);
   skipUnchangedInstanceUploads(three);

@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { feedRows, deviceRows, deviceUrl, createScrolllerFeed, MAX_FEED_ROWS } from '../host/scrolllerFeed.js';
-import { createDevicePictures, fitEdge, PICTURE_EDGE, TURN_S, GENTLE_TURN_S } from '../host/devicePictures.js';
+import { createDevicePictures, decodeInto, fitEdge, PICTURE_EDGE, TURN_S, GENTLE_TURN_S, DECODE_TIMEOUT_MS } from '../host/devicePictures.js';
+import { createCardMedia } from '../host/cardMedia.js';
+import { setTrackTableLimit, trackTableMax } from '../render/spectrum.js';
 import { selectScrolllerSlots } from '../render/mediaSelection.js';
 
 const hooks = registerHooks({ resolve(specifier, context, next) {
@@ -13,6 +15,7 @@ const hooks = registerHooks({ resolve(specifier, context, next) {
     : next(specifier, context);
 } });
 const { createMediaSlots } = await import('../render/media.js');
+const { energyTexture } = await import('../render/materials/road.js');
 hooks.deregister();
 
 const ORIGIN = 'http://127.0.0.1:4173';
@@ -156,7 +159,7 @@ test('pictures advance in place on a seven second turn per owner, never past pau
   await finish();
   pictures.update(TURN_S / 3 - .1);
   assert.equal(media.swaps.length, 0, 'not due yet');
-  pictures.update(1, { paused: true });
+  pictures.update(1, true);
   assert.equal(media.swaps.length, 0, 'a pause moves nothing');
   pictures.update(.2);
   assert.equal(media.swaps.length, 1, 'one owner changes');
@@ -164,15 +167,15 @@ test('pictures advance in place on a seven second turn per owner, never past pau
   assert.equal(owners(media).size, 3);
   for (let k = 0; k < 11; k++) { await settle(); pictures.update(1 / 60); await settle(); await finish(); pictures.update(TURN_S / 3 + .01); }
   assert.equal(media.swaps.length, 12);
-  assert.ok(pictures.stats().canvases <= 5, 'owners + the one being decoded, reused: ' + pictures.stats().canvases);
+  assert.equal(pictures.stats().canvases, 4, 'owners + the one being decoded, reused');
   pictures.dispose();
 });
 
 test('Gentle Visuals doubles the turn', async () => {
   const f = fixture(); await fill(f); await f.finish();
-  f.pictures.update(TURN_S / 3 + .1, { gentle: true });
+  f.pictures.update(TURN_S / 3 + .1, false, true);
   assert.equal(f.media.swaps.length, 0);
-  f.pictures.update(GENTLE_TURN_S / 3 - TURN_S / 3, { gentle: true });
+  f.pictures.update(GENTLE_TURN_S / 3 - TURN_S / 3, false, true);
   assert.equal(f.media.swaps.length, 1);
   f.pictures.dispose();
 });
@@ -198,7 +201,7 @@ test('a short feed does not rotate, and a flash never gets the same picture twic
 test('My files, Off and closed consent clear every face at once, paused too; a later pick comes back', async () => {
   const f = fixture(); await fill(f);
   f.state.active = false;   // boot: shared.filesOn or source off
-  f.pictures.update(0, { paused: true });
+  f.pictures.update(0, true);
   assert.equal(f.media.shown.size, 0);
   assert.equal(f.pictures.flashCount, 0); assert.equal(f.pictures.sourceForFlash(0), null);
   f.state.active = true;
@@ -212,25 +215,207 @@ test('My files, Off and closed consent clear every face at once, paused too; a l
   assert.equal(f.media.shown.size, 0, 'a course switch releases everything');
 });
 
-test('a later feed replaces the list: older pictures rotate out first, and a late decode from the old list is dropped', async () => {
+test('a later feed replaces the list at once, paused too, and a late decode from the old list is dropped', async () => {
   const f = fixture(); await fill(f);
   const inFlight = f.decodes.at(-1);
   f.feed.deviceRows = rowsOf(2, 'n');
-  f.pictures.update(1 / 60);
+  f.pictures.update(1 / 60, true);
+  assert.equal(f.media.shown.size, 0, 'every old picture left the screens while paused');
   inFlight.resolve(); await settle();
   f.pictures.update(1 / 60); await settle();
-  assert.equal(f.media.swaps.length, 0, 'the old decode never lands');
-  assert.equal(f.decodes.at(-1).url, same('n0'));
+  assert.equal(f.decodes.at(-1).url, same('n0'), 'the old decode never lands, the new list starts');
   for (const name of ['n0', 'n1', 'n0']) {
     assert.equal(f.decodes.at(-1).url, same(name));
-    await f.finish(); f.pictures.update(TURN_S); await settle(); f.pictures.update(1 / 60); await settle();
+    await f.finish(); f.pictures.update(1 / 60); await settle(); f.pictures.update(1 / 60); await settle();
   }
-  assert.equal(f.media.swaps.length, 3, 'all three old owners replaced');
+  assert.equal(f.pictures.stats().owners, 3);
   assert.equal(f.pictures.flashCount, 2, 'only the new list is on the screens');
   const decoded = f.decodes.length;
   f.pictures.update(60); await settle();
   assert.equal(f.decodes.length, decoded, 'then it rests: two rows fit three owners');
   f.pictures.dispose();
+});
+
+test('a dropped row leaves at once, kept rows stay, and a repeated feed decodes and uploads nothing', async () => {
+  const f = fixture({ rows: rowsOf(3) }); await fill(f);
+  assert.equal(f.pictures.stats().owners, 3);
+  const decoded = f.decodes.length, shown = f.media.shown.size;
+  f.feed.deviceRows = rowsOf(3);   // the same urls in a new array
+  f.pictures.update(1 / 60); await settle(); f.pictures.update(TURN_S * 2); await settle();
+  assert.equal(f.decodes.length, decoded, 'no decode');
+  assert.equal(f.media.swaps.length, 0, 'no upload');
+  assert.equal(f.media.shown.size, shown);
+  const kept = rowsOf(3).filter((_, i) => i !== 1), gone = [...f.media.shown.values()].map((s) => s.el);
+  f.feed.deviceRows = kept;
+  f.pictures.update(0, true);
+  assert.equal(f.pictures.stats().owners, 2, 'the dropped row left while paused');
+  assert.ok(f.media.shown.size < shown, 'its faces are back on the Loom');
+  assert.ok(gone.some((c) => c.width === 1 && c.height === 1), 'its canvas keeps no pixels');
+  assert.equal(f.decodes.length, decoded, 'kept pictures are not decoded again');
+  f.pictures.update(1 / 60); await settle();
+  assert.equal(f.decodes.at(-1).url, same('p0'), 'an empty owner refills from a kept row');
+  await f.finish(); f.pictures.update(1 / 60); await settle();
+  assert.equal(f.pictures.stats().owners, 3, 'a hole in the owners is refilled on its own faces');
+  assert.equal(new Set([...f.media.shown.keys()]).size, f.media.shown.size);
+  assert.equal(f.media.shown.size, shown, 'every selected face is back');
+  f.pictures.dispose();
+});
+
+test('a flash card keeps its picture through a burst, and a takedown still wins at once', async () => {
+  const f = fixture(); await fill(f); await f.finish();
+  let busy = true;
+  f.pictures.holdFlash(() => busy);
+  const seeds = [0, 1, 2], before = seeds.map((s) => f.pictures.sourceForFlash(s));
+  assert.equal(new Set(before).size, 3, 'no still repeats in a burst');
+  f.pictures.update(TURN_S * 4); await settle();
+  assert.equal(f.media.swaps.length, 0, 'no swap while a burst is live');
+  assert.deepEqual(seeds.map((s) => f.pictures.sourceForFlash(s)), before, 'each card keeps its canvas');
+  const url = (c) => [...f.media.shown.values()].find((s) => s.el === c);
+  assert.ok(url(before[1]), 'the card shows what a screen shows');
+  f.feed.deviceRows = f.feed.deviceRows.filter((r) => r.url !== same('p1'));   // a takedown mid-burst
+  assert.equal(f.pictures.sourceForFlash(1), null, 'the taken-down card answers null at once');
+  assert.equal(f.pictures.sourceForFlash(0), before[0], 'the others keep theirs');
+  assert.equal(f.pictures.sourceForFlash(2), before[2]);
+  assert.equal(f.pictures.flashCount, 2);
+  busy = false;
+  f.pictures.update(1 / 60); await settle();
+  f.pictures.update(TURN_S); await settle();
+  assert.ok(f.pictures.stats().swaps + f.pictures.stats().owners >= 2, 'placing resumes after the burst');
+  f.pictures.dispose();
+});
+
+test('the off switch and a course switch leave no picture pixels in any canvas', async () => {
+  const made = [], media = fakeMedia(), feed = { deviceRows: rowsOf(12) }, decodes = [];
+  const decode = (url, canvas) => new Promise((resolve) => { canvas.width = 360; canvas.height = 640; decodes.push(resolve); });
+  const pictures = createDevicePictures(media, { feed, decode, makeCanvas: () => { const c = { width: 300, height: 150 }; made.push(c); return c; } });
+  const step = async () => { pictures.update(1 / 60); await settle(); decodes.at(-1)?.(); await settle(); pictures.update(1 / 60); await settle(); };
+  for (let i = 0; i < 4; i++) await step();
+  assert.ok(made.length >= 3);
+  assert.ok(made.some((c) => c.width === 360));
+  feed.deviceRows = [];
+  pictures.update(0, true);
+  assert.ok(made.every((c) => c.width === 1 && c.height === 1), 'off: every canvas is 1x1');
+  feed.deviceRows = rowsOf(12);
+  for (let i = 0; i < 4; i++) await step();
+  assert.ok(made.some((c) => c.width === 360));
+  const pending = decodes.length; pictures.update(1 / 60); await settle();
+  pictures.dispose();
+  decodes.at(-1)?.(); decodes[pending - 1]?.(); await settle();
+  assert.ok(made.every((c) => c.width === 1 && c.height === 1), 'dispose: the ring and a late decode are 1x1 too');
+  assert.equal(media.shown.size, 0);
+});
+
+test('decodeInto: a hung decode gives up, clears the source and frees the provider; crossOrigin is set', async () => {
+  assert.equal(DECODE_TIMEOUT_MS, 10000);
+  const hung = { removed: 0, removeAttribute(k) { if (k === 'src') { this.src = ''; this.removed++; } }, decode: () => new Promise(() => {}) };
+  await assert.rejects(decodeInto(same('a'), {}, { makeImage: () => hung, timeoutMs: 5 }), /timed out/);
+  assert.equal(hung.src, '', 'the source is cleared');
+  assert.equal(hung.crossOrigin, 'anonymous');
+  const drawn = [], img = { naturalWidth: 1080, naturalHeight: 1920, removeAttribute() {}, decode: () => Promise.resolve() };
+  const canvas = { getContext: () => ({ drawImage: (...a) => drawn.push(a) }) }, cib = globalThis.createImageBitmap;
+  globalThis.createImageBitmap = () => Promise.reject(new Error('no options on old WebKit'));
+  try { await decodeInto(same('a'), canvas, { makeImage: () => img }); } finally { globalThis.createImageBitmap = cib; }
+  assert.equal(img.crossOrigin, 'anonymous');
+  assert.deepEqual([canvas.width, canvas.height], [360, 640]);
+  assert.equal(drawn[0][0], img, 'the decoded image draws when the bitmap route refuses');
+
+  // A provider built on it recovers from the hang and moves to the next row.
+  const media = fakeMedia(), images = [];
+  const pictures = createDevicePictures(media, { feed: { deviceRows: rowsOf(2) }, makeCanvas: () => ({}),
+    decode: (url, c) => decodeInto(url, c, { timeoutMs: 5, makeImage: () => { const h = { url, removeAttribute() {}, decode: () => new Promise(() => {}) }; images.push(h); return h; } }) });
+  pictures.update(1 / 60); await settle();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(pictures.stats().decoding, false, 'loading is not jammed');
+  pictures.update(2); await settle();
+  assert.equal(images.length, 2, 'the next row is tried');
+  pictures.dispose();
+  await new Promise((r) => setTimeout(r, 20));
+});
+
+test('consent: the press asks on the device origin only, a declined ask is heard once, web frames are unchanged', () => {
+  const web = fakeBridge(), wf = createScrolllerFeed({ bridge: web });
+  wf.setConsent(true); wf.setConsent(true, true); wf.setConsent(false);
+  assert.deepEqual(web.sent, [
+    { type: 'set-setting', key: 'media.remoteConsent', value: true },
+    { type: 'set-setting', key: 'media.remoteConsent', value: true },
+    { type: 'set-setting', key: 'media.remoteConsent', value: false }], 'never an ask without the device origin');
+  wf.dispose();
+
+  const b = fakeBridge(), feed = createScrolllerFeed({ bridge: b }); let no = 0;
+  feed.useDeviceOrigin(ORIGIN); feed.onDeclined(() => no++);
+  feed.setConsent(false, true);
+  assert.deepEqual(b.sent.at(-1), { type: 'set-setting', key: 'media.remoteConsent', value: false }, 'off never asks');
+  b.emit('setting', { key: 'media.remoteConsent', value: false });
+  assert.equal(no, 0, 'false with no pending ask is not a decline');
+  feed.setConsent(true, true);
+  assert.deepEqual(b.sent.at(-1), { type: 'set-setting', key: 'media.remoteConsent', value: true, ask: true });
+  b.emit('setting', { key: 'media.remoteConsent', value: false });
+  assert.equal(no, 1, 'a declined sheet');
+  b.emit('setting', { key: 'media.remoteConsent', value: false });
+  assert.equal(no, 1, 'the ask is answered once');
+  feed.setConsent(true, true);
+  b.emit('setting', { key: 'media.remoteConsent', value: true });
+  assert.equal(no, 1, 'yes is not a decline');
+  assert.equal(feed.consent, true);
+  feed.dispose();
+});
+
+test('the boot never raises a device consent on its own, and a decline turns the course pick off', () => {
+  const boot = read('boot.js').replace(/\r\n/g, '\n');
+  assert.match(boot, /if \(!consentOn\(\) && !deviceOrigin\) scrolller\.setConsent\(true\);/);
+  assert.equal(boot.match(/setConsent\(true\)/g).length, 1, 'that guarded line is the only unasked raise');
+  assert.match(boot, /scrolller\.setConsent\(to === 'scrolller', deviceOrigin\)/);
+  assert.match(boot, /onDeclined\(\(\) => \{\s*if \(coursePick\.source === 'scrolller'\) \{ coursePick\.source = 'off'; saveCustomization\(shared\.coursePicks\); refreshMedia\(\); \}/);
+  assert.match(boot, /devicePictures\?\.update\(frameDt, frozen \|\| state === 'menu' \|\| lights\.covered \|\| !!\(deferred && !deferred\.done\),/, 'no decode or swap while nothing draws the world');
+  assert.match(boot, /holdFlash\(\(\) => cueBurst\.busy\)/);
+});
+
+test('svg urls are refused whatever the mime says', () => {
+  for (const url of [same('a').replace('.jpg', '.svg'), same('a').replace('.jpg', '.SVG'), same('a').replace('.jpg', '.svg?x=1'), same('a').replace('.jpg', '.svg#f')])
+    assert.deepEqual(deviceRows({ v: 1, rows: [{ url, kind: 'image', mime: 'image/png' }] }, ORIGIN), [], url);
+  assert.equal(deviceRows({ v: 1, rows: [{ url: same('a').replace('.jpg', '.svgz.jpg'), kind: 'image' }] }, ORIGIN).length, 1);
+});
+
+test('the tick allocates no flash list: the same answers come from one cached list', async () => {
+  const f = fixture(); await fill(f);
+  const src = read('host/devicePictures.js');
+  assert.ok(!/flashable|new Set/.test(src), 'no list rebuilt per call');
+  assert.equal(f.pictures.sourceForFlash(4), f.pictures.sourceForFlash(4));
+  f.pictures.dispose();
+});
+
+test('the phone does not poll the dev manifest; the default is untouched', () => {
+  const realFetch = globalThis.fetch, realLocation = Object.getOwnPropertyDescriptor(globalThis, 'location'); let polls = 0;
+  globalThis.fetch = async () => { polls++; return { ok: false }; };
+  Object.defineProperty(globalThis, 'location', { value: { origin: ORIGIN, hostname: '127.0.0.1' }, configurable: true });
+  try {
+    const off = createCardMedia(fakeMedia(), { bridge: fakeBridge(), local: false });
+    assert.equal(polls, 0, 'local: false never polls');
+    off.dispose();
+    const dev = createCardMedia(fakeMedia(), { bridge: fakeBridge() });
+    assert.equal(polls, 1, 'the default on loopback is the dev adapter, as before');
+    dev.dispose();
+  } finally {
+    globalThis.fetch = realFetch;
+    if (realLocation) Object.defineProperty(globalThis, 'location', realLocation); else delete globalThis.location;
+  }
+  assert.match(read('boot.js'), /\.\.\.\(deviceOrigin \? \{ local: false \} : null\)/);
+});
+
+test('the song energy row follows the GPU table limit and keeps its clock', () => {
+  const song = { energy: { fps: 25, mix: new Uint8Array(6000), vocals: new Uint8Array(6000), drums: new Uint8Array(6000), bass: new Uint8Array(6000) } };
+  try {
+    setTrackTableLimit(4096);
+    assert.equal(trackTableMax(), 4096);
+    const small = energyTexture(song);
+    assert.equal(small.width, 4096);
+    assert.ok(Math.abs(small.fps - 25 * 4096 / 6000) < 1e-9, 'eFps scales so the row still spans the song');
+    setTrackTableLimit(8192);
+    const full = energyTexture(song);
+    assert.equal(full.width, 6000); assert.equal(full.fps, 25);
+    small.texture.dispose(); full.texture.dispose();
+  } finally { setTrackTableLimit(8192); }
+  assert.match(read('render/renderer.js'), /setTrackTableLimit\(three\.backend\?\.isWebGPUBackend \?/);
 });
 
 test('a broken row is skipped, and a wholly broken feed waits instead of spinning', async () => {

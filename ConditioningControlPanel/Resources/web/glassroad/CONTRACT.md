@@ -308,6 +308,9 @@ go to the world screens (every face `selectScrolllerSlots` picks) and the flash 
 shared owners `media.setSource(id, { kind: 'canvas', el, borrowed: true, credit: 'scrolller' })` and `media.swapStill`.
 One decode at a time, long edge at most 640 px, one upload per picture under the tier's upload budget, owners =
 `mediaClipLimit(memoryTier)` (phone 3), each owner changes picture every 7 s (Gentle 14 s), nothing moves while paused.
+Page -> host `set-setting { key: 'media.remoteConsent', value: true, ask: true }` under this origin only, from the
+player's own press of Scrolller (the host may show its sheet); nothing else ever sends `ask`, and the page never raises
+this consent by itself. An echo of false to a pending ask turns the course's pick off. Rows ending in `.svg` are refused.
 My files and Off still win: the provider then holds nothing and My files keeps the display-only route. A host without
 `origin` (the web) and the desktop (no `caps.scrolller`) behave as before.
 Per-course niches (2026-10-26, `host/scrolllerNiches.js`): the web switch is the race's OWN (stored under

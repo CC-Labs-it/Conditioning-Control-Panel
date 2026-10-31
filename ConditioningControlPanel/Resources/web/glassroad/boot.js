@@ -461,7 +461,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!shared.filesOn) { library.clear(); delete shared.courseFiles[TRACK_ID]; }
     if (shared.filesOn && !library.count && choose) pick();
     if (scrolller) {
-      scrolller.setConsent(to === 'scrolller');
+      scrolller.setConsent(to === 'scrolller', deviceOrigin);   // every setSource is the player's own press
       if (to === 'scrolller') scrolller.setNiches(track.id, nichesFor(track.id));
     }
     refreshMedia();
@@ -471,10 +471,15 @@ async function boot(course, options, lifetime, isCurrent) {
   if (scrolller) {
     if (coursePick.source === 'scrolller') {
       scrolller.setNiches(track.id, nichesFor(track.id));
-      if (!consentOn()) scrolller.setConsent(true);
+      // The phone's stored consent is the player's own: only a press raises it (setSource, with `ask`).
+      if (!consentOn() && !deviceOrigin) scrolller.setConsent(true);
     }
     else if (consentOn()) scrolller.setConsent(false);
     lifetime.defer(scrolller.subscribe(refreshMedia));
+    // A declined sheet does not stay as a lit Scrolller pick.
+    lifetime.defer(scrolller.onDeclined(() => {
+      if (coursePick.source === 'scrolller') { coursePick.source = 'off'; saveCustomization(shared.coursePicks); refreshMedia(); }
+    }));
   }
   hud.on('scrolller-files', pick);
   hud.on('scrolller', e => setSource(e?.source || (e?.on ? 'scrolller' : 'off')));
@@ -594,7 +599,7 @@ async function boot(course, options, lifetime, isCurrent) {
   });
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge,
-    readyCount: renderer.device === 'phone' ? PHONE_READY_CLIPS : Infinity });   // the DEVICE, whatever Quality is pinned
+    readyCount: renderer.device === 'phone' ? PHONE_READY_CLIPS : Infinity, ...(deviceOrigin ? { local: false } : null) });   // the DEVICE, whatever Quality is pinned
   if (qs.get('media') !== '0') world.media?.setDisplayFeed(pictures, renderer.canvas);
   // My files and Off win: while either is picked this provider holds nothing and the display route above has the faces.
   const devicePictures = deviceOrigin && qs.get('media') !== '0' && world.media ? createDevicePictures(world.media, { feed: scrolller,
@@ -711,6 +716,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || devicePictures?.sourceForFlash(seed) || pictures?.stillFor(seed) || null,
     pool: () => cardMedia?.flashCount || devicePictures?.flashCount || pictures?.stillCount || 0,   // never the same picture twice in one burst
     photosafe, gentle: cueSafety });
+  devicePictures?.holdFlash(() => cueBurst.busy);   // a card keeps its picture until it ends
   let cueRunSeen = null, cueRevision = -1;
   lifetime.defer(() => cueBurst.dispose());
   Object.defineProperty(debug, 'cueBurst', { get: () => cueBurst.stats });
@@ -1804,7 +1810,8 @@ async function boot(course, options, lifetime, isCurrent) {
     for (const cue of cueView?.fired || NO_WORDS) if (cue.kind === 'VEIL' || (cue.kind === 'BURST' && cue.params?.variant === 'cards')) cueBurst.fire(cue);
     cueBurst.update(frameDt, { paused: frozen, aspect: renderer.aspect, screen: effects.screen,
       flashes: [effects.screen, payoff.flash] });
-    devicePictures?.update(frameDt, { paused: frozen, gentle: cueSafety.on || !!feel.get('gentle.on') });
+    // Nothing draws the world in the garage, under the counter or behind the staged warm: sync only, no decode or swap.
+    devicePictures?.update(frameDt, frozen || state === 'menu' || lights.covered || !!(deferred && !deferred.done), cueSafety.on || !!feel.get('gentle.on'));
     const wordLive = words && song ? words.update(songS,
       { s: pv[S.s], lat: pv[S.lateral], speedMps: Math.max(0, pv[S.speedPct]) * feel.get('speed.topMps') }) : NO_WORDS;
     if (words) {

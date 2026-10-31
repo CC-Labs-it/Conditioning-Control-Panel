@@ -216,6 +216,8 @@ export function sweepMix(s, u, edgeS, L = SPECTRUM_LOOK) {
 // course builds. Paint only: the course hash never reads this.
 let trackTableLimit = 8192;
 export const setTrackTableLimit = (max) => { trackTableLimit = Number.isFinite(max) && max >= 2 ? Math.min(8192, Math.floor(max)) : 8192; };
+/** The widest course table this GPU takes (at most 8192), for anything else sampled along a row. */
+export const trackTableMax = () => trackTableLimit;
 export const trackTableWidth = lengthM => Math.max(2, Math.min(trackTableLimit, Math.ceil(lengthM)));
 
 export function patternBytes(zones, lengthM, morphM = SPECTRUM_LOOK.morphM) {

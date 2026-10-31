@@ -118,6 +118,12 @@ export function createFlashBurst({ source = () => null, pool = null, photosafe, 
     }
   }
   return { fire, update, clear,
+    /** A card is up or queued. No allocation: a media provider reads this every frame. */
+    get busy() {
+      if (queue.length) return true;
+      for (let i = 0; i < slots.length; i++) if (slots[i].row) return true;
+      return false;
+    },
     get stats() { return { clock, total, pending: queue.length, active: slots.filter(s => s.row).length, capacity: slots.length }; },
     dispose() {
       if (disposed) return; clear(); disposed = true;
