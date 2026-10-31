@@ -2846,6 +2846,9 @@ namespace ConditioningControlPanel.Services
                 var settings = App.Settings?.Current;
                 if (settings == null) return false;
                 if (!settings.ProfileCosmetics.IsEmpty) return false;
+                // An unequip-everything still on its way to /v2/equip: the server's frame and avatar in
+                // this echo are what the player just took off.
+                if (settings.ProfileEquipPushOwed) return false;
 
                 var clean = CosmeticsCatalog.SanitizeOwn(cloud);
                 if (clean.IsEmpty) return false;
@@ -4754,6 +4757,10 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.ServerPaidUntil),
             // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
             nameof(AppSettings.RainPackHash),
+            // Frame and avatar equip state: what THIS PC owes the server and last saw of it.
+            nameof(AppSettings.ProfileEquipAccount),
+            nameof(AppSettings.ProfileEquipUpdatedMs),
+            nameof(AppSettings.ProfileEquipPushOwed),
             // Rain look sync state: what THIS PC owes the server and last agreed with it.
             nameof(AppSettings.RainLookPushOwed),
             nameof(AppSettings.RainLookAgreedUtc),
@@ -4816,6 +4823,9 @@ namespace ConditioningControlPanel.Services
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             restored.RainPackHash = current.RainPackHash;
+            restored.ProfileEquipAccount = current.ProfileEquipAccount;
+            restored.ProfileEquipUpdatedMs = current.ProfileEquipUpdatedMs;
+            restored.ProfileEquipPushOwed = current.ProfileEquipPushOwed;
             restored.RainLookPushOwed = current.RainLookPushOwed;
             restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
