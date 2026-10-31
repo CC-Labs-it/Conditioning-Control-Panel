@@ -148,4 +148,30 @@ public sealed class PrivacySyncTests
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
         }
     }
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public async Task PurchaseRetryWaitsOutCooldownOnceBeforeCreditingTheServer(bool inFlight) {
+        var (previous, login) = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider);
+        var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings;
+        CoreAccount.IsLoggedInProvider = () => true;
+        var handler = new FakeSync { Hold = inFlight ? new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously) : null };
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, handler); Task<bool>? first = null;
+        try {
+            var s = settings.Current; s.LastConfirmedServerXp = 0;
+            s.UnifiedId = "purchase-test"; s.AuthToken = "fake"; s.OfflineMode = false;
+            var now = DateTime.UtcNow; sync.UtcNow = () => now;
+            int waits = 0; sync.PurchaseRetryDelay = delay => { waits++; now += delay; return Task.CompletedTask; };
+            sync.MarkLoaded(null); first = sync.PushAsync("initial");
+            Task<bool> retry;
+            if (inFlight)
+            {
+                await handler.Received.Task; retry = sync.SyncBeforePurchaseRetryAsync(); var logout = sync.PushAsync("logout", waitForGate: true);
+                try { await Task.Delay(TimeSpan.FromSeconds(6)); Assert.False(retry.IsCompleted); Assert.True(logout.IsCompleted); Assert.False(await logout); }
+                finally { handler.Hold!.TrySetResult(true); }
+            }
+            else { Assert.True(await first); retry = sync.SyncBeforePurchaseRetryAsync(); }
+            Assert.True(await first); Assert.True(await retry);
+            Assert.Equal(inFlight ? 0 : 1, waits); Assert.Equal(inFlight ? 1 : 2, handler.Bodies.Count);
+        }
+        finally { handler.Hold?.TrySetResult(true); if (first != null) await first; sync.Reset(); CoreSettings.ServiceProvider = previous; CoreAccount.IsLoggedInProvider = login; }
+    }
 }

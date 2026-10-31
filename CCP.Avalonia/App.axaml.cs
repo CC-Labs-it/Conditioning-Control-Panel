@@ -847,6 +847,14 @@ namespace ConditioningControlPanel.Avalonia
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
                 WireAchievementUnlocks(Achievements);
+                SkillPurchase.Current = new SkillPurchase
+                {
+                    SyncBeforeRetry = () => Platform.AccountSeed.Sync is { } sync
+                        ? sync.SyncBeforePurchaseRetryAsync() : System.Threading.Tasks.Task.FromResult(false),
+                    PointsSpent = Achievements.TrackSkillPointsSpent,
+                    LifetimeSpentReconciled = Achievements.ReconcileLifetimePointsSpent,
+                };
+                WireSkillPurchases(SkillPurchase.Current);
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
                 // Its loss must not cost the launch.
@@ -1095,6 +1103,10 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.SpiralOverlay.CloseAll();   // WPF StopEngine -> App.Overlay.Stop(); panic and exit too
         }
 
+        internal static void WireSkillPurchases(SkillPurchase purchases) => purchases.SkillUnlocked += (_, id) =>
+        {
+            if (id == Models.PinkRushRules.SkillId && CoreEngine.IsRunning) Views.Windows.PinkRushHost.Start();
+        };
         /// <summary>WPF App.OnAchievementUnlocked (App.xaml.cs:3815): one popup per unlock, shown at once.
         /// ponytail: no sound, no Discord webhook - neither service exists on this head.</summary>
         /// <summary>WPF ProgressionService.cs:285 (a level-up celebrates) and App.xaml.cs:3174 (retroactive,
