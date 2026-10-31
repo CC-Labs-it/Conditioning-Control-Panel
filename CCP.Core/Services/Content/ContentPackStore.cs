@@ -383,16 +383,24 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>Delete a decrypt this store minted and forget its identity. Never throws.</summary>
-        public void DeleteTempFile(string tempPath)
+        public void DeleteTempFile(string tempPath) => TryDeleteTempFile(tempPath);
+
+        // Keep identity until deletion succeeds, so shutdown can retry a refused delete.
+        internal bool TryDeleteTempFile(string tempPath)
         {
-            if (string.IsNullOrEmpty(tempPath)) return;
+            if (string.IsNullOrEmpty(tempPath)) return true;
             try
             {
                 var full = Path.GetFullPath(tempPath);
+                File.Delete(full); // Missing files succeed; access and sharing failures stay owed.
                 _tempIdentity.TryRemove(full, out _);
-                if (File.Exists(full)) File.Delete(full);
+                return true;
             }
-            catch (Exception ex) { Log.Debug("ContentPacks: temp delete failed {Path}: {E}", tempPath, ex.Message); }
+            catch (Exception ex)
+            {
+                Log.Debug("ContentPacks: temp delete failed {Path}: {E}", tempPath, ex.Message);
+                return false;
+            }
         }
 
         /// <summary>Delete every decrypt still on record (shutdown). Files in use stay.</summary>

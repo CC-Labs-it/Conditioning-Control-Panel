@@ -44,7 +44,7 @@ namespace ConditioningControlPanel.Services
     /// (WPF TriggerGame :321 queueing on InteractionQueue), re-checked every <see cref="QueuePoll"/>.
     /// Pack clips come through <see cref="PackVideos"/>; an on-screen feed defers one game for at most 90 s.
     /// </summary>
-    public sealed class BubbleCountScheduler
+    public sealed class BubbleCountScheduler : IDisposable
     {
         public enum Difficulty { Easy, Medium, Hard }
 
@@ -126,6 +126,14 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _scheduler);
             Dispose(ref _feedDefer);
             _feedDeadline = null;
+            // A game already on screen plays out. Its completion/force-close retries after release.
+            if (!IsBusy) PackVideos?.CleanupTemps();
+        }
+
+        public void Dispose()
+        {
+            Stop();
+            ForceCleanup();
         }
 
         /// <summary>WPF RefreshSchedule: a live schedule picks up a new frequency.</summary>
@@ -139,9 +147,10 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _feedDefer);
             _feedDeadline = null;
             var wasBusy = IsBusy;
-            Idle(resumeFlashes: false);   // WPF ForceCleanup: App.Bubbles.Resume()
             _retryCount = 0;
             try { _host.CloseAll(); } catch (Exception ex) { Log.Warning(ex, "BubbleCountService: close failed"); }
+            Idle(resumeFlashes: false);   // WPF ForceCleanup: App.Bubbles.Resume()
+            PackVideos?.CleanupTemps(); // CloseAll released the players before deleting their files.
             if (wasBusy) Log.Information("BubbleCountService: ForceCleanup called");
         }
 
@@ -324,11 +333,16 @@ namespace ConditioningControlPanel.Services
                 _heldFlashes = false;
             }
             CoreBubbles.Resume();
+            if (!IsRunning) PackVideos?.CleanupTemps();
         }
 
         /// <summary>WPF BubbleCountService.ReloadAssets: drop the dealt queue so the next game re-reads
         /// the enabled library (#130).</summary>
-        public void ReloadAssets() => _queue = new Queue<string>();
+        public void ReloadAssets()
+        {
+            _queue = new Queue<string>();
+            PackVideos?.CleanupTemps();
+        }
 
         internal string? PickNext()
         {

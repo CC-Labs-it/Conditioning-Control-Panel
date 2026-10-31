@@ -90,10 +90,9 @@ namespace ConditioningControlPanel.Services
                 {
                     var drop = _temps.Count / 2;
                     stale = _temps.GetRange(0, drop);
-                    _temps.RemoveRange(0, drop);
                 }
             }
-            if (stale != null) foreach (var p in stale) store.DeleteTempFile(p);
+            if (stale != null) DeleteTemps(stale, store);
             var temp = store.GetPackFileTempPath(entry.PackId, entry.File);
             if (string.IsNullOrEmpty(temp))
             {
@@ -109,12 +108,22 @@ namespace ConditioningControlPanel.Services
         public void CleanupTemps()
         {
             List<string> all;
-            lock (_lock) { all = new List<string>(_temps); _temps.Clear(); }
-            var store = _store();
-            foreach (var p in all)
+            lock (_lock) all = new List<string>(_temps);
+            DeleteTemps(all, _store());
+        }
+
+        private void DeleteTemps(List<string> paths, ContentPackStore? store)
+        {
+            foreach (var p in paths)
             {
-                if (store != null) store.DeleteTempFile(p);
-                else try { System.IO.File.Delete(p); } catch { }
+                bool gone;
+                if (store != null) gone = store.TryDeleteTempFile(p);
+                else
+                {
+                    try { System.IO.File.Delete(p); gone = true; }
+                    catch { gone = false; }
+                }
+                if (gone) lock (_lock) _temps.Remove(p);
             }
         }
 

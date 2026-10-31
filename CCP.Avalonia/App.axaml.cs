@@ -1264,6 +1264,10 @@ namespace ConditioningControlPanel.Avalonia
             // Before libvlc goes: close the Mantra Lab (stops and disposes its drone), then its temp WAVs.
             try { StopMantra(((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).Windows); } catch { }
 
+            // Release pack players before libvlc shuts down, then retry retained temp deletes.
+            try { CoreEngine.BubbleCount?.Dispose(); } catch { }
+            try { CoreEngine.Video?.Dispose(); } catch { }
+
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
             try { Platform.KeywordTriggerHead.Stop(); } catch { }
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
