@@ -6270,6 +6270,8 @@
   "rf_skill_early_bird_bimbo_req": "Usa l'app prima delle 7 del mattino 10 volte",
   "rf_skill_eternal_doll_req": "Raggiungi il livello 50",
   "webcam_device_unnamed": "(dispositivo senza nome)",
+  "webcam_debug_mouth_fmt": "Bocca aperta n. {0}",
+  "webcam_debug_tongue_fmt": "Lingua fuori n. {0}",
   "rf_webcam_stopped": "Spenta",
   "rf_webcam_starting": "Avvio…",
   "rf_webcam_tracking": "Tracciamento",

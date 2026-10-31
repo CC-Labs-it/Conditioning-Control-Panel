@@ -55,11 +55,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// BlinkDetector + GazeEngine, the same pipeline WebcamTrackingService.ProcessFrame runs on WPF:
     /// blinks, face lost/found, head pose, raw iris, gaze side and the projected gaze point. Camera
     /// open only between Start and Stop, only with current consent.
-    /// Mouth MAR is shared with Core. ponytail: tongue HSV remains WPF-only, so calibration's tongue
-    /// prompt times out to "moving on", as WPF does on a miss. Gaze lock-on (Core GazeLock) and long
+    /// Mouth MAR and tongue timing are shared with Core. Gaze lock-on (Core GazeLock) and long
     /// stare (Core LongStareDetector) run as WPF EmitGazeEvents does.
     /// </summary>
-    internal sealed class WebcamTracker
+    internal sealed partial class WebcamTracker
     {
         internal static WebcamTracker Instance { get; } = new();
 
@@ -248,6 +247,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     opened = false;
                 }
                 catch (Exception ex) { Log.Warning(ex, "[Webcam] open threw"); opened = false; }
+                if (!opened && Volatile.Read(ref _gen) != gen)
+                {
+                    LastError = "Webcam tracking was stopped before the camera finished opening.";
+                    StartWasStopped = true;
+                    run.Release();
+                    return false;
+                }
                 if (!opened)
                 {
                     LastError = "No camera could be opened. Check that a webcam is connected, camera access is allowed, and it is not in use by another app.";
@@ -256,6 +262,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 _blink.Reset();
                 _mouth.Reset();
+                _tongue.FaceMissing();
                 _gaze.Reset();
                 _longStare.Clear();
                 run.Thread = new Thread(() => Loop(run)) { IsBackground = true, Name = "WebcamCapture", Priority = ThreadPriority.BelowNormal };
@@ -408,7 +415,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 composed.X0, composed.X1, composed.Y0, composed.Y1, persist);
         }
 
-        /// <summary>WPF ProcessFrame without tongue: face, mesh, face lost/found, head pose,
+        /// <summary>WPF ProcessFrame with mouth and tongue: face, mesh, face lost/found, head pose,
         /// iris, EAR blink, mouth MAR, then the shared gaze lock, follower and long-stare chain.</summary>
         private void ProcessFrame(Run run, Mat bgr)
         {
@@ -438,6 +445,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 else if (ev == BlinkEvent.EyesClosedLong) Dispatcher.UIThread.Post(() => OnEyesClosedLong?.Invoke());
             }
             ProcessMouthLandmarks(lm, DateTime.UtcNow, run);   // WPF :1740 order: after blink, skipped when both irises are missing
+            ProcessTongue(bgr, lm, DateTime.UtcNow, run);
             (double Dx, double Dy)? vl = left == null ? null
                 : _gaze.NormalizeIris(left.IrisCenter, lm[FaceMeshDetector.LeftEyeOuterIdx], lm[FaceMeshDetector.LeftEyeInnerIdx], rightEye: false);
             (double Dx, double Dy)? vr = right == null ? null
@@ -510,6 +518,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             _blink.CancelClosure();
             _mouth.FaceMissing();
+            _tongue.FaceMissing();
             if (_gaze.NoFaceFrames > GazeEngine.FaceLostFramesThreshold * 2) _longStare.Clear();
         }
     }

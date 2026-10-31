@@ -5981,6 +5981,8 @@
   "rf_skill_early_bird_bimbo_req": "Use o app 10 vezes antes das 7h da manhã",
   "rf_skill_eternal_doll_req": "Alcance o nível 50",
   "webcam_device_unnamed": "(dispositivo sem nome)",
+  "webcam_debug_mouth_fmt": "Boca aberta nº {0}",
+  "webcam_debug_tongue_fmt": "Língua de fora nº {0}",
   "rf_webcam_stopped": "Parado",
   "rf_webcam_starting": "Iniciando…",
   "rf_webcam_tracking": "Te seguindo",

@@ -61,8 +61,7 @@ public sealed class WebcamCaptureTests
         finally { localization.SetLanguage(previous); }
     }
 
-    private static string RepoRoot([CallerFilePath] string here = "") =>
-        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "../.."));
+    private static string RepoRoot([CallerFilePath] string here = "") => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "../.."));
 
     private sealed class Fake : ICameraCapture
     {
@@ -156,20 +155,21 @@ public sealed class WebcamCaptureTests
         Assert.Equal(1, fake.Reads);
     }
 
+    // WPF WebcamTrackingService.cs:1231,1505: Stop during warmup releases the candidate, tries no
+    // other backend, and the failed start reads as stopped, not as camera in use.
     [Fact]
-    public void StopDuringWarmupReleasesCandidateAndDoesNotTryAnotherBackend()
+    public void StopDuringWarmupReleasesCandidateAndReadsAsStopped() => WebcamCalibrationTests.WithTracker(start: false, (tracker, _) =>
     {
-        bool stopped = false;
         int opens = 0;
-        var fake = new Fake();
-        using var source = Source((_, _) => { opens++; return fake; });
-        var advance = source.Wait;
-        source.Wait = ms => { advance(ms); stopped = true; };
-        Assert.False(source.Open(() => stopped));
+        var fake = new Fake { Frame = (_, _) => tracker.Stop() };
+        WebcamTracker.SourceFactory = () => Source((_, _) => { opens++; return fake; });
+        Assert.False(tracker.Start());
         Assert.Equal(1, opens);
         Assert.True(fake.Disposed);
         Assert.Equal(1, fake.Reads);
-    }
+        Assert.True(tracker.StartWasStopped, tracker.LastError);
+        Assert.Equal(WebcamTrackingState.Stopped, tracker.State);
+    });
 
     [Theory]
     [InlineData(false, WebcamTrackingState.CameraDenied)]

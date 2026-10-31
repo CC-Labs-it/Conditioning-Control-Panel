@@ -5981,6 +5981,8 @@
   "rf_skill_early_bird_bimbo_req": "朝7時より前にアプリを10回使う",
   "rf_skill_eternal_doll_req": "レベル50に到達する",
   "webcam_device_unnamed": "(名前のないデバイス)",
+  "webcam_debug_mouth_fmt": "口を開く #{0}",
+  "webcam_debug_tongue_fmt": "舌を出す #{0}",
   "rf_webcam_stopped": "停止中",
   "rf_webcam_starting": "起動中…",
   "rf_webcam_tracking": "追跡中",
