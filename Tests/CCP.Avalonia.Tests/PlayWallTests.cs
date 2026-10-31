@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -472,6 +473,62 @@ public sealed class PlayWallTests
                 Assert.IsType<global::Avalonia.Media.ImageBrush>(border.Background);
             }
             finally { host.Close(); CoreModArt.OverridePathProvider = previous; dir.Delete(true); }
+        });
+    }
+
+    [Theory]
+    [InlineData("BtnPlayDtrh", "game.dtrh")]
+    [InlineData("BtnPlayRacingThoughts", "game.race")]
+    public void GameCardsPinAndUnpinThroughTheirContextMenu(string buttonName, string id)
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            LabWebcamStatusTests.Setup();
+            var settings = CoreSettings.Current;
+            var favorites = settings.RailFavorites.ToArray();
+            settings.RailFavorites.Clear();
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.Show();
+                shell.ShowTab("play");
+                shell.CompleteTabTransition();
+                Dispatcher.UIThread.RunJobs();
+                var play = shell.Named<PlayTabView>("PlayTab")!;
+                var button = play.FindControl<Button>(buttonName)!;
+                var menu = Assert.IsType<ContextMenu>(button.ContextMenu);
+                // WPF MainWindow/MainWindow.FavoritesRail.cs:78-79 maps the hostless cards too.
+                foreach (var name in new[] { "BtnPlayBackRoom", "BtnPlayArcademy" })
+                    Assert.IsType<ContextMenu>(play.FindControl<Button>(name)!.ContextMenu);
+
+                // WPF FavoritesRail.cs:488-500: right-click opens the shared Pin/Unpin menu.
+                button.RaiseEvent(new ContextRequestedEventArgs());
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(menu.IsOpen);
+                var pin = Assert.IsType<MenuItem>(Assert.Single(menu.Items));
+                Assert.Equal(Loc.Get("rail_pin"), pin.Header);
+                Assert.True(pin.IsEnabled);
+                pin.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                menu.Close();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(new[] { id }, settings.RailFavorites);
+
+                button.RaiseEvent(new ContextRequestedEventArgs());
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(menu.IsOpen);
+                var unpin = Assert.IsType<MenuItem>(Assert.Single(menu.Items));
+                Assert.Equal(Loc.Get("rail_unpin"), unpin.Header);
+                unpin.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                menu.Close();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Empty(settings.RailFavorites);
+            }
+            finally
+            {
+                shell.Close();
+                settings.RailFavorites.Clear();
+                settings.RailFavorites.AddRange(favorites);
+            }
         });
     }
 
