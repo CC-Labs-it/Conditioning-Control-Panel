@@ -594,7 +594,7 @@
            week rolls. -->
       <Border x:Name="LogoBrandFrame"
               Grid.Row="1" Grid.RowSpan="2" Grid.Column="1" Grid.ColumnSpan="2"
-              Background="#01000000" Margin="6"
+              Background="{DynamicResource DepthWellFloorBrush}" Margin="6"
               Cursor="Hand"
               ToolTip.Tip="{loc:Str tooltip_click_me_rapidly}">
 
@@ -1333,7 +1333,7 @@
       <!-- ============================================================ -->
       <!-- THE TONIGHT BOARD (WPF SettingsTabView.xaml:1807): the deck in the row the folded browser
            gives back. MainShellWindow.DashboardBillboard.cs drops a BillboardCardHost into
-           BillboardHostSlot. A sunken well; the WPF depth-law bands have no Avalonia brushes yet. -->
+           BillboardHostSlot. The well paint follows the section hue. -->
       <Border x:Name="DashBillboard" Grid.Row="1" IsVisible="False" Margin="0,0,0,5"
               CornerRadius="12" ClipToBounds="True"
               Background="{DynamicResource ElevatedSurfaceBrush}"

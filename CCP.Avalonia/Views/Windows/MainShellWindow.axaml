@@ -657,7 +657,10 @@
              under the XP row. Drawn before the header so its controls sit on it; never hit-testable.
              (The depth well along its top is sync6-nav-polish-c.) -->
         <Border x:Name="HudBand" Grid.Row="1" Grid.RowSpan="3" Grid.Column="1" Background="#33000000" IsHitTestVisible="False">
-            <Border Height="1" VerticalAlignment="Bottom" Background="{DynamicResource TextMutedBrush}" Opacity="0.3"/>
+            <Panel>
+                <Border x:Name="HudDepthTop" Height="9" VerticalAlignment="Top" Background="{DynamicResource DepthWellTop}"/>
+                <Border Height="1" VerticalAlignment="Bottom" Background="{DynamicResource TextMutedBrush}" Opacity="0.3"/>
+            </Panel>
         </Border>
 
         <!-- Header Bar - Row 1 -->
@@ -960,6 +963,16 @@
                          nothing else. The third beat (the Platinum Puppets thanks hyperlink) was
                          retired with the row - see MainWindow.Marquee.cs, where the rotation is
                          now a two-beat crossfade. -->
+                    <!-- Keep the glow off the text container. -->
+                    <Border Grid.Column="3" x:Name="HeaderBannerGlowHost"
+                            Background="{DynamicResource SurfaceBgBrush}" CornerRadius="13"
+                            Height="26" Width="{Binding #HeaderBannerHost.Bounds.Width}"
+                            Margin="12,0,12,0" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            IsHitTestVisible="False">
+                        <Border.Effect>
+                            <DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="12" OffsetX="0" OffsetY="0" Opacity="0.35"/>
+                        </Border.Effect>
+                    </Border>
                     <Border Grid.Column="3" x:Name="HeaderBannerHost"
                             Background="{DynamicResource SurfaceBgBrush}"
                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
@@ -1657,9 +1670,12 @@
                          sits, and after a level-up the fill has already wrapped back to a sliver. -->
                     <!-- ToolTip is a live readout of the ambient-bubble daily XP budget (#1019/#1026);
                          the placeholder here only exists so ToolTipOpening fires, which rewrites it. -->
-                    <Border x:Name="XPBarTrack" Grid.Column="2" Background="{DynamicResource PanelAccentBrush}" CornerRadius="4" Height="8" Margin="0,0,10,0"
+                    <Border x:Name="XPBarTrack" Grid.Column="2" Background="{DynamicResource DepthWellFloorBrush}" CornerRadius="4" Height="8" Margin="0,0,10,0"
                             ToolTip.Tip=" ">
                         <Grid>
+                            <Border x:Name="XpDepthTop" Height="5" VerticalAlignment="Top" Background="{DynamicResource DepthWellTop}" IsHitTestVisible="False"/>
+                            <Border x:Name="XpDepthLeft" Width="6" HorizontalAlignment="Left" Background="{DynamicResource DepthWellLeft}" IsHitTestVisible="False"/>
+                            <Border Height="1" VerticalAlignment="Bottom" Background="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
                             <Border x:Name="XPBar" Background="{DynamicResource PinkBrush}" CornerRadius="4"
                                     HorizontalAlignment="Left" Width="100">
                                 <!-- Chrome FX (PR-1): a slow gloss travelling along the filled part of
@@ -1670,6 +1686,7 @@
                                 <!-- Inset past the pill's rounded caps: a Border does not clip its
                                      child to CornerRadius, so a full-bleed gloss would show square
                                      corners poking out of the 8px-tall bar at each end. -->
+                                <Panel>
                                 <Border x:Name="XPBarSheen" Margin="4,0" IsHitTestVisible="False" Opacity="0">
                                     <Border.Background>
                                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
@@ -1679,6 +1696,9 @@
                                         </LinearGradientBrush>
                                     </Border.Background>
                                 </Border>
+                                <Border x:Name="XpDepthGloss" Margin="1,0" CornerRadius="4" Background="{DynamicResource DepthTubeGloss}" IsHitTestVisible="False"/>
+                                <Border x:Name="XpDepthBead" Width="8" Height="8" Margin="0,0,-4,0" HorizontalAlignment="Right" CornerRadius="4" Background="{DynamicResource DepthTubeBead}" IsHitTestVisible="False"/>
+                                </Panel>
                             </Border>
                             <Border x:Name="XPBarFlashOverlay" Background="{DynamicResource PinkBrush}" CornerRadius="4"
                                     HorizontalAlignment="Left"
