@@ -48,7 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             p.Volume = PlayerVolume = _userMuted ? 0 : MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
         }
 
-        /// <summary>WPF ShowVideoControls: once the first frame is up, on every screen. UI thread.</summary>
+        /// <summary>WPF ShowVideoControls: after the picture fade completes, on every screen. UI thread.</summary>
         private void ShowVideoControls()
         {
             if (!Scheduler.IsPlaying || _closing || !ControlsAllowed) return;

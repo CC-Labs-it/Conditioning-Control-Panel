@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private List<double> _spawnTimes = new();
         private MediaPlayer? _player;
         private double _videoFadeSeconds;
+        private Services.Video.VideoReveal? _videoReveal;
         private Media? _media;
         private VlcFrameSink? _sink;
         private WriteableBitmap? _fill;
@@ -125,6 +126,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private void Play(string path, bool strict)
         {
+            _videoReveal?.Dispose();
+            _videoReveal = null;
             var muted = _userMuted;
             if (_surfaces.Count > 0) CloseAll();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
@@ -188,10 +191,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     FirstFrameMs = _sinceShow.ElapsedMilliseconds;
                     if (!_gracePaused) _sinceFrame.Start();   // WPF arms the length/max timers once playing
                     Log.Information("VideoService: first frame after {Ms} ms", FirstFrameMs);
-                    ShowVideoControls();   // mute and close, once the clip is rolling (MandatoryVideoOverlay.Controls.cs)
+                    // WPF player.js:915 and VideoService.FloatingInstances.cs:603:
+                    // animate independently of decoded frames, then reveal the controls.
+                    var window = _surfaces[0].Window;
+                    _videoReveal = new Services.Video.VideoReveal(_videoFadeSeconds,
+                        tick => window.RequestAnimationFrame(_ => tick()),
+                        opacity => { foreach (var x in _surfaces) x.Picture.Opacity = opacity; },
+                        ShowVideoControls);
+                    _videoReveal.Start();
                 }
-                foreach (var x in _surfaces)
-                    x.Picture.Opacity = Services.Video.MandatoryVideoPresentation.PictureOpacity(true, _sinceFrame.Elapsed.TotalSeconds, _videoFadeSeconds);
                 var fill = _surfaces.Any(x => x.Fill.IsVisible);
                 if (fill && _sink?.Bitmap is { } src && _fill != null)
                 {
@@ -889,6 +897,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _closing = true;
             try
             {
+                _videoReveal?.Dispose();
+                _videoReveal = null;
                 _attention = _gracePaused = false;
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;
