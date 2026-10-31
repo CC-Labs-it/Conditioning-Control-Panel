@@ -18,6 +18,7 @@ internal sealed class BrainDrainPlayer
     private readonly object _gate = new();
     private string[] _clips = [];
     private ITimer? _timer;
+    private TimeSpan _interval;
     private MindWipePlayer.IVoice? _voice;
     private bool _running, _building;
     private int _generation;
@@ -53,11 +54,11 @@ internal sealed class BrainDrainPlayer
             Reload(); _settings = CoreSettings.Current;
             _settings.PropertyChanged += SettingsChanged;
             _running = true;
-            var every = Interval; _timer = _time.CreateTimer(_ => Tick(), null, every, every);
+            _interval = TimeSpan.FromMilliseconds(CoreSettings.Current.BrainDrainHighRefresh ? 500 : 5000);
+            _timer = _time.CreateTimer(_ => Tick(), null, _interval, _interval);
             App.DiscordRpc?.SetBrainDrainActivity(); // WPF BrainDrainService.cs:240
         }
     }
-    private TimeSpan Interval => TimeSpan.FromMilliseconds(CoreSettings.Current.BrainDrainHighRefresh ? 500 : 5000);
     private static double Volume => Math.Clamp(CoreSettings.Current.MasterVolume, 0, 100) / 100.0
         * Math.Clamp(CoreSettings.Current.BrainDrainVolume, 0, 100) / 100.0;
     private void SettingsChanged(object? sender, PropertyChangedEventArgs e) {
@@ -87,7 +88,7 @@ internal sealed class BrainDrainPlayer
         lock (_gate) {
             if (!_running || _building || _voice != null || _clips.Length == 0) return;
             var probability = Math.Clamp(CoreSettings.Current.BrainDrainIntensity, 0, 100) / 100.0
-                / (60 / Interval.TotalSeconds); // WPF BrainDrainService.cs:285
+                / (60 / _interval.TotalSeconds); // WPF BrainDrainService.cs:285
             if (_roll() >= probability) return;
             path = _clips[_random.Next(_clips.Length)];
             generation = _generation; _building = true;

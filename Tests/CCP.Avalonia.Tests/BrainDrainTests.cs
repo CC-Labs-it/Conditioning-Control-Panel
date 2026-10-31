@@ -20,14 +20,12 @@ public class BrainDrainTests
     private sealed class Voice : MindWipePlayer.IVoice {
         public bool Disposed; public int Starts;
         public bool Play() { Starts++; return true; }
-        public double Gain;
-        public Action End = () => { };
+        public double Gain; public Action End = () => { };
         public double Volume { set => Gain = value; }
         public void Dispose() => Disposed = true;
     }
     private sealed class Clock : TimeProvider {
-        public TimeSpan Due, Period;
-        public TimerCallback? Callback;
+        public TimeSpan Due, Period; public TimerCallback? Callback;
         public override ITimer CreateTimer(TimerCallback cb, object? state, TimeSpan due, TimeSpan period)
         { Callback = cb; Due = due; Period = period; return new Timer(this); }
         private sealed class Timer(Clock clock) : ITimer {
@@ -39,10 +37,8 @@ public class BrainDrainTests
     private static void Run(Action<string> body) {
         var dir = Directory.CreateTempSubdirectory("brain-drain");
         CorePaths.EffectiveAssetsProvider = () => dir.FullName;
-        var service = new SettingsService();
-        CoreSettings.ServiceProvider = () => service;
-        CoreSettings.Current.BrainDrainEnabled = true;
-        Directory.CreateDirectory(BrainDrainPlayer.Folder);
+        var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
+        CoreSettings.Current.BrainDrainEnabled = true; Directory.CreateDirectory(BrainDrainPlayer.Folder);
         File.WriteAllText(Path.Combine(BrainDrainPlayer.Folder, "clip.mp3"), "test");
         try { body(dir.FullName); }
         finally { BrainDrainPlayer.Instance?.Stop(); BrainDrainPlayer.Instance = null; dir.Delete(true); }
@@ -50,8 +46,7 @@ public class BrainDrainTests
     [Fact]
     public void Cadence_probability_nonoverlap_volume_presence_and_stop_match_Wpf() => Run(_ =>
     {
-        using var rpc = AvApp.DiscordRpc = new DiscordRichPresenceService();
-        var s = CoreSettings.Current;
+        using var rpc = AvApp.DiscordRpc = new DiscordRichPresenceService(); var s = CoreSettings.Current;
         s.BrainDrainIntensity = 60; s.MasterVolume = 50; s.BrainDrainVolume = 40;
         s.BrainDrainHighRefresh = false; var clock = new Clock(); var voices = new List<Voice>();
         double roll = .051;
@@ -92,10 +87,8 @@ public class BrainDrainTests
             using var rpc = AvApp.DiscordRpc = new DiscordRichPresenceService();
             var clock = new Clock(); Voice? current = null;
             var player = new BrainDrainPlayer((_, _, _, _) => current = new Voice(), clock, () => 0);
-            player.Seed(); var s = CoreSettings.Current;
-            s.BrainDrainEnabled = false;
-            var card = new BrainDrainFeatureControl();
-            var enable = card.FindControl<CheckBox>("ChkEnable")!;
+            player.Seed(); var s = CoreSettings.Current; s.BrainDrainEnabled = false;
+            var card = new BrainDrainFeatureControl(); var enable = card.FindControl<CheckBox>("ChkEnable")!;
             enable.IsChecked = true; Assert.True(s.BrainDrainEnabled); Assert.False(player.IsRunning);
             s.AudioOnlySession = true; CoreEngine.Start(); Assert.False(player.IsRunning); CoreEngine.Stop();
             s.AudioOnlySession = false; CoreEngine.Start(); Assert.True(player.IsRunning);
@@ -126,20 +119,27 @@ public class BrainDrainTests
     [Fact]
     public void Clip_scan_prefers_assets_by_name_and_rescans_on_start() => Run(_ =>
     {
-        Directory.CreateDirectory(BrainDrainPlayer.LegacyFolder);
-        var legacy = Path.Combine(BrainDrainPlayer.LegacyFolder, "clip.mp3");
+        Directory.CreateDirectory(BrainDrainPlayer.LegacyFolder); var legacy = Path.Combine(BrainDrainPlayer.LegacyFolder, "clip.mp3");
         var extra = Path.Combine(BrainDrainPlayer.Folder, "added.wav");
-        Assert.False(File.Exists(legacy));
-        File.WriteAllText(legacy, "legacy");
+        Assert.False(File.Exists(legacy)); File.WriteAllText(legacy, "legacy");
         string? played = null; var player = new BrainDrainPlayer((path, _, _, _) =>
         { played = path; return new Voice(); }, new Clock(), () => 0);
-        player.Seed();
-        try {
+        player.Seed(); try {
             player.Start(); Assert.Equal(1, player.ClipCount); player.Tick();
             Assert.Equal(Path.Combine(BrainDrainPlayer.Folder, "clip.mp3"), played); player.Stop();
             File.WriteAllText(extra, "added");
             player.Start(); Assert.Equal(2, player.ClipCount); player.Stop();
         }
         finally { player.Stop(); File.Delete(legacy); }
+    });
+    [Theory, InlineData(false), InlineData(true)]
+    public void Preset_refresh_change_keeps_running_cadence(bool high) => Run(_ => {
+        var s = CoreSettings.Current; s.BrainDrainIntensity = 60; s.BrainDrainHighRefresh = high;
+        var clock = new Clock(); Voice? clip = null;
+        var player = new BrainDrainPlayer((_, _, _, _) => clip = new Voice(), clock, () => .01);
+        player.Seed(); player.Start(); var tick = clock.Callback;
+        new ConditioningControlPanel.Models.Preset { BrainDrainEnabled = true, BrainDrainIntensity = 60, BrainDrainHighRefresh = !high }.ApplyTo(s);
+        player.Tick(); Assert.Equal(high ? 0 : 1, clip?.Starts ?? 0); Assert.Same(tick, clock.Callback);
+        Assert.Equal(TimeSpan.FromMilliseconds(high ? 500 : 5000), clock.Period); player.Stop();
     });
 }
