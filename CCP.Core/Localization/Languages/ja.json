@@ -6473,6 +6473,7 @@
   "panic_portal_description": "パニック：すべて停止",
   "panic_portal_bound": "パニックキー（全ウィンドウ）：{0}",
   "panic_portal_unavailable": "パニックキーはCCPなどのX11ウィンドウにフォーカスがある間だけ効きます。それ以外はトレイの「すべて停止」を使ってください。",
+  "panic_key_unhearable": "パニックキー {0} はこのデスクトップでは検出できません。別のキーを選ぶか、トレイの「すべて停止」を使ってください。",
   "panic_key_wayland_hint": "Waylandでは、パニックキーはエフェクト実行中だけデスクトップ全体で捕捉されます。",
   "btn_stop_session_no": "続ける",
   "btn_stop_session_yes": "セッションを止める",

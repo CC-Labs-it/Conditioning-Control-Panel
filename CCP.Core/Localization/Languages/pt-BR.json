@@ -6473,6 +6473,7 @@
   "panic_portal_description": "Pânico: parar tudo",
   "panic_portal_bound": "Tecla de pânico em qualquer janela: {0}",
   "panic_portal_unavailable": "A tecla de pânico só funciona enquanto uma janela do CCP ou outra X11 está em foco. Fora disso, use \"Parar tudo\" na bandeja.",
+  "panic_key_unhearable": "A tecla de pânico {0} não pode ser detectada nesta área de trabalho. Escolha outra tecla ou use \"Parar tudo\" na bandeja.",
   "panic_key_wayland_hint": "No Wayland a tecla de pânico só é capturada em toda a área de trabalho enquanto há efeitos ativos.",
   "btn_stop_session_no": "Continuar",
   "btn_stop_session_yes": "Parar a sessão",
