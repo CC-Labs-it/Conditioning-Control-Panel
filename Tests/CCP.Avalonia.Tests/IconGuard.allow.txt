@@ -115,6 +115,7 @@ Views/Windows/QuizWindow.axaml.cs :: TrendDirection.Up => "\u2191", :: trend arr
 Views/Windows/QuizWindow.axaml.cs :: TrendDirection.Down => "\u2193", :: trend arrow leading a wrapped score sentence (Run inline), typography (content (c).4)
 Views/Windows/QuizWindow.axaml.cs :: TrendDirection.Flat => "\u2192", :: trend arrow leading a wrapped score sentence (Run inline), typography (content (c).4)
 Views/Controls/Companion/CompanionRoomPreviewWindow.axaml :: narrow ⇄ wide :: arrow between two words of a dev-preview button label, typography (content (c).4)
+Views/Windows/MainShellWindow.Inbox.cs :: Glyph = "💖" :: InboxItem.Glyph is Core row data from WPF MainWindow.Patreon.cs:1220; InboxFlyout renders it through IconGlyph Emoji= and IconMap's filled Heart entry
 App.axaml.cs :: Glyph = "👗" :: InboxItem.Glyph is Core row data, not an icon slot in this file; the inbox row renderer (InboxFlyout) owns the icon - IconMap maps 👗 to Wand once it draws via IconGlyph Emoji=
 Platform/FriendsLanding.cs :: ? "✨" : item.Kind == SendKind.Invite ? "🚪" : "🎁" :: InboxItem.Glyph is Core row data copied from WPF FriendsLanding.cs:283, not an icon slot in this file; the inbox row renderer (InboxFlyout) owns the icon
 

@@ -156,10 +156,25 @@ internal static class AccountSeed
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();
 
+    // WPF EntitlementTierSync.cs:33,61-66: valid authenticated readings only, scoped to this session.
+    private static volatile string? _tierAnsweredAccount, _tierAnsweredToken;
+    internal static bool ServerTierAnsweredThisRun => !CoreSettings.Current.OfflineMode
+        && !string.IsNullOrEmpty(_tierAnsweredToken) && _tierAnsweredAccount == CoreSettings.Current.UnifiedId
+        && _tierAnsweredToken == CoreSettings.Current.AuthToken;
+
+    internal static void NoteTierReading(int tier, string account, string? token)
+    {
+        var s = CoreSettings.Current;
+        if (s.OfflineMode || tier < 0 || tier > EntitlementTierRule.MaxTier || string.IsNullOrEmpty(token)
+            || account != s.UnifiedId || token != s.AuthToken) return;
+        (_tierAnsweredAccount, _tierAnsweredToken) = (account, token);
+    }
+
     private static async Task<bool> LoadProfileCoreAsync(V2AuthService v2)
     {
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
+        var token = s.AuthToken;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
         var user = await v2.GetUserProfileAsync(id);
         if (user == null)
@@ -172,6 +187,7 @@ internal static class AccountSeed
         if (!string.IsNullOrEmpty(s.AuthToken))
             EntitlementTierRule.ApplyRise(s, EntitlementTierRule.ParseTier(user.EffectiveTierRaw), DateTime.UtcNow);
         ProfileAdopt.AdoptReadBeforeWrite(s, user);
+        if (EntitlementTierRule.ParseTier(user.EffectiveTierRaw) is int tier) NoteTierReading(tier, id, token);
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
         if (Sync is { } sync)
