@@ -397,6 +397,15 @@ namespace ConditioningControlPanel.Services
             else if (verdict == AttentionVerdict.Fail) CoreProgression.TrackAttentionCheck(false);
             if (verdict is not (AttentionVerdict.Troll or AttentionVerdict.Fail)) { End(); return; }
 
+            // WPF VideoService.cs:5883-5917: score first; off ends an ordinary video without a retry card.
+            if (!Video.MandatoryVideoPresentation.ReplaysAfterCheck(
+                    s.MandatoryVideoReplayAfterFailedCheck, IsStrict, LockdownService.Current?.IsActive == true))
+            {
+                Log.Information("VideoService: attention {Verdict} - no replay (setting off)", verdict);
+                End();
+                return;
+            }
+
             Penalties++;
             var mercy = Penalties >= s.MercyAfterFails && s.MercySystemEnabled;   // #1145: 2..10, default 3
             var strict = IsStrict;

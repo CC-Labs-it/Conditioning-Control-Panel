@@ -56,6 +56,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderVideoMinDur.ValueChanged += SliderVideoMinDur_Changed;
             SliderVideoMaxDur.ValueChanged += SliderVideoMaxDur_Changed;
             ChkMiniGame.IsCheckedChanged += ChkMiniGame_Changed;
+            ChkReplayFailedCheck.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.MandatoryVideoReplayAfterFailedCheck = ChkReplayFailedCheck.IsChecked == true;
+                CoreSettings.Save();
+            };
             SliderTargets.ValueChanged += SliderTargets_Changed;
             ChkRandomize.IsCheckedChanged += ChkRandomize_Changed;
             SliderDuration.ValueChanged += SliderDuration_Changed;
@@ -141,6 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 SliderVideoMaxDur.Value = s.VideoMaxDurationSeconds;
                 TxtVideoMaxDur.Text = FormatDuration(s.VideoMaxDurationSeconds);
                 ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
+                ChkReplayFailedCheck.IsChecked = s.MandatoryVideoReplayAfterFailedCheck;
                 SliderTargets.Value = s.AttentionDensity;
                 TxtTargets.Text = s.AttentionDensity.ToString();
                 ChkRandomize.IsChecked = s.RandomizeAttentionTargets;
@@ -185,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.VideoMinDurationSeconds) ||
                 e.PropertyName == nameof(AppSettings.VideoMaxDurationSeconds) ||
                 e.PropertyName == nameof(AppSettings.AttentionChecksEnabled) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoReplayAfterFailedCheck) ||
                 e.PropertyName == nameof(AppSettings.AttentionDensity) ||
                 e.PropertyName == nameof(AppSettings.RandomizeAttentionTargets) ||
                 e.PropertyName == nameof(AppSettings.AttentionLifespan) ||
