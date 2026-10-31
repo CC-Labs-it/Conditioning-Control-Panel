@@ -98,4 +98,52 @@ public sealed class SessionRunWireTests
             return Task.CompletedTask;
         });
     }
+
+    /// <summary>WPF MainWindow.Presets.cs:1745,1777 rejects a recap during shutdown.
+    /// Both the event entry and its queued callback must respect the shell lifetime.</summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ShutdownNeverOpensARecap(bool queuedBeforeShutdown, bool exitRequested)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<AvApp>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+
+            var shell = new MainShellWindow();
+            shell.Show();
+            var opened = new System.Collections.Generic.List<SessionCompleteWindow>();
+            using var hook = Window.WindowOpenedEvent.AddClassHandler<SessionCompleteWindow>((w, _) => opened.Add(w));
+            var log = new SessionLogReadyEventArgs(new SessionLog { SessionName = "Lifecycle Test" });
+            try
+            {
+                // Positive control: the event and window observer really work on this head.
+                shell.OnSessionLogReady(null, log);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Single(opened).Close();
+                opened.Clear();
+
+                if (queuedBeforeShutdown) shell.OnSessionLogReady(null, log);
+                if (exitRequested)
+                    shell.MarkExitRequestedForTest();
+                else shell.Close();
+                if (!queuedBeforeShutdown) shell.OnSessionLogReady(null, log);
+                Dispatcher.UIThread.RunJobs();
+                // Observe all recaps, including an orphan shown without the closed owner.
+                Assert.Empty(opened);
+            }
+            finally
+            {
+                foreach (var recap in opened) recap.Close();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
 }
