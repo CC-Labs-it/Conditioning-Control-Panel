@@ -32,6 +32,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         private bool _favoritesRailHooked;
+        internal global::ConditioningControlPanel.Avalonia.Views.Controls.PageFavoritesDrawer? PageFavorites =>
+            Named<global::ConditioningControlPanel.Avalonia.Views.Controls.PageFavoritesDrawer>("PageDrawer");
 
         /// <summary>WPF FavoritePinMap (MainWindow.FavoritesRail.cs:63): rail/Play-wall x:Name -> palette id.</summary>
         private static readonly (string Element, string Id)[] FavoritePinMap =
@@ -99,6 +101,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 dash.RecentEmpty.IsVisible = dash.RecentList.Children.Count == 0;
             }
             catch (Exception ex) { Log.Debug("RefreshFavoritesRail: {E}", ex.Message); }
+            RefreshPageDrawer();
+        }
+
+        // WPF MainWindow.FavoritesRail.cs:151-191: independent chips, same rules and builder.
+        private void RefreshPageDrawer()
+        {
+            if (PageFavorites is not { } drawer || SettingsPage is not { } dash) return;
+            var s = CoreSettings.Current;
+            var entries = SettingsPaletteIndex.All.Where(e => FavoritesRailRule.IsDestination(e.Id))
+                .ToDictionary(e => e.Id, StringComparer.Ordinal);
+            bool Known(string id) => entries.TryGetValue(id, out var e) && e.Available;
+            drawer.Paint(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.GlowColor);
+            drawer.FavoritesList.Children.Clear();
+            foreach (var id in s.RailFavorites.Where(Known))
+                drawer.FavoritesList.Children.Add(BuildRailChip(dash, entries[id]));
+            drawer.FavoritesEmpty.IsVisible = drawer.FavoritesList.Children.Count == 0;
+            drawer.RecentList.Children.Clear();
+            foreach (var id in FavoritesRailRule.RecentForDisplay(s.RailRecent, s.RailFavorites, Known))
+                drawer.RecentList.Children.Add(BuildRailChip(dash, entries[id]));
+            drawer.RecentEmpty.IsVisible = drawer.RecentList.Children.Count == 0;
         }
 
         private Button BuildRailChip(Tabs.SettingsTabView dash, SettingsPaletteEntry entry)
@@ -313,6 +335,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // favorite slides it out for a moment.
             if (!wasPinned)
             {
+                // WPF MainWindow.FavoritesRail.cs:474: off Home show the new pin until navigation.
+                if (PageFavorites?.IsVisible == true) PageFavorites.SetOpen(true, true);
                 try { SettingsPage?.PeekFavoritesDrawer(id); }
                 catch (Exception ex) { Log.Debug("PeekFavoritesDrawer({Id}): {E}", id, ex.Message); }
             }
