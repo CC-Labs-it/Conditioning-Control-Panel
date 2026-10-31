@@ -20,6 +20,89 @@ public sealed class ChaosEffectBannerOverlayTests
         public override DateTimeOffset GetUtcNow() => Now;
     }
 
+    // WPF ChaosModeService.cs:2722-2734, 3017-3027, 3176-3177.
+    [Theory]
+    [InlineData(1, false, 3)]
+    [InlineData(2, false, 7)]
+    [InlineData(3, true, 7)]
+    public async Task Dvd_toy_launches_labels_tracks_retirement_and_cleans_up(int level, bool maxed, double power)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var levels = ChaosMeta.State.LifetimeBoonLevels;
+            bool hadLevel = levels.TryGetValue("porn_dvd", out int oldLevel);
+            levels["porn_dvd"] = level;
+            var oldCan = ChaosDvdOverlay.CanOverlay;
+            var oldPrepare = ChaosDvdOverlay.PrepareWindow;
+            ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
+            ChaosDvdOverlay.CanOverlay = () => true;
+            ChaosDvdOverlay.PrepareWindow = (_, _) => true;
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.BeginRun();
+                ChaosRunHost.StopTimerForTests();
+                var state = Assert.IsType<ChaosRunState>(ChaosRunHost.State);
+                state.ActiveToys.Clear();
+                var toy = new ChaosToyState { Id = "porn_dvd", CooldownSec = 30, ChargesLeft = -1 };
+                state.ActiveToys.Add(toy);
+                state.ToyPower[toy.Id] = power;
+                state.DvdSplitBounces = 2;
+                if (maxed) state.MaxedBoons.Add(toy.Id);
+                ChaosRunHost.ToggleManualPause();
+                ChaosRunHost.UseToyById(toy.Id);
+                Assert.False(ChaosDvdOverlay.AnyToyActive);
+                Assert.Empty(ChaosEffectBannerOverlay.Active!.Strip.Row);
+                ChaosRunHost.ToggleManualPause();
+                ChaosRunHost.UseToyById(toy.Id);
+                Assert.Equal(maxed ? 2 : 1, ChaosDvdOverlay.Flock.Active.Count);
+                Assert.All(ChaosDvdOverlay.Flock.Active, l =>
+                {
+                    Assert.Equal(Math.Max(5, power), l.RemainingSec);
+                    Assert.Equal(level == 1 ? 0.8 : level == 2 ? 0.9 : 1.0, l.FontScale);
+                    Assert.Equal(ChaosDvdFlock.BaseSpeed * (level == 1 ? 0.7 : level == 2 ? 0.85 : 1.0),
+                        Math.Sqrt(l.Vx * l.Vx + l.Vy * l.Vy), 5);
+                    Assert.Equal(2, l.SplitBouncesLeft);
+                });
+                var banner = Assert.Single(ChaosEffectBannerOverlay.Active!.Strip.Row);
+                Assert.Equal("dvd", banner.Id);
+                Assert.Equal("Porn DVD", banner.Text);
+                Assert.Equal("dvd", banner.ArtKey);
+                Assert.True(banner.IsLive);
+                ChaosRunHost.UseToyById(toy.Id); // cooldown cannot stack logos or labels
+                Assert.Equal(maxed ? 2 : 1, ChaosDvdOverlay.Flock.Active.Count);
+                ChaosRunHost.Tick();
+                Assert.True(toy.IsEffectActive);
+                for (int i = 0; i < 100; i++) ChaosDvdOverlay.Advance(0.1);
+                ChaosRunHost.Tick();
+                Assert.False(toy.IsEffectActive);
+                Assert.False(banner.IsLive);
+                toy.CooldownRemainingSec = 0;
+                ChaosRunHost.UseToyById(toy.Id);
+                Assert.True(ChaosDvdOverlay.AnyToyActive);
+                ChaosRunHost.ForceShutdown();
+                Assert.False(ChaosDvdOverlay.AnyActive);
+                Assert.Null(ChaosEffectBannerOverlay.Active);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosDvdOverlay.CloseActive();
+                ChaosEffectBannerOverlay.CloseActive();
+                ChaosEffectBannerOverlay.SkipPlatformChecksForTests = false;
+                if (hadLevel) levels["porn_dvd"] = oldLevel;
+                else levels.Remove("porn_dvd");
+                ChaosDvdOverlay.CanOverlay = oldCan;
+                ChaosDvdOverlay.PrepareWindow = oldPrepare;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
     public async Task A_run_births_the_strip_shows_and_fades_labels_and_teardown_closes_it()
     {
