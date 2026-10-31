@@ -36,20 +36,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
                 CompanionPageHost.Adopt(workshop.Parts.Community, CommunityHost);
         }
 
-        private async void OpenStudio_Click(object? sender, RoutedEventArgs e)
-        {
-            if (TopLevel.GetTopLevel(this) is Window owner) await Dialogs.PersonalityStudio.Show(owner);
-            _presets?.ViewModel.Sync();
-        }
+        private async void OpenStudio_Click(object? sender, RoutedEventArgs e) => await OpenPersonalityEditorAsync(studio: true);
 
         /// <summary>WPF OpenPromptEditor_Click: BtnCustomizeCompanion_Click, then re-sync the presets.</summary>
-        private async void OpenPromptEditor_Click(object? sender, RoutedEventArgs e)
+        private async void OpenPromptEditor_Click(object? sender, RoutedEventArgs e) => await OpenPersonalityEditorAsync(studio: false);
+
+        private async System.Threading.Tasks.Task OpenPersonalityEditorAsync(bool studio)
         {
             try
             {
-                if (TopLevel.GetTopLevel(this) is MainShellWindow shell) await shell.OpenCompanionPromptEditorAsync();
+                if (TopLevel.GetTopLevel(this) is MainShellWindow shell)
+                    await (studio ? Dialogs.PersonalityStudio.Show(shell) : shell.OpenCompanionPromptEditorAsync());
             }
-            catch (Exception ex) { Log.Warning(ex, "Companion > Personality: prompt editor failed"); }
+            catch (Exception ex) { Log.Warning(ex, "Companion > Personality: editor failed"); }
             _presets?.ViewModel.Sync();
         }
     }

@@ -24,14 +24,13 @@ namespace CCP.Avalonia.Tests;
 public class TakeoverCommentHeadTests
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public Task HeadRoutesAndDisplaysOnlyUsableDistinctReplies(bool useBrain) => AvaloniaTestDispatcher.RunAsync(async () =>
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public Task HeadRoutesAndDisplaysOnlyUsableDistinctReplies(bool useBrain, bool panic) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings;
+        using var state = new TestSettingsScope(); var settings = state.Settings;
         var s = settings.Current;
         s.AiChatEnabled = s.AvatarEnabled = s.AvatarMuted = true;
         s.AutonomyConsentGiven = true;
@@ -70,12 +69,14 @@ public class TakeoverCommentHeadTests
             await Reply(new("offline", false, null));
             Assert.Equal(useBrain ? "first line" : "offline", text.Text);
             Assert.Equal(useBrain, tube.FindControl<Border>("AiBadge")!.IsVisible);
+            await Reply(new("first line", true, null));
             ai.Pending = new TaskCompletionSource<AiReplyResult>();
             var pending = shell.MakeAutonomyCommentAsync(); Assert.False(pending.IsCompleted);
-            shell.Autonomy.Stop(); ai.Pending.SetResult(new("completed after stop", true, null));
+            if (panic) shell.StopAutonomyForPanic(); else shell.Autonomy.Stop();
+            ai.Pending.SetResult(new("completed after stop", true, null));
             await pending; Dispatcher.UIThread.RunJobs();
-            // WPF AutonomyService.ShowAICommentLine has no enabled gate on an already requested reply.
-            Assert.Equal("completed after stop", text.Text);
+            // Panic and Stop must suppress a reply that was already in flight.
+            Assert.Equal("first line", text.Text);
         }
         finally { shell.RequestExit(); AvApp.Brain = null; AvApp.Ai = null; }
     });
@@ -101,4 +102,20 @@ public class TakeoverCommentHeadTests
         public Task<string?> GetVideoDoneReaction(string title, string? promptTemplate = null) => throw new NotSupportedException();
         public void Dispose() { }
     }
+}
+
+internal sealed class TestSettingsScope : IDisposable
+{
+    private readonly Func<SettingsService?>? _settings;
+    private readonly Func<bool>? _premium;
+    public SettingsService Settings { get; }
+    public TestSettingsScope()
+    {
+        _settings = CoreSettings.ServiceProvider; _premium = CoreEntitlement.HasPremiumProvider;
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        Settings = new SettingsService(); CoreSettings.ServiceProvider = () => Settings;
+    }
+    public void Dispose() { CoreSettings.ServiceProvider = _settings; CoreEntitlement.HasPremiumProvider = _premium; }
 }

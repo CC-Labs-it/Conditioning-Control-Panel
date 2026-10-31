@@ -220,7 +220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private string? _lastAICommentLine;
         private void ShowAutonomyComment(string? text, bool aiGenerated)
         {
-            if (string.IsNullOrWhiteSpace(text)
+            if (!Autonomy.IsEnabled || string.IsNullOrWhiteSpace(text)
                 || TakeoverComment.IsRepeat(_lastAICommentLine, text)) return;
             _lastAICommentLine = text;
             _avatarTubeWindow?.GigglePriority(text, false, aiGenerated: aiGenerated);

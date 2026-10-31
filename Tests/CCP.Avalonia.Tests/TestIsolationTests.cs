@@ -38,6 +38,7 @@ public class TestIsolationTests
 
     [Theory]
     [InlineData(typeof(CoreSettings), nameof(CoreSettings.ServiceProvider))]
+    [InlineData(typeof(CoreEntitlement), nameof(CoreEntitlement.HasPremiumProvider))]
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
     [InlineData(typeof(CoreAccount), nameof(CoreAccount.UnifiedUserId))]
     [InlineData(typeof(CoreMods), nameof(CoreMods.MakeModAwareProvider))]
@@ -57,20 +58,24 @@ public class TestIsolationTests
         var before = hadFile ? File.ReadAllText(settingsFile) : null;
         var user = CoreAccount.UnifiedUserId;
         var provider = CoreSettings.ServiceProvider;
+        var premium = CoreEntitlement.HasPremiumProvider;
         var chat = CoreSettings.Current.AiChatEnabled;
 
         var snapshot = ProcessStateSnapshot.Take();
         CoreAccount.UnifiedUserId = "leaked-user";
         CoreSettings.Current.AiChatEnabled = !chat;
         CoreSettings.ServiceProvider = () => null;
+        CoreEntitlement.HasPremiumProvider = () => true;
         File.WriteAllText(settingsFile, "{\"leaked\":true}");
         File.WriteAllText(stray, "{}");
         var leaked = new ConditioningControlPanel.Services.SettingsService();
         leaked.Save();   // armed, as a test that ends inside the debounce leaves it
         snapshot.Restore();
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() => { using var state = new TestSettingsScope(); CoreEntitlement.HasPremiumProvider = () => true; });
 
         Assert.Equal(user, CoreAccount.UnifiedUserId);
         Assert.Same(provider, CoreSettings.ServiceProvider);
+        Assert.Same(premium, CoreEntitlement.HasPremiumProvider);
         Assert.Equal(chat, CoreSettings.Current.AiChatEnabled);
         Assert.Equal(hadFile, File.Exists(settingsFile));
         if (hadFile) Assert.Equal(before, File.ReadAllText(settingsFile));

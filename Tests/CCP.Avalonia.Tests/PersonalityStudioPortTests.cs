@@ -1,20 +1,14 @@
-using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
-using Avalonia.Threading;
-using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using Avalonia.Media;
 using CCP.Avalonia.Testing;
-using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Models;
-using ConditioningControlPanel.Services;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -39,12 +33,7 @@ public class PersonalityStudioPortTests
     [Fact]
     public Task SaveCopyAndConfirmedDeleteWithoutLayout() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
-                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var settings = new SettingsService();
-        CoreSettings.ServiceProvider = () => settings;
+        using var state = new TestSettingsScope(); var settings = state.Settings;
         var mine = new PersonalityPreset { Id = "studio-data", Name = "Mine", PromptSettings = new CompanionPromptSettings { Personality = "own voice" } };
         settings.Current.UserPersonalityPresets.Add(mine);
         settings.Current.ActivePersonalityPresetId = mine.Id;
@@ -86,12 +75,7 @@ public class PersonalityStudioPortTests
     [Fact]
     public Task OverrideSavesACopyAndDeleteWaitsForConfirmation() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
-                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var settings = new SettingsService();
-        CoreSettings.ServiceProvider = () => settings;
+        using var state = new TestSettingsScope(); var settings = state.Settings;
         var mine = new PersonalityPreset { Id = "studio-owned", Name = "Mine", PromptSettings = new CompanionPromptSettings { Personality = "own voice" } };
         settings.Current.UserPersonalityPresets.Add(mine);
         settings.Current.ActivePersonalityPresetId = mine.Id;
@@ -130,12 +114,7 @@ public class PersonalityStudioPortTests
     [Fact]
     public Task OwnedSaveUpdatesWithoutDuplicatesAndNameAndFooterFit() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
-                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var settings = new SettingsService();
-        CoreSettings.ServiceProvider = () => settings;
+        using var state = new TestSettingsScope(); var settings = state.Settings;
         var mine = new PersonalityPreset { Id = "studio-owned", Name = "Before", PromptSettings = new CompanionPromptSettings { Personality = "voice" } };
         settings.Current.UserPersonalityPresets.Add(mine);
         settings.Current.ActivePersonalityPresetId = mine.Id;
