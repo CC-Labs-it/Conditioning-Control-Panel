@@ -138,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var st = OnlineMeterHead.Now();
                 if (!st.Show || !st.Spent || Named<Border>("OnlineMeterPill") is not { } pill) return;
                 var holder = new Border { Padding = new Thickness(0, 6, 0, 0), Background = Brushes.Transparent, Child = BuildOnlineMeterHoverCard(st) };
+                holder.PointerPressed += (_, e) => e.Handled = true;
                 holder.PointerEntered += (_, _) => _onlineMeterHoverLeave?.Stop();
                 holder.PointerExited += (_, _) => _onlineMeterHoverLeave?.Start();
                 if (_onlineMeterHover == null)

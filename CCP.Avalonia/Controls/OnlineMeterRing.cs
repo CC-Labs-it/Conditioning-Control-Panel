@@ -14,12 +14,7 @@ public sealed class OnlineMeterRing : Control
     public static readonly StyledProperty<int> PercentProperty = AvaloniaProperty.Register<OnlineMeterRing, int>(nameof(Percent));
     internal static readonly StyledProperty<OnlineMeterTone> ToneProperty = AvaloniaProperty.Register<OnlineMeterRing, OnlineMeterTone>(nameof(Tone));
     static OnlineMeterRing() => AffectsRender<OnlineMeterRing>(PercentProperty, ToneProperty);
-    public OnlineMeterRing()
-    {
-        Width = 18;
-        Height = 18;
-        IsHitTestVisible = false;
-    }
+    public OnlineMeterRing() { Width = 18; Height = 18; IsHitTestVisible = false; }
     public int Percent { get => GetValue(PercentProperty); set => SetValue(PercentProperty, value); }
     internal OnlineMeterTone Tone { get => GetValue(ToneProperty); set => SetValue(ToneProperty, value); }
     internal static Color ColorFor(OnlineMeterTone tone) => tone == OnlineMeterTone.Amber ? Amber : tone == OnlineMeterTone.Spent ? Grey : Pink;

@@ -71,6 +71,10 @@ public sealed class OnlineMeterTests
         shell.OpenOnlineMeterHover();
         Assert.True(shell.OnlineMeterHover!.IsOpen);
         Assert.Contains(shell.OnlineMeterHover.Child!.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("online_see_plans"));
+        var body = shell.OnlineMeterHover.Child!.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == Loc.Get("online_hover_body"));
+        var press = new PointerPressedEventArgs(body, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), shell, new Point(400, 400), 0, new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 2);
+        body.RaiseEvent(press);
+        Assert.True(press.Handled);
         shell.ShowTab("dashboard");
         Dispatcher.UIThread.RunJobs();
         pill.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
