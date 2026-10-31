@@ -37,7 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// are paused by the Core scheduler.
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
-    /// attention input, no-activate z-order, and the remote-media offer after the "no videos" dialog.
+    /// attention input and no-activate z-order.
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
@@ -100,6 +100,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The global panic listener can stop a video right now (LockCardWindow #875's
         /// PanicHookIsInstalled). Tests swap it.</summary>
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
+
+        /// <summary>WPF VideoService.PrimaryPlaybackTimeMsChanged (:677): the playhead the funscript
+        /// follows (FunScriptService.SubscribePlaybackTime, seeded in App). Raised on LibVLC's thread.</summary>
+        internal event Action<long>? PlaybackTimeMsChanged;
+
+        internal void RaisePlaybackTime(long ms)
+        {
+            try { PlaybackTimeMsChanged?.Invoke(ms); }
+            catch (Exception ex) { Log.Debug("PlaybackTimeMsChanged handler error: {Error}", ex.Message); }
+        }
+
+        /// <summary>The FunScriptService.SubscribePlaybackTime seam (WPF App.xaml.cs:3218-3223).</summary>
+        internal static Action? SubscribePlaybackTime(Action<long> handler)
+        {
+            Instance.PlaybackTimeMsChanged += handler;
+            return () => Instance.PlaybackTimeMsChanged -= handler;
+        }
 
         internal IReadOnlyList<Window> Windows => _surfaces.Select(s => s.Window).ToList();
         internal IReadOnlyList<Surface> Surfaces => _surfaces;
@@ -205,7 +222,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
-            _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
+            _player.TimeChanged += (_, e) =>
+            {
+                Interlocked.Exchange(ref _watchedMs, e.Time);
+                RaisePlaybackTime(e.Time);
+            };
             _player.EndReached += (_, _) =>
             {
                 var len = _player?.Length ?? 0;
@@ -859,13 +880,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }, TimeSpan.FromMilliseconds(ms));
         });
 
+        // Tests supply an owner without replacing the headless application's lifetime.
+        internal static Func<Window?> NoVideosOwner = () =>
+            (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        internal System.Threading.Tasks.Task NoVideosRun { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
+
         /// <summary>WPF's guidance dialog when the library is empty (once per launch).</summary>
-        private void ShowNoVideos() => Dispatcher.UIThread.Post(() =>
+        private void ShowNoVideos()
         {
-            var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-            if (owner == null) return;
-            _ = Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(Scheduler));
-        });
+            // WPF VideoService.cs:2448 reads the funnel at trigger time; a refill before the post runs must not flip it.
+            var s = Scheduler;
+            var filterEmptied = NoVideosReason.LengthFilterEmptied(s.LastFunnelEnabled, s.LastFunnelDuration);
+            var message = NoVideosMessage(s);
+            Dispatcher.UIThread.Post(() =>
+            {
+                var owner = NoVideosOwner();
+                if (owner == null) return;
+                NoVideosRun = ShowNoVideosAsync(owner, message, filterEmptied);
+            });
+        }
+
+        /// <summary>WPF VideoService.cs:2463-2469: the guidance box, then - AFTER it closes, and only when
+        /// the length filter did not cause the empty library - the remote-media offer.</summary>
+        internal static async System.Threading.Tasks.Task ShowNoVideosAsync(Window owner, string message, bool filterEmptied)
+        {
+            try
+            {
+                await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), message);
+                if (!filterEmptied) RemoteMediaOffer.Offer("videos", owner);
+            }
+            catch (Exception ex) { Log.Debug("VideoService: no-videos dialog failed: {Error}", ex.Message); }
+        }
 
         /// <summary>WPF TriggerVideo's guidance text: #1352 names the length filter when it emptied a
         /// library that has files, else the add-files hint.</summary>
