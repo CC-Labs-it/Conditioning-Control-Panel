@@ -365,12 +365,15 @@ namespace ConditioningControlPanel.Avalonia
         /// seam): register the installed packs under &lt;assets&gt;/.packs and the network half beside them.
         /// The proxy follows the friends rule: a sandbox without a loopback override sends nothing.
         /// </summary>
-        internal static void StartContentPacks(ContentPackStore store, string? userDataDir, string? overrideUrl)
+        internal static void StartContentPacks(ContentPackStore store, string? userDataDir, string? overrideUrl, System.Net.Http.HttpClient? http = null)
         {
             var url = Platform.FriendsHead.BaseUrl(userDataDir, overrideUrl);
             ConditioningControlPanel.Services.Packs.ContentPackService.DefaultBaseUrl = () => url;
             ContentPackStore.Current = store;
-            ConditioningControlPanel.Services.Packs.ContentPackService.Current = new ConditioningControlPanel.Services.Packs.ContentPackService(store);
+            ConditioningControlPanel.Services.Packs.ContentPackService.Current = new ConditioningControlPanel.Services.Packs.ContentPackService(store, http: http,
+                // WPF ContentPackService.cs:831-863: read live provider state, including logout.
+                patreonToken: () => Platform.AccountSeed.Patreon?.IsAuthenticated == true ? Platform.AccountSeed.Patreon.GetAccessToken() : null,
+                discordToken: () => Platform.AccountSeed.Discord?.IsAuthenticated == true ? Platform.AccountSeed.Discord.GetAccessToken() : null);
             CoreProgram.ActivePackVideoCountProvider = () => ContentPackStore.Current?.GetAllActivePackVideos().Count ?? 0;
         }
 

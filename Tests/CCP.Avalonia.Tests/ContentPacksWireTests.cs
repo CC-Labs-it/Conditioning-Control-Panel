@@ -120,6 +120,48 @@ public sealed class ContentPacksWireTests : IDisposable
         Assert.NotEqual(Expected(1, 1), Expected(1, 0));
     }
 
+    [Fact]
+    public async System.Threading.Tasks.Task Startup_StatusUsesLiveProviderTokensAndHonorsLogout()
+    {
+        // WPF ContentPackService.cs:831-884: Patreon priority, then Discord, never stale auth.
+        var secrets = new System.Collections.Generic.Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var value) ? value : null;
+        CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+        Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed());
+        var handler = new StatusHandler();
+        var store = StoreWithPack(("a.png", "image"));
+        AvApp.StartContentPacks(store, _root, "http://127.0.0.1:9", new System.Net.Http.HttpClient(handler));
+        var svc = PackService.Current!;
+        Assert.Null(await svc.GetFullPackStatusAsync());
+        Assert.Empty(handler.Seen);
+
+        secrets["discord_auth"] = JsonConvert.SerializeObject(new DiscordTokenData
+        { AccessToken = "discord-test", RefreshToken = "r", ExpiresAt = DateTime.UtcNow.AddDays(1) });
+        Assert.Equal(7, (await svc.GetFullPackStatusAsync())!.DailyLimit);
+        Assert.Equal(("/discord/pack/status", "Bearer discord-test"), handler.Seen[0]);
+
+        secrets["patreon_auth"] = JsonConvert.SerializeObject(new PatreonTokenData
+        { AccessToken = "patreon-test", RefreshToken = "r", ExpiresAt = DateTime.UtcNow.AddDays(1) });
+        Assert.Equal(7, (await svc.GetFullPackStatusAsync())!.DailyLimit);
+        Assert.Equal(("/pack/status", "Bearer patreon-test"), handler.Seen[1]);
+        Assert.Equal(2, handler.Seen.Count);
+        secrets.Clear();
+        Assert.Null(await svc.GetFullPackStatusAsync());
+        Assert.Equal(2, handler.Seen.Count);
+    }
+
+    private sealed class StatusHandler : System.Net.Http.HttpMessageHandler
+    {
+        internal readonly System.Collections.Generic.List<(string, string?)> Seen = new();
+        protected override System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
+        {
+            Seen.Add((request.RequestUri!.AbsolutePath, request.Headers.Authorization?.ToString()));
+            return System.Threading.Tasks.Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            { Content = new System.Net.Http.StringContent("{\"dailyLimit\":7}") });
+        }
+    }
+
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
 }
