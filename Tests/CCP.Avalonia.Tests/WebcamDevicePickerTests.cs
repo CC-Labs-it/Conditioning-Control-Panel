@@ -18,6 +18,43 @@ namespace CCP.Avalonia.Tests;
 public sealed class WebcamDevicePickerTests
 {
     [Fact]
+    public async Task PickerAndCaptureShareWindowsDeviceIndices()
+    {
+        var provider = CameraList.Provider;
+        int saved = CoreSettings.Current.WebcamDeviceIndex;
+        try
+        {
+            CameraList.Provider = () => new[] { (0, "DirectShow A"), (1, "DirectShow B") };
+            CoreSettings.Current.WebcamDeviceIndex = 1;
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var section = new DevicesSettingsSection();
+                var window = new Window { Content = section };
+                window.Show();
+                var picker = section.FindControl<ComboBox>("CmbWebcamDevice")!;
+                Assert.Equal("[1] DirectShow B", ((ComboBoxItem)picker.SelectedItem!).Content);
+                Assert.Equal(1, OpenCvFrameSource.ResolveSavedIndex());
+                picker.SelectedIndex = 0;
+                Assert.Equal(0, OpenCvFrameSource.ResolveSavedIndex());
+                CoreSettings.Current.WebcamDeviceIndex = 9;
+                Assert.Equal(0, OpenCvFrameSource.ResolveSavedIndex());
+                window.Close();
+                return Task.CompletedTask;
+            });
+        }
+        finally
+        {
+            CameraList.Provider = provider;
+            CoreSettings.Current.WebcamDeviceIndex = saved;
+            CoreSettings.SaveImmediate();
+        }
+    }
+
+    [Fact]
     public async Task PickerListsCaptureNodesAndSavesThePick()
     {
         var root = Directory.CreateTempSubdirectory("ccp-v4l2-").FullName;
