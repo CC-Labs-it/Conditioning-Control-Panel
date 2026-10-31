@@ -52,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             card.Opacity = 0;
             card.ZIndex = 1200; // WPF: above hosted image flashes
             lease.Canvas.Children.Add(card);
+            lease.Raise();
             var retired = false;
             Action retire = () =>
             {

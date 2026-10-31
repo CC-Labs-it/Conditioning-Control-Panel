@@ -30,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly Random Rng = new();
         private static Action? _stopWhisper;
         private static int _deferredResetPending;
+        private static int _resetGen;
         private static int _gen;   // bumped by StopAll: anything scheduled before it is stale
 
         /// <summary>WPF <c>_audioPath</c>: BaseDirectory/Resources/sub_audio.</summary>
@@ -93,12 +94,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
         }
 
-        internal static void DeferredReset()
+        internal static void DeferredReset(bool completed = true)
         {
-            if (Interlocked.Exchange(ref _deferredResetPending, 0) == 1) ScheduleReset(true);
+            var resetGen = Volatile.Read(ref _resetGen);
+            if (!completed) Interlocked.Increment(ref _resetGen);
+            if (Interlocked.Exchange(ref _deferredResetPending, 0) == 1 && completed) ScheduleReset(true, resetGen);
         }
 
-        private static void ScheduleReset(bool deferred = false)
+        private static void ScheduleReset(bool deferred = false, int resetGen = 0)
         {
             if (!SubliminalWhisper.ResetFollows(Roll()))
             {
@@ -109,6 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             lock (Rng) delay = deferred ? SubliminalWhisper.DeferredResetDelayMs(Rng) : SubliminalWhisper.ResetDelayMs(Rng);
             Later(delay, () =>
             {
+                if (deferred && Volatile.Read(ref _resetGen) != resetGen) return;
                 var text = App.Mods?.GetResetTriggerText() ?? "Reset";
                 if (!Whisper(text)) HapticThenDraw(text);
                 Log.Debug("Bambi Reset triggered after Bambi Freeze");

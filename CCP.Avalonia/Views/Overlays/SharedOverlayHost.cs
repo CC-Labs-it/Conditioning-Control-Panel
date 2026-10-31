@@ -15,11 +15,14 @@ internal static class SharedOverlayHost
     internal static Func<Window, PixelRect, bool> Configure = (w, bounds) =>
         X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, bounds);
 
+    internal static Func<Window, bool> Raise = X11Overlay.Raise; // WPF SubliminalService.cs:829
+
     internal sealed class Lease : IDisposable
     {
         private Window? _window;
         internal Grid Canvas { get; }
         internal Lease(Window window, Grid canvas) => (_window, Canvas) = (window, canvas);
+        internal void Raise() { if (_window != null) SharedOverlayHost.Raise(_window); }
         public void Dispose() { var w = _window; _window = null; w?.Close(); }
     }
 

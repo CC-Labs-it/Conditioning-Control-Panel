@@ -85,6 +85,16 @@ public sealed class SubliminalWhisperShowTests
             reset.Then();
             Assert.Equal("play reset.mp3 whisper", run.Log[^1]);
             SubliminalWhisperShow.Freeze(true);
+            SubliminalWhisperShow.DeferredReset(false);
+            run.Timers.Clear();
+            SubliminalWhisperShow.DeferredReset();
+            Assert.Empty(run.Timers);
+            SubliminalWhisperShow.Freeze(true);
+            SubliminalWhisperShow.DeferredReset();
+            var cancelled = run.Timers.FindLast(t => t.Ms >= 1000);
+            SubliminalWhisperShow.DeferredReset(false);
+            var count = run.Log.Count; cancelled.Then(); Assert.Equal(count, run.Log.Count);
+            SubliminalWhisperShow.Freeze(true);
             SubliminalWhisperShow.StopAll();
             run.Timers.Clear();
             SubliminalWhisperShow.DeferredReset();

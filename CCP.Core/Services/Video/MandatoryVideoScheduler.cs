@@ -367,6 +367,7 @@ namespace ConditioningControlPanel.Services
         public void End()
         {
             if (!Finish()) return;
+            CoreSubliminal.DeferredResetProvider?.Invoke(true); // WPF VideoService.cs:7937, normal Cleanup only
             AfterEnd();
         }
 
@@ -417,6 +418,8 @@ namespace ConditioningControlPanel.Services
         public void ForceCleanup()
         {
             _retryGeneration++;
+            try { CoreSubliminal.DeferredResetProvider?.Invoke(false); } // WPF ForceCleanup :2638 never plays Reset
+            catch (Exception ex) { Log.Warning(ex, "VideoService: Reset cancellation failed"); }
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
             if (!Finish()) return;
@@ -434,7 +437,6 @@ namespace ConditioningControlPanel.Services
             double watched = 0;
             try { watched = _host.CloseAll(); }
             catch (Exception ex) { Log.Warning(ex, "VideoService: close failed"); }
-            CoreSubliminal.DeferredResetProvider?.Invoke();
             if (watched >= 1.0) CoreProgression.TrackVideoWatched(watched);
             // WPF CloseAll (VideoService.cs:7916): every teardown path stops the vibe and the funscript.
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();

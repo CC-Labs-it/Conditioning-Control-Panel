@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
@@ -67,18 +68,24 @@ public sealed class SubliminalSolidHostTests
         var configure = SharedOverlayHost.Configure;
         Window? stage = null;
         var bounds = new PixelRect(0, 0, 300, 200);
+        var raise = SharedOverlayHost.Raise; var raised = new List<Window>();
+        SharedOverlayHost.Raise = w => { raised.Add(w); return true; };
         SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; return true; };
         try
         {
             Assert.True(SubliminalOverlay.ShowHosted(bounds, "TEST", 0.8, TimeSpan.FromSeconds(1)));
             var canvas = Assert.IsType<Grid>(stage!.Content);
             Assert.Single(canvas.Children);
+            var first = stage; var other = new Window(); other.Show(); raised.Clear();
+            Assert.True(SubliminalOverlay.ShowHosted(bounds, "AGAIN", 0.8, TimeSpan.FromSeconds(1)));
+            Assert.Same(first, Assert.Single(raised));
+            other.Close();
             SubliminalOverlay.CloseAll(); // existing engine/panic surface owns the host lease
             Assert.Empty(canvas.Children);
             Assert.False(stage.IsVisible);
             SharedOverlayHost.Configure = (_, _) => false;
             Assert.False(SubliminalOverlay.ShowHosted(bounds, "TEST", 0.8, TimeSpan.FromSeconds(1)));
         }
-        finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; }
+        finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; SharedOverlayHost.Raise = raise; }
     });
 }

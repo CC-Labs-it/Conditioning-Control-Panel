@@ -26,9 +26,11 @@ public sealed class MandatoryVideoSchedulerTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Video_freeze_has_800ms_head_start_and_reset_on_cleanup(bool attention)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void Video_freeze_has_800ms_head_start_and_reset_on_cleanup(bool attention, bool forced)
     {
         var freeze = CoreSubliminal.VideoFreezeProvider;
         var reset = CoreSubliminal.DeferredResetProvider;
@@ -38,7 +40,7 @@ public sealed class MandatoryVideoSchedulerTests
         var host = new Host();
         var video = new MandatoryVideoScheduler(host, clock, () => Clips);
         CoreSubliminal.VideoFreezeProvider = () => calls.Add("freeze");
-        CoreSubliminal.DeferredResetProvider = () => calls.Add("reset");
+        CoreSubliminal.DeferredResetProvider = completed => calls.Add(completed ? "reset" : "cancel");
         CoreSettings.Current.AttentionChecksEnabled = attention;
         try
         {
@@ -48,10 +50,10 @@ public sealed class MandatoryVideoSchedulerTests
             Assert.Equal(attention ? 1 : 0, host.Shown.Count);
             clock.Advance(TimeSpan.FromMilliseconds(800));
             Assert.Single(host.Shown);
+            if (forced) video.ForceCleanup(); else video.End();
+            Assert.Equal(forced ? "cancel" : "reset", calls[^1]);
             video.End();
-            Assert.Equal("reset", calls[^1]);
-            video.End();
-            Assert.Single(calls, x => x == "reset");
+            Assert.Equal(forced ? 0 : 1, calls.Count(x => x == "reset"));
         }
         finally
         {
