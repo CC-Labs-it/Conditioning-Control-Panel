@@ -14,7 +14,7 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>Keyboard/audio slice of WPF KeywordTriggerService. OCR and the other actions remain a follow-up.</summary>
+/// <summary>Keyboard/audio and exact subliminal slice of WPF KeywordTriggerService. OCR and other actions remain a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -173,6 +173,30 @@ internal sealed class KeywordAudioRuntime
                 PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
         }
         if (audio != null) Play(audio);
+        FireExactSubliminal(fired);
+    }
+
+    private void FireExactSubliminal(System.Collections.Generic.List<KeywordTrigger> fired)
+    {
+        // WPF KeywordTriggerService.cs:1257-1313,1713,1774-1782.
+        // A merged response borrows the first keyword and deduplicates each visual effect.
+        var exact = fired.SelectMany(t => t.Actions ?? new()).OfType<VisualEffectAction>()
+            .Any(a => a.Enabled && a.Effect == KeywordVisualEffect.ExactSubliminal);
+        if (fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
+            exact = fired[0].VisualEffect == KeywordVisualEffect.ExactSubliminal;
+        if (!exact || ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+        try
+        {
+            // WPF SubliminalService.cs:311-324: custom one-shot has no linked whisper.
+            var text = fired[0].Keyword.ToUpperInvariant().Trim();
+            if (text.Length > 200) text = text.Substring(0, 200);
+            text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]*>", "");
+            Views.Overlays.SubliminalWhisperShow.HapticThenDraw(text);
+            CoreProgression.AddXP(10, "Subliminal");
+            // Mandatory echo protection, independent of the optional loop-protection toggle.
+            _cooldowns.Mute(fired[0].Keyword, 3000, Now().ToUniversalTime());
+        }
+        catch (Exception ex) { Log.Debug(ex, "Keyword exact subliminal failed"); }
     }
 
     // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic
