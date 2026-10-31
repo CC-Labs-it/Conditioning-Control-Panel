@@ -561,11 +561,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Label = entry.Label;
             Context = entry.Context;
             var was = SettingsPaletteIndex.WasHint(entry, query);
-            WasHint = pinned ? "  ★" : was == null ? string.Empty : "  " + Loc.GetF("nav_was_hint", was);
+            IsPinned = pinned;
+            WasHint = pinned || was == null ? string.Empty : "  " + Loc.GetF("nav_was_hint", was);
         }
 
         /// <summary>The retired name the row was found under ("(was Premium)"), or empty.</summary>
         public string WasHint { get; }
+
+        /// <summary>The caption carries a filled star through the standard icon control.</summary>
+        public bool IsPinned { get; }
 
         /// <summary>Caption, then its breadcrumb: what a screen reader announces for the row.</summary>
         public string AutomationName => string.IsNullOrEmpty(Context) ? Label : Label + ", " + Context;
