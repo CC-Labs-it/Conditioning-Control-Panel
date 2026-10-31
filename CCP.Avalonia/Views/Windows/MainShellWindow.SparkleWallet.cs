@@ -68,9 +68,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             else Dispatcher.UIThread.Post(Present);
         }
 
-        /// <summary>WPF BtnStartBackRoom_Click. The Back Room is not on this head yet, so this takes the
-        /// billboard's Back Room door (sign-in first, else Play, where its door will live).</summary>
+        /// <summary>WPF MainWindow.SparkleWallet.cs:85 -> MainWindow.Lab.cs:306.</summary>
         private void VisitFromSparkleWallet(object? sender, EventArgs e) => OpenBillboardBackRoom();
+
+        internal void RequestBackRoomSignIn() => _ = OpenUnifiedLoginDialog();
 
         private void ShutdownSparkleWallet()
         {

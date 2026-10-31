@@ -40,6 +40,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF 7.1.5's game hosts, StartUrl for StartUrl.</summary>
         internal static readonly IReadOnlyDictionary<string, Game> Games = new Dictionary<string, Game>(StringComparer.OrdinalIgnoreCase)
         {
+            // WPF BackRoomHostService.cs:26,312-318: free room with one account gate.
+            [BackRoomId] = new(BackRoomId, "play_backroom_title", "backroom/index.html", BackRoomGate),
             // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
             // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
             ["breakoutdemo"] = new("breakoutdemo", "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
@@ -71,7 +73,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
-        internal static GameWindow? Launch(string id)
+        internal static GameWindow? Launch(string id) => Launch(id, null);
+
+        internal static GameWindow? Launch(string id, Window? roomOwner)
         {
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
@@ -82,7 +86,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             var window = new GameWindow(spec);
             window.Load(Server());
-            window.Show();
+            // WPF BackRoomHostService.cs:369-370: owned by and centred on the panel.
+            if (spec.Id == BackRoomId && (roomOwner ?? Windows.MainShellWindow.Current) is { } owner)
+            {
+                window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+                window.Show(owner);
+            }
+            else window.Show();
             return window;
         }
 
@@ -104,6 +114,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
             Closing += (_, _) => _closing = true;
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
+            if (spec.Id == BackRoomId)
+            {
+                Opened += (_, _) => OpenBackRoom();
+                Closed += (_, _) => DisposeBackRoom();
+                Activated += (_, _) => ResumeBackRoomAfterPanic();
+                PropertyChanged += (_, e) =>
+                {
+                    bool min = WindowState == WindowState.Minimized; // WPF BackRoomHostService.cs:572-576.
+                    if (e.Property == WindowStateProperty && min != _roomMinimised) { _roomMinimised = min; _room?.Suspend(min, "minimise"); }
+                };
+            }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
@@ -141,6 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            if (Spec.Id == BackRoomId) { HandleBackRoom(o); return; }
             if (Spec.Id == "loom") { HandleLoom(o); return; } // only the Loom bridge subset
             if (Spec.Id == FypId && HandleFyp(o)) return;
             if (Spec.Id == JustDropId) { HandleJustDrop(o); return; }   // the remote site never gets the games' frames

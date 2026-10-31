@@ -101,9 +101,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (rung != PanicPolicy.Rung.DismissSettingsPalette) PanicAftermath.ArmQuiet();
             if (rung == PanicPolicy.Rung.DismissLockCard) { StopLockCards(); StopCameraForPanic(); }
             if (!PanicPolicy.StopsSurfaces(rung)) return;
-            // WPF MainWindow.xaml.cs:1709: close the game surface that owns the screen, then the normal
-            // stop tail with the exit ladder NOT armed (and no grace pause), in BOTH modes: override
-            // (MainWindow.xaml.cs:1627) and ladder (:1720 RunPanicStopTail(advanceExitLadder: false)).
+            // WPF MainWindow.xaml.cs:1742-1747: the legacy room ladder consumes this key
+            // before the stop pass and app exit counter. Escape-pause already had first claim above.
+            if (rung == PanicPolicy.Rung.RunLadder && (Games.GameWindow.TryDtrhPanic() || Games.GameWindow.TryBackRoomPanic())) { StopCameraForPanic(); return; }
+            // WPF MainWindow.xaml.cs:1694-1707: override closes every surface without arming game exit.
+            // Remaining game surfaces use this stop pass; legacy DtRH and room hand-offs returned above.
             // Sampled BEFORE the stop pass closes it (intake host, Chaos descent).
             bool gameOwnedTheScreen = PanicSurfaces.AnyOwnsTheScreen();
             // WPF #735: with PanicOverridesAll off (RunLadder), the first press over a playing mandatory
@@ -176,6 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PanicPolicy.KeptEscapePage Route(bool claimed) => PanicPolicy.KeptEscapeGoesTo(claimed,
                     In(PanicPolicy.KeptEscapePage.Race), ready, In(PanicPolicy.KeptEscapePage.Board), ready,
                     In(PanicPolicy.KeptEscapePage.Breakout), ready, In(PanicPolicy.KeptEscapePage.Dtrh), ready,
+                    roomInFront: In(PanicPolicy.KeptEscapePage.Room), roomReady: ready,
                     intakeInFront: intake != null, intakeReady: intakeReady,
                     glassroadInFront: In(PanicPolicy.KeptEscapePage.Glassroad), glassroadReady: ready);
                 bool claim = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,

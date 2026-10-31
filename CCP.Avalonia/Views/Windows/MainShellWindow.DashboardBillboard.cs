@@ -164,12 +164,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "Dashboard billboard: card action failed ({Id})", card.Spec.Id); }
         }
 
-        /// <summary>WPF OpenBackRoomInApp: signed out, sign-in first. The Back Room itself is not on
-        /// this head, so a signed-in player lands on Play, where its door will live.</summary>
+        /// <summary>WPF MainWindow.Lab.cs:306 and BackRoomHostService.cs:312: one gated room door.</summary>
         private void OpenBillboardBackRoom()
         {
-            if (Platform.FriendsHead.Identity() == null) { _ = OpenUnifiedLoginDialog(); return; }
-            ShowTab("play");
+            try { Games.GameWindow.Launch(Games.GameWindow.BackRoomId, this); }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Back Room launch failed");
+                _ = Dialogs.MessageDialog.ShowAsync(this, Loc.Get("play_backroom_title"),
+                    Loc.GetF("play_backroom_open_failed_body", ex.Message));
+            }
         }
 
         /// <summary>The link opener (seam: tests never launch a browser).</summary>
