@@ -18,9 +18,7 @@ public sealed class OnlineMeterRingTests
     [Fact]
     public void Ring_draws_progress_and_a_plain_grey_track_when_spent() => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        OnlineMeterTestPlatform.EnsureApplication();
         var ring = new OnlineMeterRing();
         Assert.Equal(18, ring.Width);
         Assert.False(ring.IsHitTestVisible);
