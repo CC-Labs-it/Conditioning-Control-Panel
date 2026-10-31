@@ -352,6 +352,22 @@
                                VerticalAlignment="Center"/>
                 </StackPanel>
             </Border>
+            <!-- Hold-Esc progress (WPF MediaInfoStrip HoldEscHint), top-left of the media pane. -->
+            <Border x:Name="HoldEscHint"
+                    HorizontalAlignment="Left" VerticalAlignment="Top"
+                    Margin="10,8,0,0" Padding="8,3" CornerRadius="6"
+                    Background="{DynamicResource DeeperPlayerOverlayBgBrush}"
+                    IsVisible="False" IsHitTestVisible="False" ZIndex="20">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{loc:Str deeper_player_hold_esc_hint}"
+                               Foreground="{DynamicResource DeeperAccentSoftBrush}"
+                               FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <ProgressBar x:Name="HoldEscProgress" Width="70" Height="6" MinHeight="6" Minimum="0" Maximum="1"
+                                 Foreground="{DynamicResource DeeperAccentBrush}"
+                                 Background="{DynamicResource DeeperAccentTransparent20Brush}"
+                                 BorderThickness="0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
         </Grid>
 
         <!-- =====================================================================
