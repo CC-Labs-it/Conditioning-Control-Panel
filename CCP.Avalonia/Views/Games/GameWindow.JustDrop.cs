@@ -14,11 +14,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// page message goes to Core <see cref="JustDropService"/>; a panic closes it with every other game
     /// window (PanicSurfaces "games", WPF GameSurfaces.cs:57).
     /// <para>Takeaway replay uses the bare player, fullscreen and panel duck/restore. Remaining:
-    /// HostOwnedFullscreen's persistent strip and Chromium no-throttle flags (WebKitGTK has no equivalent).</para>
+    /// HostOwnedFullscreen's persistent strip (covered by a separate PR).</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
         internal const string JustDropId = "justdrop";
+
+        // WPF JustDropHostService.cs:111,133-135. Keep flags away from the shared default profile.
+        internal static void ConfigureJustDropEnvironment(global::Avalonia.Controls.WebViewEnvironmentRequestedEventArgs args)
+        {
+            if (args is not global::Avalonia.Platform.WindowsWebView2EnvironmentRequestedEventArgs windows) return;
+            windows.AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required "
+                + "--disable-background-timer-throttling --disable-backgrounding-occluded-windows";
+            windows.UserDataFolder = System.IO.Path.Combine(CorePaths.UserData, "browser_data_avalonia_justdrop");
+        }
 
         /// <summary>WPF ShowTab("justdrop"): a door the account cannot see is a no-op, never a redirect.</summary>
         private static bool JustDropDoorOpen()
@@ -70,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             };
             window.Show();
             if (duck) { shell.WindowState = global::Avalonia.Controls.WindowState.Minimized; window.Activate(); }
+            window.AttachJustDropOwner(shell);
             return window;
         }
 

@@ -8,11 +8,18 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Services.EmiDesk;
 using Avalonia.Input.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
+using System.Collections.Generic;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -92,6 +99,128 @@ public sealed class TakeawayShelfTests
         Assert.Equal(prior, shell.WindowState);
     });
 
+    [Fact]
+    public Task NativeOwnershipFollowsVisiblePanelAndUnsubscribesOnClose() => InShell(async shell =>
+    {
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        var owners = new System.Collections.Generic.List<Window?>();
+        NativeWindowOwner.SetForTests = (_, owner) => { owners.Add(owner); return true; };
+        // WPF JustDropHostService.cs:68-75: the shop stays windowed.
+        shell.OpenJustDrop();
+        var shop = GameWindow.OpenForTests(GameWindow.JustDropId)!;
+        Assert.NotEqual(WindowState.FullScreen, shop.WindowState);
+        Assert.True(shop.JustDropOwnerLinked);
+        Assert.Same(shell, owners[^1]);
+        shop.WindowState = WindowState.Maximized;
+        shell.WindowState = WindowState.Minimized;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(shop.JustDropOwnerLinked);
+        Assert.Null(owners[^1]);
+        Assert.True(shop.IsVisible);
+        Assert.Equal(WindowState.Maximized, shop.WindowState); // owner changes preserve the player state
+        shop.WindowState = WindowState.Normal;
+        shell.WindowState = WindowState.Normal;
+        Assert.True(shop.JustDropOwnerLinked);
+        shell.Hide();
+        Assert.False(shop.JustDropOwnerLinked);
+        shell.Show();
+        Assert.True(shop.JustDropOwnerLinked);
+        shop.Close();
+        int closedCalls = owners.Count;
+        shell.WindowState = WindowState.Maximized;
+        Assert.Equal(closedCalls, owners.Count);
+        var replay = GameWindow.LaunchJustDropReplay("kept", shell)!;
+        Assert.False(replay.JustDropOwnerLinked);
+        Assert.Null(owners[^1]);
+        replay.Close();
+    });
+
+    [Fact]
+    public Task ReceiptAndShopLiftAndResetWhileTrayAndToggleStayStill() => InShell(async shell =>
+    {
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        var tab = shell.Named<PresetsTabView>("PresetsTab")!;
+        var shelf = tab.FindControl<StackPanel>("TakeawayShelf")!;
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        foreach (var chip in new[] { (Border)shelf.Children[0], (Border)shelf.Children[^1] })
+        {
+            void PointerEvent(global::Avalonia.Interactivity.RoutedEvent<PointerEventArgs> ev) =>
+                chip.RaiseEvent(new PointerEventArgs(ev, chip, new Pointer(1, PointerType.Mouse, true),
+                    shell, default, 0, default, KeyModifiers.None));
+            PointerEvent(InputElement.PointerEnteredEvent);
+            var scale = Assert.IsType<ScaleTransform>(chip.RenderTransform);
+            Assert.Equal(1.02, scale.ScaleX, 3);
+            Assert.Equal(scale.ScaleX, scale.ScaleY);
+            Assert.Null(scale.Transitions);
+            PointerEvent(InputElement.PointerExitedEvent);
+            Assert.Equal(1, scale.ScaleX);
+            PointerEvent(InputElement.PointerEnteredEvent);
+            shelf.Children.Remove(chip);
+            Assert.Equal(1, scale.ScaleX);
+        }
+        Assert.Null(shelf.Children.OfType<Border>().Single(b => b.Name == "TakeawayMore").RenderTransform);
+        Assert.Null(tab.FindControl<StackPanel>("TakeawayTray")!.Children[0].RenderTransform);
+    });
+
+    [Fact]
+    public void EmiJustDropDoorTracksServerAvailabilityWithoutAPremiumLock()
+    {
+        var available = JustDropService.ServerEnabledForTests;
+        try
+        {
+            var door = EmiTargets.Find("justdrop")!;
+            Assert.NotNull(door);
+            JustDropService.SetServerEnabledForTests(false);
+            Assert.False(door.Available);
+            JustDropService.SetServerEnabledForTests(true);
+            Assert.True(door.Available);
+            Assert.False(door.Locked);
+        }
+        finally { JustDropService.SetServerEnabledForTests(available); }
+    }
+
+    [Fact]
+    public void ChromiumOptionsKeepTheExactWpfFlagsInADedicatedProfile()
+    {
+        var args = (WindowsWebView2EnvironmentRequestedEventArgs)
+            System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(WindowsWebView2EnvironmentRequestedEventArgs));
+        GameWindow.ConfigureJustDropEnvironment(args);
+        Assert.Equal("--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-backgrounding-occluded-windows",
+            args.AdditionalBrowserArguments);
+        Assert.Equal(System.IO.Path.Combine(CorePaths.UserData, "browser_data_avalonia_justdrop"), args.UserDataFolder);
+    }
+
+    [Fact]
+    public Task ShopOptionsAndEmiDoorAreScopedAndRefocusCountsOnce() => InShell(async shell =>
+    {
+        var door = EmiTargets.Find("justdrop")!;
+        Assert.True(door.Available);
+        Assert.False(door.Locked);
+        var before = EmiState.Current.Usage.GetValueOrDefault("justdrop");
+        var shop = shell.OpenJustDrop()!;
+        var after = EmiState.Current.Usage["justdrop"];
+        Assert.True(after > before);
+        Assert.Same(shop, shell.OpenJustDrop());
+        Assert.Equal(after - before, EmiState.Current.Usage["justdrop"] - after);
+        JustDropService.SetServerEnabledForTests(false);
+        Assert.False(door.Available);
+        Assert.Null(shell.OpenJustDrop());
+        Assert.Equal(after + after - before, EmiState.Current.Usage["justdrop"]);
+
+        var args = (WindowsWebView2EnvironmentRequestedEventArgs)
+            System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(WindowsWebView2EnvironmentRequestedEventArgs));
+        // Invoke the actual per-host subscriber, just as NativeWebView's environment event does.
+        var field = typeof(ConditioningControlPanel.Avalonia.Views.Controls.WebHost).GetField("EnvironmentRequested",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        ((Action<WebViewEnvironmentRequestedEventArgs>)field.GetValue(shop.Web)!)(args);
+        Assert.Equal("--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-backgrounding-occluded-windows",
+            args.AdditionalBrowserArguments);
+        Assert.Equal(System.IO.Path.Combine(CorePaths.UserData, "browser_data_avalonia_justdrop"), args.UserDataFolder);
+        var ordinary = new GameWindow();
+        try { Assert.Null(field.GetValue(ordinary.Web)); }
+        finally { ordinary.Close(); }
+    });
+
     private sealed class Drawer : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
@@ -106,6 +235,15 @@ public sealed class TakeawayShelfTests
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var state = EmiState.Current;
+        var usage = new Dictionary<string, int>(state.Usage);
+        var score = new Dictionary<string, double>(state.OpenScore);
+        var usageAt = new Dictionary<string, long>(state.UsageAt);
+        var motion = CoreSettings.Current.MotionLevel;
+        var getHandle = NativeWindowOwner.HandleForTests;
+        var nativeOwner = NativeWindowOwner.SetForTests;
+        NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "HWND");
+        NativeWindowOwner.SetForTests = (_, _) => true;
         var get = CoreSecrets.RetrieveProvider;
         var id = CoreAccount.UnifiedUserId;
         var http = JustDropOrdersService.Http;
@@ -125,6 +263,12 @@ public sealed class TakeawayShelfTests
         finally
         {
             GameWindow.CloseAllForPanic(); shell?.Close();
+            CoreSettings.Current.MotionLevel = motion;
+            NativeWindowOwner.HandleForTests = getHandle;
+            NativeWindowOwner.SetForTests = nativeOwner;
+            state.Usage.Clear(); foreach (var entry in usage) state.Usage[entry.Key] = entry.Value;
+            state.OpenScore.Clear(); foreach (var entry in score) state.OpenScore[entry.Key] = entry.Value;
+            state.UsageAt.Clear(); foreach (var entry in usageAt) state.UsageAt[entry.Key] = entry.Value;
             JustDropOrdersService.Http = http; JustDropOrdersService.Invalidate();
             CoreSecrets.RetrieveProvider = get; CoreAccount.UnifiedUserId = id;
             JustDropService.SetServerEnabledForTests(available);
