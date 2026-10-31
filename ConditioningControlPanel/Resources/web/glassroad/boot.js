@@ -107,6 +107,7 @@ import { ORDER as TIER_ORDER } from './render/quality.js';
 import { dismantleScene } from './render/sceneResources.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
+import { bodyOfVehicle, isKartBody } from './sim/kartStats.js';
 import { ownedChoices } from './hud/lobbyMath.js';
 import { unlockedSet } from './meta/unlocks.js';
 import { hostCounter, counterMessage } from './host/prizeCounter.js';
@@ -794,6 +795,11 @@ async function boot(course, options, lifetime, isCurrent) {
     debug.trial = trial ? { ghost: ghost ? Math.round(ghost.timeS * 100) / 100 : 0, saved: false } : null;
     if (trial && garage && world.setLook) { world.setLook(1, raceLook(garage.state)); ghostSlotShadow(true); }
   }
+  // ?kart=<id> (dev, solo): drive and wear that body, owned or not
+  const devKart = DEV && isKartBody(feel, qs.get('kart')) ? qs.get('kart') : null;
+  const soloLook = () => { const look = raceLook(garage.state); return devKart ? { ...look, vehicle: 'emi-vehicle-' + devKart } : look; };
+  /** Solo: the garage pick is the player's body too (online it comes from the seat's look, sim/racers.js). */
+  function setSoloBody() { racers.setBody(0, devKart || bodyOfVehicle(garage ? raceLook(garage.state).vehicle : null)); debug.playerBody = racers.player.feel.kart; }
   function buildRun(s = null) {
     if (P) { bindAirWords(P.st, null); bindAirWords(P.view, null); }
     airWords?.reset(); airWords = null; airSong = null;
@@ -839,9 +845,10 @@ async function boot(course, options, lifetime, isCurrent) {
     // each seat's look (Astra's wardrobe and vehicles) on its kart: online the room's ids, back to the seat picks after
     if (world.setLook && (s || looksOnline || garage)) {
       for (let i = 0; i < COUNT; i++) world.setLook(i, s && racers.list[i] ? racers.list[i].meta.look : undefined);
-      if(garage&&!s)world.setLook(0,raceLook(garage.state));
+      if(garage&&!s)world.setLook(0,soloLook());
       looksOnline = !!s;
     }
+    if (!s) setSoloBody();
     if (solo && garage && world.setLook) world.setLook(1, raceLook(garage.state));   // the ghost wears your look
     ghostSlotShadow(solo);
   }
@@ -1104,7 +1111,8 @@ async function boot(course, options, lifetime, isCurrent) {
     setSoloLaps(opts);
     prepareRunMode();
     const started = audio.start(); unpause(); resetAll();
-    if(garage){world.setLook(0,raceLook(garage.state));debug.playerLook=world.looks()[0];}
+    if(garage){world.setLook(0,soloLook());debug.playerLook=world.looks()[0];}
+    setSoloBody();
     raceAudioStart = started;
     state = 'intro'; introElapsed = 0;
     cam.snap(P.view, track, renderer.aspect);

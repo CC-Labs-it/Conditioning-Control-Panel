@@ -49,6 +49,7 @@ import { aerialGapAt } from '../track/aerial.js';
 import { airWordQuery, resetAirWords, stepAirWords } from './airWords.js';
 import { pistonHopUp } from '../track/movingHazards.js';
 import { rampCrossed, RAMP_HOP_GRACE_S } from './ramps.js';
+import { NEUTRAL_KART } from './kartStats.js';
 
 export { applyBoost };
 
@@ -159,7 +160,9 @@ export function step(st, a, track, feel, dt, ev) {
   }
   // a chute: gravity along the kart's own downhill forward feeds the engine (no magnet holds it)
   const slope = W.chute ? feel.get('hop.gravityMps2') * -F[1] : 0;
-  engine(st, a, feel, dt, top, wasGround && qa.surface === 'haze', ev, typeof cc === 'number' ? cc : 1, loop, W.thrustMul, W.dragTcS, slope);
+  // the body's top speed is a cap on the engine only: `top`, speedPct and every boost amount stay the class's own
+  const K = feel.kart || NEUTRAL_KART;
+  engine(st, a, feel, dt, top, wasGround && qa.surface === 'haze', ev, (typeof cc === 'number' ? cc : 1) * K.topMul, loop, W.thrustMul, W.dragTcS, slope);
 
   // on the ground: forward speed chases engineV, lateral bleeds into the heading, slip costs engineV
   let slipDeg = 0;
@@ -175,7 +178,7 @@ export function step(st, a, track, feel, dt, ev) {
     } else { wm.cur[0] = 0; wm.cur[1] = 0; WV[0] = 0; WV[1] = 0; WV[2] = 0; }
     let f = v3dot(V, FP) - v3dot(WV, FP), l = v3dot(V, RP) - v3dot(WV, RP);
     f += (st[S.engineV] - f) * Math.min(1, dt / feel.get('engine.chaseTcS'));
-    const tc = st[S.driftDir] ? gap(feel, 'drift.slideTcS') * W.slideMul : gap(feel, 'kart.gripTcS') * W.gripMul;
+    const tc = st[S.driftDir] ? gap(feel, 'drift.slideTcS') * W.slideMul : gap(feel, 'kart.gripTcS') * W.gripMul * K.gripMul;
     l *= Math.exp(-dt / tc);
     slipDeg = Math.atan2(Math.abs(l), Math.max(Math.abs(f), 1)) * RAD2DEG;
     v3scale(V, FP, f); v3addScaled(V, V, RP, l);
@@ -343,7 +346,7 @@ export function step(st, a, track, feel, dt, ev) {
       v3addScaled(V, V, b, -side * into * (1 + keep));
       if (v3dot(F, b) * side > 0) railNose(F, V, b, frame.t, st[S.engineV] >= 0);   // the nose turns along the rail
       if (into >= gap(feel, 'wall.minHitMps')) {
-        st[S.engineV] *= 1 - feel.get('wall.engineLoss');
+        st[S.engineV] *= 1 - Math.min(1, feel.get('wall.engineLoss') * K.wallMul);
         if (!grace) { cancelDrift(st, 'wall', ev); endBoost(st, feel, ev); }
         ev.emit('wall', railHit(P, frame, side, radius, into * (1 + keep)));
       }
@@ -432,7 +435,7 @@ function engine(st, a, feel, dt, top, haze, ev, capMul = 1, loop = false, waterM
       if (e < cap) {
         const g = feel.get('engine.bandGains');
         const band = clamp(Math.floor(e / top * g.length), 0, g.length - 1);
-        e = Math.min(cap, e + g[band] * top * a.throttle * mul * dt);
+        e = Math.min(cap, e + g[band] * top * a.throttle * mul * (feel.kart || NEUTRAL_KART).accelMul * dt);
       }
     }
   } else e = approach(e, 0, coast);
