@@ -230,7 +230,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ==================================================================================
         // Launch shims (WPF PlayTabView.Cards.cs). Every name below is the MainWindow handler the
-        // WPF card forwards to. GAMES: the Breakout demo and Piece by Piece open their GameWindow
+        // WPF card forwards to. GAMES: the Breakout demo, Piece by Piece, DtRH and Racing Thoughts open their GameWindow
         // as the launcher does (LauncherWindow.Destinations); the full Breakout and Goon have no
         // host on this head, so their buttons stay disabled in the markup with the
         // exclusives_not_on_this_build tooltip and carry no shim.
@@ -249,6 +249,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF LaunchPlayChess (PieceByPieceHostService.Launch): free for everyone.</summary>
         private void BtnPlayChess_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.PbpId);
+
+        // WPF PlayTabView.Cards.cs:59-66: the same game doors as the launcher; each host owns its gate.
+        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.DtrhId);
+
+        private void BtnPlayRacingThoughts_Click(object? sender, RoutedEventArgs e) => LaunchGame("race");
 
         // ---- TOGETHER --------------------------------------------------------------------
 

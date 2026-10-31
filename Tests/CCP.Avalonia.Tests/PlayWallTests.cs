@@ -25,6 +25,33 @@ namespace CCP.Avalonia.Tests;
 /// zone, the Graded Intake card's four pass states, and the two doors that land on a section.</summary>
 public sealed class PlayWallTests
 {
+    [Theory]
+    [InlineData("BtnPlayDtrh", "dtrh")]
+    [InlineData("BtnPlayRacingThoughts", "race")]
+    public void AvailableGameCardUsesTheExistingLauncherDoor(string buttonName, string gameId)
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var previous = PlayTabView.LaunchGame;
+            var launches = new System.Collections.Generic.List<string>();
+            PlayTabView.LaunchGame = id => launches.Add(id);
+            try
+            {
+                var play = new PlayTabView();
+                var button = play.FindControl<Button>(buttonName)!;
+                Assert.True(button.IsEnabled);
+                Assert.Null(ToolTip.GetTip(button));
+                // WPF PlayTabView.Cards.cs:59-66 forwards the click; the host runs the access gate.
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(gameId, Assert.Single(launches));
+            }
+            finally { PlayTabView.LaunchGame = previous; }
+        });
+    }
+
     [Fact]
     public void RacingThoughtsBandAndBadgeFollowLabEntitlement()
     {
@@ -53,11 +80,12 @@ public sealed class PlayWallTests
                 lab = true;
                 shell.UpdateQuickLoginUI();
                 Assert.False(band.IsVisible);
-                Assert.True(badge.IsVisible);
+                // The tier badge stays outside the band that entitlement hides (WPF PlayTabView.xaml:574-580).
+                Assert.Same(band.Parent, badge.Parent);
                 lab = false;
                 shell.UpdateQuickLoginUI();
                 Assert.True(band.IsVisible);
-                Assert.False(play.FindControl<Button>("BtnPlayRacingThoughts")!.IsEnabled);
+                Assert.True(play.FindControl<Button>("BtnPlayRacingThoughts")!.IsEnabled);
             }
             finally { shell.Close(); CoreEntitlement.HasLabProvider = previous; }
         });
@@ -130,7 +158,7 @@ public sealed class PlayWallTests
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var view = new PlayTabView();
             T C<T>(string name) where T : Control => view.FindControl<T>(name)!;
-            foreach (var name in new[] { "BackRoom", "Dtrh", "Arcademy", "RacingThoughts" })
+            foreach (var name in new[] { "BackRoom", "Arcademy" })
             {
                 var button = C<Button>("BtnPlay" + name);
                 Assert.False(button.IsEnabled);
