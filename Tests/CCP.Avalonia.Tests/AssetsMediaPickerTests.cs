@@ -69,7 +69,7 @@ public sealed class AssetsMediaPickerTests
     [Fact]
     public Task SourceSwitchWritesOnlyAfterTheAwaitedConsentSaysYes() => AvaloniaTestDispatcher.RunAsync(() => WithView(async (view, s) =>
     {
-        var details = view.FindControl<StackPanel>("RemoteMediaDetails")!;
+        var details = view.FindControl<Grid>("RemoteMediaDetails")!;
         Assert.False(details.IsVisible);
 
         // No: nothing changes, the chips go back to "local".
@@ -119,8 +119,14 @@ public sealed class AssetsMediaPickerTests
         Assert.Equal(AssetsTabView.SummaryText(s.FypOnlineNiches, s.FypOnlineCustomSubs),
             view.FindControl<TextBlock>("TxtRemoteSummary")!.Text);
 
-        // Fine-tune opens the list and the browser steps aside.
-        view.FindControl<Button>("BtnRemoteFineTune")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        // Fine-tune opens the list and the browser steps aside, only once remote media is in play
+        // (WPF AssetsTabView.xaml.cs:30 FineTuneShows = open && remoteInPlay).
+        var fineTune = view.FindControl<Button>("BtnRemoteFineTune")!;
+        fineTune.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.False(view.FindControl<ScrollViewer>("RemoteFineTuneScroll")!.IsVisible);
+        Assert.True(view.FindControl<Border>("AssetBrowserSection")!.IsVisible);
+        s.MediaSource = "online";
+        view.RefreshRemoteMediaPicker();
         Assert.True(view.FindControl<ScrollViewer>("RemoteFineTuneScroll")!.IsVisible);
         Assert.False(view.FindControl<Border>("AssetBrowserSection")!.IsVisible);
 
