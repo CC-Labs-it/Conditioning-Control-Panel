@@ -54,6 +54,8 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
     public override void Before(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
+            // The first test must not choose process-wide font mappings for the whole shard.
+            AmbientBeatLoopsTests.Setup();
             Current = ProcessStateSnapshot.Take();
             OpenWindows.Mark();
             // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.
