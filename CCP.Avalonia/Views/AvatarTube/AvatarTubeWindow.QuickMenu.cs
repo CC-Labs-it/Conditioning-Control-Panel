@@ -19,6 +19,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -33,10 +34,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
     public partial class AvatarTubeWindow
     {
-        private static readonly IBrush MenuRed = new SolidColorBrush(Color.FromRgb(255, 99, 71));
-        private static readonly IBrush MenuGreen = new SolidColorBrush(Color.FromRgb(144, 238, 144));
-        private static readonly IBrush MenuPatreon = new SolidColorBrush(Color.FromRgb(155, 89, 182));
-        private static readonly IBrush MenuLocked = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x70));
+        // Pure tube helpers can initialize this type off the dispatcher. Shared colours must be immutable.
+        // WPF AvatarTubeWindow.ChatInput.cs:1453-1492 creates these brushes on its UI thread.
+        private static readonly IBrush MenuRed = new ImmutableSolidColorBrush(Color.FromRgb(255, 99, 71));
+        private static readonly IBrush MenuGreen = new ImmutableSolidColorBrush(Color.FromRgb(144, 238, 144));
+        private static readonly IBrush MenuPatreon = new ImmutableSolidColorBrush(Color.FromRgb(155, 89, 182));
+        private static readonly IBrush MenuLocked = new ImmutableSolidColorBrush(Color.FromRgb(0x60, 0x60, 0x70));
 
         private MenuItem? QuickItem(string name) => this.FindControl<MenuItem>(name);
 

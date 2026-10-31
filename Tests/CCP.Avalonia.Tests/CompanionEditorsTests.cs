@@ -5,6 +5,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -183,8 +185,10 @@ public sealed class CompanionEditorsTests
         return Task.CompletedTask;
     });
 
-    [Fact]
-    public Task PromptEditor_is_reachable_from_make_her_yours_links() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory]
+    [InlineData(0.5)]
+    [InlineData(0.95)]
+    public Task PromptEditor_is_reachable_from_make_her_yours_links(double vertical) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var service = new SettingsService();
@@ -204,16 +208,23 @@ public sealed class CompanionEditorsTests
             foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
-                button.BringIntoView();
+                // Settle the entrance before scrolling to its final position.
+                shell.CompleteTabTransition();
+                shell.UpdateLayout();
+                // This link template draws only its TextBlock; Button padding is not a hit surface.
+                var label = button.GetVisualDescendants().OfType<TextBlock>().Single();
+                label.BringIntoView();
                 Dispatcher.UIThread.RunJobs();
-                var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                var at = label.TranslatePoint(new Point(label.Bounds.Width / 2, label.Bounds.Height * vertical), shell)!.Value;
+                Assert.Same(button, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<Button>(includeSelf: true));
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
                 await Until(() => shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Any());
                 var editor = shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Single();
                 Click(editor.FindControl<Button>("BtnCancel")!);
-                await Until(() => !editor.IsVisible);
+                await Until(() => !editor.IsVisible && shell.IsEffectivelyEnabled);
             }
         }
         finally { shell.Close(); CoreSettings.ServiceProvider = null; }

@@ -41,6 +41,13 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
+    // Native call seam: tests verify HWND_NOTOPMOST and the no-activation flags on Linux too.
+    internal static Func<IntPtr, IntPtr, int, int, int, int, uint, bool> PositionWindow = SetWindowPos;
+
+    // WPF ChaosWindowZ.cs:47-53: unpinned windows leave the topmost band.
+    internal static bool SetStacking(IntPtr hwnd, bool topmost) =>
+        PositionWindow(hwnd, new IntPtr(topmost ? -1 : -2), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
 
@@ -64,13 +71,13 @@ internal static class Win32Overlay
         return Apply(hwnd, clickThrough, IsPassive(window), AllowsFocus(window));
     }
 
-    /// <summary>Tool/no-activate/layered + HWND_TOPMOST: the Windows form of an override-redirect overlay.</summary>
-    internal static bool SetOverrideRedirect(TopLevel window, IntPtr hwnd, bool passive = false)
+    /// <summary>Tool/no-activate/layered + the requested stacking band: the Windows form of an override-redirect overlay.</summary>
+    internal static bool SetOverrideRedirect(TopLevel window, IntPtr hwnd, bool passive = false, bool topmost = true)
     {
         if (!OperatingSystem.IsWindows()) return false;
         if (passive) Passive.AddOrUpdate(window, Passive);
         return Apply(hwnd, Track(window).Value, IsPassive(window), AllowsFocus(window))
-            && SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+            && SetStacking(hwnd, topmost);
     }
 
     /// <summary>WPF ApplyWindowStyles(stealsFocus): activation and mouse pass-through are independent.</summary>

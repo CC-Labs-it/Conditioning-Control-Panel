@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// stage-sized window the run boons draw on (Size Queen ring, the Ripple cast, Aftermath residue,
     /// Tail-Plug trail sparks, The Bound tethers). Motion lives in Core <see cref="ChaosFieldFxModel"/>;
     /// this draws what it samples on the window's shared <see cref="FrameClock"/> and stops the clock
-    /// when hidden. Same keep-alive contract as WPF: created on first draw, hidden when idle, closed
+    /// when hidden. Same keep-alive contract as WPF: realized at run start, hidden when idle, closed
     /// only at run teardown/panic (<see cref="CloseActive"/>).
     ///
     /// <para>Refuses (draws nothing) unless X11 click-through and a compositor are there: an opaque or
@@ -41,6 +41,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Func<double> NowMs = () => Stopwatch.GetTimestamp() * 1000.0 / Stopwatch.Frequency;
 
         internal static ChaosFieldFxOverlay? Active => _active;
+        // Native raise seam: headless tests observe the show-time request.
+        internal static Action<Window> RaiseWindow = w =>
+        {
+            if (!SkipPlatformChecksForTests) X11Overlay.Raise(w);
+        };
+
+        /// <summary>WPF ChaosFieldFxOverlay.cs:35: realize at run start, then idle hidden.</summary>
+        public static void EnsureCreated() => OnUi(_ => { }, draw: false);
+
+        // WPF ChaosFieldFxOverlay.cs:85/123/128: re-stack on show without activation.
+        public static void RaiseActive()
+        {
+            if (_active is { IsVisible: true, Topmost: true })
+                RaiseWindow(_active);
+        }
 
         public static void Ripple(Point centerPx, double radiusPx, double lifeMs) =>
             OnUi(w => w.Model.Ripple(w.Lx(centerPx.X), w.Ly(centerPx.Y), radiusPx / w._scale, lifeMs, NowMs()));
@@ -48,8 +63,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void SnapRipple(Point centerPx, double radiusPx, double lifeMs) =>
             OnUi(w => w.Model.SnapRipple(w.Lx(centerPx.X), w.Ly(centerPx.Y), radiusPx / w._scale, lifeMs, NowMs()));
 
+        // WPF ChaosFieldFxOverlay.cs:343: gentle residue uses a steady rise/hold/fade.
         public static void Residue(Point centerPx, double radiusPx, double lifeMs) =>
-            OnUi(w => w.Model.Residue(w.Lx(centerPx.X), w.Ly(centerPx.Y), radiusPx / w._scale, lifeMs, NowMs()));
+            OnUi(w => w.Model.Residue(w.Lx(centerPx.X), w.Ly(centerPx.Y), radiusPx / w._scale, lifeMs, NowMs(),
+                gentle: Services.Safety.GentleVisuals.On,
+                gentleFadeSeconds: Services.Safety.GentleVisuals.FadeSeconds));
 
         public static void TrailDot(Point centerPx, double lifeSec, bool warm = false) =>
             OnUi(w => w.Model.TrailDot(w.Lx(centerPx.X), w.Ly(centerPx.Y), lifeSec, warm, NowMs()));
@@ -57,17 +75,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void SetTether(int key, Point aPx, Point bPx) =>
             OnUi(w => w.Model.SetTether(key, w.Lx(aPx.X), w.Ly(aPx.Y), w.Lx(bPx.X), w.Ly(bPx.Y)));
 
-        /// <summary>WPF ClearTether: never opens the window just to drop a thread.</summary>
+        /// <summary>WPF ChaosFieldFxOverlay.cs:82/109: remove on the dispatcher, without opening.</summary>
         public static void ClearTether(int key)
         {
+            if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(() => ClearTether(key));
+                return;
+            }
             if (_active == null) return;
             _active.Model.ClearTether(key);
             _active.HideIfIdle();
         }
 
-        /// <summary>Run end / panic: the only place the window dies. Safe when idle.</summary>
+        /// <summary>WPF ChaosFieldFxOverlay.cs:89: dispatcher teardown, safe when idle.</summary>
         public static void CloseActive()
         {
+            if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(CloseActive);
+                return;
+            }
+            _refused = false;
             var w = _active;
             _active = null;
             if (w == null) return;
@@ -76,12 +105,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try { w.Close(); } catch (Exception ex) { Log.Debug("ChaosFieldFx close: {E}", ex.Message); }
         }
 
-        private static void OnUi(Action<ChaosFieldFxOverlay> act)
+        private static void OnUi(Action<ChaosFieldFxOverlay> act, bool draw = true)
         {
             // WPF BeginInvoke'd every call onto the UI thread; callers may be off it.
             if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
             {
-                global::Avalonia.Threading.Dispatcher.UIThread.Post(() => OnUi(act));
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(() => OnUi(act, draw));
                 return;
             }
             try
@@ -92,8 +121,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var w = new ChaosFieldFxOverlay(sample: false);
                     if (!w.Place()) return;
                     _active = w;
+                    w.Show();
+                    w.Hide();
                 }
-                if (!_active.IsVisible) _active.Show();
+                if (!draw) return;
+                if (!_active.IsVisible)
+                {
+                    _active.Show();
+                    RaiseActive();
+                }
                 act(_active);
                 if (!_active.Clock.IsEnabled) _active.Clock.Start();
             }
@@ -114,7 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             SystemDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = true;
+            Topmost = CoreSettings.Current.ChaosPinOnTop;   // WPF ChaosFieldFxOverlay.cs:162; ChaosWindowZ.cs:35
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
@@ -156,7 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return true;
             }
             // Override-redirect before any geometry, or KWin can replay a stale size (X11Overlay.SetOverrideRedirect).
-            if (!X11Overlay.SetClickThrough(this, true) | !X11Overlay.SetOverrideRedirect(this, bounds))
+            if (!X11Overlay.SetClickThrough(this, true) | !X11Overlay.SetOverrideRedirect(this, bounds, topmost: Topmost))
             {
                 Log.Warning("ChaosFieldFx: the platform refused a click-through overlay, so no field FX are drawn");
                 _refused = true;
