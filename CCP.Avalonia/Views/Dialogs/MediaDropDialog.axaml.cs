@@ -19,4 +19,6 @@ public partial class MediaDropDialog : Window
         BtnOk.Click += (_, _) => Close(MediaDropChoice.Library);
         BtnCancel.Click += (_, _) => Close(MediaDropChoice.Cancel);
     }
+    // RenderProof requires a parameterless constructor; production callers supply the dropped path.
+    internal MediaDropDialog() : this("sample.mp4") { }
 }
