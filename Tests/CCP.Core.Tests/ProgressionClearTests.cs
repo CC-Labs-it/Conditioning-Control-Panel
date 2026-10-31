@@ -3,12 +3,31 @@ using System.Collections.Generic;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
+using System.Linq;
+using Newtonsoft.Json.Linq;
 
 namespace CCP.Core.Tests;
 
 /// <summary>ProgressionClear.Apply = the settings half of WPF MainWindow.ClearProgressionData.</summary>
 public class ProgressionClearTests
 {
+    [Fact]
+    public void DefaultWpfClearRetainsMigrationState()
+    {
+        var s = new AppSettings { PlayerLevel = 51, PendingDescentMigrationChoice = "restore",
+            DescentMigrationCompleted = true, DescentMigrationChoice = "cycle", DescentEpoch = 1,
+            DescentCycle = 2, DescentCycleXpBonus = 1.1, DescentAnchorUtc = DateTime.UtcNow,
+            DescentVeteranArchive = true, DescentPreMigrationLevel = 150, DescentPreMigrationLifetimeXp = 70343,
+            DescentPendingStageCeremonies = new() { 1, 2 }, DescentLastStageDripDate = "2026-10-30" };
+        var before = JObject.FromObject(s);
+        ProgressionClear.Apply(s);
+        var after = JObject.FromObject(s);
+        foreach (var field in before.Properties().Where(p => p.Name.StartsWith("Descent", StringComparison.Ordinal)
+            || p.Name == nameof(AppSettings.PendingDescentMigrationChoice)))
+            Assert.Equal(field.Value, after[field.Name]);
+        Assert.Equal(1, s.PlayerLevel);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -23,7 +42,7 @@ public class ProgressionClearTests
             DescentPreMigrationLifetimeXp = 70343, DescentPendingStageCeremonies = new() { 1, 2 },
             DescentLastStageDripDate = "2026-10-30", DescentSpiralRailEnabled = false,
         };
-        ProgressionClear.Apply(s);
+        ProgressionClear.Apply(s, clearMigration: true);
         Assert.Null(s.PendingDescentMigrationChoice);
         Assert.Equal(0, s.DescentEpoch);
         Assert.False(s.DescentMigrationCompleted);

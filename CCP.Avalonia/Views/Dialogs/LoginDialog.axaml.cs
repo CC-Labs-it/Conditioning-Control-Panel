@@ -791,7 +791,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             var previousId = CoreSettings.Current.UnifiedId;
             if (!string.IsNullOrEmpty(previousId) && !string.IsNullOrEmpty(newId) && previousId != newId)
             {
-                ProgressionClear.Apply(CoreSettings.Current);
+                ProgressionClear.Apply(CoreSettings.Current, clearMigration: true);
                 App.Achievements?.Reset();
                 AccountSeed.Sync?.Reset();
             }

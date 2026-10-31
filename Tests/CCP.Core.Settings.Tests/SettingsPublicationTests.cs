@@ -84,6 +84,57 @@ internal static class SettingsPublicationTestProfile
 
 public sealed class SettingsPublicationTests
 {
+    private sealed class OfferWire : System.Net.Http.HttpMessageHandler
+    {
+        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request,
+            CancellationToken cancellationToken) => Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            { Content = new System.Net.Http.StringContent("""{"descent_migration":{"required":true,"total_xp_earned":16343,"restore_basis_xp":70343}}""") });
+    }
+
+    [Fact]
+    public async Task FailedMigrationCheckpointRollsBackThroughTheProductionSyncPath()
+    {
+        var service = Seed("ja");
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        var s = service.Current;
+        s.UnifiedId = "fixture"; s.AuthToken = "fixture-token"; s.OfflineMode = false;
+        s.PlayerLevel = 40; s.PlayerXP = 123; s.DescentEpoch = 0;
+        s.PendingDescentMigrationChoice = null; s.DescentMigrationCompleted = false;
+        s.LastConfirmedServerXp = 0;
+        CoreSettings.ServiceProvider = () => service;
+        CoreAccount.IsLoggedInProvider = () => true;
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false, new OfferWire());
+        sync.MarkLoaded(Array.Empty<string>());
+        var now = DateTime.UtcNow;
+        sync.UtcNow = () => now;
+        try
+        {
+            File.Delete(SettingsPublicationTestProfile.SettingsPath);
+            Directory.CreateDirectory(SettingsPublicationTestProfile.SettingsPath); // a real publish failure on every OS
+            Assert.False(service.TrySaveImmediate(suppressCloudBackup: true));
+            Assert.False(CoreSettings.TrySaveImmediate(suppressCloudBackup: true));
+            Assert.True(await sync.PushAsync("blocked checkpoint"));
+            Assert.Equal((40, 123d, 0), (s.PlayerLevel, s.PlayerXP, s.DescentEpoch));
+            Assert.Null(s.PendingDescentMigrationChoice);
+            Assert.Empty(SettingsPublicationTestProfile.TempFiles());
+            Directory.Delete(SettingsPublicationTestProfile.SettingsPath);
+            sync.UtcNow = () => now.AddMinutes(1);
+            Assert.True(await sync.PushAsync("checkpoint recovered"));
+            var disk = new SettingsService().Current;
+            Assert.Equal("restore", disk.PendingDescentMigrationChoice);
+            Assert.Equal(70343, ProfileAdopt.TotalXp(disk), 5);
+        }
+        finally
+        {
+            sync.Reset();
+            if (Directory.Exists(SettingsPublicationTestProfile.SettingsPath)) Directory.Delete(SettingsPublicationTestProfile.SettingsPath);
+            service.SaveImmediate(suppressCloudBackup: true);
+            CoreSettings.ServiceProvider = oldProvider;
+            CoreAccount.IsLoggedInProvider = oldLogin;
+        }
+    }
+
     [Fact]
     public void NoReaderPublishesTheLatestSettingsAndCleansItsTempFile()
     {

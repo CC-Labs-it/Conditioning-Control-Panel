@@ -231,7 +231,7 @@ internal static class AccountSeed
         s.UserDisplayName = null;
         s.HasLinkedDiscord = false;
         s.HasLinkedPatreon = false;
-        ProgressionClear.Apply(s);
+        ProgressionClear.Apply(s, clearMigration: true);
         if (accountDeleted) App.Quests?.ResetProgress();
         CoreSettings.Save();
         App.Achievements?.Reset();

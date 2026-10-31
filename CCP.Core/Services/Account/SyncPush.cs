@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -293,7 +294,7 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
-                    if (ApplyReply(s, reply, DescentReader?.Current?.Stage, UtcNow(), () => CoreSettings.SaveImmediate()))
+                    if (ApplyReply(s, reply, DescentReader?.Current?.Stage, UtcNow(), PersistMigration))
                         Nudge("descent migration");
                 }
                 catch (Exception ex) { Log.Debug("V2 Sync: Could not parse server flags: {Error}", ex.Message); }
@@ -314,6 +315,11 @@ namespace ConditioningControlPanel.Services
                 return false;
             }
             finally { _gate.Release(); }
+        }
+
+        private static void PersistMigration()
+        {
+            if (!CoreSettings.TrySaveImmediate()) throw new IOException("Migration checkpoint was not saved.");
         }
 
         internal static string SerializeBody(AppSettings s, IEnumerable<string>? achievements,
