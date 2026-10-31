@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -60,6 +61,99 @@ public sealed class OnlineMeterSurfaceTests
         Assert.Equal("Media from Scrolller", ((global::Avalonia.Controls.TextBlock)tab.TxtScrolllerCredit.Link.Content!).Text);
         Assert.Contains(Loc.Get("label_online_media_credit"), tab.TxtScrolllerCredit.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Select(r => r.Text));
         Assert.Equal(Loc.Get("online_cache_day_line"), tab.TxtOnlineCacheDay.Text);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, -6)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced, 0)]
+    public void Official_entrance_definition_matches_Wpf(ConditioningControlPanel.Models.MotionLevel level, int y)
+    {
+        var animation = AssetsTabView.OfficialNoteEntrance(level);
+        Assert.Equal(TimeSpan.FromMilliseconds(420), animation.Duration);
+        Assert.IsType<global::Avalonia.Animation.Easings.CubicEaseOut>(animation.Easing);
+        Assert.Equal(2, animation.Children.Count);
+        for (var i = 0; i < 2; i++)
+        {
+            Assert.Equal(i, animation.Children[i].Cue.CueValue);
+            var setters = animation.Children[i].Setters.OfType<global::Avalonia.Styling.Setter>().ToArray();
+            Assert.Equal(i == 0 ? 0.2 : 1.0, setters.Single(s => s.Property == Visual.OpacityProperty).Value);
+            var transform = Assert.IsType<global::Avalonia.Media.Transformation.TransformOperations>(
+                setters.Single(s => s.Property == Visual.RenderTransformProperty).Value);
+            Assert.Equal(i == 0 ? y : 0, transform.Value.M32);
+        }
+    }
+
+    [Theory]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, false, true, -6, false)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, false, true, -6, true)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced, false, true, 0, false)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Off, false, false, 0, false)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, true, true, 0, false)]
+    public Task Official_note_lands_only_on_first_effective_show(
+        ConditioningControlPanel.Models.MotionLevel level, bool gentle, bool animates, int y, bool detach) => Run(() =>
+    {
+        CoreSettings.Current.MotionLevel = level;
+        CoreSettings.Current.GentleVisuals = gentle;
+        var probe = UiMotionPreference.OsProbe;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        var tab = new AssetsTabView();
+        // Keep the real note and its view wiring, without measuring unrelated font-heavy assets UI.
+        ((global::Avalonia.Controls.Panel)tab.OnlineOfficialNote.Parent!).Children.Remove(tab.OnlineOfficialNote);
+        tab.OnlineOfficialNote.Child = null;
+        tab.Content = tab.OnlineOfficialNote;
+        var parent = new global::Avalonia.Controls.Border { Child = tab, IsVisible = false };
+        var window = new global::Avalonia.Controls.Window { Content = parent };
+        var calls = 0;
+        global::Avalonia.Animation.Animation? captured = null;
+        var token = default(System.Threading.CancellationToken);
+        tab.RunOfficialLanding = (animation, cancellation) =>
+        {
+            calls++;
+            token = cancellation;
+            captured = animation;
+            return Task.Delay(System.Threading.Timeout.Infinite, cancellation);
+        };
+        try
+        {
+            window.Show();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            tab.PaintOnlineMeter(State(10, official: true), DateTime.Now, DateTime.Now.AddDays(1));
+            Assert.Equal(0, calls); // a visible note under a hidden tab must wait
+            parent.IsVisible = true;
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(animates ? 1 : 0, calls);
+            if (animates)
+            {
+                var animation = Assert.IsType<global::Avalonia.Animation.Animation>(captured);
+                Assert.Equal(TimeSpan.FromMilliseconds(420), animation.Duration);
+                Assert.IsType<global::Avalonia.Animation.Easings.CubicEaseOut>(animation.Easing);
+                Assert.Equal(2, animation.Children.Count);
+                Assert.Equal(0.2, animation.Children[0].Setters.OfType<global::Avalonia.Styling.Setter>().Single(s => s.Property == Visual.OpacityProperty).Value);
+                Assert.Equal(1.0, animation.Children[1].Setters.OfType<global::Avalonia.Styling.Setter>().Single(s => s.Property == Visual.OpacityProperty).Value);
+                var transform = Assert.IsType<global::Avalonia.Media.Transformation.TransformOperations>(
+                    animation.Children[0].Setters.OfType<global::Avalonia.Styling.Setter>().Single(s => s.Property == Visual.RenderTransformProperty).Value);
+                Assert.Equal(y, transform.Value.M32);
+            }
+            tab.PaintOnlineMeter(State(20, official: true), DateTime.Now, DateTime.Now.AddDays(1));
+            Assert.Equal(animates ? 1 : 0, calls); // repaint cannot restart it
+            if (detach) parent.Child = null;
+            else parent.IsVisible = false;
+            if (animates) Assert.True(token.IsCancellationRequested);
+            parent.IsVisible = true;
+            parent.Child = null;
+            parent.Child = tab;
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(animates ? 1 : 0, calls); // no replay on reattach
+            Assert.Equal(1.0, tab.OnlineOfficialNote.Opacity);
+        }
+        finally
+        {
+            window.Close();
+            UiMotionPreference.OsProbe = probe;
+            UiMotionPreference.CacheStamp = long.MinValue;
+        }
         return Task.CompletedTask;
     });
 
