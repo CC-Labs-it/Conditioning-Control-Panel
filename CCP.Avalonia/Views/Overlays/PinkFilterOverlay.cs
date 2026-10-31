@@ -72,10 +72,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// </summary>
         /// <param name="host">Any attached visual - it is only used to reach <c>Screens</c> and
         /// the owning window. A detached one enumerates no screens and hides the tint.</param>
+        private static DateTime _payloadUntil;
+        private static double _payloadOpacity;
+        private static int _payloadGeneration;
+        internal static bool HasTimedPayload => DateTime.UtcNow < _payloadUntil;
+        internal static void ShowTimed(Visual host, int ms, double opacity)
+        {
+            _payloadGeneration++;
+            _payloadUntil = DateTime.UtcNow.AddMilliseconds(Math.Max(1, ms));
+            _payloadOpacity = Math.Clamp(opacity, 0, 1);
+            Refresh(host);
+            var generation = _payloadGeneration;
+            global::Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+            {
+                if (generation != _payloadGeneration) return;
+                _payloadUntil = default;
+                Refresh(host);
+            }, TimeSpan.FromMilliseconds(Math.Max(1, ms)));
+        }
+
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (!s.PinkFilterEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (!HasTimedPayload && (!s.PinkFilterEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -84,6 +103,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var (r, g, b) = EffectiveColor();
             var opacity = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;   // a session ramps it without writing it (#471)
+            // WPF ResolveAdHocOverlayOpacity: an effect raises a live tint, never lowers it.
+            if (HasTimedPayload) opacity = s.PinkFilterEnabled && ShouldShow() ? Math.Max(opacity, _payloadOpacity) : _payloadOpacity;
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.
@@ -93,7 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
 
-            CloseAll();
+            CloseWindows();
 
             // Checked BEFORE anything is created, not only inside Accept: without this, a slider
             // drag on a platform that cannot do click-through flashes a topmost full-screen window
@@ -117,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                                                 // BubbleCountWindow uses; there is no XID before Show
                 // A refusal is about the platform, not about this monitor, so drop the whole set
                 // rather than tinting some screens and not others.
-                if (!Accept(w)) { CloseAll(); return; }
+                if (!Accept(w)) { CloseWindows(); return; }   // a refusal is not a stop: the payload timer still ends it
                 Windows.Add(w);
             }
             _shownOn = want;
@@ -126,6 +147,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         public static void CloseAll()
+        {
+            _payloadUntil = default;
+            _payloadGeneration++;
+            CloseWindows();
+        }
+
+        private static void CloseWindows()
         {
             foreach (var w in Windows)
             {

@@ -85,11 +85,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
+        private static DateTime _payloadUntil;
+        private static double _payloadOpacity;
+        private static int _payloadGeneration;
+        internal static bool HasTimedPayload => DateTime.UtcNow < _payloadUntil;
+        internal static void ShowTimed(Visual host, int ms, double opacity)
+        {
+            _payloadGeneration++;
+            _payloadUntil = DateTime.UtcNow.AddMilliseconds(Math.Max(1, ms));
+            _payloadOpacity = Math.Clamp(opacity, 0, 1);
+            Refresh(host);
+            var generation = _payloadGeneration;
+            global::Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+            {
+                if (generation != _payloadGeneration) return;
+                _payloadUntil = default;
+                Refresh(host);
+            }, TimeSpan.FromMilliseconds(Math.Max(1, ms)));
+        }
+
         public static void Refresh(Visual host)
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (!HasTimedPayload && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var path = SourcePath();
             var video = IsVideo(path);
@@ -116,7 +135,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
             var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
-            var opacity = PaintedOpacity;
+            var opacity = HasTimedPayload
+                ? Math.Max(s.SpiralEnabled && ShouldShow() ? PaintedOpacity : 0, _payloadOpacity) : PaintedOpacity;
 
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
             {
@@ -146,7 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Log.Warning("Spiral: the platform refused a click-through topmost overlay window, so the spiral is not shown");
                     _refused = true;
                     w.Close();
-                    CloseAll();
+                    CloseWindows();
                     return;
                 }
                 w.Show();
@@ -185,6 +205,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _configuredPath = null;
             _randomizeAtStart = null;
             _repicked = false;
+            _payloadUntil = default;
+            _payloadGeneration++;
             CloseWindows();
         }
 
