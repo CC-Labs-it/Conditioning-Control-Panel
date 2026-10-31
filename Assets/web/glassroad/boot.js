@@ -439,7 +439,7 @@ async function boot(course, options, lifetime, isCurrent) {
   shared.filesOn = coursePick.source === 'files';
   const pictures = feedSwitch(() => shared.filesOn ? library : coursePick.source === 'off' ? null : scrolller);
   const view = () => ({ on: consentOn(), track: trackName, niches: nichesFor(track.id), custom: !isDefault(track.id),
-    scrolllerAvailable: init.caps.scrolller !== false, catalog: scrolller?.catalog, source: shared.filesOn ? 'files' : consentOn() ? 'scrolller' : 'off', files: library.count });
+    scrolllerAvailable: !!scrolller, catalog: scrolller?.catalog, source: shared.filesOn ? 'files' : consentOn() ? 'scrolller' : 'off', files: library.count });
   const refreshMedia = () => { hud.setScrolller(view()); shared.garage?.refreshMedia?.(); };
   function setSource(to, choose = true) {
     if (!['scrolller', 'files', 'off'].includes(to) || (to === 'scrolller' && !scrolller)) return;

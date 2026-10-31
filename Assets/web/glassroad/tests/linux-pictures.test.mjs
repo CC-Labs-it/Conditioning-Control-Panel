@@ -40,6 +40,49 @@ test('Linux init refuses early and late Scrolller stills, clips and posters', as
   }
 });
 
+test('init timeout keeps pictures and Options closed through a late Linux init', async t => {
+  const requests = [], sent = [];
+  t.mock.method(globalThis, 'fetch', async url => { requests.push(url); throw Error('unexpected fetch'); });
+  let message, timeout;
+  const win = { chrome: { webview: { postMessage: m => sent.push(m),
+    addEventListener: (_, fn) => { message = fn; } } },
+    setInterval: () => 1, clearInterval() {},
+    setTimeout(fn, ms) { assert.equal(ms, 3000); timeout = fn; return 2; }, clearTimeout() {} };
+  const bridge = createBridge({ win });
+  t.after(() => bridge.dispose());
+  const media = () => ({ set src(url) { requests.push(url); }, set poster(url) { requests.push(url); },
+    removeAttribute() {}, load() {} });
+  const pending = createHostScrolllerFeed({ bridge, makeImage: media, makeVideo: media });
+  const emit = data => message({ data });
+  const feed = { type: 'scrolller-feed', v: 1, rows: [
+    { kind: 'image', url: 'https://images.scrolller.com/early.jpg' },
+    { kind: 'video', url: 'https://iris.scrolller.com/clip.mp4', poster: 'https://images.scrolller.com/poster.jpg' }] };
+  emit(feed);
+  timeout(); // resolve bridge.init with browser defaults, with no Scrolller capability
+  const result = await pending;
+  t.after(() => result?.dispose());
+  assert.deepEqual(requests, [], 'timeout must not load the buffered feed');
+  const card = element(), cards = createCards(card, { doc: element(), emit() {} });
+  t.after(() => cards.dispose());
+  const assertClosed = () => {
+    cards.setScrolller({ scrolllerAvailable: !!result, source: 'off' });
+    cards.show('options');
+    const html = card.querySelector('.card-extra').innerHTML;
+    assert.doesNotMatch(html, /data-source="scrolller"/);
+    assert.match(html, /data-source="files"[^>]*>My files/);
+    assert.match(html, /data-source="off"[^>]*>Off/);
+    assert.deepEqual(requests, [], 'no src, poster or fetch requests');
+  };
+  assertClosed();
+  emit(feed); // media after timeout, before the disabling init
+  emit({ type: 'init', caps: { scrolller: false } });
+  emit({ type: 'setting', key: 'media.remoteConsent', value: true });
+  emit(feed); // media after the late Linux init
+  assertClosed();
+  assert.equal(result, null);
+  assert.equal(sent.some(m => m.type === 'set-setting' || m.type === 'scrolller-niches'), false);
+});
+
 function element() {
   const nodes = new Map();
   return { dataset: {}, style: {}, hidden: false, innerHTML: '', textContent: '', offsetWidth: 1,
@@ -69,5 +112,5 @@ test('boot uses the capability-gated feed and carries the Options capability', (
   const boot = readFileSync(new URL('../boot.js', import.meta.url), 'utf8');
   assert.match(boot, /shared.scrolllerFeedTask = createHostScrolllerFeed/);
   assert.match(boot, /shared.scrolllerFeed = await shared.scrolllerFeedTask/);
-  assert.match(boot, /scrolllerAvailable: init.caps.scrolller !== false/);
+  assert.match(boot, /scrolllerAvailable: !!scrolller/);
 });

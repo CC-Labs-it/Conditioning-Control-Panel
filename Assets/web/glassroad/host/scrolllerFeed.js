@@ -55,10 +55,10 @@ export function feedCatalog(msg) {
   return out.length ? out : null;
 }
 
-/** Wait for the host capability before accepting even a buffered feed message. */
+/** Require an explicit host capability. Browser defaults after init timeout grant no remote pictures. */
 export async function createHostScrolllerFeed(options = {}) {
   const init = await options.bridge.init;
-  return init.caps.scrolller === false ? null : createScrolllerFeed(options);
+  return init.caps.scrolller ? createScrolllerFeed(options) : null;
 }
 
 export function createScrolllerFeed({ bridge, makeImage = () => new Image(), makeVideo = () => displayVideo(), now = () => Date.now() } = {}) {
