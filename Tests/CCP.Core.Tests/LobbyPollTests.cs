@@ -10,16 +10,13 @@ using ConditioningControlPanel.Services.Lobby;
 using ConditioningControlPanel.Services.PieceByPiece;
 using Xunit;
 namespace CCP.Core.Tests;
-public sealed class LobbyPollTests
-{
+public sealed class LobbyPollTests {
     [Fact]
-    public void TableIdsMatchWpfBoundaries()
-    {
+    public void TableIdsMatchWpfBoundaries() {
         foreach (var id in new[] { "p_a", "p_Az09_-", "p_" + new string('a', 62) }) Assert.True(PbpWatchRules.IsTableId(id));
         foreach (var id in new string?[] { null, "", "p_", "P_a", "m_a", "p_é", "p_a/", "p_a b", "p_a\n", "p_" + new string('a', 63) }) Assert.False(PbpWatchRules.IsTableId(id));
     }
-    private sealed class Timer : IUiTimer
-    {
+    private sealed class Timer : IUiTimer {
         public TimeSpan Interval { get; set; }
         public event EventHandler? Tick;
         public bool Running;
@@ -29,10 +26,8 @@ public sealed class LobbyPollTests
         public void Fire() { if (Running) Tick?.Invoke(this, EventArgs.Empty); }
     }
     [Fact]
-    public async Task SignedOutDoesNotFetchAndLastLeaseStopsTimer()
-    {
-        var timer = new Timer();
-        var calls = 0;
+    public async Task SignedOutDoesNotFetchAndLastLeaseStopsTimer() {
+        var timer = new Timer(); var calls = 0;
         using var lobby = new LobbyPoll(timer, () => false, () => Array.Empty<Friend>(),
             () => { calls++; return Task.FromResult(PbpLobbyReply.Empty); },
             () => throw new Exception(), () => throw new Exception());
@@ -45,8 +40,7 @@ public sealed class LobbyPollTests
         b.Dispose(); Assert.False(timer.Running);
     }
     [Fact]
-    public async Task ConcurrentWatchersShareRoundMergeAllSourcesAndBackoffResets()
-    {
+    public async Task ConcurrentWatchersShareRoundMergeAllSourcesAndBackoffResets() {
         var timer = new Timer();
         var pending = new TaskCompletionSource<PbpLobbyReply>(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
@@ -64,16 +58,14 @@ public sealed class LobbyPollTests
         Assert.Single(lobby.Snapshot.Playing);
         Assert.True(lobby.LastRoundOk);
         fail = true;
-        foreach (var seconds in new[] { 20, 40, 60, 60 })
-        {
+        foreach (var seconds in new[] { 20, 40, 60, 60 }) {
             await lobby.RefreshAsync(); Assert.Equal(TimeSpan.FromSeconds(seconds), timer.Interval);
         }
         Assert.False(lobby.LastRoundOk);
         fail = false; await lobby.RefreshAsync(); Assert.Equal(LobbyPollPlan.Base, timer.Interval);
     }
     [Fact]
-    public async Task SignOutDuringRoundClearsRowsAndDisposedRoundCannotPublish()
-    {
+    public async Task SignOutDuringRoundClearsRowsAndDisposedRoundCannotPublish() {
         var timer = new Timer(); var signedIn = true; var changed = 0;
         var pending = new TaskCompletionSource<PbpLobbyReply>(TaskCreationOptions.RunContinuationsAsynchronously);
         var lobby = new LobbyPoll(timer, () => signedIn, () => Array.Empty<Friend>(), () => pending.Task,
@@ -85,23 +77,19 @@ public sealed class LobbyPollTests
         await round; Assert.Equal(LobbySnapshot.Empty, lobby.Snapshot);
         lobby.Dispose(); timer.Fire(); await lobby.RefreshAsync(); Assert.Equal(1, changed);
     }
-    private sealed class DirectoryHandler : HttpMessageHandler
-    {
+    private sealed class DirectoryHandler : HttpMessageHandler {
         public bool Fail;
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {
             Assert.Equal("/v2/directory/list", request.RequestUri!.AbsolutePath);
             Assert.Equal("caller", Assert.Single(request.Headers.GetValues("X-Caller-Unified-Id")));
             Assert.Equal("test-token", Assert.Single(request.Headers.GetValues("X-Auth-Token")));
-            return Task.FromResult(new HttpResponseMessage(Fail ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK)
-            {
+            return Task.FromResult(new HttpResponseMessage(Fail ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK) {
                 Content = new StringContent("{\"entries\":[{\"unified_id\":\"subject\",\"claimed\":true,\"tags\":[\"tag\",\"\"]},{\"level\":\"invalid\"}]}")
             });
         }
     }
     [Fact]
-    public async Task DirectoryUsesCallerHeadersDefaultsSkipsMalformedEntriesAndRetainsLastGoodOnError()
-    {
+    public async Task DirectoryUsesCallerHeadersDefaultsSkipsMalformedEntriesAndRetainsLastGoodOnError() {
         var handler = new DirectoryHandler(); using var http = new HttpClient(handler);
         var api = new RemoteLobbyApi(http, () => ("caller", "test-token"), () => "https://example.invalid");
         var good = await api.FetchAsync(); Assert.True(good.Ok);
