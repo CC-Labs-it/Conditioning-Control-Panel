@@ -64,5 +64,8 @@ public partial class EmiDeskWindow
         Position = _beforePresentation;
         _moveShift.Y = 0; _wobbleRotate.Angle = 0; _btnGear.IsVisible = _btnHelp.IsVisible = true;
         SetPose("idle"); DrawFace("^_^"); ClampIntoWorkArea(); RestartIdleBeats();
+        // WPF EmiDeskWindow.Presentation.cs:71 and .Alive.cs:162: a new desk sitting
+        // starts with a fresh poke ladder after the show returns her.
+        StartAlive();
     }
 }
