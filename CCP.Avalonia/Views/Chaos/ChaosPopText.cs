@@ -31,8 +31,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <see cref="ChaosPopTextMotion"/> on the shared 30 fps <see cref="BeatLoop"/>.</para>
     ///
     /// <para>ChaosRunHost delivers bubble labels and payouts through its PopText hook.
-    /// First-time bonus and ripple-denial callers (WPF ChaosModeService :221/:2600) remain
-    /// missing. WPF RaiseActive (:74) still waits on RaiseGameLayerAboveVideo (:745-756).</para>
+    /// First taste and first snap bonuses now use that hook (WPF ChaosModeService :208-225).
+    /// First play/draft awards and ripple-denial callers (:2600) remain missing. WPF RaiseActive (:74) still waits on RaiseGameLayerAboveVideo (:745-756).</para>
     /// </summary>
     internal sealed class ChaosPopText : Window
     {
