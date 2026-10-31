@@ -23,12 +23,11 @@ public sealed class EmiMomentBubbleTests {
     private static Task Run(Func<EmiDeskWindow, Task> test) => AvaloniaTestDispatcher.RunAsync(async () => {
         if (Application.Current == null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-        _ = EmiDeskService.Instance;
-        var win = new EmiDeskWindow();
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var st = EmiState.Current; var placement = (st.WinLeftPx, st.WinTopPx, st.Monitor);
+        _ = EmiDeskService.Instance; var win = new EmiDeskWindow();
         try { win.Show(); await test(win); }
-        finally { win.ShutDown(); Dispatcher.UIThread.RunJobs(); }
+        finally { win.ShutDown(); Dispatcher.UIThread.RunJobs(); (st.WinLeftPx, st.WinTopPx, st.Monitor) = placement; }
     });
     private sealed class Steps : TimeProvider {
         private sealed class Entry { public long Due; public Action Tick = () => { }; public bool Stopped; }
@@ -57,8 +56,7 @@ public sealed class EmiMomentBubbleTests {
         var clock = new Steps(win); string? effect = null;
         win.RunAskEffect = value => { Assert.False(win.AskLive); effect = value; };
         win.ShowAsk(Ask()); Assert.Equal(".", win.MomentBubbleText);
-        win.SpeakLine(Line("older"));
-        win.SpeakLine(Line("newest")); Assert.Equal(".", win.MomentBubbleText);
+        win.SpeakLine(Line("older")); win.SpeakLine(Line("newest")); Assert.Equal(".", win.MomentBubbleText);
         clock.Advance(1360); Assert.Equal("a question?", win.MomentBubbleText);
         win.SpeakLine(new LineDraw("hold", "test", "", "-_-", null, 2, true, 500));
         clock.Advance(1600); Assert.True(win.AskLive);
@@ -70,17 +68,14 @@ public sealed class EmiMomentBubbleTests {
     });
     [Fact]
     public Task BubbleWearsThePixelFontAndATail() => RunSync(win => {
-        new Steps(win);
-        win.ShowAsk(Ask()); Assert.Contains("Press Start 2P", win.MomentBubbleTextBlock!.FontFamily.ToString());
+        new Steps(win); win.ShowAsk(Ask()); Assert.Contains("Press Start 2P", win.MomentBubbleTextBlock!.FontFamily.ToString());
         Assert.True(win.MomentBubbleTail is { IsVisible: true, Points.Count: 3 }); Assert.Same(win, TopLevel.GetTopLevel(win.MomentBubbleTail));
         Assert.True(win.MomentBubbleTail.IsEffectivelyVisible);
     });
     [Fact]
     public Task ReplyLandsAfterAChip() => RunSync(win => {
         var clock = new Steps(win); win.RunAskEffect = _ => { };
-        win.ShowAsk(Ask());
-        clock.Advance(1360);
-        win.AnswerAsk(1);
+        win.ShowAsk(Ask()); clock.Advance(1360); win.AnswerAsk(1);
         clock.Advance(1360); Assert.Equal("reply.no", win.MomentBubbleText);
     });
     [Fact]
@@ -118,8 +113,7 @@ public sealed class EmiMomentBubbleTests {
                 Assert.False(EmiLineEngine.AskSituationProbe!());
             }
             finally { global::ConditioningControlPanel.CoreSession.IsSessionRunningProvider = sessionProbe; }
-            string? moment = null;
-            EventHandler<EmiMoment> heard = (_, value) => moment = value.Id;
+            string? moment = null; EventHandler<EmiMoment> heard = (_, value) => moment = value.Id;
             service.MomentFired += heard;
             try { service.Window!.ToggleRing(); Assert.Equal("ringOpen", moment); }
             finally { service.MomentFired -= heard; }
@@ -210,5 +204,11 @@ public sealed class EmiMomentBubbleTests {
         if (cancelAsk) win.CancelAsk(); else win.SpeakLine(new LineDraw("hold", "test", "", "-_-", null, 2, true, 1400));
         clock.Advance(1399); win.AdvancePatFeedback(); Assert.Equal("-_-", win.Face);
         clock.Advance(1); Assert.Equal(cancelAsk ? "..." : null, win.MomentBubbleText); Assert.Equal(cancelAsk ? "-_-" : "0_0", win.Face);
+    });
+    [Fact]
+    public Task PointerDragDoesNotPolluteTheNextSummon() => AvaloniaTestDispatcher.RunAsync(async () => {
+        var st = EmiState.Current; var saved = (st.WinLeftPx, st.WinTopPx, st.Monitor);
+        try { st.WinLeftPx = st.WinTopPx = double.NaN; st.Monitor = ""; await PaintedBubblePassesPointerInputToTheBodyAndOnlyChipsTakeInput(); await new EmiDeskSummonTests().SummonCountsAndRestoresHerSavedPlace(); }
+        finally { (st.WinLeftPx, st.WinTopPx, st.Monitor) = saved; }
     });
 }
