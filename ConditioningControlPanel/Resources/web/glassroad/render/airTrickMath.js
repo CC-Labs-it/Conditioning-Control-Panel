@@ -22,24 +22,29 @@ export const AIR_TRICK = Object.freeze({
   floatM: 0.05, floatHz: 1.1,
   antS: 0.14, antUp: 0.1,   // return: rise this much (of the lift) and gather before the drop
   stretch: 0.1, squash: 0.22,   // fall stretch, landing squash at the bottom of the dip (fraction of height)
-  spinStartS: 0.05, spinS: 0.62,
+  spinStartS: 0.05, spinS: 0.78,
   armAtS: 0.14, armInS: 0.2, armOutS: 0.3,
   faceAtS: 0.12, faceKeepS: 0.5,
-  wobRad: 0.2, wobHz: 3.4, wobTcS: 0.3, dipM: 0.12, dipS: 0.18,
+  wobRad: 0.2, wobHz: 2.2, wobTcS: 0.3, dipM: 0.12, dipS: 0.12,
   gentle: { lift: 0.5, spin: 1.6, wob: 0.5, wobHz: 0.5 },
   faces: ['cheer', 'wink', 'sparkle', 'heart'],
 });
 
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const smooth = (x) => { x = clamp01(x); return x * x * (3 - 2 * x); };
-const inOutCubic = (x) => { x = clamp01(x); return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2; };
+const smoother = x => { x = clamp01(x); return x * x * x * (x * (x * 6 - 15) + 10); };
 const outBack = (x) => { x = clamp01(x); const c = 1.4, y = x - 1; return 1 + (c + 1) * y * y * y + c * y * y; };
+const hermite = (a, b, va, vb, duration, u) => {
+  u = clamp01(u); const u2 = u * u, u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * a + (u3 - 2 * u2 + u) * va * duration
+    + (-2 * u3 + 3 * u2) * b + (u3 - u2) * vb * duration;
+};
 const TAU = Math.PI * 2;
 
 export function createAirTrick(seed = 0) {
   return {
     phase: 'idle', t: 0, age: 0, used: false, hop: null, landed: -1, rng: (seed * 2654435761 + 12345) >>> 0,
-    face: null, lastFace: null, arm: 1, spinSign: 1, from: 0, gentle: false,
+    face: null, lastFace: null, arm: 1, spinSign: 1, from: 0, fromV: 0, gentle: false,
     out: { active: false, phase: 'idle', lift: 0, spin: 0, armK: 0, arm: 1, face: null, wobRoll: 0, wobPitch: 0, squash: 0 },
   };
 }
@@ -91,9 +96,14 @@ export function stepAirTrick(s, dt, sig = {}, T = AIR_TRICK) {
   s.t += dt; s.age += dt;
   if (!air && s.landed < 0 && (s.phase === 'launch' || s.phase === 'hang')) s.landed = 0;
   else if (s.landed >= 0) s.landed += dt;
-  if (s.phase === 'launch' && s.t >= T.launchS) { s.phase = 'hang'; s.t = 0; }
-  if (s.phase === 'hang' && (s.t >= T.hangMaxS || (s.landed >= T.landHoldS && s.t >= T.hangMinS))) { s.from = liftAt(s, T); s.phase = 'return'; s.t = 0; }   // height read in the hang, before the switch
-  if (s.phase === 'return' && s.t >= T.returnS) { s.phase = 'settle'; s.t = 0; }
+  if (s.phase === 'launch' && s.t >= T.launchS) { s.phase = 'hang'; s.t -= T.launchS; }
+  if (s.phase === 'hang' && (s.t >= T.hangMaxS || (s.landed >= T.landHoldS && s.t >= T.hangMinS))) {
+    const over = s.t >= T.hangMaxS ? s.t - T.hangMaxS : Math.min(s.t - T.hangMinS, s.landed - T.landHoldS);
+    s.t -= over; s.from = liftAt(s, T);
+    s.fromV = T.floatM * TAU * T.floatHz * Math.cos(TAU * T.floatHz * s.t);
+    s.phase = 'return'; s.t = over;
+  }
+  if (s.phase === 'return' && s.t >= T.returnS) { s.phase = 'settle'; s.t -= T.returnS; }
   if (s.phase === 'settle' && s.t >= T.settleS) {
     resetAirTrick(s); s.used = air;   // still flying after the settle: wait for the next takeoff
     return s.out;
@@ -102,7 +112,7 @@ export function stepAirTrick(s, dt, sig = {}, T = AIR_TRICK) {
   o.active = true; o.phase = s.phase; o.arm = s.arm;
   o.lift = liftAt(s, T) * T.liftM * (g ? g.lift : 1);
   const spinS = T.spinS * (g ? g.spin : 1);
-  o.spin = s.spinSign * TAU * inOutCubic((s.age - T.spinStartS) / spinS);
+  o.spin = s.spinSign * TAU * smoother((s.age - T.spinStartS) / spinS);
   if (o.spin && Math.abs(Math.abs(o.spin) - TAU) < 1e-9) o.spin = 0;   // a whole turn is the rest pose
   const armIn = smooth((s.age - T.armAtS) / T.armInS);
   o.armK = s.phase === 'return' ? armIn * (1 - smooth(s.t / T.armOutS)) : s.phase === 'settle' ? 0 : armIn;
@@ -110,25 +120,26 @@ export function stepAirTrick(s, dt, sig = {}, T = AIR_TRICK) {
   o.squash = squashAt(s, T) * (g ? g.wob : 1);
   if (s.phase === 'settle') {
     const hz = T.wobHz * (g ? g.wobHz : 1), k = Math.exp(-s.t / (T.wobTcS * (g ? 1 / g.wobHz : 1))), w = TAU * hz * s.t;
-    const amp = T.wobRad * (g ? g.wob : 1) * k;
+    const amp = T.wobRad * (g ? g.wob : 1) * k * smooth(s.t / .12) * settleTail(s.t, T);
     o.wobRoll = amp * Math.sin(w);
-    o.wobPitch = 0.55 * amp * Math.sin(w + 1.3) * smooth(s.t / 0.06);
+    o.wobPitch = 0.55 * amp * Math.sin(w + 1.3);
   } else o.wobRoll = o.wobPitch = 0;
   return o;
 }
 
 /** Normalised height 0..1 (the settle dip goes a little below 0). */
+function settleTail(t, T) { return 1 - smooth((t - T.settleS * .65) / (T.settleS * .35)); }
 function liftAt(s, T) {
   if (s.phase === 'launch') return outBack(s.t / T.launchS);
   if (s.phase === 'hang') return 1 + T.floatM * Math.sin(TAU * T.floatHz * s.t) * smooth(s.t / 0.2);
   if (s.phase === 'return') {
-    // a small rise first (anticipation), then a fall that leaves the peak gently and still moves on contact
+    // Match both sides' velocities: float into the gather, then fall into one damped compression.
     const top = s.from + T.antUp;
-    if (s.t < T.antS) return s.from + T.antUp * smooth(s.t / T.antS);
+    if (s.t < T.antS) return hermite(s.from, top, s.fromV, 0, T.antS, s.t / T.antS);
     const p = clamp01((s.t - T.antS) / (T.returnS - T.antS));
-    return top * (1 - p * p * (2.2 - 1.2 * p));
+    return hermite(top, 0, 0, -(T.dipM / T.liftM) * Math.E / T.dipS, T.returnS - T.antS, p);
   }
-  if (s.phase === 'settle') return -(T.dipM / T.liftM) * Math.exp(-s.t / T.wobTcS) * Math.sin(Math.PI * Math.min(1, s.t / T.dipS) + Math.max(0, s.t - T.dipS) * TAU * T.wobHz);
+  if (s.phase === 'settle') { const u = s.t / T.dipS; return -(T.dipM / T.liftM) * u * Math.exp(1 - u) * settleTail(s.t, T); }
   return 0;
 }
 

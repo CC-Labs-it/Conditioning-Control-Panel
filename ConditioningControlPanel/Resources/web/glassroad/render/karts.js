@@ -56,6 +56,7 @@ import {
 } from './kartPose.js';
 import { dressKart, lookForSeat } from './wardrobe.js';
 import { createEmiLife } from './emiLife.js';
+import { createRigBlend } from './rigBlend.js';
 import { createEmiSkin } from './emiSkin.js';
 import { skinFromWire } from '../hud/garageState.js';
 import { lookForTier } from './wardrobeMath.js';
@@ -159,15 +160,13 @@ function makeRig(gltf, model) {
     else { a.setLoop(LoopOnce, 1); a.clampWhenFinished = true; }
     actions[clip.name] = a;
   }
-  return { mixer, actions, cur: null, rider, rest, bank: 1 };
+  return { mixer, actions, blend: createRigBlend(actions), cur: null, rider, rest, bank: 1 };
 }
 
-/** Start a director change on the mixer: the old clip fades out (frozen for a landing: the captured pose), the new one fades in at `from`. */
+/** Ease every live action into the next pose, preserving interrupted blends and idle phase. */
 function playRig(rig, ch) {
-  const next = ch.clip ? rig.actions[ch.clip] || null : null, prev = rig.cur, fade = Math.max(ch.fade, 1e-3);
-  if (prev && prev !== next) { if (ch.land) prev.timeScale = 0; prev.fadeOut(fade); }
-  if (next) { next.reset(); next.timeScale = 1; next.time = ch.from || 0; next.fadeIn(fade); next.play(); }
-  rig.cur = next;
+  rig.blend.change(ch);
+  rig.cur = ch.clip ? rig.actions[ch.clip] || null : null;
 }
 
 /** A remote player's tag (render/nameTag.js HUMAN_TAG): a bright pink pill sized to the name, white ring and text,
@@ -471,7 +470,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     k.pend.length = 0;
     const o = stepReact(r, st, dt, RR, { gentle, lean: p.lean, fxv });
     // EMI's air trick on a long jump: out of the cup, a 360, an arm up and a face, back in with a wobble
-    const motionOff = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const motionOff = still || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     const ts = k.trickSig, airborne = st[S.airborne] > 0.5;
     ts.air = airborne; ts.airTime = st[S.airTime]; ts.velY = st[S.velY]; ts.hopT = st[S.hopT]; ts.gentle = gentle; ts.motionOff = motionOff || !k.trickPieces;
     ts.blocked = st[S.respawnPhase] !== RESPAWN.NONE || (glide && airborne) || phraseBouncePhase(st) != null;
@@ -479,10 +478,12 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     if (rig) {
       // the clips own every joint; the body keeps the steering bank (not while a lean clip leans), the item
       // hit turns, flips and hops (polish 4) and the hit squash, layered over the rig
-      const ch = directorStep(k.dir, st, dt, RIG_T, RN, gentle);
+      const ch = motionOff ? (rig.cur ? { clip: null, fade: .3 } : null) : directorStep(k.dir, st, dt, RIG_T, RN, gentle);
+      if (motionOff) { k.dir.cur = null; k.dir.own = false; }
       if (ch) { playRig(rig, ch); if (ch.face) holdFace(r, ch.face, RIG_T[ch.clip].dur); }
       const leanClip = k.dir.cur === 'lean_left' || k.dir.cur === 'lean_right';
       rig.bank += ((leanClip ? 0 : 1) - rig.bank) * (1 - Math.exp(-dt / 0.15));
+      rig.blend.update(dt);
       rig.mixer.update(dt);
     }
     body.position.set(0, o.lift, 0);
@@ -506,7 +507,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     const signals=k.lifeSignals;
     signals.time=r.t; signals.speed=Math.min(1,Math.max(0,st[S.speedPct])); signals.steer=st[S.steerSlew];
     signals.boost=st[S.boostKind]>0?1:0; signals.air=st[S.airborne]; signals.land=k.lifeAir&&!signals.air?1:0;
-    signals.hit=o.stunK||0; signals.gentle=gentle; signals.motionOff=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+    signals.hit=o.stunK||0; signals.gentle=gentle; signals.motionOff=motionOff;
     signals.near=near; signals.clip=k.dir.cur; signals.outfit=k.dress?.outfit||''; k.lifeAir=signals.air;
     k.life?.update(dt,signals); k.dress?.life?.update(dt,signals);
     k.phrasePieces?.update(bounce, !k.dress?.vehicle && !motionOff);
@@ -624,7 +625,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       k.propeller.reset();
       k.surge.alpha = k.surge.time = k.surge.material.opacity = 0; k.surge.mesh.visible = false;
       k.underwater=0;k.caustics.amount.value=k.caustics.time.value=0;
-      if (k.rig) { k.rig.mixer.stopAllAction(); k.rig.cur = null; }
+      if (k.rig) { k.rig.blend.reset(); k.rig.mixer.stopAllAction(); k.rig.cur = null; }
     }
   }
 

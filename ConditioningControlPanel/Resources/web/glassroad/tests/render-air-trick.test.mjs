@@ -99,3 +99,41 @@ test('air trick: karts.js restores the rider before every pose and passes the tr
   assert.match(src, /face \|\| trick\.face \|\| o\.face/);
   assert.ok(src.indexOf('k.trickPieces?.update(trick, near)') > src.indexOf('k.phrasePieces?.update('), 'applied last');
 });
+
+test('air trick: descent meets the landing compression at the same position and velocity', () => {
+  const epsilon = .00001;
+  const sample = (phase, t) => {
+    const s = createAirTrick(2); Object.assign(s, { phase, t, age: 2, used: true, from: 1, fromV: 0, landed: .4 });
+    return { ...stepAirTrick(s, 0, { air: false }) };
+  };
+  const left = sample('return', T.returnS - epsilon), join = sample('settle', 0), right = sample('settle', epsilon);
+  assert.ok(Math.abs(join.lift) < 1e-12);
+  const inV = (join.lift - left.lift) / epsilon, outV = (right.lift - join.lift) / epsilon;
+  assert.ok(Math.abs(inV - outV) < .002, 'no landing velocity kick: ' + inV + ' / ' + outV);
+  assert.ok(Math.abs(right.wobRoll) < 1e-8, 'settle rotation eases in from zero velocity');
+  const finish = sample('settle', T.settleS - epsilon);
+  for (const key of ['lift', 'wobRoll', 'wobPitch', 'squash']) assert.ok(Math.abs(finish[key]) < 1e-8, key + ' returns smoothly to rest');
+});
+
+test('air trick: phase changes retain fractional frame time at low frame rates', () => {
+  const s = createAirTrick(1);
+  Object.assign(s, { phase: 'launch', t: T.launchS - .01, age: .4, used: true });
+  stepAirTrick(s, .05, { air: true, airTime: .8, velY: 0 });
+  assert.equal(s.phase, 'hang'); assert.ok(Math.abs(s.t - .04) < 1e-12);
+  Object.assign(s, { phase: 'return', t: T.returnS - .02, from: 1, fromV: 0 });
+  stepAirTrick(s, .05, { air: false });
+  assert.equal(s.phase, 'settle'); assert.ok(Math.abs(s.t - .03) < 1e-12);
+});
+
+test('air trick: one full turn has a bounded angular speed and acceleration', () => {
+  const frames = fly(createAirTrick(3)); let previous = 0, velocity = 0, peak = 0, acceleration = 0;
+  for (const frame of frames.filter(f => f.active)) {
+    const angle = frame.spin === 0 && previous > Math.PI ? Math.PI * 2 : Math.abs(frame.spin);
+    const nextV = (angle - previous) / DT;
+    peak = Math.max(peak, nextV); acceleration = Math.max(acceleration, Math.abs(nextV - velocity) / DT);
+    previous = angle; velocity = nextV;
+  }
+  assert.ok(peak < 16, 'the turn never snaps through its middle: ' + peak);
+  assert.ok(acceleration < 70, 'angular acceleration stays continuous and bounded: ' + acceleration);
+  assert.ok(previous > Math.PI * 1.99, 'the accepted full turn remains');
+});
