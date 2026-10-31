@@ -106,11 +106,14 @@ public sealed class LockCardVoiceTests
     [InlineData(true, false, true, CoreSpeechModelStatus.LoadFailed, "lock_voice_hint_load_failed")]
     [InlineData(true, false, true, CoreSpeechModelStatus.NoModelFound, "lock_voice_hint_no_model")]
     public void VoiceHintsUseEverySelectedLanguage(bool on, bool available, bool mic,
-        CoreSpeechModelStatus status, string key)
+        CoreSpeechModelStatus status, string key) => AvaloniaTestDispatcher.Run(() =>
     {
         var loc = LocalizationManager.Instance;
         var oldLanguage = loc.CurrentLanguage;
         var folder = Path.Combine(CorePaths.UserData, "Models", "vosk");
+        // Reproduce a shell's UI-bound language listener even when this test runs alone.
+        void RequireUiThread(object? sender, EventArgs e) => Dispatcher.UIThread.VerifyAccess();
+        loc.LanguageChanged += RequireUiThread;
         try
         {
             CoreSpeech.IsAvailableProvider = () => available;
@@ -132,8 +135,12 @@ public sealed class LockCardVoiceTests
                 Assert.DoesNotContain("\u2013", hint);
             }
         }
-        finally { loc.SetLanguage(oldLanguage); ResetSpeech(); }
-    }
+        finally
+        {
+            try { loc.SetLanguage(oldLanguage); }
+            finally { loc.LanguageChanged -= RequireUiThread; ResetSpeech(); }
+        }
+    });
 
     private static void ResetSpeech()
     {
