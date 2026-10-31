@@ -7,50 +7,40 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Services.Fyp.Online;
-
 namespace ConditioningControlPanel.Avalonia.Controls;
-
 public sealed class OnlineMeterRing : Control
 {
     internal static readonly Color Track = Color.FromRgb(0x3A, 0x3A, 0x5C);
     internal static readonly Color Pink = Color.FromRgb(0xFF, 0x69, 0xB4);
     internal static readonly Color Amber = Color.FromRgb(0xFF, 0xB3, 0x47);
     internal static readonly Color Grey = Color.FromRgb(0xA7, 0xA7, 0xC1);
-
     public static readonly StyledProperty<int> PercentProperty =
         AvaloniaProperty.Register<OnlineMeterRing, int>(nameof(Percent));
-
     internal static readonly StyledProperty<OnlineMeterTone> ToneProperty =
         AvaloniaProperty.Register<OnlineMeterRing, OnlineMeterTone>(nameof(Tone));
-
     static OnlineMeterRing() => AffectsRender<OnlineMeterRing>(PercentProperty, ToneProperty);
-
     public OnlineMeterRing()
     {
         Width = 18;
         Height = 18;
         IsHitTestVisible = false;
     }
-
     public int Percent
     {
         get => GetValue(PercentProperty);
         set => SetValue(PercentProperty, value);
     }
-
     internal OnlineMeterTone Tone
     {
         get => GetValue(ToneProperty);
         set => SetValue(ToneProperty, value);
     }
-
     internal static Color ColorFor(OnlineMeterTone tone) => tone switch
     {
         OnlineMeterTone.Amber => Amber,
         OnlineMeterTone.Spent => Grey,
         _ => Pink,
     };
-
     public override void Render(DrawingContext dc)
     {
         var w = Bounds.Width;
@@ -61,9 +51,7 @@ public sealed class OnlineMeterRing : Control
         var r = (size - thick) / 2;
         var c = new Point(w / 2, h / 2);
         var spent = Tone == OnlineMeterTone.Spent;
-
         dc.DrawEllipse(null, new Pen(new SolidColorBrush(spent ? Grey : Track), thick), c, r, r);
-
         var sweep = OnlineMeterRules.RingSweep(Percent, spent);
         if (sweep <= 0) return;
         var a = sweep * 2 * Math.PI;

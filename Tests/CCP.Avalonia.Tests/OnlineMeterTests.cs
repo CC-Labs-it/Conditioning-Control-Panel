@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Documents;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
@@ -17,18 +16,12 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
-/// <summary>"Online media today" on this head (WPF MainWindow.OnlineMeter.cs, main 76cb2f8b0 / 50a0074f1 /
-/// 6ea63f274): the title bar pill and the Assets card follow the source, the remote media consent and the
-/// day's share; the spent notice waits out a hold.</summary>
 public sealed class OnlineMeterTests
 {
     private static readonly DateTime SixPm = new(2026, 10, 20, 18, 0, 0);
     private static readonly LandingWorld Quiet = new(false, false, false, true, false, false);
     private static readonly LandingWorld Session = new(false, false, false, true, false, false, SessionRunning: true);
-
     [Fact]
     public void PillAndCardFollowSourceConsentAndTheDaysShare() => Run((shell, s) =>
     {
@@ -52,7 +45,6 @@ public sealed class OnlineMeterTests
         ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes * 40 / 100);
         shell.RefreshOnlineMeterPill();
         Assert.Equal(OnlineMeterTone.Amber, shell.OnlinePillRing.Tone);
-
         // 50a0074f1: no remote media consent, no meter, whatever the source says.
         (s.RemoteMediaConsented, s.FypOnlineConsented) = (false, false);
         shell.RefreshOnlineMeterPill();
@@ -65,7 +57,6 @@ public sealed class OnlineMeterTests
         shell.Named<AssetsTabView>("AssetsTab")!.RefreshOnlineMeter();
         Assert.False(pill.IsVisible);
         s.MediaSource = "mixed";
-
         // Spent: grey "done for today", the card says when it is back, the hover card offers plans.
         ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes);
         Dispatcher.UIThread.RunJobs();
@@ -79,7 +70,6 @@ public sealed class OnlineMeterTests
         shell.OpenOnlineMeterHover();
         Assert.True(shell.OnlineMeterHover!.IsOpen);
         Assert.Contains(shell.OnlineMeterHover.Child!.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("online_see_plans"));
-
         // The pill is a door to the Assets tab (Enter, as a click).
         shell.ShowTab("dashboard");
         Dispatcher.UIThread.RunJobs();
@@ -97,19 +87,16 @@ public sealed class OnlineMeterTests
         tab.RefreshOnlineMeter();
         Assert.False(tab.BtnOnlineMeterPlans.IsVisible);
     });
-
     [Fact]
     public void SpentNoticeWaitsOutAHoldThenOffersPlans() => Run((shell, s) =>
     {
         var host = shell.Named<Panel>("NotificationHost")!;
         global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(host);
         bool Toast() => host.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == Loc.Get("online_toast_spent"));
-
         FriendsLanding.World = () => Session;
         ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes);   // SpentReached, on the real event path
         Dispatcher.UIThread.RunJobs();
         Assert.False(Toast());
-
         FriendsLanding.World = () => Quiet;
         shell.ReleaseOnlineSpentNotice();   // what the 3 s wait timer runs
         Dispatcher.UIThread.RunJobs();
@@ -119,7 +106,6 @@ public sealed class OnlineMeterTests
         Assert.Equal(count, host.Children.Count);
         Assert.Contains(host.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("online_see_plans"));
     });
-
     [Fact]
     public void RingDrawsAnArcThenAGreyCircle() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -149,14 +135,52 @@ public sealed class OnlineMeterTests
         Assert.True(spent.SequenceEqual(Frame(0, OnlineMeterTone.Spent)));
         Assert.Contains(spent.Where((_, i) => i % 4 == 3), a => a > 200);
     });
-
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DisplayedNoticeFoldsOnHoldOrPausesWhileHovered(bool hold) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Platform();
+        var service = new global::ConditioningControlPanel.Avalonia.Helpers.NotificationService();
+        service.RemoveLater = (remove, _) => remove();
+        var host = new StackPanel();
+        var now = SixPm;
+        var queue = new OnlineSpentNoticeQueue();
+        bool holding = false;
+        using var toast = new global::ConditioningControlPanel.Avalonia.Helpers.OnlineSpentToast(service, host,
+            () => holding, () => queue.Arm(now), "spent", null, null);
+        toast.Tick(4_000);
+        if (hold)
+        {
+            holding = true;
+            toast.Tick(50);
+            Assert.Empty(host.Children);
+            Assert.False(queue.TryRelease(now, true));
+            Assert.True(queue.TryRelease(now, false));
+            Assert.False(queue.TryRelease(now, false));
+        }
+        else
+        {
+            void Hover(bool on) => toast.Border.RaiseEvent(new PointerEventArgs(
+                on ? InputElement.PointerEnteredEvent : InputElement.PointerExitedEvent, toast.Border,
+                null!, null!, default, 0, PointerPointProperties.None, KeyModifiers.None));
+            Hover(true);
+            toast.Tick(20_000);
+            Assert.Single(host.Children);
+            Hover(false);
+            toast.Tick(5_999);
+            Assert.Single(host.Children);
+            toast.Tick(1);
+            Assert.Empty(host.Children);
+            Assert.False(queue.Pending);
+        }
+    });
     private static void Platform()
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
-
     private static void Run(Action<MainShellWindow, AppSettings> body) => AvaloniaTestDispatcher.Run(() =>
     {
         Platform();

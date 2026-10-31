@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         private bool _onlinePillWired;
+        private Helpers.OnlineSpentToast? _onlineSpentToast;
 
         // This window loads with AvaloniaXamlLoader.Load (no generated fields): the pill's parts by name.
         internal Border? OnlinePill => Named<Border>("OnlineMeterPill");
@@ -57,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     ScrolllerAllowance.SpentReached -= OnOnlineAllowanceSpent;
                     LocalizationManager.Instance.LanguageChanged -= OnOnlineMeterLanguageChanged;
                     _onlineSpentWait.Stop();
+                    _onlineSpentToast?.Dispose();
                     CloseOnlineMeterHover();
                 };
                 if (OnlinePill is not { } pill) return;
@@ -251,8 +253,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 RefreshOnlineMeterPill();
                 var tier = OnlineMeterRules.SpentNoticePlansTier(ScrolllerAllowance.Plan, LockdownActive);
-                App.Notifications.Show(Loc.Get("online_toast_spent"), Helpers.NotificationType.Info,
-                    TimeSpan.FromMilliseconds(OnlineMeterRules.NoticeLifetimeMs),
+                _onlineSpentToast?.Dispose();
+                if (Named<Panel>("NotificationHost") is not { } host) return;
+                _onlineSpentToast = new Helpers.OnlineSpentToast(App.Notifications, host, OnlineNoticeHolding,
+                    QueueOnlineSpentNotice, Loc.Get("online_toast_spent"),
                     tier != null ? Loc.Get("online_see_plans") : null,
                     tier is int t ? () => OpenOnlinePlans(t) : null);
             }
