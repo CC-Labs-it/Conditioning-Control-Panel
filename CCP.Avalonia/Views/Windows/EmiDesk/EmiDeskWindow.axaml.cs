@@ -263,9 +263,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private double _resizeStartWidth;
 
         /// <summary>True while a chain is on screen.</summary>
-        // ponytail: the pat faces are the only chain this head plays; the full chain player (EmiChainPlayer, WPF head only;
-        // the chain data is in Core as EmiChains) is wire-win-emi-desk-b.
-        public bool ChainLive => _patFeedback is not null;
+        // WPF React.cs:134,307 and EmiDeskWindow.xaml.cs:1828: speech owns the face, too.
+        public bool ChainLive => _patFeedback is not null || _tourSpeech is not null;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -906,6 +905,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void CancelChain()
         {
             StopPatFeedback();
+            StopTourSpeech();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -926,7 +926,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>True when something is on screen that an idle beat must not interrupt.</summary>
         private bool Busy()
         {
-            // ChainLive is the WPF gate's `_player.IsLive` (here: a pat face is running).
+            // ChainLive is the WPF gate's `_player.IsLive` (pat feedback or tour speech).
             if (PresentationActive || _transiting || ChainLive || InputLocked) return true;
             bool glass = false;
             try { OnGlassLiveQuery(ref glass); }
@@ -2607,7 +2607,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private void HideProp() { }
 
         /// <summary>ponytail: EmiDeskWindow.Bubble.cs - drops the voice hooks.</summary>
-        private void TearDownVox() { }
+        private void TearDownVox() => StopTourSpeech();
 
         /// <summary>WPF EmiDeskWindow.xaml.cs:1832 - the pat sound.</summary>
         private void PlayPatSfx() => EmiSfx.Pat();

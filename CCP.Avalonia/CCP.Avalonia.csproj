@@ -271,6 +271,7 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
+    <Content Include="..\Assets\emi\desk-lines.json" Link="Resources\emi\desk-lines.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <!-- The banner line pool (Core BannerPoolService reads Resources/banner/lines.<lang>.json), as WPF csproj:661. -->
     <Content Include="..\Assets\banner\*.json" Link="Resources\banner\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
