@@ -240,6 +240,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        /// <summary>WPF BubbleService.PopAllBubbles, ChaosModeService.cs:1464:
+        /// destroy the field without firing a payload or unhooking the run.</summary>
+        internal static void ClearForDraft()
+        {
+            Field.Bubbles.Clear();
+            foreach (var w in Windows) w.Sync();
+        }
+
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {

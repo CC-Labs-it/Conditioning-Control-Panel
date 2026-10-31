@@ -20,7 +20,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// false, WS_EX_NOACTIVATE -> ShowActivated false, WS_EX_TRANSPARENT ->
     /// <see cref="X11Overlay.SetClickThrough"/>. UI thread only: <see cref="ChaosRunHost"/> calls it
     /// from its run tick and closes it on every teardown, including panic (PanicSurfaces "chaos").</para>
-    /// <para>Draft clearing remains pending the run host draft lifecycle.</para>
     /// </summary>
     internal sealed class ChaosWaveTimerWindow : Window
     {
@@ -63,6 +62,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             EnsureCreated();
             Active?.SetText(ChaosWaveTimerReadout.For(wave, waveCount, secLeftInWave, score));
+        }
+
+        /// <summary>WPF ChaosWaveTimerOverlay.cs:62-69: blank without destroying the watch.</summary>
+        internal static void Clear()
+        {
+            if (Active is { } w) w.Pill.IsVisible = false;
         }
 
         /// <summary>WPF CloseActive: instant teardown (run end, panic, shutdown). Safe when idle.</summary>

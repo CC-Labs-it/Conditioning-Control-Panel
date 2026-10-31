@@ -153,7 +153,7 @@ public sealed class ChaosPopTextTests
             {
                 foreach (var panic in new[] { false, true })
                 {
-                    ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                    ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                     ChaosRunHost.Overlay!.FinishCountdown();
                     var w = new ChaosPopText();
                     Assert.Same(w, ChaosPopText.Pool.Acquire(() => w));

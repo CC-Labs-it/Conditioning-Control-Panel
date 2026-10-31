@@ -120,7 +120,7 @@ public sealed class ChaosAnnouncerOverlayTests
     {
         await Run(_ =>
         {
-            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
             ChaosRunHost.Overlay!.FinishCountdown();
             for (int i = 0; i < 4 * 49; i++) ChaosRunHost.Tick();   // 49 s
             Assert.Null(ChaosAnnouncerOverlay.Active);

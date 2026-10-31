@@ -30,7 +30,7 @@ public sealed class ChaosRunHostTests
                 .SetupWithoutStarting();
     }
 
-    private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3 };
+    private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false };
 
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
@@ -39,6 +39,209 @@ public sealed class ChaosRunHostTests
     {
         for (int s = 1; s <= 3; s++) ChaosMetaStore.Delete(s);
         ChaosMeta.Init();
+    }
+
+    private static void CommitDraft(ChaosOverlayWindow overlay, ChaosBoon? boon) =>
+        typeof(ChaosOverlayWindow).GetMethod("ChooseBoon",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(overlay, new object?[] { boon });
+
+    // WPF ChaosModeService.cs:1440-1485,1533-1620; ChaosWaveTimerOverlay.cs:62-69.
+    [Fact]
+    public async Task Wave_draft_blanks_watch_clears_without_detonating_and_waits_for_pick_and_go()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            ChaosWaveTimerWindow.SkipPlatformChecksForTests = true;
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
+                    BoonDraftEnabled = true, DraftAutoResumeSec = 0 });
+                var state = ChaosRunHost.State!;
+                state.ShowWaveTimer = true;
+                var overlay = ChaosRunHost.Overlay!;
+                overlay.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                Ticks(79);
+                var watch = ChaosWaveTimerWindow.Active!;
+                Assert.True(watch.Pill.IsVisible);
+                BubbleOverlay.SpawnChaos(LiveSpec());
+                int detonated = state.Detonated;
+                Ticks(1);
+                Assert.True(overlay.FindControl<Border>("DraftPanel")!.IsVisible);
+                Assert.Same(watch, ChaosWaveTimerWindow.Active);
+                Assert.False(watch.Pill.IsVisible);
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                Assert.Equal(detonated, state.Detonated);
+                Assert.Equal(1, state.WaveIndex);
+                double elapsed = state.ElapsedSec;
+                var toy = new ChaosToyState { Id = "vibe_popping", CooldownSec = 20 };
+                state.ActiveToys.Add(toy);
+                ChaosRunHost.UseToyById(toy.Id);
+                Assert.Equal(0, toy.CooldownRemainingSec);
+                Ticks(8);
+                ChaosRunHost.SpawnTick();
+                ChaosRunHost.ToggleManualPause();
+                Assert.False(ChaosRunHost.IsManuallyPaused);
+                Assert.Equal(elapsed, state.ElapsedSec);
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
+
+                int shields = state.Shields;
+                var pick = ChaosBoonPool.All.Single(b => b.Id == "extra_shield");
+                CommitDraft(overlay, pick);   // the draft's actual commit callback
+                Assert.Contains(pick, state.ActiveBoons);
+                Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
+                Assert.Equal(1, ChaosLessons.Progress("draft4"));
+                Assert.Equal(shields + 2, state.Shields);
+                Assert.Equal(2, state.WaveIndex);
+                Ticks(8);
+                Assert.Equal(elapsed, state.ElapsedSec);
+                Assert.False(watch.Pill.IsVisible);
+                overlay.FinishCountdown();
+                Ticks(1);
+                Assert.True(state.ElapsedSec > elapsed);
+                Assert.True(watch.Pill.IsVisible);
+                Assert.Same(watch, ChaosWaveTimerWindow.Active);
+                ChaosRunHost.UseToyById(toy.Id);
+                Assert.Equal(20, toy.CooldownRemainingSec);
+                ChaosRunHost.SpawnTick();
+                Assert.True(BubbleOverlay.ChaosCount > 0);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosWaveTimerWindow.SkipPlatformChecksForTests = false;
+                FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF ChaosModeService.cs:1520-1530,1540-1564,1577-1599.
+    [Fact]
+    public async Task Draft_rerolls_spend_charges_skip_adds_resistance_and_surrender_shields_the_first_sin()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
+                    BoonDraftEnabled = true, DraftAutoResumeSec = 0 });
+                var state = ChaosRunHost.State!;
+                var overlay = ChaosRunHost.Overlay!;
+                overlay.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                state.RerollsLeft = 1;
+                state.MaxedBoons.Add("surrender");
+                state.ApplyBoon(ChaosBoonPool.All.Single(b => b.Id == "gold_digger"));
+                Ticks(80);
+                var reroll = (Func<(List<ChaosBoon> options, int rerollsLeft)?>)typeof(ChaosOverlayWindow)
+                    .GetField("_rerollFunc", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .GetValue(overlay)!;
+                var deal = reroll();
+                Assert.NotNull(deal);
+                Assert.Equal(state.Config.DraftChoices, deal.Value.options.Count);
+                Assert.Equal(0, deal.Value.rerollsLeft);
+                Assert.Contains(deal.Value.options, b => b.IsCurse);
+                Assert.DoesNotContain(deal.Value.options, b => b.Id == "gold_digger");
+                Assert.All(deal.Value.options, b => Assert.Contains("boon:" + b.Id, ChaosMeta.State.DiscoveredCodexIds));
+                Assert.Equal(0, state.RerollsLeft);
+                Assert.Null(reroll());
+                int shields = state.Shields;
+                CommitDraft(overlay, null);
+                Assert.Equal(shields + 1, state.Shields);
+                overlay.FinishCountdown();
+                Ticks(80);
+                state.MaxedBoons.Add("surrender");
+                state.SinExtraMult = 0.2;
+                var sin = ChaosBoonPool.All.Single(b => b.Id == "hair_trigger");
+                double fuse = state.FuseTimeMult;
+                double mult = state.BoonMult;
+                shields = state.Shields;
+                CommitDraft(overlay, sin);
+                Assert.True(state.SurrenderShieldUsed);
+                Assert.Equal(fuse, state.FuseTimeMult);   // the shield keeps the upside, drops the drawback
+                Assert.Contains(sin, state.ActiveCurses);
+                Assert.Equal(shields + 1, state.Shields);
+                Assert.Equal(mult + sin.RunMultBonus + 0.2, state.BoonMult, 6);
+                Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes));
+                ChaosRunHost.ForceShutdown();
+                // A stale GO callback cannot restart the stopped run.
+                overlay.FinishCountdown();
+                Assert.False(ChaosRunHost.IsDescending);
+                Assert.Null(ChaosWaveTimerWindow.Active);
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    private sealed class CardClock : TimeProvider
+    {
+        public long Ticks;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Ticks;
+    }
+
+    // WPF ChaosModeService.cs:1602-1620: queued lessons take over the draft's pause after GO.
+    [Fact]
+    public async Task Draft_lessons_wait_for_go_and_last_card_dismissal_resumes_the_field()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var oldClock = ChaosUnlockCardOverlay.Clock;
+            var clock = new CardClock();
+            ChaosUnlockCardOverlay.Clock = clock;
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
+                    BoonDraftEnabled = true, DraftAutoResumeSec = 0 });
+                var overlay = ChaosRunHost.Overlay!;
+                overlay.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                Ticks(80);
+                ChaosLessons.Tick("taking_chances", ChaosLessons.T_TAKING_CHANCES);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.False(ChaosUnlockCardOverlay.IsShowing);
+                CommitDraft(overlay, null);
+                double elapsed = ChaosRunHost.State!.ElapsedSec;
+                overlay.FinishCountdown();
+                Assert.True(ChaosUnlockCardOverlay.IsShowing);
+                Ticks(8);
+                ChaosRunHost.SpawnTick();
+                Assert.Equal(elapsed, ChaosRunHost.State.ElapsedSec);
+                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                int cards = 0;
+                while (ChaosUnlockCardOverlay.IsShowing && cards++ < 10)
+                {
+                    var card = ChaosUnlockCardOverlay.Active!;
+                    Assert.False(card.AutoDismiss);
+                    clock.Ticks += TimeSpan.FromSeconds(1).Ticks;
+                    card.Step();
+                    card.Dismiss();
+                    clock.Ticks += TimeSpan.FromMilliseconds(150).Ticks;
+                    card.Step();
+                }
+                Assert.False(ChaosUnlockCardOverlay.IsShowing);
+                Ticks(1);
+                Assert.True(ChaosRunHost.State.ElapsedSec > elapsed);
+                ChaosRunHost.SpawnTick();
+                Assert.True(BubbleOverlay.ChaosCount > 0);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosUnlockCardOverlay.Clock = oldClock;
+                FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
     }
 
     [Fact]
@@ -426,7 +629,16 @@ public sealed class ChaosRunHostTests
                 state.Score = 1234;
                 var meta = ChaosMeta.State;
                 int gold0 = meta.Gold;
-                for (int i = 0; i < 4 * 1000 && ChaosRunHost.IsDescending; i++) ChaosRunHost.Tick();
+                for (int i = 0; i < 4 * 1000 && ChaosRunHost.IsDescending; i++)
+                {
+                    ChaosRunHost.Tick();
+                    var overlay = ChaosRunHost.Overlay!;
+                    if (overlay.FindControl<Border>("DraftPanel")!.IsVisible)
+                    {
+                        CommitDraft(overlay, null);
+                        overlay.FinishCountdown();
+                    }
+                }
                 Assert.False(ChaosRunHost.IsDescending);
 
                 double durMin = state.RunDurationSec / 60.0, diff = state.Config.DifficultyMult;
