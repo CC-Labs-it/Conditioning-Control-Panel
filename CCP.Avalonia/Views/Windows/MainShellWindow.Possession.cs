@@ -1,5 +1,4 @@
-// WPF MainWindow.Possession.cs:53,96,149,257,323,355,432,454 (lifecycle, stage, cache, walk, roles).
-// WPF :529,563,623,658 (placement, names, coordinates, usability). Stage only; director requires attribution and effect adapters.
+// WPF MainWindow.Possession.cs:53,96,149,257,323,355,432,454 (lifecycle, stage, cache, walk, roles). WPF :529,563,623,658 (placement, names, coordinates, usability). Stage only; director requires attribution and effect adapters.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -123,8 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     {
                         if (!TryWindowBounds((Control)t.Visual, out var r)) return double.MaxValue;
                         if (!haveCursor) return -(r.Width * r.Height);         // biggest first
-                        var dx = r.X + r.Width / 2 - origin.X;
-                        var dy = r.Y + r.Height / 2 - origin.Y;
+                        double dx = r.X + r.Width / 2 - origin.X, dy = r.Y + r.Height / 2 - origin.Y;
                         return dx * dx + dy * dy;                              // nearest first
                     }
                     catch { return double.MaxValue; }
@@ -260,8 +258,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!fe.IsEffectivelyEnabled || !fe.IsHitTestVisible) return false;
                 for (Visual? ancestor = fe.GetVisualParent(); ancestor != null; ancestor = ancestor.GetVisualParent())
                     if (ancestor is global::Avalonia.Input.InputElement { IsHitTestVisible: false }) return false;
-                if (fe.Bounds.Width <= 0 || fe.Bounds.Height <= 0) return false;
-                if (!TryWindowBounds(fe, out var r)) return false;
+                if (fe.Bounds.Width <= 0 || fe.Bounds.Height <= 0 || !TryWindowBounds(fe, out var r)) return false;
                 if (r.Width < MinTargetPx || r.Height < MinTargetPx) return false;
                 double w = Bounds.Width, h = Bounds.Height;
                 if (w <= 0 || h <= 0) return false;
@@ -312,20 +309,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (string.IsNullOrWhiteSpace(raw)) return null;
             var s = raw.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ').Trim();
             while (s.Contains("  ", StringComparison.Ordinal)) s = s.Replace("  ", " ", StringComparison.Ordinal);
-            if (s.Length is < 2 or > 32) return null;
-            return s;
+            return s.Length is < 2 or > 32 ? null : s;
         }
         private static string FallbackDisplayName(PossessionRole role) => role switch
         {
             PossessionRole.Button => "that button", PossessionRole.Card => "that card",
             PossessionRole.Toggle => "that toggle", PossessionRole.Title => "the title",
             PossessionRole.Label => "that label", PossessionRole.TabHeader => "that tab",
-            PossessionRole.Timer => "the timer",
-            PossessionRole.Slider => "that slider",
-            PossessionRole.Combo => "that dropdown",
-            PossessionRole.Image => "that picture",
-            PossessionRole.Scroll => "that list",
-            PossessionRole.Progress => "that bar",
+            PossessionRole.Timer => "the timer", PossessionRole.Slider => "that slider",
+            PossessionRole.Combo => "that dropdown", PossessionRole.Image => "that picture",
+            PossessionRole.Scroll => "that list", PossessionRole.Progress => "that bar",
             PossessionRole.TextBox => "that box",
             _ => "something",
         };
