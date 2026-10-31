@@ -3,7 +3,6 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
-using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -11,14 +10,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         internal readonly record struct DirectoryPill(bool Visible, string Text, string DotHex, string Tip);
 
-        /// <summary>WPF's four states, localized on this head: no session = hidden;
-        /// private = grey; listed = directory purple; claimed = green.</summary>
+        /// <summary>WPF's four states, with WPF's literals (it has no keys for them): no session = hidden;
+        /// not opted in = "Private only" (grey); opted in = "Listed" (directory purple); claimed = "Claimed" (green).</summary>
         internal static DirectoryPill DirectoryPillFor(bool active, bool optedIn, bool claimed) =>
             !active ? new DirectoryPill(false, "", "#8A8AA0", "")
-            : !optedIn ? new DirectoryPill(true, Loc.Get("remote_directory_private"), "#8A8AA0",
-                Loc.Get("remote_directory_private_tip"))
-            : claimed ? new DirectoryPill(true, Loc.Get("remote_directory_claimed"), "#00FF88", Loc.Get("remote_directory_claimed_tip"))
-            : new DirectoryPill(true, Loc.Get("remote_directory_listed"), "#B47BFF", Loc.Get("remote_directory_listed_tip"));
+            : !optedIn ? new DirectoryPill(true, "Private only", "#8A8AA0",
+                "Your session is private — you are not listed in the Available Subjects Directory.")
+            : claimed ? new DirectoryPill(true, "Claimed", "#00FF88", "A controller has claimed your directory listing.")
+            : new DirectoryPill(true, "Listed", "#B47BFF", "You're listed in the Available Subjects Directory and waiting to be claimed.");
 
         /// <summary>The Remote tab calls this whenever its session, its listing or its controller changes.</summary>
         internal void UpdateDirectoryListingStatus(bool active, bool optedIn, bool claimed)

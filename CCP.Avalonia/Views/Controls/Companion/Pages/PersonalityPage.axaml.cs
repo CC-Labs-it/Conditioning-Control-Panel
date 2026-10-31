@@ -36,12 +36,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
                 CompanionPageHost.Adopt(workshop.Parts.Community, CommunityHost);
         }
 
-        private async void OpenStudio_Click(object? sender, RoutedEventArgs e)
-        {
-            if (TopLevel.GetTopLevel(this) is Window owner) await Dialogs.PersonalityStudio.Show(owner);
-            _presets?.ViewModel.Sync();
-        }
-
         /// <summary>WPF OpenPromptEditor_Click: BtnCustomizeCompanion_Click, then re-sync the presets.</summary>
         private async void OpenPromptEditor_Click(object? sender, RoutedEventArgs e)
         {

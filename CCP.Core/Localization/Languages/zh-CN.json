@@ -8468,11 +8468,5 @@
   "online_official_plan_prime": "Prime 每日额度最大。看过的内容重播免费。",
   "online_official_nice": "好的",
   "online_official_stamped_line": "在线媒体来自 Scrolller。每张图片和短片都带有一个小小的“via Scrolller”标记。",
-  "online_cache_day_line": "在线媒体只会在这台电脑的小缓存里保留一天，从不上传。",
-  "remote_directory_private": "Remote：私密",
-  "remote_directory_listed": "Remote：已列出",
-  "remote_directory_claimed": "Remote：已认领",
-  "remote_directory_private_tip": "你的Remote会话是私密的，未列入可用对象目录。Goon牌桌有独立的可见范围开关。",
-  "remote_directory_listed_tip": "你的Remote会话已列入可用对象目录，正在等待控制者认领。",
-  "remote_directory_claimed_tip": "一位控制者已认领你的Remote条目。"
+  "online_cache_day_line": "在线媒体只会在这台电脑的小缓存里保留一天，从不上传。"
 }

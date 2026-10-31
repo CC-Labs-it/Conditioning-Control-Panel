@@ -8707,11 +8707,5 @@
   "online_official_plan_prime": "Prime ha la quota giornaliera più ampia. Quello che hai già visto si riguarda gratis.",
   "online_official_nice": "Bello",
   "online_official_stamped_line": "I media online arrivano da Scrolller. Ogni immagine e clip porta un piccolo marchio \"via Scrolller\".",
-  "online_cache_day_line": "I media online restano un giorno in una piccola cache su questo computer e non vengono mai caricati.",
-  "remote_directory_private": "Remote: privata",
-  "remote_directory_listed": "Remote: in elenco",
-  "remote_directory_claimed": "Remote: assegnata",
-  "remote_directory_private_tip": "La tua sessione Remote è privata: non sei nella directory dei soggetti disponibili. I tavoli Goon hanno un proprio interruttore di visibilità.",
-  "remote_directory_listed_tip": "La tua sessione Remote è nella directory dei soggetti disponibili e attende un controller.",
-  "remote_directory_claimed_tip": "Un controller ha preso in carico la tua voce Remote."
+  "online_cache_day_line": "I media online restano un giorno in una piccola cache su questo computer e non vengono mai caricati."
 }
