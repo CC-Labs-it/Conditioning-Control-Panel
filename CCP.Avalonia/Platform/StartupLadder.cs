@@ -73,7 +73,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             var generation = PresentationGeneration;
             if (!Dispatcher.UIThread.CheckAccess())
             {
-                Dispatcher.UIThread.Post(() => { if (generation == PresentationGeneration) PresentOrInbox(item); });
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (generation == PresentationGeneration) PresentOrInbox(item);
+                    else Inbox.File(item);
+                });
                 return;
             }
 
@@ -141,14 +145,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
             foreach (var h in held) PresentOrInbox(h);
         }
 
-        // Stricter panic cancellation than WPF StartupPresenter.cs:247,552: discard deferred offers,
+        // WPF StartupPresenter.cs:247,552 retains deferred offers. Panic parks them in the Inbox,
         // dispose the passive watch and invalidate callbacks already posted to the dispatcher.
         internal static void CancelDeferred()
         {
             PresentationGeneration++;
             _passiveTimer?.Dispose();
             _passiveTimer = null;
-            _held.Clear(); // cancellation never spends a surface's user-dismissal bookkeeping
+            var held = _held.ToArray();
+            _held.Clear();
+            foreach (var item in held) Inbox.File(item); // never run Open or Dismiss on panic
         }
 
         /// <summary>Test seam: forget the quiet window, the passive pacing, the passive windows up and every row.</summary>

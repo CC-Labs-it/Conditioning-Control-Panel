@@ -36,21 +36,22 @@ public partial class MainShellWindow
 
     internal async Task ShowWhatsNewIfNeeded()
     {
-        if (_upgradeOffered || CoreSettings.Service == null) return;
+        if (_upgradeOffered || _upgradeCancelled || CoreSettings.Service == null) return;
         _upgradeOffered = true;
         var version = CoreReleaseContent.AppVersion;
         var previous = CoreSettings.Current.LastSeenVersion;
-        // WPF Marquee.cs:307: a fresh profile is stamped silently, never shown patch notes.
-        if (string.IsNullOrEmpty(previous))
-        {
-            CoreSettings.Current.LastSeenVersion = version;
-            CoreSettings.Save();
-            return;
-        }
         if (previous == version) return;
+        var notes = CoreReleaseContent.PatchNotes;
         Platform.StartupLadder.ModalPending = true;
         try
         {
+            // WPF Marquee.cs:311: fresh profiles stamp silently. Missing notes use the same fallback.
+            if (string.IsNullOrEmpty(previous) || string.IsNullOrWhiteSpace(notes))
+            {
+                CoreSettings.Current.LastSeenVersion = version;
+                CoreSettings.Save();
+                return;
+            }
             // WPF StartupPresenter: 750ms settle, 500ms recheck, five minutes per surface.
             await UpgradeDelay(TimeSpan.FromMilliseconds(750));
             var waited = TimeSpan.Zero;
@@ -64,13 +65,14 @@ public partial class MainShellWindow
             // WPF StartupPresenter.cs:247,497,554: deferred offers wait until the modal drains.
             try
             {
-                _upgradeDialog = new WhatsNewDialog(Loc.GetF("upgrade_notes_title_fmt", version), CoreReleaseContent.PatchNotes,
+                _upgradeDialog = new WhatsNewDialog(Loc.GetF("upgrade_notes_title_fmt", version), notes,
                     tourAction: () =>
                     {
                         IsStartupDialogShowing = false;
                         Tours.TutorialHead.StartOnShell(Tours.TutorialType.UpgradeTour);
                     }, tourButtonText: Loc.Get("upgrade_notes_tour_button"));
                 await _upgradeDialog.ShowDialogSafe(this);
+                if (_upgradeCancelled) return; // panic leaves this version owed next launch
                 CoreSettings.Current.LastSeenVersion = version;
                 CoreSettings.Save();
             }

@@ -41,6 +41,20 @@ public sealed class FeatureIntroUpgradeTests
         return Task.CompletedTask;
     }, detachStartup: false);
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task MissingNotesStaySilentWithoutSpendingCancelledUpgrade(bool cancelled) => Run("old-version", async shell =>
+    {
+        CoreReleaseContent.PatchNotesProvider = () => "";
+        shell.UpgradeDelay = _ => throw new InvalidOperationException("missing notes must not wait");
+        if (cancelled) shell.StopUpgradeIntroForPanic();
+        await shell.ShowWhatsNewIfNeeded();
+        Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
+        Assert.Equal(cancelled ? "old-version" : CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
+        Assert.False(StartupLadder.ModalPending);
+    });
+
     [Fact]
     public Task UpgradeHoldsCardsAndStampsOnlyAfterDismissal() => Run("old-version", async shell =>
     {
@@ -49,7 +63,10 @@ public sealed class FeatureIntroUpgradeTests
         Assert.True(MainShellWindow.IsStartupDialogShowing);
         Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
         Assert.Equal($"What's New in v{CoreReleaseContent.AppVersion}", news.FindControl<TextBlock>("TxtTitle")!.Text);
-        Assert.Equal(CoreReleaseContent.PatchNotes, news.FindControl<TextBlock>("TxtNotes")!.Text);
+        var notes = news.FindControl<TextBlock>("TxtNotes")!.Text;
+        Assert.False(string.IsNullOrWhiteSpace(notes));
+        Assert.Contains(CoreReleaseContent.AppVersion, notes);
+        Assert.Equal(CoreReleaseContent.PatchNotes, notes);
         Assert.True(news.FindControl<Button>("BtnTour")!.IsVisible);
         Assert.Equal("Show me around (60s)", news.FindControl<TextBlock>("TourLabel")!.Text);
         FeatureIntroPopup.ShowWhenStartupSettles("lockdown", shell, "play");
@@ -94,15 +111,19 @@ public sealed class FeatureIntroUpgradeTests
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         await showing;
         ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(5));
-        StartupLadder.PumpHeld(); // cancellation also discarded the held offer
+        StartupLadder.PumpHeld(); // panic parked the offer instead of presenting it
         Dispatcher.UIThread.RunJobs();
         Assert.Empty(((StartupLadder.TestClock)StartupLadder.Time).Timers);
         Assert.False(MainShellWindow.IsStartupDialogShowing);
         Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
-        Assert.False(StartupLadder.Inbox.Contains("intro:lockdown"));
+        Assert.True(StartupLadder.Inbox.Contains("intro:lockdown"));
         Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
-        // A new explicit offer is still owed after panic cancelled the earlier one.
+        Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
+        // Re-offering stays deduplicated; the parked card is opened only by the user.
         FeatureIntroPopup.ShowWhenStartupSettles("lockdown", shell, "play");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
+        StartupLadder.Inbox.Open(Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "intro:lockdown"));
         Dispatcher.UIThread.RunJobs();
         Assert.Single(shell.OwnedWindows.OfType<FeatureIntroPopup>());
     });
@@ -218,7 +239,8 @@ public sealed class FeatureIntroUpgradeTests
         var clock = (StartupLadder.TestClock)StartupLadder.Time;
         var timer = Assert.Single(clock.Timers);
         var dismissed = false;
-        StartupLadder.PresentOrInbox(new() { Key = "held", Dismiss = () => dismissed = true });
+        var offered = false;
+        StartupLadder.PresentOrInbox(new() { Key = "held", Open = () => offered = true, Dismiss = () => dismissed = true });
         var showing = shell.ShowWhatsNewIfNeeded();
         Task.Run(timer.Fire).GetAwaiter().GetResult(); // tick queued, UI thread still occupied
         PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
@@ -237,6 +259,10 @@ public sealed class FeatureIntroUpgradeTests
         Assert.True(opened);
         Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
         Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
+        Assert.False(offered);
+        StartupLadder.Inbox.Open(Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "held"));
+        Assert.True(offered);
+        Assert.False(dismissed);
     });
 
     [Fact]
@@ -264,7 +290,9 @@ public sealed class FeatureIntroUpgradeTests
         StartupLadder.PumpHeld();
         Dispatcher.UIThread.RunJobs();
         Assert.False(opened);
-        Assert.False(StartupLadder.Inbox.Contains("worker"));
+        Assert.True(StartupLadder.Inbox.Contains("worker"));
+        StartupLadder.Inbox.Open(Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "worker"));
+        Assert.True(opened);
         return Task.CompletedTask;
     });
 
@@ -293,6 +321,7 @@ public sealed class FeatureIntroUpgradeTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
         LocalizationManager.Instance.SetLanguage("en");
+        CoreReleaseContent.PatchNotesProvider = () => $"v{CoreReleaseContent.AppVersion} - Test notes";
         var old = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
