@@ -41,6 +41,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF TrayIconService._hasShownFirstMinimizeNotification.
         private bool _shownFirstMinimizeNotification;
 
+        // Watcher ownership does not prove that our icon registered. Remain conservative until
+        // SNI activation proves recovery; a fresh watcher alone must never tuck the window away.
+        private bool _trayNameDenied;
+        private static WeakReference<MainShellWindow>? _trayOwner;
+        internal bool CanHideToTray => Tray != null && !_trayNameDenied && TrayHostPresent();
+
+        internal bool HideToTrayIfAvailable()
+        {
+            if (!CanHideToTray) return false;
+            Hide();
+            HideAvatarTube();
+            return true;
+        }
+
+        internal void OnTrayActivated()
+        {
+            _trayNameDenied = false;
+            ShowFromTray();
+        }
+
+        private void MarkTrayUnavailable()
+        {
+            _trayNameDenied = true;
+            if (!_windowClosed && (!IsVisible || WindowState == WindowState.Minimized)) ShowFromTray();
+        }
+
         private static bool _deniedBusNameFilterInstalled;
         private static bool _deniedBusNameLogged;
 
@@ -56,7 +82,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             for (var current = exception; current != null; current = current.InnerException)
                 if (current is DBusErrorReplyException reply &&
-                    reply.ErrorName == "org.freedesktop.DBus.Error.AccessDenied") return true;
+                    reply.ErrorName == "org.freedesktop.DBus.Error.AccessDenied" &&
+                    // xdg-dbus-proxy's error body can contain only the error name, with no SNI
+                    // name or operation. Both pinned async frames identify the tray RequestName;
+                    // RegisterStatusNotifierItem and other D-Bus calls must still fail normally.
+                    reply.StackTrace is { } stack &&
+                    stack.Contains("Tmds.DBus.Protocol.DBusConnection.RequestNameAsync(", StringComparison.Ordinal) &&
+                    stack.Contains("Avalonia.FreeDesktop.DBusTrayIconImpl.CreateTrayIcon(", StringComparison.Ordinal)) return true;
             return false;
         }
 
@@ -66,15 +98,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Avalonia's async-void CreateTrayIcon can outlive CreateTray's synchronous call.
             // Flatpak refuses SNI names beyond -2-3 after watcher restarts: lose the icon, not the app.
             e.Handled = true;
+            // Invalidate every time, even after the one-time warning (or after icon recovery).
+            Exception? restoreFailure = null;
+            try
+            {
+                if (_trayOwner?.TryGetTarget(out var shell) == true) shell.MarkTrayUnavailable();
+            }
+            catch (Exception ex) { restoreFailure = ex; }
             if (_deniedBusNameLogged) return;
             _deniedBusNameLogged = true;
-            try { Serilog.Log.Warning(e.Exception, "Tray bus name refused; the tray icon may be unavailable"); }
+            try { Serilog.Log.Warning(e.Exception, "Tray bus name refused; tray hiding disabled. Restore error: {RestoreError}", restoreFailure?.Message); }
             catch { } // Even a failing log sink must not turn this optional icon into a fatal error.
         }
 
         internal TrayIcon CreateTray()
         {
             InstallDeniedBusNameFilter();
+            _trayOwner = new WeakReference<MainShellWindow>(this);
             Tray = new TrayIcon
             {
                 ToolTipText = "Conditioning Control Panel",
@@ -83,7 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 IsVisible = true,
             };
             // SNI Activate (left click) arrives as Clicked; WPF restores on single and double click.
-            Tray.Clicked += (_, _) => ShowFromTray();
+            Tray.Clicked += (_, _) => OnTrayActivated();
             AttachFeedTooltip(Platform.FriendsHead.Feed, Platform.FriendsHead.Service);
             return Tray;
         }
@@ -197,8 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             // WPF WindowChrome.cs:140: closing (real exit OR minimize-to-tray) always ends a Chaos run.
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { }
-            if (Tray is not null && !_exitRequested && e.CloseReason == WindowCloseReason.WindowClosing
-                && TrayHostPresent())
+            if (!_exitRequested && e.CloseReason == WindowCloseReason.WindowClosing && CanHideToTray)
             {
                 e.Cancel = true;
                 // WPF WindowChrome.cs:345: quizzes are unowned topmost windows that would stay on screen.

@@ -13,6 +13,8 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Platform;
+using System.Runtime.ExceptionServices;
 
 namespace CCP.Avalonia.Tests;
 
@@ -26,6 +28,7 @@ public sealed class ShellTrayTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
@@ -33,11 +36,15 @@ public sealed class ShellTrayTests
             MainShellWindow.InstallDeniedBusNameFilter(); // repeated tray creation must be harmless
             var errors = new Exception[]
             {
-                new Tmds.DBus.Protocol.DBusErrorReplyException("org.freedesktop.DBus.Error.AccessDenied", "RequestName refused"),
+                TrayDenial(),
                 new InvalidOperationException("wrapper", new Exception("nested",
-                    new Tmds.DBus.Protocol.DBusErrorReplyException("org.freedesktop.DBus.Error.AccessDenied", "RequestName refused"))),
+                    TrayDenial())),
                 new Tmds.DBus.Protocol.DBusErrorReplyException("org.freedesktop.DBus.Error.Failed", "RequestName refused"),
                 new InvalidOperationException("org.freedesktop.DBus.Error.AccessDenied"),
+                new Tmds.DBus.Protocol.DBusErrorReplyException("org.freedesktop.DBus.Error.AccessDenied", "RequestName refused"),
+                new Exception("unrelated wrapper", new Tmds.DBus.Protocol.DBusErrorReplyException("org.freedesktop.DBus.Error.AccessDenied", "ReadSecret refused")),
+                TrayDenial("   at Other.Service.CreateTrayIcon()\n   at Tmds.DBus.Protocol.DBusConnection.RequestNameAsync(String name)"),
+                TrayDenial("   at Avalonia.FreeDesktop.DBusTrayIconImpl.CreateTrayIcon()\n   at Avalonia.FreeDesktop.DBus.StatusNotifierWatcher.RegisterStatusNotifierItemAsync(String name)"),
                 new Exception("wrapper", new Tmds.DBus.Protocol.DBusErrorReplyException("org.freedesktop.DBus.Error.NoReply", "timeout")),
             };
             var handled = new System.Collections.Generic.List<bool>();
@@ -54,9 +61,70 @@ public sealed class ShellTrayTests
                     Dispatcher.UIThread.Post(() => throw error);
                     Dispatcher.UIThread.RunJobs();
                 }
-                Assert.Equal(new[] { true, true, false, false, false }, handled);
+                Assert.Equal(new[] { true, true, false, false, false, false, false, false, false }, handled);
             }
             finally { Dispatcher.UIThread.UnhandledException -= Observe; }
+            return Task.CompletedTask;
+        });
+    }
+
+    // The proxy need not include a service name or operation in its error body. Replay the
+    // pinned Avalonia 12.1.2 / Tmds 0.94.1 async RequestName stack, not a message-based heuristic.
+    private static Exception TrayDenial(string? stack = null)
+    {
+        var error = new Tmds.DBus.Protocol.DBusErrorReplyException(
+            "org.freedesktop.DBus.Error.AccessDenied", "org.freedesktop.DBus.Error.AccessDenied");
+        ExceptionDispatchInfo.SetRemoteStackTrace(error, stack ??
+            "   at Tmds.DBus.Protocol.DBusConnection.RequestNameAsync(String name, RequestNameOptions options)\n" +
+            "   at Avalonia.FreeDesktop.DBusTrayIconImpl.CreateTrayIcon()");
+        return error;
+    }
+
+    [Fact]
+    public async Task DeniedRegistrationRestoresHiddenShellAndWatcherCannotHideItAgain()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            shell.TrayHostPresent = () => true; // watcher survives the registration failure
+            shell.Show();
+            shell.CreateTray();
+            var closed = false;
+            shell.Closed += (_, _) => closed = true;
+            try
+            {
+                Assert.True(shell.CanHideToTray);
+                shell.Close(); // a real X-to-tray before the watcher restarts
+                Assert.False(closed);
+                Assert.False(shell.IsVisible);
+                Dispatcher.UIThread.Post(() => throw new Exception("async wrapper", TrayDenial()));
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(shell.IsVisible);
+                Assert.Equal(WindowState.Normal, shell.WindowState);
+                Assert.False(shell.CanHideToTray);
+                Assert.False(shell.HideToTrayIfAvailable()); // delayed StartMinimized callback
+                Assert.True(shell.IsVisible);
+                shell.OnTrayActivated(); // a delivered SNI activation proves the icon recovered
+                Assert.True(shell.CanHideToTray);
+                Assert.True(shell.HideToTrayIfAvailable());
+                // Repeated denials must restore too, even though the warning was already logged.
+                Dispatcher.UIThread.Post(() => throw TrayDenial());
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(shell.IsVisible);
+                shell.Close();
+                Assert.True(closed); // a present watcher cannot hide behind the lost icon
+            }
+            finally
+            {
+                shell.MarkExitRequestedForTest();
+                if (!closed) shell.Close();
+                shell.Tray?.Dispose();
+            }
             return Task.CompletedTask;
         });
     }
@@ -68,6 +136,7 @@ public sealed class ShellTrayTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
@@ -143,6 +212,7 @@ public sealed class ShellTrayTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
