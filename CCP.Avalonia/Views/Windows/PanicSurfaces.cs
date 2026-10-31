@@ -76,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // programs 3a (P06, docs/avalonia-decisions.html): today's program session ENDS, not pauses, so
             // a panic never leaves a program run holding the screen; foreign sessions stay paused below.
             new("program-session", sh => { if (sh != null) sh.EndProgramSessionQuietly("panic"); else App.Programs?.StopProgramSessionIfRunning("panic"); }),
+            new("programs-fx", sh => sh?.Named<Tabs.ProgramsTabView>("ProgramsTab")?.StopProgramFxForPanic()),
             // WPF :1554 CancelPendingAi (right after FirstShowService.Stop :1553) runs long before StopEngine (:1838); :1721-1732 game
             // surfaces and Lab minigames (GameSurfaces.cs:50 'chaos') close before RunPanicStopTail (:1733); :1819 KillAllAudio
             // (App.xaml.cs:1780 Mantra.Dispose), :1797 remote haptics, :2003 haptics PanicStop and :1822 Autonomy.CancelActivePulses
