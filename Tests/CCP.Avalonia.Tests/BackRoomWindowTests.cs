@@ -20,6 +20,8 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Safety;
+using ConditioningControlPanel.Services.Webcam;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -58,6 +60,7 @@ public sealed class BackRoomWindowTests
         finally
         {
             GameWindow.CloseAllForPanic();
+            WebcamTracker.Instance.Stop();
             CoreSettings.ServiceProvider = oldSettings;
             (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = oldSecrets;
             GameWindow.Server = oldServer;
@@ -66,7 +69,6 @@ public sealed class BackRoomWindowTests
             Directory.Delete(root, true);
         }
     });
-
     // WPF MainWindow.SparkleWallet.cs:85, BackRoomHostService.cs:312-318.
     [Fact]
     public void WalletVisitOpensTheRoomAndSignedOutDoorRequestsLogin() => Run(() =>
@@ -89,7 +91,6 @@ public sealed class BackRoomWindowTests
         Assert.Same(room, GameWindow.Launch(GameWindow.BackRoomId));
         Assert.False(wallet.InviteOpen);
     });
-
     // WPF BackRoomHostService.cs:399-447,590-648,560-574 and BackRoomBridge.Handle.
     [Fact]
     public void RoomCarrierInitializesRelaysAdoptsAndClosesWithoutCrossAccountWrites() => Run(() =>
@@ -136,13 +137,14 @@ public sealed class BackRoomWindowTests
         room.WindowState = WindowState.Minimized; Dispatcher.UIThread.RunJobs();
         Assert.Equal("suspend", (string?)sent.Last()["type"]);
         Assert.True((bool)sent.Last()["on"]!);
+        room.WindowState = WindowState.Normal; Dispatcher.UIThread.RunJobs();
+        Assert.Equal("suspend", (string?)sent.Last()["type"]); Assert.False((bool)sent.Last()["on"]!);
         CoreSettings.Current.UnifiedId = "other-account";
         adopt(99); Dispatcher.UIThread.RunJobs();
         Assert.Equal(30, CoreSettings.Current.SkillPoints);
         Send("{\"type\":\"exit-done\"}");
         Assert.Null(GameWindow.OpenForTests(GameWindow.BackRoomId));
     });
-
     [Theory]
     [InlineData("tunnel", "true", "BackRoomTunnel", "gates.tunnel")]
     [InlineData("melt", "true", "BackRoomMelt", "gates.melt")]
@@ -172,7 +174,6 @@ public sealed class BackRoomWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.Null(GameWindow.OpenForTests(GameWindow.BackRoomId));
     });
-
     // WPF MainWindow.xaml.cs:1694-1707,1742-1747; BackRoomHostService.cs:553-585.
     [Theory]
     [InlineData(false)]
@@ -184,7 +185,7 @@ public sealed class BackRoomWindowTests
         var oldSurfaces = PanicSurfaces.All;
         int stops = 0;
         GameWindow.BackRoomUtcNow = () => now;
-        PanicSurfaces.All = [oldSurfaces.Single(x => x.Id == "games"), new("probe", _ => stops++)];
+        PanicSurfaces.All = [oldSurfaces.Single(x => x.Id == "games"), oldSurfaces.Single(x => x.Id == "camera"), new("probe", _ => stops++)];
         try
         {
             using var shell = new ShellLifetime();
@@ -194,14 +195,21 @@ public sealed class BackRoomWindowTests
             var sent = new List<JObject>();
             room.Posted += json => sent.Add(JObject.Parse(json));
             room.HandleMessage("{type:'ready'}"); Dispatcher.UIThread.RunJobs(); sent.Clear();
+            WebcamTracker.Instance.SetTrackingState(WebcamTrackingState.Starting);
+            Assert.Equal(WebcamTrackingState.Starting, WebcamTracker.Instance.State);
+            int blinkGeneration = BlinkTrainerSession.Generation;
             shell.Window.HandlePanicKeyPress(now); Dispatcher.UIThread.RunJobs();
+            Assert.True(SpinWait.SpinUntil(() => WebcamTracker.Instance.State == WebcamTrackingState.Stopped, 5000));
+            Assert.True(BlinkTrainerSession.Generation > blinkGeneration);
             Assert.Equal(overrideAll ? 1 : 0, stops);
             if (overrideAll) { Assert.Null(GameWindow.OpenForTests(GameWindow.BackRoomId)); return; }
             Assert.Same(room, GameWindow.OpenForTests(GameWindow.BackRoomId));
             Assert.Equal("suspend", (string?)Assert.Single(sent)["type"]);
             Assert.True((bool)sent[0]["on"]!);
             now = now.AddSeconds(2); // inclusive boundary on WPF's room ladder
+            WebcamTracker.Instance.SetTrackingState(WebcamTrackingState.Starting);
             shell.Window.HandlePanicKeyPress(now); Dispatcher.UIThread.RunJobs();
+            Assert.True(SpinWait.SpinUntil(() => WebcamTracker.Instance.State == WebcamTrackingState.Stopped, 5000));
             Assert.Equal("close", (string?)sent.Last()["type"]);
             Assert.Equal("panic", (string?)sent.Last()["reason"]);
             Assert.False(room.KeptEscapeReady);
@@ -211,7 +219,6 @@ public sealed class BackRoomWindowTests
         }
         finally { GameWindow.BackRoomUtcNow = oldClock; PanicSurfaces.All = oldSurfaces; }
     });
-
     [Fact]
     public void SuspendedRoomResumesOnlyOnActivationAfterTheDoublePressWindow() => Run(() =>
     {
@@ -226,6 +233,8 @@ public sealed class BackRoomWindowTests
             room.Posted += json => sent.Add(JObject.Parse(json));
             Assert.True(GameWindow.TryBackRoomPanic()); Dispatcher.UIThread.RunJobs();
             Assert.True((bool)Assert.Single(sent)["on"]!);
+            foreach (var state in new[] { WindowState.Maximized, WindowState.Normal, WindowState.FullScreen, WindowState.Normal })
+            { room.WindowState = state; Dispatcher.UIThread.RunJobs(); Assert.Single(sent); }
             void ActivateRoom() { shell.Window.Activate(); room.Activate(); Dispatcher.UIThread.RunJobs(); }
             now = now.AddSeconds(2); ActivateRoom(); Assert.Single(sent);
             now = now.AddTicks(1); ActivateRoom();
@@ -240,7 +249,6 @@ public sealed class BackRoomWindowTests
         }
         finally { GameWindow.BackRoomUtcNow = oldClock; }
     });
-
     // WPF MainWindow.xaml.cs:1557,1577-1578: a ready foreground room keeps Escape as page pause.
     [Fact]
     public void ReadyForegroundRoomKeepsEscapeBeforeThePanicLadder() => Run(() =>
@@ -263,7 +271,6 @@ public sealed class BackRoomWindowTests
         Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
         Assert.Same(room, GameWindow.OpenForTests(GameWindow.BackRoomId));
     });
-
     // WPF MainWindow.xaml.cs:1719-1747: DtRH consumes panic before the room, even during boot.
     [Theory]
     [InlineData(false)]
@@ -281,7 +288,9 @@ public sealed class BackRoomWindowTests
         var roomFrames = new List<JObject>(); var dtrhFrames = new List<JObject>();
         room.Posted += json => roomFrames.Add(JObject.Parse(json));
         dtrh.Posted += json => dtrhFrames.Add(JObject.Parse(json));
+        WebcamTracker.Instance.SetTrackingState(WebcamTrackingState.Starting);
         shell.Window.HandlePanicKeyPress(DateTime.Now); Dispatcher.UIThread.RunJobs();
+        Assert.True(SpinWait.SpinUntil(() => WebcamTracker.Instance.State == WebcamTrackingState.Stopped, 5000));
         Assert.Empty(roomFrames);
         if (ready)
         {
@@ -294,7 +303,6 @@ public sealed class BackRoomWindowTests
         Assert.Null(GameWindow.OpenForTests(GameWindow.DtrhId));
         Assert.Same(room, GameWindow.OpenForTests(GameWindow.BackRoomId));
     });
-
     private sealed class Relay : IBackRoomRelay
     {
         public int Calls;
@@ -304,7 +312,6 @@ public sealed class BackRoomWindowTests
             return Task.FromResult(new BackRoomStationResult(true, 200, null, new JObject { ["sp"] = 25 }));
         }
     }
-
     private sealed class ShellLifetime : IDisposable
     {
         internal readonly MainShellWindow Window = new();

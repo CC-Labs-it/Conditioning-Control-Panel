@@ -121,7 +121,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Activated += (_, _) => ResumeBackRoomAfterPanic();
                 PropertyChanged += (_, e) =>
                 {
-                    if (e.Property == WindowStateProperty) _room?.Suspend(WindowState == WindowState.Minimized, "minimise");
+                    bool min = WindowState == WindowState.Minimized; // WPF BackRoomHostService.cs:572-576.
+                    if (e.Property == WindowStateProperty && min != _roomMinimised) { _roomMinimised = min; _room?.Suspend(min, "minimise"); }
                 };
             }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();

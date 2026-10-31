@@ -30,7 +30,6 @@ internal sealed partial class GameWindow
         return url == null ? new OfflineRoomRelay() : new BackRoomApi(null, Identity,
             sp => { if (Identity() != null) adopt(sp); }, PrizeOwnership.ApplySnapshot, url);
     };
-
     // WPF BackRoomHostService.cs:312-318. No paid tier gate.
     private static bool BackRoomGate()
     {
@@ -38,11 +37,9 @@ internal sealed partial class GameWindow
         RequestBackRoomSignIn();
         return false;
     }
-
     internal static Func<DateTime> BackRoomUtcNow = () => DateTime.UtcNow;
-    private bool _roomPanicSuspended;
+    private bool _roomPanicSuspended, _roomMinimised;
     private DateTime _roomLastPanicUtc;
-
     // WPF MainWindow.xaml.cs:1742-1747 and BackRoomHostService.cs:553-570.
     // Only the legacy key ladder calls here; Stop everything still closes every game.
     internal static bool TryBackRoomPanic()
@@ -63,7 +60,6 @@ internal sealed partial class GameWindow
         else room._room.Suspend(true, "panic");
         return true;
     }
-
     // WPF BackRoomHostService.cs:581-585: activation after the two-second window wakes the room.
     private void ResumeBackRoomAfterPanic()
     {
@@ -71,12 +67,10 @@ internal sealed partial class GameWindow
         _roomPanicSuspended = false;
         _room?.Suspend(false, "panic");
     }
-
     private BackRoomBridge? _room;
     private AppSettings? _roomSettings;
     private SettingsService? _roomService;
     private string? _roomAccount;
-
     // WPF BackRoomHostService.cs:399-447. Reuse protocol validation, deadlines and close watchdog.
     private void OpenBackRoom()
     {
@@ -102,9 +96,7 @@ internal sealed partial class GameWindow
         if (_roomService != null) _roomService.CurrentReplaced += ReplaceRoomSettings;
         ReplaceRoomSettings();
     }
-
     private bool SameRoomAccount() => !_closing && _roomAccount != null && FriendsHead.Identity()?.UnifiedId == _roomAccount;
-
     private void ReplaceRoomSettings()
     {
         if (_roomSettings != null) _roomSettings.PropertyChanged -= RoomSettingChanged;
@@ -116,7 +108,6 @@ internal sealed partial class GameWindow
             _room?.OnSpChanged(CoreSettings.Current.SkillPoints, "sync");
         }
     }
-
     // WPF BackRoomHostService.cs:689-720: external balance and settings changes reach an open room.
     private void RoomSettingChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -128,7 +119,6 @@ internal sealed partial class GameWindow
                  e.PropertyName == nameof(AppSettings.MotionLevel))
             _room?.PushSettings(BackRoomSettings("settings"));
     }
-
     private void DisposeBackRoom()
     {
         if (_roomService != null) _roomService.CurrentReplaced -= ReplaceRoomSettings;
@@ -136,14 +126,12 @@ internal sealed partial class GameWindow
         _room?.CloseNow();
         _room = null;
     }
-
     private void HandleBackRoom(JObject message)
     {
         if ((string?)message["type"] == "ready") { IsReady = true; _room?.OnReady(); }
         else if ((string?)message["type"] == "boot-error") Close();
         else _room?.Handle(message);
     }
-
     // WPF BackRoomHostService.cs:590-648. No token or server URL is sent to the page.
     private object BackRoomInit()
     {
@@ -159,7 +147,6 @@ internal sealed partial class GameWindow
         result["breakoutStandalone"] = false;
         return result;
     }
-
     private static object BackRoomSettings(string type)
     {
         var s = CoreSettings.Current;
