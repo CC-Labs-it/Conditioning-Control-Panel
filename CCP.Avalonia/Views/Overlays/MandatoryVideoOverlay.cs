@@ -227,6 +227,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_attention) DispatcherTimer.RunOnce(SetupAttention, TimeSpan.FromSeconds(2));   // WPF: Task.Delay(2000)
         }
 
+        internal static Border DecorateFloating(Window w)
+        {
+            var content = (Control)w.Content!;
+            w.Content = null;
+            var frame = new Border
+            {
+                CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(4),
+                Background = Brushes.Black, Child = content,
+            };
+            content.SizeChanged += (_, _) => content.Clip = new RectangleGeometry
+            {
+                Rect = new Rect(content.Bounds.Size), RadiusX = 6, RadiusY = 6,
+            };
+            w.Background = Brushes.Transparent;
+            w.TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+            w.Content = frame;
+            return frame;
+        }
+
         /// <summary>This clip shows as a floating window (AppSettings.MandatoryVideoFloating), decided per clip.</summary>
         internal bool Floating { get; private set; }
 
@@ -289,10 +308,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 // WPF: a floating window never takes focus from what is under it (panic and Esc reach
                 // it through the global hooks), and it moves with the mouse.
-                // ponytail: WPF's first-cut drag; the frame's fling and bounce (row 18) replace it.
                 w.ShowActivated = false;
                 PlaceFloating(w, screen, _random);
-                w.PointerPressed += (_, e) => { if (e.GetCurrentPoint(w).Properties.IsLeftButtonPressed) w.BeginMoveDrag(e); };
+                var frame = DecorateFloating(w);
+                w.Opened += (_, _) => _ = new FloatingVideoFrame(w, frame: frame,
+                    audible: () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0);
             }
             else Place(w, screen);
             void OnKey(KeyEventArgs e)
