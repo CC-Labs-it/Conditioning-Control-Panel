@@ -1,4 +1,6 @@
+using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -57,18 +59,28 @@ public sealed class TabFirstShowWorkTests
     {
         Setup();
         var loads = 0;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
         var view = new RemoteControlTabView(() =>
         {
             Assert.False(Dispatcher.UIThread.CheckAccess());
-            System.Threading.Interlocked.Increment(ref loads);
+            Interlocked.Increment(ref loads);
+            entered.SetResult();
+            Assert.True(release.Wait(TimeSpan.FromSeconds(30)), "Worker decode was not released");
             return ModArt.TryLoad("features/remote_control.png", 800);
         });
         var window = new Window { Content = view };
         try
         {
             window.Show();
-            await view.FeatureArtReady;
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            // Draining UI work cannot make an unfinished worker decode ready.
+            Dispatcher.UIThread.RunJobs();
             var plate = view.FindControl<Border>("HeroArtPlate")!;
+            Assert.Null(plate.Background);
+            Assert.False(view.FeatureArtReady.IsCompleted);
+            release.Set();
+            await view.FeatureArtReady.WaitAsync(TimeSpan.FromSeconds(30));
             var brush = Assert.IsType<ImageBrush>(plate.Background);
             Assert.NotNull(brush.Source);
             Assert.InRange(Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(brush.Source).PixelSize.Width, 1, 800);
@@ -79,6 +91,6 @@ public sealed class TabFirstShowWorkTests
             Assert.Same(brush, plate.Background);
             Assert.Equal(1, loads);
         }
-        finally { window.Close(); }
+        finally { release.Set(); window.Close(); }
     });
 }
