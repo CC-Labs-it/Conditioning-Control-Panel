@@ -40,6 +40,33 @@ public sealed class IntakeBridgeTests
         return sent;
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ExitAndCloseReturnTheBorrowedMicBeforeTheLoopFinishes(bool exit) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        int returned = 0;
+        var mic = new ConditioningControlPanel.Services.Quiz.IntakeMicBorrow(
+            () => true, () => { }, () => returned++);
+        var host = new IntakeHostWindow { MicBorrow = mic };
+        host.Show();
+        mic.Take(1);
+        mic.Take(2);
+        try
+        {
+            if (exit) host.HandleMessage("{\"type\":\"exit\"}");
+            else host.Close();
+            Assert.Equal(1, returned);
+            Assert.Equal(0, mic.Holders);
+            mic.Return(1);
+            mic.Return(2);
+            Assert.Equal(1, returned);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
     private static readonly byte[] Png = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3 };
     private static readonly byte[] Gif = "GIF89a"u8.ToArray().Concat(new byte[10]).Append((byte)0x3B).ToArray();
 
