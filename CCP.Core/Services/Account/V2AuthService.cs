@@ -757,7 +757,7 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        /// <summary>Check availability before the rename route spends its cooldown.
+        /// <summary>Check availability to choose an inline error after a refused rename.
         /// Null means the server could not answer; the rename route still decides.</summary>
         public async Task<bool?> IsDisplayNameAvailableAsync(string name)
         {

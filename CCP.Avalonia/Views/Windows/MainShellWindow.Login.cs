@@ -113,10 +113,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 AccountSeed.Discord?.DisplayName), async name =>
             {
                 if (CoreAccount.UnifiedUserId != uid) return Loc.Get("msg_failed_to_change_display_name");
-                if (await AccountSeed.NewV2().IsDisplayNameAvailableAsync(name) == false)
-                    return Loc.GetF("login_name_already_taken", name);
-                if (CoreAccount.UnifiedUserId != uid) return Loc.Get("msg_failed_to_change_display_name");
-                var (ok, error, saved) = await CoreAccount.ChangeDisplayNameAsync(name);
+                var (ok, error, saved) = await NeedsDisplayNameRule.SaveRequiredAsync(name,
+                    CoreAccount.ChangeDisplayNameAsync, value => AccountSeed.NewV2().IsDisplayNameAvailableAsync(value));
                 if (!ok) return error ?? Loc.Get("msg_failed_to_change_display_name");
                 if (CoreAccount.UnifiedUserId != uid) return Loc.Get("msg_failed_to_change_display_name");
                 CoreSettings.Current.UserDisplayName = saved ?? name;
