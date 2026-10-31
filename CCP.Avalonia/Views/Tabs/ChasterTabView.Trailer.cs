@@ -89,10 +89,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs {
                 TrailerBadgeHost.Child = tier > 0 ? new TierBadge { Tier = tier, MaxWidthOverride = 64 } : null;
                 var shown = TabPriceEdit.Shown(price, Overrides);
                 Trailer.PlacementTarget = row;
+                var keep = _trailerShown && TrailerWeb.IsVisible;
                 _trailerShown = true;
                 var (add, sub) = TabMenuCopy.SceneFigures(id, ShownSeconds);
                 TrailerWeb.Show(TabMenuCopy.VignetteFor(id), add, sub);
-                TrailerWeb.IsVisible = TrailerWeb.IsReady;
+                TrailerWeb.IsVisible = !TrailerWeb.HasFailed && (keep || TrailerWeb.IsReady);
                 FxTrailerStart(shown);
             }
             catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] trailer"); }

@@ -39,8 +39,7 @@ public sealed class ChasterTrailerTests {
             });
     }
     private static async Task WithTab(Func<ChasterTabView, Window, Task> body) {
-        App();
-        var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
+        App(); var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
         s.MotionLevel = MotionLevel.Full; s.PerformanceMode = false; s.AutoPerformanceMode = false;
         var old = (s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPrices, s.ChasterPriceOverrides, s.ChasterFlashDodge);
@@ -50,21 +49,18 @@ public sealed class ChasterTrailerTests {
         (s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPrices, s.ChasterPriceOverrides, s.ChasterFlashDodge) = ("l1", true, new List<string> { "attention" }, new Dictionary<string, int>(), false);
         var dir = Directory.CreateTempSubdirectory("ccp-chaster-menu-").FullName;
         new SecretChasterTokenStore().Write(new ChasterStoredTokens("acc", "ref", DateTime.UtcNow.AddHours(1)));
-        var fake = new FakeChaster();
-        var chaster = new ChasterService(new ChasterClient(fake), new SecretChasterTokenStore(), Path.Combine(dir, "chaster_tab.json"),
+        var chaster = new ChasterService(new ChasterClient(new FakeChaster()), new SecretChasterTokenStore(), Path.Combine(dir, "chaster_tab.json"),
             () => new ChasterOptions(CoreSettings.Current.ChasterTabEnabled, CoreSettings.Current.ChasterLockId,
                 new HashSet<string>(CoreSettings.Current.ChasterPrices ?? new List<string>())));
         ChasterHead.Service = chaster;
-        var tab = new ChasterTabView();
-        var w = new Window { Width = 1200, Height = 3000, Content = tab };
+        var tab = new ChasterTabView(); var w = new Window { Width = 1200, Height = 3000, Content = tab };
         try {
             w.Show(); await chaster.RefreshLockAsync();
             tab.OnTabShown(); Dispatcher.UIThread.RunJobs();
             await body(tab, w);
         }
         finally {
-            w.Close(); ChasterHead.Service = null;
-            chaster.Dispose(); new SecretChasterTokenStore().Clear();
+            w.Close(); ChasterHead.Service = null; chaster.Dispose(); new SecretChasterTokenStore().Clear();
             try { Directory.Delete(dir, true); } catch { }
             (s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPrices, s.ChasterPriceOverrides, s.ChasterFlashDodge) = old;
             (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (oldGet, oldSet);
@@ -77,8 +73,7 @@ public sealed class ChasterTrailerTests {
         Assert.Equal(320, tab.FindControl<Border>("TrailerCard")!.Width);
         Assert.Equal(190, tab.FindControl<Grid>("TrailerPlate")!.Height);
         Assert.Equal(PlacementMode.Bottom, tab.FindControl<Popup>("Trailer")!.Placement);
-        var open = tab.TrailerOpenTimer;
-        var close = tab.TrailerCloseTimer;
+        var open = tab.TrailerOpenTimer; var close = tab.TrailerCloseTimer;
         Assert.Equal(TimeSpan.FromMilliseconds(150), open.Interval); // WPF ChasterTabView.xaml.cs open delay
         Assert.Equal(TimeSpan.FromMilliseconds(140), close.Interval); // WPF close grace
         open.Interval = close.Interval = TimeSpan.FromHours(1);
@@ -194,11 +189,7 @@ public sealed class ChasterTrailerTests {
         Assert.True(host.SuppressNewWindows);
         tab.HideTrailer(); Assert.False(view.IsVisible); Assert.Equal(ChasterTrailerView.PauseScript, scripts.Last());
     }));
-    [Theory]
-    [InlineData(false, "true")]
-    [InlineData(true, "false")]
-    [InlineData(true, null)]
-    [InlineData(true, "throw")]
+    [Theory, InlineData(false, "true"), InlineData(true, "false"), InlineData(true, null), InlineData(true, "throw")]
     public Task BrowserFailureKeepsTheArtwork(bool navigationOk, string? result) => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) => {
         var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!;
         view.Browser = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = script =>
@@ -228,9 +219,7 @@ public sealed class ChasterTrailerTests {
         { Assert.Equal(Path.Combine(CorePaths.UserData, "browser_data_chaster"), win.UserDataFolder); Assert.Equal("--disable-direct-composition-video-overlays --disable-features=CalculateNativeWinOcclusion --disable-backgrounding-occluded-windows", win.AdditionalBrowserArguments); }
         else Assert.True(((global::Avalonia.Platform.GtkWebViewEnvironmentRequestedEventArgs)args).EphemeralDataManager);
     }
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [Theory, InlineData(false), InlineData(true)]
     public Task ReopeningDuringPauseDrainsTheLatestScene(bool alreadyReady) => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) => {
         var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!; var scripts = new List<string>();
         var mount = new TaskCompletionSource<string?>(); var pause = new TaskCompletionSource<string?>();
@@ -255,4 +244,14 @@ public sealed class ChasterTrailerTests {
         Assert.NotNull(tab.FindControl<Image>("TrailerArt")!.Source);
         host.OnBrowserProcessFailed(); Assert.Equal(1, failures);
     }));
+    [Fact] public Task ReadyPlayerStaysVisibleDuringRowMountAndFailureRestoresArtwork() => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) => {
+        var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!; var pending = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously); var swapped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        view.Browser = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = _ => Task.FromResult<string?>("true") };
+        tab.OpenTrailer(tab.PriceRows["typo"]); await view.NavigationFinished(view.Page, true); Assert.True(view.IsVisible);
+        view.Browser.ScriptInvoker = script => script.StartsWith("window.__mount") ? pending.Task : Task.FromResult<string?>("true");
+        view.Ready += (_, _) => swapped.TrySetResult(); tab.OpenTrailer(tab.PriceRows["program_done"]); Assert.False(view.IsReady); Assert.True(view.IsVisible);
+        pending.SetResult("true"); await swapped.Task; Assert.True(view.IsVisible);
+        view.Browser.ScriptInvoker = _ => Task.FromResult<string?>("false"); tab.OpenTrailer(tab.PriceRows["typo"]); Assert.True(view.HasFailed); Assert.False(view.IsVisible);
+    }));
+
 }
