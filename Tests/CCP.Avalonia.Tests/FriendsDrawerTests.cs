@@ -42,14 +42,18 @@ public sealed class FriendsDrawerTests
         public readonly List<string> Sends = new();
         /// <summary>When set, a "send" waits for it: the answer is still out while the test folds the drawer.</summary>
         public TaskCompletionSource? HoldSends;
+        public TaskCompletionSource? HoldActions;
         public string StateBody = State;
         public bool ActSucceeds = true;
+        public string? RequestBody;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var op = r.RequestUri!.AbsolutePath.Split('/').Last();
             lock (Ops) Ops.Add(op);
             if (op == "send") { Sends.Add(await r.Content!.ReadAsStringAsync(ct)); if (HoldSends != null) await HoldSends.Task; }
-            var body = op == "state" ? StateBody : op == "poll" ? """{"ok":true,"online":[],"inbox":[],"receipts":[]}"""
+            if (op == "accept" && HoldActions != null) await HoldActions.Task;
+            var body = op == "request" && RequestBody != null ? RequestBody
+                : op == "state" ? StateBody : op == "poll" ? """{"ok":true,"online":[],"inbox":[],"receipts":[]}"""
                 : op == "send" ? """{"ok":true,"status":"sent"}""" : ActSucceeds ? """{"ok":true}""" : """{"ok":false,"error":"try_later"}""";
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
@@ -250,6 +254,98 @@ public sealed class FriendsDrawerTests
         d.ToggleBlocked();
         Assert.NotNull(Tagged<Border>(d, "friends-blocked:u_bad"));
     });
+
+    // WPF FriendsDrawer.Honesty.cs:16-148, FriendsDrawer.cs:686,980,1123-1129,
+    // FriendsDrawer.Blocked.cs:240-253 and Services/Friends/FriendsSfx.cs:26-30.
+    [Theory]
+    [InlineData("accept", true, "friends-click,friends-accepted")]
+    [InlineData("accept", false, "friends-click,friends-denied")]
+    [InlineData("decline", true, "friends-click,friends-sink")]
+    [InlineData("cancel", true, "friends-click,friends-sink")]
+    [InlineData("unblock", true, "friends-click,friends-accepted")]
+    [InlineData("unblock", false, "friends-click,friends-denied")]
+    [InlineData("remove", true, "friends-sink")]
+    [InlineData("block", true, "friends-sink")]
+    [InlineData("remove", false, "friends-denied")]
+    [InlineData("report", true, "friends-click")]
+    [InlineData("report", false, "friends-click,friends-denied")]
+    [InlineData("squelch", true, "friends-click")]
+    [InlineData("squelch", false, "friends-denied")]
+    [InlineData("menu-remove", true, "friends-click")]
+    [InlineData("keep", true, "friends-click,friends-click")]
+    [InlineData("blocked-list", true, "friends-click")]
+    [InlineData("copy", true, "friends-click")]
+    [InlineData("more", true, "friends-click")]
+    [InlineData("add", true, "friends-accepted")]
+    [InlineData("add", false, "friends-denied")]
+    public Task RemainingDrawerActionsPlayTheirWpfCues(string action, bool success, string expected) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (global::Avalonia.Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var sounds = new List<string>();
+        var prior = ConditioningControlPanel.CoreAudio.PlayOneShotProvider;
+        try
+        {
+            ConditioningControlPanel.CoreSettings.Current.MasterVolume = 80;
+            ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, _, tag, _, done) =>
+            {
+                sounds.Add(tag);
+                // A fresh gate represents the user/network gap without a timing-sensitive sleep.
+                FriendsLanding.SfxGate = new FriendsSfxGate();
+                done?.Invoke();
+            };
+            FriendsLanding.SfxGate = new FriendsSfxGate();
+            var (svc, wire) = Service();
+            wire.ActSucceeds = success;
+            if (action == "add") wire.RequestBody = success ? """{"ok":true,"status":"sent"}""" : """{"ok":false,"reason":"try_later"}""";
+            using var d = new DrawerLifetime(new FriendsDrawer(svc));
+            await svc.RefreshAsync();
+            d.Drawer.OnOpened();
+            var friend = svc.Snapshot.Friends.First();
+            switch (action)
+            {
+                case "accept": case "decline": case "cancel":
+                    await d.Drawer.AnswerRequestAsync(svc.Snapshot.Incoming.First(), action); break;
+                case "unblock": await d.Drawer.UnblockAsync(svc.Snapshot.Blocked!.First()); break;
+                case "remove": case "block": await d.Drawer.ConfirmAsync(friend.Id, friend.Name, action); break;
+                case "report": await d.Drawer.ReportAsync(friend.Id, "spam"); break;
+                case "squelch": await d.Drawer.RunMenuAsync(friend, action); break;
+                case "menu-remove": await d.Drawer.RunMenuAsync(friend, "remove"); break;
+                case "keep":
+                    await d.Drawer.RunMenuAsync(friend, "remove");
+                    Click(d.Drawer, "friends-confirm-keep"); break;
+                case "blocked-list": d.Drawer.ToggleBlocked(); break;
+                case "more": case "copy":
+                    var window = new Window { Content = d.Drawer };
+                    try
+                    {
+                        window.Show();
+                        if (action == "more") d.Drawer.Toggle(friend.Id);
+                        Click(d.Drawer, action == "more" ? "friends-action:more" : "friends-copy");
+                        await Until(() => sounds.Count > 0);
+                    }
+                    finally { window.Close(); }
+                    break;
+                case "add":
+                    Tagged<TextBox>(d.Drawer, "friends-code-box")!.Text = "CCP-FGHJK";
+                    await d.Drawer.AddByCodeAsync(); break;
+            }
+            Assert.Equal(expected.Split(','), sounds);
+        }
+        finally
+        {
+            ConditioningControlPanel.CoreAudio.PlayOneShotProvider = prior;
+            FriendsLanding.SfxGate = new FriendsSfxGate();
+        }
+    });
+
+    private sealed class DrawerLifetime(FriendsDrawer drawer) : IDisposable
+    {
+        public FriendsDrawer Drawer { get; } = drawer;
+        public void Dispose() => Drawer.OnClosed();
+    }
 
     /// <summary>audit #1976: a click inside the drawer routes through the Popup to the chip; it must
     /// not toggle the drawer shut (WPF's HWND popup never reached the chip at all).</summary>
