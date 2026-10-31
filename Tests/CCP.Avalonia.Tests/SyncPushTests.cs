@@ -26,104 +26,56 @@ public sealed partial class AccountSeedTests
     [Fact]
     public void ProfileLoadAndSyncRestoreHistoricalAchievementsOnTheUiQueue() => WithFreshInstall(async () =>
     {
-        var (wire, sync, _) = SignIn("u1", L40Profile("u1", "from-get"));
-        wire.SyncReply = """{"success":true,"user":{"achievements":["from-post"]}}""";
-        var queue = new Queue<Action>();
-        CoreDispatch.PostProvider = queue.Enqueue;
-        var restored = new HashSet<string>();
-        sync.RestoreAchievements = ids => restored.UnionWith(ids);
-        Assert.True(await AccountSeed.LoadProfileAsync());
-        Assert.Empty(restored);
-        while (queue.TryDequeue(out var restore)) restore();
-        Assert.True(restored.SetEquals(new[] { "from-get", "from-post" }));
-        sync.UtcNow = () => T0.AddMinutes(1);
-        Assert.True(await sync.PushAsync("union"));
-        Assert.Contains("from-post", wire.Syncs.Last()["achievements"]!.Values<string>());
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1", "from-get")); wire.SyncReply = """{"success":true,"user":{"achievements":["from-post"]}}"""; var queue = new Queue<Action>();
+        CoreDispatch.PostProvider = queue.Enqueue; var restored = new HashSet<string>(); sync.RestoreAchievements = ids => restored.UnionWith(ids); Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Empty(restored); while (queue.TryDequeue(out var restore)) restore(); Assert.True(restored.SetEquals(new[] { "from-get", "from-post" })); sync.UtcNow = () => T0.AddMinutes(1);
+        Assert.True(await sync.PushAsync("union")); Assert.Contains("from-post", wire.Syncs.Last()["achievements"]!.Values<string>());
     });
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void QueuedAchievementRestoreCannotCrossAccountOrSession(bool sameAccount) => WithFreshInstall(async () =>
     {
-        var (_, sync, _) = SignIn("u1", L40Profile("u1", "old-account"));
-        var queue = new Queue<Action>();
-        CoreDispatch.PostProvider = queue.Enqueue;
-        var restored = new List<string>();
-        sync.RestoreAchievements = ids => restored.AddRange(ids);
-        Assert.True(await AccountSeed.LoadProfileAsync());
+        var (_, sync, _) = SignIn("u1", L40Profile("u1", "old-account")); var queue = new Queue<Action>(); CoreDispatch.PostProvider = queue.Enqueue; var restored = new List<string>();
+        sync.RestoreAchievements = ids => restored.AddRange(ids); Assert.True(await AccountSeed.LoadProfileAsync());
         if (sameAccount) { sync.Reset(); sync.MarkLoaded(null); }
-        else CoreSettings.Current.UnifiedId = "u2";
-        while (queue.TryDequeue(out var restore)) restore();
-        Assert.Empty(restored);
+        else CoreSettings.Current.UnifiedId = "u2"; while (queue.TryDequeue(out var restore)) restore(); Assert.Empty(restored);
     });
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void ProfileReadCannotRestoreIntoAnAccountOrSessionThatReplacedItsRequester(bool sameAccount) => WithFreshInstall(async () =>
     {
-        var (wire, sync, _) = SignIn("u1", L40Profile("u1", "old-account"));
-        wire.ProfileHold = new TaskCompletionSource();
-        var restored = new List<string>();
-        sync.RestoreAchievements = ids => restored.AddRange(ids);
-        var load = AccountSeed.LoadProfileAsync();
-        Assert.False(load.IsCompleted);
-        if (sameAccount) sync.Reset();
-        else CoreSettings.Current.UnifiedId = "u2";
-        wire.ProfileHold.SetResult();
-        Assert.False(await load);
-        Assert.Empty(restored);
-        Assert.False(sync.Loaded);
-        Assert.Empty(wire.Syncs);
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1", "old-account")); wire.ProfileHold = new TaskCompletionSource(); var restored = new List<string>(); sync.RestoreAchievements = ids => restored.AddRange(ids);
+        var load = AccountSeed.LoadProfileAsync(); Assert.False(load.IsCompleted); if (sameAccount) sync.Reset(); else CoreSettings.Current.UnifiedId = "u2"; wire.ProfileHold.SetResult(); Assert.False(await load);
+        Assert.Empty(restored); Assert.False(sync.Loaded); Assert.Empty(wire.Syncs);
     });
-
     [Fact]
     public void InFlightSyncCannotRestoreAfterSameAccountRelogin() => WithFreshInstall(async () =>
     {
         CoreDispatch.PostProvider = null; // A broken guard must execute restoration immediately.
-        var (wire, sync, _) = SignIn("u1", null);
-        sync.MarkLoaded(null);
-        wire.Hold = new TaskCompletionSource();
-        wire.SyncReply = """{"success":true,"user":{"achievements":["old-session"]}}""";
-        var restored = new List<string>();
-        sync.RestoreAchievements = ids => restored.AddRange(ids);
-        var push = sync.PushAsync("held");
-        Assert.False(push.IsCompleted);
-        sync.Reset();
-        sync.MarkLoaded(null);
-        wire.Hold.SetResult();
-        Assert.False(await push);
-        Assert.Empty(restored);
+        var (wire, sync, _) = SignIn("u1", null); sync.MarkLoaded(null); wire.Hold = new TaskCompletionSource(); wire.SyncReply = """{"success":true,"user":{"achievements":["old-session"]}}""";
+        var restored = new List<string>(); sync.RestoreAchievements = ids => restored.AddRange(ids); var push = sync.PushAsync("held"); Assert.False(push.IsCompleted); sync.Reset(); sync.MarkLoaded(null);
+        wire.Hold.SetResult(); Assert.False(await push); Assert.Empty(restored);
     });
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task FreshRestoresDispatcherAfterSuccessOrFailure(bool fail)
     {
-        var oldPost = CoreDispatch.PostProvider;
-        var dispatched = 0;
-        Action<Action> sentinel = action => { dispatched++; action(); };
+        var oldPost = CoreDispatch.PostProvider; var dispatched = 0; Action<Action> sentinel = action => { dispatched++; action(); };
         try
         {
             CoreDispatch.PostProvider = sentinel;
             var run = Fresh(() =>
             {
-                CoreDispatch.PostProvider = _ => { };
-                if (fail) throw new InvalidOperationException("cleanup probe");
+                CoreDispatch.PostProvider = _ => { }; if (fail) throw new InvalidOperationException("cleanup probe");
                 return Task.CompletedTask;
-            });
-            if (fail) await Assert.ThrowsAsync<InvalidOperationException>(() => run);
-            else await run;
-            Assert.Same(sentinel, CoreDispatch.PostProvider);
-            dispatched = 0;
-            CoreDispatch.Post(() => { });
+            }); if (fail) await Assert.ThrowsAsync<InvalidOperationException>(() => run); else await run; Assert.Same(sentinel, CoreDispatch.PostProvider); dispatched = 0; CoreDispatch.Post(() => { });
             Assert.Equal(1, dispatched);
         }
         finally { CoreDispatch.PostProvider = oldPost; }
     }
-
     private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements" };
 
     /// <summary>Records every request with its body; profile GET answers <see cref="Profile"/> (500 when null).</summary>
@@ -250,6 +202,34 @@ public sealed partial class AccountSeedTests
         Assert.Equal(1, (int)body["descent_epoch"]!);
         Assert.Superset(new HashSet<string> { "first_steps", "night_owl", "linux_only" },
             body["achievements"]!.Values<string>().ToHashSet()!);
+    });
+
+    [Fact]
+    public void CompanionAndTimePushOnlyAfterReadAndDisarmOnLogout() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        var s = CoreSettings.Current;
+        s.TotalConditioningMinutes = 0;
+        s.CompanionProgressData = new Dictionary<int, CompanionProgress>();
+        wire.SyncReply = """{"success":true,"total_conditioning_minutes":15,"companion_progress":{"0":{"Level":3,"TotalXPEarned":90}}}""";
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Null(wire.Syncs.Last()["companion_progress"]);
+        Assert.Null(wire.Syncs.Last()["total_conditioning_minutes"]);
+        s.CompanionProgressData[0].TotalXPEarned = 100;
+        s.TotalConditioningMinutes = 16;
+        sync.UtcNow = () => T0.AddSeconds(31);
+        Assert.True(await sync.PushAsync("progress"));
+        var sent = wire.Syncs.Last();
+        Assert.Equal(16, (double)sent["total_conditioning_minutes"]!);
+        Assert.Equal(100, (double)sent["companion_progress"]!["0"]!["TotalXPEarned"]!);
+        await AccountSeed.Logout();
+        (s.UnifiedId, s.AuthToken) = ("u1", "tok");
+        CoreAccount.UnifiedUserId = "u1";
+        wire.SyncReply = """{"success":true}""";
+        sync.UtcNow = () => T0.AddSeconds(62);
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Null(wire.Syncs.Last()["companion_progress"]);
+        Assert.Null(wire.Syncs.Last()["total_conditioning_minutes"]);
     });
 
     [Fact]
