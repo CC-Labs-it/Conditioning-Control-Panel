@@ -205,7 +205,8 @@ public sealed class CompanionEditorsTests
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
-                Dispatcher.UIThread.RunJobs();
+                // Hit testing reads the last rendered frame, not the just-updated layout.
+                ContentHitTestTests.RenderLiveTree(shell);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);

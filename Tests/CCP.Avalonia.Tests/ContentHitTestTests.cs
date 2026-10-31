@@ -87,8 +87,10 @@ public sealed class ContentHitTestTests
     /// committed after it is missing from the frame. Every tab's first probe ran with one batch pending,
     /// and on a slow runner the stale frame still had no hero there (Linux CI 38316007639: awareness
     /// BtnAwarenessTutorial / ChkAwarenessMaster hit ScrollContentPresenter, pressed False).</summary>
-    private static void RenderLiveTree(Visual w)
+    internal static void RenderLiveTree(Visual w)
     {
+        // Pointer probes target resting geometry, after the finite tab entrance.
+        if (w is MainShellWindow shell) shell.CompleteTabTransition();
         Dispatcher.UIThread.RunJobs();
         var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
         var deadline = Stopwatch.StartNew();
