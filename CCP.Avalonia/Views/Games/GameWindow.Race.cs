@@ -39,6 +39,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private DateTime _raceLastHeartbeatUtc;
         private bool _racePinged, _raceExiting, _raceStarted, _raceDisposed;
 
+        private WindowState _raceWindowedState = WindowState.Normal;
+
         internal bool RaceRunActive => _raceRun.IsActive;
         /// <summary>The watchdog clock (P08); tests step it.</summary>
         internal static Func<DateTime> RaceUtcNow = () => DateTime.UtcNow;
@@ -79,7 +81,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "fullscreen-set":
                     RaceQueue(() =>
                     {
-                        WindowState = (bool?)o["on"] == true ? global::Avalonia.Controls.WindowState.FullScreen : global::Avalonia.Controls.WindowState.Normal;
+                        bool on = (bool?)o["on"] == true;
+                        if (on && WindowState != WindowState.FullScreen)
+                        {
+                            _raceWindowedState = WindowState;
+                            WindowState = WindowState.FullScreen;
+                        }
+                        else if (!on && WindowState == WindowState.FullScreen)
+                            WindowState = _raceWindowedState;
                         Post(new { type = "fullscreen", on = WindowState == global::Avalonia.Controls.WindowState.FullScreen });
                         Web.Focus();
                     });
@@ -183,6 +192,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal Windows.AchievementPopup? RaceMilestonePopup { get; private set; }
 
+        // Instance seams exercise constructor and display failures without leaking process state.
+        internal Func<int, Windows.AchievementPopup> RaceCreateMilestonePopup = boundary =>
+            new Windows.AchievementPopup(Loc.GetF("achievement_bubble_milestone_name", boundary),
+                    Loc.Get("achievement_bubble_milestone_flavor"), "bubble_pop.png",
+                    headerText: Loc.Get("achievement_bubble_milestone_header"));
+        internal Action<Windows.AchievementPopup> RaceShowMilestonePopup = popup => popup.Show();
+
         private void CreditRaceBubbles(int count)
         {
             if (count <= 0 || App.Achievements is not { } achievements) return;
@@ -194,13 +210,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 settings.SkillPoints += milestones;
                 CoreSettings.Save();
                 SparklePointRewards.PublishCredit(previous, settings.SkillPoints, SparklePointSource.BubbleMilestone);
-                RaceMilestonePopup?.Close();
-                int boundary = achievements.Progress.TotalBubblesPopped / 100 * 100;
-                RaceMilestonePopup = new Windows.AchievementPopup(Loc.GetF("achievement_bubble_milestone_name", boundary),
-                    Loc.Get("achievement_bubble_milestone_flavor"), "bubble_pop.png",
-                    headerText: Loc.Get("achievement_bubble_milestone_header"));
-                RaceMilestonePopup.FindControl<IconGlyph>("TxtHeaderIcon")!.Kind = IconKind.Sparkle;
-                RaceMilestonePopup.Show();
+                // WPF AchievementService.cs:468 isolates notification failures from quest credit.
+                try
+                {
+                    RaceMilestonePopup?.Close();
+                    int boundary = achievements.Progress.TotalBubblesPopped / 100 * 100;
+                    RaceMilestonePopup = RaceCreateMilestonePopup(boundary);
+                    RaceMilestonePopup.FindControl<IconGlyph>("TxtHeaderIcon")!.Kind = IconKind.Sparkle;
+                    RaceShowMilestonePopup(RaceMilestonePopup);
+                }
+                catch (Exception ex) { Log.Warning("RaceHost bubble milestone popup: {E}", ex.Message); }
             }
             App.Quests?.TrackBubblesPopped(count);
         }

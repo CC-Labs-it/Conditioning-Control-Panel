@@ -21,21 +21,32 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class GameWindowTests
 {
-    [Fact]
-    public void Race_FullscreenEchoAndClosedQueue() => RunRace("rt.original.03", (_, _, _) =>
+    [Theory]
+    [InlineData(WindowState.Normal)]
+    [InlineData(WindowState.Maximized)]
+    public void Race_FullscreenEchoAndClosedQueue(WindowState windowedState) => RunRace("rt.original.03", (_, _, _) =>
     {
         var w = GameWindow.Launch("race")!;
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
         sent.Clear();
+        w.WindowState = windowedState;
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(windowedState, w.WindowState);
+        sent.Clear();
         w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(WindowState.FullScreen, w.WindowState);
         Assert.True((bool)Assert.Single(sent)["on"]!);
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(WindowState.FullScreen, w.WindowState);
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
         w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(WindowState.Normal, w.WindowState);
+        Assert.Equal(windowedState, w.WindowState);
         Assert.False((bool)sent.Last()["on"]!);
         sent.Clear();
         w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
@@ -91,8 +102,11 @@ public sealed partial class GameWindowTests
         finally { field.SetValue(null, copy); }
     });
 
-    [Fact]
-    public void Race_BubbleBatchCreditsOnceEvenWhenXpThrows() => RunRace("rt.original.03", (_, _, _) =>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("construct")]
+    [InlineData("show")]
+    public void Race_BubbleBatchCreditsOnceEvenWhenXpThrows(string? popupFailure) => RunRace("rt.original.03", (_, _, _) =>
     {
         var property = typeof(Head).GetProperty("Achievements", BindingFlags.NonPublic | BindingFlags.Static)!;
         var before = property.GetValue(null);
@@ -112,6 +126,11 @@ public sealed partial class GameWindowTests
         try
         {
             var w = GameWindow.Launch("race")!;
+            int attempts = 0;
+            if (popupFailure == "construct")
+                w.RaceCreateMilestonePopup = _ => { attempts++; throw new InvalidOperationException("constructor"); };
+            if (popupFailure == "show")
+                w.RaceShowMilestonePopup = _ => { attempts++; throw new InvalidOperationException("display"); };
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
             engine.Progress.TotalBubblesPopped = 95;
@@ -124,10 +143,14 @@ public sealed partial class GameWindowTests
             Assert.Equal(350, engine.Progress.TotalBubblesPopped);
             Assert.Equal(points + 3, CoreSettings.Current.SkillPoints);
             var popup = w.RaceMilestonePopup;
-            Assert.NotNull(popup);
-            Assert.True(popup.IsVisible);
-            Assert.Equal(Loc.GetF("achievement_bubble_milestone_name", 300),
-                popup.FindControl<TextBlock>("TxtName")!.Text);
+            if (popupFailure == null)
+            {
+                Assert.NotNull(popup);
+                Assert.True(popup.IsVisible);
+                Assert.Equal(Loc.GetF("achievement_bubble_milestone_name", 300),
+                    popup.FindControl<TextBlock>("TxtName")!.Text);
+            }
+            else Assert.Equal(1, attempts);
             w.HandleMessage("{\"type\":\"run-ended\",\"popped\":255}");
             Assert.Equal(255, Assert.Single(batches));
             Assert.Equal(255, quests.Progress.DailyQuests[0].CurrentProgress);
@@ -135,7 +158,8 @@ public sealed partial class GameWindowTests
             Assert.Equal(points + 3, CoreSettings.Current.SkillPoints);
             Assert.Single(sent.Where(o => (string?)o["type"] == "payout-result"));
             w.Close();
-            Assert.False(popup.IsVisible);
+            if (popup != null) Assert.False(popup.IsVisible);
+            if (popupFailure != null) Assert.Equal(1, attempts);
         }
         finally
         {

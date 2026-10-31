@@ -79,3 +79,27 @@ No credentials or secret files were inspected.
 Final restored-head command:
 dotnet test Tests/CCP.Avalonia.Tests --no-restore --filter 'FullyQualifiedName~GameWindowTests.Race_|FullyQualifiedName~TestIsolationTests'
 Result: Passed: 22, Failed: 0, Skipped: 0, Total: 22, 51 s. Fonts worked; these tests ran, not merely compiled.
+
+## Independent review fixes
+
+The original port citations above refer to a54b3cf03. Both P2 findings are accepted.
+
+- Fullscreen restoration: CCP.Avalonia/Views/Games/GameWindow.Race.cs:84 captures the pre-entry WindowState only on entry and restores it on exit. WPF ConditioningControlPanel/Chaos/ChaosWebViewHost.cs:371 restores Maximized and :598 ignores repeated requests. Tests/CCP.Avalonia.Tests/GameWindowRaceGapTests.cs:25 now tests Normal and Maximized, repeated enter/leave requests, and closed queued work.
+- Popup failure isolation: the same Avalonia race file:214 catches notification failures before quest credit at :224. WPF ConditioningControlPanel/Services/Progression/AchievementService.cs:468 catches construction and display failures. The existing bubble credit test now covers successful notification, constructor failure, and display failure, asserting points/totals and exactly one quest batch despite duplicate run-end messages.
+- Factory and display failure seams belong to the window instance; they add no shared test state. No new strings or WPF edits. The game-race ledger row remains partial, with no live parity claim.
+
+Review-fix validation commands (SDK /tmp/dotnet/dotnet, 10.0.403):
+
+| Command | Result tail |
+| --- | --- |
+| dotnet build CCP.Core --no-restore | 50 warnings, 0 errors |
+| dotnet build CCP.Avalonia --no-restore | 201 warnings, 0 errors |
+| dotnet build Tests/CCP.Avalonia.Tests --no-restore | 147 warnings, 0 errors |
+| dotnet test Tests/CCP.Core.Tests --no-restore | Passed: 4636, Failed: 0, Skipped: 6, Total: 4642, 42 s |
+| dotnet test Tests/CCP.Avalonia.Tests --no-build --filter 'FullyQualifiedName~GameWindowTests.Race_\|FullyQualifiedName~TestIsolationTests' | Passed: 25, Failed: 0, Skipped: 0, Total: 25, 1 m |
+| bash .github/scripts/core-guards.sh | All Core guards passed |
+| python3 .github/scripts/avalonia_docs.py | avalonia_docs self-check OK |
+
+Review fail-proof command: dotnet test Tests/CCP.Avalonia.Tests --no-restore --filter 'FullyQualifiedName~GameWindowTests.Race_FullscreenEchoAndClosedQueue|FullyQualifiedName~GameWindowTests.Race_BubbleBatchCreditsOnceEvenWhenXpThrows'.
+Forcing restore to Normal and rethrowing popup failures produced 3 failed, 2 passed, 0 skipped: Maximized expected but Normal observed; construction and display failure cases lost the quest batch. Source was restored in a finally block.
+The same command against restored source passed 5, failed 0, skipped 0 (24 s). The 25-case race/isolation suite also passed before mutation. No tests weakened or skipped.
