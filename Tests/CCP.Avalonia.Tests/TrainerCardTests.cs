@@ -8,9 +8,13 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using Avalonia.VisualTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -63,6 +67,7 @@ public sealed partial class AccountSeedTests
             {
                 if (global::Avalonia.Application.Current is null)
                     global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 LocalizationManager.Instance.SetLanguage("en");
@@ -151,6 +156,7 @@ public sealed partial class AccountSeedTests
             {
                 if (global::Avalonia.Application.Current is null)
                     global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -163,12 +169,36 @@ public sealed partial class AccountSeedTests
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
+                // Hit testing reads the last rendered frame. Land the real tab entrance before
+                // measuring and rendering the row, then send the actual double-click through it.
+                w.CompleteTabTransition();
+                w.UpdateLayout();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                Assert.Contains(row, Assert.IsAssignableFrom<Control>(w.InputHitTest(at)).GetSelfAndVisualAncestors());
+                var clicks = new List<int>();
+                w.AddHandler(InputElement.PointerPressedEvent, (_, e) => clicks.Add(e.ClickCount),
+                    global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+                // MouseDown/Up render between events. Use input time, not slow Skia render time,
+                // for the double-click interval; keep the real hit test, mouse device and gestures.
+                // Avalonia 12 protects the backend callback on ITopLevelImpl.
+                var inputProperty = w.PlatformImpl!.GetType().GetProperty("Input")!;
+                var input = (Action<RawInputEventArgs>)inputProperty.GetValue(w.PlatformImpl)!;
+                var timestampProperty = typeof(RawInputEventArgs).GetProperty("Timestamp",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)!;
+                ulong timestamp = 1000;
+                inputProperty.SetValue(w.PlatformImpl, (Action<RawInputEventArgs>)(e => { timestampProperty.SetValue(e, timestamp++); input(e); }));
+                try
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    for (var i = 0; i < 2; i++)
+                    {
+                        w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                        w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                        if (i == 0) Assert.False(w.ProfilePage!.IsEffectivelyVisible);
+                    }
                 }
+                finally { inputProperty.SetValue(w.PlatformImpl, input); }
+                Assert.Equal(new[] { 1, 2 }, clicks);
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
