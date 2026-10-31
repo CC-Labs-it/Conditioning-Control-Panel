@@ -111,9 +111,8 @@ public sealed class StartStopScheduleTests
     public System.Threading.Tasks.Task RampReachesNativeVideoWithoutAnAudioPage() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null) ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
-        var s = service.Current;
-        _ = new ConditioningControlPanel.Avalonia.Platform.LibVlcAudio();
+        var service = new SettingsService(); CoreSettings.ServiceProvider = () => service; var s = service.Current;
+        _ = new ConditioningControlPanel.Avalonia.Platform.LibVlcAudio("--aout=dummy");
         var clip = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "help-clip-audio-2s.mp4");
         var o = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
         var (oldNow, oldInterval) = (CoreIntensityRamp.Now, CoreIntensityRamp.Interval);
@@ -124,13 +123,17 @@ public sealed class StartStopScheduleTests
             var clock = DateTime.Now; CoreIntensityRamp.Now = () => clock; CoreIntensityRamp.Interval = System.Threading.Timeout.InfiniteTimeSpan;
             o.Show(clip, strict: false);
             var player = (LibVLCSharp.Shared.MediaPlayer)typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay).GetField("_player", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(o)!;
-            await MandatoryVideoOverlayTests.Until(() => player.IsPlaying && (o.Sink?.FrameCount ?? 0) >= 3);
-            Assert.True(player.IsPlaying && o.Sink!.FrameCount >= 3);
+            // Headless outputs have no usable Volume getter; assert gain delivered to native decoded audio.
+            player.Stop(); int decoded = 0; float nativeVolume = -1; var frames = o.Sink!.FrameCount;
+            player.SetAudioFormat("S16N", 48000, 2); player.SetAudioCallbacks((_, _, count, _) => { if (count > 0) System.Threading.Interlocked.Increment(ref decoded); }, null, null, null, null);
+            player.SetVolumeCallback((_, volume, mute) => System.Threading.Volatile.Write(ref nativeVolume, mute ? 0 : volume)); Assert.True(player.Play());
+            await MandatoryVideoOverlayTests.Until(() => player.IsPlaying && o.Sink!.FrameCount >= frames + 3 && System.Threading.Volatile.Read(ref decoded) > 0);
+            Assert.True(player.IsPlaying && o.Sink!.FrameCount >= frames + 3 && System.Threading.Volatile.Read(ref decoded) > 0);
             CoreIntensityRamp.Start(); clock = clock.AddMinutes(5); CoreIntensityRamp.Tick();
-            Assert.Equal(MandatoryVideoScheduler.EffectiveVolume(60, 50), player.Volume);
-            CoreIntensityRamp.Stop(); Assert.Equal(MandatoryVideoScheduler.EffectiveVolume(40, 50), player.Volume);
+            Assert.Equal(MandatoryVideoScheduler.EffectiveVolume(60, 50) / 100f, System.Threading.Volatile.Read(ref nativeVolume), precision: 6);
+            CoreIntensityRamp.Stop(); Assert.Equal(MandatoryVideoScheduler.EffectiveVolume(40, 50) / 100f, System.Threading.Volatile.Read(ref nativeVolume), precision: 6);
             service.RestoreFrom(new AppSettings { MasterVolume = 20, VideoVolume = 50 });
-            Assert.Equal(MandatoryVideoScheduler.EffectiveVolume(20, 50), player.Volume);
+            Assert.Equal(MandatoryVideoScheduler.EffectiveVolume(20, 50) / 100f, System.Threading.Volatile.Read(ref nativeVolume), precision: 6);
         }
         finally { CoreIntensityRamp.Stop(); CoreIntensityRamp.Now = oldNow; CoreIntensityRamp.Interval = oldInterval; o.CloseAll(); }
     });
