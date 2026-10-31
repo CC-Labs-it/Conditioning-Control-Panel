@@ -266,6 +266,48 @@ public sealed class EmiDeskSummonTests
         finally { win.ShutDown(); }
     });
 
+    [Fact]
+    public Task SayDuringDismissalCannotCancelTheOutro() => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>
+    {
+        await svc.Summon();
+        var win = svc.Window!;
+        svc.Dismiss();
+        win.Say("x");
+        win.PlayChain("shock");
+        await Pump(3000);
+        Assert.False(win.IsVisible);
+        Assert.False(win.InputLocked);
+        Assert.False(svc.IsOut);
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task InterruptedWakeFinishesOnceAndLaterLinesEatPats(bool panic) => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async _ =>
+    {
+        var win = new EmiDeskWindow();
+        int completed = 0;
+        try
+        {
+            win.RunSummon(() => completed++);
+            await Pump(700);
+            Assert.True(win.ChainLive);
+            if (panic) win.StopForPanic(); else win.Say("x");
+            Assert.Equal(1, completed);
+            win.PlayChain("shock");
+            var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!;
+            var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), win)!.Value;
+            win.MouseDown(point, global::Avalonia.Input.MouseButton.Left);
+            win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
+            Assert.Equal("o_o", win.Face);
+            Assert.True(win.ChainLive);
+            await Pump(2000);
+            Assert.Equal(1, completed);
+        }
+        finally { win.ShutDown(); }
+    });
+
     /// <summary>P06: the panic registry's emi-desk-feedback entry kills a running chain.</summary>
     [Fact]
     public Task PanicEntryCancelsHerChain() => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>

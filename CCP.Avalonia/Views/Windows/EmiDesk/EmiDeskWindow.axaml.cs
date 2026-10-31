@@ -899,6 +899,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void PlayChain(EmiChain? chain, Action? done = null, string? bodyFrameOverride = null)
         {
             if (chain == null || (PresentationActive && !(PresentationArriving && chain.Id == "wake"))) return;
+            if (_finishDismiss != null && chain.Id != "wink") return;
+            if (_summonChainLive && chain.Id != "wake") FinishSummon();
             StopPatFeedback();
             StopIdleBeats();
             Player.Play(chain, new EmiChainHooks
@@ -925,6 +927,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // so panic must also complete the hide/callback from WPF EmiDeskWindow.Fx.cs:182-203.
         internal void StopForPanic()
         {
+            FinishSummon();
             CancelChain();
             _finishDismiss?.Invoke();
         }
