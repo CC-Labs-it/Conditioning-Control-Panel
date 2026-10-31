@@ -115,6 +115,7 @@ public sealed class PanicSurfacesTests
         "panic-quiet",
         "pink-rush",
         "possession",
+        "program-moments",
         "program-session",
         "remote-haptics",
         "takeover",

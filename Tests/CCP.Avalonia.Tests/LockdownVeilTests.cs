@@ -35,7 +35,7 @@ public sealed class LockdownVeilTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -246,6 +246,17 @@ public sealed class LockdownVeilTests
                 // programs 3a (P05; WPF has no gate): each lifecycle door says Lockdown before anything else
                 ("program Enroll", () => _ = shell.EnrollProgramAsync("first_week"),
                     () => !DialogTexts(shell).Contains(Loc.Get("msg_you_are_in_lockdown_mode_nthere_is_no_escape"))),
+                ("program locked account door", () =>
+                {
+                    var premiumBeforeAttempt = CoreEntitlement.HasPremiumProvider;
+                    try
+                    {
+                        CoreEntitlement.HasPremiumProvider = () => false;
+                        _ = shell.EnrollProgramAsync("presentation");
+                    }
+                    finally { CoreEntitlement.HasPremiumProvider = premiumBeforeAttempt; }
+                },
+                    () => shell.CurrentTab == "appsettings" || !DialogTexts(shell).Contains(Loc.Get("msg_you_are_in_lockdown_mode_nthere_is_no_escape"))),
                 ("program Withdraw", () => _ = shell.WithdrawProgramAsync(),
                     () => programs.ActiveEnrollment == null || !DialogTexts(shell).Contains(Loc.Get("msg_you_are_in_lockdown_mode_nthere_is_no_escape"))),
                 ("program Start session", () => _ = shell.StartProgramSessionAsync(),
