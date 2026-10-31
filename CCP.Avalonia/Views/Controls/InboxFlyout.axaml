@@ -37,8 +37,8 @@
                         <DataTemplate x:DataType="startup:InboxItem">
                             <Border BorderBrush="#FF2C2C44" BorderThickness="0,0,0,1" Padding="12,10">
                                 <Grid ColumnDefinitions="Auto,*,Auto">
-                                    <TextBlock Grid.Column="0" Text="{Binding Glyph}"
-                                               Foreground="#FFE8E8F5" FontSize="16"
+                                    <fx:IconGlyph Grid.Column="0" Emoji="{Binding Glyph}"
+                                               Foreground="#FFE8E8F5" Size="16"
                                                Margin="0,0,10,0" VerticalAlignment="Top"/>
                                     <StackPanel Grid.Column="1">
                                         <TextBlock Text="{Binding Title}" Foreground="#FFE8E8F5"
