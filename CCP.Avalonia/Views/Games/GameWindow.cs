@@ -301,6 +301,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            if (WebHost.HandlePageLog(o, Spec.Id)) return;
             bool handled = false;
             if (Spec.Id == "goon") HandleGoonMessage(o, ref handled);
             if (Spec.Id == "backroom") HandleBackRoomMessage(o, ref handled);
@@ -361,9 +362,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         type = "fx-ack", token = (string?)o["token"], fired = Array.Empty<string>(),
                         skipped = new[] { new { prim = (string?)o["fxId"] ?? "", why = "unknown" } },
                     });
-                    break;
-                case "log":
-                    Log.Debug("[Game] {Id} page: {Msg}", Spec.Id, (string?)o["msg"]);
                     break;
                 case "boot-error":
                     Log.Warning("[Game] {Id}: page boot-error: {Msg}", Spec.Id, (string?)o["msg"]);
