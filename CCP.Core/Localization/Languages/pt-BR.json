@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Agendamento ativo",
+  "scheduler_started_body": "Sessão iniciada conforme o agendamento.",
+  "scheduler_ended_title": "Agendamento",
+  "scheduler_ended_body": "A sessão agendada terminou.",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Este aprimoramento está publicado no catálogo da comunidade.",
   "deeper_submission_badge_pending": "Pendente",

@@ -1,6 +1,7 @@
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Helpers;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows;
@@ -42,13 +43,13 @@ public partial class MainShellWindow
         if (action == SchedulerRun.Action.Start && !PanicAftermath.HoldsEngineRestart)
         {
             if (Tray != null && TrayHostPresent()) { Hide(); HideAvatarTube(); }
-            Platform.OsNotifications.Show("Scheduler Active", "Session auto-started based on schedule.");
+            Platform.OsNotifications.Show(Loc.Get("scheduler_started_title"), Loc.Get("scheduler_started_body"));
             if (!CoreEngine.IsRunning) StartEngine();
         }
         else if (action == SchedulerRun.Action.Stop)
         {
             StopEngine();
-            Platform.OsNotifications.Show("Scheduler", "Scheduled session ended.");
+            Platform.OsNotifications.Show(Loc.Get("scheduler_ended_title"), Loc.Get("scheduler_ended_body"));
         }
     }
 }

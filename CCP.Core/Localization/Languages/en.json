@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Scheduler active",
+  "scheduler_started_body": "Session started on schedule.",
+  "scheduler_ended_title": "Scheduler",
+  "scheduler_ended_body": "Scheduled session ended.",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",

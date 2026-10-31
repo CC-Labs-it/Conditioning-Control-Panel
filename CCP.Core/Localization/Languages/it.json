@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Pianificazione attiva",
+  "scheduler_started_body": "Sessione avviata secondo il programma.",
+  "scheduler_ended_title": "Pianificazione",
+  "scheduler_ended_body": "La sessione programmata è terminata.",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",

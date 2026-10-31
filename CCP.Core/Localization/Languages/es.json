@@ -1,4 +1,8 @@
 {
+  "scheduler_started_title": "Programación activa",
+  "scheduler_started_body": "Sesión iniciada según el horario.",
+  "scheduler_ended_title": "Programación",
+  "scheduler_ended_body": "La sesión programada terminó.",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
   "deeper_submission_badge_pending": "Pendiente",
