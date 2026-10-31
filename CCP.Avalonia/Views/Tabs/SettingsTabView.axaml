@@ -803,7 +803,7 @@
           </TransformGroup>
         </Grid.RenderTransform>
 
-        <features:FeatureCard x:Name="CardMystery" Icon="/Resources/features/mysterybox.png"
+        <features:FeatureCard x:Name="CardMystery" DashboardDepth="True" Icon="/Resources/features/mysterybox.png"
                               Title="FREE TODAY"/>
 
         <!-- The reveal face: today's feature, full-bleed. Art + name are painted by
@@ -894,7 +894,7 @@
       <!-- Row 4: the vault (double-wide) + the two games -->
       <!-- THE VAULT: the Exclusives storefront (Velvet Vault + the premium T2 shelf).
            Double-wide because it is a billboard as much as a door. -->
-      <features:FeatureCard Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" x:Name="CardVault" Icon="/Resources/features/vault.png"
+      <features:FeatureCard Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" x:Name="CardVault" DashboardDepth="True" Icon="/Resources/features/vault.png"
                             Title="The Vault"/>
       <!-- The vault's animated CTA: big, slightly diagonal, breathing. Overlaid on the CELL
            rather than inside FeatureCard so the card control stays generic. IsHitTestVisible
