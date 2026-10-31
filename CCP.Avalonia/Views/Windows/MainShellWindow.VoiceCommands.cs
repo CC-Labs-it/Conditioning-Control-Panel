@@ -5,7 +5,7 @@
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
 // ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path). Intents with no
-// seam here (keyword triggers, shake, deeper, session pause/resume, video pause/resume) are left out of the grammar.
+// seam here (keyword arming, shake, deeper, session pause/resume, video pause/resume) are left out of the grammar.
 
 using System;
 using System.Linq;
@@ -140,6 +140,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "wipe_once" when CoreMindWipe.TriggerOnceProvider != null => CoreMindWipe.TriggerOnce,
             "quiz_once" when CoreEngine.PopQuiz != null => () => CoreEngine.PopQuiz?.Show(),
             "count_once" when CoreEngine.BubbleCount != null => () => CoreEngine.BubbleCount?.Trigger(forceTest: true),
+            // WPF AutonomyService.VoiceCommandHost.cs:96 -> KeywordTriggerService.cs:193.
+            // Stop the runtime and its clip, leaving the saved Awareness switch alone.
+            "keyword_off" => Platform.KeywordTriggerHead.Stop,
             "mantra" => () => { }, // Core returns this intent to the existing spoken-mantra funnel.
             "mute" => () => ApplyVoiceMute(true),
             "unmute" => () => ApplyVoiceMute(false),
