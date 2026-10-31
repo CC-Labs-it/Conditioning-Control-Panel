@@ -13,8 +13,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// The Assets tab's "Online media today" card, the one-time official note and the Scrolller credit (WPF
     /// MainWindow.OnlineMeter.cs PaintOnlineMeterCard / PaintOnlineOfficialNote + AssetsTabView.xaml:273-465). What
     /// shows is Core <see cref="OnlineMeterRules"/> through <see cref="OnlineMeterHead"/>; this file only paints it.
-    /// <para>ponytail: not on this head yet - the "See plans" link (no vault gate card here), the spent corner notice,
-    /// the licence card on the startup ladder, and the note's landing animation.</para>
+    /// <para>ponytail: not on this head yet - the licence card on the startup ladder, and the note's landing animation.</para>
     /// </summary>
     public partial class AssetsTabView
     {
@@ -34,6 +33,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 OnlineMeterHead.Refresh += RefreshOnlineMeter;
                 DetachedFromVisualTree += (_, _) => OnlineMeterHead.Refresh -= RefreshOnlineMeter;
                 AttachedToVisualTree += (_, _) => { OnlineMeterHead.Refresh -= RefreshOnlineMeter; OnlineMeterHead.Refresh += RefreshOnlineMeter; };
+                BtnOnlineMeterPlans.Click += (_, _) =>
+                {
+                    if (OnlineMeterHead.Now().SeePlansTier is int tier)
+                        (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenOnlinePlans(tier);
+                };
                 BtnOnlineOfficialNice.Click += (_, _) => OnlineOfficialNice();
                 // The credit is the shared ScrolllerCreditLine: its own link opens scrolller.com and refuses under
                 // Strict Lock, Lockdown or a Chaos run (a second click handler here would open it twice).
@@ -50,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Repaints the card and the note from the live allowance. UI thread.</summary>
         internal void RefreshOnlineMeter()
         {
-            try { PaintOnlineMeter(OnlineMeterHead.Now(), DateTime.Now, ScrolllerAllowance.NextResetLocal); }
+            try { PaintOnlineMeter(OnlineMeterHead.Now(), ScrolllerAllowance.Now(), ScrolllerAllowance.NextResetLocal); }
             catch (Exception ex) { Log.Debug("Online meter refresh failed: {E}", ex.Message); }
         }
 
@@ -60,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             OnlineMeterStamped.IsVisible = st.ShowStampedLine;
             OnlineOfficialNote.IsVisible = st.ShowOfficialNote;
             if (st.ShowOfficialNote) TxtOnlineOfficialPlan.Text = Loc.Get(OnlineMeterRules.OfficialPlanKey(st.Plan));
+            BtnOnlineMeterPlans.IsVisible = st.Show && st.SeePlansTier != null;
             if (!st.Show) return;
             var tone = new SolidColorBrush(ToneColor(st.Tone));
             TxtOnlineMeterPct.Text = string.Format(Loc.Get("online_meter_pct"), st.Percent);

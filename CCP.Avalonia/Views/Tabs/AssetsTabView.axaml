@@ -315,6 +315,9 @@
                                 </Grid>
                             </Border>
                         </DockPanel>
+                        <Button x:Name="BtnOnlineMeterPlans" IsVisible="False" HorizontalAlignment="Left" Margin="0,5,0,0" Padding="0" Background="Transparent">
+                            <TextBlock Text="{loc:Str online_see_plans}" Foreground="#FF69B4"/>
+                        </Button>
                         <TextBlock x:Name="TxtOnlineMeterLine" Margin="0,5,0,0" FontSize="11.5" TextWrapping="Wrap" Foreground="#A7A7C1"/>
                         <StackPanel x:Name="OnlineMeterStamped" Orientation="Horizontal" Margin="0,6,0,0" IsVisible="False">
                             <Border BorderBrush="{DynamicResource PinkBrush}" BorderThickness="2" CornerRadius="4"
