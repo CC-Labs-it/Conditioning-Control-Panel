@@ -81,6 +81,7 @@ public sealed partial class AccountSeedTests
     [Fact]
     public void InFlightSyncCannotRestoreAfterSameAccountRelogin() => WithFreshInstall(async () =>
     {
+        CoreDispatch.PostProvider = null; // A broken guard must execute restoration immediately.
         var (wire, sync, _) = SignIn("u1", null);
         sync.MarkLoaded(null);
         wire.Hold = new TaskCompletionSource();
@@ -95,6 +96,33 @@ public sealed partial class AccountSeedTests
         Assert.False(await push);
         Assert.Empty(restored);
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FreshRestoresDispatcherAfterSuccessOrFailure(bool fail)
+    {
+        var oldPost = CoreDispatch.PostProvider;
+        var dispatched = 0;
+        Action<Action> sentinel = action => { dispatched++; action(); };
+        try
+        {
+            CoreDispatch.PostProvider = sentinel;
+            var run = Fresh(() =>
+            {
+                CoreDispatch.PostProvider = _ => { };
+                if (fail) throw new InvalidOperationException("cleanup probe");
+                return Task.CompletedTask;
+            });
+            if (fail) await Assert.ThrowsAsync<InvalidOperationException>(() => run);
+            else await run;
+            Assert.Same(sentinel, CoreDispatch.PostProvider);
+            dispatched = 0;
+            CoreDispatch.Post(() => { });
+            Assert.Equal(1, dispatched);
+        }
+        finally { CoreDispatch.PostProvider = oldPost; }
+    }
 
     private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements" };
 
@@ -164,7 +192,7 @@ public sealed partial class AccountSeedTests
     {
         var s = CoreSettings.Current;
         var saved = Touched.ToDictionary(n => n, n => Get(s, n));
-        var (oldToken, oldNew, oldOffline) = (s.AuthToken, AccountSeed.NewV2, s.OfflineMode);
+        var (oldToken, oldNew, oldOffline, oldPost) = (s.AuthToken, AccountSeed.NewV2, s.OfflineMode, CoreDispatch.PostProvider);
         try
         {
             Assert.True(AccountSeed.Seed(Make, p => new DiscordAccount(() => p, () => new AppSettings())));
@@ -177,7 +205,7 @@ public sealed partial class AccountSeedTests
             AccountSeed.Sync?.Reset();
             AccountSeed.Sync = null;
             foreach (var n in Touched) Set(s, n, saved[n]);
-            (s.AuthToken, AccountSeed.NewV2, s.OfflineMode) = (oldToken, oldNew, oldOffline);
+            (s.AuthToken, AccountSeed.NewV2, s.OfflineMode, CoreDispatch.PostProvider) = (oldToken, oldNew, oldOffline, oldPost);
             CoreAccount.UnifiedUserId = null;
         }
     }
