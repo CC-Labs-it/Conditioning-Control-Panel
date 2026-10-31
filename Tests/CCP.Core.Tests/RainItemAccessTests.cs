@@ -1,14 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text.RegularExpressions;
-using ConditioningControlPanel.Services.Companion.Rain;
-using Newtonsoft.Json.Linq;
-using Xunit;
-
+using System; using System.Collections.Generic; using System.IO; using System.Linq;
+using System.Text.RegularExpressions; using ConditioningControlPanel.Services.Companion.Rain; using Newtonsoft.Json.Linq; using Xunit;
 namespace CCP.Core.Tests;
-
 public class RainItemAccessTests
 {
     private sealed class Progress : IRainProgressSource
@@ -16,7 +8,6 @@ public class RainItemAccessTests
         public int Level { get; init; } = 1;
         public IReadOnlyCollection<string> UnlockedAchievements { get; init; } = Array.Empty<string>();
     }
-
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -25,14 +16,10 @@ public class RainItemAccessTests
         Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
         return dir!.FullName;
     }
-
     private static string WardrobeDir() => Path.Combine(RepoRoot(), "Assets", "web", "rain-wardrobe");
-
     private static RainItemManifest Shipped() => RainItemManifest.Load(Path.Combine(WardrobeDir(), RainItemManifest.FileName));
-
     private static RainItemAccess Access(int level = 1, string[]? achievements = null, params string[] grants)
         => new(Shipped(), new RainGrantSet(grants), new Progress { Level = level, UnlockedAchievements = achievements ?? Array.Empty<string>() });
-
     [Fact]
     public void Shipped_manifest_parses_with_unique_slot_qualified_ids()
     {
@@ -41,7 +28,6 @@ public class RainItemAccessTests
         Assert.Equal(m.Items.Count, m.Items.Select(i => i.Id).Distinct(StringComparer.Ordinal).Count());
         Assert.All(m.Items, i => Assert.Equal(i.Slot + ":" + i.PageId, i.Id));
     }
-
     [Fact]
     public void Every_grant_is_a_rain_cosmetic_and_matches_its_shop_row()
     {
@@ -55,7 +41,6 @@ public class RainItemAccessTests
         }
         Assert.All(Shipped().Items.Where(i => i.Access != RainItemAccessKind.Shop), i => Assert.Null(i.Grant));
     }
-
     [Fact]
     public void Every_page_id_exists_in_the_wardrobe_page_modules()
     {
@@ -68,7 +53,6 @@ public class RainItemAccessTests
             .Select(i => i.Id).ToList();
         Assert.True(missing.Count == 0, "items.json names page ids the wardrobe page lacks: " + string.Join(", ", missing));
     }
-
     [Fact]
     public void Defaults_skin_tones_and_none_are_free()
     {
@@ -78,7 +62,6 @@ public class RainItemAccessTests
                      ("accessories", "glasses"), ("arms", "none"), ("ankles", "none") })
             Assert.Equal(RainItemState.Free, a.StateOf(slot, id).State);
     }
-
     [Fact]
     public void Shop_items_are_buyable_until_the_grant_arrives()
     {
@@ -88,7 +71,6 @@ public class RainItemAccessTests
         Assert.True(owned.Wearable);
         Assert.Equal(RainItemState.Owned, Access(grants: "cos.rain.suit.hazmat-yellow").StateOf("dress", "hazmat-yellow").State);
     }
-
     [Fact]
     public void Level_unlocks_open_at_their_level()
     {
@@ -101,7 +83,6 @@ public class RainItemAccessTests
         Assert.Equal(RainItemState.Locked, Access(level: 49).StateOf("accessories", "rose-gold-collar").State);
         Assert.Equal(RainItemState.Unlocked, Access(level: 50).StateOf("accessories", "rose-gold-collar").State);
     }
-
     [Fact]
     public void Rose_ribbon_opens_on_the_first_achievement()
     {
@@ -110,7 +91,6 @@ public class RainItemAccessTests
         Assert.Equal(RainItemManifest.AnyAchievement, none.NeedsAchievement);
         Assert.Equal(RainItemState.Unlocked, Access(achievements: new[] { "first_week_graduate" }).StateOf("accessories", "hair-bow").State);
     }
-
     [Fact]
     public void Slot_qualified_ids_resolve_per_slot()
     {
@@ -129,17 +109,14 @@ public class RainItemAccessTests
         var access = Access(level: 12, grants: "cos.rain.hair.copper-lob");
         var clamped = JObject.Parse(RainLookClamp.Clamp(look, access));
         var items = (JObject)clamped["items"]!;
-
         Assert.Null(items["dress"]);                                // not owned: default dress
         Assert.Equal("copper-lob", (string)items["hair"]!);         // owned
         Assert.Equal("warm", (string)items["skin"]!);               // free
         Assert.Equal("fine-gold", (string)items["arms"]!);
         Assert.Equal(new[] { "velvet-choker", "glasses" }, items["accessories"]!.Select(t => (string)t!));  // Lv 12 choker, no unowned drops, no repeat
         Assert.Equal("#112233", (string)clamped["colors"]!["fabric"]!);
-
         Assert.Equal(new[] { "dress:midnight-cocktail", "accessories:silver-drops" }, RainLookClamp.Blockers(look, access));
     }
-
     [Fact]
     public void Clamp_drops_unknown_ids_and_slots_and_keeps_an_empty_accessory_list()
     {
@@ -150,7 +127,6 @@ public class RainItemAccessTests
         Assert.Equal("", RainLookClamp.Clamp("not json", Access()));
         Assert.Equal("", RainLookClamp.Clamp("{\"rev\":2,\"items\":{\"dress\":\"satin-original\"}}", Access()));
     }
-
     [Fact]
     public void Wardrobe_window_clamp_is_this_clamp_and_honours_level_unlocks()
     {
@@ -158,11 +134,9 @@ public class RainItemAccessTests
         Assert.Equal(RainLookClamp.Clamp(look, Access(level: 30)), RainWardrobeCatalog.Clamp(look, null, new Progress { Level = 30 }));
         Assert.Contains("accessories:rose-gold-collar", RainWardrobeCatalog.LockedKeys(null, new Progress { Level = 30 }));
         Assert.DoesNotContain("accessories:midnight-ribbon", RainWardrobeCatalog.LockedKeys(null, new Progress { Level = 30 }));
-        // The two later hair drops stay locked until the counter sells them.
         Assert.True(RainWardrobeCatalog.IsLocked("hair", "honey-roundbob", null, new Progress { Level = 200 }));
         Assert.True(RainWardrobeCatalog.IsLocked("hair", "espresso-sidesweep", null, new Progress { Level = 200 }));
     }
-
     [Fact]
     public void Missing_manifest_wears_nothing_but_the_defaults()
     {

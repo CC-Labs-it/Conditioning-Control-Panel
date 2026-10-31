@@ -1,8 +1,5 @@
-using ConditioningControlPanel.Services.Companion.Rain;
-using Xunit;
-
+using ConditioningControlPanel.Services.Companion.Rain; using Xunit;
 namespace CCP.Core.Tests;
-
 public sealed class RainLookCodecTests
 {
     [Fact]
@@ -19,7 +16,6 @@ public sealed class RainLookCodecTests
             """, actual);
         Assert.Equal(actual, RainLookCodec.Normalize(actual));
     }
-
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -28,7 +24,6 @@ public sealed class RainLookCodecTests
     [InlineData("{\"rev\":1,\"colors\":{\"unknown\":\"#ffffff\"}}")]
     public void InvalidOrEmptyLooksUseAuthoredDefault(string? input)
         => Assert.True(RainLookCodec.IsDefault(input));
-
     [Fact]
     public void BoundsInputAndAccessoryList()
     {

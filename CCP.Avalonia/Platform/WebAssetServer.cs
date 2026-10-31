@@ -312,6 +312,13 @@ public sealed class WebAssetServer : IDisposable
         res.Headers.Add("X-Content-Type-Options", "nosniff");
         res.Headers.Add("Referrer-Policy", "no-referrer");
         res.Headers.Add("Accept-Ranges", "bytes");
+        if (RainAssetsRoot != null && path == Path.Combine(_root, "rain-wardrobe", "host-bridge.js"))
+        {
+            var bytes = Encoding.UTF8.GetBytes(File.ReadAllText(path).Replace("https://ccp.rain-assets/", "/ccp.rain-assets/", StringComparison.Ordinal));
+            res.ContentLength64 = bytes.Length;
+            if (req.HttpMethod == "GET") res.OutputStream.Write(bytes);
+            return;
+        }
         using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         long from = 0, to = file.Length - 1;
         // One bytes=a-b / a- / -n range (what a media element asks for to seek, as WebView2's virtual host
@@ -368,6 +375,7 @@ public sealed class WebAssetServer : IDisposable
     public Func<string?>? AssetsRoot { get; init; }
 
     /// <summary>Downloaded audio-web mirror; read on every request so a pack installed during a run is available.</summary>
+    public string? RainAssetsRoot { get; init; }
     public Func<string?>? ContentRoot { get; init; }
 
     /// <summary>The file a URL path names, or null if it is missing or lies outside its root, symlinks followed.</summary>
@@ -383,6 +391,13 @@ public sealed class WebAssetServer : IDisposable
             var file = ConditioningControlPanel.Services.Chaos.DtrhLoomStore.GifPathFor(name[5..^4]);
             return file != null && new DirectoryInfo(ConditioningControlPanel.Services.Chaos.DtrhLoomStore.SpiralsFolder).LinkTarget == null
                 && new FileInfo(file).LinkTarget == null ? file : null;
+        }
+        if (rel.StartsWith("ccp.rain-assets/", StringComparison.Ordinal))
+        {
+            rel = rel["ccp.rain-assets/".Length..];
+            if (RainAssetsRoot == null || rel is not ("avatar.glb" or "pelvis-data.js")) return null;
+            root = Path.GetFullPath(RainAssetsRoot).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (HoldsUserData(root)) return null;
         }
         bool asset = rel.StartsWith(AssetsPrefix, StringComparison.Ordinal);
         bool whisper = rel.StartsWith(PbpWhisperClips.SubAudioHost + "/", StringComparison.Ordinal)

@@ -1,8 +1,5 @@
-using ConditioningControlPanel;
-using Xunit;
-
+using ConditioningControlPanel; using Xunit;
 namespace CCP.Core.Tests;
-
 public sealed class RainTypeIsolationTests
 {
     [Theory]
