@@ -119,6 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Serilog.Log.Information("Tray: Stop everything");
             if (RefuseStopUnderLockdown()) return;   // WPF refuses every Stop under Lockdown (StartStop.cs:45)
             PanicSurfaces.StopAll("tray");   // decision C: the only panic control on Windows, camera included
+            NoteLocalPanicPause();
         }
 
         /// <summary>TrayIconService.ShowWindow + MainWindow's OnShowRequested (ShowAvatarTube).</summary>

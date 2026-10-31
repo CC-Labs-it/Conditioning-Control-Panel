@@ -77,6 +77,24 @@ public sealed class ListeningPauseTests
     });
 
     [Fact]
+    public void SessionGrammarCannotUndoTrayPanic() => Run(shell =>
+    {
+        var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+        try
+        {
+            shell.StartSession(new Session { Id = "voice_tray_panic", Name = "Tray panic", DurationMinutes = 5 });
+            Assert.True(runner.IsRunning && !runner.IsPaused);
+            MainShellWindow.StopEverything();
+            Assert.True(runner.IsPaused);
+            Command(shell, "resume the session");
+            Assert.True(runner.IsPaused);
+            Assert.True(MainShellWindow.LocalPanicHoldsSession);
+            Assert.False(shell.ResumeSessionByVoice());
+        }
+        finally { runner.Stop(); AvApp.Sessions = null; CoreEngine.Stop(); }
+    });
+
+    [Fact]
     public void LockdownRefusesSessionPause() => Run(shell =>
     {
         var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
