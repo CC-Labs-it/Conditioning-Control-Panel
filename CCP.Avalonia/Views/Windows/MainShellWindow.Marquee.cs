@@ -36,7 +36,7 @@
 //   CheckIntakePassNudge / StartIntakeFromNudge - App.Programs (the weekly intake pass); the
 //     accepted nudge then wants ShowTab("gradedintake"), which does exist here.
 //   (BannerWebLink_Click is ported below: the beat's inline SafeHyperlinkButton opens through
-//   ExternalOpener, which has no no-default-browser prompt - WPF BrowserLauncher's fallback.)
+//   ExternalOpener, with clipboard and no-default-browser prompt.)
 //   LocOr - a Loc.Get with an English literal fallback. Used only by the marquee and takeaway
 //     formatters, neither of which runs here; Loc.Get already returns the key when a string is
 //     missing, so there is nothing to restore in isolation.
@@ -165,6 +165,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private static void EnsureFadeTransition(TextBlock beat)
         {
+            // WPF MainWindow.Marquee.cs:432: Off swaps without transitions.
+            if (!global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowTransitions)
+            {
+                beat.Transitions = null;
+                return;
+            }
             var transitions = beat.Transitions ??= new Transitions();
             foreach (var t in transitions)
                 if (t is DoubleTransition dt && dt.Property == OpacityProperty) return;
@@ -190,12 +196,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
-            // ponytail: WPF falls back to App.Patreon/App.Discord DisplayName when the unified
-            // name is blank. Neither provider exists on this head, so a user who linked an
-            // account but has no UserDisplayName written back gets the generic line.
-            var displayName = s.UserDisplayName;
+            // WPF MainWindow.Marquee.cs:135: unified identity, then provider names.
+            var displayName = new[] { s.UserDisplayName, Platform.AccountSeed.Patreon?.DisplayName,
+                Platform.AccountSeed.Discord?.DisplayName }.FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))?.Trim();
+            // WPF Marquee.cs:144 accepts a stored id; this head requires AccountSeed.RestoreSession's proven identity.
             secondary.Text = string.IsNullOrEmpty(displayName)
-                ? Loc.Get("label_welcome_consider_logging_in_with_patreon_for")
+                ? Loc.Get(CoreAccount.IsLoggedIn
+                    ? "banner_signed_in_no_name" : "label_welcome_consider_logging_in_with_patreon_for")
                 : Loc.GetF("label_welcome_back_0", displayName!);
         }
 

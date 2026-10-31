@@ -50,6 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Sign-in, startup restore and logout all land here; WPF repaints the header on
                 // each (Login.cs:198 UpdateLevelDisplay, OnProfileLoaded).
                 UpdateLevelDisplay();
+                UpdateBannerWelcomeMessage();   // WPF MainWindow.Login.cs:57/123/328
                 RefreshProfileBubble();   // WPF UpdateXPBarLoginState: the bubble paints the same identity
                 // WPF UpdatePatreonUI -> RefreshEntitlementVeils: an account change moves every veil.
                 RefreshEntitlementVeils(persist: accountChanged);
