@@ -30,23 +30,30 @@ public static class LockdownDoseRecovery
             if (!File.Exists(path)) return;
             var state = JsonConvert.DeserializeObject<RecoveryState>(File.ReadAllText(path));
             if (state?.Flipped == null) return;
-            foreach (var key in state.Flipped)
-            {
-                switch (key)
-                {
-                    case "flash": settings.FlashEnabled = false; break;
-                    case "subliminal": settings.SubliminalEnabled = false; break;
-                    case "spiral": settings.SpiralEnabled = false; break;
-                    case "pinkfilter": settings.PinkFilterEnabled = false; break;
-                    case "bouncingtext": settings.BouncingTextEnabled = false; break;
-                    case "bubbles": settings.BubblesEnabled = false; break;
-                    case "video": settings.MandatoryVideosEnabled = false; break;
-                }
-            }
+            ApplyFlipped(state.Flipped, settings);
             save();
             // Stricter than the old lane: keep the record if parsing or saving throws.
             File.Delete(path);
         }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Lockdown dose recovery failed"); }
+    }
+
+    // WPF LockdownDoseKeeper.cs at 2e5f0092e:558-567. Both heads share the borrowed-key mapping;
+    // each keeps its own recovery-file and save/cleanup policy.
+    internal static void ApplyFlipped(IEnumerable<string> keys, AppSettings settings)
+    {
+        foreach (var key in keys)
+        {
+            switch (key)
+            {
+                case "flash": settings.FlashEnabled = false; break;
+                case "subliminal": settings.SubliminalEnabled = false; break;
+                case "spiral": settings.SpiralEnabled = false; break;
+                case "pinkfilter": settings.PinkFilterEnabled = false; break;
+                case "bouncingtext": settings.BouncingTextEnabled = false; break;
+                case "bubbles": settings.BubblesEnabled = false; break;
+                case "video": settings.MandatoryVideosEnabled = false; break;
+            }
+        }
     }
 }
