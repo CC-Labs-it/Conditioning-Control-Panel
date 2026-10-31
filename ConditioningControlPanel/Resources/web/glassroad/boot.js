@@ -103,6 +103,7 @@ import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
 import { createLoading, LOAD_STALL_MS } from './hud/loading.js';
+import { createRaceToys } from './host/raceToys.js';
 import { describeFailure, rememberFailure, failureLine, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS } from './core/failure.js';
 import { ORDER as TIER_ORDER } from './render/quality.js';
 import { dismantleScene } from './render/sceneResources.js';
@@ -531,6 +532,10 @@ async function boot(course, options, lifetime, isCurrent) {
   lifetime.defer(renderer.onLost((lost) => {
     if (isCurrent()) void recover('lost', new Error((lost.api ? lost.api + ' ' : '') + (lost.message || 'device lost') + (lost.reason ? ' (' + lost.reason + ')' : '')), { race: racing() });
   }));
+  // a compat device refusing every frame is a black world with no throw: end on the reason and Retry, never on black
+  lifetime.defer(renderer.onCompatDead((message) => {
+    if (isCurrent()) fail(new Error('this phone\'s graphics could not draw the course: ' + message));
+  }));
   shared.counts.courses++;
   if (!shared.artLibrary && qs.get('art') !== '0') {
     shared.artLibrary = createArtLibrary(renderer);
@@ -940,6 +945,12 @@ async function boot(course, options, lifetime, isCurrent) {
   introVeil.setAttribute('aria-hidden', 'true'); document.body.append(introVeil);
   lifetime.defer(() => introVeil.remove());
   lifetime.defer(() => { introHud.style.visibility = ''; });
+  // the connected toy (fx/toyPlan.js): the player's own events only; a host without toys never sets caps.toys
+  const raceToys = init.caps.toys ? createRaceToys({ bus, send: m => bridge.send(m), place: () => standings.placeOf(0), bumpMinDv: feel.get('contact.cueMinDvMps') }) : null;
+  lifetime.defer(() => raceToys?.dispose());
+  lifetime.listen(document, 'visibilitychange', () => { if (document.hidden) raceToys?.stop(); });
+  hud.setToys(init.caps.toysConnected === true);
+  bridge.on('toys', (m) => hud.setToys(m.connected === true));
   function resetAll() {
     introElapsed = 0; introTarget = null; introHud.style.visibility = '';
     glideHintLap = -1;
@@ -964,6 +975,7 @@ async function boot(course, options, lifetime, isCurrent) {
     racers.interpolate(1);
     cam.snap(P.view, track, renderer.aspect);
     finishAt = 0; result = null; debug.result = null; debug.place = 0;
+    raceToys?.reset();
     coins.reset();
     armWords();
   }
@@ -1689,6 +1701,8 @@ async function boot(course, options, lifetime, isCurrent) {
         rumbleSent = rm; rumbleT = ms / 1000;
       }
     } else { rumbleT = 0; rumbleSent = 0; }
+    raceToys?.update(frameDt, { racing: state === 'race' && race.phase === 'racing' && !paused && !P.finished,
+      speedShare: pst[S.speedPct], mode: hud.options.toys });
     if (HT) hLap('audio');
 
     // feel wave hit-stop: while fs.holdS > 0 the drawn karts and the camera keep last frame's pose (render-only:

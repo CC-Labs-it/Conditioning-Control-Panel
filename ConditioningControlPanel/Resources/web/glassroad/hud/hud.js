@@ -93,7 +93,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     const list = (listeners[name] || []).length ? listeners[name] : fns[name] || [];
     for (const fn of list.slice()) { if (disposed) break; try { fn(payload); } catch (e) { console.warn('[hud]', name, e); } }
   }
-  const cards = createCards(card, { doc, emit: fire, devices, kit });
+  const cards = createCards(card, { doc, emit: fire, devices, kit, feel });
   let garageNav=null;
   // A pad step moves focus from script, which the browser never paints as :focus-visible after a mouse
   // click: html.pad-nav paints :focus (styles.css, garage.css) until the pointer is used again.
@@ -368,6 +368,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     setTrack(t) { map.setTrack(t || {}); cards.setTrack?.(t); },
     /** The host's Gentle switch: the options card shows Gentle preview locked on. */
     setHostGentle(on) { cards.setHostGentle(on); },
+    setToys(on) { cards.setToys(on); },
     /** The device behind the tier and its auto pick ({ device, autoTier }): the options card's Quality hint. */
     setDevice(v) { cards.setDevice?.(v); },
     /** The host's Scrolller consent ({ on }) for the Online pictures switch; null hides it. */
