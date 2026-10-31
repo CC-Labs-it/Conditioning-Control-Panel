@@ -14,6 +14,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Flash;
 using Serilog;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
@@ -33,7 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
     /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
-    /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), content-pack and remote pools, avatar pre-announce.</para>
+    /// the Pendulum motion style (Drift and Bounce is below), content-pack and remote pools, avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
     {
@@ -148,6 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen, InheritMotion = inheritMotion,
             };
             if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable)) return false;
+            w.AnimationLoad = w.Animate(path);
             Paid(path, s, hydraGeneration, multiplier);
             return true;
         }
@@ -386,6 +388,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
             var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: false, fromGaze: fromGaze, w.HydraGeneration, Active.Count);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
+            // WPF FlashService.cs:4854-4866,4942: gentle pops fade, without shatter or flicker.
+            if (GentleVisuals.On)
+            {
+                Exiting.Add(w);
+                w.Closed += (_, _) => Exiting.Remove(w);
+                w.Expire();
+                return;
+            }
             if (FlashShatter.DecidesClick(s.FlashShatterEnabled, PrizeOwnership.OwnsFlashV2())
                 && w.TryBeginShatter(s.MotionLevel, Rng))
             {
