@@ -434,6 +434,64 @@ public sealed class FirstShowStageTests
     private static void Setup() => AmbientBeatLoopsTests.Setup();
 
 
+#if DEBUG
+    [Fact]
+    public Task DebugPreviewOwnsTheShowAndClosesEmi() => Run(_ =>
+    {
+        FirstShowService.Stop();
+        EmiDeskService.Instance.Window?.ShutDown();
+        var desktop = new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime
+        {
+            Args = new[] { "--first-show-preview" },
+        };
+        try
+        {
+            Assert.True(ConditioningControlPanel.Avalonia.App.TryStartFirstShowPreview(desktop));
+            var stage = Assert.IsType<FirstShowStageWindow>(desktop.MainWindow);
+            Assert.Same(FirstShowService.Window, stage);
+            Assert.True(stage.IsVisible);
+            Assert.Equal(ShutdownMode.OnMainWindowClose, desktop.ShutdownMode);
+            Assert.True(EmiDeskService.Instance.Window!.PresentationActive);
+            // Keep the suite's shared dispatcher alive while testing the owned-window cleanup.
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            stage.Close();
+            Assert.False(FirstShowService.IsActive);
+            Assert.Null(EmiDeskService.Instance.Window);
+            Assert.False(EmiDeskService.Instance.IsOut);
+        }
+        finally { desktop.MainWindow = null; desktop.Dispose(); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("--first-show-preview-extra")]
+    [InlineData("--FIRST-SHOW-PREVIEW")]
+    [InlineData("--smoke")]
+    public Task OtherArgumentsDoNotStartPreview(string arg) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        using var desktop = new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime
+        {
+            Args = new[] { arg },
+        };
+        FirstShowService.RequireClickThrough = false;
+        try
+        {
+            Assert.False(ConditioningControlPanel.Avalonia.App.TryStartFirstShowPreview(desktop));
+            Assert.Null(desktop.MainWindow);
+            Assert.False(FirstShowService.IsActive);
+        }
+        finally
+        {
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            FirstShowService.Stop();
+            EmiDeskService.Instance.Window?.ShutDown();
+            FirstShowService.RequireClickThrough = true;
+        }
+        return Task.CompletedTask;
+    });
+#endif
+
     private static Task Run(Func<FirstShowStageWindow, Task> body, string? panicKey = null) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
