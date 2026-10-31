@@ -25,7 +25,7 @@ public sealed class DeeperRowsTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
@@ -60,9 +60,11 @@ public sealed class DeeperRowsTests
     private sealed class FakeAudio : IDeeperLocalAudio
     {
         public bool Playing, Disposed;
+        public int Volume { get; set; }
         public double DurationSeconds { get; set; } = 95;
         public double PositionSeconds { get; set; }
-        public void Play() => Playing = true;
+        public bool Play() { Playing = true; return true; }
+        public event Action? Failed;
         public void Pause() => Playing = false;
         public event Action? Ended;
         public void End() { Playing = false; Ended?.Invoke(); }
@@ -126,8 +128,10 @@ public sealed class DeeperRowsTests
         public LibVLCSharp.Shared.VLCState State { get; set; } = LibVLCSharp.Shared.VLCState.NothingSpecial;
         public long Time { get; set; }
         public long Length => 6000;
+        public int Volume { get; set; }
         public int Stops;
-        public void Play() => State = LibVLCSharp.Shared.VLCState.Opening;
+        public bool StartSucceeds = true;
+        public bool Play() { State = LibVLCSharp.Shared.VLCState.Opening; return StartSucceeds; }
         public void SetPause(bool pause) => State = pause ? LibVLCSharp.Shared.VLCState.Paused : LibVLCSharp.Shared.VLCState.Playing;
         public void Stop() { Stops++; State = LibVLCSharp.Shared.VLCState.Stopped; }
     }
@@ -137,14 +141,24 @@ public sealed class DeeperRowsTests
     {
         var e = new FakeEngine();
         var t = new DeeperLocalAudio.Transport(e, 12000, () => { });
+        e.StartSucceeds = false;
+        Assert.False(t.Play());
+        e.StartSucceeds = true;
+        var errors = 0;
+        t.Failed += () => errors++;
+        t.OnError();
+        Assert.Equal(1, errors);
         Assert.Equal(12, t.DurationSeconds);              // header estimate until playing
 
         // Seek before playback: taken by the first Playing, never again.
+        t.Volume = 37;
         t.PositionSeconds = 3;
         t.Play();
         e.State = LibVLCSharp.Shared.VLCState.Playing;
+        e.Volume = 0; // the backend can ignore a pre-Playing volume
         t.OnPlaying();
         Assert.Equal(3000, e.Time);
+        Assert.Equal(37, e.Volume);
         Assert.Equal(6, t.DurationSeconds);               // exact length once playing
         e.Time = 4000;
         t.Pause();
@@ -160,6 +174,15 @@ public sealed class DeeperRowsTests
         t.Play();
         t.OnPlaying();
         Assert.Equal(7000, e.Time);
+
+        t.Volume = 200;
+        Assert.Equal(100, e.Volume);
+        t.Volume = -1;
+        Assert.Equal(0, e.Volume);
+        t.PositionSeconds = 100;
+        Assert.Equal(6000, e.Time);
+        t.PositionSeconds = -1;
+        Assert.Equal(0, e.Time);
 
         // Pause (or panic) while the clip is still opening stops it rather than letting it start.
         e.State = LibVLCSharp.Shared.VLCState.Stopped;
