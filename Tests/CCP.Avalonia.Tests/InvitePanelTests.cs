@@ -59,6 +59,40 @@ public sealed class InvitePanelTests
     private static T? Tagged<T>(Control root, string tag) where T : Control => All<T>(root).FirstOrDefault(c => c.Tag as string == tag);
 
     [Fact]
+    public Task LockedRewardBadgesAreGreyAndReachedBadgesKeepColour() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsurePlatform();
+        var rung = InviteRewards.Ladder[0];
+        global::Avalonia.Media.Imaging.Bitmap Art(int converted) => All<Image>(InvitePanel.RungTile(rung, converted, false))
+            .Select(i => i.Source).OfType<global::Avalonia.Media.Imaging.Bitmap>().Single();
+        var reached = Art(rung.Converted);
+        var locked = Art(0);
+        Assert.NotSame(reached, locked);
+        byte[] Pixels(global::Avalonia.Media.Imaging.Bitmap art)
+        {
+            using var staging = new global::Avalonia.Media.Imaging.WriteableBitmap(art.PixelSize, new Vector(96, 96),
+                global::Avalonia.Platform.PixelFormat.Bgra8888, global::Avalonia.Platform.AlphaFormat.Premul);
+            using var frame = staging.Lock();
+            art.CopyPixels(frame);
+            var bytes = new byte[frame.RowBytes * art.PixelSize.Height];
+            System.Runtime.InteropServices.Marshal.Copy(frame.Address, bytes, 0, bytes.Length);
+            return bytes;
+        }
+        var colour = Pixels(reached);
+        var grey = Pixels(locked);
+        Assert.Equal(reached.PixelSize, locked.PixelSize);
+        Assert.True(Enumerable.Range(0, colour.Length / 4).Any(i =>
+            colour[i * 4] != colour[i * 4 + 1] || colour[i * 4 + 1] != colour[i * 4 + 2]));
+        for (int i = 0; i < grey.Length; i += 4)
+        {
+            Assert.Equal(grey[i], grey[i + 1]);
+            Assert.Equal(grey[i + 1], grey[i + 2]);
+            Assert.Equal(colour[i + 3], grey[i + 3]);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task ASubscriberSeesTheirCodesAndTheLadder() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var (oldUnlocked, oldUnlock) = (InviteRewards.UnlockedProvider, InviteRewards.TryUnlockProvider);
