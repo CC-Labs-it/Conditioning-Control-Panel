@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
@@ -8,6 +9,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
@@ -16,6 +21,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using Newtonsoft.Json;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -122,6 +128,10 @@ public sealed class WelcomeBackRestoreTests
     [Fact]
     public Task RestoreFailureFilesAnInboxRetryThatDownloadsAgain() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
         CoreSecrets.RetrieveProvider = _ => null;
         CoreSecrets.StoreProvider = (_, _) => { };
         var service = new SettingsService();
@@ -136,6 +146,17 @@ public sealed class WelcomeBackRestoreTests
             WelcomeBackOffer.ApplyRestore(null);
             var item = Assert.Single(StartupLadder.Inbox.Items);
             Assert.Equal("welcome-back:restore-failed", item.Key);
+            Assert.Equal(nameof(IconKind.Cloud), item.Glyph);
+            var host = new Window { Content = new InboxFlyout() };
+            try
+            {
+                host.Show();
+                host.UpdateLayout();
+                var icon = host.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Name == "InboxRowIcon");
+                Assert.Equal(IconKind.Cloud, icon.Kind);
+                Assert.False(icon.IsFallback);
+            }
+            finally { host.Close(); }
             item.Open!();
             await Task.Yield();
             Assert.Equal(1, server.Reads);

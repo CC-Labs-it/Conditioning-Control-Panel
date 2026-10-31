@@ -150,7 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 Log.Warning(ex, "Welcome-back restore failed");
                 StartupLadder.Inbox.File(new InboxItem
                 {
-                    Key = "welcome-back:restore-failed", Glyph = "☁",
+                    Key = "welcome-back:restore-failed", Glyph = nameof(IconKind.Cloud),
                     Title = Loc.Get("wb_restore_failed_title"),
                     Summary = Loc.Get("wb_restore_failed_summary"),
                     Open = () => _ = RetryRestoreAsync(),

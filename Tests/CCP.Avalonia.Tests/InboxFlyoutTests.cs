@@ -11,10 +11,12 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Startup;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -36,6 +38,28 @@ public sealed class InboxFlyoutTests
     });
 
     private static void Click(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    [Fact]
+    public Task RowIconsMapTokensKeepUnknownContentAndHideEmptyGlyphs() => Run(() =>
+    {
+        foreach (var glyph in new[] { nameof(IconKind.Cloud), "custom", "" })
+            StartupLadder.Inbox.File(new InboxItem { Key = "icon:" + glyph, Glyph = glyph });
+        var host = new Window { Content = new InboxFlyout() };
+        try
+        {
+            host.Show();
+            host.UpdateLayout();
+            var icons = host.GetVisualDescendants().OfType<IconGlyph>()
+                .Where(g => g.Name == "InboxRowIcon").ToArray();
+            Assert.Equal(3, icons.Length);
+            var cloud = Assert.Single(icons, g => g.Emoji == nameof(IconKind.Cloud));
+            Assert.Equal(IconKind.Cloud, cloud.Kind);
+            Assert.False(cloud.IsFallback);
+            Assert.True(Assert.Single(icons, g => g.Emoji == "custom").IsFallback);
+            Assert.False(Assert.Single(icons, g => g.Emoji == "").IsVisible);
+        }
+        finally { host.Close(); }
+    });
 
     [Fact]
     public Task QuietWindowParksARowAndOpenRunsIt() => Run(() =>
