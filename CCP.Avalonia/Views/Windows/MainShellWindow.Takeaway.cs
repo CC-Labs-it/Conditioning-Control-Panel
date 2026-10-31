@@ -166,7 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // WPF PreparePresetCardFx -> MotionFx.HoverLift: only pinned receipts and the shop,
         // 1.02 / 150 ms quadratic out. Takeaway never gets the selected PRESET's ambient sheen.
-        private static void PrepareTakeawayLift(Border chip)
+        internal static void PrepareTakeawayLift(Border chip)
         {
             var scale = new ScaleTransform(1, 1);
             chip.RenderTransform = scale;
@@ -182,7 +182,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             chip.PointerEntered += (_, _) => Lift(true);
             chip.PointerExited += (_, _) => Lift(false);
-            chip.DetachedFromVisualTree += (_, _) => { scale.Transitions = null; scale.ScaleX = scale.ScaleY = 1; };
+            void Reset() { scale.Transitions = null; scale.ScaleX = scale.ScaleY = 1; }
+            chip.DetachedFromVisualTree += (_, _) => Reset();
+            // A freshly painted chip can leave its shelf before the first visual attachment.
+            // That removal has no visual detach event, but still changes its logical parent.
+            chip.PropertyChanged += (_, e) => { if (e.Property == ParentProperty && chip.Parent is null) Reset(); };
         }
 
         private static StackPanel Line() => new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
