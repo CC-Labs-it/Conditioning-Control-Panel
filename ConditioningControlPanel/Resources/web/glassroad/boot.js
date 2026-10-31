@@ -22,6 +22,7 @@ import { createBridge, songCharts, isPreviewSongHost, wantLobbySongs, lobbySongC
 import { createHostEscape } from './host/hostEscape.js';
 import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
+import { createDevicePictures } from './host/devicePictures.js';
 import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
 import { nichesFor, isDefault, savePick } from './host/scrolllerNiches.js';
 import { createLocalLibrary, pickFiles, feedSwitch, loadFilesChoice, saveFilesChoice, openFilePicker } from './host/localLibrary.js';
@@ -438,6 +439,9 @@ async function boot(course, options, lifetime, isCurrent) {
   // Online pictures: a switch in Options only where the host offers the feed (the web), moved only by its echo, and this
   // course's niches (host/scrolllerNiches.js: its default pair, or the player's own pick kept in this browser).
   const scrolller = init.caps.scrolller ? shared.scrolllerFeed : null;
+  // The phone caches pictures on its own loopback server: real textures on the world screens (host/devicePictures.js).
+  const deviceOrigin = init.caps.scrolller?.origin === 'device';
+  if (deviceOrigin) scrolller.useDeviceOrigin(location.origin);
   // "My files" (host/localLibrary.js): the player's own pictures as blob urls, never uploaded; while it is on the
   // Scrolller switch is off, so the host fetches nothing. Kept across courses; only the choice survives a reload.
   const library = shared.library ||= createLocalLibrary();
@@ -592,7 +596,11 @@ async function boot(course, options, lifetime, isCurrent) {
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge,
     readyCount: renderer.device === 'phone' ? PHONE_READY_CLIPS : Infinity });   // the DEVICE, whatever Quality is pinned
   if (qs.get('media') !== '0') world.media?.setDisplayFeed(pictures, renderer.canvas);
-  world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || null);
+  // My files and Off win: while either is picked this provider holds nothing and the display route above has the faces.
+  const devicePictures = deviceOrigin && qs.get('media') !== '0' && world.media ? createDevicePictures(world.media, { feed: scrolller,
+    active: () => !shared.filesOn && coursePick.source === 'scrolller' }) : null;
+  if (devicePictures) { lifetime.defer(() => devicePictures.dispose()); lifetime.defer(scrolller.subscribe(() => devicePictures.sync())); }
+  world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || devicePictures?.sourceForFlash(seed) || null);
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
   effects.screen.params.mediaFlash = true;
   lifetime.defer(() => subliminalBurst.dispose());
@@ -601,7 +609,7 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
   Object.defineProperty(debug, 'scrolller', { get: () => (scrolller
-    ? { consent: scrolller.consent, files: shared.filesOn, pictures: pictures.count, ready: pictures.ready } : null) });
+    ? { consent: scrolller.consent, files: shared.filesOn, pictures: pictures.count, ready: pictures.ready, device: devicePictures?.stats() || null } : null) });
   Object.defineProperty(debug, 'songGates', { get: () => world.phraseGates.stats });
   Object.defineProperty(debug, 'airWords', { get: () => world.airWords?.stats || null });
   Object.defineProperty(debug, 'songCues', { get: () => ({ total: songCues?.cues.length || 0,
@@ -700,8 +708,8 @@ async function boot(course, options, lifetime, isCurrent) {
     rise(s) { return this.on ? Math.max(.6, gentle.rise(s)) : s; },
     fade(s) { return this.on ? Math.max(1, gentle.fade(s)) : s; } };
   // The flash canvas is a plain page canvas (never a texture), so the web's display-only Scrolller stills may fill it (never its clips).
-  const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || pictures?.stillFor(seed) || null,
-    pool: () => cardMedia?.flashCount || pictures?.stillCount || 0,   // never the same picture twice in one burst
+  const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || devicePictures?.sourceForFlash(seed) || pictures?.stillFor(seed) || null,
+    pool: () => cardMedia?.flashCount || devicePictures?.flashCount || pictures?.stillCount || 0,   // never the same picture twice in one burst
     photosafe, gentle: cueSafety });
   let cueRunSeen = null, cueRevision = -1;
   lifetime.defer(() => cueBurst.dispose());
@@ -1796,6 +1804,7 @@ async function boot(course, options, lifetime, isCurrent) {
     for (const cue of cueView?.fired || NO_WORDS) if (cue.kind === 'VEIL' || (cue.kind === 'BURST' && cue.params?.variant === 'cards')) cueBurst.fire(cue);
     cueBurst.update(frameDt, { paused: frozen, aspect: renderer.aspect, screen: effects.screen,
       flashes: [effects.screen, payoff.flash] });
+    devicePictures?.update(frameDt, { paused: frozen, gentle: cueSafety.on || !!feel.get('gentle.on') });
     const wordLive = words && song ? words.update(songS,
       { s: pv[S.s], lat: pv[S.lateral], speedMps: Math.max(0, pv[S.speedPct]) * feel.get('speed.topMps') }) : NO_WORDS;
     if (words) {

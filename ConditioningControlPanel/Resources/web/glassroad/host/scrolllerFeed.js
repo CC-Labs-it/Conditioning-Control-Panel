@@ -10,13 +10,41 @@
  *
  * Consent is the host's: the page asks with `set-setting` { key: 'media.remoteConsent', value } and only the
  * `setting` echo (what is stored) moves the switch. A closed gate arrives as an empty feed.
+ *
+ * DEVICE ORIGIN (phone, `caps.scrolller.origin === 'device'`): the host caches each picture and serves it from the
+ * page's own loopback server, so its rows are same-origin stills with no CORS problem. The guard flips: only the
+ * page's own origin passes, a scrolller.com url is refused. No element is made here: `deviceRows` goes to
+ * host/devicePictures.js, which puts them on the real world screens. Without the origin nothing here changes.
  */
 export const MAX_FEED_ROWS = 12;
+const NO_ROWS = Object.freeze([]);
 const SCROLLLER_MEDIA = /^https:\/\/([a-z0-9-]+\.)*scrolller\.com\//i;
 /** A feed clip is a <video> element (test fakes say so with tagName). */
 export const isVideo = (el) => String(el?.tagName || '').toUpperCase() === 'VIDEO';
 // A clip is usable once its metadata is in (HAVE_METADATA); each world face still waits for its own frame.
 const loaded = (el) => isVideo(el) ? !el.error && el.readyState >= 1 : el.complete && el.naturalWidth > 0;
+
+/** A device-origin row url: absolute, on exactly this page's origin, no credentials. The parsed href, or ''. */
+export function deviceUrl(url, pageOrigin) {
+  if (typeof url !== 'string' || !pageOrigin || pageOrigin === 'null' || !/^https?:\/\//i.test(url)) return '';
+  try {
+    const u = new URL(url);
+    return u.origin === pageOrigin && !u.username && !u.password ? u.href : '';
+  } catch { return ''; }
+}
+
+/** The rows a device-origin feed may carry: v1, stills only (never svg), on the page's own origin, deduped, capped. */
+export function deviceRows(msg, pageOrigin) {
+  if (!msg || msg.v !== 1 || !Array.isArray(msg.rows)) return [];
+  const out = [], seen = new Set();
+  for (const r of msg.rows) {
+    if (out.length >= MAX_FEED_ROWS) break;
+    const url = r?.kind === 'image' ? deviceUrl(r.url, pageOrigin) : '';
+    if (!url || seen.has(url) || (r.mime !== undefined && !/^image\/(?!svg)/i.test(String(r.mime)))) continue;
+    seen.add(url); out.push({ url, kind: 'image' });
+  }
+  return out;
+}
 
 /** The rows a feed message may carry: v1, https on a scrolller.com host, stills and GIF-style clips, deduped, capped. */
 export function feedRows(msg) {
@@ -59,6 +87,9 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image(), mak
   // stills: the flash burst's pictures, the image rows plus each clip's poster. The host sends a clip's poster on
   // its row and never again as a still, so in a GIF niche the posters are the only stills (2026-10-30).
   let pictures = [], stills = [], consent = null, disposed = false, catalog = null, expires = 0;
+  // Device origin (the phone): the guard's page origin, the rows for host/devicePictures.js and the last message,
+  // kept so a feed that lands before the init named the origin is read again under the right guard.
+  let pageOrigin = '', device = NO_ROWS, last = null;
   const listeners = new Set();
   const notify = () => { for (const fn of listeners) { try { fn(consent); } catch (e) { console.warn('[scrolller]', e); } } };
   /** Release every element; a clip also drops its poster and load() frees its decoder. */
@@ -72,8 +103,14 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image(), mak
   }
   function apply(msg) {
     if (disposed) return;
+    last = msg;
     const next = feedCatalog(msg);
     if (next && JSON.stringify(next) !== JSON.stringify(catalog)) { catalog = next; notify(); }
+    if (pageOrigin) {
+      device = consent === false ? NO_ROWS : deviceRows(msg, pageOrigin);
+      expires = now() + 24 * 60 * 60 * 1000;
+      return;
+    }
     const rows = consent === false ? [] : feedRows(msg), old = [...pictures, ...stills];
     expires = now() + 24 * 60 * 60 * 1000;
     const still = (url) => { const img = makeImage(); img.decoding = 'async'; img.src = url; return img; };
@@ -101,7 +138,7 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image(), mak
   }
   const offFeed = bridge?.on('scrolller-feed', apply);
   const offEcho = bridge?.on('setting', echo);
-  const release = () => { drop(pictures); drop(stills); pictures = []; stills = []; };
+  const release = () => { drop(pictures); drop(stills); pictures = []; stills = []; device = NO_ROWS; };
   const current = () => {
     if (now() >= expires || consent === false) release();
     return pictures;
@@ -110,6 +147,14 @@ export function createScrolllerFeed({ bridge, makeImage = () => new Image(), mak
   return {
     /** The stored consent from the last echo, or null before any echo. */
     get consent() { return consent; },
+    /** Device origin: rows are same-origin stills from now on (idempotent); a feed already here is read again. */
+    useDeviceOrigin(origin) {
+      if (disposed || !origin || pageOrigin === origin) return;
+      release(); pageOrigin = origin;
+      if (last) apply(last);
+    },
+    /** Device origin: the rows now in force; the same array until a feed replaces it, empty past consent or expiry. */
+    get deviceRows() { current(); return device; },
     get count() { return current().length; },
     get ready() { return current().filter(loaded).length; },
     /** Loaded stills only (clip posters count): the flash burst shows at most this many cards per hit. */
