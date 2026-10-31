@@ -1,0 +1,163 @@
+using System;
+using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Media;
+using Avalonia.Threading;
+using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Possession;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Possession;
+using Xunit;
+namespace CCP.Avalonia.Tests;
+public sealed class PossessionShellTests
+{
+    [Fact] public void ConsentUsesSelectedLanguage()
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var language = loc.CurrentLanguage; const string warningKey = "lockdown_possession_warning";
+        try { loc.SetLanguage("en"); var english = loc.Get(warningKey); Assert.Contains("on purpose", english); Assert.Contains("not a bug", english); foreach (var code in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" }) {
+            loc.SetLanguage(code); var text = loc.Get(warningKey); Assert.NotEqual(warningKey, text); if (code != "en") Assert.NotEqual(english, text);
+            foreach (var (intensity, key) in new[] { (0, "lockdown_poss_intensity_gentle"), (1, "lockdown_poss_intensity_eerie"), (2, "lockdown_poss_intensity_fulldoki") })
+                Assert.Contains(loc.GetF(warningKey, loc.Get(key)), global::ConditioningControlPanel.Avalonia.Views.Tabs.LockdownTabView.LockdownWarning(10, new() { LockdownPossessionEnabled = true, LockdownPossessionIntensity = intensity })); } }
+        finally { loc.SetLanguage(language); }
+    }
+    private static void Setup()
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+    }
+    private static Button Button(string name) => new() { Name = name, Width = 100, Height = 30, Content = "Start" };
+    [Fact]
+    public Task WalkPrunesSafetyAndHiddenSubtreesAndKeepsInnermostCardsAndStableVictims() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var previous = LockdownService.Current; using var lockdown = new LockdownService();
+        LockdownService.Current = lockdown; var shell = new MainShellWindow();
+        Assert.True(PossessionTree.GetExclude(shell.Named<Border>("LockdownBadge")!)); // WPF MainWindow.xaml Exclude
+        var button = Button("BtnVictim");
+        var inner = new Border { Name = "Inner", Width = 180, Height = 80, Background = Brushes.Gray,
+            CornerRadius = new CornerRadius(5), Child = button };
+        var outer = new Border { Name = "Outer", Width = 220, Height = 100, Background = Brushes.Gray,
+            CornerRadius = new CornerRadius(5), Child = inner };
+        var excluded = new StackPanel { Children = { Button("BtnExcluded") } };
+        PossessionTree.SetExclude(excluded, true);
+        var hidden = new StackPanel { IsVisible = false, Children = { Button("BtnHidden") } };
+        var tiny = Button("BtnTiny"); tiny.Width = 4;
+        var disabled = Button("BtnDisabled"); disabled.IsEnabled = false;
+        var dock = new Border { Name = "EmiDockChip", Child = Button("BtnCompanion") };
+        var tagged = new TextBlock { Name = "TxtXP", Text = "500", Width = 80, Height = 25 };
+        PossessionTree.SetRole(tagged, PossessionRole.Progress); PossessionTree.SetName(tagged, "the bank");
+        var anonymous = Button("");
+        var lockTab = new StackPanel { Name = "LockdownTab", Children = { Button("BtnLockStart") } };
+        var gated = new StackPanel { IsEnabled = false, Children = { Button("BtnGatedChild") } };
+        var panel = new StackPanel { Children = { outer, excluded, hidden, tiny, disabled, dock, tagged, anonymous, lockTab, gated } };
+        for (int i = 0; i < 30; i++) panel.Children.Add(new TextBlock { Text = "caption", FontSize = 14, Width = 80, Height = 12 });
+        shell.Content = panel; shell.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var targets = shell.GetPossessionTargets();
+            Assert.Contains(targets, t => ReferenceEquals(t.Visual, button) && t.Role == PossessionRole.Button
+                && t.DisplayName == "the Start button");
+            Assert.Contains(targets, t => ReferenceEquals(t.Visual, inner) && t.Role == PossessionRole.Card);
+            Assert.DoesNotContain(targets, t => ReferenceEquals(t.Visual, outer));
+            Assert.DoesNotContain(targets, t => t.Key is "BtnExcluded" or "BtnHidden" or "BtnTiny" or "BtnDisabled" or "BtnCompanion"
+                or "BtnLockStart" or "BtnGatedChild"); // CanApply refuses off-limits; IsEnabled does not inherit
+            Assert.DoesNotContain(targets, t => ReferenceEquals(t.Visual, lockTab));
+            var hand = Assert.Single(targets, t => ReferenceEquals(t.Visual, tagged));
+            Assert.Equal(PossessionRole.Progress, hand.Role);
+            Assert.Equal("the bank", hand.DisplayName);
+            Assert.StartsWith("Button#", targets.Single(t => ReferenceEquals(t.Visual, anonymous)).Key);
+            Assert.Same(targets, shell.GetPossessionTargets()); Assert.Equal(24, targets.Count(t => t.Role == PossessionRole.Label)); // cached, capped
+            typeof(MainShellWindow).GetField("_possessionCacheAt", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .SetValue(shell, DateTime.MinValue);
+            Assert.Same(targets, Task.Run(shell.GetPossessionTargets).GetAwaiter().GetResult()); // stale off-thread reads return the last safe snapshot
+            Assert.Same(hand, shell.GetPossessionTargets().Single(t => ReferenceEquals(t.Visual, tagged))); // live/cooldown survives
+            var spawning = typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost).GetField("_spawning", BindingFlags.Static | BindingFlags.NonPublic)!;
+            var wasSpawning = spawning.GetValue(null);
+            try { spawning.SetValue(null, true); Assert.True(((IPossessionHost)shell).IsUsable); } // WPF Possession.cs:658-699
+            finally { spawning.SetValue(null, wasSpawning); }
+            shell.WindowState = WindowState.Minimized;
+            Assert.False(((IPossessionHost)shell).IsUsable);
+        }
+        finally { shell.Close(); LockdownService.Current = previous; }
+        return Task.CompletedTask;
+    });
+    [Theory]
+    [InlineData(null, 0)]
+    [InlineData("nudge", 600)]
+    [InlineData("drift", 700)]
+    [InlineData("breathe", 700)]
+    public Task LockdownArmsCoreDirectorUsesLiveRungsAndRealEffectsAndPanicRestoresTheVictim(string? effectId, int returnMs) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var s = CoreSettings.Current; var previous = LockdownService.Current; using var lockdown = new LockdownService();
+        var now = DateTime.UtcNow; lockdown.UtcNow = () => now;
+        LockdownService.Current = lockdown;
+        var frames = new Frames(); MainShellWindow.PossessionFramesForTests = frames;
+        var shell = new MainShellWindow();
+        Control label = effectId == "breathe" ? Button("BtnVictim") : new TextBlock { Name = "TxtVictim", Text = "drifting", Width = 100, Height = 30, FontSize = 14 };
+        var prior = new ScaleTransform(1.1, 1.1); label.RenderTransform = prior;
+        shell.Content = new StackPanel { Children = { label } }; shell.Show(); Dispatcher.UIThread.RunJobs();
+        s = CoreSettings.Current; var saved = (s.LockdownPossessionEnabled, s.LockdownPossessionIntensity, s.LockdownPhotosafe);
+        s.LockdownPossessionEnabled = true; s.LockdownPossessionIntensity = (int)PossessionIntensity.FullDoki; s.LockdownPhotosafe = true;
+        try
+        {
+            var director = Assert.IsType<PossessionDirector>(shell.PossessionDirector);
+            var effects = (System.Collections.Generic.List<IPossessionEffect>)typeof(PossessionDirector).GetField("_effects", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(director)!;
+            if (effectId != null) effects.RemoveAll(e => e.Id != effectId);
+            lockdown.Activate(TimeSpan.FromMinutes(10));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(director.IsHaunting);
+            Assert.Equal(PossessionRung.Settle, director.CurrentRung);
+            var due = typeof(PossessionDirector).GetField("_nextDue", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            Assert.True((DateTime)due.GetValue(director)! > DateTime.Now); // FirstDelay, no instant twitch
+            now += TimeSpan.FromMinutes(9);
+            void Tick() => typeof(LockdownService).GetMethod("OnCountdownTick", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(lockdown, new object?[] { null, EventArgs.Empty });
+            Tick();
+            Assert.Equal(PossessionRung.ItKnows, director.CurrentRung);
+            s.LockdownPossessionIntensity = (int)PossessionIntensity.Gentle;
+            Tick();
+            Assert.Equal(PossessionRung.Melt, director.CurrentRung); // live settings, Core cap
+            due.SetValue(director, DateTime.MinValue); // step the cadence deadline without a wall-clock sleep
+            Tick();
+            Assert.Equal(1, director.LiveEffectCount);
+            Assert.False(PossessionLease.IsLeased(label)); // charge precedes any movement
+            frames.Frame(TimeSpan.Zero); Dispatcher.UIThread.RunJobs(); frames.Frame(TimeSpan.FromMilliseconds(600)); Dispatcher.UIThread.RunJobs(); // photosafe charge ends
+            frames.Frame(TimeSpan.FromMilliseconds(616)); Dispatcher.UIThread.RunJobs();
+            Assert.True(PossessionLease.IsLeased(label)); frames.Frame(TimeSpan.FromMilliseconds(1016));
+            Assert.True((DateTime)due.GetValue(director)! > DateTime.Now); // NextDelay, no immediate second pick
+            if (effectId == null) PanicSurfaces.All.Single(x => x.Id == "possession").Stop(shell);
+            else
+            {
+                lockdown.Deactivate(); Dispatcher.UIThread.RunJobs(); frames.Frame(TimeSpan.FromMilliseconds(1016));
+                frames.Frame(TimeSpan.FromMilliseconds(1016 + returnMs - 1)); Assert.True(PossessionLease.IsLeased(label));
+                frames.Frame(TimeSpan.FromMilliseconds(1016 + returnMs)); Dispatcher.UIThread.RunJobs();
+            }
+            Assert.Equal(0, director.LiveEffectCount);
+            Assert.False(PossessionLease.IsLeased(label)); Assert.Same(prior, label.RenderTransform);
+            if (effectId == null) { lockdown.RestartTimer("test"); Dispatcher.UIThread.RunJobs(); Assert.Equal(PossessionRung.Settle, director.CurrentRung); }
+            lockdown.Deactivate(); Dispatcher.UIThread.RunJobs();
+        }
+        finally
+        {
+            lockdown.Deactivate(); Dispatcher.UIThread.RunJobs(); shell.Close(); LockdownService.Current = previous;
+            MainShellWindow.PossessionFramesForTests = null; (s.LockdownPossessionEnabled, s.LockdownPossessionIntensity, s.LockdownPhotosafe) = saved;
+        }
+        Assert.Equal(saved, (s.LockdownPossessionEnabled, s.LockdownPossessionIntensity, s.LockdownPhotosafe)); return Task.CompletedTask;
+    });
+    private sealed class Frames : global::ConditioningControlPanel.Avalonia.Controls.Fx.IFrameSource
+    {
+        private event Action<TimeSpan>? Tick;
+        public void Subscribe(Action<TimeSpan> callback) => Tick += callback;
+        public void Unsubscribe(Action<TimeSpan> callback) => Tick -= callback;
+        public void Frame(TimeSpan time) => Tick?.Invoke(time);
+    }
+}

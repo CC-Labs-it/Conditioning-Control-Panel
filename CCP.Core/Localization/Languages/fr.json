@@ -4429,6 +4429,7 @@
   "browser_enhance_tooltip": "Quand c'est activé, aller sur une page vidéo qui correspond à une amélioration enregistrée joue ses effets par-dessus.",
   "browser_show_bambicloud_label": "Afficher BambiCloud",
   "browser_show_bambicloud_tooltip": "Révèle le bouton de site BambiCloud sur les mods qui le masquent normalement. Le site par défaut du mod reste sélectionné ; ça rend juste BambiCloud disponible pour y basculer.",
+  "lockdown_possession_warning": "- Possession est ACTIVÉ ({0}) : l’interface se comportera bizarrement, volontairement.\n  La lueur de braise indique que c’était Lockdown, pas un bug. Rien de ce que vous voyez n’est un dégât réel.",
   "browser_toast_offline_blocked": "Le Mode Hors Ligne est actif, le navigateur reste donc déconnecté. Désactive-le dans les Paramètres pour naviguer.",
   "companion_prompt_too_long_notice": "Le prompt de ta compagne est trop long pour l'IA cloud, elle répond donc avec moins de contexte. Réduis les liens de la base de connaissances ou choisis une personnalité plus courte.",
   "browser_enhance_match_none": "Aucune amélioration enregistrée pour cette page.",

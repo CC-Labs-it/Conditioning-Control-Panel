@@ -5266,6 +5266,7 @@
   "label_ai_custom_error": "自定义 AI 出错 - 请检查 Endpoint、模型和 API 密钥。",
   "browser_show_bambicloud_label": "显示 BambiCloud",
   "browser_show_bambicloud_tooltip": "在通常隐藏它的模组上显示 BambiCloud 站点开关。模组的默认站点仍保持选中，这只是让你可以切换到 BambiCloud。",
+  "lockdown_possession_warning": "- Possession 已开启（{0}）：应用界面会故意表现异常。\n  余烬光效表示这是 Lockdown 的演出，而不是程序错误。你看到的都不是真正的损坏。",
   "browser_toast_offline_blocked": "离线模式已开启，浏览器保持断开。若要浏览，请在设置中关闭它。",
   "companion_prompt_too_long_notice": "伴侣的提示词对云端 AI 来说太长了，所以她在用更少的上下文回答。请精简知识库链接，或选择更简短的人格。",
   "desc_remote_pairing_url": "无需安装任何应用 - 用手机浏览器打开 cclabs.app/remote 并输入此代码。",
