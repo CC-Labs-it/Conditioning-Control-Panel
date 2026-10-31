@@ -223,7 +223,6 @@ public sealed partial class AccountSeedTests : IDisposable
         Assert.True(CoreAccount.HasPremiumAccess); Assert.Equal(tier == 2, CoreAccount.HasLabAccess);
         Assert.Equal(1, notifications);
     });
-
     private sealed class Answer(HttpStatusCode status, string body = "{}") : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
