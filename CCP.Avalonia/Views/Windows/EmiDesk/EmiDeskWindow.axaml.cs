@@ -263,9 +263,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private double _resizeStartWidth;
 
         /// <summary>True while a chain is on screen.</summary>
-        // ponytail: the pat faces are the only chain this head plays; the full chain player (EmiChainPlayer, WPF head only;
-        // the chain data is in Core as EmiChains) is wire-win-emi-desk-b.
-        public bool ChainLive => _patFeedback is not null;
+        // Wordless pat feedback and canon chains both own the face while live.
+        public bool ChainLive => _patFeedback is not null || _chainPlayer.IsLive;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -885,18 +884,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         // ---------------------------------------------------------------- chains
 
-        /// <summary>Play a canon chain by id. Unknown ids are ignored.</summary>
-        // ponytail: needs EmiChainPlayer (WPF head) - the frame clock and the
-        // Draw/Bubble/BodyFrame/Fx/Move hook set. The chain table (EmiChains) is in Core; wired
-        // when the chain player moves to Core.
-        public void PlayChain(string chainId, Action? done = null, string? bodyFrameOverride = null)
+        private readonly EmiChainPlayer _chainPlayer = new(Dispatcher.UIThread);
+
+        // WPF EmiDeskWindow.xaml.cs:1013-1068. Bubble, FX and move consumers remain part B.
+        private EmiChainHooks BuildChainHooks(Action? done) => new()
         {
-            done?.Invoke();
+            Draw = (text, small, flat) => DrawFace(text, small, flat),
+            Bubble = text => OnBubbleTextCore(text),
+            BodyFrame = SetPose,
+            Fx = kind => OnChainFxCore(kind),
+            Move = RunBodyMove,
+            Done = () =>
+            {
+                SetPose("idle");
+                DrawFace(EmiChains.RestFace);
+                RestartIdleBeats();
+                done?.Invoke();
+            }
+        };
+
+        /// <summary>Play a canon chain by id. Unknown ids are ignored.</summary>
+        public void PlayChain(string chainId, Action? done = null, string? bodyFrameOverride = null)
+            => PlayChain(EmiChains.Get(chainId), done, bodyFrameOverride);
+
+        public void PlayChain(EmiChain? chain, Action? done = null, string? bodyFrameOverride = null)
+        {
+            if (_closingForGood || chain == null || (PresentationActive && !(PresentationArriving && chain.Id == "wake"))) return;
+            StopPatFeedback();
+            StopIdleBeats();
+            _chainPlayer.Play(chain, BuildChainHooks(done), bodyFrameOverride);
         }
 
         /// <summary>Say a line on the locked . / .. / ... cadence.</summary>
-        // ponytail: EmiChains.MakeSay / SayHoldMs / FrameForFace are in Core now; still needs
-        // EmiChainPlayer (WPF head) to play the result.
+        // Part B: MakeSay timing is shared, but Say needs the bubble/voice and offer owner.
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
         {
             done?.Invoke();
@@ -906,14 +926,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void CancelChain()
         {
             StopPatFeedback();
+            _chainPlayer.Cancel();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
 
         // ponytail: the five canon body moves (bounce, thud, nod, droop, shiver) were WPF
-        // DoubleAnimations on _crtScale / _moveShift. Reachable only through a chain, and nothing on
-        // this head can start one, so the animation is left out rather than ported blind - the
-        // upgrade is an Avalonia.Animation.Animation with KeyFrames on the same two transforms.
+        // DoubleAnimations on _crtScale / _moveShift. The player now dispatches the move hook;
+        // its animation consumer remains part B.
         private void RunBodyMove(string move)
         {
             bool handled = false;
@@ -2645,6 +2665,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 TearDownReactions();
                 TearDownVox();
                 CancelChain();
+                _chainPlayer.Dispose();
                 SweepFx(all: true);
                 Close();
             }
@@ -2667,6 +2688,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopChromeGrace();
                 TearDownReactions();
                 TearDownVox();
+                CancelChain();
+                _chainPlayer.Dispose();
             }
             catch (Exception ex)
             {
