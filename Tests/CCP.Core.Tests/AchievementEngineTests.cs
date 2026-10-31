@@ -53,6 +53,102 @@ public sealed class AchievementEngineTests : IDisposable
         Assert.True(OnDisk(MainPath, "eyes_front"));
     }
 
+    /// <summary>WPF AchievementService.TrackTimeBasedProgress :226-275.</summary>
+    [Fact]
+    public void PinkMinutesUnlockAtWpfThreshold()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        var p = engine.Progress;
+        p.TotalPinkFilterMinutes = 599.5;
+        engine.TrackPinkFilterMinutes(0.4);
+        Assert.False(p.IsUnlocked("rose_tinted_reality"));
+        engine.TrackPinkFilterMinutes(0.1);
+        Assert.True(OnDisk(MainPath, "rose_tinted_reality"));
+    }
+
+    [Fact]
+    public void SpiralMinutesUnlockAtWpfThresholdsAndContinuousRunResets()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        var p = engine.Progress;
+        engine.TrackSpiralMinutes(19.9);
+        engine.ResetContinuousSpiral();                     // spiral went off screen
+        engine.TrackSpiralMinutes(0.2);
+        Assert.False(p.IsUnlocked("spiral_eyes"));
+        Assert.Equal(20.1, p.TotalSpiralMinutes, 6);
+        engine.TrackSpiralMinutes(19.8);
+        Assert.True(OnDisk(MainPath, "spiral_eyes"));
+
+        p.TotalSpiralMinutes = 599.9;
+        Assert.False(p.IsUnlocked("threadbare"));
+        engine.TrackSpiralMinutes(0.1);
+        Assert.True(OnDisk(MainPath, "threadbare"));
+    }
+
+    [Fact]
+    public async Task LoadingSavedSpiralStartsANewContinuousRun()
+    {
+        var prior = new AchievementEngine(new AchievementStore(MainPath));
+        prior.TrackSpiralMinutes(15);
+        prior.Save();
+        Assert.Equal(15, new AchievementStore(MainPath).Load().ContinuousSpiralMinutes);
+
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        Assert.Equal(0, engine.Progress.ContinuousSpiralMinutes);
+        Assert.True(engine.IsDirty);
+        await engine.SaveIfDirtyAsync();
+        Assert.Equal(0, new AchievementStore(MainPath).Load().ContinuousSpiralMinutes);
+        engine.TrackSpiralMinutes(5);
+        Assert.False(engine.Progress.IsUnlocked("spiral_eyes"));
+        Assert.Equal(20, engine.Progress.TotalSpiralMinutes); // lifetime total survives startup
+        engine.TrackSpiralMinutes(15);
+        Assert.True(OnDisk(MainPath, "spiral_eyes"));
+    }
+
+    [Fact]
+    public async Task ResettingASavedSpiralPersistsWithoutAnotherAchievementEvent()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.TrackSpiralMinutes(15);
+        engine.Save();
+        Assert.False(engine.IsDirty);
+        engine.ResetContinuousSpiral();
+        Assert.True(engine.IsDirty);
+        await engine.SaveIfDirtyAsync();
+        Assert.Equal(0, new AchievementStore(MainPath).Load().ContinuousSpiralMinutes);
+        Assert.False(engine.IsDirty);
+        engine.ResetContinuousSpiral(); // an idle reset need not rewrite the file
+        Assert.False(engine.IsDirty);
+    }
+
+    /// <summary>WPF AchievementService.TrackLockCardCompletion :508-544.</summary>
+    [Fact]
+    public void LockCardCompletionCountsSavesAndUnlocksLikeWpf()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        var p = engine.Progress;
+        engine.TrackLockCardCompletion(seconds: 20, errors: 2, phrases: 3);
+        Assert.Equal(1, new AchievementStore(MainPath).Load().TotalLockCardsCompleted);   // saved at once
+        Assert.False(p.IsUnlocked("typing_tutor"));
+        Assert.False(p.IsUnlocked("obedience_reflex"));
+
+        engine.TrackLockCardCompletion(seconds: 14, errors: 0, phrases: 2);   // perfect, but 2 phrases
+        Assert.True(p.HasPerfectLockCard);
+        Assert.True(OnDisk(MainPath, "typing_tutor"));
+        Assert.False(p.IsUnlocked("obedience_reflex"));
+
+        engine.TrackLockCardCompletion(seconds: 15, errors: 1, phrases: 3);
+        Assert.False(p.IsUnlocked("obedience_reflex"));
+        engine.TrackLockCardCompletion(seconds: 12, errors: 1, phrases: 3);
+        Assert.Equal(12, p.FastestLockCardSeconds);
+        Assert.True(OnDisk(MainPath, "obedience_reflex"));
+
+        p.TotalLockCardsCompleted = 49;
+        Assert.False(p.IsUnlocked("word_perfect"));
+        engine.TrackLockCardCompletion(seconds: 60, errors: 1, phrases: 3);   // the 50th card
+        Assert.True(OnDisk(MainPath, "word_perfect"));
+    }
+
     [Fact]
     public void FlashImagesCountAndUnlockRetinalBurnAt5000()
     {

@@ -55,6 +55,23 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The achievement engine (achievements.json), or null on the headless render path.
         /// Local-only: no sync, no streak writes, no ResetProgress on this head (oracle-achievements.md).</summary>
         internal static AchievementEngine? Achievements { get; private set; }
+        private DispatcherTimer? _achievementSaveTimer;
+
+        /// <summary>WPF AchievementService.cs:99-107: periodically save dirty progress off the UI thread.</summary>
+        internal static DispatcherTimer StartAchievementAutosave(AchievementEngine engine)
+        {
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            timer.Tick += (_, _) => _ = engine.SaveIfDirtyAsync();
+            timer.Start();
+            return timer;
+        }
+
+        /// <summary>WPF AchievementService.cs:947-954: flush even when an autosave already cleared IsDirty.</summary>
+        internal static void SaveAchievementsOnExit(DispatcherTimer? timer, AchievementEngine? engine)
+        {
+            try { timer?.Stop(); }
+            finally { engine?.Save(); } // the store serializes this with any pending background write
+        }
 
         /// <summary>WPF App.FeatureDayLog (App.xaml.cs:1045): the per-day feature log over the same
         /// feature_day_log.json. Null on the headless render path or if its construction failed.</summary>
@@ -846,6 +863,8 @@ namespace ConditioningControlPanel.Avalonia
                 // way WPF App.xaml.cs:384/:394 seeds the two unlock seams. Unlocked is raised on the
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
+                _achievementSaveTimer?.Stop();
+                _achievementSaveTimer = StartAchievementAutosave(Achievements);
                 WireAchievementUnlocks(Achievements);
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
@@ -1281,9 +1300,8 @@ namespace ConditioningControlPanel.Avalonia
             var shell = (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as Views.Windows.MainShellWindow;
             SaveSettingsOnExit(shell, () => Settings?.SaveImmediate());
 
-            // WPF AchievementService.Dispose saves synchronously; only when dirty here, so an idle exit
-            // never rewrites the file (or rotates its .bak) - it may be shared with the WPF head.
-            try { if (Achievements is { IsDirty: true } a) a.Save(); } catch { /* the store logs write failures */ }
+            // WPF AchievementService.Dispose always saves synchronously, including a queued autosave.
+            try { SaveAchievementsOnExit(_achievementSaveTimer, Achievements); } catch { /* the store logs write failures */ }
             try { Quests?.Dispose(); } catch { /* WPF App.OnExit:6104; saves only when dirty */ }
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }

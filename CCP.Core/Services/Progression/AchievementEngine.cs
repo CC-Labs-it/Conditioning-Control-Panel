@@ -23,6 +23,7 @@ internal sealed class AchievementEngine
     {
         _store = store;
         Progress = store.Load();
+        ResetContinuousSpiral(); // WPF AchievementService.cs:85-86: a saved run never resumes.
     }
 
     public AchievementProgress Progress { get; private set; }
@@ -176,6 +177,57 @@ internal sealed class AchievementEngine
         Progress.GazePops++;
         _isDirty = true;
         if (Progress.GazePops >= AchievementRules.HandsFreeGazePops) TryUnlockExclusive("hands_free");
+    }
+
+    /// <summary>WPF AchievementService.TrackTimeBasedProgress :226-238, the achievement half of a pink
+    /// filter tick: minutes to the total, rose_tinted_reality at 10 h. The caller credits quests.</summary>
+    public void TrackPinkFilterMinutes(double minutes)
+    {
+        if (minutes <= 0) return;
+        Progress.TotalPinkFilterMinutes += minutes;
+        _isDirty = true;
+        if (Progress.TotalPinkFilterMinutes >= AchievementRules.RoseTintedPinkFilterMinutes) TryUnlock("rose_tinted_reality");
+    }
+
+    /// <summary>WPF TrackTimeBasedProgress :249-275, the spiral tick: total and continuous minutes,
+    /// spiral_eyes at 20 continuous, threadbare at 10 h. The caller credits quests.</summary>
+    public void TrackSpiralMinutes(double minutes)
+    {
+        if (minutes <= 0) return;
+        Progress.TotalSpiralMinutes += minutes;
+        Progress.ContinuousSpiralMinutes += minutes;
+        _isDirty = true;
+        if (Progress.ContinuousSpiralMinutes >= 20) TryUnlock("spiral_eyes");
+        if (Progress.TotalSpiralMinutes >= AchievementRules.ThreadbareSpiralMinutes) TryUnlock("threadbare");
+    }
+
+    /// <summary>WPF TrackTimeBasedProgress :252: the spiral is off, so the continuous run restarts.</summary>
+    public void ResetContinuousSpiral()
+    {
+        if (Progress.ContinuousSpiralMinutes == 0) return;
+        Progress.ContinuousSpiralMinutes = 0;
+        _isDirty = true;
+    }
+
+    /// <summary>WPF AchievementService.TrackLockCardCompletion :508-544 minus its quest and Chaster
+    /// calls (the head makes those): count + immediate save, word_perfect, typing_tutor, obedience_reflex.</summary>
+    public void TrackLockCardCompletion(double seconds, int errors, int phrases)
+    {
+        Progress.TotalLockCardsCompleted++;
+        _isDirty = true;
+        Log.Information("Lock card tracked. Total lock cards completed: {Count}", Progress.TotalLockCardsCompleted);
+        Save();
+        if (Progress.TotalLockCardsCompleted >= AchievementRules.WordPerfectLockCards) TryUnlock("word_perfect");
+        if (errors == 0)
+        {
+            Progress.HasPerfectLockCard = true;
+            TryUnlock("typing_tutor");
+        }
+        if (phrases >= 3 && seconds < 15)
+        {
+            if (seconds < Progress.FastestLockCardSeconds) Progress.FastestLockCardSeconds = seconds;
+            TryUnlock("obedience_reflex");
+        }
     }
 
     /// <summary>WPF AchievementService.TrackMindWipeDuration: clean_slate at 60 s of continuous loop.</summary>
