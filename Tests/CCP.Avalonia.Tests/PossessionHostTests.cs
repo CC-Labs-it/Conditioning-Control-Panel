@@ -186,16 +186,17 @@ public sealed class PossessionHostTests
         now = now.AddSeconds(11);
         Assert.NotSame(next, shell.GetPossessionTargets());
     });
-    [Fact]
-    public void UnownedIntakePausesHostUntilItCloses() => Run((shell, panel) =>
+    [Fact] public void UnownedIntakePausesHostUntilItCloses() => UnownedTakeover(() => new IntakeHostWindow());
+    [Fact] public void UnownedGamePausesHostUntilItCloses() => UnownedTakeover(() => new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow());
+    private static void UnownedTakeover(Func<Window> create) => Run((shell, panel) =>
     {
         Assert.True(((IPossessionHost)shell).IsUsable);
-        var intake = new IntakeHostWindow();
+        var takeover = create();
         try {
-            intake.Show();
-            Assert.Null(intake.Owner);
+            takeover.Show();
+            Assert.Null(takeover.Owner);
             Assert.False(((IPossessionHost)shell).IsUsable);
-        } finally { intake.Close(); }
+        } finally { takeover.Close(); }
         Assert.True(((IPossessionHost)shell).IsUsable);
     });
     [Fact]

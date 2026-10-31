@@ -33,8 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
         internal Canvas PossessionGhostLayer { get { EnsurePossessionLayers(); return _possessionGhostLayer ??= new Canvas { IsHitTestVisible = false }; } }
         internal Canvas PossessionRubbleFloor { get { EnsurePossessionLayers(); return _possessionRubbleFloor ??= new Canvas { IsHitTestVisible = false }; } }
-        internal Point PossessionPointOf(Control element) =>
-            element.TranslatePoint(default, PossessionGhostLayer) ?? default;
+        internal Point PossessionPointOf(Control element) => element.TranslatePoint(default, PossessionGhostLayer) ?? default;
         internal void EnsurePossessionLayers()
         {
             if (Content is not Grid root) return;
@@ -61,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
         bool IPossessionHost.IsUsable => !_possessionClosed && IsVisible
             && WindowState != WindowState.Minimized && !LockCardWindow.IsAnyOpen() && !IntakeHostWindow.IsAnyOpen()
-            && !OwnedWindows.Any(w => w.IsVisible);
+            && !Games.GameWindow.IsAnyOpen() && !OwnedWindows.Any(w => w.IsVisible);
         private List<PossessionTarget>? _possessionTargetCache;
         private DateTime _possessionCacheAt = DateTime.MinValue, _possessionLayoutSeenAt = DateTime.MinValue;
         private bool _possessionCacheDirty = true, _possessionLayoutHooked;
