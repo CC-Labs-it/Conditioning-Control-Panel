@@ -62,6 +62,13 @@ public sealed class ChaosGifCascadeOverlayTests
                 Assert.Equal(w.DesktopScaling, w.Scale);       // the factor SetOverrideRedirect sizes with
                 Assert.True(w.IsVisible);
                 Assert.True(ChaosGifCascadeOverlay.IsRaining);
+                var video = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler;
+                try
+                {
+                    Assert.True(video.Trigger(path: gif));
+                    Assert.False(video.IsPlaying); // WPF VideoService.cs:2226 holds the trigger
+                }
+                finally { video.ForceCleanup(); }
                 var first = Assert.IsType<Image>(Assert.Single(w.Surface.Children));
                 Assert.Equal(0.9, first.Opacity, 3);
                 Assert.Equal(400, first.Width);

@@ -137,12 +137,48 @@ public sealed class HelpVideoWindowTests
                     Assert.Null(Current());
                     Assert.Null(win.Player);
                     Assert.True(sink.Freed);
+
+                    HelpVideoWindow.Show(content, null);
+                    var replaced = Current()!;
+                    var replacedSink = replaced.Sink!;
+                    HelpVideoWindow.Show(content, null);
+                    Assert.False(replaced.IsVisible);
+                    Assert.Null(replaced.Player);
+                    Assert.True(replacedSink.Freed);
+                    var panicWindow = Current()!;
+                    var panicSink = panicWindow.Sink!;
+                    PanicSurfaces.All.Single(x => x.Id == "help-video").Stop(null);
+                    Assert.False(panicWindow.IsVisible);
+                    Assert.Null(panicWindow.Player);
+                    Assert.True(panicSink.Freed);
+                    Assert.Null(Current());
                 }
                 finally { Current()?.Close(); }
             });
         }
         finally { File.Delete(clip); }
     }
+
+    [Fact]
+    public Task PanicClosesCurrentHelpAndReplacementIsSafe() => Run(() =>
+    {
+        var content = new HelpContent { SectionId = "NoClip", Title = "Help", WhatItDoes = "Fallback" };
+        HelpVideoWindow.Show(content, null);
+        var first = Current()!;
+        try
+        {
+            HelpVideoWindow.Show(content, null);
+            Assert.False(first.IsVisible);
+            var replacement = Current()!;
+            Assert.NotSame(first, replacement);
+            var stop = PanicSurfaces.All.Single(x => x.Id == "help-video");
+            stop.Stop(null);
+            stop.Stop(null);
+            Assert.False(replacement.IsVisible);
+            Assert.Null(Current());
+        }
+        finally { Current()?.Close(); }
+    });
 
     private static HelpVideoWindow? Current() =>
         (HelpVideoWindow?)typeof(HelpVideoWindow).GetField("_current", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);

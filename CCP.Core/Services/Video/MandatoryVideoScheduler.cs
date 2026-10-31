@@ -41,9 +41,7 @@ namespace ConditioningControlPanel.Services
     /// (<c>FinalizeWatchCredit</c> :7424) and the strict-key rules. Drawing is the head's
     /// <see cref="IMandatoryVideoHost"/>.
     /// Content-pack clips come through <see cref="PackVideos"/>.
-    /// ponytail: remote clips, the duration filter
-    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed/DND/browser-media defers and the
-    /// interaction queue are WPF-head services; add each here when it reaches Core.
+    /// Remote clips, feed/browser-media defers and the interaction queue still need their head services.
     /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
     /// schedule. WPF returns from ContinueTriggerVideo (:2424) without ScheduleNext, so its schedule
     /// silently dies until the engine restarts; here a video added mid-session still plays
@@ -63,7 +61,11 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _preroll;
+        private ITimer? _scheduler, _preroll, _cascadeDefer;
+        private bool _deferIsReplay;
+
+        /// <summary>Head probe for WPF VideoService.cs:2221 cascade deferral.</summary>
+        public Func<bool>? CascadeIsRaining { get; set; }
         private volatile bool _running, _playing;
         private int _retryGeneration, _noVideosShown;
 
@@ -302,7 +304,7 @@ namespace ConditioningControlPanel.Services
                     Services.UI.DndGuard.LogSuppressionThrottled("scheduled video");
                     ScheduleNext(SkipRetrySeconds);
                 }
-                else if (!_playing && !Trigger()) ScheduleNext();
+                else if (!_playing && !Trigger(userEarned: false)) ScheduleNext();
             }
             catch (Exception ex)
             {
@@ -314,11 +316,44 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
-        /// pre-roll. False when nothing was started (no clip, or one is already playing).
-        /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
-        public bool Trigger(bool? strictOverride = null, string? path = null)
+        /// pre-roll. True also means accepted behind a cascade; false means refused.
+        /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).
+        /// Scheduled ticks pass userEarned=false so a held request rechecks feature enablement.</summary>
+        public bool Trigger(bool? strictOverride = null, string? path = null, bool userEarned = false)
         {
             if (_playing) return false;
+            if (_cascadeDefer != null) return true; // WPF VideoService.cs:1918: coalesce the first request
+            if (CascadeIsRaining?.Invoke() == true)
+            {
+                var deadline = _time.GetUtcNow() + TimeSpan.FromSeconds(90); // WPF :1907-1913
+                ITimer? pending = null;
+                pending = _time.CreateTimer(_ => CoreDispatch.Post(() =>
+                {
+                    if (!ReferenceEquals(pending, _cascadeDefer)) return;
+                    if (_time.GetUtcNow() >= deadline ||
+                        (!userEarned && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)))
+                    {
+                        if (DropDefer()) AfterEnd();
+                        else if (_running) ScheduleNext();
+                        return;
+                    }
+                    if (CascadeIsRaining?.Invoke() == true)
+                    {
+                        pending!.Change(TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
+                        return;
+                    }
+                    var replay = DropDefer();
+                    if (!Trigger(strictOverride, path, userEarned) && !_playing)
+                    {
+                        if (replay) AfterEnd();
+                        else if (_running) ScheduleNext();
+                    }
+                }), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                _cascadeDefer = pending;
+                // WPF ChaosGifCascadeOverlay.cs:165 polls every 500 ms until clear or the deadline.
+                pending.Change(TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
+                return true;
+            }
             path ??= PickNext();
             if (path == null)
             {
@@ -405,20 +440,29 @@ namespace ConditioningControlPanel.Services
             _host.ShowMessage(mercy ? AttentionVerdict.Mercy : verdict, mercy ? 2500 : 2000, () =>
             {
                 if (gen != _retryGeneration) return;   // stopped or replaced while the message was up
-                if (mercy || !Trigger(strict)) AfterEnd();
+                if (mercy || !Trigger(strict, userEarned: true)) AfterEnd();
+                else if (_cascadeDefer != null && !_playing) _deferIsReplay = true;
             });
         }
 
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            var heldReplay = DropDefer();
             _retryGeneration++;
-            // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
-            // fall-open panic force-stops the clip alone, and must not leave the field held forever.
-            if (!Finish()) return;
+            // A held verdict replay still owns the bubble pause when it is cancelled.
+            if (!Finish() && !heldReplay) return;
             // Deviation: WPF ForceCleanup leaves the presence on "Watching"; a closed clip is not watched.
             CoreDiscord.Service?.SetIdleActivity();
             if (_running) CoreBubbles.Resume();   // Stop() clears _running first: no resume after an engine stop
+        }
+
+        private bool DropDefer()
+        {
+            var replay = _deferIsReplay && _cascadeDefer != null;
+            _deferIsReplay = false;
+            Dispose(ref _cascadeDefer);
+            return replay;
         }
 
         private bool Finish()
