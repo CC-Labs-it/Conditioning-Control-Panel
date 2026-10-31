@@ -10,6 +10,9 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Deeper;
+using ConditioningControlPanel.Models.Deeper;
+using ConditioningControlPanel.Avalonia.Views.Deeper;
+using System.Threading;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -25,7 +28,13 @@ public sealed class SpeakCueOverlayTests
         public void Advance(int ms) => Now += TimeSpan.FromMilliseconds(ms).Ticks;
     }
 
-    private static async Task Run(Action<SteppedClock, List<double>> body)
+    private static Task Run(Action<SteppedClock, List<double>> body) => Run((c, a) =>
+    {
+        body(c, a);
+        return Task.CompletedTask;
+    });
+
+    private static async Task Run(Func<SteppedClock, List<double>, Task> body)
     {
         var (clock, prepare, alpha, warned) = (SpeakCueOverlay.Clock, SpeakCueOverlay.Prepare, SpeakCueOverlay.ApplyAlpha, SpeakCueOverlay.Warned);
         var c = new SteppedClock();
@@ -35,12 +44,11 @@ public sealed class SpeakCueOverlayTests
         SpeakCueOverlay.ApplyAlpha = (_, a) => alphas.Add(a);
         try
         {
-            await AvaloniaTestDispatcher.RunAsync(() =>
+            await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 EnsureAvalonia();
-                try { body(c, alphas); }
+                try { await body(c, alphas); }
                 finally { SpeakCueOverlay.CloseActive(); }
-                return Task.CompletedTask;
             });
         }
         finally
@@ -116,6 +124,99 @@ public sealed class SpeakCueOverlayTests
         PanicSurfaces.All.Single(s => s.Id == "speak-cue").Stop(null);
         Assert.Null(SpeakCueOverlay.Active);
         Assert.False(w.IsVisible);
+    });
+
+    private static SpeakPromptPlan Plan(SpeakCueMode mode, int interval = 250) => new(
+        new TriggerEffectAction { SpeakTarget = "YES", SpeakCueMode = mode, SpeakCueIntervalMs = interval },
+        DateTime.UtcNow);
+
+    [Fact]
+    public Task PromptPersistent_StartsOnce_StopsWithFade_AndCannotRestart() => Run((clock, _) =>
+    {
+        var flashes = new List<string>();
+        using var cue = new SpeakPromptCueSession(Plan(SpeakCueMode.Persistent), flashes.Add);
+        cue.Start();
+        var window = SpeakCueOverlay.Active;
+        Assert.NotNull(window);
+        Assert.Equal("Say YES", window.CueText);
+        cue.Start();
+        cue.Pulse();
+        Assert.Same(window, SpeakCueOverlay.Active);
+        Assert.Empty(flashes);
+        Assert.Null(cue.CueInterval);
+        clock.Advance(180); window.Step();
+        cue.Dispose();
+        clock.Advance(179); window.Step();
+        Assert.Same(window, SpeakCueOverlay.Active);
+        clock.Advance(1); window.Step();
+        Assert.Null(SpeakCueOverlay.Active);
+        cue.Start();
+        Assert.Null(SpeakCueOverlay.Active);
+    });
+
+    [Fact]
+    public Task PromptIntermittent_FlashesImmediatelyAndOnPulse_StopsTimerOnCancellation() => Run((_, _) =>
+    {
+        var flashes = new List<string>();
+        using var cancel = new CancellationTokenSource();
+        using var cue = new SpeakPromptCueSession(Plan(SpeakCueMode.Intermittent, 12), flashes.Add, cancel.Token);
+        cue.Start();
+        Assert.Equal(new[] { "Say YES" }, flashes);
+        Assert.Equal(TimeSpan.FromMilliseconds(80), cue.CueInterval);
+        cue.Pulse();
+        Assert.Equal(new[] { "Say YES", "Say YES" }, flashes);
+        Assert.Null(SpeakCueOverlay.Active);
+        cancel.Cancel();
+        Assert.Null(cue.CueInterval);
+        cue.Pulse();
+        cue.Start();
+        Assert.Equal(2, flashes.Count);
+    });
+
+    [Fact]
+    public Task PromptStoppedOrCancelledBeforeStart_ShowsNothing() => Run((_, _) =>
+    {
+        using var stopped = new SpeakPromptCueSession(Plan(SpeakCueMode.Persistent), _ => Assert.Fail());
+        stopped.Dispose();
+        stopped.Start();
+        using var cancelled = new SpeakPromptCueSession(Plan(SpeakCueMode.Persistent), _ => Assert.Fail(),
+            new CancellationToken(true));
+        cancelled.Start();
+        Assert.Null(SpeakCueOverlay.Active);
+    });
+
+    [Fact]
+    public Task PromptFlashFailure_DoesNotAbortCueOrCleanup() => Run((_, _) =>
+    {
+        var attempts = 0;
+        using var cue = new SpeakPromptCueSession(Plan(SpeakCueMode.Intermittent), _ =>
+        {
+            attempts++;
+            throw new InvalidOperationException("flash unavailable");
+        });
+        cue.Start();
+        Assert.NotNull(cue.CueInterval);
+        cue.Pulse();
+        Assert.Equal(2, attempts);
+        cue.Dispose();
+        Assert.Null(cue.CueInterval);
+    });
+
+    [Fact]
+    public Task PromptTimer_DeliversSubsequentCue() => Run(async (_, _) =>
+    {
+        var repeated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var flashes = 0;
+        using var cue = new SpeakPromptCueSession(Plan(SpeakCueMode.Intermittent, 80), _ =>
+        {
+            if (++flashes == 2) repeated.TrySetResult();
+        });
+        cue.Start();
+        Assert.Same(repeated.Task, await Task.WhenAny(repeated.Task, Task.Delay(2000)));
+        cue.Dispose();
+        var stoppedAt = flashes;
+        await Task.Delay(160);
+        Assert.Equal(stoppedAt, flashes);
     });
 
     private static void EnsureAvalonia()
