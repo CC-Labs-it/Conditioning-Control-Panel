@@ -478,16 +478,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartDrone: 90 Hz fundamental + 180 Hz harmonic at 0.4 of its gain.</summary>
+        private ConditioningControlPanel.Models.AppSettings? _volumeSettings;
+        private SettingsService? _volumeService;
+
+        private void OnMasterVolumeChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == "MasterVolume") RefreshDroneVolumeSettings();
+        }
+
+        private void RefreshDroneVolumeSettings()
+        {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(RefreshDroneVolumeSettings); return; }
+            if (_drone == null) return;
+            if (_volumeSettings != null) _volumeSettings.PropertyChanged -= OnMasterVolumeChanged;
+            _volumeSettings = CoreSettings.Current;
+            _volumeSettings.PropertyChanged += OnMasterVolumeChanged;
+            ApplyDroneVolume();
+        }
+
         private void StartDrone()
         {
             try
             {
                 _drone = DroneOpener(Platform.ToneWav.Drone());
-                ApplyDroneVolume();
+                _volumeService = CoreSettings.Service;
+                if (_volumeService != null) _volumeService.CurrentReplaced += RefreshDroneVolumeSettings;
+                RefreshDroneVolumeSettings();
             }
             catch (Exception ex)
             {
-                _drone = null;
+                StopDrone();
                 Serilog.Log.Warning(ex, "Failed to start mantra drone audio");
             }
         }
@@ -497,7 +517,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void ApplyDroneVolume()
         {
             if (_drone == null) return;
-            var masterVol = _droneRamped ? CoreSettings.Current.MantraDroneVolume / 100.0 : 1.0;
+            var masterVol = (_droneRamped ? CoreSettings.Current.MantraDroneVolume / 100.0 : 1.0) * MasterGain();
             _drone.Volume = Platform.ToneWav.VlcVolume(_droneCurrentGain * masterVol * Platform.ToneWav.DronePeak);
         }
 
@@ -514,13 +534,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void StopDrone()
         {
+            if (_volumeSettings != null) _volumeSettings.PropertyChanged -= OnMasterVolumeChanged;
+            if (_volumeService != null) _volumeService.CurrentReplaced -= RefreshDroneVolumeSettings;
+            _volumeSettings = null;
+            _volumeService = null;
             try { _drone?.Dispose(); } catch { }
             _drone = null;
         }
 
+        private static float MasterGain() => Math.Clamp(CoreSettings.Current.MasterVolume / 100f, 0f, 1f);
+
         private static void PlayTone(double frequency, int durationMs)
         {
-            try { CoreAudio.PlayOneShot(Platform.ToneWav.Tone(frequency, durationMs), 0.15f, "mantra"); }
+            try { CoreAudio.PlayOneShot(Platform.ToneWav.Tone(frequency, durationMs), 0.15f * MasterGain(), "mantra"); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to play mantra tone"); }
         }
 
