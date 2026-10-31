@@ -39,6 +39,17 @@ launcher routing. <code>startup_since_process_ms</code> adds the runtime's own s
   &quot;tabs&quot;: [ { &quot;tab&quot;: &quot;SettingsTab&quot;, &quot;median_ms&quot;: 0, &quot;p95_ms&quot;: 0 } ] }
 </code></pre>
 <p>CI: job <code>perf-bench-linux</code> in <code>.github/workflows/build.yml</code> (xvfb, report-only, artifact <code>perf-bench-linux</code>).</p>
+<h2 id="discord-remote-first-show">Discord and Remote Control first-show work</h2>
+<p>Discord retains achievement ids while its all-achievements expander is folded, populates
+on expansion with keyed lookups, and reuses items across repeated expansion. Remote Control
+loads hero art on a worker at WPF's 800px cap, retains the brush across reattachment, and
+rejects stale mod completions. Both views are constructed with the shell. Focused headless
+coverage is in <code>TabFirstShowWorkTests</code>; the directory test awaits art readiness.</p>
+<p>This lane is scoped to <code>74ac6ce3d</code>. WPF, Rain, localization and the WPF/browser regression
+suites match that base. The Windows benchmark comparison prerequisite is excluded from this
+lane and must land separately before collecting a new <code>perf-bench-windows</code> artifact.
+No Windows median or p95 improvement is claimed from headless tests. Each must satisfy
+Avalonia ≤ WPF × 1.10 + 20 ms when measured on the same Windows runner.</p>
 <h2 id="results">Results</h2>
 
 <table>
@@ -51,6 +62,14 @@ launcher routing. <code>startup_since_process_ms</code> adds the runtime's own s
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
 <ul>
+<li>2026-10-31, cloud Linux, Discord/Remote lane re-cut onto <code>74ac6ce3d</code> (one
+fast-forward merge commit following <code>613c4848b</code>): Release Core/Avalonia/test builds
+passed; Core tests 4636 passed / 5 existing skips, focused headless tests 19 passed, restored
+Rain browser tests 21 passed. Fail-proof mutations (eager gallery and premature readiness)
+failed both focused tests as expected; real implementations restored. No real-window timing
+run or Windows artifact for this revision. Windows median/p95:
+<strong>pending</strong>, not a pass. Await the separately landed comparison prerequisite and
+GitHub CI <code>perf-bench-windows</code> evidence.</li>
 <li>2026-10-23, CI ubuntu-latest under xvfb (job perf-bench-linux, run 39869706826, snapshot 10ae4e753), Release, sandboxed profile:
 startup 12860 ms, working set 909 MB, tab switch median 108-237 ms on 23 tabs, <strong>ExclusivesTab 801 ms median / 821 ms p95</strong>.
 Artifact <code>perf-bench-linux</code>.</li>
