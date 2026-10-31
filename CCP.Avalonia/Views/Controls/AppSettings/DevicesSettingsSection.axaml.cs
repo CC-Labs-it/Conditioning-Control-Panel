@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             CmbMicDevice.SelectionChanged += CmbMicDevice_SelectionChanged;
             BtnMicRefresh.Click += BtnMicRefresh_Click;
             BtnChatShortcutDevices.Click += BtnChatShortcut_Click;
+            BtnCameraShortcutDevices.Click += BtnCameraShortcut_Click;
             BtnPanicKey.Click += BtnPanicKey_Click;
             BtnPauseKey.Click += BtnPauseKey_Click;
             BtnWebcamRevokeConsent.Click += BtnWebcamRevokeConsent_Click;
@@ -120,6 +121,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         internal void SyncFromSettings()
         {
+            TxtCameraShortcutLabelDevices.Text = MainShellWindow.FormatCameraShortcut();
             _loading = true;
             try
             {
@@ -888,13 +890,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             }
         }
 
-        // ponytail: BtnCameraShortcutDevices stays inert, and NOT for the reason the old note gave.
-        // SerializeModifiers shipped with the tube, so the capture half would work - but the combo
-        // it stores drives MainWindow.ToggleWebcamFromHotkey (MainWindow.SessionIO.cs:1485), which
-        // toggles WebcamTrackingService. This head now has a tracker (Platform/WebcamTracker, and
-        // CoreWebcam.IsAvailable is seeded true), but no global hotkey listener calls it, so a rebind
-        // here would let the user configure a key that cannot fire - and the row's own label would then
-        // report a binding that does nothing. The label is left at its XAML literal for the same reason.
-        // Unblocks with a global-hotkey route to WebcamTracker (ToggleWebcamFromHotkey).
+        private async void BtnCameraShortcut_Click(object? sender, RoutedEventArgs e)
+        {
+            if (TopLevel.GetTopLevel(this) is MainShellWindow owner)
+                await owner.RebindCameraShortcut();
+        }
     }
 }

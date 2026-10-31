@@ -39,13 +39,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
             WirePhrasePresets(parts);
+            parts.Behavior.CameraShortcutRequested += async (_, _) =>
+            {
+                if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow owner) await owner.RebindCameraShortcut();
+            };
 
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
-            //  · Behavior.CameraShortcutRequested — the combo drives MainWindow.SessionIO.cs:1485
-            //    ToggleWebcamFromHotkey / WebcamTrackingService, and no webcam engine exists on this
-            //    head, so a rebind would configure a key for a feature that cannot fire. Same
-            //    refusal as DevicesSettingsSection.axaml.cs's BtnCameraShortcutDevices.
             // Browser pause forwards from the cell to the shell's live Home WebHost.
             //  · Roster.PersonalityAssignRequested — personality prompt assignment remains absent.
             //    CompanionTabView wires CompanionCardClicked to the shell's shared-Core switch.
