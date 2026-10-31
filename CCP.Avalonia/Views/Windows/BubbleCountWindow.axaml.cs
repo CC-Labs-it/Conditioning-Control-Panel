@@ -764,7 +764,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// What DOES need the shim is the pair the original got for free from Windows - being
     /// transparent to the mouse, and sitting above the game window specifically rather than
     /// somewhere in the keep-above band. Both are applied after Show(), because both need a
-    /// mapped X11 window, and both are no-ops off X11 by design.
+    /// mapped X11 or Win32 window, and both are no-ops without a native handle.
     /// </summary>
     internal class CountBubble : IDisposable
     {

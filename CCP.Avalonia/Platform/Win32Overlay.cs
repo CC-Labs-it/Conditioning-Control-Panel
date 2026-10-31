@@ -41,6 +41,33 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
+    [DllImport("user32.dll")] internal static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+    [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
+
+    internal static bool RestackAbove(IntPtr hwnd, IntPtr sibling)
+    {
+        if (!OperatingSystem.IsWindows() || !IsWindow(hwnd) || !IsWindow(sibling)) return false;
+        return RestackAbove(hwnd, sibling, h => GetWindow(h, 3 /* GW_HWNDPREV */),
+            h => (GetWindowLong(h, GwlExStyle) & WsExTopmost) != 0,
+            (h, after, flags) => SetWindowPos(h, after, 0, 0, 0, 0, flags));
+    }
+
+    // WPF AvatarTubeWindow.Windowing.cs:283-284 keeps the attached tube directly above main;
+    // BubbleCountWindow.xaml.cs:1729 raises each count bubble without activation or geometry changes.
+    // Win32 inserts BELOW hWndInsertAfter, so inserting after sibling would reverse RestackAbove.
+    // Use the sibling's predecessor, without moving the sibling or its owner. Keep the sibling's topmost band at its boundary.
+    internal static bool RestackAbove(IntPtr hwnd, IntPtr sibling, Func<IntPtr, IntPtr> previous,
+        Func<IntPtr, bool> topmost, Func<IntPtr, IntPtr, uint, bool> position)
+    {
+        if (hwnd == IntPtr.Zero || sibling == IntPtr.Zero || hwnd == sibling) return false;
+        var above = previous(sibling);
+        var band = topmost(sibling);
+        if (above == hwnd && topmost(hwnd) == band) return true;
+        // WPF attached tubes must also shed stray TOPMOST (AvatarTubeWindow.Windowing.cs:277-284).
+        if (above == IntPtr.Zero || topmost(above) != band) above = new IntPtr(band ? -1 : -2);
+        return position(hwnd, above, SwpNoMove | SwpNoSize | SwpNoActivate | 0x200 /* SWP_NOOWNERZORDER */);
+    }
+
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
 

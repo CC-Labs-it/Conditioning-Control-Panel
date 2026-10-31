@@ -142,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia
             SelectObject(mem, old); DeleteObject(bmp); DeleteDC(mem); ReleaseDC(IntPtr.Zero, screen);
             return c;
         }
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
         private record struct Rect(int Left, int Top, int Right, int Bottom);
 
@@ -197,6 +198,27 @@ namespace ConditioningControlPanel.Avalonia
                         Check((ex & (Win32Overlay.WsExTransparent | Win32Overlay.WsExNoActivate)) == 0 && (ex & Win32Overlay.OverlayBits) == Win32Overlay.OverlayBits,
                             "SetClickThrough(false) clears TRANSPARENT|NOACTIVATE, keeps LAYERED|TOOLWINDOW");
                     }
+                    // Two flips through the public entry point, even on a one-monitor runner.
+                    // Reading GW_HWNDPREV proves adjacency, not just the TOPMOST style bit.
+                    var first = overlays[0];
+                    var second = new Window { ShowActivated = false, ShowInTaskbar = false, Topmost = true };
+                    try
+                    {
+                        second.Show();
+                        var secondHwnd = second.TryGetPlatformHandle()!.Handle;
+                        var foreground = GetForegroundWindow();
+                        GetWindowRect(first.Hwnd, out var beforeFirst);
+                        GetWindowRect(secondHwnd, out var beforeSecond);
+                        Check(X11Overlay.RestackAbove(first.Window, second), "RestackAbove first over second");
+                        Check(Win32Overlay.GetWindow(secondHwnd, 3) == first.Hwnd, "first directly above second");
+                        Check(X11Overlay.RestackAbove(second, first.Window), "RestackAbove second over first");
+                        Check(Win32Overlay.GetWindow(first.Hwnd, 3) == secondHwnd, "second directly above first");
+                        GetWindowRect(first.Hwnd, out var afterFirst);
+                        GetWindowRect(secondHwnd, out var afterSecond);
+                        Check(beforeFirst == afterFirst && beforeSecond == afterSecond, "restacking preserves geometry");
+                        Check(GetForegroundWindow() == foreground, "restacking preserves foreground");
+                    }
+                    finally { second.Close(); }
                 }
                 catch (Exception e) { Console.Error.WriteLine("overlay-check threw: " + e); fails++; }
                 finally { lifetime.Shutdown(); }
