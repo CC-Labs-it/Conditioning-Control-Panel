@@ -29,7 +29,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// IntakeHostWindow.Lifecycle.cs.
     /// ponytail: not ported yet - relaunch on a web-process crash (WebHost raises no process-failed),
     /// the EmiDesk intakeRunning hold (this head's
-    /// EmiDeskService has no Fire/ReleaseHold director), the punch card. Next slices in
+    /// EmiDeskService has no Fire/ReleaseHold director), punch-card session credit (pending drafts
+    /// are persisted after a saved result). Next slices in
     /// ~/ccp-port/briefs/intake-plan.md.
     /// </summary>
     internal sealed partial class IntakeHostWindow : Window
@@ -41,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal IntakeRun Run { get; } = new();
         internal WebHost Web { get; } = new();
         internal string SessionsFolder { get; init; } = SessionFileService.CustomSessionsFolder;
+        internal string PunchCardFolder { get; init; } = CorePaths.UserData;
 
         /// <summary>The page this host loaded; messages from any other document are dropped.</summary>
         internal Uri? PageUrl { get; set; }
@@ -165,7 +167,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var (session, path) = IntakeRun.Complete(run, SessionsFolder,
                 () => App.IntakePass.ConsumeForCompletedIntake(),
                 (_, passed, perfect, category) => App.Achievements?.TrackQuizCompleted(passed, perfect, category));
-            if (session != null && path != null) Drafted?.Invoke(session, path);
+            if (session != null && path != null)
+            {
+                // WPF IntakeHostService.cs:583-587: only a saved session earns a pending stamp.
+                try { IntakePunchCardState.RecordCompletedDraft(PunchCardFolder, session.Id); }
+                catch (Exception ex) { Log.Warning(ex, "IntakeHost: pending stamp could not be saved"); }
+                Drafted?.Invoke(session, path);
+            }
             Post(new { type = "session-drafted", ok = session != null, name = session?.Name, path });
         }
 

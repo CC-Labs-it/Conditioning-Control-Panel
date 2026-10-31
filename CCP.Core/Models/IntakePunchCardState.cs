@@ -64,6 +64,48 @@ public class IntakePunchCardState
     /// beyond one punch - or a stamp still pending - means a real run happened.</summary>
     public bool EverCompletedIntake() => PunchedCount > 1 || PendingDrafts.Count > 0;
 
+    /// <summary>Record the half stamp after a session was saved. WPF IntakePunchCardService
+    /// NotifyIntakeCompleted: no stamp until that particular session has actually been run.
+    /// Persist before returning so the next launch can apply the returning-user duck rule.</summary>
+    public static void RecordCompletedDraft(string userDataDir, string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId)) return;
+        var path = System.IO.Path.Combine(userDataDir, FileName);
+        var tmp = path + ".tmp";
+        IntakePunchCardState? state = null;
+        foreach (var candidate in new[] { path, tmp })
+        {
+            if (!System.IO.File.Exists(candidate)) continue;
+            try
+            {
+                state = System.Text.Json.JsonSerializer.Deserialize<IntakePunchCardState>(System.IO.File.ReadAllText(candidate));
+                if (state != null) break;
+            }
+            catch (System.Text.Json.JsonException) { }
+        }
+        state ??= new IntakePunchCardState();
+        var now = DateTime.UtcNow;
+        state.PunchedUtc ??= new();
+        state.PendingDrafts ??= new();
+        state.PunchedCount = Math.Clamp(state.PunchedCount, 0, 8);
+        if (!state.CardStartedUtc.HasValue)
+        {
+            state.CardStartedUtc = now;
+            state.PunchedCount = 1;
+            state.PunchedUtc.Add(now);
+        }
+        // WPF Sanitize and NotifyIntakeCompleted: bounded queue, newest drafts win.
+        state.PendingDrafts.RemoveAll(d => string.IsNullOrWhiteSpace(d.SessionId) || d.DraftedUtc < now.AddDays(-90));
+        if (!state.CompletedUtc.HasValue && state.PunchedCount < 8
+            && !state.PendingDrafts.Exists(d => string.Equals(d.SessionId, sessionId, StringComparison.Ordinal)))
+            state.PendingDrafts.Add(new PendingIntakeDraft { SessionId = sessionId, DraftedUtc = now });
+        while (state.PendingDrafts.Count > 8) state.PendingDrafts.RemoveAt(0);
+        System.IO.Directory.CreateDirectory(userDataDir);
+        System.IO.File.WriteAllText(tmp, System.Text.Json.JsonSerializer.Serialize(state,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        System.IO.File.Move(tmp, path, overwrite: true);
+    }
+
     /// <summary><see cref="EverCompletedIntake()"/> read from the card on disk; no card or an
     /// unreadable one is a first-ever run.</summary>
     public static bool ReadEverCompletedIntake(string userDataDir)
