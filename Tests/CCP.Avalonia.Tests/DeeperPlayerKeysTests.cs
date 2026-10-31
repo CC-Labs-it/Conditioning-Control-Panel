@@ -8,6 +8,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using Xunit;
@@ -121,6 +122,7 @@ public sealed class DeeperPlayerKeysTests
         for (var i = 0; i < 3; i++) { now = now.AddSeconds(1); Press(w, Key.Escape); Tick(w); }
         Assert.Single(scripts);
         Assert.Contains("l.pause(); l.currentTime=0;", scripts[0]);
+        Assert.Equal(Loc.Get("deeper_player_status_escape_stopped"), w.FindControl<TextBlock>("TxtStatus")!.Text);
         Press(w, Key.Escape, false);
         Assert.False(closed);
         scripts.Clear();
@@ -142,6 +144,53 @@ public sealed class DeeperPlayerKeysTests
         Assert.False(w.FindControl<global::Avalonia.Controls.Primitives.Popup>("ChangePopup")!.IsOpen);
         Tap(w, Key.Escape);
         Assert.True(closed);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task NavigationAppliesSavedVolumeAndRetriesUntilVideoExists() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        CoreSettings.Current.DeeperPlayerVolume = 37;
+        using var cleanup = new PlayerCleanup(Create());
+        var w = cleanup.Window;
+        var scripts = Video(w);
+        var host = w.FindControl<WebHost>("VideoBrowser")!;
+        Assert.Equal(37, w.FindControl<Slider>("SliderVolume")!.Value);
+        host.OnNavigationCompleted(new Uri("https://hypnotube.com/video/first.html"));
+        Assert.Single(scripts);
+        Assert.Contains("l.volume=0.37;", scripts[0]);
+
+        // The next page has no video at completion, then mounts one before the next poll.
+        host.ScriptInvoker = s => { scripts.Add(s); return Task.FromResult<string?>(""); };
+        host.OnNavigationCompleted(new Uri("https://hypnotube.com/video/second.html"));
+        scripts.Clear();
+        host.ScriptInvoker = s => { scripts.Add(s); return Task.FromResult<string?>(s.Contains("l.volume=") ? "ok" : "0|100|0"); };
+        await (Task)w.GetType().GetMethod("PollVideoTimeAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(w, null)!;
+        Assert.Equal(2, scripts.Count);
+        Assert.Contains("l.volume=0.37;", scripts[1]);
+        scripts.Clear();
+        await (Task)w.GetType().GetMethod("PollVideoTimeAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(w, null)!;
+        Assert.Single(scripts); // once per document, not an override of page controls every tick
+    });
+
+    [Fact]
+    public Task NavigationKeepsTemporaryMuteWithoutOverwritingSavedVolume() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        CoreSettings.Current.DeeperPlayerVolume = 37;
+        using var cleanup = new PlayerCleanup(Create());
+        var w = cleanup.Window;
+        var scripts = Video(w);
+        var host = w.FindControl<WebHost>("VideoBrowser")!;
+        Tap(w, Key.M);
+        Assert.Equal(37, CoreSettings.Current.DeeperPlayerVolume);
+        scripts.Clear();
+        host.OnNavigationCompleted(new Uri("https://hypnotube.com/video/next.html"));
+        Assert.Single(scripts);
+        Assert.Contains("l.volume=0;", scripts[0]);
+        Assert.Equal(0, w.FindControl<Slider>("SliderVolume")!.Value);
+        Assert.Equal(37, CoreSettings.Current.DeeperPlayerVolume);
+        Tap(w, Key.M);
+        Assert.Contains("l.volume=0.37;", scripts[^1]);
         return Task.CompletedTask;
     });
 

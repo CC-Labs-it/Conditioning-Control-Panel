@@ -140,7 +140,7 @@ public partial class EnhancementPlayerWindow
         CancelEscHold();
         _escConsumed = true;
         BtnStop_Click();
-        _txtStatus.Text = Loc.Get("deeper_player_status_stopped");
+        _txtStatus.Text = Loc.Get("deeper_player_status_escape_stopped");
         Log.Information("[DeeperPlayer] hold-Esc stop");
     }
 
