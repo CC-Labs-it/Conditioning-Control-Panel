@@ -75,6 +75,11 @@ public sealed class OnlineMeterSurfaceTests
         var shell = new MainShellWindow();
         try
         {
+            // WPF MainWindow.xaml:235-240: only the indicator and text belong in the pill.
+            var pillContent = Assert.IsType<StackPanel>(shell.OnlinePill!.Child);
+            Assert.Collection(pillContent.Children,
+                c => Assert.IsType<global::Avalonia.Controls.Shapes.Ellipse>(c),
+                c => Assert.Same(shell.OnlinePillText, c));
             shell.PaintOnlineMeterPill(State(42));
             Assert.True(shell.OnlinePill!.IsVisible);
             Assert.Equal(string.Format(Loc.Get("online_pill"), 42), shell.OnlinePillText!.Text);
@@ -140,7 +145,7 @@ public sealed class OnlineMeterSurfaceTests
     });
 
     [Fact]
-    public Task PillHelpPinsTheAssetsSlipAndRepeatedRequestsLeaveItOpen() => Run(() =>
+    public Task HelpEntryPointPinsTheAssetsSlipAndRepeatedRequestsLeaveItOpen() => Run(() =>
     {
         var shell = new MainShellWindow();
         try
@@ -148,13 +153,12 @@ public sealed class OnlineMeterSurfaceTests
             shell.Show();
             var tab = shell.FindControl<AssetsTabView>("AssetsTab")!;
             tab.PaintOnlineMeter(State(42), DateTime.Now, DateTime.Now.AddHours(1));
-            var request = shell.FindControl<Button>("OnlinePillHelp")!;
-            request.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            shell.OpenOnlineHelp();
             Dispatcher.UIThread.RunJobs();
             var help = tab.OnlineHelp!;
             Assert.True(LeashHelpButton.IsPinned(help));
             Assert.True(LeashHelpButton.IsOpen(help));
-            request.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            shell.OpenOnlineHelp();
             Dispatcher.UIThread.RunJobs();
             Assert.True(LeashHelpButton.IsPinned(help));
             Assert.True(LeashHelpButton.IsOpen(help));
