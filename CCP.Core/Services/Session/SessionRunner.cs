@@ -108,6 +108,8 @@ namespace ConditioningControlPanel.Services
         public void Start(Session session)
         {
             if (IsRunning) throw new InvalidOperationException("A session is already running. Stop it first.");
+            if ((_snapshot != null || _custody != null) && !RestoreSettings())
+                throw new InvalidOperationException("Session settings recovery failed. Restart the app to recover them.");
             _stepFailures.Clear();
             if (!CoreEngine.IsRunning) CoreEngine.Start();
             // SessionEngine.cs:223 (#1304): the session owns Mind Wipe, so the global one the engine
@@ -475,13 +477,27 @@ namespace ConditioningControlPanel.Services
 
         private readonly SessionClockRules.StepFailures _stepFailures = new();
 
-        internal void RunStep(string name, Action step) =>
+        internal bool RunStep(string name, Action step) =>
             SessionClockRules.RunStep(step, ex => ReportStepFailure(name, ex));
 
         private void ReportStepFailure(string name, Exception ex)
         {
             if (_stepFailures.Note(name))
                 Log.Error(ex, "Session step failed: {Step}", name);
+        }
+
+        // WPF RestoreSettings clears recovery data only after all restoration succeeds.
+        // Keep both references and the journal on failure; a later start retries before taking a new snapshot.
+        private bool RestoreSettings()
+        {
+            var s = CoreSettings.Current;
+            bool settingsRestored = RunStep("stop:restore-settings", () => _snapshot?.RestoreTo(s));
+            bool poolsRestored = RunStep("stop:restore-pools", () => _custody?.Restore(s));
+            if (!settingsRestored || !poolsRestored) return false;
+            _snapshot = null;
+            _custody = null;
+            if (JournalDir is { } dir) RunStep("stop:journal", () => SessionSettingsJournal.Clear(dir));
+            return true;
         }
 
         public void Stop(bool completed = false) => Stop(completed, Elapsed);
@@ -504,13 +520,9 @@ namespace ConditioningControlPanel.Services
             var s = CoreSettings.Current;
             Step("flash-ramp", s.ClearSessionFlashRamp);   // SessionEngine.cs:390, ahead of the restore
             PinkOpacity = SpiralOpacity = null;   // WPF ReleaseOpacityRampHolds
-            Step("restore-settings", () => _snapshot?.RestoreTo(s));
-            _snapshot = null;
-            Step("restore-pools", () => _custody?.Restore(s));
-            _custody = null;
-            if (JournalDir is { } journalDir) Step("journal", () => SessionSettingsJournal.Clear(journalDir));
+            bool restored = RestoreSettings();
             Step("engine", CoreEngine.Stop);   // MainWindow.Presets.cs:1951
-            Step("save-settings", () => CoreSettings.Save());   // WPF leaves the restore to the next save; persist it now
+            if (restored) Step("save-settings", () => CoreSettings.Save());
 
             // XP actually banked: 0 while no head has a progression service (decision log).
             int xp = 0;
