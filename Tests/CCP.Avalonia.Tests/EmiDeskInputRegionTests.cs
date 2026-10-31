@@ -23,7 +23,7 @@ public sealed class EmiDeskInputRegionTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -86,6 +86,8 @@ public sealed class EmiDeskInputRegionTests
     public Task TransformedControlsStayClickableAndResetRestoresThePad(int scale) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
+        var state = EmiState.Current;
+        var placement = (state.WinLeftPx, state.WinTopPx, state.Monitor);
         var desk = new EmiDeskWindow();
         try
         {
@@ -145,9 +147,41 @@ public sealed class EmiDeskInputRegionTests
             requests.Clear(); desk.Close(); squash.ScaleX = 1.1;
             Assert.Empty(requests);
         }
-        finally { desk.Close(); }
+        finally
+        {
+            try { desk.Close(); }
+            finally
+            {
+                // Scale and presentation callbacks save placement in the cached EmiState object.
+                // Restore after closing, which can itself run window cleanup callbacks.
+                state.WinLeftPx = placement.WinLeftPx;
+                state.WinTopPx = placement.WinTopPx;
+                state.Monitor = placement.Monitor;
+            }
+        }
         return Task.CompletedTask;
     });
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task TransformExercisePreservesSavedPlacement(int scale)
+    {
+        var state = EmiState.Current;
+        var before = (state.WinLeftPx, state.WinTopPx, state.Monitor);
+        try
+        {
+            // A distinct saved place proves the exercise cannot poison a later summon test.
+            state.WinLeftPx = 417; state.WinTopPx = 263; state.Monitor = "input-region-isolation";
+            await TransformedControlsStayClickableAndResetRestoresThePad(scale);
+            Assert.Equal((417.0, 263.0, "input-region-isolation"),
+                (state.WinLeftPx, state.WinTopPx, state.Monitor));
+        }
+        finally
+        {
+            state.WinLeftPx = before.WinLeftPx; state.WinTopPx = before.WinTopPx; state.Monitor = before.Monitor;
+        }
+    }
 
     private static T Slot<T>(EmiDeskWindow desk, string field) =>
         (T)typeof(EmiDeskWindow).GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(desk)!;
