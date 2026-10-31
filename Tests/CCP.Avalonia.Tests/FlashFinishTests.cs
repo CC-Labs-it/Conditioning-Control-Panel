@@ -32,8 +32,7 @@ public sealed class FlashFinishTests
                 .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        body();
-        return Task.CompletedTask;
+        body(); return Task.CompletedTask;
     });
 
     [Fact]
@@ -114,17 +113,14 @@ public sealed class FlashFinishTests
             Assert.Equal(FlashMotionStyle.Still, ((ComboBoxItem)cmb.SelectedItem!).Tag);
             Assert.Equal(FlashMotionStyle.Pendulum, s.FlashMotionStyle); // refreshing cannot rewrite synced settings
         }
-        finally
-        {
-            host.Close();
-            (PrizeOwnership.IsGranted, s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashDraggable) = saved;
-        }
+        finally { host.Close(); (PrizeOwnership.IsGranted, s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashDraggable) = saved; }
     });
 
     [Theory]
-    [InlineData(FlashMotionStyle.Still)]
-    [InlineData(FlashMotionStyle.Pendulum)]
-    public Task Rounded_picture_uses_the_core_radius_and_dragging_moves_it_before_a_tap_can_pop(FlashMotionStyle style) => OnUi(() =>
+    [InlineData(FlashMotionStyle.Still, true)]
+    [InlineData(FlashMotionStyle.Pendulum, true)]
+    [InlineData(FlashMotionStyle.Pendulum, false)]
+    public Task Rounded_picture_uses_the_core_radius_and_dragging_moves_it_before_a_tap_can_pop(FlashMotionStyle style, bool rounded) => OnUi(() =>
     {
         var s = CoreSettings.Current;
         var saved = (PrizeOwnership.IsGranted, FlashOverlay.Present, FlashOverlay.Clock,
@@ -136,12 +132,15 @@ public sealed class FlashFinishTests
             FlashOverlay.Present = (_, _, _) => true;
             FlashOverlay.Clock = clock;
             (s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashDraggable, s.FlashExitStyle, s.CorruptionMode, s.MotionLevel) =
-                (style, true, true, FlashExitStyle.None, false, MotionLevel.Full);
+                (style, rounded, true, FlashExitStyle.None, false, MotionLevel.Full);
             var w = ShowOne();
             var image = ((Panel)((Panel)w.Content!).Children[0]).Children.OfType<Image>().Single();
-            Assert.Equal(FlashCorners.Resolve(true, true, false, 300, 1), ((RectangleGeometry)image.Clip!).RadiusX);
+            if (!rounded) { w.ApplyGlow(new FlashGlowLook(0xFF69B4, 24, 0.5, false, false), 1); w.ApplyCorners(false, true, true, 400, 300); }
+            Assert.Equal(FlashCorners.Resolve(rounded, true, !rounded, 300, 1), ((RectangleGeometry)image.Clip!).RadiusX);
+            var radius = ((RectangleGeometry)image.Clip!).RadiusX;
             w.MouseDown(new Point(50, 50), MouseButton.Left);
             Assert.Contains(FlashOverlay.Active, x => x.Window == w); // a draggable press grabs rather than pops
+            Assert.Equal(radius, ((RectangleGeometry)image.Clip!).RadiusX);
             Assert.Equal(new Rect(0, 0, ((Panel)image.Parent!).Width, ((Panel)image.Parent!).Height), ((RectangleGeometry)image.Clip!).Rect);
             clock.Now += TimeSpan.TicksPerSecond / 10;
             w.MouseMove(new Point(100, 80));
@@ -166,12 +165,8 @@ public sealed class FlashFinishTests
             tap.MouseUp(new Point(50, 50), MouseButton.Left);
             Assert.DoesNotContain(FlashOverlay.Active, x => x.Window == tap);
         }
-        finally
-        {
-            FlashOverlay.CloseAll(false);
-            (PrizeOwnership.IsGranted, FlashOverlay.Present, FlashOverlay.Clock,
-                s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashDraggable, s.FlashExitStyle, s.CorruptionMode, s.MotionLevel, ScreenList.QueryOverride) = saved;
-        }
+        finally { FlashOverlay.CloseAll(false);
+            (PrizeOwnership.IsGranted, FlashOverlay.Present, FlashOverlay.Clock, s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashDraggable, s.FlashExitStyle, s.CorruptionMode, s.MotionLevel, ScreenList.QueryOverride) = saved; }
     });
 
     [Fact]
@@ -205,8 +200,13 @@ public sealed class FlashFinishTests
             Assert.Equal(new PixelPoint((int)Math.Round(m.X), (int)Math.Round(m.Y)), w.Position);
             Assert.True(w.TryBeginShatter(MotionLevel.Full, new Random(3)));
             var shards = ((Panel)w.Content!).Children.OfType<Panel>().Last();
+            var frozen = ((TransformGroup)shards.RenderTransform!).Children.OfType<ScaleTransform>().Single();
+            w.SetGazeDwellProgress(0);
+            Assert.Equal((1.05, 1.05), (frozen.ScaleX, frozen.ScaleY));
+            var center = new Point(0, m.Rope);
+            Assert.InRange(Point.Distance(shards.RenderTransform!.Value.Transform(center), new RotateTransform(m.AngleRad * 180 / Math.PI).Value.Transform(center)), 0, 1e-8);
             Assert.Equal(m.AngleRad, w.Shatter!.FrozenAngleRad, 6);
-            Assert.Equal(m.AngleRad * 180 / Math.PI, ((RotateTransform)shards.RenderTransform!).Angle, 6);
+            Assert.Equal(m.AngleRad * 180 / Math.PI, ((TransformGroup)shards.RenderTransform!).Children.OfType<RotateTransform>().Single().Angle, 6);
             Assert.Equal(new Point((m.PivotX - w.Shatter.RectX), (m.PivotY - w.Shatter.RectY)), shards.RenderTransformOrigin.Point);
             Assert.Equal((m.PivotX - m.MediaW / 2, m.PivotY + m.Rope - m.MediaH / 2), (w.Shatter.RectX, w.Shatter.RectY));
             w.Close();
@@ -239,12 +239,8 @@ public sealed class FlashFinishTests
             Assert.Empty(FlashOverlay.Active);
             Assert.False(FlashOverlay.DriftRunning);
         }
-        finally
-        {
-            FlashOverlay.CloseAll(false);
-            (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider,
-                CoreFlash.StopProvider, FlashOverlay.Present) = saved;
-        }
+        finally { FlashOverlay.CloseAll(false);
+            (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider, CoreFlash.StopProvider, FlashOverlay.Present) = saved; }
     });
 
     [Fact]

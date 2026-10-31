@@ -122,7 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var k = DesktopScaling > 0 ? DesktopScaling : 1;
                 _card.Width = m.MediaW / k;
                 _card.Height = m.MediaH / k;
-                if (_image.Clip != null) ApplyCorners(true, true, GlowPadPx > 0, _card.Width, _card.Height);
+                if (_image.Clip is RectangleGeometry clip) clip.Rect = new Rect(0, 0, _card.Width, _card.Height);
                 e.Pointer.Capture(this);
             };
             PointerMoved += (_, e) =>
@@ -180,7 +180,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             UpdateLayout();
             var fit = Stretch.Uniform.CalculateSize(_image.Bounds.Size, source.Size);
             var scale = DesktopScaling > 0 ? DesktopScaling : 1;
-            var imageOrigin = _image.TranslatePoint(default, this) ?? default;
+            var imageOrigin = (_image.TranslatePoint(default, _card) ?? default) + new Vector(_card.Bounds.X, _card.Bounds.Y);
             var local = imageOrigin + new Point((_image.Bounds.Width - fit.Width) / 2, (_image.Bounds.Height - fit.Height) / 2);
             var x = Position.X + local.X * scale;
             var y = Position.Y + local.Y * scale;
@@ -201,11 +201,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Width = bounds.Width / scale;
             Height = bounds.Height / scale;
             _card.IsVisible = false;
+            var pivot = new Point((state.PivotX - x) / scale, (state.PivotY - y) / scale);
+            var center = new Point(fit.Width / 2 - pivot.X, fit.Height / 2 - pivot.Y);
             _shards = new Panel
             {
                 Width = fit.Width, Height = fit.Height,
-                RenderTransformOrigin = new RelativePoint((state.PivotX - x) / scale, (state.PivotY - y) / scale, RelativeUnit.Absolute),
-                RenderTransform = new RotateTransform(state.FrozenAngleRad * 180 / Math.PI),
+                RenderTransformOrigin = new RelativePoint(pivot, RelativeUnit.Absolute),
+                RenderTransform = new TransformGroup { Children = {
+                    new TranslateTransform(-center.X, -center.Y), new ScaleTransform(DwellScale, DwellScale), new TranslateTransform(center.X, center.Y), new RotateTransform(state.FrozenAngleRad * 180 / Math.PI) } },
                 HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
                 VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
                 Margin = new Thickness((x - bounds.X) / scale, (y - bounds.Y) / scale, 0, 0),
