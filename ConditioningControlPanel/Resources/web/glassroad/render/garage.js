@@ -70,7 +70,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   for(const arrow of arrows.arrows)style.apply(arrow.root);
   const barsOf=id=>{const bars=statBars(feel,id);return {...bars,word:TYPE_LABELS[bars.type]||''};};
   const ui=garageUi({change,select,customize,trackId,online,counter,barsOf,deny:()=>sound('menu-deny'),changeTrack:id=>changeTrack?.(id),action:name=>{if(!moving&&!viewBusy){sound('menu-ok');action(name);}},hover:(dir,on)=>arrows.hover(dir,on)});ui.track(track,laps);
-  const bubbles=createGarageBubbles({root:ui.root,pop:opts=>sound('bubble-pop',opts),leftEdge:()=>innerWidth<700?0:parseFloat(getComputedStyle(ui.root).getPropertyValue('--g-menu'))||0,floor:()=>innerWidth<700?ui.root.querySelector('.g-menu').getBoundingClientRect().top:innerHeight});
+  const bubbles=createGarageBubbles({root:ui.root,pop:opts=>sound('menu-bubble-pop',opts),leftEdge:()=>innerWidth<700?0:parseFloat(getComputedStyle(ui.root).getPropertyValue('--g-menu'))||0,floor:()=>innerWidth<700?ui.root.querySelector('.g-menu').getBoundingClientRect().top:innerHeight});
   function save(){try{storage?.setItem(STORAGE,JSON.stringify(state));}catch{}}
   function paint(){skin.set(state);ui.paint(state,{custom:custom||view>0,busy:!!moving||viewBusy,locked,owned:owns});save();}
   // A kart earned in the logbook or bought in the Prize Counter since the last look gets its own paint back; nothing re-darkens until the next page.
