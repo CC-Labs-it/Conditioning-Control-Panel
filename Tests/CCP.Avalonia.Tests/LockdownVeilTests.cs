@@ -491,6 +491,10 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        // Frame() can exceed the flash's 600 ms lifetime on a loaded CI runner.
+        // Drive the timer's real tick path with P08's clock, retaining every timing assertion.
+        var clock = new SteppedTime();
+        shell.LockdownFlashClock = clock;
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -510,12 +514,19 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
+        Assert.Equal(1, flash.Opacity);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        clock.Advance(TimeSpan.FromMilliseconds(300));
+        shell.TickLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Advance(TimeSpan.FromMilliseconds(299));
+        shell.TickLockdownFlash();
+        Assert.Same(flash, shell.LockdownFlash);
+        Assert.Contains(flash, root.Children);
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        shell.TickLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 
