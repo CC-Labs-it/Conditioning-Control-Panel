@@ -34,6 +34,17 @@ public class TestIsolationTests
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
     [Fact]
+    public void TheFirstTestGetsTheApplicationsFontConfiguration() =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            Assert.NotNull(global::Avalonia.Application.Current);
+            Assert.Equal(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                global::Avalonia.Media.FontManager.Current.DefaultFontFamily);
+            // Shell construction measures this label before any test can repair a missing font setup.
+            Assert.NotNull(new ConditioningControlPanel.Avalonia.Controls.PremiumSpark());
+        });
+
+    [Fact]
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]
