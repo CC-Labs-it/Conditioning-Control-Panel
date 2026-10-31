@@ -10,6 +10,7 @@ using Avalonia.Headless;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -777,6 +778,112 @@ public sealed class FriendsDrawerTests
         finally { d.OnClosed(); }
         return Task.CompletedTask;
     });
+
+    // WPF Feed.cs:334-344 and RailChip.cs:363-374: observe playback, not just its recipe.
+    [Fact]
+    public Task FeedAnimationsPlayToRestAndCancelOnDetach() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        ConditioningControlPanel.CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        ConditioningControlPanel.CoreSettings.Current.GentleVisuals = false;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        var clock = new FeedStepClock();
+        var rowClock = new FeedStepClock();
+        void Step(double ms) { clock.Step(ms); rowClock.Step(ms); }
+        var feed = new FriendsFeed(() => "playback-test");
+        FriendsHead.Feed = feed;
+        var (svc, _) = Service();
+        await svc.RefreshAsync();
+        var chip = new FriendsRailChip(svc);
+        var drawer = new FriendsDrawer(svc, asPage: true);
+        drawer.SetValue(FeedStepClock.Property, rowClock.Instance);
+        var host = new Canvas();
+        var window = new Window { Width = 800, Height = 600, Content = host };
+        window.SetValue(FeedStepClock.Property, clock.Instance);
+        window.Show();
+        // Attach before starting motion; the stepped clock owns animation time.
+        host.Children.Add(chip);
+        host.Children.Add(drawer);
+        var badge = Tagged<Border>(chip, "friends-chip-unread")!;
+        var now = DateTime.UtcNow;
+        FriendEvent Ev(string key, int seconds) => new(FriendEventKind.PokeReceived, "u_on", "Mia", now.AddSeconds(seconds), key, Detail: PokeSet.Shipped[0]);
+        double Scale() => badge.RenderTransform!.Value.M11;
+        try
+        {
+            feed.Add(Ev("first", 0));
+            Step(0); Step(60);
+            Assert.Equal(1.225, Scale(), 4);
+            Assert.Equal(Scale(), badge.RenderTransform!.Value.M22, 6);
+            Step(120);
+            Assert.Equal(1.45, Scale(), 4);
+            Step(240);
+            Assert.True(Scale() < 1); // elastic undershoot
+            Step(420); Step(421);
+            Assert.Equal(1, Scale(), 6);
+
+            drawer.OnOpened();
+            // Materialize the scroller without text measurement (Segoe UI may be absent on Linux).
+            for (var pass = 0; pass < 3; pass++)
+                foreach (var control in drawer.GetLogicalDescendants().OfType<global::Avalonia.Controls.Primitives.TemplatedControl>().ToArray())
+                    control.ApplyTemplate();
+            Assert.True(drawer.FeedSection.IsAttachedToVisualTree());
+            feed.Add(Ev("second", 1));
+            var row = Tagged<Border>(drawer, "friends-feed-line:second")!;
+            Step(500); Step(570);
+            Assert.InRange(row.RenderTransform!.Value.M31, -2.518, -2.516); // BackEase, t=0.25
+            Assert.Equal(0.25, row.Opacity, 4); // fade stays linear
+            Step(640);
+            Assert.Equal(0.9, row.RenderTransform!.Value.M31, 4); // slight overshoot at t=0.5
+            Assert.Equal(0.5, row.Opacity, 4);
+            Step(780); Step(781);
+            Assert.Equal(0, row.RenderTransform!.Value.M31, 6);
+            Assert.Equal(1, row.Opacity, 6);
+            Assert.False(rowClock.Watching);
+
+            feed.Add(Ev("detach", 2));
+            row = Tagged<Border>(drawer, "friends-feed-line:detach")!;
+            Step(900); Step(970);
+            Assert.InRange(row.Opacity, 0.24, 0.26);
+            Assert.True(rowClock.Watching);
+            host.Children.Remove(drawer);
+            Step(980);
+            Assert.False(rowClock.Watching); // stopped child clocks release their parent on the next pulse
+            Assert.Equal(0, row.RenderTransform!.Value.M31, 6);
+            Assert.Equal(1, row.Opacity, 6);
+            drawer.OnClosed();
+
+            feed.Add(Ev("badge-detach", 3));
+            Step(1000); Step(1060);
+            Assert.Equal(1.225, Scale(), 4);
+            Assert.True(clock.Watching);
+            host.Children.Remove(chip); // Unwire cancels the badge's in-flight run
+            Step(1070);
+            Assert.False(clock.Watching);
+            Assert.Equal(1, Scale(), 6);
+            Step(2000);
+            Assert.Equal(1, Scale(), 6);
+            Assert.Equal(0, row.RenderTransform!.Value.M31, 6);
+            Assert.Equal(1, row.Opacity, 6);
+        }
+        finally { drawer.OnClosed(); window.Close(); }
+    });
+
+    // Same Avalonia 12 clock technique as SharedDeeperThemeTests: fail loudly on API drift.
+    private sealed class FeedStepClock
+    {
+        private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(global::Avalonia.Animation.Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", true)!;
+        private static readonly System.Reflection.MethodInfo Pulse = Base.GetMethod("Pulse", Any | System.Reflection.BindingFlags.Instance)!;
+        public static readonly AvaloniaProperty Property = (AvaloniaProperty)typeof(global::Avalonia.Animation.Animatable)
+            .GetField("ClockProperty", Any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        private static readonly System.Reflection.PropertyInfo Subscriptions = Base.GetProperty("HasSubscriptions", Any | System.Reflection.BindingFlags.Instance)!;
+        public bool Watching => (bool)Subscriptions.GetValue(Instance)!;
+        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        public void Step(double ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
+    }
 
     [Theory]
     [InlineData(MotionLevel.Off, 0)]
