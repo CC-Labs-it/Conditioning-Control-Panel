@@ -23,6 +23,98 @@ namespace CCP.Avalonia.Tests;
 /// card while a lock card is up waits (no game, no Bambi Freeze) and plays once the card closes.</summary>
 public sealed class BubbleCountQueueTests
 {
+    // WPF LockCardService.cs:201-251: queue before drawing or resolving live settings.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ShowNextUsesTheEnabledPoolAndSettingsAtReplay(bool disableAll) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var saved = (s.LockCardPhrases, s.LockCardRepeats, s.LockCardRandomRepeats,
+            s.LockCardTargetLengthEnabled, s.LockCardStrict, s.LockCardVoiceMode);
+        var b = new BubbleCountScheduler(BubbleCountHost.Instance, new Clock(), () => Array.Empty<string>());
+        var (oldBubble, oldFreeze) = (CoreEngine.BubbleCount, CoreSubliminal.BambiFreezeProvider);
+        CoreEngine.BubbleCount = b;
+        CoreSubliminal.BambiFreezeProvider = () => { };
+        try
+        {
+            s.LockCardPhrases = new() { ["old phrase"] = true };
+            s.LockCardRepeats = 1;
+            s.LockCardRandomRepeats = s.LockCardTargetLengthEnabled = s.LockCardStrict = s.LockCardVoiceMode = false;
+            b.Trigger(forceTest: true);
+            LockCardWindow.ShowNext(isTest: true);
+            LockCardWindow.ShowNext(isTest: true, strict: false); // suppressed, including this override
+            Assert.False(LockCardWindow.IsAnyOpen());
+            s.LockCardPhrases = new() { ["old phrase"] = false, ["new phrase"] = !disableAll };
+            s.LockCardRepeats = 4;
+            s.LockCardStrict = true;
+            b.ForceCleanup();
+            LockCardWindow.ReplayAfterGame();
+            if (disableAll) Assert.False(LockCardWindow.IsAnyOpen());
+            else
+            {
+                Assert.NotNull(LockCardWindow.Primary);
+                Assert.Equal("new phrase", LockCardWindow.Primary.PhraseShown);
+                Assert.Equal(4, LockCardWindow.Primary.RequiredRepeats);
+                Assert.True(LockCardWindow.Primary.IsStrict);
+            }
+        }
+        finally
+        {
+            LockCardWindow.ForceCloseAll(); b.ForceCleanup();
+            (s.LockCardPhrases, s.LockCardRepeats, s.LockCardRandomRepeats,
+                s.LockCardTargetLengthEnabled, s.LockCardStrict, s.LockCardVoiceMode) = saved;
+            (CoreEngine.BubbleCount, CoreSubliminal.BambiFreezeProvider) = (oldBubble, oldFreeze);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ShowNextDuplicatesDoNotConsumeRotationWhileWaiting() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var scheduler = LockCardScheduler.Instance;
+        var recent = (Queue<string>)typeof(LockCardScheduler).GetField("_recentPhrases", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(scheduler)!;
+        var known = (HashSet<string>)typeof(LockCardScheduler).GetField("_recentPhrasesSet", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(scheduler)!;
+        var savedRecent = recent.ToArray();
+        var savedKnown = known.ToArray();
+        var s = CoreSettings.Current;
+        var savedPhrases = s.LockCardPhrases;
+        var b = new BubbleCountScheduler(BubbleCountHost.Instance, new Clock(), () => Array.Empty<string>());
+        var (oldBubble, oldFreeze) = (CoreEngine.BubbleCount, CoreSubliminal.BambiFreezeProvider);
+        CoreEngine.BubbleCount = b;
+        CoreSubliminal.BambiFreezeProvider = () => { };
+        try
+        {
+            recent.Clear(); known.Clear();
+            s.LockCardPhrases = new() { ["first"] = true, ["second"] = true, ["third"] = true };
+            b.Trigger(forceTest: true);
+            for (var i = 0; i < 5; i++) LockCardWindow.ShowNext(isTest: true);
+            Assert.Empty(recent);
+            Assert.Empty(known);
+            Assert.False(LockCardWindow.IsAnyOpen());
+        }
+        finally
+        {
+            LockCardWindow.ForceCloseAll(); b.ForceCleanup();
+            recent.Clear(); known.Clear();
+            foreach (var phrase in savedRecent) recent.Enqueue(phrase);
+            foreach (var phrase in savedKnown) known.Add(phrase);
+            s.LockCardPhrases = savedPhrases;
+            (CoreEngine.BubbleCount, CoreSubliminal.BambiFreezeProvider) = (oldBubble, oldFreeze);
+        }
+        return Task.CompletedTask;
+    });
+
     // WPF LockCardService.cs:201-210 defers ordinary cards; the game's own mercy
     // bypasses that service (BubbleCountResultWindow.xaml.cs:304-346).
     [Fact]

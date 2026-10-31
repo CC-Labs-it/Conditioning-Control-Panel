@@ -1072,13 +1072,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static void ShowCard(string phrase, int repeats, bool strictMode, bool isTest, bool voiceMode, bool gameOwned)
         {
-            if (!gameOwned && (CoreEngine.BubbleCount?.IsBusy == true || _heldForGame != null))
-            {
-                // WPF InteractionQueueService.cs:108-121 coalesces duplicate pending types.
-                _heldForGame ??= () => ShowOnAllMonitors(phrase, repeats, strictMode, isTest, voiceMode);
-                _gameWait.Start();
+            if (!gameOwned && HoldForGame(() => ShowOnAllMonitors(phrase, repeats, strictMode, isTest, voiceMode)))
                 return;
-            }
             // A card is already up. Reconfiguring live covers would drop the lock mid-solve, which
             // is also why the WPF original deferred a second show rather than reusing the set.
             if (_allWindows.Count > 0) return;
@@ -1168,6 +1163,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <param name="strict">Null: the player's own setting. The leash passes false (never a strict card).</param>
         internal static void ShowNext(bool isTest, bool? strict)
         {
+            // WPF LockCardService.cs:201-251: defer the request before drawing a phrase or
+            // reading settings. Suppressed duplicates must not consume rotation slots.
+            if (HoldForGame(() => ShowNext(isTest, strict))) return;
+            if (IsAnyOpen()) return;
+            if (PopQuizWindow.IsAnyOpen())
+            {
+                _heldForQuiz ??= () => ShowNext(isTest, strict);
+                return;
+            }
             var phrase = LockCardScheduler.Instance.PickPhrase(LockCardScheduler.EnabledPhrases());
             if (phrase is null) return;   // no enabled phrases: nothing to lock behind
             var s = CoreSettings.Current;
@@ -1194,6 +1198,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static Action? _heldForQuiz, _heldForGame;
         private static readonly DispatcherTimer _gameWait = new() { Interval = TimeSpan.FromMilliseconds(500) };
+
+        private static bool HoldForGame(Action replay)
+        {
+            if (CoreEngine.BubbleCount?.IsBusy != true && _heldForGame == null) return false;
+            // WPF InteractionQueueService.cs:108-121: preserve the first pending request.
+            _heldForGame ??= replay;
+            _gameWait.Start();
+            return true;
+        }
 
         // Poll the entire round, including lead-in, answers, retries and mercy. A visible mercy
         // card also blocks replay if the round was externally cleaned up before it closed.
