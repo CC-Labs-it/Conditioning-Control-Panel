@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "Nouveautés de la v{0}",
+  "upgrade_notes_tour_button": "Voir la visite (60 s)",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",

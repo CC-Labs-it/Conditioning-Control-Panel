@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "v{0} 版本更新",
+  "upgrade_notes_tour_button": "查看导览 (60秒)",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",

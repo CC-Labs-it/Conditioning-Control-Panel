@@ -1,4 +1,6 @@
 {
+  "upgrade_notes_title_fmt": "Novedades de v{0}",
+  "upgrade_notes_tour_button": "Mostrar recorrido (60 s)",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
   "deeper_submission_badge_pending": "Pendiente",
