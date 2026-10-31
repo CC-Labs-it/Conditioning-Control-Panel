@@ -1397,6 +1397,21 @@ listed, a saved monitor index that does not exist shows &quot;Default&quot; in i
 must be mirrored by hand.</li>
 </ul>
 </li>
+<li><strong>2026-10-31: item-level path handling (cloud-r72-need-cloud-backup-list-paths, local review FIX).</strong>
+Supersedes the whole-list stripping and no-list-restore claims above. AudioLayers, CornerGifOverlays, KeywordTriggers
+and KeywordTriggerPresets now travel with their non-path fields. Only rooted item paths are stripped: leading slash,
+backslash or an ASCII drive-letter colon is machine-local on either OS. Relative paths, including bundled
+AwarenessPresets/audio/bell.wav and explicit empty values, travel unchanged on upload and restore, as WPF
+KeywordTriggerService.cs:1528-1535 and Avalonia KeywordTriggerHead.cs:193-197 resolve bundled resources.
+For rooted or omitted paths, presets/triggers match by stable id; duplicate ids match only at the same position
+with the same id. Audio actions match by id, then audio-action position, then the trigger's local AudioFilePath.
+Tracks/corner slots have no stable id and match by position, so reorder/delete can associate a different local file.
+An unmatched rooted/omitted path becomes blank. Missing lists keep local lists; explicit empty lists clear them.
+Uploads keep this machine's portable list fields and carry matched slot paths, so frozen WPF now receives
+Linux-made list edits with the slot's matched paths (or blank), plus portable relative paths. This supersedes the
+older consequence that WPF loses entire lists; its whole-blob restore remains unchanged (ProfileSyncService.cs:4734-4738).
+The nine whole path settings still follow AbsolutePathFields and CarryPathFields. Tests: CloudSettingsBackupTests,
+including relative/empty paths with and without a slot and restore with and without matching local ids.</li>
 <li>Tests: <code>Tests/CCP.Core.Tests/CloudSettingsBackupTests.cs</code>, <code>AccountSettingsSectionTests.CloudRestoreAsksFirstAndKeepsThisMachinesPaths</code>.</li>
 </ul>
 <h2 id="2026-10-14-companion-v2-room-collapse-and-the-companion-pages-avalonia-portcompanion-v2-pages-b">2026-10-14: Companion v2 room collapse and the Companion pages (avalonia-port/companion-v2-pages-b)</h2>

@@ -135,6 +135,79 @@ public sealed class CloudSettingsBackupTests : IDisposable
         Assert.Single(sent["AssetPresets"]!);
     }
 
+    private static void SetItemPaths(AppSettings settings, string path)
+    {
+        settings.AudioLayers[0].Path = path;
+        settings.CornerGifOverlays[0].GifPath = path;
+        settings.KeywordTriggers[0].AudioFilePath = path;
+        ((PlayAudioAction)settings.KeywordTriggers[0].Actions[0]).FilePath = path;
+        settings.KeywordTriggerPresets[0].Triggers[0].AudioFilePath = path;
+        ((PlayAudioAction)settings.KeywordTriggerPresets[0].Triggers[0].Actions[0]).FilePath = path;
+    }
+
+    private static void AssertItemPaths(AppSettings settings, string path)
+    {
+        Assert.Equal(path, Assert.Single(settings.AudioLayers).Path);
+        Assert.Equal(path, Assert.Single(settings.CornerGifOverlays).GifPath);
+        var trigger = Assert.Single(settings.KeywordTriggers);
+        Assert.Equal(path, trigger.AudioFilePath);
+        Assert.Equal(path, Assert.Single(trigger.Actions.OfType<PlayAudioAction>()).FilePath);
+        var presetTrigger = Assert.Single(Assert.Single(settings.KeywordTriggerPresets).Triggers);
+        Assert.Equal(path, presetTrigger.AudioFilePath);
+        Assert.Equal(path, Assert.Single(presetTrigger.Actions.OfType<PlayAudioAction>()).FilePath);
+    }
+
+    // WPF KeywordTriggerService.cs:1528-1535 resolves bundled relative paths under Resources.
+    [Theory]
+    [InlineData("AwarenessPresets/audio/bell.wav", false)]
+    [InlineData("AwarenessPresets/audio/bell.wav", true)]
+    [InlineData("", false)]
+    [InlineData("", true)]
+    public async Task PortableItemPathsSurviveUploadAndRestoreWithOrWithoutMatches(string path, bool hasSlot)
+    {
+        var here = Signed();
+        SetItemPaths(here, path);
+        var slot = Signed();
+        SetItemPaths(slot, @"C:\slot-local.wav");
+        slot.KeywordTriggers[0].Id = "slot-only";
+        slot.KeywordTriggerPresets[0].Id = "slot-only";
+        var slotJson = JObject.FromObject(slot);
+        foreach (var name in CloudSettingsBackup.AbsolutePathFields) slotJson.Remove(name);
+        _fake.BodyFor = u => u.EndsWith("/v2/user/settings-backup") && hasSlot
+            ? new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(slotJson.ToString()) } }.ToString() : null;
+        Assert.True(await new CloudSettingsBackup(_fake).BackupAsync(here));
+        var uploaded = Unpack((string)JObject.Parse(Assert.Single(Uploads).Body)["settings_data"]!);
+        AssertItemPaths(uploaded.ToObject<AppSettings>()!, path); // also the frozen WPF whole-blob restore
+        AssertItemPaths(here, path);
+        _fake.BodyFor = null;
+        _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(uploaded.ToString()) } }.ToString();
+        // Relative values win both over matched local absolute paths and on a second machine with no ids.
+        foreach (var local in new[] { Signed(), new AppSettings { UnifiedId = "u_abc", AuthToken = "TOK" } })
+            AssertItemPaths((await new CloudSettingsBackup(_fake).DownloadAsync(local))!, path);
+    }
+
+    [Theory]
+    [InlineData("/unix/local.wav")]
+    [InlineData(@"\rooted.wav")]
+    [InlineData(@"\\server\share\local.wav")]
+    [InlineData(@"C:\local.wav")]
+    [InlineData("z:local.wav")]
+    public async Task RootedItemPathsStayLocalOnAnyOs(string path)
+    {
+        var here = Signed();
+        SetItemPaths(here, path);
+        var stripped = CloudSettingsBackup.StripForUpload(here);
+        Assert.Null(stripped["AudioLayers"]![0]!["Path"]);
+        Assert.Null(stripped["CornerGifOverlays"]![0]!["GifPath"]);
+        Assert.Null(stripped["KeywordTriggers"]![0]!["AudioFilePath"]);
+        Assert.Null(stripped["KeywordTriggers"]![0]!["Actions"]![0]!["filePath"]);
+        Assert.Null(stripped["KeywordTriggerPresets"]![0]!["triggers"]![0]!["AudioFilePath"]);
+        Assert.Null(stripped["KeywordTriggerPresets"]![0]!["triggers"]![0]!["Actions"]![0]!["filePath"]);
+        var otherMachine = new AppSettings { UnifiedId = "u_abc", AuthToken = "TOK" };
+        _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(JsonConvert.SerializeObject(here)) } }.ToString();
+        AssertItemPaths((await new CloudSettingsBackup(_fake).DownloadAsync(otherMachine))!, "");
+    }
+
     /// <summary>R2-3 (port review 7.2): the Core list said "copied unchanged from WPF" and had gone stale. Every
     /// property the WPF head keeps out of its backup is kept out here too, so a Linux backup never uploads
     /// conversion state or playlist paths, and a restore never wipes the once-ever inbox rows.</summary>
