@@ -169,6 +169,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // short-lived ~30 fps DispatcherTimer like the Emergency Exit breath, so tests drive frames.
         private global::Avalonia.Controls.Border? _lockdownFlash;
         private global::Avalonia.Threading.DispatcherTimer? _lockdownFlashTimer;
+        // Tests hold elapsed time while explicitly stepping the 600 ms flash.
+        internal static System.Func<System.Diagnostics.Stopwatch> StartLockdownFlashClock = System.Diagnostics.Stopwatch.StartNew;
         internal global::Avalonia.Controls.Border? LockdownFlash => _lockdownFlash;
 
         private void PlayLockdownActivationAnimation()
@@ -187,7 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (root.RowDefinitions.Count > 1) global::Avalonia.Controls.Grid.SetRowSpan(_lockdownFlash, root.RowDefinitions.Count);
                 if (root.ColumnDefinitions.Count > 1) global::Avalonia.Controls.Grid.SetColumnSpan(_lockdownFlash, root.ColumnDefinitions.Count);
                 root.Children.Add(_lockdownFlash);
-                var clock = System.Diagnostics.Stopwatch.StartNew();
+                var clock = StartLockdownFlashClock();
                 _lockdownFlashTimer = new global::Avalonia.Threading.DispatcherTimer(System.TimeSpan.FromMilliseconds(33),
                     global::Avalonia.Threading.DispatcherPriority.Render, (_, _) => PaintLockdownFlash(clock.Elapsed.TotalMilliseconds));
                 _lockdownFlashTimer.Start();
