@@ -10,6 +10,7 @@ using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
+using ConditioningControlPanel;
 
 namespace CCP.Avalonia.Tests;
 
@@ -156,10 +157,18 @@ public sealed class ChaosUnlockCardOverlayTests
         window.Close();
     });
 
-    [Fact]
-    public async Task Wave_draft_and_ready_go_defer_cards_until_the_last_dismissal() => await Run(clock =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Wave_draft_and_ready_go_defer_cards_until_the_last_dismissal(bool flashes) => await Run(clock =>
     {
-        ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true });
+        var pulses = new System.Collections.Generic.List<(uint, double)>();
+        var cues = new System.Collections.Generic.List<string>();
+        ChaosRunHost.PulseFx = (c, strength) => pulses.Add((c.ToUInt32(), strength));
+        ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => cues.Add(System.IO.Path.GetFileNameWithoutExtension(p));
+        ConditioningControlPanel.CoreSettings.Current.ChaosAnnouncerEnabled = true;
+        ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
+            BoonDraftEnabled = true, ColorFlashesEnabled = flashes });
         var overlay = ChaosRunHost.Overlay!;
         overlay.FinishCountdown();
         ChaosRunHost.StopTimerForTests();
@@ -170,6 +179,8 @@ public sealed class ChaosUnlockCardOverlayTests
         state.ElapsedSec = 40; // entering the final loop
         ChaosRunHost.Tick();
         Assert.True(overlay.FindControl<global::Avalonia.Controls.Border>("DraftPanel")!.IsVisible);
+        Assert.Equal(flashes, pulses.Contains((0xFF96C8FFu, 0.30)));
+        Assert.Contains("lvup", cues); // shipped fallback when the dedicated wave-clear asset is absent
         Dispatcher.UIThread.RunJobs();
         Assert.True(ChaosLessons.IsComplete("silk_touch"));
         Assert.False(ChaosUnlockCardOverlay.IsShowing);
@@ -183,6 +194,10 @@ public sealed class ChaosUnlockCardOverlayTests
         typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic
             | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { null });
         Assert.Equal(shields + 1, state.Shields);
+        Assert.Equal(flashes, pulses.Contains((0xFF78DCA0u, 0.22)));
+        Assert.Equal(("resistance", ChaosAnnounceKind.Willpower, ConditioningControlPanel.Localization.Loc.Get("Chaos_DraftResistance")),
+            (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
+        ChaosAnnouncerOverlay.CloseActive(); // final-loop delivery below is a distinct announcement
         Complete("intrusive_thoughts"); // a second completion during ReadyGo
         Assert.False(ChaosUnlockCardOverlay.IsShowing);
         overlay.FinishCountdown();
@@ -207,10 +222,17 @@ public sealed class ChaosUnlockCardOverlayTests
     });
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Draft_pick_earns_a_deferred_lesson_and_shutdown_drops_the_handoff(bool curse) => await Run(clock =>
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Draft_pick_earns_a_deferred_lesson_and_shutdown_drops_the_handoff(int pick) => await Run(clock =>
     {
+        bool curse = pick == 1;
+        var pulses = new System.Collections.Generic.List<(uint, double)>();
+        var cues = new System.Collections.Generic.List<string>();
+        ChaosRunHost.PulseFx = (c, strength) => pulses.Add((c.ToUInt32(), strength));
+        ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => cues.Add(System.IO.Path.GetFileNameWithoutExtension(p));
+        ConditioningControlPanel.CoreSettings.Current.ChaosAnnouncerEnabled = true;
         Begin();
         var state = ChaosRunHost.State!;
         state.ElapsedSec = 20;
@@ -226,7 +248,7 @@ public sealed class ChaosUnlockCardOverlayTests
         Assert.Equal(0, state.RerollsLeft);
         Assert.False(reroll.IsVisible);
         var boon = curse ? ChaosBoonPool.Draft(true, 3, guaranteeCurse: true).First(b => b.IsCurse)
-            : ChaosBoonPool.All.Single(b => b.Id == "golden_touch");
+            : ChaosBoonPool.All.Single(b => b.Id == (pick == 2 ? "extra_shield" : "golden_touch"));
         int shields = state.Shields;
         double mult = state.BoonMult;
         state.SinExtraMult = 0.2;
@@ -238,7 +260,11 @@ public sealed class ChaosUnlockCardOverlayTests
         Dispatcher.UIThread.RunJobs();
         Assert.Contains(boon, curse ? state.ActiveCurses : state.ActiveBoons);
         Assert.Equal(mult + boon.RunMultBonus + (curse ? 0.2 : 0), state.BoonMult, 8);
-        Assert.Equal(shields + (curse ? 1 : 0), state.Shields);
+        Assert.Equal(shields + (curse ? 1 : pick == 2 ? 2 : 0), state.Shields);
+        Assert.Equal(pick != 0, pulses.Contains((0xFF78DCA0u, 0.22)));
+        Assert.Equal(curse, cues.Contains("sin_accept"));
+        Assert.Equal((boon.Id, curse ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, (curse ? "☠ " : "◈ ") + boon.Name),
+            (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
         Assert.Equal(curse, state.SurrenderShieldUsed);
         Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
         Assert.Equal(curse, ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes));
@@ -334,8 +360,11 @@ public sealed class ChaosUnlockCardOverlayTests
             Setup();
             var clock = new SteppedClock();
             ChaosUnlockCardOverlay.Clock = clock;
+            var pulse = ChaosRunHost.PulseFx;
+            var audio = ConditioningControlPanel.CoreAudio.PlayOneShotProvider;
             try { body(clock); }
-            finally { ChaosRunHost.ForceShutdown(); ChaosUnlockCardOverlay.Clock = TimeProvider.System; }
+            finally { ChaosRunHost.ForceShutdown(); ChaosUnlockCardOverlay.Clock = TimeProvider.System;
+                ChaosRunHost.PulseFx = pulse; ConditioningControlPanel.CoreAudio.PlayOneShotProvider = audio; }
             return Task.CompletedTask;
         });
     }

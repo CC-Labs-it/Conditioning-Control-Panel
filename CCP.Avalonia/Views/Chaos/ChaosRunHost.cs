@@ -442,6 +442,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _spawnTimer?.Stop();
             ChaosWaveTimerWindow.Clear();
             BubbleOverlay.Field.Bubbles.RemoveAll(b => b.Spec != null);
+            // WPF ChaosModeService.cs:1465-1467; Pulse retains the colour-flash gate (:1672).
+            ChaosOverlayWindow.ChaosSfx.PlayWaveClear();
+            Pulse(Color.FromRgb(150, 200, 255), 0.30);
             _pendingWave = newWave;
             ShowDraft();
         }
@@ -471,7 +474,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void OnBoonChosen(ChaosBoon? boon)
         {
             if (!_active || !_draftPaused || _state == null) return;
-            if (boon == null) _state.Shields++;
+            if (boon == null)
+            {
+                _state.Shields++;
+                Pulse(Color.FromRgb(120, 220, 160), 0.22); // WPF :1581
+                ChaosAnnouncerOverlay.Announce(Loc.Get("Chaos_DraftResistance"),
+                    ChaosAnnounceKind.Willpower, artKey: "resistance"); // WPF :1583
+            }
             else
             {
                 bool shielded = boon.IsCurse && _state.MaxedBoons.Contains("surrender") && !_state.SurrenderShieldUsed;
@@ -481,11 +490,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosLessons.Tick("draft4");
                 if (boon.IsCurse) ChaosLessons.Tick("surrender");
                 _state.ApplyBoon(boon, shieldDrawback: shielded);
+                if (boon.Id == "extra_shield") Pulse(Color.FromRgb(120, 220, 160), 0.22); // WPF :1548
                 if (boon.IsCurse)
                 {
                     if (_state.SinExtraMult > 0) _state.BoonMult += _state.SinExtraMult;
-                    if (_state.MaxedBoons.Contains("surrender")) _state.Shields++;
+                    if (_state.MaxedBoons.Contains("surrender"))
+                    {
+                        _state.Shields++;
+                        Pulse(Color.FromRgb(120, 220, 160), 0.22); // WPF :1562
+                    }
+                    ChaosOverlayWindow.ChaosSfx.Play("sin_accept", 0.6f); // WPF :1565
                 }
+                // WPF ChaosModeService.cs:1566,1574: the accepted card names its kind and art.
+                ChaosAnnouncerOverlay.Announce((boon.IsCurse ? "☠ " : "◈ ") + boon.Name,
+                    boon.IsCurse ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
             _state.WaveIndex = _pendingWave;
             _state.ActIndex = ChaosRunEngine.ActFor(_pendingWave);
