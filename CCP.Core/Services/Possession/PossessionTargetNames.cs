@@ -1,4 +1,3 @@
-using System;
 namespace ConditioningControlPanel.Services.Possession;
 public static class PossessionTargetNames
 {
@@ -8,15 +7,12 @@ public static class PossessionTargetNames
         string? text = null;
         foreach (var candidate in candidates)
         {
-            if (string.IsNullOrWhiteSpace(candidate)) continue;
-            var tidy = candidate.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ').Trim();
-            while (tidy.Contains("  ", StringComparison.Ordinal)) tidy = tidy.Replace("  ", " ", StringComparison.Ordinal);
+            var tidy = candidate?.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ').Trim() ?? "";
+            while (tidy.Contains("  ")) tidy = tidy.Replace("  ", " ");
             if (tidy.Length is < 2 or > 32) continue;
-            text = tidy;
-            break;
+            text = tidy; break;
         }
-        if (text == null) return role switch
-        {
+        if (text == null) return role switch {
             PossessionRole.Button => "that button", PossessionRole.Card => "that card",
             PossessionRole.Toggle => "that toggle", PossessionRole.Title => "the title",
             PossessionRole.Label => "that label", PossessionRole.TabHeader => "that tab",
@@ -25,13 +21,11 @@ public static class PossessionTargetNames
             PossessionRole.Scroll => "that list", PossessionRole.Progress => "that bar",
             PossessionRole.TextBox => "that box", _ => "something",
         };
-        var noun = role switch
-        {
+        return "the " + text + (role switch {
             PossessionRole.Button => " button", PossessionRole.Toggle => " toggle",
             PossessionRole.TabHeader => " tab", PossessionRole.Slider => " slider",
             PossessionRole.Combo => " dropdown", PossessionRole.Card => " card",
             PossessionRole.Title => " heading", PossessionRole.Label => " label", _ => "",
-        };
-        return "the " + text + noun;
+        });
     }
 }

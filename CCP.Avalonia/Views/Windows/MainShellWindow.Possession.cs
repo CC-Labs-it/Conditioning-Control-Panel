@@ -21,7 +21,6 @@ public partial class MainShellWindow : IPossessionHost
     private DateTime _possessionCacheAt = DateTime.MinValue;
     private bool _possessionDirty = true;
     private Canvas? _possessionGhostLayer;
-    private PossessionRuntime? _possessionRuntime;
     internal PossessionDirector? PossessionDirector { get; private set; }
     private Point _possessionPointer;
     private bool _possessionClosed;
@@ -36,9 +35,10 @@ public partial class MainShellWindow : IPossessionHost
     {
         if (Named<Border>("LockdownBadge") is { } badge) PossessionTree.SetExclude(badge, true);
         if (LockdownService.Current is not { } lockdown) return;
-        _possessionRuntime = new PossessionRuntime(PossessionFrames);
-        var effects = PossessionRuntime.CreateAll().Select(e => new DirectorHeadEffect(e, _possessionRuntime));
-        PossessionDirector = new PossessionDirector(lockdown, effects, new PossessionDirectorHead
+        var runtime = new PossessionRuntime(PossessionFrames);
+        _possessionGhostLayer = new Canvas { IsHitTestVisible = false, ClipToBounds = false, ZIndex = 9000 };
+        Named<Grid>("RootGrid")?.Children.Add(_possessionGhostLayer);
+        PossessionDirector = new PossessionDirector(lockdown, PossessionRuntime.CreateAll().Select(e => new DirectorHeadEffect(e, runtime)), new PossessionDirectorHead
         {
             OnUi = a => { if (Dispatcher.UIThread.CheckAccess()) a(); else Dispatcher.UIThread.Post(a); },
             UiAlive = () => !_possessionClosed,
@@ -47,16 +47,11 @@ public partial class MainShellWindow : IPossessionHost
             IsVisible = v => v is Control { IsEffectivelyVisible: true },
             ParentOf = v => (v as Visual)?.GetVisualParent(),
             Pointer = () => (_possessionPointer.X, _possessionPointer.Y),
-            BoundsOf = (_, v) => v is Control c && TryPossessionBounds(c, out var r)
-                ? (r.X, r.Y, r.Width, r.Height) : null,
-            Attribution = _ =>
-            {
-                EnsurePossessionLayers();
-                return new EmberHeadAttribution(_possessionGhostLayer!,
+            BoundsOf = (_, v) => v is Control c && TryPossessionBounds(c, out var r) ? (r.X, r.Y, r.Width, r.Height) : null,
+            Attribution = _ => new EmberHeadAttribution(_possessionGhostLayer!,
                     c => TryPossessionBounds(c, out var r) ? r : null, PossessionFrames,
                     () => CoreSettings.Current.LockdownPhotosafe
-                        || global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level != global::ConditioningControlPanel.Models.MotionLevel.Full);
-            },
+                        || global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level != global::ConditioningControlPanel.Models.MotionLevel.Full),
         });
         PossessionDirector.AttachHost(this);
         if (lockdown.IsActive) PossessionDirector.OnLockdownActivated();
@@ -66,27 +61,19 @@ public partial class MainShellWindow : IPossessionHost
         {
             _possessionClosed = true;
             PossessionDirector.Dispose();
-            _possessionRuntime.UndoAll();
+            runtime.UndoAll();
         };
-    }
-    private void EnsurePossessionLayers()
-    {
-        if (Named<Grid>("RootGrid") is not { } root || _possessionGhostLayer != null) return;
-        _possessionGhostLayer = new Canvas { IsHitTestVisible = false, ClipToBounds = false, ZIndex = 9000 };
-        root.Children.Add(_possessionGhostLayer);
     }
     IReadOnlyList<PossessionTarget> IPossessionHost.Targets => GetPossessionTargets();
     bool IPossessionHost.IsUsable => IsVisible && !_possessionClosed && WindowState != WindowState.Minimized
-        && !Games.GameWindow.IsAnyOpen() && !IntakeHostWindow.IsAnyOpen() && !LockCardWindow.IsAnyOpen()
-        && !Chaos.ChaosRunHost.IsDescending;
+        && !Games.GameWindow.IsAnyOpen() && !IntakeHostWindow.IsAnyOpen() && !LockCardWindow.IsAnyOpen();
     internal IReadOnlyList<PossessionTarget> GetPossessionTargets()
     {
         if (!Dispatcher.UIThread.CheckAccess()) { _possessionDirty = true; return _possessionCache; }
         var age = DateTime.UtcNow - _possessionCacheAt;
         if (age < TimeSpan.FromSeconds(10) && (!_possessionDirty || age < TimeSpan.FromMilliseconds(750)))
             return _possessionCache;
-        var found = new List<PossessionTarget>();
-        var labels = new List<PossessionTarget>();
+        List<PossessionTarget> found = new(), labels = new();
         if (Content is Visual root) WalkPossession(root, found, labels, 0, 17);
         double Score(PossessionTarget t)
         {

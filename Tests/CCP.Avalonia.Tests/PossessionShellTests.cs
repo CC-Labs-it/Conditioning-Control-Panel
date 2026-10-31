@@ -17,6 +17,14 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 public sealed class PossessionShellTests
 {
+    [Fact] public void ConsentUsesSelectedLanguage()
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var language = loc.CurrentLanguage;
+        try { foreach (var code in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" }) {
+            loc.SetLanguage(code); Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("lockdown_possession_warning"), global::ConditioningControlPanel.Avalonia.Views.Tabs.LockdownTabView.LockdownWarning(10, new() { LockdownPossessionEnabled = true })); } }
+        finally { loc.SetLanguage(language); }
+    }
     private static void Setup()
     {
         if (Application.Current is null)
@@ -74,6 +82,10 @@ public sealed class PossessionShellTests
                 .SetValue(shell, DateTime.MinValue);
             Assert.Same(targets, Task.Run(shell.GetPossessionTargets).GetAwaiter().GetResult()); // stale off-thread reads return the last safe snapshot
             Assert.Same(hand, shell.GetPossessionTargets().Single(t => ReferenceEquals(t.Visual, tagged))); // live/cooldown survives
+            var spawning = typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost).GetField("_spawning", BindingFlags.Static | BindingFlags.NonPublic)!;
+            var wasSpawning = spawning.GetValue(null);
+            try { spawning.SetValue(null, true); Assert.True(((IPossessionHost)shell).IsUsable); } // WPF Possession.cs:658-699
+            finally { spawning.SetValue(null, wasSpawning); }
             shell.WindowState = WindowState.Minimized;
             Assert.False(((IPossessionHost)shell).IsUsable);
         }
@@ -104,7 +116,6 @@ public sealed class PossessionShellTests
         s.LockdownPhotosafe = true;
         try
         {
-            Assert.Contains("Possession is ON", global::ConditioningControlPanel.Avalonia.Views.Tabs.LockdownTabView.LockdownWarning(10, s));
             var director = Assert.IsType<PossessionDirector>(shell.PossessionDirector);
             lockdown.Activate(TimeSpan.FromMinutes(10));
             Dispatcher.UIThread.RunJobs();

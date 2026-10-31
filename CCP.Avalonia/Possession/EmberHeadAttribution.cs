@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -27,7 +26,7 @@ internal sealed class EmberHeadAttribution(Canvas layer, Func<Control, Rect?> bo
     private readonly List<Mark> _marks = new();
     private bool _subscribed;
     private static readonly Color Ember = Color.Parse("#FF8A5C");
-    public bool AnyPossessed => _marks.Any(m => m.Held);
+    public bool AnyPossessed => _marks.Exists(m => m.Held);
     public Task ChargeAsync(object target, CancellationToken ct, int durationMs = 400)
     {
         ct.ThrowIfCancellationRequested();
