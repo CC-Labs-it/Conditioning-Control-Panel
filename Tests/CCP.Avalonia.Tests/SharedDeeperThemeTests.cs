@@ -18,6 +18,9 @@ using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services;
 namespace CCP.Avalonia.Tests;
 
 public sealed class SharedDeeperThemeTests
@@ -168,6 +171,206 @@ public sealed class SharedDeeperThemeTests
             Assert.Same(Theme("DeeperRoundButton"), hub.FindControl<Button>("BtnDeeperOpenPlayer")!.Theme);
         }
         finally { editor.Close(); player.Close(); host.Close(); CoreSettings.Current.MotionLevel = oldMotion; }
+        await Task.CompletedTask;
+    });
+    [Theory]
+    [InlineData(MotionLevel.Full, 90, 140, 120)]
+    [InlineData(MotionLevel.Reduced, 45, 70, 60)]
+    [InlineData(MotionLevel.Off, 0, 0, 0)]
+    public void HudPlankHonoursMotionDurations(MotionLevel level, int press, int release, int hover)
+    {
+        Assert.Equal(press, HudPlank.DurationFor(true, false, level));
+        Assert.Equal(release, HudPlank.DurationFor(false, true, level));
+        Assert.Equal(hover, HudPlank.DurationFor(false, false, level));
+    }
+
+    [Theory]
+    [InlineData(MotionLevel.Full, false, false, MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Full, true, true, MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off, false, true, MotionLevel.Off)]
+    public void HudPlankUsesOsAndGentleMotionCaps(MotionLevel setting, bool os, bool gentle, MotionLevel expected)
+    {
+        var oldProbe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+        var oldMotion = CoreSettings.Current.MotionLevel;
+        var oldGentle = CoreSettings.Current.GentleVisuals;
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => os;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            CoreSettings.Current.MotionLevel = setting;
+            CoreSettings.Current.GentleVisuals = gentle;
+            Assert.Equal(expected, HudPlank.Level);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = oldProbe;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            CoreSettings.Current.MotionLevel = oldMotion;
+            CoreSettings.Current.GentleVisuals = oldGentle;
+        }
+    }
+
+    [Theory]
+    [InlineData(HudPlankKind.None, true, false, false, 0, 0)]
+    [InlineData(HudPlankKind.Plank, true, false, false, 3, 0)]
+    [InlineData(HudPlankKind.Chunky, true, false, false, 5, 0)]
+    [InlineData(HudPlankKind.Plank, true, false, true, 5, -2)]
+    [InlineData(HudPlankKind.Chunky, true, false, true, 7, -2)]
+    [InlineData(HudPlankKind.Plank, true, true, true, 0, 2)]
+    [InlineData(HudPlankKind.Chunky, true, true, true, 0, 2)]
+    [InlineData(HudPlankKind.Plank, false, true, true, 0, 0)]
+    [InlineData(HudPlankKind.Chunky, false, true, true, 0, 0)]
+    public void HudPlankStateMatchesWpf(HudPlankKind kind, bool enabled, bool pressed, bool hovered,
+        double drop, double travel)
+    {
+        Assert.Equal(drop, HudPlank.DropLength(kind, enabled, pressed, hovered));
+        Assert.Equal(travel, HudPlank.Travel(enabled, pressed, hovered));
+        if (kind != HudPlankKind.None)
+            Assert.Equal(kind == HudPlankKind.Chunky ? 7 : 5, HudPlank.DropBaseHeight(kind));
+    }
+
+    [Fact]
+    public void HudPlankReleasePassesTheWpfOvershootAtSixtyPercent()
+    {
+        // Releasing a hovered face: 2 -> -3 -> -2, sampled without a render clock.
+        var spring = new HudPlank.ReleaseSpring(1.25);
+        Assert.Equal(0, spring.Ease(0));
+        Assert.Equal(1.25, spring.Ease(0.6));
+        Assert.Equal(1.125, spring.Ease(0.8), 5);
+        Assert.Equal(1, spring.Ease(1));
+    }
+
+    [Fact]
+    public Task HudPlanksRaiseTheStartRowAndTravelOnHoverPressRelease() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var oldMotion = CoreSettings.Current.MotionLevel;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        static double Base(AvaloniaObject o, StyledProperty<double> p) => o.GetBaseValue(p) is { HasValue: true } v ? v.Value : double.NaN;
+        try
+        {
+            foreach (var (key, kind) in new[]
+            {
+                ("PinkButton", HudPlankKind.None), ("PinkButton", HudPlankKind.Plank), ("PinkButton", HudPlankKind.Chunky),
+                ("SecondaryButton", HudPlankKind.None), ("SecondaryButton", HudPlankKind.Plank),
+            })
+            {
+                var button = new Button { Theme = Theme(key), Content = "Test", Width = 120, Height = 40 };
+                HudPlank.SetKind(button, kind);
+                var window = new Window { Content = button, Width = 200, Height = 100 };
+                window.Show(); Dispatcher.UIThread.RunJobs();
+                try
+                {
+                    Control Part(string n) => button.GetVisualDescendants().OfType<Control>().Single(c => c.Name == n);
+                    bool raised = kind != HudPlankKind.None;
+                    Assert.Equal(raised, Part("DepthDrop").IsVisible);
+                    Assert.Equal(raised, Part("DepthSheen").IsVisible);
+                    Assert.Equal(raised, Part("DepthBevel").IsVisible);
+                    if (key == "PinkButton") Assert.Equal(raised ? 0 : 1.5, ((Border)Part("border")).BorderThickness.Top);
+                    bool chunky = kind == HudPlankKind.Chunky;
+                    Assert.Same(Application.Current!.FindResource(chunky ? "DepthPlankSheen" : "DepthRaisedSheen"), ((Border)Part("DepthSheen")).Background);
+                    Assert.Same(Application.Current!.FindResource(chunky ? "DepthPlankBevel" : "DepthRaisedBevel"), ((Border)Part("DepthBevel")).BorderBrush);
+                    if (!raised) continue;
+
+                    var drop = Part("DepthDrop");
+                    double h = chunky ? 7 : 5;   // StartPx / RaisedPx + HoverLiftPx
+                    Assert.Equal(h, drop.Height);
+                    Assert.Equal(-h, drop.Margin.Bottom);
+                    var slide = (TranslateTransform)Part("DepthFace").RenderTransform!;
+                    var clock = new StepClock();
+                    slide.SetValue(StepClock.Property, clock.Instance);
+                    double Travel() => Base(slide, TranslateTransform.YProperty);
+                    double Drop() => Base((ScaleTransform)drop.RenderTransform!, ScaleTransform.ScaleYProperty) * h;
+                    // Rest: on the sheet, RaisedPx drop (StartPx for START).
+                    Assert.Equal(0, Travel(), 3); Assert.Equal(chunky ? 5 : 3, Drop(), 3);
+                    // Hover lifts 2 px and lengthens the drop by the same.
+                    window.MouseMove(new Point(100, 50)); Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(-2, Travel(), 3); Assert.Equal(h, Drop(), 3);
+                    // Press drops 2 px and the shadow goes; a plank SecondaryButton does not also squash.
+                    window.MouseDown(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(2, Travel(), 3); Assert.Equal(0, Drop(), 3);
+                    if (key == "SecondaryButton") Assert.Null(Part("border").RenderTransform);
+                    clock.Step(0); clock.Step(500);
+                    Assert.Equal(2, slide.Y, 3);
+                    // Release springs back through 1 px past rest at 60% of 140 ms (WPF keyframes): 2 -> -3 -> -2.
+                    window.MouseUp(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(-2, Travel(), 3);
+                    clock.Step(1000); clock.Step(1084);
+                    Assert.Equal(-3, slide.Y, 3);
+                    clock.Step(1140);
+                    Assert.Equal(-2, slide.Y, 3);
+                    // A press that lands mid-hover-glide starts from where the face is, not the hover target.
+                    window.MouseMove(new Point(5, 5)); Dispatcher.UIThread.RunJobs();
+                    clock.Step(2000); clock.Step(2200);
+                    Assert.Equal(0, slide.Y, 3);
+                    window.MouseMove(new Point(100, 50)); Dispatcher.UIThread.RunJobs();
+                    clock.Step(3000); clock.Step(3060);   // half of HoverMs, QuadraticEaseOut: 0 -> -1.5
+                    Assert.Equal(-1.5, slide.Y, 2);
+                    window.MouseDown(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+                    clock.Step(3061);
+                    Assert.InRange(slide.Y, -1.6, -1.3);
+                    clock.Step(3300);
+                    Assert.Equal(2, slide.Y, 3);
+                    window.MouseUp(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+                    clock.Step(4000); clock.Step(4300);
+                    Assert.Equal(-2, slide.Y, 3);
+                    // Disabled: flat, no shadow.
+                    button.IsEnabled = false; Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(0, Travel(), 3); Assert.Equal(0, Drop(), 3);
+                    // Off changes the actual transform immediately, with no animation collection.
+                    CoreSettings.Current.MotionLevel = MotionLevel.Off;
+                    button.IsEnabled = true; Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(-2, slide.Y, 3);
+                    Assert.Null(slide.Transitions);
+                    Assert.Equal(h, ((ScaleTransform)drop.RenderTransform!).ScaleY * h, 3);
+                    CoreSettings.Current.MotionLevel = MotionLevel.Full;
+                }
+                finally { window.Close(); }
+            }
+
+            // The real callers: WPF MainWindow.xaml:2243-2427 (Remember, START, the caret, Save, Exit).
+            var oldProvider = CoreSettings.ServiceProvider;
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            MainShellWindow? shell = null;
+            try
+            {
+                shell = new MainShellWindow();
+                shell.Show(); Dispatcher.UIThread.RunJobs();
+                foreach (var (name, kind) in new[]
+                {
+                    ("BtnRemember", HudPlankKind.Plank), ("BtnStart", HudPlankKind.Chunky), ("BtnStartMenu", HudPlankKind.Plank),
+                    ("BtnSaveAll", HudPlankKind.Plank), ("BtnExit", HudPlankKind.Plank),
+                })
+                {
+                    var b = shell.Named<Button>(name)!;
+                    Assert.Equal(kind, HudPlank.GetKind(b));
+                    var drop = b.GetVisualDescendants().OfType<Border>().Single(x => x.Name == "DepthDrop");
+                    Assert.True(drop.IsVisible, name);
+                    Assert.Equal(kind == HudPlankKind.Chunky ? 7 : 5, drop.Height);
+                    if (name == "BtnStart")
+                    {
+                        Assert.Same(Application.Current!.FindResource("AccentGradientBrush"), b.Background);
+                        Assert.NotNull(b.RenderTransform); // ignition dip belongs to the button, not DepthFace
+                    }
+                }
+                var exit = new Button { Theme = shell.Named<Button>("BtnExit")!.Theme, Content = "Exit", Width = 120, Height = 40 };
+                HudPlank.SetKind(exit, HudPlankKind.Plank);
+                var exitHost = new Window { Content = exit, Width = 200, Height = 100 };
+                exitHost.Show(); Dispatcher.UIThread.RunJobs();
+                try
+                {
+                    var plate = exit.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "b");
+                    Assert.Equal(Colors.Transparent, ((ISolidColorBrush)exit.Background!).Color);
+                    exitHost.MouseMove(new Point(100, 50)); Dispatcher.UIThread.RunJobs();
+                    Assert.Same(Application.Current!.FindResource("DangerBrush"), plate.Background);
+                    Assert.Equal(Colors.White, ((ISolidColorBrush)exit.Foreground!).Color);
+                }
+                finally { exitHost.Close(); }
+            }
+            finally { shell?.Close(); CoreSettings.ServiceProvider = oldProvider; }
+        }
+        finally { CoreSettings.Current.MotionLevel = oldMotion; }
         await Task.CompletedTask;
     });
 }
