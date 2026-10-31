@@ -441,6 +441,28 @@ namespace ConditioningControlPanel.Avalonia
             base.OnFrameworkInitializationCompleted();
         }
 
+        // WPF Services/Chaos/EffectPayloadFiring.cs:51-61. Resolve the host at fire time,
+        // after startup has attached the shell. Other payloads retain the existing diagnostic.
+        internal static void InstallChaosPayloads(Func<Visual?> host)
+        {
+            Services.Chaos.EffectPayload.Firer = payload =>
+            {
+                if (payload is Services.Chaos.OverlayPayload { OverlayKind: "braindrain" } p)
+                {
+                    if (host() is not { } visual) return;
+                    if (p.BraindrainOpacity is double opacity)
+                    {
+                        int duration = (int)(p.Scale(1500, 4500)
+                            * Services.Chaos.EffectPayload.GlobalDurationMult * p.DurationMult);
+                        Views.Overlays.ChaosFlashOverlay.Show(visual, duration, opacity);
+                    }
+                    else Views.Overlays.ChaosFlashOverlay.Show(visual);
+                    return;
+                }
+                Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", payload.DisplayName);
+            };
+        }
+
         /// <summary>Runs <paramref name="start"/>, painting each step on the splash; then shows the
         /// shell (the lifetime found no MainWindow to show yet) and fades the splash out (WPF
         /// App.xaml.cs:3837-3867). No splash: the steps are no-ops and everything runs inline.</summary>
@@ -517,10 +539,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
-                // P31: WPF seeds EffectPayloadFiring. ponytail: no chaos payload effects on this head yet
-                // (next lane chaos-bubble-field-b); log so a fired payload is never silently dropped.
-                Services.Chaos.EffectPayload.Firer = p =>
-                    Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", p.DisplayName);
+                InstallChaosPayloads(() => desktop.MainWindow);
                 LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
