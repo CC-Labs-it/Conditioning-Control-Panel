@@ -50,16 +50,17 @@ namespace ConditioningControlPanel.Services
         private int _purchaseSyncSuccesses;
         internal Func<TimeSpan, Task> PurchaseRetryDelay = Task.Delay;
 
-        /// <summary>WPF SyncBeforeRetryAsync: wait for an in-flight sync and its cooldown once.</summary>
+        /// <summary>WPF ProfileSyncService.cs:3967: wait up to 30 s for an in-flight sync, then its cooldown once.</summary>
         public async Task<bool> SyncBeforePurchaseRetryAsync()
         {
             var before = _purchaseSyncSuccesses;
-            if (await PushAsync("purchase-retry", waitForGate: true)) return true;
-            if (_purchaseSyncSuccesses != before) return true;
+            if (!await _gate.WaitAsync(Cooldown)) return false;
+            _gate.Release();
+            if (_purchaseSyncSuccesses != before || await PushAsync("purchase-retry")) return true;
             var left = LastSyncTime is { } last ? Cooldown - (UtcNow() - last) : TimeSpan.Zero;
             if (left <= TimeSpan.Zero || left > Cooldown) return false;
             await PurchaseRetryDelay(left + TimeSpan.FromMilliseconds(250));
-            return await PushAsync("purchase-retry", waitForGate: true);
+            return await PushAsync("purchase-retry");
         }
 
         public static bool RememberPrivacyChange(AppSettings s, SyncBody.Field field)
