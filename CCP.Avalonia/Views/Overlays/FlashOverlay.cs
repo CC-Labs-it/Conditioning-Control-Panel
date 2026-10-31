@@ -386,6 +386,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
             var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: false, fromGaze: fromGaze, w.HydraGeneration, Active.Count);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
+            if (s.GentleVisuals)
+            {
+                Exiting.Add(w);
+                w.Closed += (_, _) => Exiting.Remove(w);
+                w.BeginExit(FlashExit.Gentle(ConditioningControlPanel.Services.Safety.GentleVisuals.ClampFade(s.GentleFadeSeconds), Rng.Next()), fromDisplayedAlpha: true);
+                return;
+            }
             if (FlashShatter.DecidesClick(s.FlashShatterEnabled, PrizeOwnership.OwnsFlashV2())
                 && w.TryBeginShatter(s.MotionLevel, Rng))
             {

@@ -9,6 +9,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 {
@@ -34,6 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             // InitializeComponent, not AvaloniaXamlLoader.Load: only the generated one assigns the
             // x:Name fields, and the seed below reads them.
             InitializeComponent();
+            FillGentleChoices();
             SyncFromSettings();
         }
 
@@ -92,6 +94,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 ChkAutoPerformance.IsChecked = s.AutoPerformanceMode;
                 ChkUnifiedOverlay.IsChecked = s.UnifiedOverlayHost;
                 ChkVideoHwDecode.IsChecked = s.VideoForceHardwareDecoding;
+                ChkGentleVisuals.IsChecked = s.GentleVisuals;
+                PnlGentleChoices.IsVisible = s.GentleVisuals;
+                CmbGentleFade.SelectedIndex = NearestIndex(GentleVisuals.FadeChoices, s.GentleFadeSeconds);
+                CmbGentleSpeed.SelectedIndex = NearestIndex(GentleVisuals.SpeedChoices, s.GentleSpeed);
                 // MotionLevel's ordinal IS the item index (Full=0, Reduced=1, Off=2). Clamped rather
                 // than trusted so a settings file from a future build cannot throw here.
                 var index = (int)s.MotionLevel;
@@ -106,6 +112,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 ChkDndSuppressFlashes.IsChecked = s.DndSuppressFlashes;
             }
             finally { _isLoading = false; }
+        }
+
+        private void FillGentleChoices()
+        {
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            foreach (var f in GentleVisuals.FadeChoices)
+                CmbGentleFade.Items.Add(f.ToString("0.##", culture) + " s");
+            foreach (var v in GentleVisuals.SpeedChoices)
+                CmbGentleSpeed.Items.Add(v.ToString("0.##", culture) + "x");
+        }
+
+        internal static int NearestIndex(double[] choices, double value)
+        {
+            var best = 0;
+            for (var i = 1; i < choices.Length; i++)
+                if (Math.Abs(choices[i] - value) < Math.Abs(choices[best] - value)) best = i;
+            return best;
+        }
+
+        private void ChkGentleVisuals_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = CoreSettings.Current;
+            if (s == null) return;
+            s.GentleVisuals = ChkGentleVisuals.IsChecked == true;
+            PnlGentleChoices.IsVisible = s.GentleVisuals;
+            Log.Information("Gentle visuals set to {On}", s.GentleVisuals);
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            CoreSettings.Save();
+        }
+
+        private void CmbGentle_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = CoreSettings.Current;
+            if (s == null) return;
+            if (CmbGentleFade.SelectedIndex >= 0)
+                s.GentleFadeSeconds = GentleVisuals.FadeChoices[CmbGentleFade.SelectedIndex];
+            if (CmbGentleSpeed.SelectedIndex >= 0)
+                s.GentleSpeed = GentleVisuals.SpeedChoices[CmbGentleSpeed.SelectedIndex];
+            CoreSettings.Save();
         }
 
         private void ChkPerformanceMode_Changed(object? sender, RoutedEventArgs e)
