@@ -67,6 +67,27 @@ public sealed class BarkEngineTests : IDisposable
     }
 
     [Fact]
+    public void NarratorHoldsEvenTextAttributionButSafetyAndGuaranteedBypassWithoutSpendingOneShot()
+    {
+        var normal = Rule("AttentionCheckFail", "look");
+        normal.Repeatable = false;
+        var panic = Rule("Panic", "safe");
+        panic.ClassRaw = "safety";
+        var e = Engine(normal, panic, Rule("PossessionEffect", "haunt"));
+        bool busy = true;
+        e.IsNarratorPlaying = () => busy;
+        Assert.False(e.Raise("AttentionCheckFail"));
+        Assert.False(e.Raise("PossessionEffect"));
+        Assert.Empty(_said);
+        Assert.True(e.Raise("PossessionEffect", guaranteed: true));
+        Assert.True(e.Raise("Panic"));
+        busy = false;
+
+        Assert.True(e.Raise("AttentionCheckFail", guaranteed: true));
+        Assert.False(e.Raise("AttentionCheckFail", guaranteed: true));
+    }
+
+    [Fact]
     public void WhisperHoldsOrdinaryBarksUntilTheLongestClipAndTailButSafetyAndGuaranteedBypass()
     {
         var clock = new PopQuizSchedulerTests.FakeClock();
