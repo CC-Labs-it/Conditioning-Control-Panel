@@ -59,10 +59,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private readonly HashSet<VaultCardAura> _auras = new();
+        private BeatLoop? _reducedAuraMotion;
+        private long _reducedAuraStart;
+        private bool _vaultLoaded;
+        internal bool ReducedAuraRunning => _reducedAuraMotion?.IsRunning == true;
+
+        internal void ReducedAuraFrame()
+        {
+            if (!ReducedAuraRunning) return;
+            double t = FxAdorner.Time.GetElapsedTime(_reducedAuraStart).TotalSeconds;
+            foreach (var aura in _auras) if (aura.IsVisible) aura.Frame(t, full: false);
+        }
 
         private void Aura_Loaded(object? sender, RoutedEventArgs e)
         {
-            if (sender is VaultCardAura aura && _auras.Add(aura) && _motion == null) aura.Rest();
+            if (sender is VaultCardAura aura && _auras.Add(aura) && _motion == null && _reducedAuraMotion == null) aura.Rest();
         }
 
         private void Aura_Unloaded(object? sender, RoutedEventArgs e)
@@ -92,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
+            _vaultLoaded = true;
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged += UpdateMotion;
@@ -122,6 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnUnloaded(object? sender, RoutedEventArgs e)
         {
+            _vaultLoaded = false;
             CoreMods.ModChanged -= OnModChanged;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged -= UpdateMotion;
@@ -271,7 +284,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _kenBurns.ScaleX = _kenBurns.ScaleY = 1;
                 if (LitPlate != null) LitPlate.Opacity = 1;
             }
-            if (!want) foreach (var aura in _auras) aura.Rest();
+            // WPF VaultCardAura.cs:140-152: Reduced breathing is independent of ambient loops.
+            bool reduced = _vaultLoaded && IsVisible && this.IsAttachedToVisualTree()
+                && AmbientFxCanvas.Env.Level == MotionLevel.Reduced;
+            if (!reduced) { _reducedAuraMotion?.Stop(); _reducedAuraMotion = null; }
+            else if (_reducedAuraMotion == null)
+            {
+                _reducedAuraStart = FxAdorner.Time.GetTimestamp();
+                _reducedAuraMotion = new BeatLoop(this, _ => ReducedAuraFrame());
+                _reducedAuraMotion.Start();
+            }
+            if (!want && !reduced) foreach (var aura in _auras) aura.Rest();
             foreach (var part in _fxParts) Dress(part);
         }
 

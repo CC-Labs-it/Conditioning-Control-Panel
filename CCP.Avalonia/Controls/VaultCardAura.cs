@@ -61,17 +61,18 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (change.Property == HueProperty) _halo = null;
         }
 
-        /// <summary>One frame of WPF Start(Full): the breath (0.32..0.95, sine, auto-reverse, begun -3*jitter
-        /// early) and the glint (fade/grow/turn over 620 ms, once a period). <paramref name="t"/> is seconds since the clock started.</summary>
-        internal void Frame(double t)
+        /// <summary>One frame of WPF Start: Full breath 0.32..0.95; Reduced 0.5..0.72 at half speed.
+        /// Sine, auto-reverse, begun -3*jitter early, with the Full-only glint (fade/grow/turn over 620 ms, once a period). <paramref name="t"/> is seconds since the clock started.</summary>
+        internal void Frame(double t, bool full = true)
         {
             int seed = Seed;
             double jitter = Math.Abs(seed) % 7 * 0.13;
-            Opacity = Views.Tabs.ExclusivesTabView.Breath(t + jitter * 3, BreathSeconds + jitter, 0.32, 0.95);
+            Opacity = Views.Tabs.ExclusivesTabView.Breath(t + jitter * 3, (full ? BreathSeconds : BreathSeconds * 2) + jitter,
+                full ? 0.32 : 0.5, full ? 0.95 : 0.72);
             Breathing = true;
             double period = GlintMinSeconds + Math.Abs(seed * 37) % 100 / 100.0 * (GlintMaxSeconds - GlintMinSeconds);
             double begin = 0.6 + Math.Abs(seed * 13) % 100 / 100.0 * 2.4;
-            var glint = t < begin ? (0.0, 0.2, 0.0) : GlintAt((t - begin) % period * 1000);
+            var glint = !full || t < begin ? (0.0, 0.2, 0.0) : GlintAt((t - begin) % period * 1000);
             if (glint == _glint) return;
             _glint = glint;
             InvalidateVisual();

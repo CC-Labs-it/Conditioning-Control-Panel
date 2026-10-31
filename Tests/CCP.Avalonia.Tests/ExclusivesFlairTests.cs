@@ -58,6 +58,62 @@ public sealed class ExclusivesFlairTests
     });
 
     [Fact]
+    public Task ReducedAuraBreathesWithoutAmbientLoopsAndCleansUp() => WithPremiumPage((shell, view) =>
+    {
+        var aura = Parts<VaultCardAura>(view).First(a => a.IsVisible);
+        aura.Seed = 0; // exact WPF period, without seed jitter
+        aura.Frame(0.74);
+        Assert.Equal(1, aura.GlintOpacity, 6);
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.False(view.MotionRunning);
+        Assert.True(view.ReducedAuraRunning);
+        Assert.True(aura.Breathing);
+        Assert.Equal(0, aura.GlintOpacity);
+        Assert.Equal(0.5, aura.Opacity, 6);
+        Step(view, 1.3);
+        Assert.Equal(0.532218, aura.Opacity, 6);
+        Step(view, 3.9);
+        Assert.Equal(0.72, aura.Opacity, 6);
+        Step(view, 5.2);
+        Assert.Equal(0.5, aura.Opacity, 6);
+        Assert.Equal(0, aura.GlintOpacity);
+
+        aura.Seed = 3; // jitter 0.39, direction 5.59, phase advanced 1.17 seconds
+        aura.Frame(0, full: false);
+        Assert.Equal(0.522935, aura.Opacity, 6);
+        aura.Frame(4.42, full: false);
+        Assert.Equal(0.72, aura.Opacity, 6);
+
+        // A rebuilt shelf releases the old aura and the new one joins the Reduced clock.
+        view.RefreshVault(); Settle();
+        Assert.False(aura.Breathing);
+        aura = Parts<VaultCardAura>(view).First(a => a.IsVisible);
+        Step(view, 0.2);
+        Assert.True(aura.Breathing);
+        shell.ShowTab("settings"); Settle();
+        Assert.False(view.ReducedAuraRunning);
+        Assert.False(aura.Breathing);
+        Assert.Equal(0.6, aura.Opacity);
+        shell.ShowTab("premium"); Settle();
+        Assert.True(view.ReducedAuraRunning);
+        aura = Parts<VaultCardAura>(view).First(a => a.IsVisible);
+        Step(view, 0.2);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.False(view.ReducedAuraRunning);
+        Assert.False(aura.Breathing);
+        Assert.Equal(0.6, aura.Opacity);
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(view.ReducedAuraRunning);
+        shell.Content = null; Settle();
+        Assert.False(view.ReducedAuraRunning);
+        Assert.False(aura.Breathing);
+        Assert.Equal(0.6, aura.Opacity);
+    });
+
+    [Fact]
     public Task HoverLiftsAndBloomsTheCard() => WithPremiumPage((shell, view) =>
     {
         var card = Parts<Border>(view).First(b => b.Name == "ExCard");
@@ -176,6 +232,7 @@ public sealed class ExclusivesFlairTests
     {
         Clock.Now += (long)(seconds * TimeSpan.TicksPerSecond);
         view.MotionFrame();
+        view.ReducedAuraFrame();
     }
 
     private static void Settle()
