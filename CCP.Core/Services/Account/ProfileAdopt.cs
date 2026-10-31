@@ -155,14 +155,16 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
-        /// The <c>/v2/user/sync</c> response rules a head that only knows level/xp/season acts on, in WPF's order
+        /// The <c>/v2/user/sync</c> response: conditioning minutes take-higher, then user level/xp/season
         /// (ProfileSyncService.SyncProfileAsync): curve epoch, season forward, then <c>level_reset</c> (with the
-        /// Descent refusal) or the server-ahead adopt, then the agreed watermark. Everything else is ignored.
+        /// Descent refusal) or the server-ahead adopt, then the agreed watermark. Other fields are ignored.
         /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe), no skills union, recap or
         /// SeasonResetPending on level_reset - add each with its feature. Does not save.
         /// </summary>
         public static void ApplySyncResponse(AppSettings settings, JObject response, DateTime nowUtc)
         {
+            // WPF ProfileSyncService.cs:2172 reads the response field, independently of user.
+            AdoptConditioningMinutes(settings, response.Value<double?>("total_conditioning_minutes"));
             if (response["user"] is not JObject node) return;
             var user = node.ToObject<V2User>()!;
             ApplyCurveEpoch(settings, user.CurveEpoch);
@@ -203,10 +205,13 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// The read-before-write adopt (WPF ProfileSyncService.ReadServerProfileBeforePushAsync) after the curve
         /// epoch: level/XP take-higher, the season key forward only (clearing the watermark), and the watermark
-        /// when the server's season is the one we sync under. Nothing else. Returns true when the season advanced.
+        /// when the server's season is the one we sync under. Returns true when the season advanced.
+        /// Conditioning minutes are opt-in for Avalonia, which rebaselines on ConditioningMinutesLifted.
+        /// WPF keeps its own merge and rebaseline (ProfileSyncService.cs:2172-2187).
         /// </summary>
-        public static bool AdoptReadBeforeWrite(AppSettings settings, V2User user)
+        public static bool AdoptReadBeforeWrite(AppSettings settings, V2User user, bool adoptConditioningMinutes = false)
         {
+            if (adoptConditioningMinutes) AdoptConditioningMinutes(settings, user.TotalConditioningMinutes);
             var localTotalXp = TotalXp(settings);
             var keepSeason = settings.CurrentSeason;
             var seasonAdvances = ShouldAdoptServerSeason(user.CurrentSeason, keepSeason);
@@ -231,6 +236,19 @@ namespace ConditioningControlPanel.Services
                     string.IsNullOrEmpty(user.CurrentSeason) ? "(none)" : user.CurrentSeason,
                     string.IsNullOrEmpty(scopedSeason) ? "(none)" : scopedSeason);
             return seasonAdvances;
+        }
+        /// <summary>Raised after a cloud merge lifted <see cref="AppSettings.TotalConditioningMinutes"/>. The head
+        /// re-baselines its FeatureDayLog here, as WPF ProfileSyncService.cs:2187 does, so the gain is not credited
+        /// to today (the "1,000-minute day" bug).</summary>
+        public static event Action<AppSettings>? ConditioningMinutesLifted;
+
+        // WPF ProfileSyncService: cloud minutes can lift the local total, never reduce it.
+        private static void AdoptConditioningMinutes(AppSettings settings, double? cloudMinutes)
+        {
+            if (cloudMinutes is not { } minutes || !double.IsFinite(minutes)
+                || minutes <= settings.TotalConditioningMinutes) return;
+            settings.TotalConditioningMinutes = minutes;
+            ConditioningMinutesLifted?.Invoke(settings);
         }
     }
 }

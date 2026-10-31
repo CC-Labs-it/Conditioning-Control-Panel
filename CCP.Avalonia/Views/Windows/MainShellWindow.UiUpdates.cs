@@ -1,15 +1,3 @@
-// PARTIALLY PORTED from ConditioningControlPanel/MainWindow/MainWindow.UiUpdates.cs (2904 lines).
-// Sorted member by member against the fifteen Core seams. One member is real (plus the stat pills); the blanket claim
-// was wrong for it and is right for most of the rest, with three exceptions worth naming.
-//
-// WHAT IS REAL: BtnAccountChip_Click. WPF's body is ShowTab("appsettings") +
-// AppSettingsTab.FocusSection("account"), and BOTH halves already ship here as
-// OpenAppSettingsSection (MainShellWindow.Settings.cs:65) - "account" is one of the nine keys in
-// AppSettingsTabView.SectionKeys. It routes through that helper rather than repeating the pair,
-// which also means it gets the helper's Named<T> lookup: the generated AppSettingsTab field on
-// this window is permanently null (AvaloniaXamlLoader.Load), so AppSettingsTab?.FocusSection(...)
-// transcribed from WPF would have compiled, rendered, reviewed clean and done nothing.
-//
 // NOT BLOCKED, MOVED - the settings toggles. SliderMaster_Changed, SliderVideoVolume_Changed,
 // SliderDuck_Changed, ChkAudioDuck_Changed, ChkExcludeBambiCloudDucking_Changed,
 // CmbAudioOutputDevice_SelectionChanged, BtnAudioOutputRefresh_Click, BtnTestAudio_Click,
@@ -21,47 +9,6 @@
 // On this head each section owns its own handler and its own _isLoading guard:
 // Views/Controls/AppSettings/{Audio,Performance,General,Devices,Data}SettingsSection.axaml.cs.
 // Adding any of them back here would be a SECOND writer for one setting, not a restoration.
-//
-// PURE AND PORTABLE, LEFT OUT ANYWAY because they are orphans on this head:
-//   ModAwareLabel(english, locKey) - CoreMods.MakeModAware answers it, so it compiles today. Its
-//     consumer, StudioTabView, already carries its own inlined twin
-//     (Views/Tabs/StudioTabView.axaml.cs:1105-1131) precisely because a UserControl cannot reach a
-//     private on the shell. A second public copy with no caller is duplication, not progress.
-//   StripLeadingGlyph - same story, same file, already inlined there.
-//   FormatFileSize - its only callers are the assets-folder rows, which are not ported.
-//
-// STILL OUT, by blocker:
-//   (UpdateLevelDisplay's header half is live in MainShellWindow.HeroFx.cs.)
-//   (UpdateStatPills + StartStatPillUpdateTimer, startup leaderboard read, mic backstop and XP bonus chips
-//    are live below; the Quests view applies the shared journal mod policy on attach and mod change.)
-//   App.Progression / the XP bar - UpdateXPBarLoginState,
-//     XPBarTrack_ToolTipOpening,
-//     RefreshAccountChip and the three AccountChip* brushes. CoreProgression is a seam, but the
-//     chip and the pills read App.Account / App.Patreon tier state on top of it, and a chip that
-//     paints the logged-out tier unconditionally is the same failure recorded for
-//     UpdateSubscribeStarUI in MainShellWindow.SubscribeStar.cs.
-//   (StartConditioningTimeTracker / StopConditioningTimeTracker are live below, on Core's ConditioningTimeTracker.)
-//   SyncConditioningTimeToServerAsync - the 15-minute and on-stop ProfileSync push. Core's SyncPush does not
-//     send total_conditioning_minutes yet, so there is nothing for the timer to call.
-//   UpdateUI / QueueModAwareSurfaceSweep / RefreshModAwareSurfaces / SweepStep /
-//     EnsureModSweepWatchers / ApplyModFeatureNames - the sweep
-//     walks named controls across every tab, most of which are unported; it is a pass over the
-//     finished UI, so it lands last, not first.
-//   UpdateUnlockablesVisibility / SetFeatureImageBlur - App.Unlockables plus a WPF BlurEffect.
-//   (The Intake Pass tile is ported: MainShellWindow.IntakePassTile.cs.)
-//   ImgLogo_MouseLeftButtonDown / ShowEasterEgg / TriggerStartupVideo - a media window each.
-//   BtnManageAttention_Click, BtnAttentionStyle_Click, BtnSubliminalSettings_Click,
-//     BtnManageMessages_Click, BtnPrevImage_Click, BtnNextImage_Click,
-//     BtnRefreshAssets_Click - each opens an unported window or drives the unported asset tree.
-//   SetOfflineDisabled / UpdateOfflineModeUI / DisconnectNetworkServices - the toggle itself moved
-//     (DataSettingsSection.axaml.cs:67, which persists OfflineMode and asks for the offline name),
-//     but the TEARDOWN did not: App.Account, App.RemoteControl and the update checker are the
-//     things a disconnect disconnects, and none of them exists here to disconnect. The greying
-//     pass, SetOfflineDisabled, walks named controls on unported tabs.
-//   BtnPickAssetsFolder_Click / CopyDirectoryRecursive - the picker itself already ships as
-//     MainShellWindow.Settings.cs RequestPickAssetsFolder, called from AssetsTabView (Library > Folders). What
-//     is missing here is only the WPF handler shell around it and the copy-the-old-library
-//     migration, which needs the assets tree to say what it copied.
 
 using System;
 using System.Linq;
@@ -76,14 +23,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        /// <summary>
-        /// The header's account chip. Opens the Settings door and scrolls it to Account - no popup
-        /// and no reparenting, same as WPF (MainWindow.UiUpdates.cs). The scroll deliberately
-        /// happens after the tab is shown, because a section can only be measured once visible;
-        /// OpenAppSettingsSection keeps that order and swallows a failed scroll.
-        /// </summary>
         private void BtnAccountChip_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-            => OpenAppSettingsSection("account");
+        {
+            if (!CoreAccount.IsLoggedIn) { _ = OpenUnifiedLoginDialog(); return; }
+            OpenAppSettingsSection("account");
+        }
+
+        internal void UpdateXPBarLoginState()
+        {
+            var loggedIn = CoreAccount.IsLoggedIn;
+            if (Named<Border>("XPBarLoginOverlay") is { } overlay) overlay.IsVisible = !loggedIn;
+            if (Named<Grid>("XPBarContent") is { } content) content.Opacity = loggedIn ? 1 : 0.3;
+            if (Named<Button>("BtnAccountChip") is not { } button
+                || Named<TextBlock>("TxtAccountChipName") is not { } name
+                || Named<global::ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtAccountChipBadge") is not { } badge) return;
+            var displayName = CoreAccount.DisplayName;
+            name.Text = !loggedIn ? Loc.Get("account_chip_sign_in") : string.IsNullOrWhiteSpace(displayName)
+                ? Loc.Get("account_chip_signed_in") : displayName;
+            var tier = !loggedIn ? 0 : CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess ? 1 : 0;
+            badge.IsVisible = tier > 0;
+            badge.Kind = tier == 2 ? IconKind.Beaker : IconKind.LockClosed;
+            // WPF's coloured emoji: the tier's semantic icon brush, not the chip's inherited foreground.
+            badge.Bind(global::ConditioningControlPanel.Avalonia.Controls.IconGlyph.ForegroundProperty,
+                badge.GetResourceObservable(tier == 2 ? global::ConditioningControlPanel.Avalonia.Controls.IconBrushes.Tier2
+                    : global::ConditioningControlPanel.Avalonia.Controls.IconBrushes.Tier1));
+            // Keep the signed-out CTA bound to the mod accent, as WPF SetResourceReference does.
+            button.Bind(Button.BorderBrushProperty, new global::Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension(
+                !loggedIn ? "PinkBrush" : tier == 2 ? "AccountChipTier2Brush" : tier == 1 ? "AccountChipTier1Brush" : "AccountChipNeutralBrush"));
+        }
 
         // ---- header stat pills (WPF MainWindow.UiUpdates.cs:530-641 UpdateStatPills, :717 timer) ----
         private global::Avalonia.Threading.DispatcherTimer? _statPillTimer;
@@ -131,7 +98,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             UpdateStatPills();
             // WPF MainWindow.xaml.cs:3716: signed-in startup fetch, after the window has loaded.
-            Opened += (_, _) => StartupPillFetch = StartupPillFetchAsync();
+            // WPF runs both once from Loaded (MainWindow.xaml.cs:3716/3794). Opened fires again on every
+            // tray restore (Hide/Show), so the handler removes itself.
+            void OnFirstOpened(object? _, EventArgs __)
+            {
+                Opened -= OnFirstOpened;
+                StartupPillFetch = StartupPillFetchAsync();
+                StartupVideo = PlayStartupVideoAsync();
+            }
+            Opened += OnFirstOpened;
             _statPillTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromSeconds(30) };
             _statPillTimer.Tick += (_, _) => UpdateStatPills();
             _statPillTimer.Start();
@@ -139,9 +114,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Closed += (_, _) => { _statPillsClosed = true; _statPillTimer?.Stop(); StopConditioningTimeTracker(); };
         }
 
+        internal Task StartupVideo { get; private set; } = Task.CompletedTask;
+        internal static TimeSpan StartupVideoDelay = TimeSpan.FromMilliseconds(200);
+        private async Task PlayStartupVideoAsync()
+        {
+            if (!CoreSettings.Current.ForceVideoOnLaunch) return;
+            await Task.Delay(StartupVideoDelay);
+            if (!_statPillsClosed) CoreEngine.Video?.TriggerStartup();
+        }
+
         // ---- conditioning-time tracker (WPF MainWindow.UiUpdates.cs:746-842) ----
         internal ConditioningControlPanel.Services.ConditioningTimeTracker ConditioningTime = new();   // tests swap the clock
         private global::Avalonia.Threading.DispatcherTimer? _conditioningTimeTimer;
+        private global::Avalonia.Threading.DispatcherTimer? _conditioningTimeSyncTimer;
+        internal TimeSpan? ConditioningSyncInterval => _conditioningTimeSyncTimer?.Interval;
+        internal Task LastConditioningSync { get; private set; } = Task.CompletedTask;
+        internal Func<Task> PushConditioningProfile = async () =>
+        {
+            if (Platform.AccountSeed.Sync is { } sync) await sync.PushAsync("conditioning-time");
+        };
+
+        internal async Task SyncConditioningTimeToServerAsync()
+        {
+            if (CoreSettings.Current.OfflineMode || !CoreAccount.IsLoggedIn) return;
+            try { await PushConditioningProfile(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to sync conditioning time"); }
+        }
+
         internal bool ConditioningTimerRunning => _conditioningTimeTimer?.IsEnabled == true;
 
         /// <summary>WPF StartConditioningTimeTracker: called where WPF's StartEngine is (engine start, session
@@ -153,6 +152,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _conditioningTimeTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromSeconds(1) };
             _conditioningTimeTimer.Tick += (_, _) => ConditioningTimeTick();
             _conditioningTimeTimer.Start();
+            _conditioningTimeSyncTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMinutes(15) };
+            _conditioningTimeSyncTimer.Tick += (_, _) => LastConditioningSync = SyncConditioningTimeToServerAsync();
+            _conditioningTimeSyncTimer.Start();
         }
 
         internal void ConditioningTimeTick()
@@ -172,12 +174,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_conditioningTimeTimer == null) return;
             _conditioningTimeTimer.Stop();
             _conditioningTimeTimer = null;
+            _conditioningTimeSyncTimer?.Stop();
+            _conditioningTimeSyncTimer = null;
             try
             {
                 ConditioningTime.Stop(CoreSettings.Current);
                 UpdateStatPills();
             }
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "Error finalizing conditioning time"); }
+            LastConditioningSync = SyncConditioningTimeToServerAsync();
         }
 
         private void RefreshXPBarBonuses()

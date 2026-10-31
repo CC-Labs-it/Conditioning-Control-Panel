@@ -29,15 +29,21 @@ public sealed class ConditioningTimeTrackerShellTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                    .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
+            var oldLogin = CoreAccount.IsLoggedInProvider;
+            CoreAccount.IsLoggedInProvider = () => true;
             var s = CoreSettings.Current;
-            var saved = (s.TotalConditioningMinutes, s.UnlockedSkills, s.PanicKeyEnabled, s.FlashEnabled, s.OfflineMode);
+            var saved = (s.TotalConditioningMinutes, s.UnlockedSkills, s.PanicKeyEnabled, s.FlashEnabled, s.OfflineMode, s.SeasonConditioningMinutes, s.SeasonStatsSeason);
             (s.TotalConditioningMinutes, s.PanicKeyEnabled, s.FlashEnabled, s.OfflineMode) = (100, false, false, true);
             s.UnlockedSkills = new() { "pink_hours" };
             var clock = new SteppedClock();
             var shell = new MainShellWindow();
             shell.Show();
+            var pushes = new System.Collections.Generic.List<double>();
+            shell.PushConditioningProfile = () => { pushes.Add(s.TotalConditioningMinutes); return Task.CompletedTask; };
             void Tick(int n) { for (var i = 0; i < n; i++) { clock.Now = clock.Now.AddSeconds(1); shell.ConditioningTimeTick(); } }
             try
             {
@@ -49,6 +55,12 @@ public sealed class ConditioningTimeTrackerShellTests
 
                 shell.StartEngine();                               // the Start button's path
                 Assert.True(shell.ConditioningTimerRunning);
+                Assert.Equal(TimeSpan.FromMinutes(15), shell.ConditioningSyncInterval);
+                shell.SyncConditioningTimeToServerAsync().GetAwaiter().GetResult();
+                Assert.Empty(pushes); // offline gate applies even to the timer callback
+                s.OfflineMode = false;
+                shell.SyncConditioningTimeToServerAsync().GetAwaiter().GetResult();
+                Assert.Equal(100, Assert.Single(pushes));
                 Tick(60);
                 Assert.Equal(101, s.TotalConditioningMinutes);
                 Tick(30);
@@ -57,6 +69,8 @@ public sealed class ConditioningTimeTrackerShellTests
 
                 PanicSurfaces.StopAll("conditioning-time test", shell);   // panic -> StopEngine -> hook
                 Assert.False(shell.ConditioningTimerRunning);
+                Assert.Null(shell.ConditioningSyncInterval);
+                Assert.Equal(101.5, pushes[1], 6); // stop pushes after writing the remainder
                 Assert.Equal(101.5, s.TotalConditioningMinutes, 6);      // the 30 s remainder
                 Tick(120);                                               // stopped: nothing more
                 Assert.Equal(101.5, s.TotalConditioningMinutes, 6);
@@ -80,10 +94,11 @@ public sealed class ConditioningTimeTrackerShellTests
             }
             finally
             {
+                CoreAccount.IsLoggedInProvider = oldLogin;
                 CoreEngine.StoppedHook = null;
                 CoreEngine.Stop();
                 shell.Close();
-                (s.TotalConditioningMinutes, s.UnlockedSkills, s.PanicKeyEnabled, s.FlashEnabled, s.OfflineMode) = saved;
+                (s.TotalConditioningMinutes, s.UnlockedSkills, s.PanicKeyEnabled, s.FlashEnabled, s.OfflineMode, s.SeasonConditioningMinutes, s.SeasonStatsSeason) = saved;
             }
             return Task.CompletedTask;
         });

@@ -343,6 +343,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// roster gradient; "?" on slate signed out. Then the tier badge and, if open, the menu.</summary>
         internal void RefreshProfileBubble()
         {
+            UpdateXPBarLoginState();
             if (Named<Ellipse>("ProfileBubbleFill") is not { } fill || Named<TextBlock>("ProfileBubbleInitials") is not { } initials) return;
             try
             {
