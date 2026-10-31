@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Safety;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -24,6 +25,7 @@ public sealed class KeywordAudioRuntimeTests
 
     private static Task RunAsync(Func<KeywordAudioRuntime, AppSettings, List<(string Path, float Volume)>, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        PanicAftermath.EndQuiet();
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
@@ -50,6 +52,7 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally
         {
+            PanicAftermath.EndQuiet();
             engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
@@ -58,6 +61,29 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void HarnessClearsInheritedQuietAndCleansUpAfterTheBody(bool throwInBody)
+    {
+        PanicAftermath.ArmQuiet();
+        try
+        {
+            void Exercise(KeywordAudioRuntime engine, AppSettings settings, List<(string Path, float Volume)> played)
+            {
+                Assert.False(PanicAftermath.TriggersSilenced());
+                Type(engine, "sit");
+                Assert.Single(played);
+                PanicAftermath.ArmQuiet();
+                if (throwInBody) throw new InvalidOperationException();
+            }
+            if (throwInBody) Assert.Throws<InvalidOperationException>(() => Run(Exercise));
+            else Run(Exercise);
+            Assert.False(PanicAftermath.TriggersSilenced());
+        }
+        finally { PanicAftermath.EndQuiet(); }
+    }
 
     [Fact]
     public void TypedMatchPlaysConfiguredClipAtWpfVolumeAndStopCutsIt() => Run((engine, s, played) =>
