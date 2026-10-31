@@ -132,6 +132,56 @@ public sealed class BubbleCountSchedulerTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void Deferred_video_selection_failure_recovers_without_latching(bool running) => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        var videoHost = new VideoHost(); var reads = 0; var inaccessible = true;
+        var v = new MandatoryVideoScheduler(videoHost, clock, () =>
+        {
+            reads++;
+            if (inaccessible) throw new System.IO.IOException("Video folder unavailable");
+            return Clips;
+        });
+        var previous = CoreEngine.BubbleCount;
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.VideosPerHour);
+        (s.MandatoryVideosEnabled, s.VideosPerHour) = (true, 60);
+        CoreEngine.BubbleCount = b;
+        try
+        {
+            b.Trigger(forceTest: true);
+            if (running) v.Start();
+            else Assert.True(v.Trigger());
+            clock.Advance(TimeSpan.FromHours(1));
+            Assert.Equal(0, reads);
+            host.Shown[0].Done(true);
+            Assert.Null(Record.Exception(() => clock.Advance(BubbleCountScheduler.QueuePoll)));
+            Assert.Equal(1, reads);
+            Assert.False(v.IsPlaying);
+            Assert.Empty(videoHost.Shown);
+            inaccessible = false;
+            clock.Advance(TimeSpan.FromHours(1));
+            if (!running)
+            {
+                Assert.Empty(videoHost.Shown); // failed Test Now must not arm a stopped schedule
+                Assert.Equal(1, reads);
+                Assert.True(v.Trigger()); // the pending latch was released
+                clock.Advance(MandatoryVideoScheduler.PreRoll);
+            }
+            Assert.Single(videoHost.Shown); // running schedule recovered without another trigger
+            Assert.Equal(2, reads);
+        }
+        finally
+        {
+            v.Stop(); b.ForceCleanup(); CoreEngine.BubbleCount = previous;
+            (s.MandatoryVideosEnabled, s.VideosPerHour) = saved;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void Video_wait_is_cancelled_by_stop_or_panic(bool stop) => With(true, false, true, () =>
     {
         var clock = new FakeClock(); var b = new BubbleCountScheduler(new Host(), clock, () => Clips);

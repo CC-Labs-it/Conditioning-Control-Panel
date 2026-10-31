@@ -372,8 +372,18 @@ namespace ConditioningControlPanel.Services
             {
                 if (!ReferenceEquals(mine, _bubbleWait)) return;
                 Dispose(ref _bubbleWait);
-                if (CoreEngine.BubbleCount?.IsBusy == true) WaitForBubbleCount(strictOverride, path);
-                else if (!Trigger(strictOverride, path) && _running) ScheduleNext();
+                try
+                {
+                    if (CoreEngine.BubbleCount?.IsBusy == true) WaitForBubbleCount(strictOverride, path);
+                    else if (!Trigger(strictOverride, path) && _running) ScheduleNext();
+                }
+                catch (Exception ex)
+                {
+                    // WPF VideoService.cs:2358-2363 catches selection failures; keep Tick's recovery here too.
+                    Log.Error(ex, "VideoService: deferred trigger failed - re-arming scheduler if running");
+                    _playing = false;
+                    if (_running) ScheduleNext();
+                }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _bubbleWait = created;
             // Same bounded handover lag as BubbleCountScheduler.QueueBehind.
