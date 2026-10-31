@@ -349,6 +349,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public bool ShowLibraryError => _libraryError;
         public string LibraryErrorText => Loc.Get("deeper_import_library_not_ready");
         public bool ShowLibraryEmpty => !_libraryError && FilteredEntries.Count == 0;
+        // WPF MainWindow.DeeperHub.cs:383-403: no actions for filtered-out files.
+        public bool ShowLibraryEmptyActions => !_libraryError && _allEntries.Count == 0;
         public string LibraryEmptyText => Loc.Get(_allEntries.Count == 0 ? "deeper_library_empty" : "deeper_hub_empty_filtered");
         public string LibraryCountText => FilteredEntries.Count == _allEntries.Count
             ? Loc.GetF("deeper_library_count_fmt", _allEntries.Count)
@@ -491,7 +493,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 row.IsHighlighted = PathsEqual(entry.FilePath, _highlightedPath);
                 FilteredEntries.Add(row);
             }
-            Notify(nameof(LibraryCountText), nameof(ShowLibraryEmpty), nameof(LibraryEmptyText),
+            Notify(nameof(LibraryCountText), nameof(ShowLibraryEmpty), nameof(ShowLibraryEmptyActions), nameof(LibraryEmptyText),
                 nameof(PillAllCount), nameof(PillVideoCount), nameof(PillAudioCount),
                 nameof(PillHapticsCount), nameof(PillWebcamCount), nameof(ShowLibraryError),
                 nameof(SortDirectionGlyph));
