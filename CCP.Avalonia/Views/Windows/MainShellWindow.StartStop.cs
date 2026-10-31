@@ -98,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _engineGen++;
             App.Sessions?.Pause();
+            NoteVoiceStoppedSession();
             CoreEngine.Stop();
         }
 

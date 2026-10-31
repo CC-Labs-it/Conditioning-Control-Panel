@@ -6,7 +6,7 @@
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
 // ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path). Intents with no
 // seam here (spiral, pink, mind wipe, quiz, keyword triggers, bubble count, shake, deeper,
-// session pause/resume, volume/mute, video pause/resume) are left out of the grammar.
+// volume/mute) are left out of the grammar.
 
 using System;
 using System.Linq;
@@ -41,8 +41,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Recognize = (grammar, opts) => VoiceSpeech?.RecognizeOneOfAsync(grammar, opts, _voicePromptCts?.Token ?? default)
                                            ?? Task.FromResult(PhraseResult.NotAvailable),
             ActionFor = VoiceAction,
-            // The panic applies its own rule (hard rule 6): false = refused, nothing is said.
-            RunFor = n => n == "panic" ? RunVoicePanic : null,
+            // Panic and session resume apply their own rules: false means no success line.
+            RunFor = n => n switch { "panic" => RunVoicePanic, "resume" => ResumeSessionByVoice, _ => null },
             IsBlocked = g => g == VoiceGuard.Lockdown ? LockdownActive : VoiceStopLocked(),
             OnRefused = () => LockdownService.Current?.NotifyEscapeAttempt(EscapeKinds.Stop),
             ShowListening = line => _avatarTubeWindow?.ShowListeningBubble(line),
@@ -128,6 +128,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "bubbles_off" when CoreBubbles.StopAction != null => CoreBubbles.Stop,
             "video_on" when CoreEngine.Video != null => () => CoreEngine.Video?.Trigger(),
             "video_off" when CoreEngine.Video != null => () => CoreEngine.Video?.Stop(),
+            "video_pause" when CoreEngine.Video != null => MandatoryVideoOverlay.Instance.PausePrimary,
+            "video_resume" when CoreEngine.Video != null => MandatoryVideoOverlay.Instance.PlayPrimary,
+            "pause" => PauseSessionByVoice,
+            "resume" => () => ResumeSessionByVoice(),
             "flash_once" when CoreFlash.ShowProvider != null => () => CoreFlash.ShowProvider?.Invoke(),
             "subliminals_on" when CoreSubliminal.ShowProvider != null => CoreSubliminal.Start,
             "subliminals_off" when CoreSubliminal.ShowProvider != null => CoreSubliminal.Stop,
@@ -140,6 +144,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "stop_listening" => StopVoiceInput,
             _ => null,
         };
+
+        // WPF MainWindow.RemoteControl.cs:1341, Services/AutonomyService.VoiceCommandHost.cs:104.
+        internal void PauseSessionByVoice()
+        {
+            if (VoiceStopLocked() || App.Sessions is not { IsRunning: true, IsPaused: false } runner) return;
+            runner.Pause();
+            PinkFilterOverlay.Refresh(this);
+            SpiralOverlay.Refresh(this);
+            SetPauseButton(true);
+        }
+
+        // WPF MainWindow.RemoteControl.cs:1385: voice cannot undo a local panic pause.
+        // Stricter: any head StopEngine pause requires a local resume, including tray Stop.
+        private static SessionRunner? _voiceStoppedRunner;
+        private static object? _voiceStoppedSession;
+        private static int _voiceStoppedPauseCount;
+        private static void NoteVoiceStoppedSession()
+        {
+            _voiceStoppedRunner = App.Sessions;
+            _voiceStoppedSession = App.Sessions?.CurrentSession;
+            _voiceStoppedPauseCount = App.Sessions?.PauseCount ?? 0;
+        }
+
+        internal bool ResumeSessionByVoice()
+        {
+            if (App.Sessions is not { IsRunning: true, IsPaused: true } runner) return false;
+            bool Held() => ReferenceEquals(runner, _voiceStoppedRunner)
+                && ReferenceEquals(runner.CurrentSession, _voiceStoppedSession)
+                && runner.PauseCount == _voiceStoppedPauseCount;
+            if (Held()) return false;
+            StartEffect(() =>
+            {
+                if (!ReferenceEquals(App.Sessions, runner) || !runner.IsRunning || !runner.IsPaused || Held()) return;
+                runner.Resume();
+                PinkFilterOverlay.Refresh(this);
+                SpiralOverlay.Refresh(this);
+                SetPauseButton(false);
+                OnSessionTick();
+            });
+            return true;
+        }
 
         /// <summary>WPF TriggerPanicFromRemote: the spoken safe word. Hard rule 6 (owner, 2026-10-22, WPF
         /// 769373c28): it reaches exactly as far as the panic key (Core VoicePanicReach). Under Lockdown or
