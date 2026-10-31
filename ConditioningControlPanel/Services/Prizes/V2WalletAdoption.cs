@@ -16,7 +16,9 @@ namespace ConditioningControlPanel.Services.Prizes;
 ///
 /// <para>So: a BUY settlement is the server's word and is adopted in both directions, because the
 /// server just debited under its own locks and the counter's netSp keeps a later sync from
-/// refunding it. Anything else may only raise the balance, never lower it.</para>
+/// refunding it. Any other counter reply may only raise the balance, never lower it. The one other
+/// thing that may lower the wallet is a <c>/v2/user/sync</c> reply whose <c>wallet_net</c> dropped:
+/// see <see cref="V2WalletNet"/> (owner call 2026-10-31, a spend elsewhere corrects this PC).</para>
 ///
 /// <para>Pure. The caller does the account check and the write.</para>
 /// </summary>

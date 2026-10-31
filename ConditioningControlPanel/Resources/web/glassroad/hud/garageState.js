@@ -1,9 +1,12 @@
 /* The garage stores appearance only. Every kart body but FREE_KART is sold in the Prize Counter (owner 2026-10-29,
  * B3 section 9): the garage offers the free kart, the bodies the account owns (`cos.kart.body.<id>` grants,
  * meta/owned.js) and the two the logbook still earns (meta/unlocks.js); the rest stay visible and dark.
- * Looks only: the sim, the course hash and the room never read a vehicle. */
+ * A body is more than a look since 2026-10-31: the sim drives its row (sim/kartStats.js, boot.js passes the pick in);
+ * outfits, paints and the rest stay looks only. */
 import {UNLOCKS} from '../meta/unlocks.js';
 import {ACHIEVEMENTS} from '../meta/achievements.js';
+import {dueGarageBlock,saveGarageSeen,stampGarageBlock} from '../meta/record.js';
+import {normLook} from '../net/protocol.js';
 export const KARTS = [['pendulum','Pendulum'],['reverie','Reverie'],['house-edge','House Edge'],['checkmate','Checkmate'],['lovebomb','Lovebomb'],['feedback','Feedback'],['velvet-lock','Velvet Lock'],['undertow','Undertow'],['petal','Petal'],['trinket','Trinket']];
 export const OUTFITS = [['none','Classic'],['varsity','Varsity'],['croupier','Croupier'],['drone-protocol','Protocol'],['builder','Builder'],['cheer','Cheer'],['pool','Pool'],['snow-day','Snow'],['swim','Swim'],
   ['pit-crew','Pit Crew'],['ringmaster','Ringmaster'],['ballerina','Ballerina']];
@@ -83,6 +86,40 @@ export function cleanGarage(saved,locked=LOCKED,owns=NONE_OWNED) {
   if (TRAILS.some(([id]) => id === saved.trail) && wearable('trail',saved.trail,owns)) s.trail = saved.trail;
   return s;
 }
+const EVERY_LOOK = ownedLooks([SHOP_OUTFITS,SHOP_PAINTS,SHOP_UMBRELLAS,SHOP_TRAILS].flatMap(table=>Object.values(table).flat()));
+/** A logbook garage block put through the lock rules: what this device may wear, and whether a pick had to fall back. */
+export function fitGarageBlock(block,locked=LOCKED,owns=NONE_OWNED) {
+  const state = cleanGarage(block?.state,locked,owns);
+  return {state,clamped:JSON.stringify(state)!==JSON.stringify(cleanGarage(block?.state,new Set(),EVERY_LOOK))};
+}
+/** THE GARAGE ON THE LOGBOOK (72 contract C1). `state` is the live object the garage saves. changed() stamps a block
+ * only when a player's action really moved it, so a load, a clamp or a repaint never counts. due() is what a newer
+ * block would put on, and null while the first pull has not landed or nothing is owed; applied() records that it was
+ * put on. `sync` = { live(), ready(), push(record) }: no live sync (signed out, no access) means local only. */
+export function garageTracker({state,storage,sync,adoptLook}) {
+  let stored = JSON.stringify(state);
+  return {
+    changed() {
+      const now = JSON.stringify(state);
+      if (now === stored) return false;
+      stored = now;
+      if (!sync?.live?.()) return false;
+      const record = stampGarageBlock({state,look:normLook(raceLook(state))},storage);
+      if (record) sync.push?.(record);
+      return !!record;
+    },
+    due(locked,owns) {
+      if (!sync?.ready?.()) return null;
+      const block = dueGarageBlock(storage);
+      return block ? {block,...fitGarageBlock(block,locked,owns)} : null;
+    },
+    applied({block,clamped}) {
+      stored = JSON.stringify(state);
+      adoptLook?.(block);
+      saveGarageSeen(block.updatedAt,clamped,storage);
+    },
+  };
+}
 export function loadGarage(storage,locked=LOCKED,owns=NONE_OWNED) {
   try { return cleanGarage(JSON.parse(storage.getItem(STORAGE) || storage.getItem('rt.garage-proposal.v2')),locked,owns); }
   catch { return cleanGarage(null,locked,owns); }
@@ -120,6 +157,8 @@ export function lockLine(kart) {
 }
 /** The line under a dark shop look (outfit, paint, umbrella, trail). */
 export const shopLockLine = id => PRIME_LOOKS.has(id) ? 'Prime, in the Prize Counter' : COUNTER_LINE;
+/** A page with no door to the counter (website, phone) says where it is, so a dark item is never a dead end. */
+export const whereSold = (line, door) => door || !line ? line : line.replace('the Prize Counter', "the desktop app's Prize Counter");
 /** The race look (NET.md looks): vehicle, outfit and skin, plus the shop extras only when worn. A paint needs the
  * skin colours, so it rides only with a custom skin. `owns` (ownedLooks) drops anything no longer owned. */
 export function raceLook(s,owns=null) {

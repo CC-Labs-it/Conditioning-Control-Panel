@@ -14,6 +14,7 @@ export const LEX = {
   shop_buy: 'Buy',
   shop_keep_looking: 'Keep looking',
   shop_wear: 'Wear',
+  shop_desk_on_desktop: 'Shows on EMI\'s desk in the desktop app',
   shop_wear_in_garage: 'Wear it in the garage',
   shop_worn: 'Wearing it now.',
   shop_owned: 'Owned',
@@ -38,6 +39,17 @@ export const LEX = {
   shop_tab_desk: 'Desk',
   shop_tab_prime: 'Prime',
   shop_tab_backroom: 'Back Room',
+  shop_howto: 'How it works',
+  shop_howto_go: 'To the shelves',
+  shop_howto_earn_title: 'Earn',
+  shop_howto_earn_gist: 'Games pay Sparkles by finishing place',
+  shop_howto_earn_cap: 'Sparkles are the only money here',
+  shop_howto_pick_title: 'Pick',
+  shop_howto_pick_gist: 'One shelf per family, new stock weekly',
+  shop_howto_pick_cap: 'Opens from the wallet chip or a game\'s Prize Counter button',
+  shop_howto_buy_title: 'Buy, wear',
+  shop_howto_buy_gist: 'A buy asks once, no refunds',
+  shop_howto_buy_cap: 'Owned stays stamped, Wear puts it on. Kart bodies change how you drive',
 };
 
 export const itemKey = (id) => `shop_item_${String(id).replace(/[.-]/g, '_')}_name`;
@@ -74,7 +86,7 @@ export const descKey = (id) => itemKey(id).replace(/_name$/, '_desc');
 /* One short factual line per item (Astra's item-info.json, trimmed), shown on the preview strip and the confirm card.
  * A family + slot key (`shop_item_kart_body_desc`) covers every row of that slot without a key of its own. */
 const ITEM_DESCS = {
-  "shop_item_kart_body_desc": "A kart body for EMI in Racing Thoughts. Outfits and paint equip separately.",
+  "shop_item_kart_body_desc": "A kart body for EMI in Racing Thoughts. It changes how the kart drives. Outfits and paint equip separately.",
   "shop_item_kart_outfit_pit_crew_desc": "Pit crew uniform with a cap for EMI in Racing Thoughts. The kart is separate.",
   "shop_item_kart_outfit_ringmaster_desc": "Ringmaster outfit with a top hat for EMI in Racing Thoughts. The kart is separate.",
   "shop_item_kart_outfit_ballerina_desc": "Ballet outfit with a tutu for EMI in Racing Thoughts. The kart is separate.",

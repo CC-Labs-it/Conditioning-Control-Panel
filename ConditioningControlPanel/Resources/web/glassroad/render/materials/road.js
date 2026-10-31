@@ -21,7 +21,7 @@ import { MeshBasicNodeMaterial, DoubleSide, DataTexture, RGBAFormat, UnsignedByt
 import { uniform, uv, sin, fract, mix, smoothstep, float, vec2, vec3, texture, normalWorld, positionWorld, cameraPosition,
   normalize, dot, pow, abs, clamp, max, min, reflect, floor, hash, length, atan, step, exp, select, fwidth, attribute } from 'three/tsl';
 import { LOOK } from '../look.js';
-import { SPECTRUM_LOOK, patternZones, patternBytes, fitPeriod, trackTableWidth } from '../spectrum.js';
+import { SPECTRUM_LOOK, patternZones, patternBytes, fitPeriod, trackTableWidth, trackTableMax } from '../spectrum.js';
 import { ROAD_AA } from '../roadAaMath.js';
 import { createMusicTiles } from './musicTiles.js';
 import { ROAD_HALF_WIDTH_RANGE, encodeRoadHalfWidth } from '../musicTilesMath.js';
@@ -103,9 +103,9 @@ const ENERGY_REST = (() => {
   return t;
 })();
 
-/** A song's energy curves as one RGBA row (R mix, G drums, B bass, A vocals), at most 8192 texels. */
+/** A song's energy curves as one RGBA row (R mix, G drums, B bass, A vocals), at most the GPU's table limit. eFps and eW follow its width. */
 export function energyTexture(song) {
-  const e = song.energy, n = Math.max(e.mix.length, e.vocals.length, 1), w = Math.min(n, 8192), data = new Uint8Array(w * 4);
+  const e = song.energy, n = Math.max(e.mix.length, e.vocals.length, 1), w = Math.min(n, trackTableMax()), data = new Uint8Array(w * 4);
   const at = (a, i) => (a.length ? a[Math.min(a.length - 1, Math.floor(i * n / w))] : 0);
   for (let i = 0; i < w; i++) { data[i * 4] = at(e.mix, i); data[i * 4 + 1] = at(e.drums, i); data[i * 4 + 2] = at(e.bass, i); data[i * 4 + 3] = at(e.vocals, i); }
   const t = new DataTexture(data, w, 1, RGBAFormat, UnsignedByteType);

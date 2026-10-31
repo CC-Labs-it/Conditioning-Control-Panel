@@ -132,6 +132,9 @@ public class GlassroadHostTests
     public void Init_SignedIn_CarriesTheIdentityAndNoSong()
     {
         var f = GlassroadRules.InitFrame("u_1", "Kit", 7, false, 0.75, 0.5);
+        Assert.False((bool)f["caps"]!["scrolller"]!["consent"]!);
+        Assert.Equal("device", (string?)f["caps"]!["scrolller"]!["origin"]);
+        Assert.Equal(GlassroadRules.PicturesMediaOrigin, (string?)f["caps"]!["scrolller"]!["mediaOrigin"]);
         Assert.Equal("init", (string?)f["type"]);
         Assert.Equal(2, (int)f["v"]!);
         Assert.Equal("desktop", (string?)f["caps"]!["platform"]);

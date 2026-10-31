@@ -4809,6 +4809,19 @@ namespace ConditioningControlPanel.Models
             set { _rainLookAgreedUtc = value; OnPropertyChanged(); }
         }
 
+        private Dictionary<string, int> _walletNetSeen = new();
+        /// <summary>The last <c>wallet_net</c> a <c>/v2/user/sync</c> reply carried, per unified id
+        /// (<see cref="Services.Prizes.V2WalletNet"/>). Machine-local: it records what THIS PC has seen, so a
+        /// backup carrying it to another PC would invent or hide a spend. Survives signing out, since it
+        /// belongs to the account. Replaced whole on every change, because a save can serialize it on
+        /// another thread.</summary>
+        [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public Dictionary<string, int> WalletNetSeen
+        {
+            get => _walletNetSeen;
+            set { _walletNetSeen = value ?? new Dictionary<string, int>(); OnPropertyChanged(); }
+        }
+
         /// <summary>True when the user has agreed to see remote content anywhere. Read THIS,
         /// not the raw flag: users who already accepted the FYP feed's consent card agreed to
         /// exactly this, and asking them a second time in different words would read as the
@@ -8774,6 +8787,16 @@ namespace ConditioningControlPanel.Models
         // ---- Piece by Piece pictures (2026-09-28) ----
         // The chess game's Distraction pictures: the Goon Game's flavour model, host-owned.
 
+        private bool? _glassroadPictures;
+        /// <summary>The race's own Scrolller switch: null before the player has pressed it (it then follows the app-wide
+        /// online source), else their last press. App consent is still required (<c>GlassroadRules.PicturesOn</c>).</summary>
+        [JsonProperty("glassroadPictures")]
+        public bool? GlassroadPictures
+        {
+            get => _glassroadPictures;
+            set { _glassroadPictures = value; OnPropertyChanged(); }
+        }
+
         private string _pbpMediaFlavour = "";
         /// <summary>
         /// Piece by Piece's picture flavour (trance, pink, frills, shiny, censored, mine), or ""
@@ -9911,6 +9934,37 @@ namespace ConditioningControlPanel.Models
         {
             get => _emiDeskEquipPushOwed;
             set { _emiDeskEquipPushOwed = value; OnPropertyChanged(); }
+        }
+
+        private string? _profileEquipAccount;
+        /// <summary>The account <see cref="ProfileEquipUpdatedMs"/> and <see cref="ProfileEquipPushOwed"/> belong to
+        /// (Services/Profile/ProfileEquipSync). Null = this client has not settled a frame or avatar here, so an
+        /// existing pick goes up once. Machine-local, like the other two: never in a cloud backup.</summary>
+        [JsonProperty]
+        public string? ProfileEquipAccount
+        {
+            get => _profileEquipAccount;
+            set { _profileEquipAccount = value; OnPropertyChanged(); }
+        }
+
+        private long _profileEquipUpdatedMs;
+        /// <summary>The equip stamp of the frame and avatar on this PC (unix ms). A server copy is adopted only
+        /// when its updatedAt is newer.</summary>
+        [JsonProperty]
+        public long ProfileEquipUpdatedMs
+        {
+            get => _profileEquipUpdatedMs;
+            set { _profileEquipUpdatedMs = Math.Max(0, value); OnPropertyChanged(); }
+        }
+
+        private bool _profileEquipPushOwed;
+        /// <summary>True while a local frame or avatar pick has not reached /v2/equip. It goes up instead of being
+        /// judged against the server copy, whose stamp any other family's PUT can move.</summary>
+        [JsonProperty]
+        public bool ProfileEquipPushOwed
+        {
+            get => _profileEquipPushOwed;
+            set { _profileEquipPushOwed = value; OnPropertyChanged(); }
         }
 
         private double _emiDeskWidth = 220;

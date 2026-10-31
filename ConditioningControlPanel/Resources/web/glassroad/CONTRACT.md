@@ -282,8 +282,15 @@ re-sends `owned { grants, wear: '<counter row id>' }` (`kart.body.<id>`, `kart.o
 `kart.umbrella.lace`, `prime.paint.host-gold`, `prime.trail.podium`). The garage adopts the grants first, then puts the
 item on like its own picker (`hud/garageState.js wearPick`; the bundle keeps hearts or spiral if worn, else hearts),
 saves it, turns to the kart or opens Customize on the section, and shows a short note. Unknown or unowned ids are ignored.
+Toys (7.2, `host/raceToys.js`, the feel table is `fx/toyPlan.js`): a host with a toy stack sets `caps.toys: true`, and
+`caps.toysConnected` drives the Options "Toys" row (host -> page `toys { connected }` when it changes). page -> host:
+`toy { level 0..1, ms, tag }`, `toy-bed { level 0..1 }` re-sent while it runs (the host zeroes it within 1.5 s when the
+sends stop, so a dead page cannot pin a toy) and `toy-stop`. The player's own events only, nothing crosses the network.
+Pause, a hidden page and leaving send `toy-stop`. The host clamps everything and scales it: the page is untrusted.
+The numbers stay out of feel.json, which would move the course hash.
+
 Web Scrolller pictures (2026-10-26, `host/scrolllerFeed.js`): a host that can feed them sets `caps.scrolller:
-{ consent: boolean }` (the web shim; the desktop never does). Host -> page `scrolller-feed { v: 1, rows: [{ url, kind:
+{ consent: boolean }` (the web shim). Host -> page `scrolller-feed { v: 1, rows: [{ url, kind:
 'image' }] }` (https on a scrolller.com host, at most 12 used; an empty list when consent is off) and the `setting
 { key: 'media.remoteConsent', value }` echo (what is STORED). Page -> host `set-setting { key: 'media.remoteConsent',
 value }` from the Options "Online pictures" switch, drawn only when `caps.scrolller` is set and moved only by the
@@ -292,6 +299,20 @@ echo. LAW: Scrolller's media hosts send no CORS headers, so these rows are DISPL
 texture, never read back) and nowhere else. The host asks api.scrolller.com from the same browser (no CC Labs
 server touches a byte). If Scrolller ever serves CORS to the page's origin, the host may instead fetch whole clips
 into `blob:` urls and post the existing `card-media` manifest, which reaches the world screens.
+Device origin (2026-10-31, phone, `host/devicePictures.js`): `caps.scrolller: { consent, origin: 'device' }` means the
+host caches each picture and serves it from the page's own loopback server. `scrolller-feed { v: 1, rows: [{ url, kind:
+'image', mime }], catalog? }`: every `url` is absolute and same-origin (under `/scrolller-media/` or a host alias), and
+the guard (`deviceRows`) refuses anything else, a scrolller.com url included; at most 12, a later feed replaces the list,
+empty rows when consent is off or nothing is available. These rows are origin-clean, so they are NOT display only: they
+go to the world screens (every face `selectScrolllerSlots` picks) and the flash stills as real textures, on the prewarmed
+shared owners `media.setSource(id, { kind: 'canvas', el, borrowed: true, credit: 'scrolller' })` and `media.swapStill`.
+One decode at a time, long edge at most 640 px, one upload per picture under the tier's upload budget, owners =
+`mediaClipLimit(memoryTier)` (phone 3), each owner changes picture every 7 s (Gentle 14 s), nothing moves while paused.
+Page -> host `set-setting { key: 'media.remoteConsent', value: true, ask: true }` under this origin only, from the
+player's own press of Scrolller (the host may show its sheet); nothing else ever sends `ask`, and the page never raises
+this consent by itself. An echo of false to a pending ask turns the course's pick off. Rows ending in `.svg` are refused.
+My files and Off still win: the provider then holds nothing and My files keeps the display-only route. A host without
+`origin` (the web) behaves as before. The desktop (2026-10-31) is a device-origin host with `mediaOrigin: 'https://ccp.assets'`: its rows sit on that host, not the page's, and each one is a cached temp file.
 Per-course niches (2026-10-26, `host/scrolllerNiches.js`): the web switch is the race's OWN (stored under
 `glassroad-web:scrolller`, ON unless the player turned it off; it never writes the campus-wide consent). Each course
 has a default pick (`TRACK_NICHES`, one to four catalog ids); the player's own pick per course is kept in

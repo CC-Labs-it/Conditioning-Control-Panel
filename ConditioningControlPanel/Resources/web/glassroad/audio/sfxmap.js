@@ -222,6 +222,7 @@ export function sfxPlan(name, p = {}, o = {}) {
     case 'menu-toggle': return [one('menu-move', 0.9, 1.12)];
     case 'menu-ok': return [one('menu-ok')];
     case 'menu-back': return [one('menu-back')];
+    case 'menu-bubble-pop': return [one('bubble-pop', 0.6)];
     // polish 5 (S4): the online lobby on the same shipped menu sounds; the grid count on a low, quiet bell
     case 'seat-in': return [one('menu-ok', 0.7, 1.12)];
     case 'seat-out': return [one('menu-back', 0.7, 0.9)];

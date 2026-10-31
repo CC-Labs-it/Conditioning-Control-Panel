@@ -74,15 +74,26 @@ export function goonworksWorldPlan(track){
     const r=layout.byId?.[hall]||range(id);if(!r)return;rooms.push({id,s0:r.s0,s1:r.s1,height});
     const count=Math.max(2,Math.ceil((r.s1-r.s0)/spacing)),step=(r.s1-r.s0)/count;
     const mid=track.frameAt((r.s0+r.s1)/2),length=r.s1-r.s0,roomHalf=Math.max(mid.w,track.frameAt(r.s1-1).w)/2;
-    // Whole ledges and one suspended hull give each room a single readable silhouette.
+    // Joined wall rings follow the room's bends. A single tangent box used to cut across
+    // neighbouring panels while the columns followed the road independently.
+    const band=(name,material,x,y,width,high)=>{
+      for(let i=0;i<count;i++){
+        const a=track.frameAt(r.s0+i*step),b=track.frameAt(r.s0+(i+1)*step),f=track.frameAt(r.s0+(i+.5)*step);
+        const corners=[a,b].flatMap(frame=>[-1,1].flatMap(up=>[-1,1].map(side=>point(frame,x+side*width/2,y+up*high/2))));
+        const basis=axes(f),spans=basis.map(axis=>corners.map(p=>dot(sub(p,f.p),axis))).map(values=>[Math.min(...values),Math.max(...values)]);
+        const p=basis.reduce((p,axis,k)=>add(p,mul(axis,(spans[k][0]+spans[k][1])/2)),f.p);
+        const row=put(name,material,p,spans.map(([lo,hi])=>hi-lo),{basis,outline:false});
+        if(row)row.wallCorners=corners;
+      }
+    };
     for(const side of[-1,1]){
       const x=side*(roomHalf+10);
-      local(id+'-wall-base','fuchsia',mid,x,3,0,[10,10,length+5]);
-      local(id+'-enamel-sill','white',mid,x,8.5,0,[11.2,1.2,length+6]);
-      local(id+'-roof-beam','fuchsia',mid,x,height,0,[12,8,length+8]);
-      local(id+'-scalloped-eave','white',mid,x,height+4.8,0,[14,1.5,length+10]);
-      local(id+'-balcony-band','fuchsia',mid,x,25,0,[13,3.4,length-5]);
-      local(id+'-balcony-white-lip','white',mid,x-side*.5,27,0,[14,1.2,length-4]);
+      band(id+'-wall-base','fuchsia',x,3,10,10);
+      band(id+'-enamel-sill','white',x,8.65,11.2,1.2);
+      band(id+'-roof-beam','fuchsia',x,height,12,8);
+      band(id+'-scalloped-eave','white',x,height+4.8,14,1.5);
+      band(id+'-balcony-band','fuchsia',x,25,13,3.4);
+      band(id+'-balcony-white-lip','white',x-side*.5,27.35,14,1.2);
     }
     local(id+'-island-keel','wine',mid,0,-17,0,[roomHalf*2+30,24,length+7],{shape:'island'});
     for(let i=0;i<count;i++){const s=r.s0+(i+.5)*step,f=track.frameAt(s),half=f.w/2;

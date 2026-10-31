@@ -14,15 +14,15 @@ import {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const read = (rel) => fs.readFileSync(path.join(here, '..', rel), 'utf8').replace(/\r\n/g, '\n');
-const C1 = { currency: 'USD', prime: { name: 'Prime', monthly: '12.50', patreon_url: 'https://www.patreon.com/checkout/CodeBambi?rid=27681505' } };
+const C1 = { currency: 'USD', basic: { name: 'Basic', monthly: '6.50', patreon_url: 'https://www.patreon.com/checkout/CodeBambi?rid=27604786' }, prime: { name: 'Prime', monthly: '12.50', patreon_url: 'https://www.patreon.com/checkout/CodeBambi?rid=27681505' } };
 
 test('only a Daily Gift payout carries the row', () => {
-  assert.deepEqual(planRowFor({ daily_gift: true, plan: 'prime', finalXp: 10 }), { key: 'prime', line: DAILY_GIFT_LINE });
+  assert.deepEqual(planRowFor({ daily_gift: true, plan: 'basic', finalXp: 10 }), { key: 'basic', line: DAILY_GIFT_LINE });
   assert.equal(planRowFor({ finalXp: 10 }), null, 'an older host, or a paid player: nothing');
   assert.equal(planRowFor({ daily_gift: 'yes' }), null, 'only a real true');
   assert.equal(planRowFor({ daily_gift: true, dryRun: true }), null, 'a dry run is not a run');
   assert.equal(planRowFor(null), null);
-  assert.equal(planRowFor({ daily_gift: true }).key, 'prime', 'Prime when the host names no plan');
+  assert.equal(planRowFor({ daily_gift: true }).key, 'basic', 'Basic when the host names no plan');
 });
 
 test('no plans payload: the Prime checkout, no price', () => {
@@ -56,15 +56,15 @@ test('the row: one calm line, one link, the price only with plans', () => {
   const env = { chrome: { webview: { postMessage: (m) => sent.push(m) } } };
   const box = buildPlanRow({ doc: fakeDoc(), row: planRowFor({ daily_gift: true }), plans: C1, env });
   const [line, a, price] = box.children;
-  assert.equal(line.textContent, 'Open today. Prime keeps it open.');
+  assert.equal(line.textContent, 'Open today. Basic keeps it open.');
   assert.equal(a.tag, 'a');
-  assert.equal(a.href, C1.prime.patreon_url);
-  assert.equal(a.textContent, 'Get Prime');
-  assert.equal(price.textContent, 'USD 12.50 a month');
+  assert.equal(a.href, C1.basic.patreon_url);
+  assert.equal(a.textContent, 'Get Basic');
+  assert.equal(price.textContent, 'USD 6.50 a month');
   let held = 0;
   a.listeners.click[0]({ preventDefault: () => { held++; } });
   assert.equal(sent[0].event, 'cta_clicked');
-  assert.equal(sent[0].plan, 'prime', 'in the app the host is told which plan to open');
+  assert.equal(sent[0].plan, 'basic', 'in the app the host is told which plan to open');
   assert.equal(held, 1, 'in the app the link does not open itself (it raised a bare popup)');
   const web = buildPlanRow({ doc: fakeDoc(), row: planRowFor({ daily_gift: true }), plans: C1, env: {} });
   let webHeld = 0;

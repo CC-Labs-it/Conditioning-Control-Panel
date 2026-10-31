@@ -3,13 +3,17 @@
  * decides. Every effect has an IN and an OUT; Gentle drops movement, motion 'off' cuts.
  *
  *   const hud = createHud(root, { t, send, goTab, signIn, motion, gentle, list });
- *   hud.paint(view); hud.receipt(sp, {x, y}); hud.previewSlot   // lane B3-W5 fills the slot */
+ *   hud.paint(view); hud.receipt(sp, {x, y}); hud.previewSlot   // lane B3-W5 fills the slot
+ *   hud.guide   // the how-to card (hud/guide.js) */
 
 import { tabKey, itemName, itemDesc } from '../state/strings.js';
 import { TAB_ICONS, STAR, LOCK, BACK } from './icons.js';
 import { cardModel, renderCard } from './card.js';
+import { renderBars } from './bars.js';
+import { kartBarsOf } from '../state/kart-bars.js';
 import { countDown, weekNo } from './wallet.js';
 import { createPressGuard, keyName } from '../state/press-guard.js';
+import { createGuide } from './guide.js';
 
 const STATUS = { loading: 'shop_loading', offline: 'shop_offline' };
 const OUT_MS = 160;
@@ -25,11 +29,15 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
   const back = el('button', 'pc-back');
   back.type = 'button'; back.innerHTML = BACK; back.setAttribute('aria-label', t('shop_back'));
   back.onclick = () => { back.blur(); send({ type: 'back' }); };
+  // The how-to door: '?' where the top line is tight, the words where there is room (page.css).
+  const door = el('button', 'pc-howto');
+  door.type = 'button'; door.title = t('shop_howto'); door.setAttribute('aria-label', t('shop_howto')); door.hidden = true;
+  door.append(el('span', 'pc-howto-q', '?'), el('span', 'pc-howto-w', t('shop_howto')));
   const week = el('span', 'pc-week');
   const wallet = el('p', 'pc-wallet'), walletN = el('span', 'pc-wallet-n');
   wallet.innerHTML = STAR; wallet.append(walletN); wallet.setAttribute('aria-live', 'polite');
   const top = el('div', 'pc-top');
-  top.append(back, week, wallet);
+  top.append(back, door, week, wallet);
 
   const tabs = el('nav', 'pc-tabs'), tabRow = el('div', 'pc-tab-row');
   tabs.setAttribute('aria-label', t('shop_tabs'));
@@ -39,13 +47,17 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
 
   const listEl = el('div', 'pc-list');
   const peek = el('aside', 'pc-peek'), previewSlot = el('div', 'pc-peek-view');
-  const peekName = el('p', 'pc-peek-name'), peekPrice = el('p', 'pc-peek-price'), peekDesc = el('p', 'pc-peek-desc');
-  peek.append(previewSlot, peekName, peekPrice, peekDesc);
+  const peekName = el('p', 'pc-peek-name'), peekPrice = el('p', 'pc-peek-price'), peekDesc = el('p', 'pc-peek-desc'), peekBars = el('div', 'pc-peek-bars');
+  peek.append(previewSlot, peekName, peekPrice, peekDesc, peekBars);
   peek.onclick = () => send({ type: 'select' });
   const status = el('p', 'pc-status');
   status.setAttribute('role', 'status');
   const modal = el('div', 'pc-modal'), scrim = el('div', 'pc-scrim');
-  scrim.onclick = () => send({ type: 'back' });
+  // Only a press that began on the scrim closes the card. A shelf tap opens the card on pointerup, and a touch's click
+  // lands on the scrim that just appeared under the finger (emulator, 2026-10-31: shut about 3 ms after opening).
+  let scrimPressed = false;
+  scrim.onpointerdown = () => { scrimPressed = true; };
+  scrim.onclick = () => { if (scrimPressed) send({ type: 'back' }); scrimPressed = false; };
   modal.append(scrim);
   modal.hidden = true;
   const fx = el('div', 'pc-fx');
@@ -55,7 +67,9 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
   gateBtn.onclick = () => { gateBtn.blur(); signIn(); };
   gate.append(gateBtn);
   gate.hidden = true;
-  hud.append(top, tabs, listEl, peek, status, gate, modal, fx);
+  const guide = createGuide(doc, { t, guard, motion });
+  door.onclick = () => { door.blur(); if (!card) guide.open(); };
+  hud.append(top, tabs, listEl, peek, status, gate, modal, guide.el, fx);
   root.append(hud);
 
   let shown = 0, counting = null, tabIds = '', peekKey = '', cardKey = null, card = null, outTimer = 0;
@@ -105,6 +119,9 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
     const desc = itemDesc(t, row.id);
     peekDesc.textContent = desc || '';
     peekDesc.hidden = !desc;
+    const bars = kartBarsOf(row.id);
+    peekBars.replaceChildren(...(bars ? [renderBars(doc, bars)] : []));
+    peekBars.hidden = !bars;
     fillPrice(peekPrice, rowLook(row, v));
   }
 
@@ -164,6 +181,7 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
     card = next;
     modal.hidden = false;
     modal.classList.remove('pc-out');
+    if (!wasOpen) scrimPressed = false;
     if (!wasOpen) pulse(modal, 'pc-in'); else modal.classList.remove('pc-in');
     if (fresh) guard.card();
     const bs = buttons();
@@ -214,7 +232,7 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
   }
 
   return {
-    el: hud, previewSlot,
+    el: hud, previewSlot, guide,
     /** The bands (px from the HUD's top and bottom) a phone keeps the shelf out of: under the tabs, over the preview strip. */
     insets() {
       const box = hud.getBoundingClientRect(), above = (tabs.hidden ? top : tabs).getBoundingClientRect();
@@ -231,6 +249,7 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
       tabs.hidden = !v.tabs.length;
       paintGate(v.status === 'signed_out');
       wallet.hidden = v.status === 'signed_out';
+      door.hidden = v.status !== 'ready';
       paintTabs(v);
       paintPeek(v);
       paintList(v);
@@ -245,6 +264,6 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
       fly(pos);
       return run.done.then(() => { if (counting === run) counting = null; wallet.classList.remove('pc-hit'); });
     },
-    dispose() { clearTimeout(outTimer); clearTimeout(gateTimer); if (counting) counting.stop(); hud.remove(); },
+    dispose() { clearTimeout(outTimer); clearTimeout(gateTimer); guide.dispose(); if (counting) counting.stop(); hud.remove(); },
   };
 }

@@ -26,7 +26,7 @@ internal static class GlassroadRules
     /// them to sign in. <c>songs</c> stays empty: the private race song never ships in the app.
     /// </summary>
     public static JObject InitFrame(string? unifiedId, string? displayName, int tier,
-        bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null, bool toysConnected = false)
+        bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null, bool toysConnected = false, bool picturesOn = false)
     {
         bool signedIn = !string.IsNullOrWhiteSpace(unifiedId);
         return new JObject
@@ -45,6 +45,8 @@ internal static class GlassroadRules
                 ["prizeCounter"] = true,
                 // the race sends its toy plan here (host/raceToys.js); the Options row shows only with a toy connected
                 ["toys"] = true, ["toysConnected"] = toysConnected,
+                // Scrolller stills as real textures, cached here and served from the media host (host/devicePictures.js)
+                ["scrolller"] = new JObject { ["consent"] = picturesOn, ["origin"] = "device", ["mediaOrigin"] = PicturesMediaOrigin },
             },
             ["identity"] = signedIn
                 ? new JObject { ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
@@ -53,6 +55,31 @@ internal static class GlassroadRules
                     ["grants"] = KartGrants(grants) }
                 : JValue.CreateNull(),
         };
+    }
+
+    public const string PicturesMediaOrigin = "https://ccp.assets";
+    public const string PicturesSettingKey = "media.remoteConsent";
+    /// <summary>The page shows at most this many at once (host/scrolllerFeed.js MAX_FEED_ROWS).</summary>
+    public const int PicturesRows = 12;
+    /// <summary>How far the shown rows move along the pool on each turn.</summary>
+    public const int PicturesStep = 6;
+
+    /// <summary>The race's Scrolller gate. The app's consent always, and never offline. The player's own press in the race
+    /// (<paramref name="own"/>) decides; before any press it follows the app-wide online source.</summary>
+    public static bool PicturesOn(bool? own, string? mediaSource, bool consent, bool offline)
+        => consent && !offline && (own == true
+            || (own == null && !string.Equals(mediaSource ?? "local", "local", StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>Host -> page <c>scrolller-feed</c>: a window of the pool's stills, wrapping, with no repeats.</summary>
+    public static JObject PicturesFeed(IReadOnlyList<string> urls, int offset, IEnumerable<(string Id, string Label)> catalog)
+    {
+        var rows = new JArray();
+        int n = Math.Min(urls.Count, PicturesRows), start = urls.Count == 0 ? 0 : ((offset % urls.Count) + urls.Count) % urls.Count;
+        for (int i = 0; i < n; i++)
+            rows.Add(new JObject { ["url"] = urls[(start + i) % urls.Count], ["kind"] = "image" });
+        var list = new JArray();
+        foreach (var (id, label) in catalog) list.Add(new JObject { ["id"] = id, ["label"] = label });
+        return new JObject { ["type"] = "scrolller-feed", ["v"] = 1, ["rows"] = rows, ["catalog"] = list };
     }
 
     /// <summary>The Prize Counter grants the garage reads: <c>cos.kart.*</c> plus the two kart Prime families

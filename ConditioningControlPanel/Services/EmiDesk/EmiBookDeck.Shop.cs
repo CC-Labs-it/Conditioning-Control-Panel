@@ -29,7 +29,7 @@ internal static class EmiBookDeckShop
         new EmiBookCard(
             "prize-counter", 2, "emi_book_prize_counter",
             "THE PRIZE COUNTER",
-            "a 3D *counter* that trades *Sparkles* for looks.",
+            "a 3D *counter* that trades *Sparkles* for kart bodies and looks.",
             new[] { "games pay *Sparkles* by your finishing place",
                    "looks for the *kart*, *chess*, your *profile* and my desk",
                    "the *stock* changes every week. what you own stays *stamped*",

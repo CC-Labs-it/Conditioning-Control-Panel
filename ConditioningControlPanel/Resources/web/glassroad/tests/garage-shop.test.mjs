@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { DEFAULT, OUTFITS, PAINTS, ownedLooks, wearable, cleanGarage, raceLook, shopLockLine, COUNTER_LINE } from '../hud/garageState.js';
+import { DEFAULT, OUTFITS, PAINTS, ownedLooks, wearable, cleanGarage, raceLook, shopLockLine, COUNTER_LINE, whereSold } from '../hud/garageState.js';
 import { cleanGrants } from '../meta/owned.js';
 import { normLook, roomLook, botLook, TYPES, C2R, LOOK_OUTFITS, SHOP_LOOK_OUTFITS, LOOK_PAINTS, LOOK_UMBRELLAS, LOOK_TRAILS } from '../net/protocol.js';
 import { catalogFrom, lookForSeat, lookForTier, SHOP_PIECES, shopExtras } from '../render/wardrobeMath.js';
@@ -29,6 +29,13 @@ test('grants open the shop looks; retired v1 paints keep what their owners bough
   assert.equal(ownedLooks(['cos.kart.paint.pink-checker']).paints.size, 0, 'checks is a free native pattern already');
   // the owned snapshot keeps the two kart Prime families and nothing else outside cos.kart.*
   assert.deepEqual(cleanGrants([...ALL, 'cos.prime.frame.room-host', 'cos.prime.banner.arena', 'cos.rain.dress.x']), [...ALL].sort());
+});
+
+test('a page with no counter door names the desktop app; a page with one keeps the short line', () => {
+  assert.equal(whereSold(COUNTER_LINE, true), COUNTER_LINE);
+  assert.equal(whereSold(COUNTER_LINE, false), "In the desktop app's Prize Counter");
+  assert.equal(whereSold(shopLockLine('podium'), false), "Prime, in the desktop app's Prize Counter");
+  assert.equal(whereSold(null, false), null);
 });
 
 test('free outfits and native patterns stay free; shop ones are dark with the counter line until owned', () => {
@@ -124,13 +131,13 @@ test('the Prize Counter row: only a host with caps.prizeCounter, contract messag
 });
 
 test('looks never reach the online course hash: all five courses still match the room cards', async () => {
-  // CCP-Server rooms/src/tracks.js courseHash after the 15% larger karts; a change here means a room regenerate + redeploy
+  // CCP-Server rooms/src/tracks.js courseHash after the kart stats table; a change here means a room regenerate + redeploy
   const ROOM = {
-    threshold: '3e234696549f22d5c249fa1048a1f002e3c0ecf558ca7e0bad3ad8ed6c3172a9',
-    mainframe: 'd3bf3330a0787b0f575deb702fe4ebba97abc9b468af5e606f82381cc359e575',
-    keep: '41b90e0ebb20c173fefcdef1f0aa8e32e87478fbdade22de4a150d0467b95475',
-    boudoir: '7a47c6ba08bdbe534a72cd578b9bac794da610da865fe1f29afdb6274f820651',
-    goonworks: '7355475b106dfa2f2293d88384da274225655ebb57e051624e465d9200d7a1f4',
+    threshold: '894e0085d0b36af20187c20f98fb05ef25fb6a94f6c642a41c58b208873e1d9b',
+    mainframe: '109aa2c6f452b1d78e2e3b4a558352c6eb9d9bf704d22cc36518d010edce204a',
+    keep: '32b4530731a1f7e6a94d2ca608b8c4fd3982a458cffde3c1c7e38b7021824de3',
+    boudoir: '0fcaed781726a90a8e744c23a70b01e15dee519b290b8e32940e677bc7666027',
+    goonworks: '1f5193b1db396cec11e41d61febd93dbdf8c17dbda46d822f9c1c4dce3699a71',
   };
   const feel = read('../feel.json');
   for (const [id, hash] of Object.entries(ROOM)) {
