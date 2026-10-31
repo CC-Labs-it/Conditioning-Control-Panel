@@ -252,6 +252,103 @@ public sealed class ProgramIgnitionTests
         Assert.DoesNotContain(tab.FindControl<ItemsControl>("ProgramDayStrip")!.Items.Cast<ProgramDayPip>(), pip => pip.Ignite);
     });
 
+    [Fact]
+    public void SealUsesWpfBackLandingThenLinearDriftAndSettles() => WithRun(lastDay: false, (_, tab, svc, program) =>
+    {
+        svc.ActiveEnrollment!.CompletedChapterIds.Add(program.Chapters[0].Id);
+        tab.RefreshPrograms();
+        var host = tab.FindControl<Grid>("ProgramsSealHost")!;
+        var scale = (ScaleTransform)tab.FindControl<StackPanel>("ProgramsSealStamp")!.RenderTransform!;
+        Assert.True(host.IsVisible);
+        Assert.Equal(1.35, scale.ScaleX, 5);
+        Step(.15);
+        // WPF BackEase EaseOut A=.5: f(.5)=1.125, so the seal undershoots 1.
+        Assert.Equal(.95625, scale.ScaleX, 5);
+        Assert.Equal(scale.ScaleX, scale.ScaleY);
+        Step(.15);
+        Assert.Equal(1, scale.ScaleX, 5);
+        Step(.65);
+        Assert.Equal(1.03, scale.ScaleX, 5);
+        Step(.65);
+        Assert.False(host.IsVisible);
+        Assert.Equal(1, scale.ScaleX);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FiniteMomentsSettleImmediatelyOnOffOrMinimiseAndNeverReplay(bool minimise) => WithRun(lastDay: false, (shell, tab, svc, program) =>
+    {
+        svc.TodayRecord!.DayCompleted = true;
+        svc.ActiveEnrollment!.CompletedChapterIds.Add(program.Chapters[0].Id);
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        Step(.18);
+        var wave = tab.FindControl<Rectangle>("TodayWave")!;
+        var xp = tab.FindControl<TextBlock>("TxtTodayXpFloat")!;
+        var seal = tab.FindControl<Grid>("ProgramsSealHost")!;
+        Assert.Equal(.75, wave.Opacity, 3);
+        Assert.True(xp.Opacity > 0);
+        Assert.True(seal.IsVisible);
+        if (minimise) shell.WindowState = WindowState.Minimized;
+        else
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        }
+        Assert.Equal(0, wave.Opacity);
+        Assert.Equal(0, xp.Opacity);
+        Assert.False(seal.IsVisible);
+        Assert.Equal(1, ((ScaleTransform)tab.FindControl<StackPanel>("ProgramsSealStamp")!.RenderTransform!).ScaleX);
+        shell.WindowState = WindowState.Normal;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        Step(.18);
+        Assert.Equal(0, wave.Opacity);
+        Assert.Equal(0, xp.Opacity);
+        Assert.False(seal.IsVisible);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GraduationAccentSettlesToGoldOnOffOrMinimise(bool minimise) => WithRun(lastDay: false, (shell, tab, svc, _) =>
+    {
+        svc.ActiveEnrollment!.State = ProgramEnrollmentState.Graduated;
+        tab.RefreshPrograms();
+        var brush = (ISolidColorBrush)tab.FindControl<Border>("ProgramsGraduatedCard")!.BorderBrush!;
+        var gold = Color.FromRgb(0xFF, 0xD7, 0x00);
+        Assert.NotEqual(gold, brush.Color);
+        if (minimise) shell.WindowState = WindowState.Minimized;
+        else
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        }
+        Assert.Equal(gold, brush.Color);
+    });
+
+    [Fact]
+    public void PipBreathKeepsItsPhaseAcrossRepaintAndMinimise() => WithRun(lastDay: true, (shell, tab, _, _) =>
+    {
+        Ellipse CurrentGlow() => global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tab)
+            .OfType<Ellipse>().Single(e => e.Name == "PipGlow" && e.DataContext is ProgramDayPip { IsCurrent: true });
+        Step(.6);
+        var opacity = CurrentGlow().Opacity;
+        Assert.Equal(.65, opacity, 3);
+        tab.RefreshPrograms();
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(opacity, CurrentGlow().Opacity, 3);
+        shell.WindowState = WindowState.Minimized;
+        Step(.6);
+        shell.WindowState = WindowState.Normal;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(.95, CurrentGlow().Opacity, 3);
+    });
+
     /// <summary>40 beats of stepped time, time-bounded (P73); returns how many distinct values each loop showed:
     /// edge opacity, the border brush's rotation, the counter ink's X offset and the comet's X offset.</summary>
     private static (int Edge, int Angle, int Shimmer, int Comet) Frames(string phase, StringBuilder log, ProgramsTabView tab)

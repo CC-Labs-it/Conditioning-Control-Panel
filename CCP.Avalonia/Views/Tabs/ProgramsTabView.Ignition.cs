@@ -4,15 +4,12 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.VisualTree;
 using System.Threading;
-using System.Threading.Tasks;
 using Avalonia;
-using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Data;
 using Avalonia.Media;
-using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -63,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _programFxSuppressed;
         private Window? _fxWindow;
         private CancellationTokenSource? _railPipCts;
+        private long? _pipPhaseStarted;
         private readonly HashSet<ProgramDayPip> _ignitedPips = new();
 
         /// <summary>Tests read these: the heat tier last computed, and whether ambient clocks run.</summary>
@@ -104,6 +102,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _momentCts?.Cancel();
             _momentCts?.Dispose();
             _momentCts = null;
+            Find<Rectangle>("TodayWave").Opacity = 0;
+            Find<TextBlock>("TxtTodayXpFloat").Opacity = 0;
+            var seal = Find<Grid>("ProgramsSealHost");
+            seal.Opacity = 0;
+            seal.IsVisible = false;
         }
 
         private void OnFxWindowProperty(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -117,7 +120,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void SyncIgnition()
         {
             RefreshLiveSessionProgress();
-            if (!IsVisible || VisualRoot is null) { StopIgnitionLoops(); StopMoments(); return; }
+            if (!IsVisible || VisualRoot is null) { StopIgnitionLoops(); StopMoments(); StopAccentFade(); return; }
+            // WPF ProgramsFx.cs:929-936,1095-1101 skips finite moments with transitions Off.
+            // Also settle when minimised rather than leaving a finite overlay parked halfway.
+            if (!Env.AllowTransitions || Shell is { WindowState: WindowState.Minimized })
+            { StopMoments(); StopAccentFade(settle: true); }
             if (_ignitionEnrollment != null && Find<StackPanel>("ProgramsRunPanel").IsVisible)
                 ApplyIgnition(_ignitionEnrollment);
         }
@@ -129,6 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (string.Equals(key, _runKeySeen, StringComparison.Ordinal)) return;
             _programFxSuppressed = false;
             _runKeySeen = key;
+            _pipPhaseStarted = null;
             _dayCompletePopped = _chapterSealed = _chapterBaselineRun = _graduationCelebrated = null;
         }
 
@@ -165,11 +173,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _accentFadeCts.Token, () => { if (_runAccentTarget == target) brush.Color = target; });
         }
 
-        private void StopAccentFade()
+        private void StopAccentFade(bool settle = false)
         {
             _accentFadeCts?.Cancel();
             _accentFadeCts?.Dispose();
             _accentFadeCts = null;
+            if (settle && _runAccent != null && _runAccentTarget is { } target) _runAccent.Color = target;
         }
 
         private Color AccentNow => _runAccentTarget ?? _runAccent?.Color ?? Colors.HotPink;
@@ -413,9 +422,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     pip.Breathe = pip.IsCurrent && AmbientOn && _tier >= ProgramHeatTier.Warm;
                     if (!pip.Breathe) continue;
                     var scale = (ScaleTransform)glow.RenderTransform!;
+                    // WPF ProgramsTabView.xaml:626-653: repainting a carrier must not restart its breath.
+                    _pipPhaseStarted ??= BeatLoop.Time.GetTimestamp();
+                    var offset = BeatLoop.Time.GetElapsedTime(_pipPhaseStarted.Value).TotalSeconds;
                     var loop = new BeatLoop(glow, t =>
                     {
-                        var phase = BeatLoop.Breath(t, 1.2);
+                        var phase = BeatLoop.Breath(t + offset, 1.2);
                         glow.Opacity = .35 + .60 * phase;
                         scale.ScaleX = scale.ScaleY = .9 + .22 * phase;
                     });
@@ -469,22 +481,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             var wave = Find<Rectangle>("TodayWave");
             var xp = Find<TextBlock>("TxtTodayXpFloat");
-            if (_programFxSuppressed || !Env.AllowTransitions || _waveBrush == null) { wave.Opacity = 0; xp.Opacity = 0; return; }
+            if (!MomentsAllowed || _waveBrush == null) { wave.Opacity = 0; xp.Opacity = 0; return; }
             var token = (_momentCts ??= new CancellationTokenSource()).Token;
 
             wave.Fill = _waveBrush;
             var grow = (ScaleTransform)_waveBrush.Transform!;
-            Drive(0.95, new CubicEaseOut(), p => grow.ScaleX = grow.ScaleY = 0.02 / 1.15 + (1 - 0.02 / 1.15) * p, token);
-            _ = Run(Keys(0.95, OpacityProperty, (0, 0.0), (0.18, 0.75), (0.95, 0.0)), wave, token, () => wave.Opacity = 0);
-
             xp.Text = Loc.GetF("label_0_xp_3", ProgramHeat.DayXp(day?.Intensity ?? 0.0, day?.IsBoss == true));
             if (_runAccent != null) xp.Foreground = _runAccent;
-            _ = Run(new Animation
+            var slide = (TranslateTransform)xp.RenderTransform!;
+            var ease = new CubicEaseOut();
+            var waveKeys = new[] { (0d, 0d), (.18, .75), (.95, 0d) };
+            var xpKeys = new[] { (0d, 0d), (.22, 1d), (.95, 1d), (1.5, 0d) };
+            // WPF ProgramsFx.cs:943-979: wave radius/opacity and XP rise/fade on independent tracks.
+            Moment(1.5, token, t =>
             {
-                Duration = TimeSpan.FromSeconds(1.5), Easing = new CubicEaseOut(), FillMode = FillMode.Forward,
-                Children = { Frame(0, TranslateTransform.YProperty, 18.0), Frame(1, TranslateTransform.YProperty, -46.0) },
-            }, xp, token);
-            _ = Run(Keys(1.5, OpacityProperty, (0, 0.0), (0.22, 1.0), (0.95, 1.0), (1.5, 0.0)), xp, token, () => xp.Opacity = 0);
+                grow.ScaleX = grow.ScaleY = 0.02 / 1.15 + (1 - 0.02 / 1.15) * ease.Ease(Math.Min(t / .95, 1));
+                wave.Opacity = BeatLoop.Keys(t, waveKeys);
+                slide.Y = 18 - 64 * ease.Ease(Math.Min(t / 1.5, 1));
+                xp.Opacity = BeatLoop.Keys(t, xpKeys);
+            }, () => { wave.Opacity = xp.Opacity = 0; slide.Y = 0; });
         }
 
         /// <summary>WPF NoteProgramChapterSeal: baseline per run, then only a change from it is live.</summary>
@@ -520,17 +535,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Find<TextBlock>("TxtProgramsSealSub").Text = days is { Count: > 0 }
                 ? Loc.GetF("program_enroll_chapter_days", days[0].DayIndex, days[^1].DayIndex)
                 : chapter.Subtitle;
-            if (_programFxSuppressed || !Env.AllowTransitions) { host.IsVisible = false; host.Opacity = 0; return; }
+            if (!MomentsAllowed) { host.IsVisible = false; host.Opacity = 0; return; }
 
             host.IsVisible = true;
             var token = (_momentCts ??= new CancellationTokenSource()).Token;
-            _ = Run(Keys(SealSeconds, OpacityProperty, (0, 0.0), (0.22, 1.0), (1.15, 1.0), (SealSeconds, 0.0)), host, token,
-                () => { host.Opacity = 0; host.IsVisible = false; });
-            // WPF eases the landing with BackEase; per-keyframe easing is a KeySpline here, so linear segments.
-            var stamp = Keys(SealSeconds, ScaleTransform.ScaleXProperty, (0, 1.35), (0.3, 1.0), (SealSeconds, 1.06));
-            foreach (var (frame, value) in new[] { (0, 1.35), (1, 1.0), (2, 1.06) })
-                stamp.Children[frame].Setters.Add(new Setter(ScaleTransform.ScaleYProperty, value));
-            _ = Run(stamp, Find<StackPanel>("ProgramsSealStamp"), token);
+            var scale = (ScaleTransform)Find<StackPanel>("ProgramsSealStamp").RenderTransform!;
+            var landing = new ConditioningControlPanel.Avalonia.Theme.BackEaseOutAmplitude { Amplitude = .5 };
+            var fadeKeys = new[] { (0d, 0d), (.22, 1d), (1.15, 1d), (SealSeconds, 0d) };
+            // WPF ProgramsFx.cs:1107-1129: only the first .3 seconds use BackEase, then linear drift.
+            Moment(SealSeconds, token, t =>
+            {
+                host.Opacity = BeatLoop.Keys(t, fadeKeys);
+                scale.ScaleX = scale.ScaleY = t <= .3
+                    ? 1.35 - .35 * landing.Ease(t / .3)
+                    : 1 + .06 * (t - .3) / (SealSeconds - .3);
+            }, () => { host.Opacity = 0; host.IsVisible = false; scale.ScaleX = scale.ScaleY = 1; });
             Serilog.Log.Information("[FX] program chapter sealed: {Chapter}", chapter.Name);
         }
 
@@ -559,10 +578,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             StopMoments();
         }
 
-        // ---- helpers ----
+        private bool MomentsAllowed => !_programFxSuppressed && Env.AllowTransitions && IsVisible
+            && VisualRoot != null && Shell is not { WindowState: WindowState.Minimized };
 
-        private static KeyFrame Frame(double cue, AvaloniaProperty property, object value) =>
-            new() { Cue = new Cue(cue), Setters = { new Setter(property, value) } };
+        // Finite clocks share the window beat and synchronously settle on cancel. This avoids a
+        // queued animation completion hiding a newer seal after a motion/window gate change.
+        private void Moment(double seconds, CancellationToken token, Action<double> step, Action settle)
+        {
+            BeatLoop? loop = null;
+            CancellationTokenRegistration registration = default;
+            void Finish() { loop?.Stop(); settle(); registration.Dispose(); }
+            loop = new BeatLoop(this, t => { step(Math.Min(t, seconds)); if (t >= seconds) Finish(); });
+            loop.OnParked = Finish;
+            registration = token.Register(Finish);
+            if (!token.IsCancellationRequested) loop.Start();
+        }
+
+        // ---- helpers ----
 
         /// <summary>A forever sine yo-yo (WPF AutoReverse + RepeatBehavior.Forever + SineEase) on the
         /// window's 30 fps beat (WPF SetDesiredFrameRate(AmbientFrameRate = 30), MainWindow.AmbientFx.cs:15),
@@ -584,24 +616,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private static BoxShadows Glow(Color c, double blur, double opacity) =>
             new(new BoxShadow { Blur = blur, Color = WithAlpha(c, (byte)Math.Round(255 * opacity)) });
-
-        /// <summary>WPF DoubleAnimationUsingKeyFrames with linear frames, times in seconds.</summary>
-        private static Animation Keys(double seconds, AvaloniaProperty property, params (double at, double value)[] frames)
-        {
-            var a = new Animation { Duration = TimeSpan.FromSeconds(seconds), Easing = new LinearEasing(), FillMode = FillMode.Forward };
-            foreach (var (at, value) in frames) a.Children.Add(Frame(at / seconds, property, value));
-            return a;
-        }
-
-        /// <summary>Runs one animation; a cancelled or failed run is decoration lost, never a crash. Targets
-        /// are Visuals (a Transform setter reaches the RenderTransform): a bare brush or transform has no
-        /// clock in Avalonia 12 and freezes at its first frame (measured), so those go through Drive.</summary>
-        private static async Task Run(Animation animation, Visual target, CancellationToken token, Action? done = null)
-        {
-            try { await animation.RunAsync(target, token); }
-            catch (Exception ex) { Serilog.Log.Debug("Program FX: {E}", ex.Message); }
-            done?.Invoke();
-        }
 
         /// <summary>Per-frame driver for brushes and their transforms: eased progress 0..1 over
         /// <paramref name="seconds"/>, ends with <paramref name="done"/> (also on cancel).</summary>
