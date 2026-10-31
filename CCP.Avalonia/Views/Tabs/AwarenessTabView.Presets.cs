@@ -12,6 +12,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
@@ -24,7 +25,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class AwarenessTabView
     {
         /// <summary>WPF's App.KeywordPresets. Stateless over CoreSettings, like the dialog's own.</summary>
-        private static readonly KeywordTriggerPresetService Presets = new();
+        private static KeywordTriggerPresetService Presets => App.KeywordPresets;
+        private bool _presetEventsSubscribed;
+
+        // WPF MainWindow.Awareness.cs:102-130: one shared publisher refreshes both surfaces.
+        // The visual lifetime bounds the subscription so the publisher cannot retain a closed tab.
+        private void AttachPresetEvents()
+        {
+            if (_presetEventsSubscribed) return;
+            Presets.PresetsChanged += OnPresetsChanged;
+            _presetEventsSubscribed = true;
+        }
+
+        private void DetachPresetEvents()
+        {
+            Presets.PresetsChanged -= OnPresetsChanged;
+            _presetEventsSubscribed = false;
+        }
+
+        private void OnPresetsChanged(object? sender, EventArgs e)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_presetEventsSubscribed) return;
+                try
+                {
+                    KeywordPanel.RefreshTriggerList();
+                    RefreshAwarenessPresetCards();
+                }
+                catch (Exception ex) { Log.Debug(ex, "Awareness preset refresh failed"); }
+            });
+        }
 
         private IBrush Res(string key, IBrush fallback)
             => this.TryFindResource(key, out var v) && v is IBrush b ? b : fallback;

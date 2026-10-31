@@ -108,8 +108,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // Tabs are shown and hidden rather than rebuilt, so re-read on every show: the master
             // switch is [JsonIgnore] session state and the app list can be edited elsewhere.
-            AttachedToVisualTree += (_, _) => { AttachPulseFeed(); SyncAwarenessTabUi(); };
-            DetachedFromVisualTree += (_, _) => DetachPulseFeed();
+            AttachedToVisualTree += (_, _) => { AttachPulseFeed(); AttachPresetEvents(); SyncAwarenessTabUi(); };
+            DetachedFromVisualTree += (_, _) => { DetachPulseFeed(); DetachPresetEvents(); };
             PropertyChanged += (_, e) =>
             {
                 if (e.Property == IsVisibleProperty && IsVisible) SyncAwarenessTabUi();
