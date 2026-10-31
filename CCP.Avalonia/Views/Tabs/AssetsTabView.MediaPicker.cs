@@ -67,6 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Builds the picker once, then re-syncs it to settings (WPF InitializeRemoteMediaPicker).</summary>
         internal void InitializeRemoteMediaPicker()
         {
+            WireOnlineMeter();   // The meter must not depend on the picker successfully building its tiles.
             try
             {
                 if (!_pickerWired)
@@ -90,7 +91,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     };
                 }
                 RefreshRemoteMediaPicker();
-                WireOnlineMeter();   // AssetsTabView.OnlineMeter.cs: the card, the note and the credit
             }
             catch (Exception ex) { Log.Warning(ex, "Remote media picker init failed"); }
         }
