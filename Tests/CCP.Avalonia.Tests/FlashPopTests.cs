@@ -248,11 +248,11 @@ public sealed class FlashPopTests
         // Point-fired (test button, companion command) keeps its authored timing.
         Assert.Equal(TimeSpan.FromSeconds(6), FlashOverlay.Lifetime(s, ambient: false, durationMs: null));
         Assert.Equal(TimeSpan.FromSeconds(3), FlashOverlay.Lifetime(s, ambient: false, durationMs: 2000));
-        Assert.Equal(30, FlashOverlay.Cap(s, ambient: false));
+        Assert.Equal(s.HydraLimit, FlashOverlay.Cap(s, ambient: false));
         // A flash nobody can click never stays.
         s.FlashClickable = false;
         Assert.Equal(TimeSpan.FromSeconds(6), FlashOverlay.Lifetime(s, ambient: true, durationMs: null));
-        Assert.Equal(30, FlashOverlay.Cap(s, ambient: true));
+        Assert.Equal(s.HydraLimit, FlashOverlay.Cap(s, ambient: true));
     }
 
     [Fact]
