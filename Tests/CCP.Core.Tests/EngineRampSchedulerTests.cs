@@ -5,19 +5,16 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
 namespace CCP.Core.Tests;
-// WPF MainWindow.StartStop.cs:619-790 ramp and :795-924 scheduler rules.
 [Collection(SessionStatics.Name)]
 public sealed class EngineRampSchedulerTests
 {
     private static AppSettings Schedule(string start, string end, bool today = true)
     {
-        var s = new AppSettings
+        return new AppSettings
         {
             SchedulerEnabled = true, SchedulerStartTime = start, SchedulerEndTime = end,
-            SchedulerMonday = today, SchedulerTuesday = today, SchedulerWednesday = today, SchedulerThursday = today,
-            SchedulerFriday = today, SchedulerSaturday = today, SchedulerSunday = today,
+            SchedulerMonday = today, SchedulerTuesday = today, SchedulerWednesday = today, SchedulerThursday = today, SchedulerFriday = today, SchedulerSaturday = today, SchedulerSunday = today,
         };
-        return s;
     }
     private static readonly DateTime Day = new(2026, 10, 22);   // a Thursday
     [Theory]
@@ -36,10 +33,8 @@ public sealed class EngineRampSchedulerTests
     [Fact]
     public void Tick_starts_once_holds_off_after_a_manual_stop_and_stops_only_what_it_started()
     {
-        var s = Schedule("16:00", "22:00");
-        var sch = new CoreScheduler();
-        var inside = Day.AddHours(17);
-        var outside = Day.AddHours(23);
+        var s = Schedule("16:00", "22:00"); var sch = new CoreScheduler();
+        var inside = Day.AddHours(17); var outside = Day.AddHours(23);
         Assert.Equal(CoreScheduler.Step.Start, sch.OnTick(s, inside, running: false));
         Assert.Equal(CoreScheduler.Step.None, sch.OnTick(s, inside, running: true));
         sch.OnManualToggle(s, inside, stopping: true);   // the user's own Stop inside the window
@@ -64,9 +59,7 @@ public sealed class EngineRampSchedulerTests
         var s = CoreSettings.Current;
         var keep = (s.FlashOpacity, s.MasterVolume, s.PinkFilterOpacity, s.RampMode, s.SchedulerMultiplier, s.RampDurationMinutes,
             s.RampLinkFlashOpacity, s.RampLinkMasterAudio, s.RampLinkPinkFilterOpacity, s.EndSessionOnRampComplete, s.RampCurve);
-        var clock = Day;
-        var oldNow = CoreIntensityRamp.Now;
-        var oldSession = CoreSession.IsSessionRunningProvider;
+        var clock = Day; var oldNow = CoreIntensityRamp.Now; var oldSession = CoreSession.IsSessionRunningProvider;
         var oldDone = CoreIntensityRamp.CompletedProvider;
         bool session = false; int done = 0;
         try

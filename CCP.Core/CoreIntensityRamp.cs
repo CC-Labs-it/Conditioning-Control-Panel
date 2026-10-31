@@ -6,38 +6,25 @@ using Serilog;
 using ConditioningControlPanel.Services;
 namespace ConditioningControlPanel
 {
-    /// <summary>
-    /// The plain Intensity Ramp: WPF <c>StartRampTimer</c> / <c>StopRampTimer</c> / <c>RampTimer_Tick</c>
-    /// (ConditioningControlPanel/MainWindow/MainWindow.StartStop.cs:619-790). Started and stopped by
-    /// <see cref="CoreEngine"/>, so every engine start (button, session, remote) ramps as WPF's
-    /// StartEngine does. Linked values are scaled from the snapshot taken at start and restored on stop.
-    /// </summary>
     public static class CoreIntensityRamp
     {
         private static readonly object Gate = new();
         private static readonly Dictionary<string, double> Base = new();
         private static DateTime _start;
         private static Timer? _timer;
-        /// <summary>Wall clock; a test steps it.</summary>
         internal static Func<DateTime> Now = () => DateTime.Now;
-        /// <summary>WPF's 2 s tick; a test turns it off (Infinite) and calls <see cref="Tick"/> itself.</summary>
         internal static TimeSpan Interval = TimeSpan.FromSeconds(2);
-        /// <summary>The head's "ramp finished" (WPF: tray notice + StopEngine). Null: stop the Core engine.</summary>
         public static volatile Action? CompletedProvider;
         public static bool IsRunning { get { lock (Gate) return Base.Count > 0; } }
-        /// <summary>WPF StartRampTimer: snapshot the base values, tick every 2 s.</summary>
         public static void Start()
         {
             var s = CoreSettings.Current;
             lock (Gate)
             {
                 if (Base.Count > 0) return;
-                Base["FlashOpacity"] = s.FlashOpacity;
-                Base["SpiralOpacity"] = s.SpiralOpacity;
-                Base["PinkFilterOpacity"] = s.PinkFilterOpacity;
-                Base["MasterVolume"] = s.MasterVolume;
-                Base["SubAudioVolume"] = s.SubAudioVolume;
-                Base["BrainDrainBlurStrength"] = s.BrainDrainBlurStrength;
+                Base["FlashOpacity"] = s.FlashOpacity; Base["SpiralOpacity"] = s.SpiralOpacity;
+                Base["PinkFilterOpacity"] = s.PinkFilterOpacity; Base["MasterVolume"] = s.MasterVolume;
+                Base["SubAudioVolume"] = s.SubAudioVolume; Base["BrainDrainBlurStrength"] = s.BrainDrainBlurStrength;
                 SessionSettingsJournal.WriteRamp(CorePaths.UserData, SessionSettingsJournal.BuildRamp(Base));
                 _start = Now();
                 _timer ??= new Timer(_ => CoreDispatch.Post(() => Tick()), null, Timeout.Infinite, Timeout.Infinite);
@@ -46,7 +33,6 @@ namespace ConditioningControlPanel
             Log.Information("Ramp timer started - Duration: {Duration}min, Mode: {Mode}, Multiplier: {Mult}x, Range: {Start}%->{End}%",
                 s.RampDurationMinutes, s.RampMode, s.SchedulerMultiplier, s.RampStartPercent, s.RampEndPercent);
         }
-        /// <summary>WPF StopRampTimer: stop ticking and put every snapshotted value back.</summary>
         public static void Stop()
         {
             Dictionary<string, double> snap;
@@ -58,17 +44,12 @@ namespace ConditioningControlPanel
                 Base.Clear();
             }
             var s = CoreSettings.Current;
-            s.FlashOpacity = (int)snap["FlashOpacity"];
-            s.SpiralOpacity = (int)snap["SpiralOpacity"];
-            s.PinkFilterOpacity = (int)snap["PinkFilterOpacity"];
-            s.MasterVolume = (int)snap["MasterVolume"];
-            s.SubAudioVolume = (int)snap["SubAudioVolume"];
-            s.BrainDrainBlurStrength = (int)snap["BrainDrainBlurStrength"];
+            s.FlashOpacity = (int)snap["FlashOpacity"]; s.SpiralOpacity = (int)snap["SpiralOpacity"];
+            s.PinkFilterOpacity = (int)snap["PinkFilterOpacity"]; s.MasterVolume = (int)snap["MasterVolume"];
+            s.SubAudioVolume = (int)snap["SubAudioVolume"]; s.BrainDrainBlurStrength = (int)snap["BrainDrainBlurStrength"];
             SessionSettingsJournal.ClearRamp(CorePaths.UserData);
             Log.Information("Ramp timer stopped - values reset to base");
         }
-        /// <summary>WPF RampTimer_Tick. Visual links sit out a running session (it ramps itself, #444);
-        /// audio links do not. Ends the run at 100 % when EndSessionOnRampComplete and no session.</summary>
         internal static void Tick()
         {
             var s = CoreSettings.Current;

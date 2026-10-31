@@ -107,4 +107,31 @@ public sealed class StartStopScheduleTests
             CoreIntensityRamp.Now = oldNow; CoreIntensityRamp.Interval = oldInterval;
         }
     });
+    [Fact]
+    public System.Threading.Tasks.Task RampReachesNativeVideoWithoutAnAudioPage() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null) ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
+        var s = service.Current;
+        _ = new ConditioningControlPanel.Avalonia.Platform.LibVlcAudio();
+        var clip = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "help-clip-audio-2s.mp4");
+        var o = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        var (oldNow, oldInterval) = (CoreIntensityRamp.Now, CoreIntensityRamp.Interval);
+        try
+        {
+            s.AudioDuckingEnabled = s.AttentionChecksEnabled = false; s.MasterVolume = 40; s.VideoVolume = 50;
+            s.RampMode = RampMode.Multiplier; s.RampCurve = RampCurve.Linear; s.RampDurationMinutes = 10; s.SchedulerMultiplier = 2; s.RampLinkMasterAudio = true; s.EndSessionOnRampComplete = false;
+            var clock = DateTime.Now; CoreIntensityRamp.Now = () => clock; CoreIntensityRamp.Interval = System.Threading.Timeout.InfiniteTimeSpan;
+            o.Show(clip, strict: false);
+            var player = (LibVLCSharp.Shared.MediaPlayer)typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay).GetField("_player", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(o)!;
+            await MandatoryVideoOverlayTests.Until(() => player.IsPlaying && (o.Sink?.FrameCount ?? 0) >= 3);
+            Assert.True(player.IsPlaying && o.Sink!.FrameCount >= 3);
+            CoreIntensityRamp.Start(); clock = clock.AddMinutes(5); CoreIntensityRamp.Tick();
+            Assert.Equal(MandatoryVideoScheduler.EffectiveVolume(60, 50), player.Volume);
+            CoreIntensityRamp.Stop(); Assert.Equal(MandatoryVideoScheduler.EffectiveVolume(40, 50), player.Volume);
+            service.RestoreFrom(new AppSettings { MasterVolume = 20, VideoVolume = 50 });
+            Assert.Equal(MandatoryVideoScheduler.EffectiveVolume(20, 50), player.Volume);
+        }
+        finally { CoreIntensityRamp.Stop(); CoreIntensityRamp.Now = oldNow; CoreIntensityRamp.Interval = oldInterval; o.CloseAll(); }
+    });
 }
