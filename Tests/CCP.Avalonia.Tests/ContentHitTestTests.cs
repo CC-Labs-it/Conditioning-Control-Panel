@@ -31,7 +31,7 @@ public sealed class ContentHitTestTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var w = new MainShellWindow();
@@ -82,22 +82,76 @@ public sealed class ContentHitTestTests
         });
     }
 
-    /// <summary>Renders a frame holding the live tree. One forced tick is not that: while a batch is in
-    /// flight MediaContext holds the next commit back, so the tick renders the OLDER batch and the layout
-    /// committed after it is missing from the frame. Every tab's first probe ran with one batch pending,
-    /// and on a slow runner the stale frame still had no hero there (Linux CI 38316007639: awareness
-    /// BtnAwarenessTutorial / ChkAwarenessMaster hit ScrollContentPresenter, pressed False).</summary>
-    private static void RenderLiveTree(Visual w)
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public Task RenderBarrierIncludesLayoutQueuedDuringACommit(int commits) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        Dispatcher.UIThread.RunJobs();
-        var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
-        var deadline = Stopwatch.StartNew();
-        while (!batch.Rendered.IsCompleted)
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var button = new Button { Content = "Move", Width = 80, Height = 30 };
+        var canvas = new Canvas();
+        canvas.Children.Add(button);
+        var window = new Window { Width = 400, Height = 200, Content = canvas };
+        try
         {
-            Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never rendered the live tree");
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
+            window.Show();
+            RenderLiveTree(window);
+            var compositor = ElementComposition.GetElementVisual(window)!.Compositor;
+            void ChangeOnCommit()
+            {
+                if (--commits > 0) compositor.RequestCompositionUpdate(ChangeOnCommit);
+                else Canvas.SetLeft(button, 200);
+            }
+            compositor.RequestCompositionUpdate(ChangeOnCommit);
+            RenderLiveTree(window);
+            Assert.Equal(200, button.Bounds.X);
+            var point = button.TranslatePoint(new Point(40, 15), window)!.Value;
+            var hit = window.InputHitTest(point) as Visual;
+            Assert.True(hit == button || (hit != null && button.IsVisualAncestorOf(hit)),
+                $"new layout hit {hit?.GetType().Name}, expected the moved button");
         }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
+    /// <summary>A completed batch can queue more UI layout work. Drain that batch first, then
+    /// arrange and render a fresh one. If layout changes while rendering, its coordinates belong
+    /// to a newer scene, so commit them before probing. No hit-test result is used as a wait condition.</summary>
+    private static void RenderLiveTree(Window window)
+    {
+        var compositor = ElementComposition.GetElementVisual(window)!.Compositor;
+        var deadline = Stopwatch.StartNew();
+        void RenderBatch()
+        {
+            var batch = compositor.RequestCompositionBatchCommitAsync();
+            while (!batch.Rendered.IsCompleted)
+            {
+                Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never rendered the live tree");
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+            }
+        }
+
+        Dispatcher.UIThread.RunJobs();
+        RenderBatch();
+        bool layoutChanged = false;
+        void LayoutChanged(object? sender, EventArgs e) => layoutChanged = true;
+        window.LayoutUpdated += LayoutChanged;
+        try
+        {
+            do
+            {
+                Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "layout did not settle before hit testing");
+                window.UpdateLayout();
+                layoutChanged = false;
+                RenderBatch();
+            } while (layoutChanged);
+        }
+        finally { window.LayoutUpdated -= LayoutChanged; }
     }
 
     private static bool Inside(Visual v, Point p, Visual root)
