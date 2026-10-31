@@ -382,11 +382,15 @@ public sealed class HeaderQuestStampsTests
     });
 
     [Fact]
-    public Task PanicAlsoCancelsACompletionRepaintStillInTheQueue() => AnimatedShell((shell, quests, _) =>
+    public Task PanicRepaintsQueuedCompletionWithoutPostponingItsPop() => AnimatedShell((shell, quests, _) =>
     {
         quests.TrackBubblesPopped(QuestDefinition.DailyQuests.Find(d => d.Id == "pop_parade_d")!.TargetValue);
         shell.StopQuestStampsForPanic();
         Dispatcher.UIThread.RunJobs();
+        Assert.Contains(Cell(shell, "d0").Children, c => c is IconGlyph { Kind: FluentIcons.Common.Symbol.Checkmark });
+        Assert.False(shell.StampAnimationsRunning);
+        Assert.DoesNotContain(Cell(shell, "d0").Children, c => Equals(c.Tag, "stamp-flash"));
+        shell.RefreshQuestStamps(); // unrelated later repaint must not rediscover the pre-panic completion
         Assert.False(shell.StampAnimationsRunning);
         Assert.DoesNotContain(Cell(shell, "d0").Children, c => Equals(c.Tag, "stamp-flash"));
     });

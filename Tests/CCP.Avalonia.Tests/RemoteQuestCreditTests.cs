@@ -27,6 +27,20 @@ public sealed class RemoteQuestCreditTests
         }
     }
 
+    // The fake relay below proves delivery behavior; this guard covers the production lazy factory.
+    [Fact]
+    public void ProductionRelayWiresQuestCredit()
+    {
+        var source = File.ReadAllText(Path.Combine(Path.GetDirectoryName(Here())!,
+            "../../CCP.Avalonia/Views/Tabs/RemoteControlTabView.axaml.cs"));
+        var start = source.IndexOf("internal static Lazy<RemoteRelay> Relay", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var end = source.IndexOf("private readonly ObservableCollection", start, StringComparison.Ordinal);
+        Assert.Contains("App.WireRemoteQuestProgress(new RemoteRelay(", source[start..end]);
+    }
+
+    private static string Here([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+
     [Fact]
     public Task OnlyExecutedCommandsCreditTheCurrentBoardWithoutAShell() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

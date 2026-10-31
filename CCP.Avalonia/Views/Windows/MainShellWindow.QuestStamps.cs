@@ -113,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static double StampCubicOut(double p) => 1 - Math.Pow(1 - p, 3);
 
         private int _stampPanicGeneration;
+        private bool _stampPopSuppressed;
 
         internal void StopQuestStampsForPanic()
         {
@@ -232,7 +233,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Dispatcher.UIThread.Post(() =>
                 {
                     Interlocked.Exchange(ref _stampRepaintQueued, 0);
-                    if (!_questStampsClosed && generation == _stampPanicGeneration) RefreshQuestStamps();
+                    if (_questStampsClosed) return;
+                    // WPF always repaints (MainWindow.QuestStamps.cs:284). After panic,
+                    // consume the completion transition silently rather than postpone its pop.
+                    bool wasSuppressed = _stampPopSuppressed;
+                    _stampPopSuppressed |= generation != _stampPanicGeneration;
+                    try { RefreshQuestStamps(); }
+                    finally { _stampPopSuppressed = wasSuppressed; }
                 });
             }
             catch { Interlocked.Exchange(ref _stampRepaintQueued, 0); }
@@ -301,7 +308,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             host.Children.Add(cell);
             bool known = _stampCompletedSeen.TryGetValue(info.Key, out bool wasDone);
             _stampCompletedSeen[info.Key] = info.Completed;
-            if (info.Completed && known && !wasDone) PlayStampStampedPop(info);
+            if (info.Completed && known && !wasDone && !_stampPopSuppressed) PlayStampStampedPop(info);
         }
 
         private void PlayStampStampedPop(QuestStampInfo info)
