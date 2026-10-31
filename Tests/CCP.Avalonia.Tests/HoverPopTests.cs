@@ -87,6 +87,29 @@ public sealed class HoverPopTests
         return Task.CompletedTask;
     });
 
+    /// <summary>The launcher's art drift owns a ScaleTransform that sits at exactly 1.0 between legs;
+    /// hovering it then must wrap that scale, not drop it (the drift would stop on that tile for good).</summary>
+    [Fact]
+    public Task IdentityTransformIsKeptUnderTheRig() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var drift = new ScaleTransform(1, 1);
+        var art = new Border { Width = 100, Height = 100, Background = Brushes.HotPink, RenderTransform = drift };
+        HoverPop.SetIsEnabled(art, true);
+        var w = new Window { Width = 300, Height = 300, Content = art };
+        w.Show();
+        Dispatcher.UIThread.RunJobs();
+        w.MouseMove(new Point(150, 150), RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        var g = Assert.IsType<TransformGroup>(art.RenderTransform);
+        Assert.Same(drift, g.Children[0]);
+        w.Close();
+        return Task.CompletedTask;
+    });
+
     private sealed class SteppedClock : TimeProvider
     {
         public long Now;

@@ -67,7 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF _statusTimer: the status line and the stats, every second while shown.</summary>
         private readonly DispatcherTimer _statusTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
-        /// <summary>Each tile's reveal as drawn (WPF _revealedAtBuild); every card here is revealed.</summary>
+        /// <summary>Reveal snapshot for every registered card, including unrevealed cards (WPF _revealedAtBuild).</summary>
         private readonly Dictionary<string, bool> _revealedAtBuild = new(StringComparer.OrdinalIgnoreCase);
 
         public LauncherWindow()
@@ -79,11 +79,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             XpTrack.SizeChanged += (_, _) => RefreshStats();
             _statusTimer.Tick += (_, _) => { RefreshStatus(); RefreshStats(); RefreshSpReadout(); };
             CoreMods.ModChanged += OnModChanged;
+            Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
             Closed += (_, _) =>
             {
                 if (ReferenceEquals(_window, this)) _window = null;
                 _statusTimer.Stop();
                 CoreMods.ModChanged -= OnModChanged;
+                Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
             };
             // WPF OnIsVisibleChanged -> OnShown / OnHidden.
             PropertyChanged += (_, e) =>
@@ -421,9 +423,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug(ex, "[Launcher] RefreshMod failed"); }
         }
 
-        /// <summary>WPF OnModChanged: the pill at once, the tiles a dispatcher turn later (ccp-bugs #1292).
-        /// ponytail: WPF also redraws on PrizeGrants.GrantsChanged; no grant service or grant-revealed
-        /// card exists on this head yet (launcher-games slice).</summary>
+        private void OnGrantsChanged()
+        {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(OnGrantsChanged); return; }
+            RefreshTiles(LauncherTileTrigger.GrantsChanged);
+        }
+
+        /// <summary>WPF OnModChanged: repaint the pill and tiles on the dispatcher.</summary>
         private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() =>
         {
             RefreshMod();
@@ -435,7 +441,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                var now = VisibleCards.Select(c => new KeyValuePair<string, bool>(c.Id, true));
+                var now = LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id))
+                    .Select(c => new KeyValuePair<string, bool>(c.Id, Revealed(c.Id)));
                 if (!LauncherTileRefresh.ShouldRebuild(trigger, IsVisible, _revealedAtBuild, now)) return;
                 Log.Information("[Launcher] {Trigger} redrawing tiles", trigger);
                 BuildTiles();
@@ -560,9 +567,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             StopWanderingSheen();
             GamesGrid.Children.Clear();
+            _artDrifts.Clear();
             _revealedAtBuild.Clear();
-            foreach (var card in VisibleCards) { GamesGrid.Children.Add(CreateTile(card)); _revealedAtBuild[card.Id] = true; }
-            SeatGrid();   // the wander timer keeps running and picks from the new tiles; the CTA sheen is untouched
+            foreach (var card in LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id)))
+            {
+                bool revealed = Revealed(card.Id);
+                _revealedAtBuild[card.Id] = revealed;
+                if (revealed) GamesGrid.Children.Add(CreateTile(card));
+            }
+            SeatGrid();
         }
 
         /// <summary>WPF GamesColumn_SizeChanged / FitTiles (LauncherWindow.xaml.cs:550): columns and card
@@ -621,24 +634,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 BorderBrush = locked ? Res("Tier2DiamondBorderBrush") : RimBrush(hue),
                 BorderThickness = new Thickness(LauncherGridLayout.TileBorder),
                 Margin = new Thickness(LauncherGridLayout.TileMargin),
-                ClipToBounds = true,
+                ClipToBounds = false,
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Tag = card.Id,
             };
 
             var body = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
+            body.SizeChanged += (_, _) => body.Clip = new RectangleGeometry(new Rect(body.Bounds.Size), TileRadius, TileRadius);
 
             // --- the art plate: the mod's art, else the hue plate with the glyph ---
             // ponytail: WPF's glyph plate also draws a radial hue and a road (no art-less card shows yet).
-            var plate = new Panel { MinHeight = LauncherGridLayout.MinArtHeight, Background = new SolidColorBrush(hue, 0.35) };
+            var artSlide = new TranslateTransform();
+            var artHost = new Panel { RenderTransform = artSlide, Margin = new Thickness(-7) };
+            Image? artImage = null;
+            var plate = new Panel { ClipToBounds = true, MinHeight = LauncherGridLayout.MinArtHeight, Background = new SolidColorBrush(hue, 0.35) };
             if (ModArt.TryLoad(card.ArtPath, 640) is { } art)
-                plate.Children.Add(new Image { Source = art, Stretch = Stretch.UniformToFill });
+                artHost.Children.Add(artImage = new Image { Source = art, Stretch = Stretch.UniformToFill });
             else
-                plate.Children.Add(new TextBlock
+                artHost.Children.Add(new TextBlock
                 {
                     Text = card.Glyph, FontSize = 64, Foreground = Brushes.White, Opacity = 0.95,
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 });
+            plate.Children.Add(artHost);
             var surface = ((ISolidColorBrush)Res("SurfaceBgBrush")).Color;
             plate.Children.Add(new Border
             {
@@ -671,10 +689,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Height = LauncherGridLayout.TextHeight - LauncherGridLayout.TextPadTop - LauncherGridLayout.TextPadBottom,
             };
             Grid.SetRow(text, 1);
+            var titleBrush = new SolidColorBrush(((ISolidColorBrush)Res("TextLightBrush")).Color);
             text.Children.Add(new TextBlock
             {
                 Text = Loc.Get(card.TitleKey), FontFamily = new FontFamily("Fredoka, Segoe UI"), FontSize = 19,
-                FontWeight = FontWeight.SemiBold, Foreground = Res("TextLightBrush"),
+                FontWeight = FontWeight.SemiBold, Foreground = titleBrush,
                 Height = LauncherGridLayout.TitleHeight, VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
             });
@@ -704,8 +723,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!MainShellWindow.LockdownActive) Play(card);
             };
 
-            tile.Child = body;
-            DecorateTileFx(tile, hue);
+            var shadow = new Border { CornerRadius = tile.CornerRadius, IsHitTestVisible = false };
+            tile.Child = new Panel { Children = { shadow, body } };
+            DecorateTileFx(tile, hue, shadow, titleBrush, artSlide, artImage);
             return tile;
         }
 

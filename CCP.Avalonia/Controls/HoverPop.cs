@@ -161,12 +161,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
         {
             if (Rigs.TryGetValue(c, out var cached)) return cached;
             var existing = c.RenderTransform;
-            bool authored = existing != null && !existing.Value.IsIdentity;
-            if (authored && existing is not Transform) return null;   // a style's TransformOperations: hands off
+            // A style's TransformOperations: hands off. Any Transform is kept, identity too: a
+            // drift that sits at exactly 1.0 when first hovered must keep driving the art.
+            if (existing != null && existing is not Transform && !existing.Value.IsIdentity) return null;
 
             var rig = new Rig();
             var group = new TransformGroup();
-            if (authored) group.Children.Add((Transform)existing!);   // wrap, never replace
+            if (existing is Transform kept) group.Children.Add(kept);   // wrap, never replace
             group.Children.Add(rig.Scale);
             group.Children.Add(rig.Rotate);
             c.RenderTransformOrigin = RelativePoint.Center;
