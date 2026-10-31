@@ -284,4 +284,21 @@ public sealed class AchievementEngineTests : IDisposable
         }
         finally { CoreEntitlement.HasPremiumProvider = previous; }
     }
+
+    /// <summary>WPF AchievementService.TrackAvatarClick (:610): 20 rapid clicks unlock neon_obsession,
+    /// 150 within 60 s unlock needy_doll; both persist.</summary>
+    [Fact]
+    public void AvatarClicksUnlockAtWpfThresholds()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        for (int i = 0; i < 19; i++) engine.TrackAvatarClick();
+        Assert.False(engine.Progress.IsUnlocked("neon_obsession"));
+        engine.TrackAvatarClick();
+        Assert.True(OnDisk(MainPath, "neon_obsession"));
+        for (int i = 20; i < 149; i++) engine.TrackAvatarClick();
+        Assert.False(engine.Progress.IsUnlocked("needy_doll"));
+        engine.TrackAvatarClick();
+        Assert.True(OnDisk(MainPath, "needy_doll"));
+        Assert.True(engine.IsDirty);
+    }
 }

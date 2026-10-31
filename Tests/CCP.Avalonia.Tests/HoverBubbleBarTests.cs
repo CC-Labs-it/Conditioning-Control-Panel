@@ -54,15 +54,16 @@ public sealed class HoverBubbleBarTests
                 var bar = dash.FindControl<HoverBubbleBar>("HomeBubbleBar")!;
                 Button B(string n) => dash.FindControl<Button>(n)!;
 
-                // WPF order: Link phone, Logout | Discord pill (not a bubble), RP | five quick bubbles.
-                Assert.Equal(new[] { "BtnLinkPhone", "BtnQuickLogout", "ChkQuickDiscordRichPresence", "VelvetBtnWebcam",
+                // WPF order: Link phone, Logout | Discord brand bubble, RP | five quick bubbles.
+                Assert.Equal(new[] { "BtnLinkPhone", "BtnQuickLogout", "BtnDiscord", "ChkQuickDiscordRichPresence", "VelvetBtnWebcam",
                                      "VelvetBtnSystem", "VelvetBtnSchedulerRamp", "VelvetBtnCatalogue", "VelvetBtnAppInfo" },
                              bar.Bubbles.Select(b => b.Name));
                 Assert.Same(bar, B("BtnDiscord").Parent);
-                Assert.DoesNotContain(B("BtnDiscord"), bar.Bubbles);
+                Assert.Contains(B("BtnDiscord"), bar.Bubbles);
+                Assert.NotNull(HoverBubbleBar.GetMark(B("BtnDiscord")));
                 Assert.Null(dash.FindControl<Grid>("VelvetHelperButtonRow"));   // the row went back to the mosaic
                 // Fluent icons: every bubble draws a mapped IconGlyph, none falls back to emoji text.
-                Assert.All(bar.Bubbles, b => Assert.False(bar.GlyphOf(b)!.IsFallback, b.Name));
+                Assert.All(bar.Bubbles.Where(b => HoverBubbleBar.GetMark(b) is null), b => Assert.False(bar.GlyphOf(b)!.IsFallback, b.Name));
 
                 // Labels come from Loc with the leading emoji stripped; two keys join with " + ".
                 string Strip(string k) => HoverBubbleBar.StripLeadingGlyph(Loc.Get(k));
