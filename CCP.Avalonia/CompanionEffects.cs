@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using ConditioningControlPanel.Models;
 using System.Linq;
 using System.IO;
 using System.Threading;
@@ -121,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia
             MediaCommand.VideoSurface = path => Start(() =>
                 CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
             MediaCommand.AudioSurface = PlayAudio;
+            CoreAudio.StopSoundProvider = StopAudio;
             MediaCommand.ModVoiceLinesProvider = () => Dispatcher.UIThread.CheckAccess()
                 ? EnabledModVoiceLines() : Dispatcher.UIThread.Invoke(EnabledModVoiceLines);
             MediaCommand.NeutralWordClipsProvider = () => SubliminalWhisper.Manifest().Values
@@ -141,12 +144,65 @@ namespace ConditioningControlPanel.Avalonia
             return CompanionVoiceLines.GetEnabledFiles(CoreSettings.Current);
         }
 
-        /// <summary>True once the clip is really playing, false when refused or it never starts.</summary>
+        internal static Func<string, float, Action<TimeSpan>, Action, MindWipePlayer.IVoice?> PlayAudioClip =
+            (path, gain, started, finished) => LibVlcAudio.Instance?.PlaySound(path, gain, started, finished);
+
+        /// <summary>WPF AudioService.cs:855-901: track the master dial for this clip's lifetime.</summary>
         internal static async Task<bool> PlayAudio(string path)
         {
             var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            StopAudio(); // a new one-shot replaces the previous one, as WPF AudioService.PlaySound does
-            _stopAudio = CoreAudio.PlayStoppable(path, 1f, "ai", _ => started.TrySetResult(true), () => started.TrySetResult(false));
+            OnUi(() =>
+            {
+                StopAudio();
+                var gate = new object();
+                var service = CoreSettings.Service;
+                AppSettings? settings = null;
+                MindWipePlayer.IVoice? clip = null;
+                var done = false;
+                void ApplyGain() { if (clip != null) clip.Volume = CoreAudio.SoundGain(100, settings?.MasterVolume ?? 100); }
+                void Changed(object? sender, PropertyChangedEventArgs e)
+                {
+                    if (e.PropertyName == nameof(AppSettings.MasterVolume)) lock (gate) ApplyGain();
+                }
+                void Replaced()
+                {
+                    lock (gate)
+                    {
+                        if (done) return;
+                        if (settings != null) settings.PropertyChanged -= Changed;
+                        settings = service?.Current ?? CoreSettings.Current;
+                        if (settings != null) settings.PropertyChanged += Changed;
+                        ApplyGain();
+                    }
+                }
+                void Finished()
+                {
+                    lock (gate)
+                    {
+                        done = true;
+                        if (settings != null) settings.PropertyChanged -= Changed;
+                        if (service != null) service.CurrentReplaced -= Replaced;
+                        clip = null;
+                        started.TrySetResult(false);
+                    }
+                }
+                _stopAudio = () => { lock (gate) { var playing = clip; Finished(); playing?.Dispose(); } };
+                lock (gate)
+                {
+                    if (done) return true;
+                    if (service != null) service.CurrentReplaced += Replaced;
+                    Replaced();
+                    try
+                    {
+                        var playing = PlayAudioClip(path, CoreAudio.SoundGain(100, settings?.MasterVolume ?? 100),
+                            _ => started.TrySetResult(true), Finished);
+                        if (done) playing?.Dispose(); else clip = playing;
+                        if (clip == null) Finished(); else ApplyGain();
+                    }
+                    catch { Finished(); }
+                }
+                return true;
+            });
             return await Task.WhenAny(started.Task, Task.Delay(10_000)) == started.Task && started.Task.Result;
         }
 

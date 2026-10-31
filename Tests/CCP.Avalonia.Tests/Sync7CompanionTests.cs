@@ -152,13 +152,12 @@ public sealed class Sync7CompanionTests
     public Task AudioActionUsesAStopHandleAndPanicStopsItOnce() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         EnsureApp();
-        var (oneShot, stoppable) = (CoreAudio.PlayOneShotProvider, CoreAudio.PlayStoppableProvider);
+        var playback = CompanionEffects.PlayAudioClip;
         var stopped = 0;
-        CoreAudio.PlayOneShotProvider = (_, _, _, started, _) => started?.Invoke(TimeSpan.FromSeconds(1));
-        CoreAudio.PlayStoppableProvider = (_, _, _, started, _) =>
+        CompanionEffects.PlayAudioClip = (_, _, started, _) =>
         {
-            started?.Invoke(TimeSpan.FromSeconds(1));
-            return () => stopped++;
+            started(TimeSpan.FromSeconds(1));
+            return new AudioClip(() => stopped++);
         };
         try
         {
@@ -173,7 +172,92 @@ public sealed class Sync7CompanionTests
         finally
         {
             CompanionEffects.StopAudio();
-            (CoreAudio.PlayOneShotProvider, CoreAudio.PlayStoppableProvider) = (oneShot, stoppable);
+            CompanionEffects.PlayAudioClip = playback;
         }
     });
+    private sealed class AudioClip(Action stop) : ConditioningControlPanel.Avalonia.Platform.MindWipePlayer.IVoice
+    {
+        public readonly List<double> Gains = new();
+        public double Volume { set => Gains.Add(value); }
+        public void Dispose() => stop();
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(50, 0.3535534)]
+    public Task AudioActionFollowsMasterAndReleasesSubscriptions(int initialMaster, double expectedGain) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var playback = CompanionEffects.PlayAudioClip;
+        var stopped = 0;
+        var clip = new AudioClip(() => stopped++);
+        CompanionEffects.PlayAudioClip = (_, gain, started, _) =>
+        {
+            clip.Volume = gain;
+            started(TimeSpan.FromSeconds(30));
+            return clip;
+        };
+        try
+        {
+            CompanionEffects.Seed();
+            service.Current.MasterVolume = initialMaster;
+            Assert.True(await CompanionEffects.PlayAudio("recorded.mp3"));
+            Assert.Equal(expectedGain, clip.Gains.Last(), 6);
+            service.Current.MasterVolume = 50;
+            Assert.Equal(0.3535534, clip.Gains.Last(), 6);
+            service.Current.MasterVolume = 1;
+            Assert.Equal(0.05, clip.Gains.Last(), 6);
+            service.RestoreFrom(new AppSettings { MasterVolume = 100 });
+            Assert.Equal(1, clip.Gains.Last());
+            service.Current.MasterVolume = 0;
+            Assert.Equal(0, clip.Gains.Last());
+            CompanionEffects.StopAudio();
+            Assert.Equal(1, stopped);
+            var updates = clip.Gains.Count;
+            service.Current.MasterVolume = 70;
+            Assert.Equal(updates, clip.Gains.Count); // stopped clips must drop their settings subscriptions
+        }
+        finally
+        {
+            CompanionEffects.StopAudio();
+            CompanionEffects.PlayAudioClip = playback;
+        }
+    });
+
+    [Fact]
+    public Task SessionPauseStopsCompanionAudioWithoutRestartingOnResume() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        var playback = CompanionEffects.PlayAudioClip;
+        var stopped = 0;
+        var starts = 0;
+        CompanionEffects.PlayAudioClip = (_, _, started, _) =>
+        {
+            starts++;
+            started(TimeSpan.FromSeconds(30));
+            return new AudioClip(() => stopped++);
+        };
+        var runner = new SessionRunner(new SessionLogService());
+        try
+        {
+            CompanionEffects.Seed();
+            runner.Start(new Session { Id = "audio-pause", Name = "Audio pause", DurationMinutes = 20 });
+            Assert.True(await CompanionEffects.PlayAudio("recorded.mp3"));
+            runner.Pause();
+            runner.Pause();
+            Assert.True(runner.IsPaused);
+            Assert.Equal(1, stopped);
+            runner.Resume();
+            Assert.Equal(1, starts);
+        }
+        finally
+        {
+            runner.Stop();
+            CompanionEffects.StopAudio();
+            CompanionEffects.PlayAudioClip = playback;
+        }
+    });
+
 }
