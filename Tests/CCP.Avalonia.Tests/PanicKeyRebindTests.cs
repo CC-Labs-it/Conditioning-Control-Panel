@@ -1,4 +1,6 @@
 using System;
+using System.Reflection;
+using Avalonia.Controls.ApplicationLifetimes;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -41,6 +43,7 @@ public sealed class PanicKeyRebindTests
             PortalPanicShortcut.SetSessionForTests("/test/rebind", up);
             return Task.FromResult<string?>("F8");
         };
+        using var desktop = new DesktopShellScope(shell);
         shell.Show();
         try
         {
@@ -64,10 +67,10 @@ public sealed class PanicKeyRebindTests
             Assert.True(PortalPanicShortcut.IsBound);
             Assert.Equal(1, binds);
 
-            // The registered callback has the existing portal panic handler; its stop path still works.
+            // Invoke the callback actually registered by the rebound portal session.
             CoreEngine.StoppedHook = shell.OnEngineStopped;
             Assert.NotNull(press);
-            shell.OnPortalPanicPressed();
+            press!();
             Dispatcher.UIThread.RunJobs();
             Assert.False(CoreEngine.IsRunning);
         }
@@ -116,6 +119,75 @@ public sealed class PanicKeyRebindTests
         }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task StartupSyncDoesNotRetryARefusedPortal() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        s.PanicKeyEnabled = true;
+        int binds = 0;
+        PortalPanicShortcut.BindForTests = (_, _) =>
+        {
+            binds++;
+            return Task.FromResult<string?>(null);
+        };
+        MainShellWindow? shell = null;
+        try
+        {
+            CoreFlash.Start();
+            MainShellWindow.StartEffect(() => { });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, binds);
+            shell = new MainShellWindow();
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, binds); // startup/settings attachment is not new consent to retry.
+            s.PanicKeyEnabled = false;
+            Dispatcher.UIThread.RunJobs();
+            s.PanicKeyEnabled = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, binds); // an explicit re-enable gets a fresh attempt.
+        }
+        finally
+        {
+            CoreFlash.Stop();
+            s.PanicKeyEnabled = false;
+            Dispatcher.UIThread.RunJobs();
+            s.PanicKeyEnabled = true;
+            Dispatcher.UIThread.RunJobs();
+            shell?.Close();
+            PortalPanicShortcut.BindForTests = null;
+            PortalPanicShortcut.UnbindAsync().GetAwaiter().GetResult();
+        }
+        return Task.CompletedTask;
+    });
+
+    // The shared headless app is already initialized; its public lifetime setter is then locked.
+    // Supply only the desktop shell lookup without running real desktop startup/services.
+    private sealed class DesktopShellScope : IDisposable
+    {
+        private readonly FieldInfo field = typeof(Application).GetField("_applicationLifetime",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        private readonly object? previous;
+        private readonly ClassicDesktopStyleApplicationLifetime lifetime;
+        public DesktopShellScope(MainShellWindow shell)
+        {
+            previous = field.GetValue(Application.Current);
+            lifetime = new ClassicDesktopStyleApplicationLifetime
+            {
+                MainWindow = shell,
+                ShutdownMode = ShutdownMode.OnExplicitShutdown,
+            };
+            field.SetValue(Application.Current, lifetime);
+            Assert.Same(shell, MainShellWindow.Current);
+        }
+        public void Dispose()
+        {
+            field.SetValue(Application.Current, previous);
+            lifetime.MainWindow = null;
+        }
+    }
 
     private static void EnsureApp()
     {

@@ -8,7 +8,7 @@
 // is physically down (XQueryKeymap), so a lost key-up never asks. Windows has real repeats and no clock.
 // Like WPF, it works with the panic key switched off and under Lockdown (panic always works on a leash).
 // The portal supplies Activated/Deactivated instead of physical X11 key state. Its effects-only
-// binding policy has the WPF leash exception: stay bound while leashed or a hold is live. A portal
+// binding policy only extends an already-live hold until release (decision C), not the whole leash. A portal
 // hold skips the X11 key check only once that compositor has proven it sends Deactivated; until then a
 // portal hold needs the X11 key proven down on every tick: up OR unknown (no X11 listener) ends it, so a
 // portal that never reports release never asks. A stale IsHeld flag never keeps the grab (KeepPortalBound).

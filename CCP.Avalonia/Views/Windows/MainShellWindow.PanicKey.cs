@@ -219,9 +219,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (on) App.Notifications.Show(Loc.Get("panic_camera_stopped"), Helpers.NotificationType.Info, TimeSpan.FromSeconds(5));
         }
 
-        // ---- Native Wayland windows: GlobalShortcuts while effects run or leash safety needs it ----
+        // ---- Native Wayland windows: GlobalShortcuts while effects run or a portal hold is live ----
         // Policy C (docs/avalonia-decisions.html, panic key row): the portal grab CONSUMES the key
-        // desktop-wide, so it exists while effects run or leash safety needs it. The first effect
+        // desktop-wide, so it exists while effects run or a portal hold is live. The first effect
         // waits (<= 30 s, a KDE dialog) for the bind; refused/missing/timeout = XI2 only for this
         // run, one notice, and the effect starts anyway.
         private static Task? _portalBind;
@@ -232,9 +232,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static bool KeepPortalBound =>
             (CoreSettings.Current.PanicKeyEnabled && AnyEffectRunning) || PortalLeashSafetyNeeded;
 
-        // WPF MainWindow.Leash.cs:434-437: StopKeyboardHookUnlessLeashed preserves the
-        // key even with panic disabled. Keep both future leash presses and an ongoing hold.
-        private static bool PortalLeashSafetyNeeded => LeashHoldLeashed || PortalHoldLive;
+        // Decision C: unlike WPF's non-consuming hook (MainWindow.Leash.cs:434-437),
+        // a portal grab must not last the whole leash. Only finish an already-live hold.
+        private static bool PortalLeashSafetyNeeded => PortalHoldLive;
 
         private static bool AnyEffectRunning =>
             CoreEngine.IsRunning || CoreFlash.IsRunning || CoreSubliminal.IsRunning || BouncingTextOverlay.IsRunning
@@ -258,6 +258,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AppSettings? hooked = null;
             var service = CoreSettings.Service;
             bool closed = false;
+            bool? lastEnabled = null;
             void Rebind()
             {
                 if (closed) return;
@@ -271,10 +272,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(AppSettings.PanicKeyEnabled))
                     Sync();
             }
-            void Sync() => Dispatcher.UIThread.Post(() =>
+            void Sync()
             {
-                if (!closed) SyncPanicEnabled();
-            });
+                bool enabled = CoreSettings.Current.PanicKeyEnabled;
+                bool reenabled = lastEnabled == false && enabled;
+                lastEnabled = enabled;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!closed) SyncPanicEnabled(reenabled);
+                });
+            }
             void Replaced() => Dispatcher.UIThread.Post(Rebind);
             Rebind();
             if (service != null) service.CurrentReplaced += Replaced;
@@ -288,7 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static readonly System.Threading.SemaphoreSlim PanicBindingSync = new(1, 1);
 
-        private static async void SyncPanicEnabled()
+        private static async void SyncPanicEnabled(bool reenabled)
         {
             await PanicBindingSync.WaitAsync();
             try
@@ -298,7 +305,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (_portalBind != null) await _portalBind;
                 // An explicit settings transition gets a fresh attempt after an earlier refusal.
                 if (!PortalPanicShortcut.IsBound) _portalBind = null;
-                _portalFailed = false;
+                if (reenabled) _portalFailed = false;
                 if (!CoreSettings.Current.PanicKeyEnabled && !PortalLeashSafetyNeeded)
                 {
                     _portalWatch?.Stop();
@@ -347,7 +354,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     App.Notifications.Show(Loc.GetF("panic_portal_bound", trigger), Helpers.NotificationType.Info, TimeSpan.FromSeconds(6));
                 else
                     App.Notifications.Show(Loc.Get("panic_portal_unavailable"), Helpers.NotificationType.Warning, TimeSpan.FromSeconds(10));
-                // 2 s poll for the last effect/hold/leash ending rather than a hook in every stop path.
+                // 2 s poll for the last effect/hold ending rather than a hook in every stop path.
                 _portalWatch ??= new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background,
                     (_, _) => ReleasePortalWhenUnused());
                 _portalWatch.Start();

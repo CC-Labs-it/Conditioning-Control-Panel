@@ -301,11 +301,11 @@ public sealed class LeashHoldTests
         Assert.Null(LeashCutConfirmWindow.Current);
         Assert.False(LeashHoldRing.IsShown);
         Assert.False(MainShellWindow.PortalHoldLive);
-        Assert.True(MainShellWindow.KeepPortalBound); // WPF keeps the key for the next leash escape.
+        Assert.False(MainShellWindow.KeepPortalBound); // decision C: no effects or live hold.
     });
 
     [Fact]
-    public void LostDeactivated_HoldEnds_LeashKeepsBinding_NextPressStillPanics() => WithPortalShell(() => false, (shell, clock) =>
+    public void LostDeactivated_HoldEnds_PortalNoLongerKeptBound_NextPressStillPanics() => WithPortalShell(() => false, (shell, clock) =>
     {
         var presses = 0;
         Action down = () => { presses++; shell.OnPortalPanicPressed(); };
@@ -316,7 +316,7 @@ public sealed class LeashHoldTests
         shell.LeashHoldClockTick();                     // X11 says up; no Deactivated ever arrives
         Assert.True(PortalPanicShortcut.IsHeld);        // the portal still believes it is held ...
         Assert.False(MainShellWindow.PortalHoldLive);  // ... but the stale IsHeld never extends the hold
-        Assert.True(MainShellWindow.KeepPortalBound);   // still leashed: the next escape remains reachable
+        Assert.False(MainShellWindow.KeepPortalBound);  // a leash alone never retains the consuming grab
         PortalPanicShortcut.Route("/test/session", "panic", true, down, () => { }, (clock.Now + LeashHoldToCut.RepeatGap * 2).UtcDateTime);
         Assert.Equal(2, presses);                       // the panic key never goes dead
     });
@@ -356,12 +356,8 @@ public sealed class LeashHoldTests
             LeashCutConfirmWindow.Current!.Close();
             shell.OnPortalPanicReleased();
             MainShellWindow.ReleasePortalWhenUnused();
-            Assert.True(PortalPanicShortcut.IsBound); // releasing the key keeps the next escape reachable.
-
-            LeashHead.Service = null;
-            shell.LeashHoldClockTick();
-            MainShellWindow.ReleasePortalWhenUnused();
-            Assert.False(PortalPanicShortcut.IsBound); // no effects, leash or hold: release the grab.
+            Assert.NotNull(LeashHead.Service!.Snapshot.Me); // still leashed, but the live hold ended.
+            Assert.False(PortalPanicShortcut.IsBound); // decision C: give Escape back to other apps.
         }
         finally { ld.Deactivate(); }
     });
