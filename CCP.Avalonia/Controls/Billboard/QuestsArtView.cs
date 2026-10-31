@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services.Billboard;
+using ConditioningControlPanel.Services.Billboard.Providers;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
 
 namespace ConditioningControlPanel.Avalonia.Controls.Billboard;
@@ -57,11 +58,32 @@ public sealed class QuestsArtView : Control, IBillboardArtView
         StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0.4, 1, RelativeUnit.Relative),
         GradientStops = { new GradientStop(a, 0), new GradientStop(b, 1) },
     };
-    private static void Plate(DrawingContext d, Rect r, double radius, IBrush fill, double lift = 0)
+    internal static Pen Bevel(double thickness, bool pressed)
     {
-        if (lift > 0) d.DrawRectangle(Fill(Colors.Black, 0.3), null, r.Translate(new Vector(lift * 0.5, lift)), radius, radius);
-        d.DrawRectangle(fill, new Pen(Fill(Colors.White, 0.18), 1), r, radius, radius);
+        var g = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative) };
+        g.GradientStops.Add(new GradientStop(pressed ? Color.FromArgb(0x80, 0, 0, 0) : Color.FromArgb(0x70, 255, 255, 255), 0));
+        g.GradientStops.Add(new GradientStop(pressed ? Color.FromArgb(0, 0, 0, 0) : Color.FromArgb(0, 255, 255, 255), 0.45));
+        g.GradientStops.Add(new GradientStop(pressed ? Color.FromArgb(0, 255, 255, 255) : Color.FromArgb(0, 0, 0, 0), 0.6));
+        g.GradientStops.Add(new GradientStop(pressed ? Color.FromArgb(0x38, 255, 255, 255) : Color.FromArgb(0x60, 0, 0, 0), 1));
+        return new Pen(g, Math.Max(0.75, thickness));
     }
+    internal static void Shadow(DrawingContext d, Rect r, double radius, double lift)
+    {
+        if (lift <= 0) return;
+        var ink = Color.FromRgb(4, 4, 12);
+        d.DrawRectangle(Fill(ink, 0.22), null, new Rect(r.X + lift * 0.9, r.Y + lift * 1.4, r.Width + lift * 0.4, r.Height + lift * 0.4), radius + lift * 0.4, radius + lift * 0.4);
+        d.DrawRectangle(Fill(ink, 0.32), null, new Rect(r.X + lift * 0.45, r.Y + lift * 0.7, r.Width, r.Height), radius, radius);
+    }
+    internal static void Plate(DrawingContext d, Rect r, double radius, IBrush fill, double lift = 0, bool pressed = false)
+    {
+        if (!pressed) Shadow(d, r, radius, lift);
+        d.DrawRectangle(fill, null, r, radius, radius);
+        double th = Math.Clamp(Math.Min(r.Width, r.Height) * 0.05, 1, 2.6);
+        var inner = new Rect(r.X + th / 2, r.Y + th / 2, Math.Max(0, r.Width - th), Math.Max(0, r.Height - th));
+        d.DrawRectangle(null, Bevel(th, pressed), inner, Math.Max(0, radius - th / 2), Math.Max(0, radius - th / 2));
+    }
+    internal static void PaintHalo(DrawingContext d, double sw, double sh, double t) =>
+        d.DrawRectangle(null, new Pen(Fill(Color.Parse(CardHues.Waiting), 0.25 + 0.35 * (0.5 + 0.5 * Math.Sin(t * 3.1))), sh * 0.05), new Rect(-sw / 2 - sh * 0.06, -sh * 0.56, sw + sh * 0.12, sh * 1.12), sh * 0.2, sh * 0.2);
     private static void Mark(DrawingContext d, Point c, double r, double alpha = 1)
     {
         using var pose = d.PushTransform(new Matrix(r, 0, 0, r, c.X, c.Y));
@@ -99,10 +121,10 @@ public sealed class QuestsArtView : Control, IBillboardArtView
         using var opacity = d.PushOpacity(Math.Clamp(intro * 1.5, 0, 1));
         using var pose = d.PushTransform(Matrix.CreateRotation((-2.5 + Math.Sin(t * 0.7) * 0.8) * Math.PI / 180) * Matrix.CreateTranslation(w * 0.73, cy));
         Plate(d, new Rect(-bw / 2, -bh / 2, bw, bh), bw * 0.07, Face(Color.Parse("#463466"), Color.Parse("#261c3c")), bh * 0.035);
-        Plate(d, new Rect(-bw * 0.46, -bh * 0.415, bw * 0.92, bh * 0.875), bw * 0.05, Fill(Colors.Black, 0.22));
+        Plate(d, new Rect(-bw * 0.46, -bh * 0.415, bw * 0.92, bh * 0.875), bw * 0.05, Fill(Color.FromRgb(4, 4, 12), 0.22), pressed: true);
         double ch = Math.Min(bh * 0.11, bw * 0.13);
         Plate(d, new Rect(-bw * 0.19, -bh / 2 - ch / 2, bw * 0.38, ch), ch * 0.22, Face(Color.Parse("#ffeab0"), Color.Parse("#b18a24")), ch * 0.16);
-        Plate(d, new Rect(-bw * 0.08, -bh / 2 - ch * 0.2, bw * 0.16, ch * 0.32), ch * 0.16, Fill(Ink));
+        Plate(d, new Rect(-bw * 0.08, -bh / 2 - ch * 0.2, bw * 0.16, ch * 0.32), ch * 0.16, Fill(Color.FromRgb(4, 4, 12), 0.75), pressed: true);
         double avail = bh - h * 0.155, gap = h * 0.025;
         double sh = Math.Min(h * 0.15, (avail - gap * (_shown - 1)) / _shown), sw = bw * 0.86;
         double y0 = -bh / 2 + h * 0.1 + (avail - (_shown * sh + (_shown - 1) * gap)) / 2;
@@ -122,7 +144,7 @@ public sealed class QuestsArtView : Control, IBillboardArtView
             using (d.PushTransform(Matrix.CreateRotation((Math.Sin(i * 7.13) * 1.5 + (next ? Math.Sin(t * 1.3) * 0.6 : 0)) * Math.PI / 180) * Matrix.CreateTranslation(c.X, c.Y)))
             {
                 Plate(d, new Rect(-sw / 2, -sh / 2, sw, sh), sh * 0.16,
-                    done ? Face(Color.Parse("#74677f"), Color.Parse("#4b3d59")) : Face(Color.Parse("#fff0d8"), Color.Parse("#ead39a")), done ? 0 : sh * 0.1);
+                    done ? Face(Color.Parse("#74677f"), Color.Parse("#4b3d59")) : Face(Color.Parse("#fff0d8"), Color.Parse("#ead39a")), done ? 0 : sh * 0.1, pressed: done);
                 var box = new Point(-sw / 2 + sh * 0.5, 0);
                 d.DrawEllipse(Fill(done ? Mint : Ink, done ? 0.5 : 0.08), new Pen(Fill(done ? Mint : Ink, 0.5), sh * 0.04), box, sh * 0.27, sh * 0.27);
                 if (done) Mark(d, box, sh * 0.24, 0.85);
@@ -133,7 +155,7 @@ public sealed class QuestsArtView : Control, IBillboardArtView
                 using (d.PushTransform(new Matrix(sh * 0.22, 0, 0, sh * 0.22, sw / 2 - sh * 0.45, 0))) d.DrawGeometry(Fill(done ? Colors.White : Pink, done ? 0.14 : 1), null, Gem);
                 if (next)
                 {
-                    d.DrawRectangle(null, new Pen(Fill(Pink, 0.4 + 0.2 * Math.Sin(t * 3.1)), sh * 0.05), new Rect(-sw / 2 - sh * 0.06, -sh * 0.56, sw + sh * 0.12, sh * 1.12), sh * 0.2, sh * 0.2);
+                    PaintHalo(d, sw, sh, t);
                     if (ShowSheen) PaintSheen(d, new Rect(-sw / 2, -sh / 2, sw, sh), t);
                     double poke = p >= 3.25 && p < 3.7 ? Math.Sin((p - 3.25) / 0.45 * Math.PI) * sh * 0.224 : 0;
                     using (d.PushTransform(new Matrix(sh * 0.364, 0, 0, sh * 0.364, -sw / 2 - sh * 0.53 + Math.Sin(t * 3.2) * sh * 0.056 + poke, 0))) d.DrawGeometry(Fill(Pink), null, Arrow);

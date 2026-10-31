@@ -1,33 +1,15 @@
-Base verified: /workspace/Conditioning-Control-Panel
-HEAD: 74ac6ce3d5e0ae082c2871c00e864943e15aa2ad; branch work; clean before changes.
-Fetched origin avalonia-port/port-docs-html and reset the initial mismatched snapshot as requested.
-Inspected git show for 8c9d33aa1 cb484717e 9c395fd7d 0cd5818b7 92eb19603 6c833da13.
-SDK: dotnet-install --channel 10.0 default feed returned 403; official builds feed installed 10.0.403.
-dotnet build CCP.Core: 50 warnings, 0 errors.
-dotnet build CCP.Avalonia: 201 warnings, 0 errors.
-dotnet build Tests/CCP.Avalonia.Tests --no-restore: 145 warnings, 0 errors.
-The initial simultaneous app/test build hit a file lock; the sequential retry passed.
-dotnet test Tests/CCP.Core.Tests: Failed 0, Passed 4644, Skipped 6, Total 4650.
-The six pre-existing skips were retained; no tests or guards were weakened.
-dotnet test Tests/CCP.Core.Tests --no-restore --filter FullyQualifiedName~QuestClipboardTests:
-Passed 9, Failed 0 after all Core mutations were restored.
-dotnet test Tests/CCP.Avalonia.Tests --no-restore --filter FullyQualifiedName~QuestClipboardArtTests:
-Passed 1, Failed 0 before the art mutation; final restored run recorded below.
-bash .github/scripts/core-guards.sh: All Core guards passed.
-python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
-Fail-proofs: fail-proofs.txt; all mutations restored. The initial surviving stamp mutation led to stronger boundary coverage.
-Final restored QuestClipboardArtTests run: Passed 1, Failed 0, Duration 4 s.
-Existing BillboardAppProvidersTests: compiled, not run to completion.
-Attempt failed during shell construction: Could not create glyphTypeface, Segoe UI Black.
-The failure is in PremiumSpark.BuildLabel before provider assertions, not in the clipboard.
-No font substitution, test skip or assertion weakening was introduced.
-Final docs check: avalonia_docs self-check OK; git diff --check: clean.
-Review follow-up on 85fe501d0: all four P2 findings fixed; WPF remains unchanged.
-Spec: BillboardVectorArt.cs:372 Sheen, QuestsArtView.cs:333 PaintStamp, BillboardVectorArt.cs:54 Play/Pause.
-SDK command: /tmp/ccp-dotnet/dotnet (10.0.403).
-Review final builds, --no-restore: CCP.Core 0 errors; CCP.Avalonia 0 errors; CCP.Avalonia.Tests 0 errors.
-Review final Core suite: Passed 4651, Failed 0, Skipped 6, Total 4657, Duration 37 s.
-Review final QuestClipboardArtTests: Passed 6, Failed 0, Skipped 0, Duration 4 s.
-Review registration uses the shell provider factory without font-dependent shell chrome.
-Six review mutations failed their assertions, then were restored: see fail-proofs.txt.
-Review final core-guards.sh: All Core guards passed; avalonia_docs.py: self-check OK; diff --check: clean.
+Historical validation condensed to retain the 600-line budget; no tests removed or weakened.
+Base: /workspace/Conditioning-Control-Panel, 74ac6ce3d5e0ae082c2871c00e864943e15aa2ad, work, clean; initial mismatch corrected by requested fetch and reset.
+Inspected git show: 8c9d33aa1 cb484717e 9c395fd7d 0cd5818b7 92eb19603 6c833da13.
+Original SDK default feed returned 403; official builds feed installed 10.0.403 at /tmp/ccp-dotnet/dotnet.
+Original builds Core/Avalonia/Avalonia.Tests: 50/201/145 warnings, 0 errors each; initial simultaneous build file lock resolved by sequential retry.
+Original Core suite: 4644 passed, 6 existing skips, 0 failed; focused Core: 9 passed; clipboard Avalonia: 1 passed after mutations restored.
+Original BillboardAppProvidersTests compiled but shell construction failed in PremiumSpark.BuildLabel: Segoe UI Black glyphTypeface; no font substitution or test weakening.
+First review follow-up on 85fe501d0: four P2s fixed; spec BillboardVectorArt.cs:372 Sheen, QuestsArtView.cs:333 PaintStamp, BillboardVectorArt.cs:54 Play/Pause.
+First review builds: 0 errors each; full Core 4651 passed, 6 existing skips, 0 failed (4657 total); clipboard Avalonia 6 passed, 0 failed.
+Registration tested through shell provider factory without font-dependent chrome. All historical mutations restored (fail-proofs.txt).
+Original and first review guards: All Core guards passed; avalonia_docs self-check OK; git diff --check clean; WPF unchanged.
+Depth review base verified clean at dca372ab181ca1906bc49a222e57931a662dcdbb; remote fetched; missing SDK reinstalled as 10.0.403 via official builds feed.
+Depth spec: WPF BillboardVectorArt.cs:311 Bevel, :338 Shadow, :347 Plate; QuestsArtView.cs:154 halo. Both P2s fixed; no new localized copy or weakened tests.
+Depth final /tmp/ccp-dotnet/dotnet builds Core/Avalonia/Avalonia.Tests: 0 errors each (0/201/145 warnings); clipboard Avalonia 9 passed, 0 failed; full Core 4651 passed, 6 existing skips, 0 failed, 4657 total.
+Depth final: four independent mutations failed assertions and were restored; core-guards.sh All Core guards passed; avalonia_docs.py self-check OK; git diff --check clean; WPF unchanged.

@@ -1,37 +1,14 @@
-Temporary mutations, all restored:
-open-count: use done instead of shown minus remaining.
-payload: return 99 completed.
-stamp: remove the pre-loop gate.
-height: return zero height.
-The first stamp mutation survived; the test was strengthened to cover t=0, 0.4 and 1.39 for every completed count. The repeated stamp mutation fails below.
-
-open-count exit=1
-  Failed CCP.Core.Tests.QuestClipboardTests.VisibleSlipsPreserveTheOpenCount(done: 5, total: 7, shown: 5, checkedCount: 3) [2 ms]
-  Failed CCP.Core.Tests.QuestClipboardTests.VisibleSlipsPreserveTheOpenCount(done: 2, total: 9, shown: 5, checkedCount: 0) [< 1 ms]
-  Failed CCP.Core.Tests.QuestClipboardTests.VisibleSlipsPreserveTheOpenCount(done: 9, total: 9, shown: 5, checkedCount: 5) [< 1 ms]
-Failed!  - Failed:     3, Passed:     6, Skipped:     0, Total:     9, Duration: 33 ms - CCP.Core.Tests.dll (net10.0)
-
-payload exit=1
-  Failed CCP.Core.Tests.QuestClipboardTests.PayloadDefaultsAndClampsInvalidCounts [4 ms]
-Failed!  - Failed:     1, Passed:     8, Skipped:     0, Total:     9, Duration: 42 ms - CCP.Core.Tests.dll (net10.0)
-
-stamp exit=0
-Passed!  - Failed:     0, Passed:     9, Skipped:     0, Total:     9, Duration: 25 ms - CCP.Core.Tests.dll (net10.0)
-stamp exit=1
-  Failed CCP.Core.Tests.QuestClipboardTests.StampCyclesOnlyThroughCompletedSlips [4 ms]
-Failed!  - Failed:     1, Passed:     8, Skipped:     0, Total:     9, Duration: 43 ms - CCP.Core.Tests.dll (net10.0)
-
-height exit=1
-  Failed CCP.Core.Tests.QuestClipboardTests.BoardGrowsAndAllSlipRowsFit [2 ms]
-Failed!  - Failed:     1, Passed:     8, Skipped:     0, Total:     9, Duration: 36 ms - CCP.Core.Tests.dll (net10.0)
-
-art: freeze the sampled frame at zero, exit=1
-  Failed CCP.Avalonia.Tests.QuestClipboardArtTests.ClipboardPaintsTheLoopAndReleasesItsClock [1 s]
-   The clipboard story must change across the loop.
-Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - CCP.Avalonia.Tests.dll (net10.0)
-Review glint-gate exit=1: Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 637 ms - CCP.Avalonia.Tests.dll (net10.0)
-Review stamp-tracks exit=1: Failed!  - Failed:     7, Passed:     0, Skipped:     0, Total:     7, Duration: 29 ms - CCP.Core.Tests.dll (net10.0)
-Review pause-jump exit=1: Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 502 ms - CCP.Avalonia.Tests.dll (net10.0)
-Review registration exit=1: Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 499 ms - CCP.Avalonia.Tests.dll (net10.0)
-Review missing-glint exit=1: Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 548 ms - CCP.Avalonia.Tests.dll (net10.0)
-Review missing-stamp exit=1: Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 552 ms - CCP.Avalonia.Tests.dll (net10.0)
+Historical fail-proofs, condensed without dropping outcomes; all mutations restored.
+Original open-count=done: exit 1, 3 failed / 9; payload=99: exit 1, 1 failed / 9.
+Original stamp pre-loop gate removal: initially survived (exit 0); after adding t=0, 0.4, 1.39 for all completed counts, exit 1, 1 failed / 9.
+Original zero height: exit 1, 1 failed / 9; frozen art frame: exit 1, 1 failed / 1 (story must change).
+Review glint-gate: exit 1, 1 failed / 1.
+Review stamp-tracks: exit 1, 7 failed / 7.
+Review pause-jump: exit 1, 1 failed / 1.
+Review registration: exit 1, 1 failed / 1.
+Review missing-glint: exit 1, 1 failed / 1.
+Review missing-stamp: exit 1, 1 failed / 1.
+Depth review pressed-bevel (force raised lighting) exit=1: Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 532 ms - CCP.Avalonia.Tests.dll (net10.0)
+Depth review two-shadows (suppress Shadow) exit=1: Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 503 ms - CCP.Avalonia.Tests.dll (net10.0)
+Depth review halo-color (Pink instead of Waiting) exit=1: Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 516 ms - CCP.Avalonia.Tests.dll (net10.0)
+Depth review halo-pulse (old 0.4 + 0.2*sin curve) exit=1: Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 540 ms - CCP.Avalonia.Tests.dll (net10.0)

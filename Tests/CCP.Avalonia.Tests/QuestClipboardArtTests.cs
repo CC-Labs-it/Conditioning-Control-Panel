@@ -165,4 +165,35 @@ public sealed class QuestClipboardArtTests
         foreach (double t in new[] { 2.3, 2.75, 2.96, 3.02, 3.85 }) Assert.False(Shot(t, false, false).AsSpan().SequenceEqual(Shot(t, false, true)), $"stamp t={t}");
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task RaisedAndPressedPlatesReverseLightingAndOnlyRaisedCastsTwoShadows() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureUi();
+        byte[] Shot(bool pressed) => Raster(d =>
+        {
+            d.DrawRectangle(Brushes.Gray, null, new Rect(0, 0, 200, 240));
+            QuestsArtView.Plate(d, new Rect(40, 40, 120, 120), 12, Brushes.Gray, 8, pressed);
+        });
+        int Red(byte[] p, int x, int y) => p[(y * 200 + x) * 4 + 2];
+        var raised = Shot(false); var pressed = Shot(true);
+        Assert.True(Red(raised, 60, 41) > Red(raised, 140, 158));
+        Assert.True(Red(pressed, 60, 41) < Red(pressed, 140, 158));
+        Assert.True(Red(raised, 162, 100) < Red(raised, 166, 100)); Assert.True(Red(raised, 166, 100) < 128);
+        Assert.Equal(128, Red(pressed, 162, 100)); Assert.Equal(128, Red(pressed, 166, 100));
+        return Task.CompletedTask;
+    });
+    [Theory]
+    [InlineData(1, 153)]
+    [InlineData(3, 64)]
+    public Task HaloRendersWaitingGoldAtWpfPulseEndpoints(int halfTurns, int alpha) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureUi();
+        var pixels = Raster(d => { using var pose = d.PushTransform(Matrix.CreateTranslation(100, 100)); QuestsArtView.PaintHalo(d, 100, 40, halfTurns * Math.PI / 2 / 3.1); });
+        int at = (77 * 200 + 100) * 4;
+        Assert.InRange((int)pixels[at + 3], alpha - 1, alpha + 1);
+        Assert.InRange((int)pixels[at + 2], alpha - 1, alpha + 1);
+        Assert.InRange((int)pixels[at + 1], (int)Math.Round(alpha * 201.0 / 255) - 1, (int)Math.Round(alpha * 201.0 / 255) + 1);
+        Assert.InRange((int)pixels[at], (int)Math.Round(alpha * 74.0 / 255) - 1, (int)Math.Round(alpha * 74.0 / 255) + 1);
+        return Task.CompletedTask;
+    });
 }
