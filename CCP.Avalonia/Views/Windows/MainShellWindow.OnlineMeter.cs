@@ -15,7 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// visible from every tab while online media is in the source, consented and switched on; a click opens the Assets
     /// tab, where the card sits. Percent only, never MB.
     /// <para>ponytail: not here yet - the ring drawn inside the pill (a tone dot stands in) and the spent hover card
-    /// with its "See plans".</para>
+    /// with its help glyph and "See plans".</para>
     /// </summary>
     public partial class MainShellWindow
     {
@@ -45,6 +45,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             catch (Exception ex) { Log.Warning(ex, "Online meter pill wiring failed"); }
             RefreshOnlineMeterPill();
+        }
+
+        /// <summary>Entry for the spent hover card's help glyph once that card is ported.</summary>
+        internal void OpenOnlineHelp()
+        {
+            ShowTab("assets");
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() => Named<Tabs.AssetsTabView>("AssetsTab")?.PinOnlineHelp());
         }
 
         internal void RefreshOnlineMeterPill()

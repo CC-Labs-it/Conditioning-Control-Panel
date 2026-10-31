@@ -4,9 +4,15 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
+using Avalonia.Controls;
+using Avalonia.Threading;
+using Avalonia.LogicalTree;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Fyp.Online;
@@ -69,6 +75,11 @@ public sealed class OnlineMeterSurfaceTests
         var shell = new MainShellWindow();
         try
         {
+            // WPF MainWindow.xaml:235-240: only the indicator and text belong in the pill.
+            var pillContent = Assert.IsType<StackPanel>(shell.OnlinePill!.Child);
+            Assert.Collection(pillContent.Children,
+                c => Assert.IsType<global::Avalonia.Controls.Shapes.Ellipse>(c),
+                c => Assert.Same(shell.OnlinePillText, c));
             shell.PaintOnlineMeterPill(State(42));
             Assert.True(shell.OnlinePill!.IsVisible);
             Assert.Equal(string.Format(Loc.Get("online_pill"), 42), shell.OnlinePillText!.Text);
@@ -76,6 +87,83 @@ public sealed class OnlineMeterSurfaceTests
             Assert.Equal(Loc.Get("online_pill_done"), shell.OnlinePillText!.Text);
             shell.PaintOnlineMeterPill(State(42, source: "local"));
             Assert.False(shell.OnlinePill!.IsVisible);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task HelpUsesTheWpfPaperCardLayout() => Run(() =>
+    {
+        var slip = new OnlineMediaHelpSlip();
+        Assert.Equal("online-help-slip", slip.Tag);
+        Assert.Equal(320, slip.Width);
+        Assert.Same(LeashHelpSlip.Paper, slip.Background);
+        Assert.Equal(new CornerRadius(6), slip.CornerRadius);
+        Assert.Equal(new Thickness(0, 0, 0, 1), slip.BorderThickness);
+        Assert.Equal(Color.Parse("#D8CFBF"), Assert.IsAssignableFrom<ISolidColorBrush>(slip.BorderBrush).Color);
+        Assert.Equal(18, slip.BoxShadow[0].Blur);
+        Assert.Equal(6, slip.BoxShadow[0].OffsetY);
+        var root = Assert.IsType<StackPanel>(slip.Child);
+        Assert.Equal(2, root.Children.Count);
+        var band = Assert.IsType<Border>(root.Children[0]);
+        Assert.Equal(6, band.Height);
+        Assert.Equal(new CornerRadius(6, 6, 0, 0), band.CornerRadius);
+        Assert.Equal(LeashHelpSlip.Lilac, Assert.IsAssignableFrom<ISolidColorBrush>(band.Background).Color);
+        var body = Assert.IsType<StackPanel>(root.Children[1]);
+        Assert.Equal(new Thickness(16, 12, 16, 16), body.Margin);
+        Assert.Equal(1 + OnlineMeterRules.HelpParagraphKeys.Length, body.Children.Count);
+        var title = Assert.IsType<TextBlock>(body.Children[0]);
+        Assert.Equal(Loc.Get(OnlineMeterRules.HelpTitleKey), title.Text);
+        Assert.Equal(17, title.FontSize);
+        Assert.Equal(FontWeight.ExtraBold, title.FontWeight);
+        Assert.Same(LeashHelpSlip.Ink, title.Foreground);
+        for (int i = 0; i < OnlineMeterRules.HelpParagraphKeys.Length; i++)
+        {
+            var text = Assert.IsType<TextBlock>(body.Children[i + 1]);
+            bool last = i == OnlineMeterRules.HelpParagraphKeys.Length - 1;
+            Assert.Equal(Loc.Get(OnlineMeterRules.HelpParagraphKeys[i]), text.Text);
+            Assert.Equal(TextWrapping.Wrap, text.TextWrapping);
+            Assert.Equal(new Thickness(0, i == 0 ? 10 : 8, 0, 0), text.Margin);
+            Assert.Equal(last ? 11.5 : 13, text.FontSize);
+            Assert.Same(last ? LeashHelpSlip.Muted : LeashHelpSlip.Ink, text.Foreground);
+            if (last) Assert.Equal(ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer.Mono, text.FontFamily);
+            else { Assert.Equal(title.FontFamily, text.FontFamily); Assert.Equal(18, text.LineHeight); }
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task RepeatedAssetsHelpRequestsDoNotToggleThePinOff() => Run(() =>
+    {
+        var tab = new AssetsTabView();
+        tab.PinOnlineHelp();
+        Assert.True(LeashHelpButton.IsPinned(tab.OnlineHelp!));
+        tab.PinOnlineHelp();
+        Assert.True(LeashHelpButton.IsPinned(tab.OnlineHelp!));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task HelpEntryPointPinsTheAssetsSlipAndRepeatedRequestsLeaveItOpen() => Run(() =>
+    {
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var tab = shell.FindControl<AssetsTabView>("AssetsTab")!;
+            tab.PaintOnlineMeter(State(42), DateTime.Now, DateTime.Now.AddHours(1));
+            shell.OpenOnlineHelp();
+            Dispatcher.UIThread.RunJobs();
+            var help = tab.OnlineHelp!;
+            Assert.True(LeashHelpButton.IsPinned(help));
+            Assert.True(LeashHelpButton.IsOpen(help));
+            shell.OpenOnlineHelp();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(LeashHelpButton.IsPinned(help));
+            Assert.True(LeashHelpButton.IsOpen(help));
+            Assert.Contains(Assert.IsType<OnlineMediaHelpSlip>(LeashHelpButton.Slip(help)).GetLogicalDescendants().OfType<TextBlock>(),
+                t => t.Text == Loc.Get("online_help_cache"));
         }
         finally { shell.Close(); }
         return Task.CompletedTask;
@@ -109,8 +197,10 @@ public sealed class OnlineMeterSurfaceTests
 
     private static Task Run(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        // The first test selects process-wide fonts, so match Program.BuildAvaloniaApp.
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         await body();

@@ -238,7 +238,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 c.Grow.ScaleX = s;
                 c.Grow.ScaleY = s;
                 c.Move.Y = f.Y;
-                if (c.Frames is { Count: > 1 } frames)
+                if (ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level != MotionLevel.Off && c.Frames is { Count: > 1 } frames)
                 {
                     c.FrameAcc += dt;
                     double delay = Math.Max(0.02, c.Delay.TotalSeconds);
@@ -307,6 +307,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 foreach (var b in decoded.Frames) b.Dispose();   // the clip already fell out
                 return;
             }
+            if (decoded.Frames.Count <= 1) f.Animated = false;
             if (decoded.Frames.Count == 0) return;
             clip.Frames = decoded.Frames;
             clip.Delay = decoded.Delay;
