@@ -374,7 +374,7 @@ internal sealed class BackRoomRemotePool : IBackRoomRemotePool
                     }
                     finally
                     {
-                        lock (_gate) { if (_inFlightIds.Remove(entry.Id)) _inFlight--; }
+                        lock (_gate) { _inFlight--; _inFlightIds.Remove(entry.Id); }
                         lane.Release();
                     }
                 }));
@@ -434,9 +434,6 @@ internal sealed class BackRoomRemotePool : IBackRoomRemotePool
             {
                 _byId[entry.Id] = new Warm(entry.Id, url, entry.Width ?? 0, entry.Height ?? 0, path!);
                 _order.Add(entry.Id);
-                // Transfer capacity from in-flight to ready under the same gate. Otherwise the
-                // coordinator can count this clip twice and stop a batch at 23 of 24.
-                if (_inFlightIds.Remove(entry.Id)) _inFlight--;
                 _firstLanded.TrySetResult(true);
             }
         }
