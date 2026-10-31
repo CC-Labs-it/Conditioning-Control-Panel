@@ -39,12 +39,13 @@ public sealed class ChaosDvdOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
-            var (can, prep, frames, sfx) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx);
+            var (can, prep, frames, sfx, shared) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx, ChaosDvdOverlay.SharedHost);
             var src = new SteppedFrames();
             var host = new Window();
             host.Show();
             try
             {
+                ChaosDvdOverlay.SharedHost = () => true;
                 ChaosDvdOverlay.CanOverlay = () => true;
                 ChaosDvdOverlay.PrepareWindow = (_, _) => true;
                 ChaosDvdOverlay.FrameSourceFor = _ => src;
@@ -72,7 +73,7 @@ public sealed class ChaosDvdOverlayTests
             finally
             {
                 ChaosDvdOverlay.CloseActive();
-                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx) = (can, prep, frames, sfx);
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx, ChaosDvdOverlay.SharedHost) = (can, prep, frames, sfx, shared);
                 host.Close();
             }
             return Task.CompletedTask;
@@ -85,12 +86,13 @@ public sealed class ChaosDvdOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
-            var (can, prep, frames, sfx) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx);
+            var (can, prep, frames, sfx, shared) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx, ChaosDvdOverlay.SharedHost);
             var src = new SteppedFrames();
             var host = new Window();
             host.Show();
             try
             {
+                ChaosDvdOverlay.SharedHost = () => true;
                 ChaosDvdOverlay.CanOverlay = () => true;
                 ChaosDvdOverlay.FrameSourceFor = _ => src;
                 ChaosDvdOverlay.PlaySfx = (_, _) => { };
@@ -112,7 +114,7 @@ public sealed class ChaosDvdOverlayTests
             finally
             {
                 ChaosDvdOverlay.CloseActive();
-                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx) = (can, prep, frames, sfx);
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx, ChaosDvdOverlay.SharedHost) = (can, prep, frames, sfx, shared);
                 host.Close();
             }
             return Task.CompletedTask;
@@ -130,6 +132,7 @@ public sealed class ChaosDvdOverlayTests
             host.Show();
             try
             {
+                ChaosDvdOverlay.SharedHost = () => true;
                 ChaosDvdOverlay.CanOverlay = () => false;
                 ChaosDvdOverlay.PrepareWindow = (_, _) => true;
                 ChaosDvdOverlay.Launch(host, 10, 1, 1);

@@ -265,7 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return targets;
         }
 
-        private Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
+        internal Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
         {
             var fill = new Image { Stretch = Stretch.UniformToFill, IsVisible = false };
             RenderOptions.SetBitmapInterpolationMode(fill, BitmapInterpolationMode.HighQuality);
@@ -333,6 +333,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
+            // WPF VideoService.cs:5822 -> ChaosModeService.cs:757: game logos above the video.
+            global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosDvdOverlay.RaiseActive();
             return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
         }
 

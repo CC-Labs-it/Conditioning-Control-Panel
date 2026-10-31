@@ -283,6 +283,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        // WPF BubbleService.cs:1916-1924: only a live rabbit can split a thought.
+        internal static bool AnyChaosDarterIntersects(Rect rect) => _chaosPopped != null &&
+            Field.Bubbles.Any(b => b.Spec?.IsDarter == true && !b.Popping && !b.Deflating &&
+                rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size)));
+
         /// <summary>WPF BubbleService.cs:325-340: paid DVD sweep, darters/freeze exempt.
         /// Use the existing pop/snap callbacks so payloads, score and lessons still run.</summary>
         internal static void PopChaosInRect(Rect rect)

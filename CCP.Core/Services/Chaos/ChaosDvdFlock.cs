@@ -14,6 +14,7 @@ public sealed class ChaosDvdLogo
     public double RemainingSec;
     public int HueIndex;
     public bool IsThought;
+    public bool SplitOnRabbit, SplitSpent;
     public int SplitBouncesLeft;
     public double Age;          // seconds since launch (fade-in)
     public double FadeOutSec = -1;   // >= 0 while retiring
@@ -34,8 +35,7 @@ public readonly record struct ChaosDvdFrame(
 /// Thoughts logo maths, head-free. Launch (:94), Begin (:180), StepAll (:274), StepOne (:327) and
 /// FadeOutAndRetire (:405), minus drawing: a DVD-screensaver label drifts across the area, bounces
 /// off the edges with one hue step per bounce, and Casting Couch splits it on wall hits.
-/// The Spanker smack (Redirect) and the rabbit split (SplitInTwo) are not here: their inputs (the
-/// Spanker boon, chaos bubble darters) are not ported.
+/// Redirect and rabbit contact accept head-free inputs from the overlay.
 /// </summary>
 public sealed class ChaosDvdFlock
 {
@@ -76,13 +76,15 @@ public sealed class ChaosDvdFlock
 
     /// <summary>WPF Launch: 1-2 logos; a thought (<paramref name="text"/> set) respects the alive cap.</summary>
     public IReadOnlyList<ChaosDvdLogo> Launch(double durationSec, double speedMult, double scale, int count = 1,
-                                              string? text = null, int splitBounces = 0)
+                                              string? text = null, int splitBounces = 0, bool splitOnRabbit = false)
     {
         var made = new List<ChaosDvdLogo>();
         for (int i = 0; i < Math.Clamp(count, 1, 2); i++)
         {
             if (text != null && _active.Count(l => l.IsThought) >= MaxThoughts) break;
-            made.Add(Begin(durationSec, speedMult, scale, text, null, null, null, null, splitBounces));
+            var logo = Begin(durationSec, speedMult, scale, text, null, null, null, null, splitBounces);
+            logo.SplitOnRabbit = splitOnRabbit;
+            made.Add(logo);
         }
         return made;
     }
@@ -164,6 +166,37 @@ public sealed class ChaosDvdFlock
         return new ChaosDvdFrame(spawned, recolored, removed, cue, launchCue);
     }
 
+    /// <summary>WPF ChaosDvdOverlay.cs:305-319. The head gates the Spanker click.</summary>
+    public bool Redirect(ChaosDvdLogo l)
+    {
+        if (!_active.Contains(l)) return false;
+        double speed = Math.Sqrt(l.Vx * l.Vx + l.Vy * l.Vy);
+        if (speed < 1) speed = BaseSpeed;
+        speed = Math.Min(speed * 1.18, BaseSpeed * 2.5);
+        double angle = _rng.NextDouble() * Math.PI * 2;
+        l.Vx = Math.Cos(angle) * speed;
+        l.Vy = Math.Sin(angle) * speed;
+        l.HueIndex = (l.HueIndex + 1) % Hues.Length;
+        return true;
+    }
+
+    /// <summary>WPF ChaosDvdOverlay.cs:322-331,392-398. Once per logo, extend even at cap.</summary>
+    public ChaosDvdLogo? TouchRabbit(ChaosDvdLogo l)
+    {
+        if (!_active.Contains(l) || !l.SplitOnRabbit || l.SplitSpent || l.FadeOutSec >= 0) return null;
+        l.SplitSpent = true;
+        l.RemainingSec += 2;
+        if (_active.Count(o => o.IsThought) >= MaxThoughts) return null;
+        double speed = Math.Sqrt(l.Vx * l.Vx + l.Vy * l.Vy);
+        double angle = Math.Atan2(l.Vy, l.Vx) + (_rng.Next(2) == 0 ? 0.61 : -0.61);
+        var clone = Begin(l.RemainingSec, 1, l.FontScale, l.Text, l.X, l.Y,
+            Math.Cos(angle) * speed, Math.Sin(angle) * speed, 0);
+        clone.SplitOnRabbit = true;
+        return clone;
+    }
+
     /// <summary>Run teardown (WPF CloseActive): every logo gone at once.</summary>
+    public void Discard(ChaosDvdLogo logo) => _active.Remove(logo);
+
     public void Clear() => _active.Clear();
 }
