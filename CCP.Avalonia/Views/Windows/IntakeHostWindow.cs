@@ -96,15 +96,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try { o = JObject.Parse(json); }
             catch (Exception ex) { Log.Debug("IntakeHost: unreadable page message: {E}", ex.Message); return; }
 
+            if (WebHost.HandlePageLog(o, "IntakeHost")) return;
             switch ((string?)o["type"])
             {
                 case "ready":   // WPF ChaosWebViewHost "ready" -> IntakeHostService.OnPageReady
                     _pageReady = true;
                     Run.Beat(Now);
                     SendInit();
-                    break;
-                case "log":
-                    Log.Debug("IntakeHost page: {Msg}", (string?)o["msg"]);
                     break;
                 case "heartbeat":
                 case "pong":

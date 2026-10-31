@@ -217,6 +217,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             + "var w=window.chrome&&window.chrome.webview;if(w&&w.dispatchEvent){w.dispatchEvent(new MessageEvent('message',{data:m}));}}catch(e){}})("
             + json + ");");
 
+        /// <summary>WPF ChaosWebViewHost.cs:1686-1697, 1721-1732: consume page logs before
+        /// dispatching game messages. Missing and unknown levels are debug; failures stay visible.</summary>
+        internal static bool HandlePageLog(Newtonsoft.Json.Linq.JObject message, string tag)
+        {
+            if ((string?)message["type"] != "log") return false;
+            var level = ((string?)message["level"])?.Trim().ToLowerInvariant() switch
+            {
+                "error" or "fatal" => Serilog.Events.LogEventLevel.Error,
+                "warn" or "warning" => Serilog.Events.LogEventLevel.Warning,
+                "info" or "information" => Serilog.Events.LogEventLevel.Information,
+                _ => Serilog.Events.LogEventLevel.Debug,
+            };
+            Log.Write(level, "{Tag}[page]: {Msg}", tag, (string?)message["msg"]);
+            return true;
+        }
+
         /// <summary>The seam the engine's WebMessageReceived routes through (headless tests drive it).</summary>
         internal void OnWebMessage(string? body)
         {
