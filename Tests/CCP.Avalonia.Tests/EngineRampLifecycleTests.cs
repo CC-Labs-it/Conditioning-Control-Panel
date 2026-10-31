@@ -1,5 +1,9 @@
 using System;
 using System.IO;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -17,7 +21,8 @@ public sealed class EngineRampLifecycleTests
 {
     private sealed class RampPlayer : ConditioningControlPanel.Avalonia.Platform.LayeredAudio.ILayerPlayer
     {
-        public int Volume { get; set; }
+        public bool Throw; public int Writes; private int _volume;
+        public int Volume { get => _volume; set { Writes++; if (Throw) throw new InvalidOperationException("volume failed"); _volume = value; } }
         public void Dispose() { }
     }
 
@@ -54,6 +59,8 @@ public sealed class EngineRampLifecycleTests
             s.AudioLayersEnabled = true;
             s.AudioLayers = new() { new() { Path = file, Volume = 100 } };
             layers.Start();
+            int writes = player.Writes; shell.StopEngineRamp();
+            Assert.Equal(writes, player.Writes); // no ramp must not touch a playing bed
             shell.ShowTab("appsettings"); Dispatcher.UIThread.RunJobs();
             var audio = shell.AppSettingsPage!.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AudioSettingsSection>("SectionAudio")!;
             void AssertAudio(int volume)
@@ -86,11 +93,18 @@ public sealed class EngineRampLifecycleTests
                 s.EndSessionOnRampComplete = false;
                 now = now.AddMinutes(10); shell.TickEngineRamp();
                 Assert.True(CoreEngine.IsRunning); Assert.Single(notices);
+                var tint = new TintOverlayWindow(); tint.Show(); // seed the headless tint registry
+                ((System.Collections.IList)typeof(PinkFilterOverlay).GetField("Windows",
+                    System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!).Add(tint);
+                player.Throw = true; MainShellWindow.StopEngine(); // Core catches the simulated native volume failure
+                Assert.False(tint.IsVisible);
+                Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_start"), shell.Named<TextBlock>("TxtStartLabel")!.Text);
+                player.Throw = false;
                 shell.Close();
                 Assert.False(shell.Ramp.IsActive); Assert.Equal(30, s.FlashOpacity);
                 Assert.False(File.Exists(journal));
             }
-            finally { MainShellWindow.StopEngine(); shell.Close(); File.Delete(file); }
+            finally { player.Throw = false; MainShellWindow.StopEngine(); shell.Close(); PinkFilterOverlay.CloseAll(); File.Delete(file); }
         });
     }
 
@@ -189,6 +203,18 @@ public sealed class EngineRampLifecycleTests
                 shell.HandlePanicKeyPress(DateTime.Now);
                 Assert.False(CoreEngine.IsRunning);
                 Assert.NotNull(engine.Progress.LastPanicPressTime);
+                shell.StartEngineFromUser(); Dispatcher.UIThread.RunJobs();
+                Assert.True(engine.Progress.IsUnlocked("relapse"));
+                engine.Reset();
+                var runner = ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+                shell.StartSession(new ConditioningControlPanel.Models.Session { Id = "stop", Name = "Stop", DurationMinutes = 10 });
+                var stop = shell.Named<PresetsTabView>("PresetsTab")!.BtnStartSession;
+                stop.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                shell.OwnedWindows.OfType<MessageDialog>().Single().Close(false); Dispatcher.UIThread.RunJobs();
+                Assert.True(runner.IsRunning); Assert.Null(engine.Progress.LastPanicPressTime);
+                stop.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                shell.OwnedWindows.OfType<MessageDialog>().Single().Close(true); Dispatcher.UIThread.RunJobs();
+                Assert.False(runner.IsRunning); Assert.NotNull(engine.Progress.LastPanicPressTime);
                 shell.StartEngineFromUser(); Dispatcher.UIThread.RunJobs();
                 Assert.True(engine.Progress.IsUnlocked("relapse"));
             }

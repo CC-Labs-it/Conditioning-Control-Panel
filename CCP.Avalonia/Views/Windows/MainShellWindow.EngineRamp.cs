@@ -24,10 +24,11 @@ public partial class MainShellWindow
 
     internal void StopEngineRamp()
     {
+        var was = Ramp.IsActive;
         _rampTimer?.Stop();
         _rampTimer = null;
         Ramp.Stop(CoreSettings.Current);
-        RefreshRampAudio();
+        if (was) RefreshRampAudio(); // WPF StartStop.cs:654 only refreshes captured values
         SessionSettingsJournal.ClearRamp(CorePaths.UserData);
     }
 

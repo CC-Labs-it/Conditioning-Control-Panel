@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Serilog.Log.Information("Start button: asking to stop the running session");
                 await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body");
-                if (!App.Sessions.IsRunning) { App.Achievements?.TrackPanicPressed(); StopEngine(); }
+                if (!App.Sessions.IsRunning) StopEngine();
                 return;
             }
             if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); App.Achievements?.TrackPanicPressed(); StopEngine(); }
@@ -113,9 +113,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             App.StopDesktopOverlays(final: false);
             PopQuizHost.Instance.CloseAll();   // first: drops a queued quiz before cards close; WPF StartStop.cs:521
             LockCardWindow.ForceCloseAll();
-            StopEngineRamp();
             PinkFilterOverlay.Refresh(this);
             UpdateStartButton();
+            StopEngineRamp();
             // A paused session keeps its labels, lock and pause button (WPF StopEngine leaves them).
             if (App.Sessions?.IsRunning == true) { SetPauseButton(App.Sessions.IsPaused); return; }
             // WPF OnSessionStopped: the session button and the dials come back on every exit path.
