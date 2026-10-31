@@ -6,6 +6,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using Serilog;
+using ConditioningControlPanel.Services.UI;
 using ModPackage = ConditioningControlPanel.Models.ModPackage;
 using MotionLevel = ConditioningControlPanel.Models.MotionLevel;
 using PerformanceTier = ConditioningControlPanel.Models.PerformanceTier;
@@ -29,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         GlowBreath = 1 << 4,
         /// <summary>Warm motes rising from the bottom edge on a slow sine sway, budgeted by the tier.</summary>
         Embers = 1 << 5,
+        EdgeDrift = 1 << 6,
     }
 
     /// <summary>Per-surface tuning for <see cref="AmbientFxCanvas.StartLayers(AmbientFxConfig)"/>.</summary>
@@ -72,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// panel is already painted in.
         /// </summary>
         public Color? Tint { get; set; }
+        public EdgeSide EdgeSide { get; set; }
 
         /// <summary>
         /// Keep ticking while the host window is NOT the active window (WPF polish wave 13). Only for
@@ -194,6 +197,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private float _emberT;
         /// <summary>Live ember count. Tests read it.</summary>
         internal int EmberCount => _emberN;
+
+        private struct EdgeMote { public float Along, Depth, Speed, Life, Max, SizePx, Phase, PhaseSpd; }
+        private EdgeMote[] _edge = Array.Empty<EdgeMote>();
+        private int _edgeN;
+        private float _edgeT;
 
         private struct Spark { public float X, Y, VX, VY, Life, Max, Size; }
         private Spark[]? _burst;
@@ -334,8 +342,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _burstN = 0;
             _dustN = 0;
             _emberN = 0;
+            _edgeN = 0;
             InvalidateVisual();
         }
+
+        public Color? Tint => _config.Tint;
+        public EdgeSide EdgeSide => _config.EdgeSide;
+        internal int EdgeMoteCount => _edgeN;
 
         /// <summary>
         /// Swap the tint override without reseeding: live particles take the new colour on the next
@@ -638,6 +651,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 : Array.Empty<Ember>();
             _emberN = 0;
             _emberT = 0f;
+            _edge = _particleBudget > 0 && (_config.Layers & AmbientFxLayers.EdgeDrift) != 0
+                ? new EdgeMote[Math.Min(EdgeDriftMath.MaxPerStrip, _particleBudget)]
+                : Array.Empty<EdgeMote>();
+            _edgeN = 0;
+            _edgeT = 0f;
             _fogT = _dustT = _sheenT = _breathT = _auroraT = 0f;
             _sheenDone = false;
             _burstN = 0;
@@ -788,6 +806,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (!_sheenDone) _sheenT += dt;
                 StepDust(dt);
                 StepEmbers(dt);
+                StepEdge(dt);
                 StepBurst(dt);
                 StepTokens(dt);
 
@@ -919,6 +938,61 @@ namespace ConditioningControlPanel.Avalonia.Controls
             }
         }
 
+        internal void StepEdge(float dt)
+        {
+            if (_edge.Length == 0) return;
+            for (int i = _edgeN - 1; i >= 0; i--)
+            {
+                var m = _edge[i];
+                m.Along = (float)EdgeDriftMath.Advance(m.Along, m.Speed, dt);
+                m.Phase += m.PhaseSpd * dt;
+                m.Life -= dt;
+                if (EdgeDriftMath.IsSpent(m.Along, m.Life))
+                    _edge[i] = _edge[--_edgeN];
+                else
+                    _edge[i] = m;
+            }
+
+            if ((_config.Layers & AmbientFxLayers.EdgeDrift) == 0 || _fogOnly) return;
+
+            int target = Math.Min(_edge.Length, EdgeDriftMath.Target(_liveBudget));
+            if (_edgeN > target) _edgeN = Math.Max(0, target);
+
+            _edgeT = _edgeN >= target
+                ? Math.Min(_edgeT + dt, (float)EdgeDriftMath.SpawnEverySeconds)
+                : _edgeT + dt;
+            while (_edgeN < target && _edgeT > EdgeDriftMath.SpawnEverySeconds)
+            {
+                _edgeT -= (float)EdgeDriftMath.SpawnEverySeconds;
+                float life = (float)(EdgeDriftMath.LifeMin + _rng.NextDouble() * (EdgeDriftMath.LifeMax - EdgeDriftMath.LifeMin));
+                _edge[_edgeN++] = new EdgeMote
+                {
+                    Along = (float)_rng.NextDouble() * 0.9f,
+                    Depth = (float)(EdgeDriftMath.DepthMin + _rng.NextDouble() * (EdgeDriftMath.DepthMax - EdgeDriftMath.DepthMin)),
+                    Speed = (float)(EdgeDriftMath.SpeedMin + _rng.NextDouble() * (EdgeDriftMath.SpeedMax - EdgeDriftMath.SpeedMin)),
+                    Life = life, Max = life,
+                    SizePx = (float)(EdgeDriftMath.SizeMinPx + _rng.NextDouble() * (EdgeDriftMath.SizeMaxPx - EdgeDriftMath.SizeMinPx)),
+                    Phase = (float)(_rng.NextDouble() * Math.PI * 2),
+                    PhaseSpd = 1.5f + (float)_rng.NextDouble() * 1.5f,
+                };
+            }
+        }
+
+        internal (float Along, float Depth)[] EdgeMotesForTests()
+        {
+            var r = new (float, float)[_edgeN];
+            for (int i = 0; i < _edgeN; i++) r[i] = (_edge[i].Along, _edge[i].Depth);
+            return r;
+        }
+
+        internal void PrimeEdgeForTests(int budget)
+        {
+            _particleBudget = budget;
+            _liveBudget = budget;
+            _fogOnly = false;
+            Reseed();
+        }
+
         private void StepBurst(float dt)
         {
             if (_burst == null || _burstN == 0) return;
@@ -1033,6 +1107,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (!_fogOnly && (layers & AmbientFxLayers.DustField) != 0) DrawDust(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.Embers) != 0) DrawEmbers(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.SheenSweep) != 0) DrawSheen(context, w, h, intensity);
+                if (!_fogOnly && (layers & AmbientFxLayers.EdgeDrift) != 0) DrawEdge(context, w, h, intensity);
                 DrawBurst(context, w, h, min);
                 DrawTokens(context, w, h, min);
             }
@@ -1111,6 +1186,23 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 float x = m.X0 + m.Amp * (float)Math.Sin(m.Phase);
                 float size = m.Size * min * 2f;
                 DrawSprite(ctx, _emberDot, x * w, m.Y * h, size, size, a);
+            }
+        }
+
+        private void DrawEdge(DrawingContext ctx, float w, float h, float intensity)
+        {
+            if (_edgeN == 0) return;
+            double aw = Bounds.Width;
+            float px = aw > 1 ? (float)(w / aw) : 1f;
+            var side = _config.EdgeSide;
+            for (int i = 0; i < _edgeN; i++)
+            {
+                var m = _edge[i];
+                float a = (float)EdgeDriftMath.Alpha(m.Along, m.Life, m.Max, m.Phase, intensity);
+                if (a <= 0.004f) continue;
+                var (x, y) = EdgeDriftMath.Position(side, m.Along, m.Depth);
+                float size = m.SizePx * px;
+                DrawSprite(ctx, _particleDot, (float)x * w, (float)y * h, size, size, a);
             }
         }
 
