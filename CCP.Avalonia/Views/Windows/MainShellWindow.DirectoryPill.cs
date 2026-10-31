@@ -11,13 +11,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal readonly record struct DirectoryPill(bool Visible, string Text, string DotHex, string Tip);
 
         /// <summary>WPF's four states, with WPF's literals (it has no keys for them): no session = hidden;
-        /// not opted in = "Private only" (grey); opted in = "Listed" (directory purple); claimed = "Claimed" (green).</summary>
+        /// not opted in = "Remote: private" (grey); opted in = "Remote: listed" (directory purple); claimed = "Remote: claimed" (green).</summary>
         internal static DirectoryPill DirectoryPillFor(bool active, bool optedIn, bool claimed) =>
             !active ? new DirectoryPill(false, "", "#8A8AA0", "")
-            : !optedIn ? new DirectoryPill(true, "Private only", "#8A8AA0",
-                "Your session is private — you are not listed in the Available Subjects Directory.")
-            : claimed ? new DirectoryPill(true, "Claimed", "#00FF88", "A controller has claimed your directory listing.")
-            : new DirectoryPill(true, "Listed", "#B47BFF", "You're listed in the Available Subjects Directory and waiting to be claimed.");
+            : !optedIn ? new DirectoryPill(true, "Remote: private", "#8A8AA0",
+                "Your Remote session is private: you are not listed in the Available Subjects Directory. Goon tables have their own Who sees this table switch.")
+            : claimed ? new DirectoryPill(true, "Remote: claimed", "#00FF88", "A controller has claimed your Remote listing.")
+            : new DirectoryPill(true, "Remote: listed", "#B47BFF", "Your Remote session is listed in the Available Subjects Directory and waiting to be claimed.");
 
         /// <summary>The Remote tab calls this whenever its session, its listing or its controller changes.</summary>
         internal void UpdateDirectoryListingStatus(bool active, bool optedIn, bool claimed)

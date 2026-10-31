@@ -139,6 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             public bool ShouldShowOgWelcome { get; set; }
             public string? UnifiedId { get; set; }
             public string? DisplayName { get; set; }
+            public bool? ServerNeedsDisplayName { get; set; }
             public string? Provider { get; set; }
             public string? LinkedProvider { get; set; }
         }
@@ -781,6 +782,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 ShouldShowOgWelcome = legacy && CoreSettings.Current.HasShownOgWelcome != true,
                 UnifiedId = user.UnifiedId,
                 DisplayName = user.DisplayName,
+                ServerNeedsDisplayName = user.NeedsDisplayName,
                 Provider = provider,
             };
             Close(true);
