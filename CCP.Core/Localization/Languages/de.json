@@ -1,4 +1,8 @@
 {
+  "deeper_open_player_failed_title": "Player konnte nicht geöffnet werden",
+  "deeper_open_player_failed_fmt": "Deeper Player konnte nicht geöffnet werden:\n\n{0}: {1}",
+  "deeper_open_editor_failed_title": "Editor konnte nicht geöffnet werden",
+  "deeper_open_editor_failed_fmt": "Deeper Editor konnte nicht geöffnet werden:\n\n{0}: {1}",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",

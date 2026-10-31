@@ -1,4 +1,8 @@
 {
+  "deeper_open_player_failed_title": "Не удалось открыть плеер",
+  "deeper_open_player_failed_fmt": "Не удалось открыть плеер Deeper:\n\n{0}: {1}",
+  "deeper_open_editor_failed_title": "Не удалось открыть редактор",
+  "deeper_open_editor_failed_fmt": "Не удалось открыть редактор Deeper:\n\n{0}: {1}",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",

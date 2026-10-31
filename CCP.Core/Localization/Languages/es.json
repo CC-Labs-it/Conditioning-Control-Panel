@@ -1,4 +1,8 @@
 {
+  "deeper_open_player_failed_title": "No se pudo abrir el reproductor",
+  "deeper_open_player_failed_fmt": "No se pudo abrir el reproductor Deeper:\n\n{0}: {1}",
+  "deeper_open_editor_failed_title": "No se pudo abrir el editor",
+  "deeper_open_editor_failed_fmt": "No se pudo abrir el editor Deeper:\n\n{0}: {1}",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
   "deeper_submission_badge_pending": "Pendiente",

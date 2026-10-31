@@ -1,4 +1,8 @@
 {
+  "deeper_open_player_failed_title": "Impossible d’ouvrir le lecteur",
+  "deeper_open_player_failed_fmt": "Impossible d’ouvrir le lecteur Deeper :\n\n{0}: {1}",
+  "deeper_open_editor_failed_title": "Impossible d’ouvrir l’éditeur",
+  "deeper_open_editor_failed_fmt": "Impossible d’ouvrir l’éditeur Deeper :\n\n{0}: {1}",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",

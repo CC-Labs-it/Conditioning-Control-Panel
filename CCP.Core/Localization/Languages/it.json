@@ -1,4 +1,8 @@
 {
+  "deeper_open_player_failed_title": "Impossibile aprire il lettore",
+  "deeper_open_player_failed_fmt": "Impossibile aprire il lettore Deeper:\n\n{0}: {1}",
+  "deeper_open_editor_failed_title": "Impossibile aprire l’editor",
+  "deeper_open_editor_failed_fmt": "Impossibile aprire l’editor Deeper:\n\n{0}: {1}",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",

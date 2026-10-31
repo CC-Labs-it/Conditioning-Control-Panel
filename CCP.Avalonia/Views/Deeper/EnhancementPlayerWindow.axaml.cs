@@ -1342,6 +1342,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 return;
             }
 
+            // WPF MainWindow.DeeperTab.cs:628: shell ownership refreshes the hub on close.
+            if ((Owner as Windows.MainShellWindow ?? Windows.MainShellWindow.Current) is { IsVisible: true } mainShell)
+            {
+                mainShell.OpenDeeperEditorFromPlayer(path);
+                return;
+            }
+
             // MainWindow.OpenDeeperFile: re-read the file (never share this player's live object
             // with the editor), record it as recent, open the editor.
             try

@@ -12,7 +12,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// installer's AppMutex and InitializeSetup look for it. WPF's named EventWaitHandles do not exist on Unix,
     /// so the show request and its ack travel over a named pipe (a Unix socket on Linux) instead. The request
     /// carries WPF's surface handoff (LauncherHandoff payload, App.xaml.cs:1951) in place of its handoff file:
-    /// one length byte, then the UTF-8 payload; length 0 is a bare relaunch.
+    /// one length byte (255 introduces a four-byte little-endian length, capped at 65536 bytes),
+    /// then the UTF-8 payload; length 0 is a bare relaunch.
     /// </summary>
     internal sealed class SingleInstance : IDisposable
     {
@@ -77,13 +78,20 @@ namespace ConditioningControlPanel.Avalonia.Platform
         static bool? RequestShow(string pipe, string? payload)
         {
             var bytes = Encoding.UTF8.GetBytes(payload ?? "");
-            if (bytes.Length > byte.MaxValue) bytes = Array.Empty<byte>();   // unreadable reads as a bare relaunch
+            if (bytes.Length > 65536) bytes = Array.Empty<byte>();   // unreadable reads as a bare relaunch
             try
             {
                 using var c = new NamedPipeClientStream(".", pipe, PipeDirection.InOut,
                     PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 c.Connect(1000);
-                c.WriteByte((byte)bytes.Length);
+                // Preserve short launcher payloads; 255 introduces a bounded extended length for media paths.
+                c.WriteByte(bytes.Length >= byte.MaxValue ? byte.MaxValue : (byte)bytes.Length);
+                if (bytes.Length >= byte.MaxValue)
+                {
+                    var size = new byte[4];
+                    System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(size, bytes.Length);
+                    c.Write(size);
+                }
                 c.Write(bytes);
                 c.Flush();
                 using var cts = new CancellationTokenSource(ShowAckTimeoutMs);
@@ -106,7 +114,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     await s.WaitForConnectionAsync(ct);
                     var len = new byte[1];
                     await s.ReadExactlyAsync(len, ct);
-                    var body = new byte[len[0]];
+                    int count = len[0];
+                    if (count == byte.MaxValue)
+                    {
+                        var size = new byte[4];
+                        await s.ReadExactlyAsync(size, ct);
+                        count = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(size);
+                        if (count < 0 || count > 65536) continue;
+                    }
+                    var body = new byte[count];
                     await s.ReadExactlyAsync(body, ct);
                     string? payload = body.Length == 0 ? null : Encoding.UTF8.GetString(body);
                     // Ack even when showing fails: WPF acks after the attempt (App.xaml.cs:1985), and a

@@ -1023,6 +1023,7 @@ namespace ConditioningControlPanel.Avalonia
                     Serilog.Log.Warning(ex, "[Launcher] boot decision failed; booting the panel");
                     Views.Windows.LauncherWindow.Boot = Services.Launcher.BootDecision.PanelFirst;
                 }
+                QueuePendingDeeperFileOpen(shell, desktop.Args);
                 var boot = Views.Windows.LauncherWindow.Boot;
                 bool panelHidden = Services.Launcher.LauncherBoot.PanelStartsHidden(boot, Views.Windows.MainShellWindow.LockdownActive);
                 Serilog.Log.Information("[Launcher] boot surface {Surface} game {GameId}, panel shown: {Shown}", boot.Surface, boot.GameId, !panelHidden);
@@ -1226,6 +1227,22 @@ namespace ConditioningControlPanel.Avalonia
             if (Directory.Exists(media)) return media;
             Serilog.Log.Warning("Media folder: could not create {Media}; keeping {Legacy}", media, legacy);
             return legacy;
+        }
+
+        // WPF App.xaml.cs:4016-4031: queue once, independently of the boot surface (:3626-3641).
+        internal static void QueuePendingDeeperFileOpen(Views.Windows.MainShellWindow shell, string[]? args)
+        {
+            var fileOpen = Services.Deeper.DeeperFileOpen.Parse(args);
+            if (fileOpen.Action != null && fileOpen.Path != null)
+            {
+                // WPF App.xaml.cs:4016-4027 consumes the pending request once.
+                void OpenMediaOnce(object? sender, EventArgs e)
+                {
+                    shell.Opened -= OpenMediaOnce;
+                    Dispatcher.UIThread.Post(() => shell.HandlePendingFileOpen(fileOpen.Action, fileOpen.Path), DispatcherPriority.Background);
+                }
+                shell.Opened += OpenMediaOnce;
+            }
         }
 
         /// <summary>The exit save, after Takeover hands back what a pulse borrowed - else a boosted

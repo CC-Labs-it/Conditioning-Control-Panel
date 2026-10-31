@@ -1,4 +1,8 @@
 {
+  "deeper_open_player_failed_title": "Não foi possível abrir o player",
+  "deeper_open_player_failed_fmt": "Não foi possível abrir o player Deeper:\n\n{0}: {1}",
+  "deeper_open_editor_failed_title": "Não foi possível abrir o editor",
+  "deeper_open_editor_failed_fmt": "Não foi possível abrir o editor Deeper:\n\n{0}: {1}",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Este aprimoramento está publicado no catálogo da comunidade.",
   "deeper_submission_badge_pending": "Pendente",
