@@ -107,6 +107,18 @@ public sealed partial class GameWindowTests
         Assert.Equal(0.25, (double)o["gentle"]!["speed"]!);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Glassroad_Init_LinuxDisablesRemotePictures(bool linux)
+    {
+        var caps = GlassroadHostRules.InitFrame(null, null, 0, false, 1, 1, linux)["caps"]!;
+        if (linux) Assert.False((bool)caps["scrolller"]!);
+        else Assert.Null(caps["scrolller"]); // preserve the other desktop hosts
+        var actual = GlassroadHostRules.InitFrame(null, null, 0, false, 1, 1)["caps"]!;
+        Assert.Equal(OperatingSystem.IsLinux(), actual["scrolller"]?.Value<bool>() == false);
+    }
+
     [Fact]
     public void Glassroad_Signing_PostBodyAndGetQuery()
     {

@@ -199,7 +199,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (!s) return '';
     const src = s.source || (s.on ? 'scrolller' : 'off');   // host/localLibrary.js: Scrolller, My files or Off
     let html = '<div class="c-opt c-niches"><span>Pictures<small>On screens and in flashes</small></span><div class="c-chips">' +
-      SOURCES.map((id) => btn('scrolller', sourceLabel(id), 'c-chip' + (src === id ? ' on' : ''), ' data-source="' + id + '" aria-pressed="' + (src === id) + '"')).join('') + '</div></div>';
+      SOURCES.filter(id => id !== 'scrolller' || s.scrolllerAvailable !== false).map((id) => btn('scrolller', sourceLabel(id), 'c-chip' + (src === id ? ' on' : ''), ' data-source="' + id + '" aria-pressed="' + (src === id) + '"')).join('') + '</div></div>';
     if (src === 'files') html += '<div class="c-opt"><span>Your files<small>' + (s.files ? s.files + ' picked. ' : '') + 'They stay on this device</small></span>' +
       btn('scrolller-files', s.files ? 'Change' : 'Choose', 'c-tog') + '</div>';
     if (src === 'scrolller' && s.catalog) {
@@ -489,7 +489,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
      * drawn). An open Options card redraws its pictures rows in place and keeps the focused control. */
     setScrolller(state) {
       host.scrolller = state ? { on: state.on === true, track: String(state.track || ''), niches: [...(state.niches || [])],
-        custom: !!state.custom, catalog: Array.isArray(state.catalog) ? state.catalog : null,
+        scrolllerAvailable: state.scrolllerAvailable !== false, custom: !!state.custom, catalog: Array.isArray(state.catalog) ? state.catalog : null,
         source: SOURCES.includes(state.source) ? state.source : null, files: Math.max(0, state.files | 0) } : null;
       const box = card.querySelector('.c-scrolller');
       if (!box || !host.scrolller) return;

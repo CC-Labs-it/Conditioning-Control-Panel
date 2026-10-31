@@ -22,7 +22,7 @@ import { createBridge, songCharts, isPreviewSongHost, wantLobbySongs, lobbySongC
 import { createHostEscape } from './host/hostEscape.js';
 import { showSlip, hideSlip } from './sparkles-slip.js';
 import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
-import { createScrolllerFeed } from './host/scrolllerFeed.js';
+import { createHostScrolllerFeed } from './host/scrolllerFeed.js';
 import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
 import { nichesFor, isDefault, savePick } from './host/scrolllerNiches.js';
 import { createLocalLibrary, pickFiles, feedSwitch, loadFilesChoice, saveFilesChoice, openFilePicker } from './host/localLibrary.js';
@@ -174,8 +174,8 @@ function receiptSlip(m) {
 }
 shared.bridge.on('sparkles-receipt', receiptSlip);
 // The web host's Scrolller pictures (host/scrolllerFeed.js): display only. Built once so a feed
-// that lands before the first course is kept; the desktop host never sends one.
-shared.scrolllerFeed = createScrolllerFeed({ bridge: shared.bridge });
+// that lands before the first course is kept, after the host's capability check.
+shared.scrolllerFeedTask = createHostScrolllerFeed({ bridge: shared.bridge });
 const controller = createCourseController({
   cover() { loading.start(); shared.renderer?.setHold(true); shared.garage?.setVisible(false); },
   open(id, options, lifetime, isCurrent) { return boot(COURSES.find(c => c.id === id), options, lifetime, isCurrent); },
@@ -349,6 +349,7 @@ async function boot(course, options, lifetime, isCurrent) {
   cardEl.innerHTML = cardTemplate;
   const bridge = scopedBridge(shared.bridge, lifetime), hostEscape = shared.hostEscape;
   const init = await bridge.init;
+  shared.scrolllerFeed = await shared.scrolllerFeedTask;
   if (!lifetime.alive) return;
   loaded('host');
   shared.owned.setAccount(init.identity?.unifiedId);
@@ -438,7 +439,7 @@ async function boot(course, options, lifetime, isCurrent) {
   shared.filesOn = coursePick.source === 'files';
   const pictures = feedSwitch(() => shared.filesOn ? library : coursePick.source === 'off' ? null : scrolller);
   const view = () => ({ on: consentOn(), track: trackName, niches: nichesFor(track.id), custom: !isDefault(track.id),
-    catalog: scrolller?.catalog, source: shared.filesOn ? 'files' : consentOn() ? 'scrolller' : 'off', files: library.count });
+    scrolllerAvailable: init.caps.scrolller !== false, catalog: scrolller?.catalog, source: shared.filesOn ? 'files' : consentOn() ? 'scrolller' : 'off', files: library.count });
   const refreshMedia = () => { hud.setScrolller(view()); shared.garage?.refreshMedia?.(); };
   function setSource(to, choose = true) {
     if (!['scrolller', 'files', 'off'].includes(to) || (to === 'scrolller' && !scrolller)) return;
