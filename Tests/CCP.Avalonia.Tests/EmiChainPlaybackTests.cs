@@ -4,6 +4,9 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
+using Avalonia.Input;
+using ConditioningControlPanel;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
@@ -139,4 +142,93 @@ public sealed class EmiChainPlaybackTests
         finally { desk.ShutDown(); }
         return Task.CompletedTask;
     });
+    private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
+    private static EmiChainPlayer Player(EmiDeskWindow desk) =>
+        (EmiChainPlayer)typeof(EmiDeskWindow).GetField("_chainPlayer", Private)!.GetValue(desk)!;
+
+    // Seed the state reached after the CRT unlocks, without sleeping through smoke/CRT animation.
+    private static void StartWake(EmiDeskWindow desk, Action done)
+    {
+        typeof(EmiDeskWindow).GetField("_summonDone", Private)!.SetValue(desk, done);
+        typeof(EmiDeskWindow).GetField("_summonChainLive", Private)!.SetValue(desk, true);
+        desk.PlayChain("wake", desk.FinishSummon);
+    }
+
+    [Fact]
+    public Task PatCutsWakeAndFinishesSummonExactlyOnce() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var desk = new EmiDeskWindow();
+        var st = EmiState.Current;
+        int pets = st.PetsTotal; bool gist = st.PetGistGot;
+        var audio = CoreAudio.PlayOneShotProvider;
+        int done = 0;
+        try
+        {
+            CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => { };
+            StartWake(desk, () => done++);
+            var player = Player(desk);
+            var timer = (DispatcherTimer)typeof(EmiChainPlayer).GetField("_timer", Private)!.GetValue(player)!;
+            Assert.True(player.IsLive);
+            typeof(EmiDeskWindow).GetMethod("PetFromClick", Private)!.Invoke(desk, null);
+            Assert.Equal(1, done);
+            Assert.False(player.IsLive);
+            Assert.False(timer.IsEnabled);
+            Assert.Equal("^_^", desk.Face);
+            Assert.Equal(pets + 1, st.PetsTotal);
+            desk.FinishSummon();
+            typeof(EmiChainPlayer).GetMethod("OnTick", Private)!.Invoke(player, new object[] { timer, EventArgs.Empty });
+            Assert.Equal(1, done);
+            Assert.Equal("^_^", desk.Face);
+        }
+        finally { desk.ShutDown(); st.PetsTotal = pets; st.PetGistGot = gist; CoreAudio.PlayOneShotProvider = audio; }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RightClickCutsOnlySummonAndOtherwisePreservesCompletion(bool summon) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var desk = new EmiDeskWindow();
+        var st = EmiState.Current;
+        int opens = st.RingOpens, ignores = st.RingIgnoreStreak, done = 0;
+        try
+        {
+            desk.Show();
+            var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot", Private)!.GetValue(desk)!;
+            var at = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), desk)!.Value;
+            if (summon) StartWake(desk, () => done++);
+            else desk.PlayChain("dizzy", () => done++);
+            var player = Player(desk);
+            var chain = player.Current!;
+            // Opening a window can pump dispatcher jobs. Step canon holds explicitly below.
+            var timer = (DispatcherTimer)typeof(EmiChainPlayer).GetField("_timer", Private)!.GetValue(player)!;
+            timer.Stop();
+            var face = desk.Face;
+            desk.MouseDown(at, MouseButton.Right);
+            desk.MouseUp(at, MouseButton.Right);
+            if (summon)
+            {
+                Assert.False(player.IsLive);
+                Assert.Equal(1, done);
+                desk.FinishSummon();
+            }
+            else
+            {
+                Assert.Same(chain, player.Current);
+                Assert.Equal(face, desk.Face);
+                Assert.Equal(0, done);
+                timer.Start();
+                foreach (var frame in chain.Seq) Tick(player, Math.Max(1, frame.Ms));
+                Assert.False(player.IsLive);
+                Assert.Equal(EmiChains.RestFace, desk.Face);
+            }
+            Assert.Equal(1, done);
+        }
+        finally { desk.ShutDown(); st.RingOpens = opens; st.RingIgnoreStreak = ignores; }
+        return Task.CompletedTask;
+    });
+
 }

@@ -1322,8 +1322,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 // The two buttons agree about the entrance: if the left one may cut it, so may this
                 // one, or the ring would open over a chain that is still animating her body.
-                FinishSummon();
-                CancelChain();
+                if (_summonChainLive) { FinishSummon(); CancelChain(); } // WPF xaml.cs:1629
 
                 RaiseActivity();
                 PlayClickSquash();
@@ -2573,7 +2572,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 if (_transiting || InputLocked) return;
-                if (ChainLive) return;   // WPF React.cs:132-137: a live chain eats the click (summon-cut is -b)
+                // WPF React.cs:134-139: her entrance is cuttable; other live chains own the face.
+                if (ChainLive)
+                {
+                    if (!_summonChainLive) return;
+                    FinishSummon();
+                    CancelChain();
+                }
                 DisarmPet();
                 _petArmed = true;
                 RaiseActivity();
