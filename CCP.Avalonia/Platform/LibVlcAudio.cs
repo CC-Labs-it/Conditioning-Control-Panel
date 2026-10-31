@@ -146,6 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             LayeredAudio.Instance = new LayeredAudio(path => new LayeredAudio.VlcLayerPlayer(_vlc, path));
             CoreAudio.PlayOneShotProvider = (path, volume, tag, started, finished) => PlayOneShot(path, volume, tag, started, finished);
             CoreAudio.PlayStoppableProvider = PlayOneShot;
+            CoreAudio.StopSoundProvider = StopSound;
             CoreAudio.PlaySoundProvider = (path, volume, started, finished) => PlaySound(path, volume, started, finished);
             // Windows ducking is seeded by StartDuckJournal (App start-up only): a probe or test must never
             // lower the desk's real apps.
@@ -156,10 +157,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         private Action? _stopSound;
-        internal void PlaySound(string path, int volume, Action<TimeSpan>? started, Action? finished)
+        internal void StopSound() => Interlocked.Exchange(ref _stopSound, null)?.Invoke();
+        internal void PlaySound(string path, int volume, Action<TimeSpan>? started, Action? finished, Func<Action, ISoundVoice>? create = null)
         {
-            Interlocked.Exchange(ref _stopSound, null)?.Invoke();
-            _stopSound = StartSound(ended => NewVoice(path, ended), volume, started, finished);
+            StopSound();
+            _stopSound = StartSound(create ?? (ended => NewVoice(path, ended)), volume, started, finished);
         }
 
         internal interface ISoundVoice : MindWipePlayer.IVoice
@@ -182,7 +184,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             master = new(Apply);
             voice.Started = ms => { Apply(master.Level); started?.Invoke(TimeSpan.FromMilliseconds(ms)); };
             Apply(master.Level);
-            void Stop() { master.Dispose(); voice.Dispose(); }
+            var stopped = 0;
+            void Stop() { if (Interlocked.Exchange(ref stopped, 1) == 0) { master.Dispose(); voice.Dispose(); } }
             if (!voice.Play()) Stop();
             return Stop;
         }
@@ -427,6 +430,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>App exit: never leave other apps ducked behind us.</summary>
         internal void Shutdown()
         {
+            StopSound();
             if (_win != null) { _win.Shutdown(); return; }
             lock (_duckLock) { if (_isDucked) ForceUnduck(); }
             Drain();

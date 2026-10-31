@@ -106,6 +106,7 @@ public sealed class PanicSurfacesTests
         "chaos-intro",
         "settings-palette",
         "keyword-triggers",
+        "sound",
         "haptics",
         "intake",
         "knock-cards",

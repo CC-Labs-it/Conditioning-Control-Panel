@@ -163,7 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             IVoice? voice = null;
             voice = _play(clip, volume, false, () => { lock (_lock) if (ReferenceEquals(_oneShot, voice)) _oneShot = null; });
             IVoice? displaced;
-            lock (_lock) { displaced = _oneShot; _oneShot = voice; }
+            lock (_lock) { displaced = _oneShot; _oneShot = voice; ApplyGain(); }
             displaced?.Dispose();
             Log.Debug("MindWipe: Playing {File} at volume {Vol}%", Path.GetFileName(clip), volume * 100);
         }
@@ -193,7 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_lock) if (!ReferenceEquals(_loop, voice)) return;
                 CleanSlate?.Invoke(_time.GetElapsedTime(started).TotalSeconds);
             }, null, TimeSpan.FromSeconds(60), Timeout.InfiniteTimeSpan);
-            lock (_lock) { _loop = voice; _cleanSlate = check; }
+            lock (_lock) { _loop = voice; _cleanSlate = check; ApplyGain(); }
             Log.Information("MindWipe: Loop started with {File} at {Vol}% volume", Path.GetFileName(clip), volume * 100);
         }
 

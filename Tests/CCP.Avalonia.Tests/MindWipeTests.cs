@@ -62,7 +62,7 @@ public sealed class MindWipeTests
         }
     }
 
-    private static void Run(Action<MindWipePlayer, List<Voice>, Clock> body) =>
+    private static void Run(Action<MindWipePlayer, List<Voice>, Clock> body, Action? duringPlay = null) =>
         AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
@@ -84,6 +84,7 @@ public sealed class MindWipeTests
                 Assert.Equal(clip, path);
                 var v = new Voice { Loop = loop, Vol = vol, Ended = ended };
                 voices.Add(v);
+                duringPlay?.Invoke();
                 return v;
             }, clock, roll: () => 0.4);   // under 180/h's 0.5 per tick: every tick fires
             player.Seed();
@@ -102,6 +103,15 @@ public sealed class MindWipeTests
             }
             return Task.CompletedTask;
         }).GetAwaiter().GetResult();
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Master_muted_during_factory_is_reapplied_on_publication(bool loop) => Run((player, voices, clock) =>
+    {
+        if (loop) player.StartLoop(0.5); else player.TriggerOnce();
+        Assert.Equal(0, Assert.Single(voices).Vol);
+    }, () => CoreSettings.Current.MasterVolume = 0);
 
     [Fact]
     public void Master_updates_one_shot_and_loop_without_losing_their_own_level() => Run((player, voices, clock) =>

@@ -4,18 +4,7 @@ using System.IO;
 
 namespace ConditioningControlPanel.Services.MediaFiles;
 
-/// <summary>
-/// Bookkeeping for decrypted / downloaded temp files that are swept above a cap.
-///
-/// The rule this exists for: a delete that is REFUSED (LibVLC and the WPF decoders open a file
-/// without FILE_SHARE_DELETE, so a clip still on screen cannot be removed) must stay on the
-/// books and be tried again. Every sweep in the app used to drop such a file from its list, so
-/// it stayed on disk until the next launch: at 120 flashes a minute that is disk filling for as
-/// long as the engine runs.
-///
-/// Held files are bounded by what is really open right now (a handful of players), so retrying
-/// them on each sweep costs a few failed deletes, not a scan.
-/// </summary>
+/// <summary>Tracks temp files and retries refused deletes until consumers release them.</summary>
 public sealed class MediaTempFileLedger
 {
     private readonly object _gate = new();
