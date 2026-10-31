@@ -22,8 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// and the master switch still greys the Possession block rather than hiding it.</para>
     ///
     /// <para>The running half (MainWindow.Lab.cs on WPF) drives the Core <see cref="LockdownService"/>:
-    /// Activate, the panel swap, the clock and the secret phrase. The Emergency Exit slab has no exit
-    /// games here and follows docs/avalonia-decisions.html (Lockdown / Emergency Exit).</para>
+    /// Activate, the panel swap, the clock and the secret phrase. The Emergency Exit slab opens the shared WPF web games.</para>
     /// </summary>
     public partial class LockdownTabView : UserControl
     {
@@ -447,17 +446,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // (AVLN2000), and Button marks PointerPressed/Released handled in its class handler, so the
         // ported handlers would have been dead code that renders and reviews as if it worked.
 
-        /// <summary>
-        /// WPF opens the Emergency Exit games here (EmergencyExitHostService, WebView2; not on this
-        /// head). docs/avalonia-decisions.html, Lockdown / Emergency Exit: only while a lockdown runs,
-        /// fire the EmergencyExit tripwire and Chaster's safety hold, then state the phrase steps
-        /// and the time left. Never RestartTimer, never Deactivate, never open the phrase box.
-        /// </summary>
         private void BtnEmergencyExit_Click(object? sender, RoutedEventArgs e)
         {
             if (Lockdown is not { IsActive: true } ld) return;
-            try { ld.NotifyEscapeAttempt(EscapeKinds.EmergencyExit); } catch (Exception ex) { Log.Debug(ex, "EmergencyExit tripwire"); }
-            try { Platform.ChasterHead.Service?.NoteSafetyExit(); } catch (Exception ex) { Log.Debug(ex, "EmergencyExit chaster hold"); }
+            Views.Windows.EmergencyExitWindow.Open(TopLevel.GetTopLevel(this) as Window, ld);
             // The real time left even under HideLockdownTimer: this notice is the way out, it must not hide it.
             TxtEmergencyExitNotice.Text = Loc.GetF("lockdown_ee_phrase_steps_fmt", SessionClockLabel.LockdownClock(ld.Remaining, false));
             TxtEmergencyExitNotice.IsVisible = true;

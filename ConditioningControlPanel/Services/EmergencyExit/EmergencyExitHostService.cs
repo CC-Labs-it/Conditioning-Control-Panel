@@ -201,12 +201,7 @@ internal static class EmergencyExitHostService
     }
 
     /// <summary>Random game, never the same one twice in a row within a lockdown.</summary>
-    private static string PickGame()
-    {
-        var pool = Games.Where(g => !string.Equals(g, _lastGame, StringComparison.Ordinal)).ToArray();
-        if (pool.Length == 0) pool = Games;
-        return pool[Rng.Next(pool.Length)];
-    }
+    private static string PickGame() => EmergencyExitRules.Pick(_lastGame, Rng);
 
     private static string NormalizeGame(string? game)
     {
@@ -465,14 +460,7 @@ internal static class EmergencyExitHostService
     /// the other three are a two-in-three exit. The roll lives here and never in JS, because JS is
     /// the one part of this feature the user can edit.
     /// </summary>
-    private static double SendBackChance(string game) => game switch
-    {
-        "labyrinth" => 1.0,
-        "password" => 0.33,
-        "jigsaw" => 0.33,
-        "captcha" => 0.33,
-        _ => 0.33,
-    };
+    private static double SendBackChance(string game) => EmergencyExitRules.SendBackChance(game);
 
     /// <summary>The outro card gets <see cref="OutroFailsafe"/> to play and post <c>outro-done</c>.
     /// After that the window closes regardless: the verdict is already applied, so the card is
