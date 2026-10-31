@@ -419,10 +419,7 @@
                             </RadialGradientBrush>
                         </Ellipse.Fill>
                     </Ellipse>
-                    <!-- Animated GIF avatar (for level 20+).
-                         ponytail: WPF drove this through XamlAnimatedGif (gif:AnimationBehavior),
-                         a WPF-only package. Avalonia needs its own GIF decoder; the layer is kept
-                         so the crossfade code has its slot, but nothing animates it. -->
+                    <!-- Animated GIF and WebP emote layer. -->
                     <Image x:Name="ImgAvatarAnimated"
                            Stretch="Uniform"
                            MaxHeight="306"
@@ -631,6 +628,7 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <!-- the lamp's sheen across the plate's top half -->
                     <Border Grid.ColumnSpan="3" Margin="-7,-5,-7,0" Height="18" VerticalAlignment="Top" CornerRadius="10,10,4,4"
@@ -682,6 +680,20 @@
                                     <Path Data="M 0,0 L 4,4 L 0,8" Stroke="White" StrokeThickness="1.6" Width="5" Height="9"
                                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="1,0,0,0"/>
                                 </Border>
+                            </Border>
+                        </Grid>
+                    </Border>
+                    <!-- WPF AvatarTubeWindow.xaml:832-854 -->
+                    <Border x:Name="BtnAvatarGeneration" Grid.Column="3" Width="46" Height="18" CornerRadius="9"
+                            Margin="10,0,0,0" VerticalAlignment="Center" Cursor="Hand" IsVisible="False" Opacity="0"
+                            Background="{StaticResource DepthWellFloorBrush}" BorderBrush="{StaticResource DepthPressedBevel}" BorderThickness="1"
+                            PointerPressed="GenerationPillPressed">
+                        <Grid ColumnDefinitions="*,*">
+                            <Border x:Name="PillSegV1" CornerRadius="8,0,0,8" Margin="1,1,0,1">
+                                <TextBlock x:Name="PillTxtV1" Text="V1" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <Border x:Name="PillSegV2" Grid.Column="1" CornerRadius="0,8,8,0" Margin="0,1,1,1">
+                                <TextBlock x:Name="PillTxtV2" Text="V2" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                         </Grid>
                     </Border>
