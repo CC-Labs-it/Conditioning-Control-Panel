@@ -221,9 +221,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ==================================================================================
         // Launch shims (WPF PlayTabView.Cards.cs). Every name below is the MainWindow handler the
         // WPF card forwards to. GAMES: the Breakout demo and Piece by Piece open their GameWindow
-        // as the launcher does (LauncherWindow.Destinations); the full Breakout and Goon have no
-        // host on this head, so their buttons stay disabled in the markup with the
-        // exclusives_not_on_this_build tooltip and carry no shim.
+        // as the launcher does (LauncherWindow.Destinations). Full Breakout uses the same host
+        // with a Lab gate. Goon stays disabled in the markup with the
+        // exclusives_not_on_this_build tooltip and carries no shim.
         // ==================================================================================
 
         // ---- GAMES -----------------------------------------------------------------------
@@ -231,7 +231,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>How a games card opens its game: the launcher's own door. Tests capture it.</summary>
         internal static Action<string> LaunchGame { get; set; } = id => Games.GameWindow.Launch(id);
 
-        /// <summary>WPF LaunchPlayBreakoutDemo (BreakoutHostService.LaunchDemo): free, no account.</summary>
+        /// <summary>WPF MainWindow.PlayTab.cs:56, BreakoutHostService.cs:14-17: Lab gate.</summary>
+        private void BtnPlayBreakout_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayBreakout();
+
         private void BtnPlayBreakoutDemo_Click(object? sender, RoutedEventArgs e) => LaunchGame("breakoutdemo");
 
         /// <summary>WPF LaunchPlayChess (PieceByPieceHostService.Launch): free for everyone.</summary>

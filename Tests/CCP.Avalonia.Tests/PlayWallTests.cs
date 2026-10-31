@@ -83,9 +83,9 @@ public sealed class PlayWallTests
                 Assert.False(band.IsVisible);
                 Assert.False(line.IsVisible);
 
-                // GAMES: the full Breakout and Goon have no host on this head, so their Play button
+                // GAMES: Goon has no host on this head, so its Play button
                 // refuses honestly; the Breakout demo and Piece by Piece open their game as the launcher does.
-                foreach (var n in new[] { "BtnPlayBreakout", "BtnPlayGoon" })
+                foreach (var n in new[] { "BtnPlayGoon" })
                 {
                     var b = C<Button>(n);
                     Assert.False(b.IsEnabled, n);
