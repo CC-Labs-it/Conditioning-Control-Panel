@@ -334,7 +334,8 @@
                                         BorderBrush="{Binding EdgeBrush}" BorderThickness="{Binding EdgeThickness}"
                                         Cursor="{Binding Cursor}" ToolTip.Tip="{Binding UnavailableTip}"
                                         PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited"
-                                        PointerReleased="Card_PointerReleased">
+                                        PointerReleased="Card_PointerReleased" RenderTransformOrigin="50%,50%">
+                                  <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
                                   <Grid>
                                     <!-- Everything that must respect the card's corners lives in
                                          this inner clip. The card itself does NOT clip: the tier
@@ -455,6 +456,9 @@
                                     <fx:TierBadge Tier="{Binding Tier}" FreeToday="{Binding BadgeFreeToday}"
                                                   HorizontalAlignment="Right" VerticalAlignment="Top"
                                                   Margin="0,-6,-6,0"/>
+                                    <fx:VaultCardAura IsVisible="{Binding IsMine}" Hue="{Binding GroupHue}"
+                                                      Seed="{Binding AuraSeed}" Margin="{Binding AuraMargin}"
+                                                      Loaded="Aura_Loaded" Unloaded="Aura_Unloaded"/>
                                   </Grid>
                                 </Border>
                             </DataTemplate>

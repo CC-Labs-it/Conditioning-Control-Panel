@@ -69,6 +69,8 @@ namespace ConditioningControlPanel.Avalonia
         internal static SessionRunner? Sessions { get; set; }
         /// <summary>The app-lifetime media recap (WPF App.MediaHistory), or null on the headless render path.</summary>
         internal static MediaHistoryService? MediaHistory { get; set; }
+        // WPF App.DailyFree: the same service drives entitlement checks and vault repaint refresh.
+        internal static DailyFreeService? DailyFree { get; set; }
         /// <summary>THE FUSE (WPF App.DescentCountdown). Built before the shell so its spark can subscribe.</summary>
         internal static Services.Descent.DescentCountdownService? DescentCountdown { get; set; }
         internal static Services.Descent.DescentService? Descent { get; set; }
@@ -626,7 +628,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:490/2549: the ? box's daily-free rotation that TierGate ORs in.
                 // Pure ctor; the override fetch is fire-and-forget and falls back to the seeded pick.
                 // A sandbox never reaches the real proxy (the SkipStartupFetch rule); the seeded pick still works.
-                var dailyFree = new DailyFreeService(
+                var dailyFree = DailyFree = new DailyFreeService(
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
