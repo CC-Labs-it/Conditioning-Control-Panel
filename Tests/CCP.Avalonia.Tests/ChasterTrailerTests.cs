@@ -85,6 +85,63 @@ public sealed partial class ChasterMenuTests
         await Task.CompletedTask;
     }));
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task HidingAnAncestorOrWindowClosesTheTrailer(bool window) => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
+    {
+        w.Content = null;
+        var parent = new Border { Child = tab };
+        w.Content = parent;
+        var row = tab.PriceRows["typo"];
+        tab.OpenTrailer(row);
+        Assert.Equal("typo", tab.TrailerId);
+        if (window) w.Hide(); else parent.IsVisible = false;
+        Assert.True(tab.IsVisible); // the tab's own property never changed
+        Assert.Null(tab.TrailerId);
+        Assert.False(tab.FindControl<Popup>("Trailer")!.IsOpen);
+        tab.OpenTrailer(row);
+        Assert.Null(tab.TrailerId);
+        if (window) w.Show(); else parent.IsVisible = true;
+        Assert.Null(tab.TrailerId);
+        // Reattach under a new ancestor; hiding the old parent must have no effect.
+        parent.Child = null;
+        w.Content = tab;
+        tab.OpenTrailer(row);
+        Assert.Equal("typo", tab.TrailerId);
+        parent.IsVisible = false;
+        Assert.Equal("typo", tab.TrailerId);
+        await Task.CompletedTask;
+    }));
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task HidingAnAncestorOrWindowCancelsPendingTrailerOpens(bool window) => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
+    {
+        w.Content = null;
+        var parent = new Border { Child = tab };
+        w.Content = parent;
+        var row = tab.PriceRows["typo"];
+        tab.TrailerDelays = (TimeSpan.FromHours(1), TimeSpan.FromHours(1));
+        void Enter() => row.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, row, null!, w,
+            default, 0, PointerPointProperties.None, KeyModifiers.None));
+        Enter();
+        Assert.True(tab.TrailerOpenPending);
+        if (window) w.Hide(); else parent.IsVisible = false;
+        Assert.False(tab.TrailerOpenPending);
+        Assert.False(tab.TrailerClosePending);
+        tab.TrailerOpenElapsed(); // a callback already queued before the hide cannot reopen it
+        Assert.Null(tab.TrailerId);
+        Enter();
+        tab.TrailerOpenElapsed(); // the open guard also rejects a new request while hidden
+        Assert.Null(tab.TrailerId);
+        Assert.False(tab.FindControl<Popup>("Trailer")!.IsOpen);
+        if (window) w.Show(); else parent.IsVisible = true;
+        Assert.Null(tab.TrailerId);
+        await Task.CompletedTask;
+    }));
+
     [Fact]
     public Task UnlinkDismissesTheTrailer() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _, tab, _) =>
     {

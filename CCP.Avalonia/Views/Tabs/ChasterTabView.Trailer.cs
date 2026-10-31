@@ -28,14 +28,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private ToggleButton? _trailerRow;
         private bool _trailerShown;
         private bool _overTrailer;
+        private IDisposable? _trailerVisibility;
+
+        private bool TrailerCanOpen => _attached && IsEffectivelyVisible
+            && TopLevel.GetTopLevel(this) is { IsVisible: true };
 
         private void TrailerInit()
         {
             _trailerOpen.Tick += (_, _) => TrailerOpenElapsed();
             _trailerClose.Tick += (_, _) => TrailerCloseElapsed();
             // WPF (xaml.cs:103): a page that leaves the screen takes its trailer with it.
-            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) HideTrailer(); };
-            DetachedFromVisualTree += (_, _) => HideTrailer();
+            AttachedToVisualTree += (_, _) =>
+            {
+                _trailerVisibility = EffectiveVisibility.Watch(this, () =>
+                {
+                    if (!TrailerCanOpen) HideTrailer();
+                });
+                if (!TrailerCanOpen) HideTrailer();
+            };
+            DetachedFromVisualTree += (_, _) =>
+            {
+                _trailerVisibility?.Dispose();
+                _trailerVisibility = null;
+                HideTrailer();
+            };
             Trailer.Closed += (_, _) => HideTrailer();
         }
 
@@ -88,7 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void OpenTrailer(ToggleButton? row = null)
         {
             row ??= _trailerRow;
-            if (!_attached || !IsVisible) return;
+            if (!TrailerCanOpen) return;
             if (row?.Tag is not string id || TabPrices.Find(id) is not { } price) return;
             _trailerRow = row;
             try
