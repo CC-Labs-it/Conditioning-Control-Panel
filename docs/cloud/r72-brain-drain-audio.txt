@@ -108,3 +108,17 @@ Review validation builds Core, Avalonia and Avalonia.Tests: 0 errors each.
 Full Core suite: Failed 0, Passed 4644, Skipped 6, Total 4650 (43 s).
 Restored review run: affected Avalonia tests Failed 0, Passed 13, Skipped 0 (10 s).
 Review guards: All Core guards passed; avalonia_docs self-check OK. Ledger remains stub.
+
+Review P2 accepted: WPF Services/LockCard/BrainDrainService.cs:405-411 logs
+only a successful start. BrainDrainPlayer now retains the selected clip path and
+feeds App.MediaHistory after generation-valid playback, outside the stop gate.
+MediaLogRecordsOnlySuccessfulPlayback tests the real history service for success,
+null/throwing preparation and failed playback. The four P1 races also assert no
+history entry after cancellation, with or without restart. No new UI strings.
+P2 fail-proof inverted the started guard: 7 failed, 1 passed across 8 cases,
+catching the missing success entry and phantom null/failed-play/cancelled entries.
+The throwing-preparation case stayed empty. Production guard restored.
+P2 validation builds: Core, Avalonia and Avalonia.Tests each had 0 errors.
+Full Core tests: Failed 0, Passed 4644, Skipped 6, Total 4650 (43 s).
+P2 restored head tests: Failed 0, Passed 17, Skipped 0 (8 s). P1 races still pass.
+P2 guards: All Core guards passed; avalonia_docs self-check OK. Ledger remains stub.

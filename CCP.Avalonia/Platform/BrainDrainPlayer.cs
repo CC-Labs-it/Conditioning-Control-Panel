@@ -69,10 +69,12 @@ internal sealed class BrainDrainPlayer
         try
         {
             var clips = BrainDrainAudioPolicy.Discover(BrainDrainAudioPolicy.AudioFolder, BrainDrainAudioPolicy.LegacyFolder);
-            if (clips.Length != 0) voice = _prepare(clips[Random.Shared.Next(clips.Length)], () =>
+            var path = clips.Length == 0 ? null : clips[Random.Shared.Next(clips.Length)];
+            if (path != null) voice = _prepare(path, () =>
             {
                 lock (_gate) if (generation == _generation) { _voice = null; _busy = false; ++_generation; }
             });
+            bool started = false;
             lock (_gate)
             {
                 // WPF BrainDrainService.cs:377-388: decoder creation may outlive panic. Check
@@ -81,10 +83,12 @@ internal sealed class BrainDrainPlayer
                 {
                     voice.Volume = Gain();
                     if (voice.Play() && _running && generation == _generation)
-                    { _voice = voice; voice = null; }
+                    { _voice = voice; voice = null; started = true; }
                 }
                 if (generation == _generation) _busy = _voice != null;
             }
+            // WPF BrainDrainService.cs:405-411: only a clip that actually started enters Media Log.
+            if (started) App.MediaHistory?.RecordAudio(path);
         }
         catch { lock (_gate) if (generation == _generation) _busy = false; }
         finally { voice?.Dispose(); }

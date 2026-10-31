@@ -25,8 +25,9 @@ public class BrainDrainAudioTests
         public double Gain;
         public bool Disposed;
         public int Plays;
+        public bool PlaySucceeds = true;
         public Action? OnPlay;
-        public bool Play() { Plays++; OnPlay?.Invoke(); return true; }
+        public bool Play() { Plays++; OnPlay?.Invoke(); return PlaySucceeds; }
         public double Volume { set => Gain = value; }
         public void Dispose() => Disposed = true;
     }
@@ -105,8 +106,11 @@ public class BrainDrainAudioTests
         }, new Clock(), () => 0);
         var oldInstance = BrainDrainPlayer.Instance;
         Task? tick = null;
+        var history = new ConditioningControlPanel.Services.MediaHistoryService(Path.Combine(root, "history.json"));
+        var oldHistory = global::ConditioningControlPanel.Avalonia.App.MediaHistory;
         try
         {
+            global::ConditioningControlPanel.Avalonia.App.MediaHistory = history;
             CorePaths.EffectiveAssetsProvider = () => root;
             CoreSettings.Current.BrainDrainEnabled = true;
             BrainDrainPlayer.Instance = player;
@@ -119,12 +123,54 @@ public class BrainDrainAudioTests
             release.Set(); tick.GetAwaiter().GetResult();
             Assert.Equal(0, voice.Plays);
             Assert.True(voice.Disposed);
+            Assert.Empty(history.GetSnapshot());
         }
         finally
         {
             release.Set();
             try { tick?.GetAwaiter().GetResult(); }
-            finally { player.Stop(); BrainDrainPlayer.Instance = oldInstance; Directory.Delete(root, true); }
+            finally
+            {
+                player.Stop(); BrainDrainPlayer.Instance = oldInstance;
+                global::ConditioningControlPanel.Avalonia.App.MediaHistory = oldHistory;
+                history.Dispose(); Directory.Delete(root, true);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("success")]
+    [InlineData("null")]
+    [InlineData("throws")]
+    [InlineData("failed-play")]
+    public void MediaLogRecordsOnlySuccessfulPlayback(string outcome)
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-drain-log-").FullName;
+        Directory.CreateDirectory(Path.Combine(root, "braindrain"));
+        var path = Path.Combine(root, "braindrain", "clip.wav"); File.WriteAllText(path, "");
+        var history = new ConditioningControlPanel.Services.MediaHistoryService(Path.Combine(root, "history.json"));
+        var oldHistory = global::ConditioningControlPanel.Avalonia.App.MediaHistory;
+        var voice = new Voice { PlaySucceeds = outcome != "failed-play" };
+        var player = new BrainDrainPlayer((_, _) => outcome switch
+        { "throws" => throw new IOException("decoder failed"), "null" => null, _ => voice }, new Clock(), () => 0);
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.App.MediaHistory = history;
+            CorePaths.EffectiveAssetsProvider = () => root; CoreSettings.Current.BrainDrainEnabled = true;
+            player.Start(); player.Tick(TimeSpan.FromSeconds(5));
+            if (outcome == "success")
+            {
+                var entry = Assert.Single(history.GetSnapshot());
+                Assert.Equal(path, entry.FilePath);
+                Assert.Equal(ConditioningControlPanel.Models.MediaType.Audio, entry.Type);
+                player.Tick(TimeSpan.FromSeconds(5)); Assert.Single(history.GetSnapshot());
+            }
+            else Assert.Empty(history.GetSnapshot());
+        }
+        finally
+        {
+            player.Stop(); global::ConditioningControlPanel.Avalonia.App.MediaHistory = oldHistory;
+            history.Dispose(); Directory.Delete(root, true);
         }
     }
 }
