@@ -21,7 +21,7 @@ public sealed class NavRailCoinTests
     private static void Run(Action<MainShellWindow> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var motion = CoreSettings.Current.MotionLevel;
         var perf = CoreSettings.Current.PerformanceMode;
@@ -130,28 +130,14 @@ public sealed class NavRailCoinTests
         Assert.IsType<MainShellWindow.NavSpringEase>(spring.Easing);
         double peak = DepthLaw.PressTravelPx + spring.Easing.Ease(0.6) * (DepthLaw.ActiveSinkPx - DepthLaw.PressTravelPx);
         Assert.Equal(DepthLaw.ActiveSinkPx - DepthLaw.ReleaseOvershootPx, peak, 6);   // past the socket by 1 px
-        Assert.Equal(DepthLaw.ActiveSinkPx - DepthLaw.ReleaseOvershootPx, MainShellWindow.CoinOvershoot(DepthLaw.PressTravelPx, DepthLaw.ActiveSinkPx), 6);
+        Assert.Equal(DepthLaw.ActiveSinkPx - DepthLaw.ReleaseOvershootPx, DepthLaw.Overshoot(DepthLaw.PressTravelPx, DepthLaw.ActiveSinkPx), 6);
         Assert.Equal(1.0, spring.Easing.Ease(1.0), 6);
     });
-    [Theory]
-    [InlineData(false, MotionLevel.Full, PerformanceTier.Balanced, true)]
-    [InlineData(false, MotionLevel.Reduced, PerformanceTier.Balanced, true)]
-    [InlineData(true, MotionLevel.Full, PerformanceTier.Balanced, false)]
-    [InlineData(false, MotionLevel.Off, PerformanceTier.Balanced, false)]
-    [InlineData(false, MotionLevel.Full, PerformanceTier.Performance, false)]
-    public void TiltHonorsSelectionMotionAndPerformance(bool active, MotionLevel level, PerformanceTier tier, bool allowed)
-    {
-        Assert.Equal(allowed, MainShellWindow.CoinTilts(active, level, tier));
-        Assert.Equal(DepthLaw.TiltDegrees, MainShellWindow.CoinTilt(2, -2));
-        Assert.Equal(-DepthLaw.TiltDegrees, MainShellWindow.CoinTilt(2, 2));
-        Assert.Equal(0, MainShellWindow.CoinTilt(0, 1));
-    }
-
     [Fact]
     public void CoinPartsAndStateTransitionsMatchWpfWithoutConstructingTheShell() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var tile = new Border { Width = 52, Height = 52, CornerRadius = new CornerRadius(13) };
         var art = new Border(); var tint = new Border(); var ring = new Border();
@@ -188,7 +174,7 @@ public sealed class NavRailCoinTests
     private static MainShellWindow.NavCoinParts BareCoin()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         return new() { Disc = new Ellipse(), Socket = new Border(), Rim = new Border() };
     }

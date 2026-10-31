@@ -1,5 +1,4 @@
 // PORTED from ConditioningControlPanel/MainWindow/MainWindow.NavRail.cs:67-497; Core DepthLaw, Theme/Depth.xaml.
-
 using System;
 using Avalonia;
 using Avalonia.Animation;
@@ -15,7 +14,6 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
-
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
@@ -28,35 +26,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             internal Border Dish = null!, Socket = null!, Rim = null!, Outer = null!, Inner = null!;
             internal Path Specular = null!;
         }
-
         // WPF Controls/NavRail/NavRailRules.cs:213-220: the coin's sizes and the tilt's 90 ms.
         internal const double CoinDiscWidth = 54, CoinDiscHeight = 12, CoinRimSize = 50, CoinRimRadius = 12;
         internal const double CoinOuterSize = 58, CoinOuterRadius = 16;
         internal const double CoinInnerSize = 48, CoinInnerRadius = 11, CoinInnerThickness = 2.5;
         internal const double SpecularOffsetX = 2.5, SpecularOffsetY = 3.0, CoinDiscRightPx = 1.5;
         internal const int CoinTiltMs = 90;
-
-        /// <summary>WPF NavRailRules.CoinOvershoot: past the target by ReleaseOvershootPx, then back.</summary>
-        internal static double CoinOvershoot(double from, double to) =>
-            to == from ? to : to + Math.Sign(to - from) * DepthLaw.ReleaseOvershootPx;
-
-        /// <summary>WPF NavRailRules.CoinTilt: the lean toward a pointer at nx, ny in -1..1.</summary>
-        internal static double CoinTilt(double nx, double ny) =>
-            Math.Clamp(nx, -1, 1) * -Math.Clamp(ny, -1, 1) * DepthLaw.TiltDegrees;
-
-        /// <summary>WPF NavRailRules.CoinTilts + DepthRules.TiltAllowed: idle coins lean, never at
-        /// Motion Off or on the Performance tier.</summary>
-        internal static bool CoinTilts(bool active, MotionLevel level, PerformanceTier tier) =>
-            !active && level != MotionLevel.Off && tier != PerformanceTier.Performance;
-
         private static IBrush? DepthBrush(string key)
         {
             try { return Application.Current?.TryGetResource(key, ThemeVariant.Dark, out var v) == true ? v as IBrush : null; }
             catch { return null; }
         }
-
         private static Color Shadow(Color hue, double alpha) => Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), alpha));
-
         /// <summary>WPF BuildNavCoin (:245): the disc under the tile, the outer hairline over the disc,
         /// the dish right over the tile, socket/lip/inner ring over the art and its hue wash, and the
         /// crescent over the ring.</summary>
@@ -107,7 +88,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             coin.DiscShift.X = CoinDiscRightPx;
             foreach (var part in new Control[] { coin.Disc, coin.Dish, coin.Socket, coin.Rim, coin.Outer, coin.Inner, coin.Specular })
                 Grid.SetRow(part, row);
-
             var kids = face.Children;
             kids.Insert(kids.IndexOf(tile), coin.Disc);
             kids.Insert(kids.IndexOf(tile) + 1, coin.Dish);
@@ -121,7 +101,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             kids.Insert(ring != null && kids.Contains(ring) ? kids.IndexOf(ring) + 1 : kids.IndexOf(coin.Inner) + 1, coin.Specular);
             return coin;
         }
-
         /// <summary>WPF BuildNavCoinCrescent (:359): the sliver between the face and the face nudged
         /// down-right, kept only near the top-left corner.</summary>
         internal static Geometry BuildNavCoinCrescent()
@@ -133,7 +112,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var corner = new EllipseGeometry { Center = new Point(r * 0.8, r * 0.8), RadiusX = s * 0.48, RadiusY = s * 0.48 };
             return new CombinedGeometry(GeometryCombineMode.Intersect, sliver, corner);
         }
-
         /// <summary>WPF NavRail.cs:221: press travels; handled release springs after navigation.</summary>
         private static void HookNavPress(NavSectionRow row)
         {
@@ -153,7 +131,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PaintNavCoin(row, spring: true);
             }, RoutingStrategies.Bubble, handledEventsToo: true);
         }
-
         /// <summary>WPF PaintNavCoin (:384): paints a coin for its row's state, eased by DepthLaw.</summary>
         private static void PaintNavCoin(NavSectionRow row, bool spring = false)
         {
@@ -166,7 +143,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             catch (Exception ex) { Log.Debug("PaintNavCoin: {E}", ex.Message); }
         }
-
         /// <summary>WPF NavRail.cs:402: swap seated lighting, ease travel and shadow; ms 0 snaps.</summary>
         internal static void ApplyNavCoinState(NavCoinParts coin, TranslateTransform lift,
             bool pressed, bool active, bool hovered, int ms, bool spring)
@@ -174,11 +150,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             bool seated = pressed || active;
             coin.Rim.BorderBrush = DepthBrush(seated ? "DepthPressedBevel" : "DepthCoinRim");
             coin.Socket.Opacity = seated ? 1 : 0;
-
             double travel = DepthLaw.TravelFor(true, pressed, active, hovered);
             double shadow = DepthLaw.ShadowFor(true, pressed, active, hovered);
             double discTo = shadow > 0 ? 1 : 0;
-
             if (ms <= 0)
             {
                 lift.Transitions = null;
@@ -189,11 +163,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 coin.Disc.Opacity = discTo;
                 return;
             }
-
             var span = TimeSpan.FromMilliseconds(ms);
             double from = lift.Y;
             Easing ease = spring && Math.Abs(from - travel) > 0.01
-                ? new NavSpringEase((CoinOvershoot(from, travel) - from) / (travel - from))
+                ? new NavSpringEase((DepthLaw.Overshoot(from, travel) - from) / (travel - from))
                 : new QuadraticEaseOut();
             ReuseNavTransition(lift, TranslateTransform.YProperty, span, ease);
             lift.Y = travel;
@@ -205,7 +178,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ReuseNavTransition(coin.Disc, Visual.OpacityProperty, span, new LinearEasing());
             coin.Disc.Opacity = discTo;
         }
-
         /// <summary>WPF's release keyframes as one curve: ease out to the overshoot point at 60% of
         /// the time, then ease in-out back to the target. <c>peak</c> is the overshoot as progress.</summary>
         internal sealed class NavSpringEase(double peak) : Easing
@@ -224,14 +196,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return peak + (1 - peak) * io;
             }
         }
-
         /// <summary>WPF TiltNavCoin (:447): the hover lean toward the pointer, idle coins only.</summary>
         private static void TiltNavCoin(NavSectionRow row, PointerEventArgs e)
         {
             try
             {
                 if (row.Face == null || row.Tile == null) return;
-                if (row.Pressed || !CoinTilts(row.Active, AmbientFxCanvas.Env.Level, AmbientFxCanvas.Env.CurrentTier))
+                if (row.Pressed || !DepthLaw.CoinTilts(row.Active, AmbientFxCanvas.Env.Level, AmbientFxCanvas.Env.CurrentTier))
                 {
                     SettleNavTilt(row);
                     return;
@@ -239,11 +210,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 double w = row.Tile.Bounds.Width, h = row.Tile.Bounds.Height;
                 if (w <= 0 || h <= 0) return;
                 var at = e.GetPosition(row.Tile);
-                SetNavTilt(row, CoinTilt(at.X / w * 2 - 1, at.Y / h * 2 - 1), DepthLaw.Ms(CoinTiltMs, AmbientFxCanvas.Env.Level), null);
+                SetNavTilt(row, DashboardDepthLaw.TiltFor(at.X / w * 2 - 1, at.Y / h * 2 - 1), DepthLaw.Ms(CoinTiltMs, AmbientFxCanvas.Env.Level), null);
             }
             catch (Exception ex) { Log.Debug("TiltNavCoin: {E}", ex.Message); }
         }
-
         /// <summary>WPF SettleNavTilt (:468): back to level over HoverMs (Off snaps).</summary>
         private static void SettleNavTilt(NavSectionRow row) =>
             SetNavTilt(row, 0, DepthLaw.Ms(DepthLaw.HoverMs, AmbientFxCanvas.Env.Level), new QuadraticEaseOut());
