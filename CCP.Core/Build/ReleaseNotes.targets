@@ -21,6 +21,7 @@
   <Target Name="GenerateReleaseNotes" BeforeTargets="CoreCompile">
     <GenerateSharedReleaseNotes SourceFile="$(MSBuildProjectDirectory)/../ConditioningControlPanel/Services/Update/UpdateService.cs" OutputFile="$(IntermediateOutputPath)ReleaseNotes.g.cs" />
     <ItemGroup>
+      <Compile Remove="ReleaseNotes.cs" />
       <Compile Include="$(IntermediateOutputPath)ReleaseNotes.g.cs" />
       <FileWrites Include="$(IntermediateOutputPath)ReleaseNotes.g.cs" />
     </ItemGroup>
