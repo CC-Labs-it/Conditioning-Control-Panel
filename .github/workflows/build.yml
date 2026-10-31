@@ -12,11 +12,11 @@ jobs:
       - run: bash .github/scripts/avalonia-tests-sharded.sh --shard 0
       - if: always()
         shell: pwsh
-        run: Get-Content hit-probe.txt
+        run: Get-Content Tests/CCP.Avalonia.Tests/bin/Release/net10.0/hit-probe.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: hit-probe
           path: |
-            hit-probe.txt
-            hit-probe.png
+            Tests/CCP.Avalonia.Tests/bin/Release/net10.0/hit-probe.txt
+            Tests/CCP.Avalonia.Tests/bin/Release/net10.0/hit-probe.png
