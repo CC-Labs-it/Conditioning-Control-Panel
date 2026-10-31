@@ -1,5 +1,14 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.IO;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Avalonia;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
@@ -32,6 +41,7 @@ public sealed class ChaosEStimOverlayTests
 
             // No compositor: nothing is created (an opaque screen-sized block otherwise).
             ChaosEStimOverlay.CanShow = () => false;
+            ChaosEStimOverlay.EnsureCreated();
             ChaosEStimOverlay.Strike(bolt);
             ChaosEStimOverlay.Arm();
             Assert.Null(ChaosEStimOverlay.Active);
@@ -40,6 +50,7 @@ public sealed class ChaosEStimOverlayTests
             ChaosEStimOverlay.CanShow = () => true;
             // A refused window is remembered for the run (no rebuild per strike); run end forgets it.
             ChaosEStimOverlay.Refused = true;
+            ChaosEStimOverlay.EnsureCreated();
             ChaosEStimOverlay.Strike(bolt);
             ChaosEStimOverlay.Arm();
             Assert.Null(ChaosEStimOverlay.Active);
@@ -79,6 +90,274 @@ public sealed class ChaosEStimOverlayTests
             ChaosEStimGlow.ReadPointer = read;
         }
     });
+
+    // WPF ChaosModeService.cs:453, ChaosEStimOverlay.cs:329/353/375/399.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Equipped_run_precreates_hidden_windows_and_reuses_them(bool equipped) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var meta = ChaosMeta.State;
+        bool had = meta.ActiveLifetimeBoons.Contains("e_stim");
+        bool hadLevel = meta.LifetimeBoonLevels.TryGetValue("e_stim", out int level);
+        meta.LifetimeBoonLevels["e_stim"] = 1;
+        var canShow = ChaosEStimOverlay.CanShow;
+        ChaosEStimOverlay.SkipPlatformChecksForTests = true;
+        ChaosEStimOverlay.CanShow = () => true;
+        try
+        {
+            ChaosRunHost.ForceShutdown();
+            ChaosEStimOverlay.CloseActive();
+            if (equipped) meta.ActiveLifetimeBoons.Add("e_stim");
+            else meta.ActiveLifetimeBoons.Remove("e_stim");
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            Assert.Null(ChaosEStimGlow.Active); // countdown does not precreate
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            if (!equipped)
+            {
+                Assert.Null(ChaosEStimOverlay.Active);
+                Assert.Null(ChaosEStimGlow.Active);
+                return;
+            }
+            var bolt = Assert.IsType<ChaosEStimOverlay>(ChaosEStimOverlay.Active);
+            var halo = Assert.IsType<ChaosEStimGlow>(ChaosEStimGlow.Active);
+            Assert.False(bolt.IsVisible);
+            Assert.False(halo.IsVisible);
+            Assert.False(halo.IsFollowing);
+            ChaosEStimOverlay.EnsureCreated();
+            ChaosEStimOverlay.Arm();
+            Assert.Same(halo, ChaosEStimGlow.Active);
+            Assert.True(halo.IsFollowing);
+            ChaosEStimOverlay.Disarm();
+            ChaosEStimOverlay.Strike(new[] { (new PixelPoint(1, 1), new PixelPoint(10, 10)) });
+            Assert.Same(bolt, ChaosEStimOverlay.Active);
+            ChaosRunHost.RequestStop();
+            Assert.Null(ChaosEStimOverlay.Active);
+            Assert.Null(ChaosEStimGlow.Active);
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            ChaosEStimOverlay.CloseActive();
+            if (had) meta.ActiveLifetimeBoons.Add("e_stim"); else meta.ActiveLifetimeBoons.Remove("e_stim");
+            if (hadLevel) meta.LifetimeBoonLevels["e_stim"] = level; else meta.LifetimeBoonLevels.Remove("e_stim");
+            ChaosEStimOverlay.CanShow = canShow;
+            ChaosEStimOverlay.SkipPlatformChecksForTests = false;
+        }
+    });
+
+    // WPF ChaosWindowZ.cs:35-60, ChaosModeService.cs:745-762.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Video_start_and_handled_click_restack_only_live_pinned_windows(bool pinned) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        bool previousPin = settings.ChaosPinOnTop;
+        var canShow = ChaosEStimOverlay.CanShow;
+        var raise = ChaosEStimOverlay.RaiseWindow;
+        var raised = new List<Window>();
+        ChaosEStimOverlay.SkipPlatformChecksForTests = true;
+        ChaosEStimOverlay.CanShow = () => true;
+        ChaosEStimOverlay.RaiseWindow = raised.Add;
+        var video = new Window();
+        var schedule = MandatoryVideoOverlay.ScheduleChaosRaise;
+        var pending = new List<(TimeSpan Delay, Action Run)>();
+        MandatoryVideoOverlay.ScheduleChaosRaise = (delay, callback) => pending.Add((delay, callback));
+        try
+        {
+            ChaosRunHost.ForceShutdown();
+            ChaosEStimOverlay.CloseActive();
+            settings.ChaosPinOnTop = pinned;
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            ChaosEStimOverlay.EnsureCreated();
+            var bolt = ChaosEStimOverlay.Active!;
+            var halo = ChaosEStimGlow.Active!;
+            Assert.Equal(pinned, bolt.Topmost);
+            Assert.Equal(pinned, halo.Topmost);
+            MandatoryVideoOverlay.RestoreChaosLayer();
+            Assert.Empty(raised); // precreation must not unhide or raise idle windows
+            ChaosEStimOverlay.Arm();
+            ChaosEStimOverlay.Strike(new[] { (new PixelPoint(1, 1), new PixelPoint(10, 10)) });
+            raised.Clear();
+            MandatoryVideoOverlay.RestoreChaosLayer();
+            Assert.Equal(pinned ? new Window[] { bolt, halo } : Array.Empty<Window>(), raised);
+            raised.Clear();
+            video.Show();
+            MandatoryVideoOverlay.WireChaosRestacking(video);
+            var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+            video.RaiseEvent(new PointerPressedEventArgs(video, pointer, video, new Point(1, 1), 0,
+                new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
+                KeyModifiers.None, 1) { Handled = true });
+            Assert.Empty(raised); // click raise must wait for native activation
+            var click = Assert.Single(pending);
+            Assert.Equal(TimeSpan.FromMilliseconds(50), click.Delay);
+            click.Run();
+            Assert.Equal(pinned ? new Window[] { bolt, halo } : Array.Empty<Window>(), raised);
+            ChaosEStimOverlay.Disarm();
+            raised.Clear();
+            ChaosEStimOverlay.RaiseActive();
+            Assert.DoesNotContain(halo, raised);
+            ChaosRunHost.RequestStop();
+            raised.Clear();
+            MandatoryVideoOverlay.RestoreChaosLayer();
+            Assert.Empty(raised); // recap is outside the gameplay band
+        }
+        finally
+        {
+            MandatoryVideoOverlay.ScheduleChaosRaise = schedule;
+            video.Close();
+            ChaosRunHost.ForceShutdown();
+            ChaosEStimOverlay.CloseActive();
+            settings.ChaosPinOnTop = previousPin;
+            ChaosEStimOverlay.CanShow = canShow;
+            ChaosEStimOverlay.RaiseWindow = raise;
+            ChaosEStimOverlay.SkipPlatformChecksForTests = false;
+        }
+    });
+
+    // WPF ChaosModeService.cs:816 and Services/Video/VideoService.cs:5809.
+    [Theory]
+    [InlineData("video")]
+    [InlineData("run")]
+    [InlineData("replacement")]
+    public void Delayed_raise_follows_activation_and_ignores_teardown(string stop) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var schedule = MandatoryVideoOverlay.ScheduleChaosRaise;
+        var raise = ChaosEStimOverlay.RaiseWindow;
+        var canShow = ChaosEStimOverlay.CanShow;
+        var pending = new List<(TimeSpan Delay, Action Run)>();
+        var stack = new List<Window>();
+        var video = new Window();
+        bool pinned = CoreSettings.Current.ChaosPinOnTop;
+        MandatoryVideoOverlay.ScheduleChaosRaise = (delay, callback) => pending.Add((delay, callback));
+        ChaosEStimOverlay.RaiseWindow = w => { stack.Remove(w); stack.Add(w); };
+        ChaosEStimOverlay.CanShow = () => true;
+        ChaosEStimOverlay.SkipPlatformChecksForTests = true;
+        try
+        {
+            ChaosRunHost.ForceShutdown();
+            CoreSettings.Current.ChaosPinOnTop = true;
+            void Start()
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosEStimOverlay.Arm();
+            }
+            Start();
+            video.Show();
+            var halo = ChaosEStimGlow.Active!;
+            stack.Clear();
+            MandatoryVideoOverlay.RestoreChaosLayerAfterStart(video);
+            Assert.Equal(new Window[] { halo }, stack); // initial raise retained
+            var startup = Assert.Single(pending);
+            Assert.Equal(TimeSpan.FromMilliseconds(60), startup.Delay);
+            stack.Add(video); // delayed fullscreen activation covers the initial raise
+            startup.Run();
+            Assert.Equal(new Window[] { video, halo }, stack);
+            pending.Clear();
+            MandatoryVideoOverlay.WireChaosRestacking(video);
+            var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+            void Click() => video.RaiseEvent(new PointerPressedEventArgs(video, pointer, video, new Point(1, 1), 0,
+                new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
+                KeyModifiers.None, 1) { Handled = true });
+            stack.Clear();
+            Click();
+            Assert.Empty(stack); // routed click finishes before native activation
+            var click = Assert.Single(pending);
+            Assert.Equal(TimeSpan.FromMilliseconds(50), click.Delay);
+            stack.Add(video);
+            click.Run();
+            Assert.Equal(new Window[] { video, halo }, stack);
+
+            pending.Clear();
+            MandatoryVideoOverlay.RestoreChaosLayerAfterStart(video);
+            Click(); // both delayed paths must refuse teardown
+            Assert.Equal(2, pending.Count);
+            if (stop == "video") video.Close();
+            else if (stop == "run") ChaosRunHost.RequestStop();
+            else
+            {
+                ChaosRunHost.ForceShutdown();
+                Start();
+            }
+            stack.Clear();
+            foreach (var callback in pending) callback.Run();
+            Assert.Empty(stack);
+        }
+        finally
+        {
+            video.Close();
+            ChaosRunHost.ForceShutdown();
+            ChaosEStimOverlay.CloseActive();
+            CoreSettings.Current.ChaosPinOnTop = pinned;
+            MandatoryVideoOverlay.ScheduleChaosRaise = schedule;
+            ChaosEStimOverlay.RaiseWindow = raise;
+            ChaosEStimOverlay.CanShow = canShow;
+            ChaosEStimOverlay.SkipPlatformChecksForTests = false;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Unpinned_preparation_never_requests_native_topmost(bool pinned) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var click = ChaosEStimOverlay.MakeClickThrough;
+        var pin = ChaosEStimOverlay.PinWindow;
+        bool skip = ChaosEStimOverlay.SkipPlatformChecksForTests;
+        int clicks = 0, pins = 0;
+        var w = new Window { Topmost = pinned };
+        try
+        {
+            ChaosEStimOverlay.SkipPlatformChecksForTests = false;
+            ChaosEStimOverlay.MakeClickThrough = _ => { clicks++; return true; };
+            ChaosEStimOverlay.PinWindow = (_, _) => { pins++; return true; };
+            Assert.True(ChaosEStimOverlay.PrepareWindow(w, new PixelRect(20, 30, 92, 92)));
+            Assert.Equal(1, clicks);
+            Assert.Equal(pinned ? 1 : 0, pins);
+            if (!pinned) Assert.Equal(new PixelPoint(20, 30), w.Position);
+            // A refused click-through must never be reported as safe to show.
+            ChaosEStimOverlay.MakeClickThrough = _ => false;
+            Assert.False(ChaosEStimOverlay.PrepareWindow(w, new PixelRect(20, 30, 92, 92)));
+        }
+        finally
+        {
+            w.Close();
+            ChaosEStimOverlay.MakeClickThrough = click;
+            ChaosEStimOverlay.PinWindow = pin;
+            ChaosEStimOverlay.SkipPlatformChecksForTests = skip;
+        }
+    });
+
+    [Fact]
+    public void Video_builder_keeps_start_and_click_callers()
+    {
+        // Fail-proof for the native video path without starting a decoder in a headless test.
+        var root = AppContext.BaseDirectory;
+        while (!File.Exists(Path.Combine(root, "CCP.Avalonia/Views/Overlays/MandatoryVideoOverlay.cs")))
+            root = Directory.GetParent(root)?.FullName ?? throw new InvalidOperationException("repository root missing");
+        // Git checkouts can use LF or CRLF; caller placement has the same meaning in both.
+        var source = File.ReadAllText(Path.Combine(root, "CCP.Avalonia/Views/Overlays/MandatoryVideoOverlay.cs")).ReplaceLineEndings("\n");
+        Assert.Contains("WireChaosRestacking(w);", source);
+        Assert.Contains("RestoreChaosLayerAfterStart(w);\n            return new Surface", source);
+    }
+
+    private static void Setup()
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+    }
 
     private sealed class SteppedClock : TimeProvider
     {

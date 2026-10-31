@@ -135,6 +135,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             picks.CollectionChanged += (_, _) => _boonBar?.SetPicks(picks);
             // WPF :450 Pocket Watch: birth the wave-countdown window now (keep-alive contract).
             if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
+            // WPF ChaosModeService.cs:453: equipped E-Stim gets both hidden keep-alive windows.
+            if (ChaosMeta.IsBoonActive("e_stim")) ChaosEStimOverlay.EnsureCreated();
             _state.StartShields = _state.Shields;
             StartToys();
             _waveDetonatedAt = _state.Detonated;
@@ -656,6 +658,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state == null) return;
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused);
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
+        }
+
+        /// <summary>WPF ChaosModeService.cs:745-762, E-Stim slice of the gameplay layer.</summary>
+        internal static void RaiseEStimAboveVideo()
+        {
+            if (_spawning && CoreSettings.Current.ChaosPinOnTop) ChaosEStimOverlay.RaiseActive();
         }
 
         private static void RunAgain()

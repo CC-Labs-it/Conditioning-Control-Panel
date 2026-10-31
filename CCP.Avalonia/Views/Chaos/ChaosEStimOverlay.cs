@@ -1,9 +1,8 @@
 // PORTED from ConditioningControlPanel/Chaos/ChaosEStimOverlay.cs (ChaosEStimOverlay + ChaosEStimGlow).
 // The maths (bolt path, strike timeline, halo follow and pulse) is Core's ChaosEStimMath; this file only draws.
 //
-// ponytail: nothing calls Strike/Arm yet. WPF fires them from BubbleService (charged pops, :440/:478/:1726)
-// and ChaosModeService's e_stim toy (:2770/:2800); neither the bubble field nor the toys exist on this head
-// (ChaosRunHost header). The e-stim DEVICE output is untouched here.
+// Remaining: charged-pop discharge and toy Arm/Disarm callers (WPF BubbleService.cs:356-442,
+// ChaosModeService.cs:2761-2799). The e-stim device output is untouched here.
 
 using System;
 using System.Collections.Generic;
@@ -25,7 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
     /// <summary>
     /// E-Stim's lightning: jagged tether bolts arcing bubble-to-bubble for a quarter second, on one
-    /// click-through primary-screen window (WPF ChaosEStimOverlay). Created on the first strike, hidden
+    /// click-through primary-screen window (WPF ChaosEStimOverlay). Precreated for an equipped run, hidden
     /// between strikes, closed only by <see cref="CloseActive"/> (run end, panic). Refuses where there is
     /// no compositor: without per-pixel alpha the "window" would be an opaque screen-sized block.
     /// </summary>
@@ -44,6 +43,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>Charges spent (or cancelled): drop the cursor halo.</summary>
         public static void Disarm() => ChaosEStimGlow.Disarm();
+
+        /// <summary>WPF ChaosEStimOverlay.cs:46 and :329: realize both windows once, then park hidden.</summary>
+        public static void EnsureCreated() => OnUi(() =>
+        {
+            ChaosEStimGlow.EnsureCreated();
+            try
+            {
+                if (_active != null || Refused || !CanShow()) return;
+                var w = new ChaosEStimOverlay(sample: false);
+                if (!w.Prepare()) { Refused = true; w.Close(); return; }
+                _active = w;
+                w.Show();
+                w.Hide();
+            }
+            catch (Exception ex) { Log.Debug("ChaosEStim.EnsureCreated: {E}", ex.Message); }
+        });
+
+        // WPF ChaosWindowZ.cs:35-60. Unpinned windows stay managed so other apps can cover them.
+        internal static Func<Window, bool> MakeClickThrough = w => X11Overlay.SetClickThrough(w, true);
+        internal static Func<Window, PixelRect, bool> PinWindow = (w, bounds) => X11Overlay.SetOverrideRedirect(w, bounds);
+        internal static bool PrepareWindow(Window w, PixelRect bounds)
+        {
+            if (SkipPlatformChecksForTests) return true;
+            bool clickThrough = MakeClickThrough(w);
+            if (w.Topmost) return PinWindow(w, bounds) && clickThrough;
+            w.Position = bounds.Position;
+            w.Width = bounds.Width / w.DesktopScaling;
+            w.Height = bounds.Height / w.DesktopScaling;
+            return clickThrough;
+        }
+
+        internal static Action<Window> RaiseWindow = w => X11Overlay.Raise(w);
+        internal static void RaisePinned(Window? w)
+        {
+            if (w is { IsVisible: true, Topmost: true }) RaiseWindow(w);
+        }
+
+        /// <summary>WPF ChaosEStimOverlay.cs:100 and :397: bolt first, halo above it.</summary>
+        public static void RaiseActive()
+        {
+            RaisePinned(_active);
+            ChaosEStimGlow.RaiseActive();
+        }
 
         /// <summary>The platform refused a click-through window this run: stop rebuilding one per strike.</summary>
         internal static bool Refused;
@@ -71,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         _active = w;
                     }
                     if (!_active.IsVisible) _active.Show();
-                    X11Overlay.Raise(_active);   // un-hiding doesn't re-stack (WPF RaiseAboveVideo)
+                    RaisePinned(_active);   // un-hiding doesn't re-stack (WPF RaiseAboveVideo)
                     _active.BeginStrike(boltsPx);
                 }
                 catch (Exception ex) { Log.Debug("ChaosEStim.Strike: {E}", ex.Message); }
@@ -110,7 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             SystemDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = true;
+            Topmost = CoreSettings.Current.ChaosPinOnTop; // WPF ChaosWindowZ.cs:35
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
@@ -137,7 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (CoreSettings.Current.DualMonitorEnabled)
                 foreach (var s in Screens!.All) bounds = bounds.Union(s.Bounds);
             if (SkipPlatformChecksForTests) return true;
-            if (!X11Overlay.SetClickThrough(this, true) | !X11Overlay.SetOverrideRedirect(this, bounds))
+            if (!PrepareWindow(this, bounds))
             {
                 Log.Warning("ChaosEStim: the platform refused a click-through topmost overlay, no lightning");
                 return false;
@@ -239,6 +281,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static ChaosEStimGlow? Active => _active;
         internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadPointer = X11Pointer.Read;
 
+        /// <summary>WPF ChaosEStimOverlay.cs:329: hidden precreation without starting the follow clock.</summary>
+        public static void EnsureCreated() => ChaosEStimOverlay.OnUi(() =>
+        {
+            try
+            {
+                if (_active != null || ChaosEStimOverlay.Refused || !ChaosEStimOverlay.CanShow()) return;
+                var w = new ChaosEStimGlow();
+                if (!w.Prepare()) { ChaosEStimOverlay.Refused = true; w.Close(); return; }
+                _active = w;
+                w.Show();
+                w.Hide();
+            }
+            catch (Exception ex) { Log.Debug("ChaosEStimGlow.EnsureCreated: {E}", ex.Message); }
+        });
+
+        public static void RaiseActive() => ChaosEStimOverlay.RaisePinned(_active);
+        internal bool IsFollowing => _follow.IsEnabled;
+
         /// <summary>Charges armed: show the halo and follow the cursor. Safe from any thread.</summary>
         public static void Arm() => ChaosEStimOverlay.OnUi(() =>
         {
@@ -254,7 +314,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _active._start = ChaosEStimOverlay.Clock.GetTimestamp();
                 _active.Step();   // snap to the cursor before the first frame
                 if (!_active.IsVisible) _active.Show();
-                X11Overlay.Raise(_active);
+                ChaosEStimOverlay.RaisePinned(_active);
                 _active._follow.Start();
             }
             catch (Exception ex) { Log.Debug("ChaosEStimGlow.Arm: {E}", ex.Message); }
@@ -285,7 +345,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             SystemDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = true;
+            Topmost = CoreSettings.Current.ChaosPinOnTop; // WPF ChaosWindowZ.cs:35
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
@@ -322,7 +382,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (ChaosEStimOverlay.SkipPlatformChecksForTests) return true;
             var at = ReadPointer()?.At ?? default;
             int size = (int)Math.Ceiling(M.HaloWindow * DesktopScaling);
-            if (!X11Overlay.SetClickThrough(this, true) | !X11Overlay.SetOverrideRedirect(this, new PixelRect(at.X, at.Y, size, size)))
+            if (!ChaosEStimOverlay.PrepareWindow(this, new PixelRect(at.X, at.Y, size, size)))
             {
                 Log.Warning("ChaosEStimGlow: the platform refused a click-through topmost overlay, no halo");
                 return false;
