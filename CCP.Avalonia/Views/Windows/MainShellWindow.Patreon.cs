@@ -188,6 +188,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ShowVaultGate(Services.Vault.VaultOffer.FeatureKeyForView(view), 1);
         }
 
+        /// <summary>WPF MainWindow.QuestsTab.cs:96 OpenPricedCard: a priced CTA sends a patron whose grant died
+        /// to Reconnect instead of the price card.</summary>
+        internal void OpenPricedCard(string featureKey, int tier)
+        {
+            if (LockdownActive) return;
+            if (TierGate.ReconnectIsTheAnswer()) { _ = ReconnectFromGate(); return; }
+            ShowVaultGate(featureKey, tier);
+        }
+
         /// <summary>WPF App.xaml.cs:505, seeded into TierGate.ReconnectIsTheAnswerProvider: a patron linked server-side
         /// whose grant on this PC is gone (or dead) and who has no premium now is told to reconnect, not sold a tier.</summary>
         internal static bool ReconnectIsTheAnswerNow()

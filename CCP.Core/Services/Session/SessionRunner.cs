@@ -162,6 +162,10 @@ namespace ConditioningControlPanel.Services
             Log.Information("Session started: {Name}", session.Name);
         }
 
+        /// <summary>Progress from the last engine tick, matching WPF ProgressUpdated.</summary>
+        public double ProgressPercent => CurrentSession is { DurationMinutes: > 0 } session
+            ? Math.Clamp(_lastElapsed.TotalMinutes / session.DurationMinutes * 100, 0, 100) : 0;
+
         private double RemainingMinutes =>
             Math.Max(0, (CurrentSession?.DurationMinutes ?? 0) - _lastElapsed.TotalMinutes);
 
