@@ -573,6 +573,38 @@ public sealed class FirstShowStageTests
         Assert.Equal(hash + ".wav", Path.GetFileName(spoken[1]));
     }, panicKey: "Enter");
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RunRestoresAudioProvidersAfterSuccessAndFailure(bool fail) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var originalOverride = CoreModArt.AudioOverridePathProvider;
+        var originalSuppressed = CoreAudio.IsOutputSuppressedProvider;
+        Func<string, string?> baselineOverride = _ => null;
+        Func<bool> baselineSuppressed = () => false;
+        CoreModArt.AudioOverridePathProvider = baselineOverride;
+        CoreAudio.IsOutputSuppressedProvider = baselineSuppressed;
+        try
+        {
+            var run = Run(_ =>
+            {
+                CoreModArt.AudioOverridePathProvider = _ => "deleted-test-cue";
+                CoreAudio.IsOutputSuppressedProvider = () => true;
+                if (fail) throw new InvalidOperationException("test body failed");
+                return Task.CompletedTask;
+            });
+            if (fail) await Assert.ThrowsAsync<InvalidOperationException>(() => run);
+            else await run;
+            Assert.Same(baselineOverride, CoreModArt.AudioOverridePathProvider);
+            Assert.Same(baselineSuppressed, CoreAudio.IsOutputSuppressedProvider);
+        }
+        finally
+        {
+            CoreModArt.AudioOverridePathProvider = originalOverride;
+            CoreAudio.IsOutputSuppressedProvider = originalSuppressed;
+        }
+    });
+
     private static void Click(FirstShowStageWindow stage, int i) => stage.ChoiceButtons[i].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     private static async Task Until(Func<bool> probe)
@@ -587,6 +619,8 @@ public sealed class FirstShowStageTests
 
     private static Task Run(Func<FirstShowStageWindow, Task> body, string? panicKey = null) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        var oldOverride = CoreModArt.AudioOverridePathProvider;
+        var oldSuppressed = CoreAudio.IsOutputSuppressedProvider;
         Setup();
         var service = new SettingsService();
         var old = CoreSettings.ServiceProvider;
@@ -603,11 +637,19 @@ public sealed class FirstShowStageTests
         }
         finally
         {
-            FirstShowService.Stop();
-            FirstShowService.RequireClickThrough = true;
-            EmiDeskService.Instance.Window?.ShutDown();
-            Dispatcher.UIThread.RunJobs();
-            service.SaveImmediate(); CoreSettings.ServiceProvider = old;
+            try
+            {
+                FirstShowService.Stop();
+                FirstShowService.RequireClickThrough = true;
+                EmiDeskService.Instance.Window?.ShutDown();
+                Dispatcher.UIThread.RunJobs();
+                service.SaveImmediate(); CoreSettings.ServiceProvider = old;
+            }
+            finally
+            {
+                CoreModArt.AudioOverridePathProvider = oldOverride;
+                CoreAudio.IsOutputSuppressedProvider = oldSuppressed;
+            }
         }
     });
 }
