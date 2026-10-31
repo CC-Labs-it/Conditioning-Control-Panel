@@ -149,6 +149,8 @@ public sealed class OnlineMeterTests
         bool holding = false;
         using var toast = new global::ConditioningControlPanel.Avalonia.Helpers.OnlineSpentToast(service, host,
             () => holding, () => queue.Arm(now), "spent", null, null);
+        var beats = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running;
+        Assert.Contains(beats, b => ReferenceEquals(b.Owner, toast.Border));
         toast.Tick(4_000);
         if (hold)
         {
@@ -174,11 +176,12 @@ public sealed class OnlineMeterTests
             Assert.Empty(host.Children);
             Assert.False(queue.Pending);
         }
+        Assert.DoesNotContain(beats, b => ReferenceEquals(b.Owner, toast.Border));
     });
     private static void Platform()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
     private static void Run(Action<MainShellWindow, AppSettings> body) => AvaloniaTestDispatcher.Run(() =>

@@ -1,7 +1,4 @@
-// PORTED from ConditioningControlPanel/Controls/OnlineMeterRing.cs (WPF Controls/OnlineMeterRing.cs:55-81): the small
-// "Online media today" ring in the title bar pill. A track circle and an arc from twelve o'clock,
-// clockwise; pink, amber from 80%, a plain grey circle once the day's share is used up. Drawn once per
-// change, no animation. The sweep comes from Core OnlineMeterRules.RingSweep.
+// PORTED from ConditioningControlPanel/Controls/OnlineMeterRing.cs:55-81; Core supplies the sweep.
 using System;
 using Avalonia;
 using Avalonia.Controls;
