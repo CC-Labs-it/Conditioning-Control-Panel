@@ -17,6 +17,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
+using ConditioningControlPanel.Localization;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -131,6 +132,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "net":
                         OnGlassroadNet(o);
                         return true;
+                    case "friends-list":
+                        Post(new { type = "friends-list-reply", id = (string?)o["id"] ?? "",
+                            friends = GlassroadInviteRules.FriendRows(FriendsHead.Service?.Snapshot.Friends) });
+                        return true;
+                    case "invite-friend":
+                        GlassroadPending = OnGlassroadInviteAsync(o);
+                        return true;
                     case "exit":
                     case "menu-back":
                         // The page's own Leave / the menu's Back link. Escape never sends these.
@@ -144,6 +152,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 return true;
             }
             return false;
+        }
+
+        private async Task OnGlassroadInviteAsync(JObject frame)
+        {
+            var id = (string?)frame["id"] ?? "";
+            var uid = (string?)frame["friendUid"];
+            var room = (string?)frame["roomId"];
+            var service = FriendsHead.Service;
+            var outcome = new SendOutcome(SendResult.Refused, null);
+            try
+            {
+                if (service != null && GlassroadInviteRules.CanInvite(service.Snapshot.Friends, uid, room))
+                    outcome = await service.InviteToRaceAsync(uid!, room!);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Glassroad: invite failed: {E}", ex.Message);
+                outcome = new SendOutcome(SendResult.TryLater, null);
+            }
+            var note = GlassroadInviteRules.Sentence(Loc.Get(GlassroadInviteRules.NoteKey(outcome)));
+            if (!_closing) Post(new { type = "invite-friend-reply", id,
+                sent = GlassroadInviteRules.IsGood(outcome), note });
         }
 
         /// <summary><c>net { id, method, path, body }</c> -&gt; <c>net-reply { id, status, body }</c>. A refusal or

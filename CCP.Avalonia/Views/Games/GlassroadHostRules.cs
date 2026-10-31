@@ -41,6 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     ["platform"] = "desktop", ["net"] = true, ["relayBase"] = null, ["texturableRemote"] = false,
                     ["gamepad"] = true, ["touch"] = false, ["forceRenderer"] = null, ["hostSfx"] = false,
                     ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
+                    ["friendInvite"] = true,
                 },
                 ["identity"] = signedIn
                     ? new JObject
