@@ -195,6 +195,51 @@ public sealed class WindowConfirmationParityTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task WindowChoiceEffectsWaitForConfirmation() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var strip = new SectionTabStrip { MotionOverride = MotionLevel.Full };
+        using var host = new ClosingWindow(Host(strip));
+        var old = BeatLoop.Time;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        int requests = 0;
+        strip.TabRequested += _ => { Assert.Equal(1, strip.BurstsFired); requests++; };
+        try
+        {
+            var card = Open(strip);
+            Assert.Equal(0, strip.BurstsFired);
+            time.Advance(TimeSpan.FromMilliseconds(150)); BeatLoop.StepAll();
+            Click(Buttons(card)[1]);
+            Assert.Equal(0, strip.BurstsFired);
+            Assert.Equal(0, requests);
+            card = Open(strip);
+            Assert.Equal(0, strip.BurstsFired);
+            time.Advance(TimeSpan.FromMilliseconds(150)); BeatLoop.StepAll();
+            Click(Buttons(card)[0]);
+            Assert.Equal(1, strip.BurstsFired);
+            Assert.Equal(1, requests);
+        }
+        finally { host.Window.Close(); BeatLoop.Time = old; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task UnanchoredWindowStillRequestsItsTarget() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var strip = new SectionTabStrip { MotionOverride = MotionLevel.Off };
+        var tab = new NavTab("justdrop", "jd_door_title", NavTabKind.Window);
+        int requests = 0;
+        strip.TabRequested += requested => { Assert.Same(tab, requested); requests++; };
+        typeof(SectionTabStrip).GetMethod("AskBeforeOpening", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(strip, new object[] { tab });
+        Assert.Equal(1, requests);
+        Assert.Null(strip.ConfirmationPopup);
+        return Task.CompletedTask;
+    });
+
     private sealed class ClosingWindow(Window window) : IDisposable
     {
         public Window Window => window;

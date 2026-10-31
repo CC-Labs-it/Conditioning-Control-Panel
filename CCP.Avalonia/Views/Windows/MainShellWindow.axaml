@@ -1671,6 +1671,9 @@
                                      child to CornerRadius, so a full-bleed gloss would show square
                                      corners poking out of the 8px-tall bar at each end. -->
                                 <Grid>
+                                <Ellipse x:Name="XPTubeBead" Width="8" Height="8" HorizontalAlignment="Right"
+                                         VerticalAlignment="Center" Margin="0,0,-4,0" IsVisible="False"
+                                         Fill="{DynamicResource DepthTubeBead}" IsHitTestVisible="False"/>
                                 <Border x:Name="XPBarSheen" Margin="4,0" IsHitTestVisible="False" Opacity="0">
                                     <Border.Background>
                                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
@@ -1680,12 +1683,9 @@
                                         </LinearGradientBrush>
                                     </Border.Background>
                                 </Border>
-                                <Ellipse x:Name="XPTubeBead" Width="8" Height="8" HorizontalAlignment="Right"
-                                         VerticalAlignment="Center" Margin="0,0,-4,0" IsVisible="False"
-                                         Fill="{DynamicResource DepthTubeBead}" IsHitTestVisible="False"/>
                                 </Grid>
                             </Border>
-                            <Border x:Name="XPBarFlashOverlay" Background="{DynamicResource PinkBrush}" CornerRadius="4"
+                            <Border x:Name="XPBarFlashOverlay" Background="{DynamicResource PinkBrush}" CornerRadius="5"
                                     HorizontalAlignment="Left"
                                     Width="{Binding #XPBar.Width}"
                                     Opacity="0" IsHitTestVisible="False">

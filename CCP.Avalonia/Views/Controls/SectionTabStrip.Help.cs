@@ -105,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private void AskBeforeOpening(NavTab tab)
         {
             var target = (Control?)PillFor(tab.Key)?.Parent ?? PillFor(tab.Key);
-            if (target == null) return;
+            if (target == null) { TabRequested?.Invoke(tab); return; }
             CloseConfirm();
             _confirmTab = tab;
             var yes = ConfirmButton(SafeLoc("nav_open_window_yes", "Open it"), true, _hue);

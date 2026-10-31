@@ -44,6 +44,10 @@ public sealed class SyncSixTipAndWindowTests
             var bar = shell.Named<Border>("XPBar")!;
             var bead = shell.Named<Ellipse>("XPTubeBead")!;
             var meniscus = shell.Named<Border>("XPMeniscus")!;
+            var fill = Assert.IsType<Grid>(bar.Child);
+            Assert.True(fill.Children.IndexOf(bead) < fill.Children.IndexOf(shell.Named<Border>("XPBarSheen")!),
+                "WPF paints the bead below the sheen");
+            Assert.Equal(new CornerRadius(5), shell.Named<Border>("XPBarFlashOverlay")!.CornerRadius);
             Assert.Equal(track.Height, meniscus.Height);
             Assert.Equal(10, meniscus.Width);
             var brush = Assert.IsType<RadialGradientBrush>(bead.Fill);
