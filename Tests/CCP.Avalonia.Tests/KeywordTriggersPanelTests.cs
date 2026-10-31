@@ -73,6 +73,29 @@ public sealed class KeywordTriggersPanelTests
     });
 
     [Fact]
+    public Task OcrIntervalEditsPersistMillisecondsAndSyncDoesNotRoundStoredValue() => Run((_, panel, s) =>
+    {
+        var savedInterval = s.ScreenOcrIntervalMs;
+        try
+        {
+            // WPF MainWindow/MainWindow.KeywordTriggers.cs:111-117: loading is not an edit;
+            // user edits display whole seconds and persist milliseconds.
+            s.ScreenOcrIntervalMs = 4500;
+            panel.SyncFromSettings();
+            Assert.Equal(4500, s.ScreenOcrIntervalMs);
+            Find<Slider>(panel, "SliderScreenOcrInterval").Value = 7;
+            Assert.Equal(7000, s.ScreenOcrIntervalMs);
+            Assert.Equal("7s", Find<TextBlock>(panel, "TxtScreenOcrInterval").Text);
+            panel.SyncFromSettings();
+            Assert.Equal(7000, s.ScreenOcrIntervalMs);
+            Find<Slider>(panel, "SliderScreenOcrInterval").Value = 6;
+            Assert.Equal(6000, s.ScreenOcrIntervalMs);
+            Assert.Equal("6s", Find<TextBlock>(panel, "TxtScreenOcrInterval").Text);
+        }
+        finally { s.ScreenOcrIntervalMs = savedInterval; }
+    });
+
+    [Fact]
     public Task AddEditAndDeleteRowsWriteTheTriggerAndSkipPresetClones() => Run((_, panel, s) =>
     {
         s.KeywordTriggers.Add(new KeywordTrigger { Id = "preset:pack:1", Keyword = "pack" });
