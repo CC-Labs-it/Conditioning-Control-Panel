@@ -78,6 +78,28 @@ public class TestIsolationTests
         Assert.False(leaked.HasPendingSave);
     }
 
+    [Fact]
+    public async System.Threading.Tasks.Task WorkerRestoreNotifiesSettingsOnTheUiThread()
+    {
+        ProcessStateSnapshot? snapshot = null;
+        var notified = new System.Collections.Generic.List<bool>();
+        System.ComponentModel.PropertyChangedEventHandler handler = (_, _) =>
+            notified.Add(CCP.Avalonia.Testing.AvaloniaTestDispatcher.IsDispatcherThread);
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            snapshot = ProcessStateSnapshot.Take();
+            CoreSettings.Current.Welcomed = !CoreSettings.Current.Welcomed;
+            CoreSettings.Current.PropertyChanged += handler;
+        });
+        try
+        {
+            await System.Threading.Tasks.Task.Run(snapshot!.Restore);
+            Assert.NotEmpty(notified);
+            Assert.All(notified, onUi => Assert.True(onUi));
+        }
+        finally { CoreSettings.Current.PropertyChanged -= handler; }
+    }
+
     /// <summary>A debounce that already FIRED is no longer armed. Its write used to land after Restore
     /// and became every later test's baseline (Welcomed, no age acceptance: an extra Age Verification
     /// dialog in JumpRightInTests, flake-stackcapture). Restore must wait for that write.</summary>

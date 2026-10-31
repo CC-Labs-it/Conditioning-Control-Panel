@@ -40,7 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
-    /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
+    /// freeze hold and the perf backoff on the cadence; only the braindrain wash payload is wired; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off);
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers

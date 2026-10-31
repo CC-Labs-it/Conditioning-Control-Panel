@@ -11,6 +11,8 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
+using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 
 namespace CCP.Avalonia.Tests;
 
@@ -81,121 +83,82 @@ public sealed class ChaosFlashOverlayTests
     }
 
     [Fact]
-    public async Task StillUsesStageWidthAndACompletedWashReusesItsWindow()
+    public Task StillUsesStageWidthAndACompletedWashReusesItsWindow() => WithImage(async (gif, steps) =>
     {
-        var dir = Directory.CreateTempSubdirectory("ccp-chaosflash-still-").FullName;
-        var path = Path.Combine(dir, "wide.png");
+        var path = Path.ChangeExtension(gif, ".png");
         using (var bitmap = new SkiaSharp.SKBitmap(3000, 1000))
         using (var image = SkiaSharp.SKImage.FromBitmap(bitmap))
         using (var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100))
             File.WriteAllBytes(path, data.ToArray());
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        var raised = new List<global::Avalonia.Controls.TopLevel>();
+        X11Overlay.RaiseRequestedForTests = w =>
         {
-            Setup();
-            var schedule = ChaosFlashOverlay.Schedule;
-            var oldRaise = X11Overlay.RaiseRequestedForTests;
-            var raised = new List<global::Avalonia.Controls.TopLevel>();
-            var steps = new List<(Action Run, TimeSpan At)>();
-            try
-            {
-                X11Overlay.RaiseRequestedForTests = w =>
-                {
-                    Assert.True(Assert.IsAssignableFrom<global::Avalonia.Controls.Window>(w).IsVisible);
-                    raised.Add(w);
-                };
-                ChaosFlashOverlay.SkipPlatformChecksForTests = true;
-                ChaosFlashOverlay.Schedule = (a, t) => steps.Add((a, t));
-                await ChaosFlashOverlay.ShowPath(TwoScreens, path, 600, .1);
-                var window = Assert.Single(ChaosFlashOverlay.Shown);
-                Assert.Same(window, Assert.Single(raised));
-                Assert.Equal(2560, ((global::Avalonia.Media.Imaging.Bitmap)window.Spiral.Source!).PixelSize.Width);
-                Assert.False(ChaosFlashOverlay.IsAnimating);
-                foreach (var step in steps.ToArray()) step.Run();
-                Assert.False(ChaosFlashOverlay.IsShowing);
-                Assert.Null(window.Spiral.Source);
-                Assert.Contains(window, ChaosFlashOverlay.Shown);
-                Assert.True(window.IsVisible);
-                Assert.Equal(TimeSpan.FromSeconds(8), steps.Last().At);
-                var hide = steps.Last().Run;
-                hide();
-                Assert.False(window.IsVisible);
-                steps.Clear();
-                await ChaosFlashOverlay.ShowPath(TwoScreens, path, 600, .1);
-                Assert.Same(window, Assert.Single(ChaosFlashOverlay.Shown));
-                Assert.Equal(2, raised.Count); // retained window raised again after Show
-                ChaosFlashOverlay.RaiseActive(); // WPF ChaosFlashOverlay.cs:82
-                Assert.Equal(3, raised.Count);
-                Assert.All(raised, w => Assert.Same(window, w));
-                hide(); // a grace callback from the old wash cannot hide its replacement
-                Assert.True(window.IsVisible);
-                PanicSurfaces.StopAll("chaos-flash still test");
-                Assert.Empty(ChaosFlashOverlay.Shown);
-            }
-            finally
-            {
-                ChaosFlashOverlay.CloseActive();
-                ChaosFlashOverlay.SkipPlatformChecksForTests = false;
-                ChaosFlashOverlay.Schedule = schedule;
-                X11Overlay.RaiseRequestedForTests = oldRaise;
-                Directory.Delete(dir, true);
-            }
-        });
-    }
+            Assert.True(Assert.IsAssignableFrom<global::Avalonia.Controls.Window>(w).IsVisible);
+            raised.Add(w);
+        };
+        await ChaosFlashOverlay.ShowPath(TwoScreens, path, 600, .1);
+        var window = Assert.Single(ChaosFlashOverlay.Shown);
+        Assert.Same(window, Assert.Single(raised));
+        Assert.Equal(2560, ((global::Avalonia.Media.Imaging.Bitmap)window.Spiral.Source!).PixelSize.Width);
+        Assert.False(ChaosFlashOverlay.IsAnimating);
+        foreach (var step in steps.ToArray()) step.Run();
+        Assert.False(ChaosFlashOverlay.IsShowing);
+        Assert.Null(window.Spiral.Source);
+        Assert.Contains(window, ChaosFlashOverlay.Shown);
+        Assert.True(window.IsVisible);
+        Assert.Equal(TimeSpan.FromSeconds(8), steps.Last().At);
+        var hide = steps.Last().Run;
+        hide();
+        Assert.False(window.IsVisible);
+        steps.Clear();
+        await ChaosFlashOverlay.ShowPath(TwoScreens, path, 600, .1);
+        Assert.Same(window, Assert.Single(ChaosFlashOverlay.Shown));
+        Assert.Equal(2, raised.Count); // retained window raised again after Show
+        ChaosFlashOverlay.RaiseActive(); // WPF ChaosFlashOverlay.cs:82
+        Assert.Equal(3, raised.Count);
+        Assert.All(raised, w => Assert.Same(window, w));
+        hide(); // a grace callback from the old wash cannot hide its replacement
+        Assert.True(window.IsVisible);
+        PanicSurfaces.StopAll("chaos-flash still test");
+        Assert.Empty(ChaosFlashOverlay.Shown);
+    });
 
     [Fact]
-    public async Task HeroIsLocalOnlyStillAndIndependentAndPanicClosesBothSurfaces()
+    public Task HeroIsLocalOnlyStillAndIndependentAndPanicClosesBothSurfaces() => WithImage(async (gif, steps) =>
     {
-        var gif = WriteGif(out var dir);
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        var shown = 0;
+        await ChaosFlashOverlay.ShowHeroPath(TwoScreens, "https://example.invalid/poster.gif", false, () => shown++);
+        Assert.Empty(ChaosFlashOverlay.HeroShown);
+        Assert.Equal(0, shown);
+        await ChaosFlashOverlay.ShowPath(TwoScreens, gif, 600, .1);
+        var wash = Assert.Single(ChaosFlashOverlay.Shown);
+        var frame = wash.Spiral.Source;
+        var acceptedBeforeDecode = false;
+        await ChaosFlashOverlay.ShowHeroPath(TwoScreens, gif, true, () =>
         {
-            Setup();
-            var schedule = ChaosFlashOverlay.Schedule;
-            try
-            {
-                ChaosFlashOverlay.SkipPlatformChecksForTests = true;
-                ChaosFlashOverlay.Schedule = (_, _) => { };
-                var shown = 0;
-                await ChaosFlashOverlay.ShowHeroPath(TwoScreens, "https://example.invalid/poster.gif", false, () => shown++);
-                Assert.Empty(ChaosFlashOverlay.HeroShown);
-                Assert.Equal(0, shown);
-                await ChaosFlashOverlay.ShowPath(TwoScreens, gif, 600, .1);
-                var wash = Assert.Single(ChaosFlashOverlay.Shown);
-                var frame = wash.Spiral.Source;
-                var acceptedBeforeDecode = false;
-                await ChaosFlashOverlay.ShowHeroPath(TwoScreens, gif, true, () =>
-                {
-                    acceptedBeforeDecode = ChaosFlashOverlay.HeroShown.Count == 1 && ChaosFlashOverlay.HeroShown[0].Spiral.Source == null;
-                    shown++;
-                });
-                Assert.True(acceptedBeforeDecode);
-                Assert.False(ChaosFlashOverlay.IsHeroAnimating);
-                var hero = Assert.Single(ChaosFlashOverlay.HeroShown);
-                Assert.NotSame(wash, hero);
-                Assert.Equal(1, shown);
-                Assert.Same(frame, wash.Spiral.Source);
-                var heroFrame = hero.Spiral.Source;
-                ChaosFlashOverlay.NextFrame();
-                Assert.Same(heroFrame, hero.Spiral.Source);
-                Assert.NotSame(frame, wash.Spiral.Source);
-                ChaosFlashOverlay.StopHero();
-                Assert.Null(hero.Spiral.Source);
-                Assert.True(ChaosFlashOverlay.IsShowing && ChaosFlashOverlay.IsAnimating);
-                await ChaosFlashOverlay.ShowHeroPath(TwoScreens, gif, false);
-                Assert.True(ChaosFlashOverlay.IsHeroAnimating);
-                Assert.Same(hero, Assert.Single(ChaosFlashOverlay.HeroShown));
-                PanicSurfaces.StopAll("chaos-flash hero test");
-                Assert.Empty(ChaosFlashOverlay.Shown);
-                Assert.Empty(ChaosFlashOverlay.HeroShown);
-            }
-            finally
-            {
-                ChaosFlashOverlay.CloseActive();
-                ChaosFlashOverlay.SkipPlatformChecksForTests = false;
-                ChaosFlashOverlay.Schedule = schedule;
-                Directory.Delete(dir, true);
-            }
+            acceptedBeforeDecode = ChaosFlashOverlay.HeroShown.Count == 1 && ChaosFlashOverlay.HeroShown[0].Spiral.Source == null;
+            shown++;
         });
-    }
+        Assert.True(acceptedBeforeDecode);
+        Assert.False(ChaosFlashOverlay.IsHeroAnimating);
+        var hero = Assert.Single(ChaosFlashOverlay.HeroShown);
+        Assert.NotSame(wash, hero);
+        Assert.Equal(1, shown);
+        Assert.Same(frame, wash.Spiral.Source);
+        var heroFrame = hero.Spiral.Source;
+        ChaosFlashOverlay.NextFrame();
+        Assert.Same(heroFrame, hero.Spiral.Source);
+        Assert.NotSame(frame, wash.Spiral.Source);
+        ChaosFlashOverlay.StopHero();
+        Assert.Null(hero.Spiral.Source);
+        Assert.True(ChaosFlashOverlay.IsShowing && ChaosFlashOverlay.IsAnimating);
+        await ChaosFlashOverlay.ShowHeroPath(TwoScreens, gif, false);
+        Assert.True(ChaosFlashOverlay.IsHeroAnimating);
+        Assert.Same(hero, Assert.Single(ChaosFlashOverlay.HeroShown));
+        PanicSurfaces.StopAll("chaos-flash hero test");
+        Assert.Empty(ChaosFlashOverlay.Shown);
+        Assert.Empty(ChaosFlashOverlay.HeroShown);
+    });
 
     [Fact]
     public void StageIncludesNegativeOriginsAndVerticalOffsets()
@@ -206,84 +169,81 @@ public sealed class ChaosFlashOverlayTests
     }
 
     [Fact]
-    public async Task ShowPicksLocalPoolAndUsesPrimaryOrVirtualStage()
+    public Task ShowPicksLocalPoolAndUsesPrimaryOrVirtualStage() => WithImage(async (gif, steps) =>
     {
-        var gif = WriteGif(out var dir);
-        Directory.CreateDirectory(Path.Combine(dir, "images"));
-        File.Move(gif, Path.Combine(dir, "images", "tiny.gif"));
-        await AvaloniaTestDispatcher.RunAsync(async () =>
-        {
-            Setup();
-            var oldAssets = CorePaths.EffectiveAssetsProvider;
-            var oldQuery = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
-            var schedule = ChaosFlashOverlay.Schedule;
-            try
-            {
-                CorePaths.EffectiveAssetsProvider = () => dir;
-                ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ =>
-                    TwoScreens.Select((b, i) => MultiMonitorResultTests.MakeScreen(1, b, b, i == 0)).ToArray();
-                ChaosFlashOverlay.SkipPlatformChecksForTests = true;
-                ChaosFlashOverlay.Schedule = (_, _) => { };
-                CoreSettings.Current.GlobalTargetMonitor = 1;
-                CoreSettings.Current.DualMonitorEnabled = false;
-                ChaosFlashOverlay.Show(new global::Avalonia.Controls.Border());
-                await ChaosFlashOverlay.LastShow!;
-                var primary = Assert.Single(ChaosFlashOverlay.Shown);
-                Assert.Equal(1920, primary.Width);
-                Assert.Equal(new PixelPoint(0, 0), primary.Position);
-                Assert.NotNull(primary.Spiral.Source);
-                CoreSettings.Current.DualMonitorEnabled = true;
-                ChaosFlashOverlay.Show(new global::Avalonia.Controls.Border());
-                await ChaosFlashOverlay.LastShow!;
-                Assert.Equal(3200, Assert.Single(ChaosFlashOverlay.Shown).Width);
-            }
-            finally
-            {
-                ChaosFlashOverlay.CloseActive();
-                ChaosFlashOverlay.SkipPlatformChecksForTests = false;
-                ChaosFlashOverlay.Schedule = schedule;
-                CorePaths.EffectiveAssetsProvider = oldAssets;
-                ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = oldQuery;
-                Directory.Delete(dir, true);
-            }
-        });
-    }
+        CoreSettings.Current.GlobalTargetMonitor = 1;
+        CoreSettings.Current.DualMonitorEnabled = false;
+        ChaosFlashOverlay.Show(new global::Avalonia.Controls.Border());
+        await ChaosFlashOverlay.LastShow!;
+        var primary = Assert.Single(ChaosFlashOverlay.Shown);
+        Assert.Equal(1920, primary.Width);
+        Assert.Equal(new PixelPoint(0, 0), primary.Position);
+        Assert.NotNull(primary.Spiral.Source);
+        CoreSettings.Current.DualMonitorEnabled = true;
+        ChaosFlashOverlay.Show(new global::Avalonia.Controls.Border());
+        await ChaosFlashOverlay.LastShow!;
+        Assert.Equal(3200, Assert.Single(ChaosFlashOverlay.Shown).Width);
+    });
 
     [Fact]
-    public async Task PanicOrphansAnInFlightDecode()
+    public void WashDispatcherIgnoresOtherPayloadsAndAnAbsentShell()
     {
-        var gif = WriteGif(out var dir);
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        var oldFirer = EffectPayload.Firer;
+        var before = ChaosFlashOverlay.LastShow;
+        try
         {
-            Setup();
-            var oldQuery = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
-            try
-            {
-                ChaosFlashOverlay.SkipPlatformChecksForTests = true;
-                // Real screens, so the queued hero would show if panic did not orphan it.
-                var screens = TwoScreens.Select((b, i) => MultiMonitorResultTests.MakeScreen(1, b, b, i == 0)).ToArray();
-                ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => screens;
-                var shown = 0;
-                var heroBefore = ChaosFlashOverlay.LastHeroShow;
-                ChaosFlashOverlay.ShowHero(new global::Avalonia.Controls.Border(), gif, 600, .1, false, () => shown++);
-                var pending = ChaosFlashOverlay.ShowPath(TwoScreens, gif, 600, .1);
-                PanicSurfaces.StopAll("pending chaos-flash test");
-                await pending;
-                await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => { });
-                if (ChaosFlashOverlay.LastHeroShow is { } hero && hero != heroBefore) await hero;
-                Assert.Equal(0, shown);
-                Assert.Empty(ChaosFlashOverlay.HeroShown);
-                Assert.Empty(ChaosFlashOverlay.Shown);
-            }
-            finally
-            {
-                ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = oldQuery;
-                ChaosFlashOverlay.CloseActive();
-                ChaosFlashOverlay.SkipPlatformChecksForTests = false;
-                Directory.Delete(dir, true);
-            }
-        });
+            var hostCalls = 0;
+            ChaosWashPayloads.Seed(() => { hostCalls++; return null; });
+            new OverlayPayload("spiral").Fire();
+            Assert.Equal(0, hostCalls);
+            ChaosWashPayloads.Seed(() => null);
+            new OverlayPayload("braindrain").Fire();
+            Assert.Same(before, ChaosFlashOverlay.LastShow);
+        }
+        finally { EffectPayload.Firer = oldFirer; }
     }
+
+    // WPF Services/Chaos/EffectPayloadFiring.cs:50-59. Exercise EffectPayload.Fire, the same
+    // seam reached by ChaosRunHost's benign pop (:218) and live detonation (:287).
+    [Theory]
+    [InlineData(false, 100, 2.0, 3.0, 10700, .10)]
+    [InlineData(true, 0, 1.0, 1.0, 2200, .30)]
+    [InlineData(true, 50, 2.0, 1.5, 9700, .30)]
+    [InlineData(true, 100, 1.0, 1.0, 5200, .30)]
+    public Task LiveWashPayloadUsesWpfDefaultsOrScaledCustomWash(
+        bool custom, int strength, double global, double mult, int endMs, double peak) => WithImage(async (gif, steps) =>
+    {
+        CoreSettings.Current.DualMonitorEnabled = true;
+        ChaosWashPayloads.Seed(() => new global::Avalonia.Controls.Border());
+        EffectPayload.GlobalDurationMult = global;
+        var payload = new OverlayPayload("braindrain", custom ? .30 : null) { Strength = strength, DurationMult = mult };
+        payload.Fire();
+        await ChaosFlashOverlay.LastShow!;
+        Assert.NotNull(Assert.Single(ChaosFlashOverlay.Shown).Spiral.Source);
+        Assert.Equal(TimeSpan.FromMilliseconds(endMs), steps[^1].At);
+        foreach (var step in steps.Where(s => s.At <= TimeSpan.FromMilliseconds(500))) step.Run();
+        Assert.Equal(peak, ChaosFlashOverlay.Alpha, 10);
+        PanicSurfaces.StopAll("payload test");
+        foreach (var step in steps.ToArray()) step.Run();
+        Assert.Empty(ChaosFlashOverlay.Shown);
+        Assert.Equal(0, ChaosFlashOverlay.Alpha);
+    });
+
+    [Fact]
+    public Task PanicOrphansAnInFlightDecode() => WithImage(async (gif, steps) =>
+    {
+        var shown = 0;
+        var heroBefore = ChaosFlashOverlay.LastHeroShow;
+        ChaosFlashOverlay.ShowHero(new global::Avalonia.Controls.Border(), gif, 600, .1, false, () => shown++);
+        var pending = ChaosFlashOverlay.ShowPath(TwoScreens, gif, 600, .1);
+        PanicSurfaces.StopAll("pending chaos-flash test");
+        await pending;
+        await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => { });
+        if (ChaosFlashOverlay.LastHeroShow is { } hero && hero != heroBefore) await hero;
+        Assert.Equal(0, shown);
+        Assert.Empty(ChaosFlashOverlay.HeroShown);
+        Assert.Empty(ChaosFlashOverlay.Shown);
+    });
 
     [Fact]
     public void DecodeKeepsAtMostMaxFramesStridedAcrossTheAnimation()
@@ -325,6 +285,37 @@ public sealed class ChaosFlashOverlayTests
                 Directory.Delete(dir, true);
             }
         });
+    }
+
+    private static async Task WithImage(Func<string, List<(Action Run, TimeSpan At)>, Task> test)
+    {
+        var gif = WriteGif(out var dir);
+        Directory.CreateDirectory(Path.Combine(dir, "images"));
+        var pooled = Path.Combine(dir, "images", "tiny.gif");
+        File.Move(gif, pooled);
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                Setup();
+                try
+                {
+                    CorePaths.EffectiveAssetsProvider = () => dir;
+                    ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ =>
+                        TwoScreens.Select((b, i) => MultiMonitorResultTests.MakeScreen(1, b, b, i == 0)).ToArray();
+                    ChaosFlashOverlay.SkipPlatformChecksForTests = true;
+                    var steps = new List<(Action Run, TimeSpan At)>();
+                    ChaosFlashOverlay.Schedule = (a, t) => steps.Add((a, t));
+                    await test(pooled, steps);
+                }
+                finally
+                {
+                    ChaosFlashOverlay.CloseActive();
+                    ChaosFlashOverlay.SkipPlatformChecksForTests = false;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     internal static string WriteGif(out string dir)
