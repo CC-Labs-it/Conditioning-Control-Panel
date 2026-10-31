@@ -13,6 +13,10 @@ internal static class ScrolllerCreditRules
     /// <summary>The brand mark every native surface shows (brief contract: never a loc key).</summary>
     public const string Mark = "via Scrolller";
 
+    /// <summary>Wallpaper card credit follows the same online admission rule as WPF's pool.</summary>
+    internal static bool WallpaperMediaEnabled(string? source, bool consent)
+        => source != null && source != "local" && consent;
+
     /// <summary>The scrolller.com home page, for the calm credit lines (pickers, settings).</summary>
     public const string HomeLink = "https://scrolller.com";
 
