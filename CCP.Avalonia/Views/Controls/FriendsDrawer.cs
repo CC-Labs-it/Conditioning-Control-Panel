@@ -464,6 +464,14 @@ public sealed partial class FriendsDrawer : Border
     private Control Card(Friend f)
     {
         var card = new StackPanel { Margin = new Thickness(0, 8, 0, 2), Tag = "friends-card" };
+        // WPF FriendsDrawer.cs:668-695 keeps actions, the leash chip and More above the question.
+        card.Children.Add(CardActions(f));
+        if (FriendLeashOffer.Create(f, Render) is { } offer) card.Children.Add(offer);
+        var more = Pill(GlyphContent(IconKind.MoreHorizontal, Loc.Get("friends_action_more"), center: true, glyphFg: Lilac), Brushes.Transparent, Muted, "friends-action:more", Line2);   // WPF E712
+        more.HorizontalAlignment = HorizontalAlignment.Stretch;
+        more.HorizontalContentAlignment = HorizontalAlignment.Center;
+        more.Click += (_, _) => { FriendsSfx.Click(); Menu(f).Open(more); };   // WPF FriendsDrawer.cs:686
+        card.Children.Add(more);
         if (_confirm is { } c && c.Id == f.Id)
         {
             bool block = c.What == "block";
@@ -486,16 +494,8 @@ public sealed partial class FriendsDrawer : Border
                     },
                 },
             });
-            return card;
         }
-        card.Children.Add(CardActions(f));
-        if (FriendLeashOffer.Create(f, Render) is { } offer) card.Children.Add(offer);
-        var more = Pill(GlyphContent(IconKind.MoreHorizontal, Loc.Get("friends_action_more"), center: true, glyphFg: Lilac), Brushes.Transparent, Muted, "friends-action:more", Line2);   // WPF E712
-        more.HorizontalAlignment = HorizontalAlignment.Stretch;
-        more.HorizontalContentAlignment = HorizontalAlignment.Center;
-        more.Click += (_, _) => { FriendsSfx.Click(); Menu(f).Open(more); };   // WPF FriendsDrawer.cs:686
-        card.Children.Add(more);
-        if (_picker != null)
+        else if (_picker != null)
         {
             var picker = Picker(f);
             picker.Margin = new Thickness(0, 8, 0, 0);
@@ -537,8 +537,8 @@ public sealed partial class FriendsDrawer : Border
     internal async Task RunMenuAsync(Friend f, string what)
     {
         if (_svc == null) return;
-        // WPF AskConfirm (FriendsDrawer.Blocked.cs:75): the question opens with a click.
-        if (what is "remove" or "block") { FriendsSfx.Click(); _confirm = (f.Id, what); _openId = f.Id; Render(); return; }
+        // WPF AskConfirm (FriendsDrawer.Blocked.cs:66-75): the question opens with a click and forgets the send picker.
+        if (what is "remove" or "block") { FriendsSfx.Click(); _confirm = (f.Id, what); _openId = f.Id; _picker = null; Render(); return; }
         ActResult r = ActResult.TryLater;
         try { r = await _svc.SetSquelchAsync(f.Id, what == "squelch"); }
         catch (Exception ex) { Serilog.Log.Debug("[Friends] menu {What} failed: {E}", what, ex.Message); }
