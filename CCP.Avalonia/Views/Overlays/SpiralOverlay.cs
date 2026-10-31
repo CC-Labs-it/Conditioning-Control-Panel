@@ -62,8 +62,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static string? _configuredPath;
         private static bool? _randomizeAtStart;
         private static bool _repicked;
+        private static DispatcherTimer? _reconcileTimer;
+        private static (int Index, PixelRect Bounds, double Scale)[]? _layout;
+        private static bool _dualMonitor;
 
-        /// <summary>Pick once per run; repainting opacity/monitors never resamples the pool.
+        // WPF OverlayService.cs:463,797-802: retry an absent spiral every 500 ms.
+        // Decode completion still gets one immediate retry; subsequent attempts yield to the timer.
+        internal static void Reconcile(Visual host)
+        {
+            if (!IsShowing && Decoding is not { IsCompleted: false })
+            {
+                _sourcePath = null;
+                _repicked = false;
+                if (_frames.Count == 0) _framesKey = "";
+            }
+            Refresh(host);
+        }
+
+        private static void StartReconciler(Visual host)
+        {
+            if (_reconcileTimer != null) return;
+            _reconcileTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _reconcileTimer.Tick += (_, _) => Reconcile(host);
+            _reconcileTimer.Start();
+        }
+
+        internal static bool IsReconciling => _reconcileTimer is { IsEnabled: true };
+
+        /// <summary>Pick once per run; repainting opacity never resamples the pool.
+        /// Monitor rebuilds and failed starts clear the pick through the reconciler.
         /// Explicit file changes take effect live. Randomize changes take effect next start.</summary>
         internal static string SourcePath()
         {
@@ -91,6 +118,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var s = CoreSettings.Current;
             if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
 
+            StartReconciler(TopLevel.GetTopLevel(host) ?? host);
+            var screens = ScreenList.Enumerate(host);
+            var primary = -1;
+            for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
+            var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
+            var layout = want.Select(i => (i, screens[i].Bounds, screens[i].Scaling)).ToArray();
+            // WPF OverlayService.cs:759-765: a monitor rebuild starts with a fresh random pick.
+            // Include geometry so a resolution/scale change cannot leave an old-sized window up.
+            if (_layout != null && (!_layout.SequenceEqual(layout) || _dualMonitor != s.DualMonitorEnabled))
+            {
+                CloseWindows();
+                _sourcePath = null;
+                _repicked = false;
+            }
+            _layout = layout;
+            _dualMonitor = s.DualMonitorEnabled;
+
             var path = SourcePath();
             var video = IsVideo(path);
             if (_framesKey != path)
@@ -112,10 +156,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
 
-            var screens = ScreenList.Enumerate(host);
-            var primary = -1;
-            for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
-            var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var opacity = PaintedOpacity;
 
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
@@ -181,6 +221,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
         {
+            _reconcileTimer?.Stop();
+            _reconcileTimer = null;
+            _layout = null;
             _sourcePath = null;
             _configuredPath = null;
             _randomizeAtStart = null;
