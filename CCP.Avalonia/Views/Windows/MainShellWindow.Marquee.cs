@@ -190,13 +190,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
-            // WPF Marquee.cs:135-154 (NeedsDisplayNameRule.FirstName): first nonblank name,
-            // trimmed, then the signed-in-without-a-name line rather than a sign-in pitch.
-            var displayName = new[] { s.UserDisplayName, Platform.AccountSeed.Patreon?.DisplayName,
-                Platform.AccountSeed.Discord?.DisplayName }.FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))?.Trim();
+            // WPF MainWindow.Marquee.cs:135-154 uses this shared name rule and copy.
+            // AccountSeed.RestoreSession:91-104: a stored id alone is not a session on this head.
+            var displayName = Services.NeedsDisplayNameRule.FirstName(s.UserDisplayName,
+                Platform.AccountSeed.Patreon?.DisplayName, Platform.AccountSeed.Discord?.DisplayName);
             secondary.Text = displayName is not null
                 ? Loc.GetF("label_welcome_back_0", displayName)
-                : Loc.Get(!string.IsNullOrEmpty(s.UnifiedId) || CoreAccount.IsLoggedIn
+                : Loc.Get(CoreAccount.IsLoggedIn
                     ? "banner_signed_in_no_name" : "label_welcome_consider_logging_in_with_patreon_for");
         }
 

@@ -79,7 +79,7 @@ public sealed class ShellAccountShellTests
             shell.SetBannerAnnouncement("Previous account");
             shell.UpdateQuickLoginUI(); // sign-in, restore, link/unlink and logout all reach this real refresh path
             Assert.Equal(expectedName is not null ? Loc.GetF("label_welcome_back_0", expectedName)
-                : Loc.Get(signedIn || unifiedId is not null ? "banner_signed_in_no_name"
+                : Loc.Get(signedIn ? "banner_signed_in_no_name"
                     : "label_welcome_consider_logging_in_with_patreon_for"), banner.Text);
 
             (s.OfflineMode, s.OfflineUsername) = (true, "Offline User");
