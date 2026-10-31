@@ -30,6 +30,25 @@ export function defaultInit({ search = '', coarse = false } = {}) {
 
 /** A host song chart url: same origin, a plain path to a .json file (CONTRACT section 7, caps.songs). */
 export const SONG_URL = /^\/[A-Za-z0-9/_.-]+\.json$/;
+
+/** The player's own songs (desktop, SongWordsService): a chart on the host's ccp.songs folder, one folder per song. */
+export const USER_SONG_URL = /^https:\/\/ccp\.songs\/[a-z0-9-]{1,40}\/chart\.json$/;
+export const USER_SONG_ROWS = 12;
+
+/** `song-words.rows` from the host (CONTRACT section 7): {id,label,url} rows, ids plain, urls on ccp.songs, at most 12. */
+export function userSongRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  const out = [];
+  for (const r of rows) {
+    if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(r.id)) continue;
+    if (typeof r.url !== 'string' || !USER_SONG_URL.test(r.url) || !r.url.includes('/' + r.id + '/')) continue;
+    if (out.some((x) => x.id === r.id)) continue;
+    const label = String(r.label || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 40) || r.id;
+    out.push({ id: r.id, label, url: r.url });
+    if (out.length >= USER_SONG_ROWS) break;
+  }
+  return out;
+}
 const DEV_SONGS = Object.freeze(['/private-audio/pink-road/chart.json', '/private-audio/pink-road/chart.v0.json']);
 
 /** The preview server mounts private recordings on every loopback port it serves. */

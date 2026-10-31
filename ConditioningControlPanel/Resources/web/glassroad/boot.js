@@ -78,6 +78,8 @@ import { createSongCache } from './audio/songCache.js';
 import { createHud } from './hud/hud.js';
 import { createDirectionWarning } from './hud/direction.js';
 import { createWordRun } from './sim/words.js';
+import { pickWords, PICK } from './sim/wordPick.js';
+import { userSongRows } from './host/bridge.js';
 import { createWordCoins, coinTuning } from './sim/wordCoins.js';
 import { createAirWordRun, bindAirWords } from './sim/airWords.js';
 import { createSongCueRun } from './sim/songCues.js';
@@ -173,6 +175,20 @@ function receiptSlip(m) {
   showSlip(m, { calm: !!gate?.calm });
 }
 shared.bridge.on('sparkles-receipt', receiptSlip);
+// RACE YOUR OWN SONG (7.2, desktop, SOLO ONLY; CONTRACT section 7 `song-words`): the host listens to a picked file
+// with whisper.cpp and answers rows {id,label,url} on ccp.songs plus progress. User rows sit ahead of the lobby's in
+// the garage list; the course scope (shared.onSongReady) selects a song the moment it is ready. Rooms never see them.
+shared.userSongRows = []; shared.lobbySongRows = []; shared.songWords = null;
+function mergeSongRows() { shared.songRows = [...shared.userSongRows, ...shared.lobbySongRows]; }
+shared.bridge.on('song-words', m => {
+  if (!m || typeof m !== 'object') return;
+  if (Array.isArray(m.rows)) { shared.userSongRows = userSongRows(m.rows); mergeSongRows(); }
+  shared.songWords = m.status === 'progress' || m.status === 'error'
+    ? { trackId: String(m.trackId || ''), status: m.status, phase: String(m.phase || ''), pct: Math.max(0, Math.min(1, Number(m.pct) || 0)), note: String(m.note || '').slice(0, 120) }
+    : null;
+  if (m.status === 'ready') shared.onSongReady?.(String(m.trackId || ''), userSongRows([m.song])[0] || null);
+  shared.garage?.refreshMedia?.();
+});
 // The web host's Scrolller pictures (host/scrolllerFeed.js): display only. Built once so a feed
 // that lands before the first course is kept; the desktop host never sends one.
 shared.scrolllerFeed = createScrolllerFeed({ bridge: shared.bridge });
@@ -644,6 +660,7 @@ async function boot(course, options, lifetime, isCurrent) {
       return { source: id === TRACK_ID ? view().source : saved.source || (consentOn() ? 'scrolller' : 'off'),
         files: id === TRACK_ID ? library.count : Math.min(24, shared.courseFiles[id]?.length || 0), catalog: scrolller?.catalog || [], scrolllerAvailable: !!scrolller,
         niches: nichesFor(id), custom: !isDefault(id), songs: shared.songRows.map(({id,label}) => ({id,label})),
+        songWords: !!init.caps.songWords, songProgress: shared.songWords?.trackId === id ? shared.songWords : null,
         songId: local ? 'file' : saved.songId || 'default',
         songName: local?.name || shared.songRows.find(row => row.id === ((saved.songId && saved.songId !== 'default' ? saved.songId : null) || ({threshold:'pink-road',mainframe:'mainframe',keep:'keep',boudoir:'boudoir',goonworks:'goonworks'})[id]))?.label || 'Track default' };
     };
@@ -667,9 +684,19 @@ async function boot(course, options, lifetime, isCurrent) {
       } else if (d.kind === 'song-file' && /^audio\//.test(d.file?.type || '')) {
         shared.courseSongs[id] = d.file; saved.songId = 'default';
         if (id === TRACK_ID) { pickedSong = d.file; stopSong(); void menuSong(); }
+      } else if (d.kind === 'song-pick' && init.caps.songWords) {
+        shared.bridge.send({ type: 'song-pick', trackId: id });   // the host's own file dialog, then whisper (song-words frames)
       }
       saveCustomization(shared.coursePicks); refreshMedia();
     });
+    // A heard song is picked for its course as soon as the host says ready (the player asked for it from that course).
+    shared.onSongReady = (id, song) => {
+      if (!song || !COURSES.some(c => c.id === id) || !shared.songRows.some(row => row.id === song.id)) return;
+      const saved = shared.coursePicks[id] ||= {};
+      delete shared.courseSongs[id]; saved.songId = song.id;
+      if (id === TRACK_ID && ['menu', 'boot'].includes(state)) { pickedSong = null; stopSong(); void menuSong(); }
+      saveCustomization(shared.coursePicks); refreshMedia();
+    };
     garage.setVisible(false);
     lifetime.defer(() => { garage.setVisible(false); garage.setHandlers({ action: null, sound: null, changeTrack: null }); });
     // not enumerable: the garage holds its three.js scene, and every status JSON.stringify of the debug
@@ -971,7 +998,9 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     if (!song || !song.words.length) { words = null; wordCount.show(false); coinNote(0); return; }
     if (!words || words.song !== song) {
-      words = createWordRun(song, track, { seed, songGates: true }); words.song = song;
+      // A heard song has no authored IMPACT list: its confident longer words (chart bubble marks) ride the bubbles.
+      const pick = song.userSong ? s => pickWords(s, { ...PICK, impactOnly: false }) : undefined;
+      words = createWordRun(song, track, { seed, songGates: true, pick }); words.song = song;
       words.onPop((e) => {
         bus.emit('word-pop', e); wordCount.pop(!!feel.get('gentle.on'), e);
         songWordCaught();
@@ -1158,10 +1187,11 @@ async function boot(course, options, lifetime, isCurrent) {
     const roomOrigin = !devLobby ? ROOM_ORIGIN : (LOCAL_URL.test(qs.get('room') || '') ? qs.get('room') : null);
     let fallback;
     extraSongs = () => fallback ||= lobbyApi.songs().then(r => {
-      shared.songRows = (r?.songs || []).flatMap(row => {
+      shared.lobbySongRows = (r?.songs || []).flatMap(row => {
         const url = lobbySongCharts([row], { roomOrigin })[0];
         return url ? [{ id: row.id, label: row.title || row.name || row.id, url }] : [];
       });
+      mergeSongRows();
       refreshMedia();
       return lobbySongCharts(courseSongRows(TRACK_ID, r?.songs), { roomOrigin });
     }).catch(() => []);

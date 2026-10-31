@@ -156,7 +156,17 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch, lowRat
     const t = ctx.currentTime;
     durS = buffer && buffer.duration > 0 ? buffer.duration : 0;
     chart = c; bpm = b; song = c ? (cached && cached.chart === c ? cached.song : normalizeChart(c)) : null;
-    if (c) analysis = null;
+    if (c && c.userSong) {
+      // RACE YOUR OWN SONG: the host's chart carries heard words and a placeholder bpm; the beat grid comes
+      // from the recording itself, as for a dropped file, and lands on the chart so every consumer sees one song.
+      if (analyzed !== buffer) { analysis = analyzeAudioBuffer(buffer); analyzed = buffer; }
+      const a = analysis;
+      if (a && a.bpm > 0 && song) {
+        const downbeatS = a.downbeats && a.downbeats.length ? a.downbeats[0] : 0;
+        bpm = a.bpm; c.bpm = a.bpm; c.downbeatS = downbeatS;
+        song.bpm = a.bpm; song.downbeatS = downbeatS; song.beats = a.beats; song.downbeats = a.downbeats;
+      }
+    } else if (c) analysis = null;
     else if (analyzed !== buffer) { analysis = analyzeAudioBuffer(buffer); analyzed = buffer; }
     let pos = null;
     if (typeof align === 'function') { try { pos = align(song); } catch (e) { pos = null; } }

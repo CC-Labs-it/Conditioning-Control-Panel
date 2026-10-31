@@ -55,7 +55,17 @@ export function createCourseMedia({root, mediaFor = () => ({})}) {
     for (const row of [{id:'default',label:'Track default'}, ...(view.songs || []).filter(row => row.id !== 'default')]) {
       button(songs, row.label, () => emit('song', {songId:row.id}), (view.songId || 'default') === row.id).dataset.focus = 'song-' + row.id;
     }
-    button(songs, 'Choose music file', () => {
+    if (view.songWords) {
+      // RACE YOUR OWN SONG (desktop host): the host opens its own file dialog and listens for the words; the row
+      // appears in the list above when it is ready. A job in flight shows its line here instead of a button.
+      const job = view.songProgress, busy = job?.status === 'progress';
+      button(songs, busy ? 'Listening' : 'Choose music file', () => {if (!busy) emit('song-pick', {});}).dataset.focus = 'song-file';
+      const note = document.createElement('p');
+      note.textContent = job?.status === 'error' ? job.note || 'That did not work. Try another file.'
+        : busy ? (job.note || 'Working') + (job.phase === 'model' || job.phase === 'listen' ? ' ' + Math.round((job.pct || 0) * 100) + '%' : '')
+        : 'Any song on this PC. Its words are heard once, a minute or two, and stay on this device.';
+      songs.append(note);
+    } else button(songs, 'Choose music file', () => {
       const input = document.createElement('input');input.type = 'file';input.accept = 'audio/*';
       input.style.display = 'none';document.body.append(input);
       input.onchange = () => {const file = input.files?.[0];if (file) emit('song-file', {file});input.remove();};
