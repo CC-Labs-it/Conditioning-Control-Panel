@@ -168,6 +168,49 @@ public sealed class LobbyPageTests
         }
     });
 
+    [Fact]
+    public void RaceRowsPollPaintCourseJoinAndStopWithoutLatePaint() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        page.ReadGates = () => LobbyGates.From(true, false, false);
+        var calls = 0;
+        page.FetchRace = _ =>
+        {
+            calls++;
+            return System.Threading.Tasks.Task.FromResult(new RaceOpenReply(new[] {
+                new RaceOpenRoom("abcdefghijkl", "keep", "Host", 8, 2, 3, false, null, false) }, true));
+        };
+        page.StartRaceRows();
+        Assert.True(page.RacePolling);
+        Assert.Equal(1, calls);
+        var card = Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "AvailableSubjectsList").Items.Single());
+        Assert.Contains("The Keep", card.Line);
+        Assert.True(card.CanLaunch);
+        string? joined = null;
+        page.OpenRace = room => joined = room;
+        page.PressRaceJoin(card.Row);
+        Assert.Equal("abcdefghijkl", joined);
+        joined = null;
+        page.PressRaceJoin(card.Row with { Key = "bad" });
+        page.ReadGates = () => LobbyGates.From(false, false, false);
+        page.PressRaceJoin(card.Row);
+        Assert.Null(joined);
+        page.RefreshRaceRows().GetAwaiter().GetResult();
+        Assert.Equal(1, calls);
+        Assert.Empty(Named<ItemsControl>(page, "AvailableSubjectsList").Items);
+        page.ReadGates = () => LobbyGates.From(true, false, false);
+        var pending = new System.Threading.Tasks.TaskCompletionSource<RaceOpenReply>();
+        page.FetchRace = _ => pending.Task;
+        var refresh = page.RefreshRaceRows();
+        page.StopRaceRows();
+        Assert.False(page.RacePolling);
+        pending.SetResult(new RaceOpenReply(new[] { card.Row }.Select(r =>
+            new RaceOpenRoom(r.Key!, "keep", "Host", 8, 2, 3, false, null, false)).ToArray(), true));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(refresh.IsCompletedSuccessfully);
+        Assert.Empty(Named<ItemsControl>(page, "AvailableSubjectsList").Items);
+    });
+
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
