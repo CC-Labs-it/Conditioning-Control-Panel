@@ -35,8 +35,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// the tier toast (TierGate.DemandLab).</summary>
         internal static bool DtrhGate() => TierGate.DemandLab(Loc.Get("launcher_game_dtrh_title"), DtrhId);
 
-        // WPF DtrhHostService.cs:924-953: a failed 3D boot uses the classic game
-        // for the rest of the session. The normal Lab gate still owns each new launch.
+        // WPF DtrhHostService.cs:924-953: boot-error opens the classic game immediately.
+        // Launch (:140-195) retries the web host; this flag records failure only.
         internal static bool DtrhBootFailedThisSession;
         internal static Chaos.ChaosHubWindow? DtrhClassicHub => Chaos.ChaosHubWindow.Current;
 

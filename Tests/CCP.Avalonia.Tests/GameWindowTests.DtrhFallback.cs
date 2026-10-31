@@ -15,7 +15,7 @@ namespace CCP.Avalonia.Tests;
 public sealed partial class GameWindowTests
 {
     // WPF DtrhHostService.cs:924-953: boot-error closes the web host, then first run
-    // or one reusable classic hub. Future launches bypass the failed web engine.
+    // or one reusable classic hub. Launch (:140-195) retries the web engine next time.
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
@@ -62,7 +62,12 @@ public sealed partial class GameWindowTests
                     Assert.NotNull(overlay);
                     overlay.FinishCountdown();
                     Assert.NotNull(ChaosSkiaFxOverlay.Active); // actual classic FX path
-                    LauncherWindow.Destinations["dtrh"].Open(shell);
+                    var retry = GameWindow.Launch("DTRH");
+                    Assert.NotNull(retry);
+                    Assert.NotSame(web, retry);
+                    Assert.True(retry.IsVisible);
+                    Assert.Same(overlay, ChaosRunHost.Overlay);
+                    retry.HandleMessage("{\"type\":\"boot-error\"}");
                     Assert.Same(overlay, ChaosRunHost.Overlay);
                     ChaosRunHost.ForceShutdown();
                     Assert.Null(ChaosSkiaFxOverlay.Active);
@@ -72,20 +77,26 @@ public sealed partial class GameWindowTests
                     var hub = GameWindow.DtrhClassicHub;
                     Assert.NotNull(hub);
                     Assert.True(hub.IsVisible);
-                    LauncherWindow.Destinations["dtrh"].Open(shell);
+                    var retry = GameWindow.Launch("DTRH");
+                    Assert.NotNull(retry);
+                    Assert.NotSame(web, retry);
+                    Assert.True(retry.IsVisible);
+                    retry.HandleMessage("{\"type\":\"boot-error\"}");
                     Assert.Same(hub, GameWindow.DtrhClassicHub);
                     hub.Close();
                     Assert.Null(GameWindow.DtrhClassicHub);
                     // A hub opened by the recap must be reused by the launcher too.
                     var recapHub = new ChaosHubWindow();
                     recapHub.Show();
-                    GameWindow.Launch("DTRH");
+                    var recapRetry = GameWindow.Launch("DTRH");
+                    Assert.NotNull(recapRetry);
+                    recapRetry.HandleMessage("{\"type\":\"boot-error\"}");
                     Assert.Same(recapHub, GameWindow.DtrhClassicHub);
                     Assert.Null(GameWindow.OpenForTests("dtrh"));
                     recapHub.Close();
                 }
                 Assert.Null(GameWindow.OpenForTests("dtrh"));
-                // The session latch must not bypass a later lost entitlement.
+                // Retrying the web game still requires entitlement.
                 CoreEntitlement.HasLabProvider = () => false;
                 LauncherWindow.Destinations["dtrh"].Open(shell);
                 Assert.NotEmpty(denied);

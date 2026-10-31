@@ -80,11 +80,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (live != null) { live.Activate(); return live; }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
-            if (spec.Id == DtrhId && DtrhBootFailedThisSession)
-            {
-                LaunchDtrhClassic();
-                return null;
-            }
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();
