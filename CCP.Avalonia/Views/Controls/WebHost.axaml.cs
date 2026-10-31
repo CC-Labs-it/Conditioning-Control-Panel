@@ -236,7 +236,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>The seam the engine's WebMessageReceived routes through (headless tests drive it).</summary>
         internal void OnWebMessage(string? body)
         {
-            if (!string.IsNullOrEmpty(body)) WebMessage?.Invoke(body);
+            // WPF ChaosWebViewHost.cs:1700-1737 contains the whole dispatch, including field casts.
+            try
+            {
+                if (!string.IsNullOrEmpty(body)) WebMessage?.Invoke(body);
+            }
+            catch (Exception ex) { Log.Debug("WebHost.OnWebMessage: {E}", ex.Message); }
         }
 
         /// <summary>Return keyboard focus to the native page after a title-bar Escape.</summary>
