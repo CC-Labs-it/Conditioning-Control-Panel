@@ -786,7 +786,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             Close(true);
         }
 
-        private static void ClearIfOtherAccount(string? newId)
+        internal static void ClearIfOtherAccount(string? newId)
         {
             var previousId = CoreSettings.Current.UnifiedId;
             if (!string.IsNullOrEmpty(previousId) && !string.IsNullOrEmpty(newId) && previousId != newId)

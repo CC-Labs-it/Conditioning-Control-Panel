@@ -22,6 +22,22 @@ namespace ConditioningControlPanel.Services
             s.StreakFixCharges = 0; // per-account, server-authoritative balance
             s.HighestLevelEver = 0;
 
+            // Migration state belongs to the account whose ledger was just cleared. A pending
+            // choice cannot survive without that ledger; the server can re-offer on the next login.
+            s.PendingDescentMigrationChoice = null;
+            s.DescentEpoch = 0;
+            s.DescentMigrationCompleted = false;
+            s.DescentMigrationChoice = null;
+            s.DescentMigrationOffered = false;
+            s.DescentCycleXpBonus = 1.0;
+            s.DescentCycle = 0;
+            s.DescentAnchorUtc = null;
+            s.DescentVeteranArchive = false;
+            s.DescentPreMigrationLevel = 0;
+            s.DescentPreMigrationLifetimeXp = 0;
+            s.DescentPendingStageCeremonies = new List<int>();
+            s.DescentLastStageDripDate = null;
+
             // Quest streak. The Perfect Week latch goes with it: leaving it standing means an
             // incoming account whose cloud streak happens to equal the old account's latch has
             // its milestone silently eaten (the latch is a "already paid for THIS streak" mark

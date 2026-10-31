@@ -23,6 +23,50 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed partial class AccountSeedTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PendingMigrationDoesNotFollowLogoutOrAccountSwitch(bool directSwitch) => WithFreshInstall(async () =>
+    {
+        var s = CoreSettings.Current;
+        var (wireA, syncA, _) = SignIn("a", L40Profile("a"));
+        wireA.SyncReply = """{"descent_migration":{"required":true,"total_xp_earned":16343,"restore_basis_xp":70343}}""";
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Equal("restore", s.PendingDescentMigrationChoice);
+        Assert.False(await syncA.PushAsync("still in cooldown"));
+        if (directSwitch) global::ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog.ClearIfOtherAccount("b");
+        else await AccountSeed.Logout();
+        Assert.Single(wireA.Syncs); // pre-logout push could not submit while cooling down
+        Assert.Null(s.PendingDescentMigrationChoice);
+        Assert.Equal(0, s.DescentEpoch);
+        Assert.Equal(1.0, DescentCycleXp.XpBonusFor(s));
+
+        var (wireB, _, _) = SignIn("b", L40Profile("b"));
+        AccountSeed.ApplyLoginUserData(s, new V2AuthService.V2User
+        {
+            UnifiedId = "b", Level = 40, Xp = L40Xp,
+        }, "fixture-token", T0);
+        Assert.Equal(40, s.PlayerLevel); // login adopt is available to B
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Equal(40, s.PlayerLevel); // read-before-write adopt is available too
+        var body = Assert.Single(wireB.Syncs);
+        Assert.Equal("b", (string?)body["unified_id"]);
+        Assert.Equal(L40Xp, (int)body["xp"]!);
+        Assert.False(body.ContainsKey("descent_migration"));
+        Assert.Equal(1.0, DescentCycleXp.XpBonusFor(s));
+
+        await AccountSeed.Logout();
+        var (returnWire, returnSync, _) = SignIn("a", L40Profile("a"));
+        returnWire.SyncReply = wireA.SyncReply; // A is re-offered, never submits a zeroed ledger
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.Equal("restore", s.PendingDescentMigrationChoice);
+        returnSync.UtcNow = () => T0.AddMinutes(1);
+        Assert.True(await returnSync.PushAsync("retry migration"));
+        var retry = returnWire.Syncs.Last();
+        Assert.Equal(70343, (int)retry["xp"]!);
+        Assert.Equal("restore", (string?)retry["descent_migration"]?["choice"]);
+    });
+
     [Fact]
     public void DescentPending_LoginUpdatesIdentityWithoutResurrectingTheOldLedger()
     {

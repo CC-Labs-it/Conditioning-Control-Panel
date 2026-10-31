@@ -28,6 +28,11 @@ public static class DescentAutoRestore
     {
         if (!DescentMigrationChoices.IsValid(choice) || s.DescentMigrationCompleted
             || DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice)) return false;
+        var before = (s.PlayerLevel, s.PlayerXP, s.HighestLevelEver, s.DescentEpoch,
+            s.DescentPreMigrationLevel, s.DescentPreMigrationLifetimeXp, s.DescentCycleXpBonus,
+            s.DescentCycle, s.DescentPendingStageCeremonies, s.DescentVeteranArchive, s.DescentAnchorUtc,
+            s.DescentLastStageDripDate, s.LastConfirmedServerXp, s.LastConfirmedServerXpAccount,
+            s.LastConfirmedServerXpSeason, s.DescentMigrationOffered);
         var result = DescentMigration.Resolve(choice, offer);
         s.DescentPreMigrationLevel = s.PlayerLevel;
         s.DescentPreMigrationLifetimeXp = result.LifetimeXp;
@@ -52,7 +57,18 @@ public static class DescentAutoRestore
         s.DescentLastStageDripDate = null;
         ProfileAdopt.ClearXpWatermark(s, "descent migration");
         s.DescentMigrationOffered = false;
-        persist();
+        try { persist(); }
+        catch
+        {
+            // The sync catch may save again. It must see the old ledger if the first checkpoint
+            // failed, rather than a rewritten ledger with no choice to tell the server why.
+            (s.PlayerLevel, s.PlayerXP, s.HighestLevelEver, s.DescentEpoch,
+                s.DescentPreMigrationLevel, s.DescentPreMigrationLifetimeXp, s.DescentCycleXpBonus,
+                s.DescentCycle, s.DescentPendingStageCeremonies, s.DescentVeteranArchive, s.DescentAnchorUtc,
+                s.DescentLastStageDripDate, s.LastConfirmedServerXp, s.LastConfirmedServerXpAccount,
+                s.LastConfirmedServerXpSeason, s.DescentMigrationOffered) = before;
+            throw;
+        }
         s.PendingDescentMigrationChoice = choice;
         persist();
         return true;

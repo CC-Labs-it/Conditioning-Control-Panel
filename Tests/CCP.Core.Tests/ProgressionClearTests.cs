@@ -9,6 +9,38 @@ namespace CCP.Core.Tests;
 /// <summary>ProgressionClear.Apply = the settings half of WPF MainWindow.ClearProgressionData.</summary>
 public class ProgressionClearTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AccountClearDropsPendingAndAcknowledgedMigrationState(bool completed)
+    {
+        var s = new AppSettings
+        {
+            DescentEpoch = 1, DescentMigrationCompleted = completed, DescentMigrationChoice = "cycle",
+            PendingDescentMigrationChoice = completed ? null : "restore", DescentMigrationOffered = true,
+            DescentCycleXpBonus = 1.1, DescentCycle = 2, DescentVeteranArchive = true,
+            DescentAnchorUtc = DateTime.UtcNow, DescentPreMigrationLevel = 150,
+            DescentPreMigrationLifetimeXp = 70343, DescentPendingStageCeremonies = new() { 1, 2 },
+            DescentLastStageDripDate = "2026-10-30", DescentSpiralRailEnabled = false,
+        };
+        ProgressionClear.Apply(s);
+        Assert.Null(s.PendingDescentMigrationChoice);
+        Assert.Equal(0, s.DescentEpoch);
+        Assert.False(s.DescentMigrationCompleted);
+        Assert.Null(s.DescentMigrationChoice);
+        Assert.False(s.DescentMigrationOffered);
+        Assert.Equal(1.0, s.DescentCycleXpBonus);
+        Assert.Equal(1.0, ConditioningControlPanel.Services.Descent.DescentCycleXp.XpBonusFor(s));
+        Assert.Equal(0, s.DescentCycle);
+        Assert.False(s.DescentVeteranArchive);
+        Assert.Null(s.DescentAnchorUtc);
+        Assert.Equal(0, s.DescentPreMigrationLevel);
+        Assert.Equal(0, s.DescentPreMigrationLifetimeXp);
+        Assert.Empty(s.DescentPendingStageCeremonies);
+        Assert.Null(s.DescentLastStageDripDate);
+        Assert.False(s.DescentSpiralRailEnabled); // the display preference belongs to this install
+    }
+
     [Fact]
     public void ApplyClearsEveryProgressionFieldAndKeepsIdentity()
     {

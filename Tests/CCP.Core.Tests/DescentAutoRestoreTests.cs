@@ -19,6 +19,41 @@ public sealed class DescentAutoRestoreTests
     };
     private static AppSettings Restart(AppSettings s) => JsonConvert.DeserializeObject<AppSettings>(JsonConvert.SerializeObject(s))!;
 
+    [Theory]
+    [InlineData("restore")]
+    [InlineData("cycle")]
+    public void FailedFirstSaveRestoresTheLedgerBeforeTheSyncCatchCanSaveIt(string choice)
+    {
+        var s = Fixture();
+        s.DescentMigrationOffered = true;
+        s.DescentPendingStageCeremonies = new() { 7 };
+        var before = JsonConvert.SerializeObject(s);
+        var body = SyncPush.SerializeBody(s, null);
+        Assert.Throws<InvalidOperationException>(() => DescentAutoRestore.ApplyChoice(s, choice,
+            new DescentMigrationOffer { TotalXpEarned = 16343, RestoreBasisXp = 70343 }, null, Now,
+            () => throw new InvalidOperationException("disk unavailable")));
+        Assert.Equal(before, JsonConvert.SerializeObject(s)); // also the later outer Save's snapshot
+        Assert.Equal(body, SyncPush.SerializeBody(s, null));
+        Assert.True(DescentAutoRestore.ApplyChoice(s, choice,
+            new DescentMigrationOffer { TotalXpEarned = 16343, RestoreBasisXp = 70343 }, null, Now, () => { }));
+        Assert.Equal(choice, s.PendingDescentMigrationChoice);
+    }
+
+    [Fact]
+    public void FailedFinalSaveKeepsTheRewrittenLedgerAndChoiceTogetherForRetry()
+    {
+        var s = Fixture();
+        var saves = 0;
+        Assert.Throws<InvalidOperationException>(() => DescentAutoRestore.ApplyChoice(s, "restore",
+            new DescentMigrationOffer { TotalXpEarned = 16343, RestoreBasisXp = 70343 }, null, Now, () =>
+            {
+                if (++saves == 2) throw new InvalidOperationException("disk unavailable");
+            }));
+        var retry = JObject.Parse(SyncPush.SerializeBody(Restart(s), null));
+        Assert.Equal(70343, (int)retry["xp"]!);
+        Assert.Equal("restore", (string?)retry["descent_migration"]?["choice"]);
+    }
+
     [Fact]
     public void Offer_runs_after_response_and_persists_before_submit_then_replay_preserves_earned_xp()
     {
