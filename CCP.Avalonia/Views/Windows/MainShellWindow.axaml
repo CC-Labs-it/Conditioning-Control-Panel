@@ -2793,6 +2793,7 @@
                 </Border.OpacityMask>
             </Border>
         </Panel>
+        <fx:EdgeParticles x:Name="SectionEdgeParticles"/>
         <Border x:Name="GlassWindowEdge" BorderBrush="#E6B79CFF" BorderThickness="3" CornerRadius="8"/>
         <Border x:Name="SectionEdgeLiftTop" Height="3" VerticalAlignment="Top" Margin="8,0,8,0" Background="#FFD0BFFF">
             <Border.OpacityMask>

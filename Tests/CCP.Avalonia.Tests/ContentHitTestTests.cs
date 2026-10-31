@@ -30,6 +30,7 @@ public sealed class ContentHitTestTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
+            if (!System.OperatingSystem.IsWindows()) AmbientBeatLoopsTests.Setup();
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
@@ -90,6 +91,9 @@ public sealed class ContentHitTestTests
     private static void RenderLiveTree(Visual w)
     {
         Dispatcher.UIThread.RunJobs();
+        // Frame callbacks can invalidate layout while RunJobs drains the queue. Commit the
+        // resulting live layout before asking for the frame whose hit-test scene we probe.
+        ((TopLevel)w).UpdateLayout();
         var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
         var deadline = Stopwatch.StartNew();
         while (!batch.Rendered.IsCompleted)
@@ -98,6 +102,11 @@ public sealed class ContentHitTestTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
+        // Rendered completes on the server before the UI consumes its acknowledgement. The
+        // jobs above can therefore enqueue the next live-tree batch. Use the same full flush
+        // as headless pointer input before probing the compositor's hit-test scene.
+        using var frame = ((TopLevel)w).CaptureRenderedFrame();
+        Assert.NotNull(frame);
     }
 
     private static bool Inside(Visual v, Point p, Visual root)

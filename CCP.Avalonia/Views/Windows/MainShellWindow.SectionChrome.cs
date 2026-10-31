@@ -13,8 +13,8 @@
 // frame line, the 28 px glow band and the lift in the hue.
 //
 // ponytail: not yet here (lane sync6-nav-polish-c): the edge lift's lap round the frame at Full
-// motion (it sits at the top centre, WPF's Reduced), the fog and ember strips the band thins for
-// (EdgeParticles, AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
+// motion (it sits at the top centre, WPF's Reduced), the edge fog (AmbientFxCanvas.EdgeFog),
+// the depth painters the wash feeds
 // (PaintDepthRail/Hud/Home/Quests), the "Moved" redirects and their note, and the "Cloud sync
 // issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
 
@@ -108,7 +108,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private void InitializeMotionChrome()
         {
-            Opened += (_, _) => { AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome; AmbientFxCanvas.Env.MotionGateChanged += OnMotionChrome; };
+            Opened += (_, _) =>
+            {
+                Named<EdgeParticles>("SectionEdgeParticles")?.Mount(NavStripRules.Accent(_washSection ?? NavSections.Home));
+                AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome;
+                AmbientFxCanvas.Env.MotionGateChanged += OnMotionChrome;
+            };
             Closed += (_, _) =>
             {
                 AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome;
@@ -122,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 // Before the first navigation the frame wears Home's hue (the XAML default; WPF _edgeHue).
                 PaintSectionEdge(NavStripRules.Accent(_washSection ?? NavSections.Home), CoreSettings.Current.MotionLevel, 0);
+                Named<EdgeParticles>("SectionEdgeParticles")?.Refresh();
                 PageStrip?.UpdateSheenClock();
                 if (!AmbientFxCanvas.Env.AllowAmbientLoops) StopLockdownPulse();
                 if (Named<Tabs.SettingsTabView>("SettingsTab") is { } dash)
@@ -138,6 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (SectionEdgeRules.GlowAlpha), the lift the hue toward white, hidden at Motion Off.</summary>
         private void PaintSectionEdge(global::Avalonia.Media.Color hue, Models.MotionLevel level, int ms)
         {
+            Named<EdgeParticles>("SectionEdgeParticles")?.Retint(hue);
             if (Named<Border>("GlassWindowEdge") is { } line)
             {
                 Fade(line, Border.BorderBrushProperty, ms);

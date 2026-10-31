@@ -42,6 +42,7 @@ public sealed class ServerAnnouncementInboxTests
 
     private static Task Run(Func<FakeProxy, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        if (!System.OperatingSystem.IsWindows()) AmbientBeatLoopsTests.Setup();
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
@@ -128,11 +129,28 @@ public sealed class ServerAnnouncementInboxTests
             Click(flyout.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("open")));
             Dispatcher.UIThread.RunJobs();
 
+            // The explicit check consumed the startup timer. Crossing its old deadline must
+            // not re-file the announcement just opened from the inbox.
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(7));
+            Dispatcher.UIThread.RunJobs();
             var popup = Assert.Single(opened);
             Assert.Equal("The Spiral is open", popup.FindControl<TextBlock>("TxtTitle")!.Text);
             Assert.Empty(StartupLadder.Inbox.Items);
         }
         finally { shell.Close(); foreach (var p in opened) p.Close(); }
+    });
+
+    [Fact]
+    public Task ClosedShellCancelsItsStartupAnnouncementCheck() => Run(fake =>
+    {
+        var shell = new MainShellWindow();
+        shell.Show();
+        shell.Close();
+        ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(7));
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(fake.Calls, c => c.Contains("/config/announcement", StringComparison.Ordinal));
+        Assert.Empty(StartupLadder.Inbox.Items);
+        return Task.CompletedTask;
     });
 
     [Fact]

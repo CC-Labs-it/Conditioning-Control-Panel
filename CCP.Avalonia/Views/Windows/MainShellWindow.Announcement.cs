@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using System.Threading;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using Serilog;
@@ -18,6 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static Func<V2AuthService>? AnnouncementClient;
 
         private bool _announcementArmed;
+        private ITimer? _announcementDelay;
 
         private void InitializeServerAnnouncement()
         {
@@ -25,13 +27,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (_announcementArmed || AnnouncementClient == null) return;
                 _announcementArmed = true;
-                DispatcherTimer.RunOnce(() => _ = CheckServerAnnouncementAsync(), TimeSpan.FromSeconds(7));
+                _announcementDelay = Platform.StartupLadder.Time.CreateTimer(_ =>
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (_announcementDelay != null) _ = CheckServerAnnouncementAsync();
+                    }), null, TimeSpan.FromSeconds(7), Timeout.InfiniteTimeSpan);
             };
+            Closed += (_, _) => CancelAnnouncementDelay();
+        }
+
+        private void CancelAnnouncementDelay()
+        {
+            _announcementDelay?.Dispose();
+            _announcementDelay = null;
         }
 
         /// <summary>One check: fetch, skip the dismissed id, route through the startup ladder.</summary>
         internal async Task CheckServerAnnouncementAsync()
         {
+            // An explicit refresh consumes the pending startup check too. Otherwise the delayed
+            // check can re-file a row after the user has already opened it.
+            CancelAnnouncementDelay();
             try
             {
                 var make = AnnouncementClient;
