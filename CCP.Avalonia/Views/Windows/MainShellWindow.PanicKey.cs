@@ -27,6 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// press is a rebind, never a panic.</summary>
         internal static bool CapturingPanicKey { get; set; }
 
+        private DateTime _lastLinuxKey;
         private int _panicPressCount;
         private DateTime _lastPanicTime = DateTime.MinValue;
 
@@ -60,6 +61,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// counted press within 2 s exits the app, as WPF does when no engine is running.</summary>
         internal void HandlePanicKeyPress(DateTime now)
         {
+            if (Games.LinuxRaceHost.Current is { InFront: true })
+            {
+                if ((now - _lastLinuxKey).TotalMilliseconds < 120) return;
+                _lastLinuxKey = now;
+            }
             var s = CoreSettings.Current;
             // WPF MainWindow.xaml.cs:914: a Pause-key capture takes the press before the panic branch, so the
             // Escape that unbinds Pause (the default panic key) is never also a panic.
@@ -168,8 +174,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var game = Games.GameWindow.EscapePauseInFront();
-                var page = game?.KeptEscapePage ?? PanicPolicy.KeptEscapePage.None;
-                bool ready = game?.KeptEscapeReady == true;
+                var linux = Games.LinuxRaceHost.Current is { InFront: true } race ? race : null;
+                var page = linux != null ? PanicPolicy.KeptEscapePage.Glassroad : game?.KeptEscapePage ?? PanicPolicy.KeptEscapePage.None;
+                bool ready = linux?.Ready ?? (game?.KeptEscapeReady == true);
                 var intake = game == null ? IntakeHostWindow.InFront() : null;
                 bool intakeReady = intake?.KeptEscapeReady == true;
                 bool In(PanicPolicy.KeptEscapePage p) => page == p;
@@ -179,7 +186,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     intakeInFront: intake != null, intakeReady: intakeReady,
                     glassroadInFront: In(PanicPolicy.KeptEscapePage.Glassroad), glassroadReady: ready);
                 bool claim = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
-                    gameInFront: game != null || intake != null, engineRunning: CoreEngine.IsRunning,
+                    gameInFront: linux != null || game != null || intake != null, engineRunning: CoreEngine.IsRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(), lastClaimUtc: _lastGameEscapeClaim, nowUtc: now,
                     frontGameReady: Route(true) != PanicPolicy.KeptEscapePage.None, fromPanicKey: true);
                 if (!claim) { _lastGameEscapeClaim = null; return false; }
@@ -190,7 +197,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     case PanicPolicy.KeptEscapePage.Intake: intake!.PostKeptEscape(); break;
                     case PanicPolicy.KeptEscapePage.None: break;
-                    default: game!.PostKeptEscape(); break;
+                    default: if (linux != null) linux.Pause(); else game!.PostKeptEscape(); break;
                 }
                 return true;
             }

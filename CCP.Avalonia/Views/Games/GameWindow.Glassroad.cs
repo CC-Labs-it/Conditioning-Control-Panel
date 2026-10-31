@@ -45,185 +45,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return false;
         }
 
-        private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
-        private bool _grOpen, _grEarlyInitSent, _grPinged;
-        private DateTime _grLastBeatUtc = DateTime.UtcNow, _grLastProgressUtc = DateTime.UtcNow;
+        private bool IsGlassroad => Spec.Id == GlassroadId;
+        private GlassroadSession? _glassroad;
         private DispatcherTimer? _grWatch;
-
-        /// <summary>Test seam: the last net relay; done once its reply is queued on the UI thread.</summary>
-        internal Task GlassroadPending { get; private set; } = Task.CompletedTask;
-
-        /// <summary>WPF Launch after the window exists: watchdog, presence, the load-time init.</summary>
+        internal Task GlassroadPending => _glassroad?.GlassroadPending ?? Task.CompletedTask;
         private void OpenGlassroad()
         {
-            if (_grOpen) return;
-            _grOpen = true;
-            _grEarlyInitSent = _grPinged = false;
-            _grLastBeatUtc = _grLastProgressUtc = DateTime.UtcNow;
-            Closed += (_, _) => CloseGlassroad();
+            _glassroad = new GlassroadSession(Post, Close, () => Web.Focus());
             Web.NavigationCompleted += url => { if (PageUrl != null && SameOrigin(url, PageUrl)) PostGlassroadInit(); };
             _grWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _grWatch.Tick += (_, _) => CheckGlassroadWatch(DateTime.UtcNow);
             _grWatch.Start();
-            try { FriendsHead.Service?.EnterActivity(PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
-            Log.Information("GlassroadHost: launched");
+            Closed += (_, _) => { _grWatch.Stop(); _glassroad.Dispose(); };
         }
-
-        /// <summary>WPF Close: the one funnel every exit reaches (page, title-bar X, panic, boot failure, watchdog).</summary>
-        private void CloseGlassroad()
-        {
-            if (!_grOpen) return;
-            _grOpen = false;
-            try { _grWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
-            _grWatch = null;
-            try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
-            Log.Information("GlassroadHost: closed");
-        }
-
-        /// <summary>The init frame, straight out (this head has no ready queue).</summary>
-        internal void PostGlassroadInit()
-        {
-            try
-            {
-                var s = CoreSettings.Current;
-                var uid = CoreAccount.UnifiedUserId;
-                bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(PbpAuthToken());
-                Post(GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed));
-            }
-            catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
-        }
-
-        /// <summary>The server's last effective tier, else the entitlement this head knows (display only: the
-        /// lobby decides every gate itself).</summary>
-        private static int GlassroadTier()
-        {
-            try { return CoreSettings.Current.LastKnownEffectiveTier ?? (CoreEntitlement.HasLab ? 2 : CoreEntitlement.HasPremium ? 1 : 0); }
-            catch { return 0; }
-        }
-
-        /// <summary>WPF OnPageMessage. True = claimed; boot-error and log fall through to the shell frames.</summary>
+        internal void PostGlassroadInit() => _glassroad?.PostGlassroadInit();
         private bool HandleGlassroad(JObject o)
         {
-            _grLastProgressUtc = DateTime.UtcNow;
-            var type = (string?)o["type"];
-            try
-            {
-                if (!_grEarlyInitSent && !IsReady && type != "ready")
-                {
-                    _grEarlyInitSent = true;
-                    PostGlassroadInit();   // backstop for a load-time init that beat the bridge
-                }
-                switch (type)
-                {
-                    case "ready":
-                        IsReady = true;
-                        _grLastBeatUtc = DateTime.UtcNow;
-                        _grPinged = false;
-                        PostGlassroadInit();
-                        try { Web.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
-                        return true;
-                    case "heartbeat":
-                    case "pong":
-                        _grLastBeatUtc = DateTime.UtcNow;
-                        _grPinged = false;
-                        return true;
-                    case "net":
-                        OnGlassroadNet(o);
-                        return true;
-                    case "exit":
-                    case "menu-back":
-                        // The page's own Leave / the menu's Back link. Escape never sends these.
-                        Close();
-                        return true;
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Warning("Glassroad: message handler threw ({Type}): {E}", type, ex.Message);
-                return true;
-            }
-            return false;
+            var handled = _glassroad?.HandleGlassroad(o) == true;
+            IsReady = _glassroad?.Ready == true;
+            return handled;
         }
-
-        /// <summary><c>net { id, method, path, body }</c> -&gt; <c>net-reply { id, status, body }</c>. A refusal or
-        /// failure answers status 0 (the page's "no answer"); no id goes unanswered.</summary>
-        private void OnGlassroadNet(JObject o)
-        {
-            var id = (string?)o["id"] ?? "";
-            var path = (string?)o["path"] ?? "";
-            var method = ((string?)o["method"] ?? "GET").Trim().ToUpperInvariant();
-            var b = o["body"];
-            var body = b == null || b.Type == JTokenType.Null ? ""
-                : b.Type == JTokenType.String ? (string?)b ?? "" : b.ToString(Newtonsoft.Json.Formatting.None);
-            if (method != "GET" && method != "POST") { ReplyGlassroadNet(id, 0, "forbidden_method"); return; }
-
-            var baseUrl = PbpServerBase();
-            if (string.IsNullOrEmpty(baseUrl)) { ReplyGlassroadNet(id, 0, ""); return; }   // a sandbox with no loopback
-            // Signed first (the host names the caller), then the SIGNED path is judged on its built Uri.
-            if (!GlassroadHostRules.TrySign(method, path, body, CoreAccount.UnifiedUserId, out var signedPath, out var signedBody)
-                || !HostNetPathRule.TryBuild(baseUrl, signedPath, GlassroadHostRules.AllowedPathPrefix, out var target)
-                || target is null)
-            {
-                Log.Warning("Glassroad: net REJECTED for path '{Path}'", path);
-                ReplyGlassroadNet(id, 0, "forbidden_path");
-                return;
-            }
-
-            var token = PbpAuthToken();
-            var http = PbpHttpClient();
-            GlassroadPending = Task.Run(async () =>
-            {
-                int status = 0;
-                string reply = "";
-                try
-                {
-                    using var request = new HttpRequestMessage(method == "POST" ? HttpMethod.Post : HttpMethod.Get, target);
-                    if (method == "POST") request.Content = new StringContent(signedBody, Encoding.UTF8, "application/json");
-                    if (!string.IsNullOrEmpty(token)) request.Headers.Add("X-Auth-Token", token);
-                    request.Headers.Add("X-Client-Version", CoreReleaseContent.AppVersion);
-                    using var response = await http.SendAsync(request).ConfigureAwait(false);
-                    status = (int)response.StatusCode;
-                    reply = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    (status, reply) = (0, "");
-                    Log.Debug("Glassroad: net {Method} {Path} failed: {E}", method, path, ex.Message);
-                }
-                Dispatcher.UIThread.Post(() => ReplyGlassroadNet(id, status, reply));
-            });
-        }
-
-        private void ReplyGlassroadNet(string id, int status, string body)
-            { if (!_closing) Post(new { type = "net-reply", id, status, body }); }
-
-        /// <summary>One 5 s watchdog tick (WPF StartWatch): before ready, 45 s with no page message at all closes
-        /// it (the bridge beats every 2 s); after ready, silent past 20 s gets one ping, then the close.</summary>
-        internal string CheckGlassroadWatch(DateTime nowUtc)
-        {
-            if (!_grOpen || _closing) return "idle";
-            if (PbpHostRules.BootTimedOut(IsReady, nowUtc - _grLastProgressUtc))
-            {
-                Log.Warning("Glassroad: no page progress for {S:0}s - closing", PbpHostRules.BootDeadline.TotalSeconds);
-                Close();
-                return "boot-timeout";
-            }
-            switch (PbpHostRules.HeartbeatStep(IsReady, (nowUtc - _grLastBeatUtc).TotalSeconds, _grPinged))
-            {
-                case PbpHostRules.WatchStep.Ping:
-                    _grPinged = true;
-                    Post(new { type = "ping", t = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
-                    return "ping";
-                case PbpHostRules.WatchStep.Close:
-                    Log.Warning("Glassroad: page heartbeat silent >20s and no pong - closing");
-                    Close();
-                    return "closed";
-                case PbpHostRules.WatchStep.Ok:
-                    return "ok";
-                default:
-                    return "idle";
-            }
-        }
+        internal string CheckGlassroadWatch(DateTime nowUtc) => _glassroad?.CheckGlassroadWatch(nowUtc) ?? "idle";
     }
 }

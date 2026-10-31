@@ -106,6 +106,7 @@ internal static class PanicWatchdog
     /// hiding: overlays are the UI thread's to drop when it comes back and runs the real handler.</summary>
     private static void RunEmergencyTeardown()
     {
+        Step("Linux race", () => Views.Games.LinuxRaceHost.Current?.Kill());
         Step("haptics", () => CoreHaptics.Service?.PanicStop());
         Step("remote haptics", RemoteCommands.StopHaptics);
         // WPF RunEmergencyPanicTeardown (main 7e14c2870): the hold the real handler would open first; thread-safe.

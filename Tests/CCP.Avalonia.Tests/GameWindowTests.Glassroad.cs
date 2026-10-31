@@ -268,4 +268,21 @@ public sealed partial class GameWindowTests
         }
         finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
     });
+    [Fact]
+    public void Glassroad_LinuxShellEscapePausesThenPanics() => RunGlassroad("1", (shell, _, _) =>
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/setsid") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add("/bin/cat");
+        using var p = System.Diagnostics.Process.Start(start)!;
+        using var observer = System.Diagnostics.Process.GetProcessById(p.Id);
+        using var host = new LinuxRaceHost(p);
+        host.Receive(new JObject { ["type"] = "ready" });
+        host.Receive(new JObject { ["type"] = "shell-focus", ["active"] = true });
+        var now = DateTime.Now;
+        shell.HandlePanicKeyPress(now);
+        Assert.False(p.HasExited);
+        shell.HandlePanicKeyPress(now.AddSeconds(1));
+        Assert.True(observer.WaitForExit(5000));
+        Assert.Null(LinuxRaceHost.Current);
+    });
 }

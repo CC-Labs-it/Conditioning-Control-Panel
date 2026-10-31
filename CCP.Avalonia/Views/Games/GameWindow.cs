@@ -80,6 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (live != null) { live.Activate(); return live; }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
+            if (spec.Id == GlassroadId && LinuxRaceHost.TryLaunch(new Uri(Server().Url(spec.Page, spec.Query)))) return null;
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();
@@ -252,7 +253,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         // ---- panic (PanicSurfaces "games", WPF GameSurfaces.cs:53-55 -> CloseActive("panic")) ----
 
-        internal static bool IsAnyOpen() { lock (Open) return Open.Count > 0; }
+        internal static bool IsAnyOpen() { lock (Open) return Open.Count > 0 || LinuxRaceHost.Current != null; }
 
         internal static GameWindow[] OpenWindowsForTests() { lock (Open) return Open.ToArray(); }
 
@@ -263,6 +264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal static void CloseAllForPanic()
         {
+            LinuxRaceHost.Current?.Dispose();
             GameWindow[] all;
             lock (Open) all = Open.ToArray();
             foreach (var w in all)
