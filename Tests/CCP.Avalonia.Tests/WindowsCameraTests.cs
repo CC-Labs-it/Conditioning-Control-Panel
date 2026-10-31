@@ -40,7 +40,7 @@ public sealed class WindowsCameraTests
     [InlineData(false, true, VideoCaptureAPIs.DSHOW)]
     [InlineData(false, false, VideoCaptureAPIs.ANY)]
     public void CaptureUsesTheEnumeratorsIndexSpace(bool linux, bool windows, VideoCaptureAPIs expected) =>
-        Assert.Equal(expected, OpenCvFrameSource.CaptureBackend(linux, windows));
+        Assert.Equal(expected, OpenCvFrameSource.Attempts(linux, windows)[0].Api);
 
     [Fact]
     public void FakeSysfsStillOverridesWindowsAndSavedSelectionUsesNodeIndices()

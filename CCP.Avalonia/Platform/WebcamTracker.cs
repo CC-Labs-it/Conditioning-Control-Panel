@@ -67,23 +67,101 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// index; live checks point it at one with no /dev/videoN so no real camera is opened.</summary>
     internal sealed class OpenCvFrameSource : IFrameSource
     {
-        private VideoCapture? _cap;
+        internal interface ICapture : IDisposable
+        {
+            bool IsOpened();
+            bool Read(Mat frame);
+            void Set(VideoCaptureProperties property, double value);
+        }
+        private sealed class NativeCapture(int index, VideoCaptureAPIs api) : ICapture
+        {
+            private readonly VideoCapture _capture = new(index, api);
+            public bool IsOpened() => _capture.IsOpened();
+            public bool Read(Mat frame) => _capture.Read(frame);
+            public void Set(VideoCaptureProperties property, double value) => _capture.Set(property, value);
+            public void Dispose() => _capture.Dispose();
+        }
+        private ICapture? _cap;
+        internal Func<int, VideoCaptureAPIs, ICapture> Create = (index, api) => new NativeCapture(index, api);
+        internal Func<DateTime> Now = () => DateTime.UtcNow;
+        internal Action<int> Delay = Thread.Sleep;
+        internal Func<bool> Abandoned = () => false;
 
-        // WPF WebcamTrackingService.cs:229-244: names and capture share the DirectShow index space.
-        internal static VideoCaptureAPIs CaptureBackend(bool linux, bool windows) =>
-            linux ? VideoCaptureAPIs.V4L2 : windows ? VideoCaptureAPIs.DSHOW : VideoCaptureAPIs.ANY;
+        // WPF WebcamTrackingService.cs:239. Keep the default format first for each backend.
+        internal static (VideoCaptureAPIs Api, string? Fourcc)[] Attempts(bool linux, bool windows) =>
+            windows ? new[] { (VideoCaptureAPIs.DSHOW, (string?)null), (VideoCaptureAPIs.DSHOW, "MJPG"),
+                (VideoCaptureAPIs.MSMF, (string?)null), (VideoCaptureAPIs.MSMF, "MJPG") }
+            : new[] { (linux ? VideoCaptureAPIs.V4L2 : VideoCaptureAPIs.ANY, (string?)null) };
 
         public bool Open()
         {
             int index = int.TryParse(Environment.GetEnvironmentVariable("CCP_WEBCAM_DEVICE"), out var i)
                 ? Math.Max(0, i) : ResolveSavedIndex();
-            _cap = new VideoCapture(index, CaptureBackend(OperatingSystem.IsLinux(), OperatingSystem.IsWindows()));
-            if (!_cap.IsOpened()) return false;
-            // WPF's default mode (WebcamTrackingService CaptureWidth/Height/TargetFps).
-            _cap.Set(VideoCaptureProperties.FrameWidth, 640);
-            _cap.Set(VideoCaptureProperties.FrameHeight, 480);
-            _cap.Set(VideoCaptureProperties.Fps, 30);
-            return true;
+            return Open(index, OperatingSystem.IsLinux(), OperatingSystem.IsWindows());
+        }
+
+        internal bool Open(int index, bool linux, bool windows)
+        {
+            foreach (var attempt in Attempts(linux, windows))
+            {
+                if (Abandoned()) return false;
+                ICapture? candidate = null;
+                try
+                {
+                    candidate = Create(index, attempt.Api);
+                    if (!candidate.IsOpened()) continue;
+                    if (attempt.Fourcc is { } f)
+                        candidate.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC(f[0], f[1], f[2], f[3]));
+                    candidate.Set(VideoCaptureProperties.FrameWidth, 640);
+                    candidate.Set(VideoCaptureProperties.FrameHeight, 480);
+                    candidate.Set(VideoCaptureProperties.Fps, 30);
+                    if (windows) candidate.Set(VideoCaptureProperties.BufferSize, 1);
+                    if (windows && !Probe(candidate)) continue;
+                    if (Abandoned()) return false;
+                    _cap = candidate;
+                    candidate = null; // The source owns only the adopted handle.
+                    return true;
+                }
+                catch (Exception ex) when (ex is not DllNotFoundException && ex is not TypeInitializationException)
+                {
+                    Log.Warning(ex, "Webcam: {Api}/{Format} attempt failed", attempt.Api, attempt.Fourcc);
+                }
+                finally
+                {
+                    try { candidate?.Dispose(); }
+                    catch (Exception ex) { Log.Debug(ex, "Webcam: rejected capture disposal failed"); }
+                }
+            }
+            return false;
+        }
+
+        // WPF :1410-1458: 3 s warm-up, 200 ms between reads; spatial contrast OR temporal motion.
+        private bool Probe(ICapture capture)
+        {
+            using var frame = new Mat();
+            using var previous = new Mat();
+            using var diff = new Mat();
+            bool havePrevious = false;
+            var deadline = Now().AddMilliseconds(3000);
+            while (Now() < deadline && !Abandoned())
+            {
+                if (capture.Read(frame) && !frame.Empty())
+                {
+                    Cv2.MeanStdDev(frame, out _, out var std);
+                    double spatial = Math.Max(std.Val0, Math.Max(std.Val1, std.Val2)), temporal = 0;
+                    if (havePrevious && previous.Size() == frame.Size() && previous.Type() == frame.Type())
+                    {
+                        Cv2.Absdiff(frame, previous, diff);
+                        var mean = Cv2.Mean(diff);
+                        temporal = Math.Max(mean.Val0, Math.Max(mean.Val1, mean.Val2));
+                    }
+                    if (spatial >= 3.0 || temporal >= 2.0) return !Abandoned();
+                    frame.CopyTo(previous);
+                    havePrevious = true;
+                }
+                Delay(200);
+            }
+            return false;
         }
 
         /// <summary>The saved /dev/videoN when it is listed, else the first listed camera - the one the
@@ -98,7 +176,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         public bool Read(Mat bgr) => _cap != null && _cap.Read(bgr) && !bgr.Empty();
 
-        public void Dispose() { _cap?.Release(); _cap?.Dispose(); _cap = null; }
+        public void Dispose() { _cap?.Dispose(); _cap = null; }
     }
 
     /// <summary>
@@ -284,6 +362,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 Progress(0.55, "Opening camera…");
                 run.Source = SourceFactory();
+                if (run.Source is OpenCvFrameSource capture) capture.Abandoned = () => gen != Volatile.Read(ref _gen);
                 bool opened;
                 try
                 {

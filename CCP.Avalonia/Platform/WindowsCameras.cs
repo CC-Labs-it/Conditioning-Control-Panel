@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Runtime.InteropServices.ComTypes;
 using Serilog;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Platform
 {
@@ -17,6 +18,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// </summary>
     internal static class WindowsCameras
     {
+        internal static string DeviceName(string? name) =>
+            string.IsNullOrWhiteSpace(name) ? Loc.Get("webcam_unnamed_device") : name;
+
         public readonly record struct WebcamDevice(int Index, string Name);
 
         private static readonly Guid CLSID_SystemDeviceEnum = new("62BE5D10-60EB-11D0-BD3B-00A0C911CE86");
@@ -116,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     var moniker = monikers[0];
                     if (moniker == null) continue;
 
-                    string name = "(unnamed device)";
+                    string name = DeviceName(null);
                     object? propBagObj = null;
                     try
                     {
