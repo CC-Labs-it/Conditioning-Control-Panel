@@ -57,7 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     ///         WS_EX_NOACTIVATE half. Declarative, so nothing to call.</item>
     ///   <item><c>SetWindowLongPtr(GWL_HWNDPARENT)</c> - native ownership, which is what glued the
     ///         tube directly above main in z-order - -> <see cref="X11Overlay.RestackAbove"/> in
-    ///         <c>OnOpened</c>. Called unconditionally: the shim returns false off X11.</item>
+    ///         <c>OnOpened</c>. Called unconditionally: the shim returns false without an X11 or Win32 handle.</item>
     ///   <item><c>SetWindowPos(SWP_FRAMECHANGED)</c>, <c>HwndSource.AddHook(WndProc)</c>,
     ///         <c>WindowInteropHelper</c>, <c>DisableProcessWindowsGhosting</c> - all dropped. They
     ///         exist to flush a LAYERED window's cached frame and to intercept WM_ messages; X11 has
@@ -297,7 +297,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             ToggleDetachedSink = ToggleDetached;
 
             // The z-order pairing the WPF head got from native (GWL_HWNDPARENT) ownership. Safe to
-            // call unconditionally - the shim returns false off X11 and on the headless render.
+            // call unconditionally - the shim returns false on the headless render.
             if (_parentWindow is not null && _isAttached)
                 X11Overlay.RestackAbove(this, _parentWindow);
 
