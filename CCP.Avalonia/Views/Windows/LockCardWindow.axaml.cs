@@ -76,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>A test card awards no XP and notifies no service - WPF's own gate.</summary>
         private bool _isTest;
+        private bool _covered;   // CoverScreen ran; the Opened fallback must not re-place the card
 
         // Per-session config (mutable: the WPF original pooled windows and reconfigured on reuse).
         private string _phrase = "";
@@ -176,7 +177,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtInput.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) TxtInput_TextChanged(); };
             KeyDown += (_, e) => Window_KeyDown(e);
             Loaded += (_, _) => OnShown();
-            Opened += (_, _) => CoverScreen(Screens.ScreenFromWindow(this) ?? Screens.Primary);
+            // Fallback only: ShowOnAllMonitors places every card before Show. Covering here again
+            // re-placed the primary onto the monitor it spawned on first, and KWin then clamped
+            // its move to the real one (the bottom 302 px of a 1.0x screen stayed usable).
+            Opened += (_, _) => { if (!_covered) CoverScreen(Screens.ScreenFromWindow(this) ?? Screens.Primary); };
 
             Configure(Loc.Get("label_good_girls_obey"), SampleRepeats, strictMode: false, voiceMode: false);
         }
@@ -1058,9 +1062,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         ///    <c>DisableProcessWindowsGhosting</c> / the <c>WM_DPICHANGED</c> swallow-hook, both
         ///    Windows-only and simply dropped.
         ///
-        /// <para>ponytail: the mirror's monitor placement is best effort. A maximized X11 window
-        /// ignores <c>Position</c>, so a mirror is un-maximized, moved and re-maximized and the WM
-        /// decides — where WPF could insist with <c>SetWindowPos</c> in device pixels.</para>
+        /// <para>Placement: each card is un-maximized and given its screen's pixel rect before it
+        /// is shown, so the WM maps it there. A move after mapping is the WM's call (KWin clamped
+        /// it, leaving the bottom of a screen usable); WPF could insist with <c>SetWindowPos</c>.</para>
         /// </summary>
         public static void ShowOnAllMonitors(string phrase, int repeats, bool strictMode, bool isTest = false, bool voiceMode = false)
         {
@@ -1079,22 +1083,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             try
             {
+                // Every card gets its screen's geometry BEFORE Show, so it maps there. Moving a
+                // mapped window across monitors is the WM's call, and KWin clamped it.
+                // Avalonia has no screen list without a TopLevel, so the set is drawn off the
+                // primary once it is constructed (Screens exist before Show).
                 var primary = Build(phrase, repeats, strictMode, voiceMode, isTest, isPrimary: true);
+                var all = Features.ScreenList.Enumerate(primary);
+                var primaryScreen = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
+                primary.CoverScreen(primaryScreen);   // the keyboard card sits on the primary (WPF :1635)
                 primary.Show();
 
-                // One cover per monitor when the user asked for it. Avalonia has no screen list
-                // without a TopLevel, so the set is drawn off the primary once it exists.
+                // One cover per monitor when the user asked for it.
                 if (CoreSettings.Current.DualMonitorEnabled)
                 {
-                    var all = Features.ScreenList.Enumerate(primary);
-                    var primaryScreen = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
-                    primary.CoverScreen(primaryScreen);   // the keyboard card sits on the primary (WPF :1635)
                     foreach (var screen in all.Where(s => s != primaryScreen))
                     {
                         var mirror = Build(phrase, repeats, strictMode, voiceMode, isTest, isPrimary: false);
-                        mirror.Show();
-                        // Placement is the WM's call on X11/Wayland: best effort, not SetWindowPos.
                         mirror.CoverScreen(screen);
+                        mirror.Show();
                     }
                 }
 
@@ -1134,6 +1140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void CoverScreen(global::Avalonia.Platform.Screen? screen)
         {
             if (screen is null) return;
+            _covered = true;
             var b = screen.Bounds;
             if (Position == b.Position && ClientSize.Width * RenderScaling >= b.Width - 1
                 && ClientSize.Height * RenderScaling >= b.Height - 1) return;
