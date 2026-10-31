@@ -25,6 +25,21 @@ public sealed class DevicesGazeCursorTests
         (T?)typeof(WebcamTracker).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(WebcamTracker.Instance);
 
     [Fact]
+    public void RenderDiscoveryCanConstructTheCursor() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        // Match RenderProof.Construct: optional parameters are not a parameterless constructor.
+        var ctor = typeof(GazeDebugCursor).GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null, Type.EmptyTypes, null);
+        Assert.NotNull(ctor);
+        var cursor = Assert.IsType<GazeDebugCursor>(ctor.Invoke(null));
+        cursor.Close();
+    });
+
+    [Fact]
     public void ReassertsStackingEvery200MsWhileStationaryAndUnsubscribesOnClose() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)

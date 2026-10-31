@@ -24,7 +24,9 @@ internal sealed class GazeDebugCursor : Window
     private readonly FrameClock _stackingClock;
     private static WebcamTracker Tracker => WebcamTracker.Instance;
 
-    internal GazeDebugCursor(global::ConditioningControlPanel.Avalonia.Controls.Fx.IFrameSource? stackingFrames = null, Action<Window>? raise = null)
+    internal GazeDebugCursor() : this(null, null) { }
+
+    internal GazeDebugCursor(global::ConditioningControlPanel.Avalonia.Controls.Fx.IFrameSource? stackingFrames, Action<Window>? raise)
     {
         WindowDecorations = WindowDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
