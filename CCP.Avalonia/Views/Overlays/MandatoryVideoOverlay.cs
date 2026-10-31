@@ -265,6 +265,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return targets;
         }
 
+        internal static Func<Action, TimeSpan, IDisposable> RestackLater = (action, delay) => DispatcherTimer.RunOnce(action, delay);
+
         internal Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
         {
             var fill = new Image { Stretch = Stretch.UniformToFill, IsVisible = false };
@@ -284,6 +286,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Background = Brushes.Black,
                 Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row } },
             };
+            // WPF VideoService.cs:3708,5809-5822: restore the game layer AFTER native activation.
+            IDisposable? restack = null;
+            void RestackAfterActivation()
+            {
+                restack?.Dispose();
+                restack = RestackLater(() =>
+                {
+                    if (w.IsVisible) global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosDvdOverlay.RaiseActive();
+                }, TimeSpan.FromMilliseconds(50));
+            }
+            w.Activated += (_, _) => RestackAfterActivation();
+            w.AddHandler(InputElement.PointerPressedEvent, (_, _) => RestackAfterActivation(),
+                global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+            w.Closed += (_, _) => restack?.Dispose();
             var floating = Floating;
             if (floating)
             {

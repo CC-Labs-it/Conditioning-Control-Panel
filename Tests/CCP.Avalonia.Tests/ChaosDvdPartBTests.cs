@@ -94,17 +94,24 @@ public sealed class ChaosDvdPartBTests {
                 Assert.Empty(ChaosDvdOverlay.LogoWindows); } finally { CoreSettings.Current.ChaosPinOnTop = oldPin; ChaosDvdOverlay.CloseActive(); host.Close();
                 (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PrepareLogoWindow,
                     ChaosDvdOverlay.SharedHost, ChaosDvdOverlay.SpankerRedirect, ChaosDvdOverlay.PlaySfx) = saved; } return Task.CompletedTask; }); }
-    // WPF VideoService.cs:5822 -> ChaosModeService.cs:745-757.
+    // WPF VideoService.cs:3708,5809-5822 -> ChaosModeService.cs:745-757.
     [Fact]
     public async Task VideoSurfaceRaisesDvdOnlyDuringPinnedRun() { await AvaloniaTestDispatcher.RunAsync(() => { Setup(); var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow,
-                ChaosDvdOverlay.RaiseWindow, ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ChaosDvdOverlay.SharedHost); var pin = CoreSettings.Current.ChaosPinOnTop; Window? video = null; try {
+                ChaosDvdOverlay.RaiseWindow, ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ChaosDvdOverlay.SharedHost, MandatoryVideoOverlay.RestackLater); var pin = CoreSettings.Current.ChaosPinOnTop; Window? video = null; try {
                 ChaosDvdOverlay.SharedHost = () => true; ChaosDvdOverlay.CanOverlay = () => true; ChaosDvdOverlay.PrepareWindow = (_, _) => true;
                 ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true; CoreSettings.Current.ChaosPinOnTop = true; var raised = new List<Window>(); ChaosDvdOverlay.RaiseWindow = raised.Add;
+                var pending = new List<Action>(); MandatoryVideoOverlay.RestackLater = (action, delay) => {
+                    Assert.Equal(TimeSpan.FromMilliseconds(50), delay); pending.Add(action); return new System.Threading.CancellationTokenSource(); };
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 600, WaveCount = 3 }); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
                 ChaosDvdOverlay.Launch(ChaosRunHost.Overlay, 5, 1, 1); video = MandatoryVideoOverlay.Instance.Build(null, false).Window; Assert.Contains(ChaosDvdOverlay.Window!, raised);
-                raised.Clear(); CoreSettings.Current.ChaosPinOnTop = false; ChaosDvdOverlay.RaiseActive(); Assert.Empty(raised); CoreSettings.Current.ChaosPinOnTop = true;
-                ChaosRunHost.ForceShutdown(); ChaosDvdOverlay.RaiseActive(); Assert.Empty(raised); } finally { video?.Close(); ChaosRunHost.ForceShutdown(); CoreSettings.Current.ChaosPinOnTop = pin;
-                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.RaiseWindow, ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ChaosDvdOverlay.SharedHost) = saved; }
+                pending.Clear(); raised.Clear(); // discard creation callbacks; the next callback must come from a later click
+                void Click() => video.RaiseEvent(new PointerPressedEventArgs(video, new Pointer(1, PointerType.Mouse, true), video, new Point(1, 1), 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
+                Click(); Assert.Empty(raised); Assert.Single(pending)(); Assert.Contains(ChaosDvdOverlay.Window!, raised);
+                raised.Clear(); pending.Clear(); Click(); CoreSettings.Current.ChaosPinOnTop = false; Assert.Single(pending)(); Assert.Empty(raised);
+                ChaosDvdOverlay.RaiseActive(); Assert.Empty(raised); CoreSettings.Current.ChaosPinOnTop = true;
+                pending.Clear(); Click(); ChaosRunHost.ForceShutdown(); Assert.Single(pending)(); Assert.Empty(raised); ChaosDvdOverlay.RaiseActive(); Assert.Empty(raised); } finally { video?.Close(); ChaosRunHost.ForceShutdown(); CoreSettings.Current.ChaosPinOnTop = pin;
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.RaiseWindow, ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ChaosDvdOverlay.SharedHost, MandatoryVideoOverlay.RestackLater) = saved; }
             return Task.CompletedTask; }); }
     // WPF ChaosDvdOverlay.cs:322-331,392-398; BubbleService.cs:1916-1924.
     [Fact]
