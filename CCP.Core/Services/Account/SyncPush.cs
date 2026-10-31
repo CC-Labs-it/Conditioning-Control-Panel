@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -23,7 +24,7 @@ namespace ConditioningControlPanel.Services
     public sealed class SyncPush
     {
         public const SyncBody.Field Sent = SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
-            | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements;
+            | SyncBody.Field.DescentEpoch | SyncBody.Field.DescentAuto | SyncBody.Field.Achievements;
         public const SyncBody.Field Privacy = SyncBody.Field.AllowDiscordDm | SyncBody.Field.ShowOnlineStatus
             | SyncBody.Field.ShareProfilePicture | SyncBody.Field.PublicShareAvatar
             | SyncBody.Field.GoonShareAvatar | SyncBody.Field.GoonShareDm;
@@ -175,6 +176,7 @@ namespace ConditioningControlPanel.Services
             Xp = (int)ProfileAdopt.TotalXp(s),
             Level = s.PlayerLevel,
             DescentEpoch = Descent.DescentEpochs.ClientEpoch,
+            DescentAuto = true,
             Achievements = achievements?.Distinct().OrderBy(a => a, StringComparer.Ordinal).ToList(),
             Cosmetics = cosmetics,
             AllowDiscordDm = s.AllowDiscordDm,
@@ -224,7 +226,8 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 var totalXp = ProfileAdopt.TotalXp(s);
-                var watermark = ProfileAdopt.ActiveXpWatermark(s);
+                var watermark = Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice)
+                    ? 0 : ProfileAdopt.ActiveXpWatermark(s);
                 if (watermark > 0 && totalXp < watermark)
                 {
                     Log.Error("[XP watermark] Sync REFUSED — would push {Xp} XP, below the {Watermark} XP last agreed", (int)totalXp, (int)watermark);
@@ -235,7 +238,7 @@ namespace ConditioningControlPanel.Services
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
-                var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s)));
+                var body = SerializeBody(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s));
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -291,10 +294,8 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
-                    ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
-                    // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
-                    // takes the offer (no descent_auto), so only the ack half runs here.
-                    Descent.DescentMigrationAck.Apply(s, reply);
+                    if (ApplyReply(s, reply, DescentReader?.Current?.Stage, UtcNow(), PersistMigration))
+                        Nudge("descent migration");
                 }
                 catch (Exception ex) { Log.Debug("V2 Sync: Could not parse server flags: {Error}", ex.Message); }
                 // THE FUSE's cache, off the RAW body (WPF ProfileSyncService.HandleDescentCountdown).
@@ -314,6 +315,34 @@ namespace ConditioningControlPanel.Services
                 return false;
             }
             finally { _gate.Release(); }
+        }
+
+        private static void PersistMigration()
+        {
+            if (!CoreSettings.TrySaveImmediate()) throw new IOException("Migration checkpoint was not saved.");
+        }
+
+        internal static string SerializeBody(AppSettings s, IEnumerable<string>? achievements,
+            ProfileCosmetics? cosmetics = null, SyncBody.Field consent = SyncBody.Field.None)
+        {
+            var body = JsonConvert.SerializeObject(Body(s, achievements, cosmetics, consent));
+            if (!Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice)) return body;
+            var payload = JObject.Parse(body);
+            payload["descent_migration"] = new JObject { ["choice"] = s.PendingDescentMigrationChoice };
+            return payload.ToString(Formatting.None);
+        }
+
+        // All ordinary response handling precedes the local relevel. Until ack, the old server
+        // ledger must not resurrect a pending migration, including after a process restart.
+        internal static bool ApplyReply(AppSettings s, JObject reply, Descent.DescentStage? stage,
+            DateTime now, Action persist)
+        {
+            var ack = reply["descent_migration"] is JObject b
+                && b["completed"]?.Type == JTokenType.Boolean && b.Value<bool>("completed");
+            if (!Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice) || ack)
+                ProfileAdopt.ApplySyncResponse(s, reply, now);
+            Descent.DescentMigrationAck.Apply(s, reply);
+            return Descent.DescentAutoRestore.ApplyOffer(s, reply, stage, now, persist);
         }
 
         /// <summary>WPF NudgeSyncSoon: one coalesced push, 3 s out or just past the cooldown.</summary>

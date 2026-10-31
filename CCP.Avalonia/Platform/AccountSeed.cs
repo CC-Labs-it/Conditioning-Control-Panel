@@ -156,6 +156,19 @@ internal static class AccountSeed
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();
 
+    // A pending migration owns its ledger until the sync ack, also across login/reload.
+    internal static void ApplyLoginUserData(ConditioningControlPanel.Models.AppSettings s, V2AuthService.V2User user, string? token, DateTime now)
+    {
+        if (ConditioningControlPanel.Services.Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice))
+        {
+            var highest = s.HighestLevelEver;
+            V2AuthService.ApplyIdentity(s, user, token);
+            s.HighestLevelEver = Math.Max(highest, s.HighestLevelEver);
+            EntitlementTierRule.ExtendGrace(s, user.PatreonTier, now);
+        }
+        else ProfileAdopt.ApplyUserData(s, user, token, now);
+    }
+
     private static async Task<bool> LoadProfileCoreAsync(V2AuthService v2)
     {
         var s = CoreSettings.Current;
@@ -171,7 +184,8 @@ internal static class AccountSeed
         // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
         if (!string.IsNullOrEmpty(s.AuthToken))
             EntitlementTierRule.ApplyRise(s, EntitlementTierRule.ParseTier(user.EffectiveTierRaw), DateTime.UtcNow);
-        ProfileAdopt.AdoptReadBeforeWrite(s, user);
+        if (!ConditioningControlPanel.Services.Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice))
+            ProfileAdopt.AdoptReadBeforeWrite(s, user);
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
         if (Sync is { } sync)
@@ -217,7 +231,7 @@ internal static class AccountSeed
         s.UserDisplayName = null;
         s.HasLinkedDiscord = false;
         s.HasLinkedPatreon = false;
-        ProgressionClear.Apply(s);
+        ProgressionClear.Apply(s, clearMigration: true);
         if (accountDeleted) App.Quests?.ResetProgress();
         CoreSettings.Save();
         App.Achievements?.Reset();

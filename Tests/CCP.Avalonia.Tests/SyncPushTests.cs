@@ -23,7 +23,7 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed partial class AccountSeedTests
 {
-    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements" };
+    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "descent_auto", "achievements" };
 
     /// <summary>Records every request with its body; profile GET answers <see cref="Profile"/> (500 when null).</summary>
     private sealed class SyncWire : HttpMessageHandler
@@ -85,13 +85,16 @@ public sealed partial class AccountSeedTests
 
     private async Task Fresh(Func<Task> body)
     {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
         var saved = Touched.ToDictionary(n => n, n => Get(s, n));
         var (oldToken, oldNew, oldOffline) = (s.AuthToken, AccountSeed.NewV2, s.OfflineMode);
         try
         {
             Assert.True(AccountSeed.Seed(Make, p => new DiscordAccount(() => p, () => new AppSettings())));
-            ProgressionClear.Apply(s);
+            ProgressionClear.Apply(s, clearMigration: true);
             s.DescentMigrationCompleted = false;
             await body();
         }
@@ -102,6 +105,7 @@ public sealed partial class AccountSeedTests
             foreach (var n in Touched) Set(s, n, saved[n]);
             (s.AuthToken, AccountSeed.NewV2, s.OfflineMode) = (oldToken, oldNew, oldOffline);
             CoreAccount.UnifiedUserId = null;
+            CoreSettings.ServiceProvider = oldSettings;
         }
     }
 
@@ -267,7 +271,7 @@ public sealed partial class AccountSeedTests
         sync.UtcNow = () => T0.AddSeconds(31);
         var push = sync.PushAsync("level-up");
         sync.Reset();                                             // a logout that did not wait (the 5 s bound ran out)
-        ProgressionClear.Apply(s);
+        ProgressionClear.Apply(s, clearMigration: true);
         (s.UnifiedId, s.CurrentSeason) = ("u2", "2026-08");
         wire.Hold.SetResult();
         Assert.False(await push);

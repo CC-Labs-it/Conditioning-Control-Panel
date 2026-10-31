@@ -761,7 +761,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             if (_closed) { Log.Warning("Sign-in finished after the login dialog closed; ignored"); return; }
             // WPF MainWindow.Login.cs:110-141: a PROVEN different account never inherits the last one's progression.
             ClearIfOtherAccount(user.UnifiedId);
-            ProfileAdopt.ApplyUserData(CoreSettings.Current, user, authToken, DateTime.UtcNow);
+            AccountSeed.ApplyLoginUserData(CoreSettings.Current, user, authToken, DateTime.UtcNow);
             // WPF V2AuthServiceHead: an invite week rides its own exact end date (main 6f5e76610).
             ConditioningControlPanel.Services.Invites.InviteRules.ApplyGrant(CoreSettings.Current, ConditioningControlPanel.Services.Invites.InviteRules.ParseUtc(user.InviteGrantUntilRaw), DateTime.UtcNow);
             Controls.Invites.InvitePanel.ArmExpiry();
@@ -786,12 +786,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             Close(true);
         }
 
-        private static void ClearIfOtherAccount(string? newId)
+        internal static void ClearIfOtherAccount(string? newId)
         {
             var previousId = CoreSettings.Current.UnifiedId;
             if (!string.IsNullOrEmpty(previousId) && !string.IsNullOrEmpty(newId) && previousId != newId)
             {
-                ProgressionClear.Apply(CoreSettings.Current);
+                ProgressionClear.Apply(CoreSettings.Current, clearMigration: true);
                 App.Achievements?.Reset();
                 AccountSeed.Sync?.Reset();
             }
