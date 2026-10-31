@@ -8,6 +8,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
@@ -35,7 +36,7 @@ public sealed class IntakeHostWindowTests
             CoreAccount.HasLabAccessProvider = () => false;
             (service.Current.IntakePassSpentWeek, service.Current.IntakePassSpentUtc) = ("", null);
             var dir = Directory.CreateTempSubdirectory("intake-host-").FullName;
-            var host = new IntakeHostWindow { SessionsFolder = dir };
+            var host = new IntakeHostWindow { SessionsFolder = dir, PunchCardFolder = dir };
             var drafted = 0;
             host.Drafted += (_, path) => { drafted++; Assert.True(File.Exists(path)); };
             try
@@ -54,6 +55,7 @@ public sealed class IntakeHostWindowTests
                 }
                 Assert.True(AvApp.IntakePass.IsPassAvailable);
                 Assert.Empty(Directory.GetFiles(dir));
+                Assert.False(IntakePunchCardState.ReadEverCompletedIntake(dir));
 
                 // The page's own carrier reaches the same handler - but only from the loaded document.
                 const string result = "{\"type\":\"quiz-result\",\"result\":{\"niche\":\"bambi\",\"totalScore\":95,\"maxScore\":100,\"peakDepth\":0.8}}";
@@ -71,6 +73,7 @@ public sealed class IntakeHostWindowTests
                 Assert.Equal(IntakePassService.CurrentWeekKey(), service.Current.IntakePassSpentWeek);
                 Assert.False(AvApp.IntakePass.IsPassAvailable);
                 Assert.Single(Directory.GetFiles(dir, "*.session.json"));
+                Assert.True(IntakePunchCardState.ReadEverCompletedIntake(dir));
                 Assert.Equal(1, drafted);   // the Sessions refresh + toast hang off this
             }
             finally
