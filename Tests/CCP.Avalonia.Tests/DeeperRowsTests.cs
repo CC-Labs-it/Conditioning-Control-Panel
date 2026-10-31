@@ -59,15 +59,16 @@ public sealed class DeeperRowsTests
 
     private sealed class FakeAudio : IDeeperLocalAudio
     {
-        public bool Playing, Disposed;
+        public bool Playing, Disposed, Rejects;
         public int Volume { get; set; }
         public double DurationSeconds { get; set; } = 95;
         public double PositionSeconds { get; set; }
-        public void Play() => Playing = true;
+        public void Play() { if (Rejects) throw new InvalidOperationException("Audio transport could not start"); Playing = true; }
         public void Pause() => Playing = false;
         public event Action? Ended;
         public event Action? Failed;
         public void End() { Playing = false; Ended?.Invoke(); }
+        public void Fail() { Playing = false; Failed?.Invoke(); }
         public void Dispose() => Disposed = true;
     }
 
@@ -111,6 +112,22 @@ public sealed class DeeperRowsTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
             Assert.Equal("0:00", editor.TxtCurrentTime.Text);
+
+            // A start the transport rejects leaves the editor stopped, and the next press tries again.
+            fake.Rejects = true;
+            Click(editor.BtnPlayPause);
+            Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
+            fake.Rejects = false;
+            Click(editor.BtnPlayPause);
+            Assert.True(fake.Playing);
+            Assert.Equal(IconKind.Pause, editor.PlayPauseGlyph.Kind);
+
+            // A playback error after the start does the same.
+            fake.Fail();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
+            Click(editor.BtnPlayPause);
+            Assert.True(fake.Playing);
         }
         finally
         {
