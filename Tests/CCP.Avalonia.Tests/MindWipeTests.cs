@@ -33,6 +33,11 @@ public sealed class MindWipeTests
     private sealed class Clock : TimeProvider
     {
         private long _now;
+        private DateTimeOffset _wallOrigin = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public TimeZoneInfo Zone = TimeZoneInfo.Utc;
+        public override TimeZoneInfo LocalTimeZone => Zone;
+        public override DateTimeOffset GetUtcNow() => _wallOrigin.AddMilliseconds(_now);
+        public void JumpWallClock(TimeSpan by) => _wallOrigin += by;
         private readonly List<Timer> _timers = new();
         public override long TimestampFrequency => 1000;
         public override long GetTimestamp() => _now;
@@ -62,11 +67,11 @@ public sealed class MindWipeTests
         }
     }
 
-    private static void Run(Action<MindWipePlayer, List<Voice>, Clock> body) =>
+    private static void Run(Action<MindWipePlayer, List<Voice>, Clock> body, double roll = 0.4) =>
         AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var s = CoreSettings.Current;
             var saved = (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency);
@@ -83,13 +88,13 @@ public sealed class MindWipeTests
                 var v = new Voice { Loop = loop, Vol = vol, Ended = ended };
                 voices.Add(v);
                 return v;
-            }, clock, roll: () => 0.4);   // under 180/h's 0.5 per tick: every tick fires
+            }, clock, roll: () => roll);   // 0.4: under 180/h's 0.5 per tick, every tick fires
             player.Seed();
             try { body(player, voices, clock); }
             finally
             {
                 CoreMindWipe.Stop();
-                CoreMindWipe.StartProvider = null; CoreMindWipe.StopProvider = null; CoreMindWipe.IsRunningProvider = null;
+                CoreMindWipe.StartProvider = null; CoreMindWipe.StartSessionProvider = null; CoreMindWipe.StopProvider = null; CoreMindWipe.IsRunningProvider = null;
                 CoreMindWipe.TriggerOnceProvider = null; CoreMindWipe.StartLoopProvider = null; CoreMindWipe.StopLoopProvider = null;
                 CoreMindWipe.IsLoopingProvider = null; CoreMindWipe.UpdateSettingsProvider = null;
                 CoreMindWipe.ReloadClipsProvider = null; CoreMindWipe.ClipCountProvider = null;
@@ -140,6 +145,73 @@ public sealed class MindWipeTests
         }
         finally { host.Close(); }
     });
+
+    [Fact]
+    public void Session_mode_escalates_per_five_minute_block_owns_the_presence_and_resumes_plain() => Run((player, voices, clock) =>
+    {
+        // WPF MindWipeService.StartSession/Timer_Tick (MindWipeService.cs:232-248, 715-718) and the
+        // resume through Start (SessionEngine.cs:575-576), with a roll of 0.05 per tick.
+        var oldRpc = global::ConditioningControlPanel.Avalonia.App.DiscordRpc;
+        var rpc = global::ConditioningControlPanel.Avalonia.App.DiscordRpc = new ConditioningControlPanel.Services.DiscordRichPresenceService();
+        try
+        {
+            CoreMindWipe.StartSession(1, 0.7);
+            Assert.True(player.IsRunning);
+            Assert.Equal("Deep conditioning", rpc.CurrentState);   // WPF MindWipeService.cs:245
+            clock.Advance(TimeSpan.FromSeconds(290));
+            Assert.Empty(voices);                                     // block 0: 1/30 per tick
+            clock.Advance(TimeSpan.FromSeconds(20));
+            Assert.NotEmpty(voices);                                  // block 1: 2/30 per tick
+            Assert.Equal(0.7, voices[0].Vol, 3);
+
+            CoreMindWipe.StartSession(9, 0.1);                        // a running service ignores it
+            clock.Advance(TimeSpan.FromSeconds(10));
+            Assert.Equal(0.7, voices.Last().Vol, 3);
+
+            CoreMindWipe.Stop();                                      // session pause
+            Assert.Equal("Browsing", rpc.CurrentState);
+            var played = voices.Count;
+            CoreMindWipe.Start(1, 0.7);                               // resume: 1 per hour, no escalation
+            clock.Advance(TimeSpan.FromMinutes(30));
+            Assert.Equal(played, voices.Count);
+        }
+        finally
+        {
+            player.Stop();
+            rpc.Dispose();
+            global::ConditioningControlPanel.Avalonia.App.DiscordRpc = oldRpc;
+        }
+    }, roll: 0.05);
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Session_escalation_uses_local_wall_time_for_clock_jumps_and_dst(bool daylightSaving, bool forward) => Run((player, voices, clock) =>
+    {
+        // WPF MindWipeService.cs:238,717: subtract local DateTimes, including DST offset changes.
+        if (daylightSaving)
+        {
+            clock.Zone = TimeZoneInfo.CreateCustomTimeZone("MindWipe-test", TimeSpan.FromHours(-5), "Test", "Standard", "Daylight",
+                new[] { TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule(new DateTime(2026, 1, 1), new DateTime(2026, 12, 31), TimeSpan.FromHours(1),
+                    TimeZoneInfo.TransitionTime.CreateFloatingDateRule(new DateTime(1, 1, 1, 2, 0, 0), 3, 2, DayOfWeek.Sunday),
+                    TimeZoneInfo.TransitionTime.CreateFloatingDateRule(new DateTime(1, 1, 1, 2, 0, 0), 11, 1, DayOfWeek.Sunday)) });
+            // Five minutes before the tick that crosses the spring-forward or fall-back boundary.
+            var start = forward ? new DateTimeOffset(2026, 3, 8, 6, 54, 50, TimeSpan.Zero)
+                                : new DateTimeOffset(2026, 11, 1, 5, 54, 50, TimeSpan.Zero);
+            clock.JumpWallClock(start - clock.GetUtcNow());
+        }
+        CoreMindWipe.StartSession(1, 0.7);
+        clock.Advance(TimeSpan.FromMinutes(5));
+        if (forward) Assert.Empty(voices); else Assert.NotEmpty(voices);
+        var played = voices.Count;
+        if (!daylightSaving) clock.JumpWallClock(TimeSpan.FromHours(forward ? 1 : -1));
+        clock.Advance(TimeSpan.FromSeconds(10));
+        // Forward: the wall clock crosses 65 minutes and raises the probability above 0.4.
+        // Backward: negative elapsed time must go quiet, even though monotonic time advanced.
+        Assert.Equal(forward ? played + 1 : played, voices.Count);
+    }, roll: forward ? 0.4 : 0.05);
 
     [Fact]
     public void A_loop_that_dies_stops_reporting_looping_and_pays_no_clean_slate() => Run((player, voices, clock) =>
