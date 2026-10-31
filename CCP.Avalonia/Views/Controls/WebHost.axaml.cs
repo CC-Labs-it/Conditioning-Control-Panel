@@ -84,7 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
-            if (url is null) return;
+            if (url is null || _panicBlank) return;
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
@@ -367,6 +367,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
             var target = e.Request;
+            // Panic teardown must pass a caller's page allowlist, including on reattachment.
+            // Late redirects from the stopped document must not replace the blank page.
+            if (_panicBlank) { e.Cancel = target != PanicBlank; return; }
             _scrolllerPanicTarget = target;
             if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
@@ -399,6 +402,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public void Navigate(Uri url)
         {
+            _panicBlank = false;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;
@@ -444,6 +448,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             _scrolllerGate = null;
             _loadedOnThisEngine = false;
+            if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;
             return gated => OnScrolllerGate(engine, gated);
         }
@@ -478,7 +483,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property == SourceProperty) ApplySource();
+            if (change.Property == SourceProperty)
+            {
+                if (Source != null) _panicBlank = false; // a new explicit request may load normally
+                ApplySource();
+            }
         }
 
         private void ApplySource()

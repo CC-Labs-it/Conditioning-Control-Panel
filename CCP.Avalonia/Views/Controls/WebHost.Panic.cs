@@ -16,6 +16,16 @@ public partial class WebHost
     }
 
     private Uri? _scrolllerPanicTarget;
+    private bool _panicBlank;
+    private static readonly Uri PanicBlank = new("about:blank");
+
+    private void NavigatePanicBlank()
+    {
+        // NativeWebView 12.1 ignores null Source and replays _lastSource on attachment.
+        // Navigate replaces that replay target even when the adapter is currently absent.
+        try { _web?.Navigate(PanicBlank); }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "WebHost: panic blank failed"); }
+    }
 
     private static bool IsScrolllerMedia(Uri? uri) => uri is { IsAbsoluteUri: true }
         && (ScrolllerPolicy.IsScrolllerUrl(uri.AbsoluteUri) && !ScrolllerWebRules.IsApiHost(uri.Host)
@@ -33,6 +43,7 @@ public partial class WebHost
             if (weak.TryGetTarget(out var host) && host.GateScrolller
                 && (IsScrolllerMedia(host.Source) || IsScrolllerMedia(host.CurrentUrl) || IsScrolllerMedia(host._scrolllerPanicTarget)))
             {
+                host._panicBlank = true;
                 try { host._web?.Stop(); }
                 catch (Exception ex) { Serilog.Log.Debug(ex, "WebHost: panic stop failed"); }
                 finally
@@ -41,8 +52,9 @@ public partial class WebHost
                     host.Source = null;
                     host.CurrentUrl = null;
                     host._scrolllerPanicTarget = null;
-                    try { if (host._web != null) host._web.Source = null!; }
-                    catch (Exception ex) { Serilog.Log.Debug(ex, "WebHost: panic clear failed"); }
+                    // WPF MainWindow.Browser.cs:983 pauses media; unloading the document
+                    // is this head's equivalent and also prevents playback after reattachment.
+                    host.NavigatePanicBlank();
                 }
             }
     }
