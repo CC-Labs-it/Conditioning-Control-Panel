@@ -156,6 +156,22 @@ public class InstallerHandoffContractTests
         Assert.Contains("path: installer-output/*-Setup.UNSIGNED-avalonia.exe", workflow);
     }
 
+    // WPF BrowserService.cs:127-131 / :187 creates the old profile. The port's
+    // WebViewProfile.cs:19-31 deliberately creates a separate one. Tell upgraders
+    // before installation rather than silently losing their embedded web sessions.
+    [Fact]
+    public void InteractiveAvaloniaInstallerExplainsBrowserLoginResetBeforeInstalling()
+    {
+        var installer = Read("installer-avalonia.iss");
+        var notice = Read(Directive(installer, "InfoBeforeFile"));
+        Assert.Contains("Embedded browser logins reset when upgrading from WPF.", notice);
+        Assert.Contains("Sign in again to websites opened inside CCP.", notice);
+        Assert.Contains("browser_data_avalonia", notice);
+        Assert.Contains("The old browser_data profile is kept.", notice);
+        Assert.Contains("does not clear CCP account tokens, settings or progress.", notice);
+        Assert.DoesNotContain("InfoBeforeFile=INSTALL_AVALONIA.txt", Read("installer.iss"));
+    }
+
     [Fact]
     public void SharedHelperKeepsSilentArgumentsAndPreviousDirectoryFallback()
     {

@@ -106,7 +106,8 @@ ShowLanguageDialog=auto
 
 ; License and info pages (optional - create these files if desired)
 ; LicenseFile=LICENSE.txt
-; InfoBeforeFile=INSTALL_INFO.txt
+; WPF BrowserService.cs:127-131 uses browser_data; WebViewProfile.cs:19-31 uses a new profile.
+InfoBeforeFile=INSTALL_AVALONIA.txt
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
