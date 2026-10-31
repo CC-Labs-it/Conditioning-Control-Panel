@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using ConditioningControlPanel.Services.Diagnostics;
@@ -7,11 +8,17 @@ using Xunit;
 
 namespace ConditioningControlPanel.Tests;
 
+// Native Thread.Start latency is measured here. Other suites create many STA/render threads;
+// run this safety timing contract without that unrelated parallel load, at the same 1 s limit.
+[CollectionDefinition(nameof(UiThreadExitTests), DisableParallelization = true)]
+public sealed class UiThreadExitCollection { }
+
 /// <summary>
 /// ccp-bugs #1458 / #1468 / #1469 / #1471 / #1472 (one 7.1.9 hang report): the render-failure exit
 /// ran Environment.Exit on the UI thread, ProcessExit's SystemEvents.Shutdown waited on a Send to
 /// that same thread, and the app froze instead of leaving.
 /// </summary>
+[Collection(nameof(UiThreadExitTests))]
 public sealed class UiThreadExitTests
 {
     [Fact]
@@ -47,7 +54,7 @@ public sealed class UiThreadExitTests
         using var terminated = new ManualResetEventSlim();
         int terminatedWith = -1;
 
-        var started = DateTime.UtcNow;
+        var started = Stopwatch.StartNew();
         UiThreadExit.Begin(1,
             exit: code =>
             {
@@ -57,14 +64,17 @@ public sealed class UiThreadExitTests
             },
             terminate: code => { terminatedWith = code; terminated.Set(); },
             graceMs: 200);
-        var returnedAfter = DateTime.UtcNow - started;
+        var returnedAfter = started.Elapsed;
 
-        Assert.True(returnedAfter < TimeSpan.FromSeconds(1), $"Begin blocked the caller for {returnedAfter}");
-        Assert.True(exitEntered.Wait(TimeSpan.FromSeconds(5)), "the exit never started");
-        Assert.NotEqual(callerThread, exitThread);
-        Assert.True(terminated.Wait(TimeSpan.FromSeconds(5)), "the backstop never terminated a wedged exit");
-        Assert.Equal(1, terminatedWith);
-        neverReleased.Set();
+        try
+        {
+            Assert.True(returnedAfter < TimeSpan.FromSeconds(1), $"Begin blocked the caller for {returnedAfter}");
+            Assert.True(exitEntered.Wait(TimeSpan.FromSeconds(5)), "the exit never started");
+            Assert.NotEqual(callerThread, exitThread);
+            Assert.True(terminated.Wait(TimeSpan.FromSeconds(5)), "the backstop never terminated a wedged exit");
+            Assert.Equal(1, terminatedWith);
+        }
+        finally { neverReleased.Set(); } // also release the worker when an assertion fails
     }
 
     [Fact]
