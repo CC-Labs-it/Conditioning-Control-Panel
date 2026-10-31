@@ -4,6 +4,8 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using ConditioningControlPanel.Services.UI;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -120,6 +122,20 @@ public sealed class LobbyCardView
         ButtonText = Loc.Get(row.CanJoin ? "lobby_btn_join" : "lobby_btn_watch");
         ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
     }
+    private static IBrush? Theme(string key) =>
+        global::Avalonia.Application.Current?.TryFindResource(key, out var value) == true ? value as IBrush : null;
+    public IBrush? CardRim => Theme("DepthFloatRim");
+    public IBrush? ButtonBevel => Theme("DepthRaisedBevel");
+    public IBrush? ButtonSheen => Theme("DepthRaisedSheen");
+    public double CardShadowPx => DepthLaw.FloatPx;
+    public IBrush CardShadow => new LinearGradientBrush
+    {
+        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+        EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+        GradientStops = { new(Color.FromUInt32(DepthLaw.ShadowColor(
+            NavStripTable.AccentRgb(NavSections.Social) | 0xFF000000,
+            DepthLaw.FloatAlpha)), 0), new(Colors.Transparent, 1) },
+    };
     public string Title { get; }
     public string Line { get; }
     public bool Friend { get; }
