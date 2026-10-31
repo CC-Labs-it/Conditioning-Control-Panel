@@ -40,8 +40,62 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF TrayIconService._hasShownFirstMinimizeNotification.
         private bool _shownFirstMinimizeNotification;
 
+        // WPF TrayIconService.cs:145-148 keeps tray initialization failure from ending the app.
+        // Avalonia requests SNI names asynchronously; Flatpak can refuse one after watcher restarts.
+        internal static bool IsDeniedBusName(Exception? error)
+        {
+            for (; error is not null; error = error.InnerException)
+                if (error is DBusErrorReplyException { ErrorName: "org.freedesktop.DBus.Error.AccessDenied" }
+                    && error.Message.Contains("org.kde.StatusNotifierItem-", StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        private bool _trayRegistrationDenied;
+        private bool _trayShellWasOpened;
+        internal bool CanHideToTray => Tray is not null && !_trayRegistrationDenied && TrayHostPresent();
+
+        private void OnTrayShellOpened(object? sender, EventArgs e) => _trayShellWasOpened = true;
+
+        private void DetachTrayHandlers(object? sender, EventArgs e)
+        {
+            global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException -= SwallowDeniedBusName;
+            Opened -= OnTrayShellOpened;
+        }
+
+        // WPF MainWindow.xaml.cs:3779-3784 hides only through the tray. Recheck at Opened:
+        // registration can be denied after startup schedules this callback.
+        internal void StartMinimizedToTray()
+        {
+            void ToTray(object? sender, EventArgs e)
+            {
+                Opened -= ToTray;
+                if (CanHideToTray) Hide();
+            }
+            Opened += ToTray;
+        }
+
+        private void SwallowDeniedBusName(object? sender, global::Avalonia.Threading.DispatcherUnhandledExceptionEventArgs e)
+        {
+            if (!IsDeniedBusName(e.Exception)) return;
+            Serilog.Log.Warning("Tray: D-Bus name refused, tray icon unavailable: {E}", e.Exception.Message);
+            e.Handled = true;
+            _trayRegistrationDenied = true;
+            // WPF TrayIconService.cs:195-218 restores access through ShowWindow. With no icon,
+            // restore here instead, but do not show a shell that startup has not opened yet.
+            if (_trayShellWasOpened && !IsVisible && !_windowClosed && !_exitRequested) ShowFromTray();
+        }
+
         internal TrayIcon CreateTray()
         {
+            // Idempotent across tray recreation. Do not swallow unrelated D-Bus access failures.
+            global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException -= SwallowDeniedBusName;
+            global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException += SwallowDeniedBusName;
+            Closed -= DetachTrayHandlers;
+            Closed += DetachTrayHandlers;
+            Opened -= OnTrayShellOpened;
+            Opened += OnTrayShellOpened;
+            _trayShellWasOpened |= IsVisible;
+            Tray?.Dispose();
             Tray = new TrayIcon
             {
                 ToolTipText = "Conditioning Control Panel",
@@ -49,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Menu = BuildTrayMenu(),
                 IsVisible = true,
             };
+            _trayRegistrationDenied = false; // Explicit recreation is the recovery attempt.
             // SNI Activate (left click) arrives as Clicked; WPF restores on single and double click.
             Tray.Clicked += (_, _) => ShowFromTray();
             AttachFeedTooltip(Platform.FriendsHead.Feed, Platform.FriendsHead.Service);
@@ -164,8 +219,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             // WPF WindowChrome.cs:140: closing (real exit OR minimize-to-tray) always ends a Chaos run.
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { }
-            if (Tray is not null && !_exitRequested && e.CloseReason == WindowCloseReason.WindowClosing
-                && TrayHostPresent())
+            if (!_exitRequested && e.CloseReason == WindowCloseReason.WindowClosing && CanHideToTray)
             {
                 e.Cancel = true;
                 // WPF WindowChrome.cs:345: quizzes are unowned topmost windows that would stay on screen.
