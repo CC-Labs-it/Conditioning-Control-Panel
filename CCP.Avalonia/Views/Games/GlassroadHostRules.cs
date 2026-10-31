@@ -28,10 +28,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// desktop: a signed-out player gets <c>identity: null</c> and the lobby asks them to sign in. <c>songs</c>
         /// stays empty: the private race song never ships in the app.</summary>
         public static JObject InitFrame(string? unifiedId, string? displayName, int tier,
-            bool gentleOn, double gentleFadeSeconds, double gentleSpeed)
+            bool gentleOn, double gentleFadeSeconds, double gentleSpeed, bool? isLinux = null)
         {
             bool signedIn = !string.IsNullOrWhiteSpace(unifiedId);
-            return new JObject
+            var frame = new JObject
             {
                 ["type"] = "init",
                 ["v"] = 2,
@@ -50,6 +50,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     }
                     : JValue.CreateNull(),
             };
+            // B2 section 4 step 5: no ungated remote pictures on the Linux race host.
+            if (isLinux ?? OperatingSystem.IsLinux()) frame["caps"]!["scrolller"] = false;
+            return frame;
         }
 
         /// <summary>The <c>gentle</c> block: the player's fade (off = the page's own 600 ms), the 300 ms rise

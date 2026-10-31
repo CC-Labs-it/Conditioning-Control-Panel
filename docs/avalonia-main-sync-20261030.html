@@ -58,6 +58,7 @@ wardrobe items follows the B3 shop decision.</li>
 <li><code>sync9-glassroad</code>: the Avalonia door (<code>GameWindow.Glassroad.cs</code>, still behind <code>CCP_GLASSROAD=1</code>) opens for everyone,
 Prime only, and the 2D race door is retired (WPF <code>LauncherCatalogue</code> &quot;race&quot;, <code>GameSurfaces</code>, Play tab). Panic/Escape
 rules from <code>5121933ee</code> are already in <code>PanicPolicy.KeptEscapePage.Glassroad</code>; recheck against <code>c7af815a0</code>.</li>
+<li>A5 <code>rt-linux-pictures</code> closes only B2 section 4 step 5: Linux init says <code>scrolller:false</code>, Options offers My files / Off, and the page refuses early and late remote feed messages before any media request. Review P2: the 3 s init timeout also grants no remote feed or Scrolller option; late Linux init/media regression and separate feed/Options fail-proofs pass. Evidence: <code>linux-pictures.test.mjs</code> and <code>Glassroad_Init_LinuxDisablesRemotePictures</code>. Rows 115, 583, 589 and 590 remain needs-port: door, tier and owned-grant work is outside this change.</li>
 <li><code>sync9-glassroad</code> also owns row 590 (<code>9718fd3f4</code>): the Avalonia <code>GlassroadHostRules.InitFrame</code> must carry
 <code>identity.grants</code> (only <code>cos.kart.*</code>, sorted, at most 64, WPF <code>GlassroadRules.KartGrants</code>) and <code>GameWindow.Glassroad.cs</code>
 must post <code>{type:'owned', grants}</code> on Core <code>OwnershipService.OwnershipChanged</code> while the window is up, unsubscribing on close.
