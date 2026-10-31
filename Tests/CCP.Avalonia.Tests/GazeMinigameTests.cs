@@ -18,6 +18,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Lab.GazeMinigame;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
@@ -70,7 +71,14 @@ public sealed class GazeMinigameTests
         AvaloniaTestDispatcher.Run(() => Body(kind, panicInRound));
     }
 
-    private static void Body(string kind, bool panicInRound)
+    [Theory]
+    [InlineData(GazeRewardEffect.Flashes)]
+    [InlineData(GazeRewardEffect.Bubbles)]
+    [InlineData(GazeRewardEffect.MindWipe)]
+    public void Correct_round_fires_configured_reward(GazeRewardEffect reward) =>
+        AvaloniaTestDispatcher.Run(() => Body("png", false, reward));
+
+    private static void Body(string kind, bool panicInRound, GazeRewardEffect reward = GazeRewardEffect.Audio)
     {
         EnsureApp();
         var s = CoreSettings.Current;
@@ -79,6 +87,11 @@ public sealed class GazeMinigameTests
         var oldCal = tracker.Calibration;
         var (oldAudio, oldVolume) = (CoreAudio.PlayOneShotProvider, s.MasterVolume);
         var clips = new List<(string Path, float Volume, string Tag)>();
+        var (oldFlash, oldMind, oldBubbleStop) = (CoreFlash.ShowProvider, CoreMindWipe.TriggerOnceProvider, CoreBubbles.StopAction);
+        var oldBubbleShared = s.BubbleSharedHost;
+        var oldPlatformChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        var flashes = 0;
+        var mindWipes = 0;
         var (oldClock, oldDelay) = (GazeMinigameWindow.Clock, GazeMinigameWindow.Delay);
         var dir = Directory.CreateTempSubdirectory("gaze-test-");
         var feedback = new TaskCompletionSource();
@@ -88,6 +101,11 @@ public sealed class GazeMinigameTests
         {
             CoreAudio.PlayOneShotProvider = (path, volume, tag, _, _) => clips.Add((path, volume, tag));
             s.MasterVolume = 36;
+            CoreFlash.ShowProvider = () => flashes++;
+            CoreMindWipe.TriggerOnceProvider = () => mindWipes++;
+            CoreBubbles.StopAction = BubbleOverlay.Stop;
+            BubbleOverlay.SkipPlatformChecksForTests = true;
+            s.BubbleSharedHost = true;
             s.WebcamConsentGiven = true;
             s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
             WebcamTracker.SourceFactory = () => new BlankSource();
@@ -108,7 +126,7 @@ public sealed class GazeMinigameTests
             var saved = new GazeMinigameSettings
             {
                 ImageCount = 2, VideoCount = 2, PassTimeSec = 3, WrongHoldMs = 2000,
-                RewardEffect = GazeRewardEffect.Audio, RewardAudioFile = "bell.wav",
+                RewardEffect = reward, RewardAudioFile = "bell.wav",
             };
             saved.Packs.Add(new GazePackRef { Path = Pack("focus"), Role = GazePackRole.Focus });
             saved.Packs.Add(new GazePackRef { Path = Pack("noise"), Role = GazePackRole.Ignore });
@@ -166,7 +184,12 @@ public sealed class GazeMinigameTests
                 tracker.RaiseGazeSideForTest(correct);
                 for (int i = 0; i < 60; i++) { clock.Now += TimeSpan.FromMilliseconds(50); win.RoundTicker_Tick(null, EventArgs.Empty); }
                 Assert.Equal("GOOD", win.FindControl<TextBlock>("TxtFeedback")!.Text);
-                Assert.Equal(new[] { "bell.wav", "chime.wav" }, clips.Select(c => Path.GetFileName(c.Path)));
+                Assert.Equal(reward == GazeRewardEffect.Audio ? new[] { "bell.wav", "chime.wav" } : new[] { "chime.wav" },
+                    clips.Select(c => Path.GetFileName(c.Path)));
+                Assert.Equal(reward == GazeRewardEffect.Flashes ? 1 : 0, flashes);
+                Assert.Equal(reward == GazeRewardEffect.MindWipe ? 1 : 0, mindWipes);
+                Assert.Equal(reward == GazeRewardEffect.Bubbles ? 5 : 0, BubbleOverlay.Field.Bubbles.Count);
+                Assert.False(BubbleOverlay.IsRunning); // a reward never starts ambient bubbles
                 Assert.All(clips, c =>
                 {
                     Assert.True(File.Exists(c.Path));
@@ -177,6 +200,8 @@ public sealed class GazeMinigameTests
 
             Assert.True(GazeMinigameWindow.IsAnyRunning());        // fullscreen: panic must not arm the exit ladder
             PanicSurfaces.All.Single(x => x.Id == "gaze-minigame").Stop(null);
+            PanicSurfaces.All.Single(x => x.Id == "engine").Stop(null);
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
             Assert.False(win.IsVisible);
             Assert.False(GazeMinigameWindow.IsAnyRunning());
             Assert.Empty(left.Children);
@@ -194,6 +219,10 @@ public sealed class GazeMinigameTests
         finally
         {
             win?.Close();
+            BubbleOverlay.Stop();
+            BubbleOverlay.SkipPlatformChecksForTests = oldPlatformChecks;
+            s.BubbleSharedHost = oldBubbleShared;
+            (CoreFlash.ShowProvider, CoreMindWipe.TriggerOnceProvider, CoreBubbles.StopAction) = (oldFlash, oldMind, oldBubbleStop);
             feedback.TrySetResult();
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             tracker.Stop();

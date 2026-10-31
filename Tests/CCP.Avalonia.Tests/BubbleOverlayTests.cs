@@ -16,6 +16,92 @@ namespace CCP.Avalonia.Tests;
 /// from the daily bucket; a press beside it pops nothing.</summary>
 public sealed class BubbleOverlayTests
 {
+    [Fact]
+    public void One_shots_obey_cap_and_retire_without_starting_ambient_schedule() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        var oldShared = CoreSettings.Current.BubbleSharedHost;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true;
+            CoreSettings.Current.BubbleSharedHost = false; // legacy cap of three
+            host.Show();
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.NotifyDisplayChange("one-shot test");
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            Assert.Equal(0, BubbleOverlay.WindowCount);
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.ResetForTests();
+            for (var i = 0; i < 5; i++) BubbleOverlay.SpawnOnce(host);
+            Assert.Equal(3, BubbleOverlay.Field.Bubbles.Count);
+            Assert.False(BubbleOverlay.IsRunning);
+            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.OnFrame(System.TimeSpan.FromSeconds(1));
+            BubbleOverlay.OnFrame(System.TimeSpan.FromSeconds(2));
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            Assert.False(BubbleOverlay.IsRunning);
+            Assert.Equal(0, BubbleOverlay.WindowCount);
+            // The retired windows must be reopened for the next reward.
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Single(BubbleOverlay.Field.Bubbles);
+            BubbleOverlay.Start(host);
+            Assert.True(BubbleOverlay.IsRunning); // ambient takes over existing one-shot windows
+            Assert.Equal(2, BubbleOverlay.Field.Bubbles.Count); // immediate first ambient spawn
+        }
+        finally
+        {
+            BubbleOverlay.Stop();
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.ResetForTests();
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks;
+            CoreSettings.Current.BubbleSharedHost = oldShared;
+            host.Close();
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void End_chaos_retires_parked_one_shot_windows_unless_ambient_owns_them(bool ambient) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true;
+            host.Show();
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Single(BubbleOverlay.Field.Bubbles);
+            if (ambient) BubbleOverlay.Start(host);
+            var windows = BubbleOverlay.WindowCount;
+            Assert.True(windows > 0);
+            BubbleOverlay.BeginChaos(host, _ => { });
+            // Model expiry, then run the last frame while Chaos still owns the field.
+            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.OnFrame(System.TimeSpan.FromSeconds(100));
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            Assert.Equal(windows, BubbleOverlay.WindowCount);
+            BubbleOverlay.EndChaos();
+            // No later frame is available to do this cleanup.
+            Assert.Equal(ambient ? windows : 0, BubbleOverlay.WindowCount);
+            Assert.Equal(ambient, BubbleOverlay.IsRunning);
+        }
+        finally
+        {
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop();
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks;
+            host.Close();
+        }
+    });
+
     /// <summary>WPF BubbleService.cs:221 LoadBubbleImage: each Start re-resolves bubble.png through the
     /// active mod, so after a mod switch the next start draws the new mod's sprite, not the cached one.</summary>
     [Fact]
