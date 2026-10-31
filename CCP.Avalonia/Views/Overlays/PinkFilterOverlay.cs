@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;               // MonitorTarget
 using Serilog;
 
@@ -66,6 +67,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ? rgb
                 : CoreMods.GetFilterColorRgb();
 
+        internal static readonly TimedOverlayHold PayloadHold = new();
+        internal static bool HasTimedPayload => PayloadHold.IsActive;
+        internal static void ShowTimed(Visual host, int ms, double opacity)
+        {
+            var release = PayloadHold.Acquire(opacity);
+            Refresh(host);
+            global::Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+            {
+                if (release()) Refresh(host);
+            }, TimeSpan.FromMilliseconds(Math.Max(50, ms)));
+        }
+
         /// <summary>
         /// Bring the tint in line with the current settings: show it, hide it, move it or repaint
         /// it as those say. Idempotent, so every card handler can just call this.
@@ -75,7 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (!s.PinkFilterEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (!HasTimedPayload && (!s.PinkFilterEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -84,6 +97,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var (r, g, b) = EffectiveColor();
             var opacity = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;   // a session ramps it without writing it (#471)
+            // WPF ResolveAdHocOverlayOpacity: an effect raises a live tint, never lowers it.
+            if (HasTimedPayload) opacity = s.PinkFilterEnabled && ShouldShow() ? Math.Max(opacity, PayloadHold.Opacity) : PayloadHold.Opacity;
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.
@@ -93,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
 
-            CloseAll();
+            CloseWindows();
 
             // Checked BEFORE anything is created, not only inside Accept: without this, a slider
             // drag on a platform that cannot do click-through flashes a topmost full-screen window
@@ -117,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                                                 // BubbleCountWindow uses; there is no XID before Show
                 // A refusal is about the platform, not about this monitor, so drop the whole set
                 // rather than tinting some screens and not others.
-                if (!Accept(w)) { CloseAll(); return; }
+                if (!Accept(w)) { CloseWindows(); return; }   // a refusal is not a stop: the payload timer still ends it
                 Windows.Add(w);
             }
             _shownOn = want;
@@ -126,6 +141,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         public static void CloseAll()
+        {
+            PayloadHold.Clear();
+            CloseWindows();
+        }
+
+        private static void CloseWindows()
         {
             foreach (var w in Windows)
             {
