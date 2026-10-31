@@ -37,6 +37,7 @@ public class TestIsolationTests
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]
+    [InlineData(typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosSkiaFxOverlay), "_refused")]
     [InlineData(typeof(CoreSettings), nameof(CoreSettings.ServiceProvider))]
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
     [InlineData(typeof(CoreAccount), nameof(CoreAccount.UnifiedUserId))]
