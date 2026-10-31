@@ -7,10 +7,9 @@ namespace ConditioningControlPanel.Avalonia.Helpers;
 // Absolute mapping keeps the contact band the same depth at every window size.
 internal static class DepthPaint
 {
-    internal static LinearGradientBrush Well(Color hue, double depth, bool left = false, bool tinted = true)
+    internal static LinearGradientBrush Well(Color hue, double depth, bool left = false)
     {
         var ink = Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), left ? DepthLaw.WellLeftAlpha : DepthLaw.WellTopAlpha));
-        if (!tinted) ink = Color.FromArgb(ink.A, 0, 0, 0);
         return new LinearGradientBrush
         {
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Absolute),

@@ -4,6 +4,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using System.Reflection;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -32,7 +34,8 @@ public sealed class SyncS6bDepthTests
 
     [Theory]
     [InlineData("banner")]
-    [InlineData("home")]
+    [InlineData("logo")]
+    [InlineData("billboard")]
     [InlineData("hud")]
     public async Task ChromeDepthPreservesContentAndTracksTheFill(string area)
     {
@@ -56,24 +59,66 @@ public sealed class SyncS6bDepthTests
                     var header = Assert.IsType<Grid>(banner.Parent);
                     Assert.True(header.Children.IndexOf(glow) < header.Children.IndexOf(banner));
                 }
-                if (area == "home")
+                if (area == "logo")
                 {
                     var home = w.Named<SettingsTabView>("SettingsTab")!;
-                    foreach (var name in new[] { "LogoBrandFrame", "DashBillboard" })
+                    var frame = home.FindControl<Border>("LogoBrandFrame")!;
+                    var flip = home.FindControl<Grid>("LogoFlipHost")!;
+                    var face = home.FindControl<Border>("LogoFaceLogo")!;
+                    var pass = home.FindControl<Border>("IntakePassFace")!;
+                    Assert.Same(flip, frame.Child);
+                    Assert.Same(flip, face.Parent);
+                    Assert.Equal(new Thickness(24), face.Margin);
+                    Assert.Equal(new CornerRadius(12), face.CornerRadius);
+                    Assert.True(face.ClipToBounds);
+                    Assert.Equal(new Thickness(1), face.BorderThickness);
+                    Assert.Equal(Color.Parse("#FF120D20"), Assert.IsAssignableFrom<ISolidColorBrush>(face.Background).Color);
+                    Assert.True(Application.Current!.TryFindResource("DepthPressedBevel", out var bevel));
+                    Assert.Same(bevel, face.BorderBrush);
+                    var well = Assert.IsType<Grid>(face.Child);
+                    var top = home.FindControl<Border>("LogoWellTop")!;
+                    var left = home.FindControl<Border>("LogoWellLeft")!;
+                    Assert.Equal(14, top.Height);
+                    Assert.Equal(9, left.Width);
+                    Assert.False(top.IsHitTestVisible);
+                    Assert.False(left.IsHitTestVisible);
+                    Assert.True(well.Children.IndexOf(top) < well.Children.IndexOf(home.FindControl<Control>("ImgLogo")!));
+                    Assert.Same(well, home.FindControl<Control>("LogoSheen")!.Parent);
+                    var drift = Assert.IsType<ScaleTransform>(face.RenderTransform);
+                    drift.ScaleX = 1.04;
+                    Assert.True(face.IsVisualAncestorOf(top));
+                    Assert.True(flip.IsVisualAncestorOf(top));
+                    var switchFace = typeof(MainShellWindow).GetMethod("SetIntakePassFace", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                    foreach (var showPass in new[] { false, true, false })
                     {
-                        var frame = home.FindControl<Border>(name)!;
-                        var well = Assert.IsType<Grid>(frame.Child);
-                        var content = well.Children.Last();
-                        home.PaintDepthHome(Colors.Red);
-                        home.PaintDepthHome(Colors.Blue);
-                        Assert.Same(well, frame.Child);
-                        Assert.Equal(4, well.Children.Count);
-                        Assert.Same(content, well.Children.Last());
-                        Assert.False(well.Children[0].IsHitTestVisible);
-                        Assert.Equal(Color.Parse("#FF120D20"), Assert.IsType<SolidColorBrush>(frame.Background).Color);
-                        var paint = Assert.IsType<LinearGradientBrush>(((Border)well.Children[0]).Background);
-                        Assert.Equal(Color.FromArgb(166, 0, 0, 0), paint.GradientStops[0].Color);
+                        switchFace.Invoke(w, new object[] { showPass });
+                        Assert.Equal(!showPass, top.IsEffectivelyVisible);
+                        Assert.Equal(showPass, pass.IsEffectivelyVisible);
+                        Assert.Same(well, face.Child);
+                        Assert.Equal(1.04, drift.ScaleX);
                     }
+                }
+                if (area == "billboard")
+                {
+                    var home = w.Named<SettingsTabView>("SettingsTab")!;
+                    var frame = home.FindControl<Border>("DashBillboard")!;
+                    var slot = home.FindControl<Grid>("BillboardHostSlot")!;
+                    var well = Assert.IsType<Grid>(frame.Child);
+                    var bands = well.Children.OfType<Border>().ToArray();
+                    var left = Assert.Single(bands, b => b.HorizontalAlignment == global::Avalonia.Layout.HorizontalAlignment.Left);
+                    Assert.Equal(6, left.Width);
+                    Assert.Equal(9, Assert.Single(bands, b => b.VerticalAlignment == global::Avalonia.Layout.VerticalAlignment.Top).Height);
+                    Assert.Equal(1, Assert.Single(bands, b => b.VerticalAlignment == global::Avalonia.Layout.VerticalAlignment.Bottom).Height);
+                    Assert.Same(slot, well.Children[0]);
+                    Assert.Equal(3, bands.Length);
+                    Assert.All(bands, b => { Assert.False(b.IsHitTestVisible); Assert.NotNull(b.Background); });
+                    Assert.Equal(Color.Parse("#FF120D20"), Assert.IsAssignableFrom<ISolidColorBrush>(frame.Background).Color);
+                    Assert.True(Application.Current!.TryFindResource("DepthPressedBevel", out var bevel));
+                    Assert.Same(bevel, frame.BorderBrush);
+                    w.ShowTab("presets");
+                    w.ShowTab("settings");
+                    Assert.Same(well, frame.Child);
+                    Assert.Same(slot, well.Children[0]);
                 }
                 if (area == "hud")
                 {
