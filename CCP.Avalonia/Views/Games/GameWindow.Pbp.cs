@@ -1,8 +1,8 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), friend / Lobby intents (.Friends.cs),
-// MergedAccountRecovery and SeasonRecapService.TrackFeature.
+// media-flavour / media-more / online-media), friend / Lobby Join intents (.Friends.cs),
+// and MergedAccountRecovery. Lobby Watch and the launch day-log are wired.
 
 using System;
 using System.Collections.Generic;
@@ -68,6 +68,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         private static readonly Random PbpRng = new();
 
+        private string? _pbpSpectateInit;
+        private JObject? _pbpSpectateIntent;
+
+        /// <summary>WPF HostSpectate: fresh board uses settings; an existing board uses a friend intent.</summary>
+        internal static GameWindow? HostSpectate(string matchId)
+        {
+            if (!PbpWatchRules.IsMatchId(matchId)) return null;
+            GameWindow? live;
+            lock (Open) live = Open.FirstOrDefault(w => w.Spec.Id == PbpId && !w._closing);
+            if (live != null)
+            {
+                live._pbpSpectateIntent = new JObject
+                    { ["type"] = "pbp:friend", ["mode"] = "spectate", ["matchId"] = matchId };
+                if (live._pbpSpectateReady) live.PostPbpSpectateIntent();
+                live.Activate();
+                return live;
+            }
+            var window = new GameWindow(Games[PbpId]) { _pbpSpectateInit = matchId };
+            window.Load(Server());
+            window.Show();
+            return window;
+        }
+
+        private void PostPbpSpectateIntent()
+        {
+            var intent = _pbpSpectateIntent;
+            _pbpSpectateIntent = null;
+            if (intent != null) Post(intent);
+        }
+
+        private bool _pbpSpectateReady;
         private bool _pbpOpen;
         private Task? _pbpBootFrames;   // single-flight: settings always precedes identity, even during an OS query
         private bool _pbpPinged;
@@ -87,6 +118,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_pbpOpen) return;
             _pbpOpen = true;
+            // WPF PieceByPieceHostService.cs:168 and SeasonRecapService.cs:187-188.
+            App.FeatureDayLog?.Note(SeasonFeatureKeys.ToDayLogEvent(SeasonFeatureKeys.PieceByPiece)!);
             _pbpLastBeatUtc = _pbpLastProgressUtc = DateTime.UtcNow;
             Closed += (_, _) => ClosePbp();
             _pbpWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -102,6 +135,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_pbpOpen) return;
             _pbpOpen = false;
+            _pbpSpectateInit = null;
+            _pbpSpectateIntent = null;
+            _pbpSpectateReady = false;
             try { _pbpWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _pbpWatch = null;
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -197,9 +233,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             frame["watchEffects"] = PbpWatchRules.WatchEffects(s);
             frame["watchAmount"] = PbpWatchRules.WatchAmount(s);
             frame["gentleIntroSpeed"] = PbpWatchRules.GentleIntroSpeed(s.GentleVisuals, withoutGentle, s.GentleSpeed);
+            frame["spectateMatchId"] = _pbpSpectateInit != null ? new JValue(_pbpSpectateInit) : JValue.CreateNull();
+            _pbpSpectateInit = null;
             Post(frame);
             Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                 s.UserDisplayName, CoreReleaseContent.AppVersion));
+            _pbpSpectateReady = true;
+            PostPbpSpectateIntent();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>
