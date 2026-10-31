@@ -101,6 +101,97 @@ public sealed class ChaosGifCascadeOverlayTests
         try { Directory.Delete(dir, true); } catch { }
     }
 
+    [Fact]
+    public async Task PayloadFiresEnabledPoolWithWpfDefaultsAndGlobalDuration()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-cascade-payload-").FullName;
+        Directory.CreateDirectory(Path.Combine(dir, "images"));
+        File.WriteAllBytes(Path.Combine(dir, "images", "tiny.gif"), Convert.FromBase64String(TinyGif));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var previousRoot = global::ConditioningControlPanel.CorePaths.EffectiveAssetsProvider;
+                var previousFirer = EffectPayload.Firer;
+                try
+                {
+                    global::ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = () => dir;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    global::ConditioningControlPanel.Avalonia.App.StartChaosPayloads();
+                    EffectPayload.GlobalDurationMult = 2;
+                    // This is the same Fire entry used by ChaosRunHost.OnBubblePopped and the fuse.
+                    new GifCascadePayload { DurationMult = 9 }.Fire();
+                    await ChaosGifCascadeOverlay.LastPick!;
+                    Dispatcher.UIThread.RunJobs();
+                    var w = Assert.IsType<ChaosGifCascadeOverlay>(ChaosGifCascadeOverlay.Active);
+                    Assert.True(ChaosGifCascadeOverlay.IsRaining);
+                    Assert.Equal(400, w.Cascade.Size);
+                    Assert.Equal(3.6, w.Cascade.FallSpeed);
+                    Assert.Equal(0.9, w.Cascade.Opacity);
+                    Assert.Equal(0.45, w.Cascade.StartScale);
+                    // WPF uses GlobalDurationMult only, not the per-payload DurationMult.
+                    w.Cascade.Step(11.9);
+                    Assert.True(w.Cascade.Spawning);
+                    w.Cascade.Step(0.1);
+                    Assert.False(w.Cascade.Spawning);
+                    await Decoded();
+                }
+                finally
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                    global::ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = previousRoot;
+                    EffectPayload.Firer = previousFirer;
+                    EffectPayload.GlobalDurationMult = 1;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public async Task PanicCancelsPendingPoolPick()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var dir = Directory.CreateTempSubdirectory("ccp-cascade-panic-").FullName;
+            var previousRoot = global::ConditioningControlPanel.CorePaths.EffectiveAssetsProvider;
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(dir, "images"));
+                File.WriteAllBytes(Path.Combine(dir, "images", "tiny.gif"), Convert.FromBase64String(TinyGif));
+                global::ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = () => dir;
+                ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                ChaosGifCascadeOverlay.Show(1.67, 6, 400, 3.6, 0.9);
+                // The picker cannot attach until this UI callback yields. Panic wins first.
+                PanicSurfaces.All.Single(x => x.Id == "gif-cascade").Stop(null);
+                await ChaosGifCascadeOverlay.LastPick!;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(ChaosGifCascadeOverlay.Active);
+                Assert.False(ChaosGifCascadeOverlay.IsRaining);
+            }
+            finally
+            {
+                ChaosGifCascadeOverlay.CloseActive();
+                ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
+                ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                global::ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = previousRoot;
+                Directory.Delete(dir, true);
+            }
+        });
+    }
+
     private static void Show(string gif) => ChaosGifCascadeOverlay.ShowWithFiles(new() { gif },
         GifCascade.PayloadSpawnRatePerSec, GifCascade.PayloadDurationSec, GifCascade.PayloadGifSize,
         GifCascade.PayloadFallSpeed, GifCascade.PayloadOpacity, GifCascade.PayloadStartScale);
