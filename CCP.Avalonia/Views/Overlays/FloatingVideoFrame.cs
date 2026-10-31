@@ -114,12 +114,12 @@ internal sealed class FloatingVideoFrame
     {
         var now = _nowMs() / 1000.0;
         var dt = Math.Clamp(now - _last, 0, 0.05);
-        _lit = FloatingFrameLook.Approach(_lit, _audioLit, dt);
+        _lit = FloatingFrameLookModel.Approach(_lit, _audioLit, dt);
         if (_audioLit) _breathSeconds += dt;
         if (_frame != null)
         {
-            var (r, g, b) = FloatingFrameLook.Border(FloatingFrameLook.AccentR, FloatingFrameLook.AccentG,
-                FloatingFrameLook.AccentB, _lit, FloatingFrameLook.Breath(_breathSeconds, CoreSettings.Current.MotionLevel));
+            var (r, g, b) = FloatingFrameLookModel.Border(FloatingFrameLookModel.AccentR, FloatingFrameLookModel.AccentG,
+                FloatingFrameLookModel.AccentB, _lit, FloatingFrameLookModel.Breath(_breathSeconds, CoreSettings.Current.MotionLevel));
             var color = Color.FromRgb(r, g, b);
             if (_frame.BorderBrush is not SolidColorBrush brush || brush.Color != color) _frame.BorderBrush = new SolidColorBrush(color);
         }

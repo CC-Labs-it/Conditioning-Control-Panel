@@ -2,7 +2,7 @@ using System;
 using ConditioningControlPanel.Models;
 namespace ConditioningControlPanel.Services.Video.Floating
 {
-    internal static class FloatingFrameLook
+    internal static class FloatingFrameLookModel
     {
         public const double BorderDip = 4.0;
         public const double CornerDip = 10.0;

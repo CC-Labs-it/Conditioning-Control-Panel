@@ -31,13 +31,13 @@ public sealed class Sync7FloatingFrameTests
     [Fact]
     public void AudioLightEasesBreathesAndRespectsMotion()
     {
-        Assert.Equal(.5, FloatingFrameLook.Approach(0, true, .09), 5);
-        Assert.Equal(.5, FloatingFrameLook.Approach(1, false, .16), 5);
-        Assert.Equal(0, FloatingFrameLook.Breath(1.2, MotionLevel.Off));
-        Assert.Equal(.5, FloatingFrameLook.Breath(1.2, MotionLevel.Reduced), 5);
-        var quiet = FloatingFrameLook.Border(255, 105, 180, 0, 0);
-        var lit = FloatingFrameLook.Border(255, 105, 180, 1, 0);
-        var peak = FloatingFrameLook.Border(255, 105, 180, 1, 1);
+        Assert.Equal(.5, FloatingFrameLookModel.Approach(0, true, .09), 5);
+        Assert.Equal(.5, FloatingFrameLookModel.Approach(1, false, .16), 5);
+        Assert.Equal(0, FloatingFrameLookModel.Breath(1.2, MotionLevel.Off));
+        Assert.Equal(.5, FloatingFrameLookModel.Breath(1.2, MotionLevel.Reduced), 5);
+        var quiet = FloatingFrameLookModel.Border(255, 105, 180, 0, 0);
+        var lit = FloatingFrameLookModel.Border(255, 105, 180, 1, 0);
+        var peak = FloatingFrameLookModel.Border(255, 105, 180, 1, 1);
         Assert.True(quiet.G < lit.G && lit.G < peak.G);
     }
 }
