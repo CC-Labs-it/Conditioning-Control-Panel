@@ -422,6 +422,106 @@ public sealed class FirstShowStageTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task SpeechUsesCachedPcmAndIndependentChannelsAndTearsDown() => Run(stage =>
+    {
+        var audio = stage.Audio;
+        var paths = new List<string>();
+        var stopped = new List<string>();
+        CoreSettings.Current.MasterVolume = 50;
+        CoreAudio.IsOutputSuppressedProvider = () => false;
+        var cue = Path.GetTempFileName();
+        CoreModArt.AudioOverridePathProvider = _ => cue;
+        audio.Play = (path, volume, tag) =>
+        {
+            Assert.Equal(tag == "first-show-voice" ? .5f : .16f, volume);
+            paths.Add(path);
+            return () => stopped.Add(tag);
+        };
+        try
+        {
+            audio.Speak("Hello?", "idle");
+            var wav = File.ReadAllBytes(paths[0]);
+            Assert.Equal("RIFF", System.Text.Encoding.ASCII.GetString(wav, 0, 4));
+            Assert.Equal("WAVE", System.Text.Encoding.ASCII.GetString(wav, 8, 4));
+            Assert.Equal(44100, BitConverter.ToInt32(wav, 24));
+            Assert.Contains(wav.Skip(44), b => b != 0);
+            File.SetLastWriteTimeUtc(paths[0], new DateTime(2001, 1, 1));
+            audio.Cue("pop");
+            Assert.Empty(stopped); // cue does not cut speech
+            audio.Speak("Hello?", "idle");
+            Assert.Equal(paths[0], paths[2]);
+            Assert.Equal(2001, File.GetLastWriteTimeUtc(paths[0]).Year); // reused, not rewritten
+            Assert.Equal(new[] { "first-show-voice" }, stopped); // speech does not cut cue
+            audio.Speak("Hello?", "celebration");
+            Assert.NotEqual(paths[0], paths[3]);
+            Assert.NotEqual(wav, File.ReadAllBytes(paths[3]));
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            audio.Speak("silent"); Assert.Equal(4, paths.Count);
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreSettings.Current.MasterVolume = 0;
+            audio.Speak("silent"); Assert.Equal(4, paths.Count);
+            audio.Dispose();
+            Assert.False(Directory.Exists(audio.CacheDirectory));
+            Assert.Equal(3, stopped.Count(t => t == "first-show-voice"));
+            Assert.Single(stopped, t => t == "first-show-cue");
+            audio.Dispose(); audio.Speak("after close"); audio.Cue("pop");
+            Assert.Equal(4, paths.Count); Assert.Equal(4, stopped.Count);
+        }
+        finally { File.Delete(cue); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task SpeechWaitsForSettlingAndGesturesDecayWithMotion() => Run(stage =>
+    {
+        double t = 0; stage.Clock = () => t;
+        var spoken = new List<string>();
+        CoreSettings.Current.MasterVolume = 50;
+        CoreAudio.IsOutputSuppressedProvider = () => false;
+        stage.Audio.Play = (path, _, tag) => { if (tag == "first-show-voice") spoken.Add(path); return () => { }; };
+        t = S.GreetAfter + .1; stage.Frame();
+        t += .2; stage.Frame();
+        Assert.Single(spoken);
+        stage.Frame(); Assert.Single(spoken); // a landed line speaks once
+        Click(stage, 0); // choose: movement and new line
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        t += .1; stage.Frame(); Assert.Single(spoken);
+        t += 1; stage.Frame(); Assert.Single(spoken);
+        t += .2; stage.Frame(); Assert.Equal(2, spoken.Count);
+        t += .1; stage.Frame();
+        double speech = 1 - .1 / 1.4;
+        Assert.Equal((Math.Sin(t * 2.5) * 3 + Math.Sin(t * 1.1) * 2 + speech * Math.Sin(t * 16) * 2), stage.PresentationGesture.Bob, 6);
+        Assert.Equal(Math.Sin(t * 1.5) * 1.6 + speech * Math.Sin(t * 9), stage.PresentationGesture.Turn, 6);
+        t += 1.5; stage.Frame();
+        Assert.Equal(Math.Sin(t * 1.5) * 1.6, stage.PresentationGesture.Turn, 6);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        stage.Frame(); Assert.Equal((0d, 0d), stage.PresentationGesture);
+        Assert.Equal(2, spoken.Count);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PendingWarningReplacesChoiceAndUsesSeriousMood() => Run(async stage =>
+    {
+        double t = S.GreetAfter + .1; stage.Clock = () => t;
+        var spoken = new List<string>();
+        CoreSettings.Current.MasterVolume = 50;
+        stage.Audio.Play = (path, _, tag) => { if (tag == "first-show-voice") spoken.Add(path); return () => { }; };
+        stage.Frame();
+        Assert.Single(spoken);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        Click(stage, 0); // the choice prompt is pending while Emi moves
+        t += .1; stage.Frame(); Assert.Single(spoken);
+        stage.BundledPictures = () => Enumerable.Range(0, 4).Select(i => ContentLocator.Resolve(Path.Combine("Resources", "web", "backroom", "stations", "slot", "fallback", $"gif{i}.webp"))).ToArray();
+        await stage.Bundled(); // ready warning replaces the pending choice prompt
+        t += 1; stage.Frame(); Assert.Single(spoken);
+        t += .2; stage.Frame();
+        Assert.Equal(2, spoken.Count);
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Loc.Get("first_show_warning") + "idle")));
+        Assert.Equal(hash + ".wav", Path.GetFileName(spoken[1]));
+    });
+
     private static void Click(FirstShowStageWindow stage, int i) => stage.ChoiceButtons[i].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     private static async Task Until(Func<bool> probe)

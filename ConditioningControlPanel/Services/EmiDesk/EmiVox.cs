@@ -7,12 +7,17 @@ using System.Text;
 using ConditioningControlPanel.Services;
 using Serilog;
 
+#if FIRST_SHOW_SYNTHESIS
+namespace ConditioningControlPanel.Services.FirstShow;
+#else
 namespace ConditioningControlPanel.Services.EmiDesk;
+#endif
 
 /// <summary>
 /// BLIPESE, the seam. The bubble talks to this and never has to know whether there is an audio
 /// stack under it (and a test can hand it a recorder instead).
 /// </summary>
+#if !FIRST_SHOW_SYNTHESIS
 public interface IEmiVox : IDisposable
 {
     /// <summary>Babble one landed line. False when nothing was played.</summary>
@@ -52,7 +57,13 @@ public interface IEmiVox : IDisposable
 /// Blips are a texture rather than a second voice, and there is no desk-sound setting to hang
 /// them off, so there is no new setting: they are on.</para>
 /// </summary>
+#endif
+#if FIRST_SHOW_SYNTHESIS
+// Shared pure score and PCM only. The WPF instance below remains in its head.
+internal static class FirstShowVoice
+#else
 public sealed class EmiVox : IEmiVox
+#endif
 {
     // ---------------------------------------------------------------- the dials
 
@@ -475,6 +486,7 @@ public sealed class EmiVox : IEmiVox
         return bytes;
     }
 
+    #if !FIRST_SHOW_SYNTHESIS
     // ---------------------------------------------------------------- the instance
 
     private static string ClipDir => Path.Combine(CorePaths.UserData, "emi", "vox");
@@ -646,4 +658,5 @@ public sealed class EmiVox : IEmiVox
         _dead = true;
         Stop();
     }
+#endif
 }

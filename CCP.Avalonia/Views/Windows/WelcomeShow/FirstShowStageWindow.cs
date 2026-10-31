@@ -81,6 +81,10 @@ internal sealed partial class FirstShowStageWindow : Window
     private bool _closed, _greeted, _centered, _playing, _ending, _serious, _moving, _bundled;
     private double _last, _moveAt, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
     private int _beat = -1;
+    private string _pendingSpeech = "";
+    private bool _speechPending;
+    private double _spokeAt = double.NegativeInfinity;
+    internal (double Bob, double Turn) PresentationGesture { get; private set; }
     private static readonly HttpClient Http = new(UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(20) };
     /// <summary>"via Scrolller" while a Scrolller show plays (WPF FirstShowDesktopWindow._credit, ScrolllerCreditBadge).
     /// Brand text, not a loc key, as on every page's mark.</summary>
@@ -180,6 +184,8 @@ internal sealed partial class FirstShowStageWindow : Window
     internal void BeginEntrance(EmiDeskWindow emi) { _emi = emi; emi.PresentAt(ToScreen(_x, _y), 0, 0, "idle", "^_^"); emi.RunPresentationEntrance(); }
     private void Say(string text, bool serious = false)
     {
+        // WPF FirstShowDesktopWindow.cs:124-127: replace the pending line until settled.
+        _pendingSpeech = text; _speechPending = true;
         _loadingPanel.IsVisible = false; _serious = serious; _speech.Inlines?.Clear(); _speech.Text = text;
         if (_speechWindow.IsVisible) _speechWindow.Hide();
     }
@@ -420,8 +426,11 @@ internal sealed partial class FirstShowStageWindow : Window
         _moving = arriving || Math.Abs(_x - previous.X) + Math.Abs(_y - previous.Y) > .3 || (_centered && move < 1)
             || (!_guiding && (_playing || _ending) && time >= S.StepAsideAt && time < S.StepAsideAt + S.StepAsideSeconds);
         if (_moving) _settledAt = now;
-        var bob = (Math.Sin(now * 2.5) * 3 + Math.Sin(now * 1.1) * 2) * m;
-        var turn = Math.Sin(now * 1.5) * 1.6 * m;
+        // WPF FirstShowDesktopWindow.cs:299-301: 1.4 seconds of speech bob and turn.
+        var speech = Math.Max(0, 1 - (now - _spokeAt) / 1.4);
+        var bob = (Math.Sin(now * 2.5) * 3 + Math.Sin(now * 1.1) * 2 + speech * Math.Sin(now * 16) * 2) * m;
+        var turn = (Math.Sin(now * 1.5) * 1.6 + speech * Math.Sin(now * 9)) * m;
+        PresentationGesture = (bob, turn);
         _emi?.PresentAt(ToScreen(_x, _y), bob, turn, S.Pose(_playing, _ending, time, m), S.Face(_serious, m, now));
         if (!_guiding && time >= S.RevealAt && (_playing || _ending))
         {
@@ -472,6 +481,12 @@ internal sealed partial class FirstShowStageWindow : Window
         var size = BodySize(); var speech = SpeechSize();
         var body = new RectD(_x - size.Width / 2, _y - size.Height / 2, size.Width, size.Height);
         var rect = FirstShowLayout.Speech(SafeBounds(), speech, body, _guiding ? TargetRect : _logo.Opacity > 0 ? logo : FirstShowLayout.Empty, new Vec2(body.Right + 18, body.Top));
+        // WPF FirstShowDesktopWindow.cs:374-378: voice starts only when the card can land.
+        if (_speechPending)
+        {
+            _speechPending = false; _spokeAt = Clock();
+            _audio.Speak(_pendingSpeech, _serious ? "idle" : "celebration");
+        }
         var pixel = ToScreen(rect.Left, rect.Top);
         _speechWindow.Position = new PixelPoint((int)Math.Round(pixel.X), (int)Math.Round(pixel.Y));
         _speechWindow.Width = rect.Width; _speechWindow.Height = rect.Height;
