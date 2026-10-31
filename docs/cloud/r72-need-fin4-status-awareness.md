@@ -15,7 +15,7 @@ WPF paths below start at ConditioningControlPanel/. Avalonia paths start at CCP.
 | App-list parsing, case/suffix matching, Enter/blur commit | Already at CCP.Core/Services/Awareness/AwarenessAppScopeRules.cs:10 and Views/Tabs/AwarenessTabView.axaml.cs:336,346; old AwarenessAppList duplicate omitted | MainWindow/MainWindow.Awareness.cs:659,668,675; Services/KeywordTriggerService.cs:594,601 |
 | Twenty newest fires and enabled-action snapshots, omitting internal XP | Ported old KeywordFireLog to CCP.Core/Services/KeywordFireLog.cs:12; WPF stays unchanged | Services/KeywordTriggerService.cs:64,72,110,135 |
 | Keyboard records and notifies after acceptance/cooldowns | Ported Platform/KeywordTriggerHead.cs:167; source, timestamp and action snapshot retained | Services/KeywordTriggerService.cs:1196 |
-| Entitled tutorial synthetic fire bypasses master/cooldowns, without saved audio | Ported history/notification only at Platform/KeywordTriggerHead.cs:183; existing caller Tours/TutorialService.cs:78 | Services/KeywordTriggerService.cs:393,426 |
+| Entitled tutorial synthetic fire bypasses master/cooldown checks, then mutes the keyword without saved audio | Ported history/notification only at Platform/KeywordTriggerHead.cs:183; existing caller Tours/TutorialService.cs:78; review fix records mute at Platform/KeywordTriggerHead.cs:198 | Services/KeywordTriggerService.cs:139,393,426 |
 | Avatar comment execution | Covered by 884cbc282, branch avalonia-port/cloud-r72-fin-shell-awareness: Platform/KeywordAvatarComment.cs:24 and KeywordTriggerHead.cs:174,183. Do not duplicate | Services/KeywordTriggerService.cs:1283,1439,1548 |
 | Recent foreground apps | Covered by 263b76968, branch avalonia-port/cloud-r72-pb-fin-shell-awareness: Platform/RecentForegroundApps.cs:7 and Views/Tabs/AwarenessTabView.Apps.cs:15 | MainWindow/MainWindow.Awareness.cs:575,622 |
 | Toggle preservation and app tooltip | Covered by ab9af725f, branch avalonia-port/cloud-r72-row-views-tab-awareness: Views/Tabs/AwarenessTabView.axaml.cs:129 | MainWindow/MainWindow.Awareness.cs:480 |
@@ -73,3 +73,31 @@ After restoring all mutations, sequential builds passed: Core 50 warnings/0 erro
 Avalonia 201 warnings/0 errors, Avalonia tests 144 warnings/0 errors.
 Restored focused tests passed: Core history 2/2 and head runtime 2/2.
 Final guards and docs checks passed again. No live desktop verification is claimed.
+
+## Independent review follow-up
+
+P2 accepted and fixed: WPF FireDemoTrigger calls RecordFire at
+ConditioningControlPanel/Services/KeywordTriggerService.cs:426; RecordFire updates
+the shared keyword mute at :139 before history and notification.
+CCP.Avalonia/Platform/KeywordTriggerHead.cs:196 now samples time once and calls
+KeywordCooldowns.Record before recording and notifying. Demos still bypass checks.
+
+Tests/CCP.Avalonia.Tests/KeywordAudioRuntimeTests.cs:153 adds stepped-time coverage:
+notification-time typing is suppressed, repeated demos remain allowed and extend
+the mute, keyboard actions remain blocked just before expiry and fire at expiry.
+No WPF code, safety code, localization keys or existing tests were changed by this fix.
+The shell-awareness parity row remains stub.
+
+Review validation uses the available .NET SDK 10.0.403:
+- Builds: Core 50 warnings/0 errors; Avalonia 201 warnings/0 errors;
+  Avalonia tests 144 warnings/0 errors.
+- Full Core suite: 4637 passed, 6 existing skips, 0 failures.
+- KeywordAudioRuntimeTests: 11 passed, 0 failed, 0 skipped.
+- Fail-proof: temporarily removing only the new demo cooldown recording caused
+  the new test to fail at :167, Assert.Empty(played), because saved audio played
+  during notification. The original source was restored in a finally block.
+- Restored focused regression: 1 passed, 0 failed, 0 skipped.
+- Restored combined runtime/status filter: 10 passed; 3 shell tests stopped at
+  Segoe UI Black glyphTypeface construction. The phase assertions remain compiled,
+  not run. The runtime-only run above passed all 11 tests in its own test process.
+- Core guards, avalonia_docs self-check and git diff --check passed.

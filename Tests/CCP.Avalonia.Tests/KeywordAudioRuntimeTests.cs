@@ -150,6 +150,41 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
+    public void DemoMutesSavedKeyboardActionsUntilExpiryAndRepeatedDemosExtendTheMute() => Run((engine, s, played) =>
+    {
+        var now = engine.Now();
+        engine.Now = () => now;
+        s.AwarenessLoopProtectionEnabled = false;
+        s.KeywordPerKeywordCooldownSeconds = 10;
+        void TryKeyboardMatch()
+        {
+            engine.Key(ConditioningControlPanel.Services.KeywordInputKey.Clear);
+            Type(engine, "SIT");
+        }
+        // The mute must already apply when subscribers receive the demo notification.
+        engine.TriggerFired += trigger => { if (trigger.Id == "tutorial:demo") TryKeyboardMatch(); };
+        engine.FireDemo("sit", "Tutorial");
+        Assert.Empty(played);
+        Assert.Single(engine.Fires.Recent());
+
+        now = now.AddSeconds(5);
+        engine.FireDemo("sit", "Tutorial");
+        engine.FireDemo("sit", "Tutorial");
+        Assert.Equal(3, engine.Fires.Recent().Count); // demos bypass their own mute
+        Assert.Empty(played);
+
+        now = now.AddMilliseconds(9999);
+        TryKeyboardMatch();
+        Assert.Empty(played); // later demos extended the original expiry
+        Assert.Equal(3, engine.Fires.Recent().Count);
+        now = now.AddMilliseconds(1);
+        TryKeyboardMatch();
+        Assert.Single(played);
+        Assert.Equal(4, engine.Fires.Recent().Count);
+        Assert.Equal("Keyboard", engine.Fires.Recent()[0].Source);
+    });
+
+    [Fact]
     public void StopCancelsPendingAudioRepeats() => Run((engine, s, played) =>
     {
         var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];

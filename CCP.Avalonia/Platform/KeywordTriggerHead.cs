@@ -193,7 +193,10 @@ internal sealed class KeywordAudioRuntime
         };
         try
         {
-            Fires.Record(demo, source, Now());
+            var now = Now();
+            // WPF KeywordTriggerService.cs:139,426: demos bypass checks but still mute the word.
+            _cooldowns.Record(demo, CoreSettings.Current, now.ToUniversalTime());
+            Fires.Record(demo, source, now);
             TriggerFired?.Invoke(demo);
         }
         catch (Exception ex) { Log.Debug(ex, "FireDemo failed"); }
