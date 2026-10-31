@@ -1,5 +1,6 @@
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Remote;
 using Xunit;
 
 namespace CCP.Core.Tests;
@@ -51,4 +52,44 @@ public sealed class RemoteLocalRunTests
             s.TotalSessions = sessions;
         }
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RemoteEndHandsBackSafetyAndVisualsWhileTheLocalEngineRuns(bool ownStrictLock)
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.AudioOnlySession, s.TotalSessions, s.StrictLockEnabled, s.PanicKeyEnabled, s.SpiralEnabled);
+        var lockdown = LockdownService.Current;
+        try
+        {
+            CoreEngine.Stop();
+            LockdownService.Current = null;
+            s.AudioOnlySession = true;
+            CoreEngine.Start();
+            s.StrictLockEnabled = ownStrictLock;
+            s.SpiralEnabled = false;
+            RemoteWearer.Take();
+            Assert.Null(RemoteCommands.Execute("enable_strict_lock", null));
+            RemoteWearer.NoteWrite(RemoteHeld.Spiral, 1);
+            s.SpiralEnabled = true;
+            s.PanicKeyEnabled = false;
+            Assert.True(s.StrictLockEnabled);
+
+            RemoteCommands.StopEffects(false);
+
+            Assert.Equal(ownStrictLock, s.StrictLockEnabled);
+            Assert.True(s.PanicKeyEnabled);
+            Assert.False(s.SpiralEnabled);
+            Assert.True(CoreEngine.IsRunning);
+        }
+        finally
+        {
+            RemoteWearer.Drop();
+            CoreEngine.Stop();
+            LockdownService.Current = lockdown;
+            (s.AudioOnlySession, s.TotalSessions, s.StrictLockEnabled, s.PanicKeyEnabled, s.SpiralEnabled) = saved;
+        }
+    }
+
 }
