@@ -4,6 +4,7 @@ using System.Reflection;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Bark;
+using ConditioningControlPanel.Services.Companion.Brain;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -23,6 +24,7 @@ internal static class BarkHead
         var e = Engine = new BarkEngine();
         Seed(e);
         e.Start();
+        CompanionBrain.IdleLineVoiced = t => !(string.Equals(t, "Idle", StringComparison.OrdinalIgnoreCase) && HoldIdleVoice());
         App.Brain?.AttachBarkSource(h => e.BarkSpoken += h, h => e.BarkSpoken -= h);   // App.xaml.cs:2826, the echo
         // The two WireSubscriptions the engine's own state needs: chat suppression (:806) and, on a mod switch,
         // the switch bark off the OLD set then the new mod's manifest (:903).
@@ -43,6 +45,7 @@ internal static class BarkHead
     /// <summary>Drops the engine and the two subscriptions Start made (tests; the seams are the caller's to restore).</summary>
     internal static void Stop()
     {
+        CompanionBrain.IdleLineVoiced = null;
         App.UserMessageSent -= _onUserMessage;
         if (_mods != null) _mods.ModChanged -= _onModChanged;
         (_onUserMessage, _onModChanged, _mods, Engine) = (null, null, null, null);
@@ -84,17 +87,26 @@ internal static class BarkHead
         CoreSettingsHooks.SettingChangedSink = name => OnSettingChanged(e, name);
     }
 
-    /// <summary>WPF Speak (:1985): preempting barks through GigglePriority, the clip as her voice.
-    /// ponytail: an ordinary VOICED bark goes the same way (this tube's Giggle takes no clip); the gate has
-    /// already dropped it if she was speaking, so it never cuts a line off.</summary>
+    /// <summary>WPF BarkService.cs:1965-1976: ordinary barks keep preset routing, including clips.</summary>
     internal static void Speak(BarkSpeech s)
     {
         var tube = Views.AvatarTube.AvatarTubeWindow.Live;
         if (tube == null) return;
-        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }
+        if (s.Priority && s.Unprompted && HoldIdleVoice())
+        {
+            tube.GigglePriority(s.Text, playSound: false, aiGenerated: false, mood: s.Mood);
+            return;
+        }
+        if (s.SilentEgg || !s.Priority) { tube.Giggle(s.Text, s.AudioPath, barkVoice: s.AudioPath != null, unprompted: s.Unprompted); return; }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
             phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
     }
+
+    // WPF CompanionIdleVoice: an idle bubble remains visible while the engine-off voice is held.
+    internal static bool HoldIdleVoice() => ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()
+        || (!CoreSession.IsEngineRunning
+        && !(CoreSession.IsSessionRunning && App.Sessions?.IsPaused != true)
+        && !CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff);
 
     private static readonly Dictionary<string, PropertyInfo?> SettingProps = new(StringComparer.Ordinal);
 
@@ -102,6 +114,8 @@ internal static class BarkHead
     internal static void OnSettingChanged(BarkEngine e, string? name)
     {
         if (string.IsNullOrEmpty(name)) return;
+        if (name == nameof(AppSettings.IdleGiggleIntervalSeconds))
+            Views.AvatarTube.AvatarTubeWindow.Live?.RestartIdleTimer();
         PropertyInfo? pi;
         lock (SettingProps)
             if (!SettingProps.TryGetValue(name!, out pi)) SettingProps[name!] = pi = typeof(AppSettings).GetProperty(name!);

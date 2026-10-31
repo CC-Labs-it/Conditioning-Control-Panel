@@ -21,10 +21,7 @@ public sealed class PanicAftermathHeadTests
 {
     private static void WithShell(Action<MainShellWindow, List<string>> body) => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
         var s = CoreSettings.Current;
         var old = (s.PanicKeyEnabled, s.PanicKey);
         var oldAll = PanicSurfaces.All;

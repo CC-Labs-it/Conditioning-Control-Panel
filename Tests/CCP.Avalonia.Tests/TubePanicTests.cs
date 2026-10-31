@@ -22,10 +22,7 @@ public sealed class TubePanicTests
     [Fact]
     public Task PanicCutsHerLineAndTakesTheBubbleDown() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
         var s = CoreSettings.Current;
         var (enabled, volume, muted, voMuted) = (s.AvatarEnabled, s.MasterVolume, s.AvatarMuted, s.CompanionVoiceLinesMuted);
         var provider = CoreAudio.PlayStoppableProvider;

@@ -60,6 +60,7 @@ internal static class AccountSeed
         SandboxWhitelisted = SandboxWhitelistRequested();
         var sandbox = SandboxWhitelisted;
         CoreAccount.IsWhitelistedProvider = () => sandbox || patreon.IsWhitelisted;
+        CoreAccount.CurrentTierProvider = () => patreon.CurrentTier;
         CoreAccount.HasPremiumAccessProvider = () => sandbox || ProviderSubscription.HasPremiumAccess(patreon, substar, CoreSettings.Current);
         CoreAccount.HasLabAccessProvider = () => sandbox || ProviderSubscription.HasLabAccess(patreon, substar, CoreSettings.Current);
         // WPF App.xaml.cs:487-488: TierGate's seam reads the same gates (Patreon.HasPremiumAccess there).

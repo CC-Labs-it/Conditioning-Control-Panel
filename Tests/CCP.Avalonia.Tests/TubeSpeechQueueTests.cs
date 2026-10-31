@@ -23,10 +23,7 @@ public sealed class TubeSpeechQueueTests
 {
     private static void EnsureApp()
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
     }
 
     private sealed class Clock : TimeProvider
