@@ -880,27 +880,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }, TimeSpan.FromMilliseconds(ms));
         });
 
+        // Tests supply an owner without replacing the headless application's lifetime.
+        internal static Func<Window?> NoVideosOwner = () =>
+            (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        internal System.Threading.Tasks.Task NoVideosRun { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
+
         /// <summary>WPF's guidance dialog when the library is empty (once per launch).</summary>
         private void ShowNoVideos()
         {
             // WPF VideoService.cs:2448 reads the funnel at trigger time; a refill before the post runs must not flip it.
             var s = Scheduler;
             var filterEmptied = NoVideosReason.LengthFilterEmptied(s.LastFunnelEnabled, s.LastFunnelDuration);
+            var message = NoVideosMessage(s);
             Dispatcher.UIThread.Post(() =>
             {
-                var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                var owner = NoVideosOwner();
                 if (owner == null) return;
-                _ = ShowNoVideosAsync(owner, s, filterEmptied);
+                NoVideosRun = ShowNoVideosAsync(owner, message, filterEmptied);
             });
         }
 
         /// <summary>WPF VideoService.cs:2463-2469: the guidance box, then - AFTER it closes, and only when
         /// the length filter did not cause the empty library - the remote-media offer.</summary>
-        internal static async System.Threading.Tasks.Task ShowNoVideosAsync(Window owner, MandatoryVideoScheduler s, bool filterEmptied)
+        internal static async System.Threading.Tasks.Task ShowNoVideosAsync(Window owner, string message, bool filterEmptied)
         {
             try
             {
-                await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(s));
+                await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), message);
                 if (!filterEmptied) RemoteMediaOffer.Offer("videos", owner);
             }
             catch (Exception ex) { Log.Debug("VideoService: no-videos dialog failed: {Error}", ex.Message); }

@@ -8713,6 +8713,6 @@
   "online_official_nice": "Nice",
   "online_official_stamped_line": "Online media comes from Scrolller. Each picture and clip carries a small \"via Scrolller\" mark.",
   "online_cache_day_line": "Online media is kept in a small cache on this computer for a day, never uploaded.",
-  "remote_media_offer_title": "Online media",
-  "remote_media_offer_summary": "Your folders are empty. Try the online media pool."
+  "remote_media_offer_title": "Media without the download",
+  "remote_media_offer_summary": "Your folders are empty - she can stream from the online pool instead."
 }

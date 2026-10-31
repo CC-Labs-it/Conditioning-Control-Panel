@@ -40,6 +40,9 @@ public sealed class NoVideosRemoteOfferTests
             EnsureApp();
             var s = CoreSettings.Current;
             var (oldSource, oldMin, oldShow) = (s.MediaSource, s.VideoMinDurationSeconds, RemoteMediaOffer.ShowCard);
+            var overlay = MandatoryVideoOverlay.Instance;
+            var oldScheduler = overlay.Scheduler;
+            var oldOwner = MandatoryVideoOverlay.NoVideosOwner;
             var opened = 0;
             RemoteMediaOffer.ResetForTests();
             RemoteMediaOffer.ShowCard = _ => opened++;
@@ -49,19 +52,25 @@ public sealed class NoVideosRemoteOfferTests
             var scheduler = new MandatoryVideoScheduler(new Host(), library: () => lib) { DurationOf = _ => 5 };
             var owner = new Window();
             owner.Show();
+            MandatoryVideoOverlay.NoVideosOwner = () => owner;
+            overlay.Scheduler = scheduler;
             try
             {
                 Assert.False(scheduler.Trigger());   // runs the funnel, nothing to play
-                // Read at trigger time (WPF VideoService.cs:2474), then let the funnel flip before the box shows.
-                var atTrigger = NoVideosReason.LengthFilterEmptied(scheduler.LastFunnelEnabled, scheduler.LastFunnelDuration);
+                var expectedMessage = MandatoryVideoOverlay.NoVideosMessage(scheduler);
+                // Refill before the posted callback runs. Both the message and offer must
+                // still describe the first trigger, in both directions of a filter change.
+                lib = filterEmptied ? Array.Empty<string>() : new[] { "/x/clip.mp4" };
                 s.VideoMinDurationSeconds = filterEmptied ? 0 : 100;
-                scheduler.Trigger();
-                var run = MandatoryVideoOverlay.ShowNoVideosAsync(owner, scheduler, atTrigger);
+                Assert.False(scheduler.Trigger());
+                Assert.NotEqual(expectedMessage, MandatoryVideoOverlay.NoVideosMessage(scheduler));
+                Assert.Empty(owner.OwnedWindows);
                 Dispatcher.UIThread.RunJobs();
                 var dialog = Assert.Single(owner.OwnedWindows.OfType<MessageDialog>());
+                Assert.Equal(expectedMessage, dialog.FindControl<TextBlock>("TxtMessage")!.Text);
                 Assert.Equal(0, opened);   // never before the box closes
                 dialog.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await run;
+                await overlay.NoVideosRun;
                 Dispatcher.UIThread.RunJobs();
                 if (StartupLadder.Inbox.Items.FirstOrDefault(i => i.Key == "intro:remote-media") is { } row)
                     StartupLadder.Inbox.Open(row);
@@ -69,6 +78,8 @@ public sealed class NoVideosRemoteOfferTests
             }
             finally
             {
+                overlay.Scheduler = oldScheduler;
+                MandatoryVideoOverlay.NoVideosOwner = oldOwner;
                 owner.Close();
                 StartupLadder.Inbox.Remove("intro:remote-media");
                 s.MediaSource = oldSource;
