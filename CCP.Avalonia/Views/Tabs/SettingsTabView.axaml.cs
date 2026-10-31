@@ -57,6 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // Avalonia's twin for "the tree is up" is AttachedToVisualTree. Views stay
             // instantiated for the app's life, so the _fxComposed guard keeps this to once.
             AttachedToVisualTree += OnDashboardAttached;
+            DetachedFromVisualTree += (_, _) => { _logoPulseReset?.Dispose(); _logoPulseReset = null; ImgLogo.Transitions = null; ImgLogo.RenderTransform = null; };
 
             // WPF IsVisibleChanged -> MainWindow.OnDashboardTabVisibilityChanged (the ? box and
             // One Account cards). Attach covers the launch: the app lands here with no IsVisible flip.

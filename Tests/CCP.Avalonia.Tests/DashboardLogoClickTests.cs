@@ -21,16 +21,11 @@ using AvApp = global::ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>
-/// WPF ImgLogo_MouseLeftButtonDown (MainWindow.UiUpdates.cs:1189) through real presses on the
-/// Dashboard wordmark: the achievement track (neon_obsession at 20 rapid clicks), the click pulse
-/// under motion, and the 100th click asking the server for the reader count before the note opens.
-/// </summary>
+/// <summary>Dashboard pointer behavior, WPF MainWindow.UiUpdates.cs:1189-1250.</summary>
 public sealed class DashboardLogoClickTests
 {
     private static readonly System.Reflection.PropertyInfo AchievementsProp = typeof(AvApp).GetProperty("Achievements",
         System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!;
-
     private const System.Reflection.BindingFlags Flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
     private static readonly Type Egg = typeof(SettingsTabView);
 
@@ -46,7 +41,7 @@ public sealed class DashboardLogoClickTests
     public void OverlappingPulsesKeepBothLegsOfTheLatestClick() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var logo = new Border(); // No text or font dependency.
         var resets = new List<Reset>();
@@ -83,7 +78,7 @@ public sealed class DashboardLogoClickTests
     public Task WordmarkClicksTrackPulseAndReachTheEasterEgg() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var (motionWas, achWas, readersWas) = (s.MotionLevel, AchievementsProp.GetValue(null), SettingsTabView.EasterEggReaders);
@@ -115,7 +110,7 @@ public sealed class DashboardLogoClickTests
             Assert.Null(logo.RenderTransform);   // no pulse with motion off, as WPF's AllowTransitions gate
             s.MotionLevel = MotionLevel.Full;
             Click();   // the pulse: scale(1.05), back to scale(1) 80 ms later (either may be current under CI load)
-            Assert.IsType<TransformOperations>(logo.GetBaseValue(Visual.RenderTransformProperty).Value);
+            var transform = logo.GetBaseValue(Visual.RenderTransformProperty); Assert.True(transform.HasValue); Assert.IsType<TransformOperations>(transform.Value);
             // Clicks through the shell take seconds each on a loaded runner, so the windows are primed rather
             // than clicked out (thresholds: AchievementEngineTests.AvatarClicksUnlockAtWpfThresholds).
             (engine.Progress.AvatarClickStartTime, engine.Progress.AvatarClickCount) = (DateTime.Now, 19);
@@ -130,6 +125,9 @@ public sealed class DashboardLogoClickTests
             Assert.Equal(1, readerAsks);
             Click();
             Assert.Equal(1, readerAsks);   // once per run, as WPF's _easterEggTriggered
+            var pulse = Egg.GetField("_logoPulseReset", Flags)!; (pulse.GetValue(dash) as IDisposable)?.Dispose();
+            var pending = new Reset(); pulse.SetValue(dash, pending);
+            shell.Content = null; Assert.True(pending.Cancelled); Assert.Null(logo.RenderTransform);
         }
         finally
         {
