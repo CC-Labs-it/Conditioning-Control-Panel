@@ -16,7 +16,8 @@ import {garageUi} from '../hud/garage.js';
 import {statBars,TYPE_LABELS} from '../sim/kartStats.js';
 import {createGarageBubbles} from '../hud/garageBubbles.js';
 import {createGarageNav} from '../hud/garageNav.js';
-import {KARTS,OUTFITS,STORAGE,loadGarage,cleanGarage,stepKart,routeTo,raceLook,lockedKarts,ownedKarts,ownedLooks,wearPick} from '../hud/garageState.js';
+import {KARTS,OUTFITS,STORAGE,loadGarage,cleanGarage,stepKart,routeTo,raceLook,lockedKarts,ownedKarts,ownedLooks,wearPick,garageTracker} from '../hud/garageState.js';
+import {adoptBlockLook} from '../hud/lobbyMath.js';
 import {loadRecord} from '../meta/record.js';
 import {unlockedSet} from '../meta/unlocks.js';
 import {warmGarageWardrobe} from './garageWarm.js';
@@ -28,13 +29,15 @@ import {cascadeIn} from './worldFeel.js';
 const STEP=2*Math.PI/KARTS.length,RING=2.35*KARTS.length/8;
 /** `owned()` = the account's Prize Counter grants (meta/owned.js); only owned, earned or free karts are selectable,
  * and the shop outfits, paints, umbrella and trail are worn only when owned. `counter`: the host opens the Prize Counter. */
-export async function createGarage({art,renderer,canvas,action,sound,track,laps,trackId='threshold',online=true,changeTrack,onProgress,owned:ownedGrants=()=>[],counter=false,feel}) {
+export async function createGarage({art,renderer,canvas,action,sound,track,laps,trackId='threshold',online=true,changeTrack,onProgress,owned:ownedGrants=()=>[],counter=false,feel,sync=null}) {
   const base=art?.model('emi-teacup-kart');
   if(!base||KARTS.some(([id])=>!art.model('emi-vehicle-'+id)))return null;
   let storage;try{storage=localStorage;}catch{}
   let layout=garageLayout(canvas.clientWidth,canvas.clientHeight);
   const darkNow=()=>lockedKarts(unlockedSet(loadRecord(storage)),ownedKarts(ownedGrants()));let locked=darkNow(),owns=ownedLooks(ownedGrants());
   const state=loadGarage(storage,locked,owns),scene=new T.Scene(),camera=new T.PerspectiveCamera(33,1,.03,40);
+  // the look on the logbook (72 contract C1): the tracker stamps only from what a player did, never from paint() or save()
+  const tracker=garageTracker({state,storage,sync,adoptLook:block=>adoptBlockLook(storage,block)});
   scene.background=new T.Color('#121220');scene.fog=new T.Fog('#1e1530',18,35);
   const backdrop=createGarageBackdrop(scene);
   const style=createGarageStyle();
@@ -79,9 +82,18 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
     for(const [index,[id]]of KARTS.entries())if(locked.has(id)&&!next.has(id)){lifted=true;const asset=collection[index].userData.asset;
       asset.traverse(m=>{if(m.isMesh&&m.userData.garageLit){m.material=m.userData.garageLit;delete m.userData.garageLit;}});style.apply(asset);}
     if(lifted){locked=new Set([...locked].filter(id=>next.has(id)));renderer.three.compileAsync?.(scene,camera)?.catch?.(()=>{});}
-    paint();}
+    paint();applySynced();}
+  // A newer look off the logbook goes on only while the garage is open and at rest: a race, a turn or Customize waits for
+  // the next open (setVisible -> refreshLocks), so it never fights the running garage. A change made in the meantime
+  // already won the merge. It snaps like a Wear with the carousel out of reach, and does not count as a player change.
+  function applySynced(){if(!visible||moving||queued||viewBusy||custom)return false;const due=tracker.due(locked,owns);if(!due)return false;
+    const before=JSON.stringify(state),index=KARTS.findIndex(k=>k[0]===due.state.kart);
+    if(index!==selected){selected=index;orbit=-index*STEP;mixer.stopAllAction();mixer.update(0);}
+    Object.assign(state,due.state);tracker.applied(due);
+    if(before!==JSON.stringify(state)){redress();paint();}
+    return true;}
   function change(values,colors=false,force=false){if(viewBusy&&!force)return;const previous=state.outfit+'|'+state.umbrella+'|'+state.trail;Object.assign(state,values);if(colors){state.antenna=state.secondary;state.shoes=state.secondary;state.hands='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.24).getHexString();state.face='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.65).getHexString();}
-    if(previous!==state.outfit+'|'+state.umbrella+'|'+state.trail)redress();paint();sound('menu-toggle');}
+    if(previous!==state.outfit+'|'+state.umbrella+'|'+state.trail)redress();paint();tracker.changed();sound('menu-toggle');}
   // the garage shows an owned umbrella open; the trail ribbons never count toward the framing bounds
   // the lace umbrella glides open when it is picked (update), and stays open through any other re-dress
   function redress(){const hadUmbrella=dress?.umbrella;dress?.dispose();const look=raceLook(state,owns);dress=dressKart(art,model,{outfit:look.outfit,vehicle:null,umbrella:look.umbrella,trail:look.trail});if(dress.umbrella&&dress.umbrella===hadUmbrella)dress.showUmbrella(true);style.apply(model);customBounds=null;if(custom)resize();}
@@ -110,7 +122,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
   function wear(item){const pick=wearPick(item,state,{locked,owns});if(!pick)return false;
     if(pick.kind==='kart'){const index=KARTS.findIndex(k=>k[0]===pick.id);
       if(visible&&!custom&&!viewBusy){if(moving?moving.index!==index:index!==selected)select(index);}
-      else if(index!==selected){moving=null;queued=null;selected=index;orbit=-index*STEP;state.kart=pick.id;mixer.stopAllAction();mixer.update(0);paint();if(visible&&custom)customize(false);}}
+      else if(index!==selected){moving=null;queued=null;selected=index;orbit=-index*STEP;state.kart=pick.id;mixer.stopAllAction();mixer.update(0);paint();tracker.changed();if(visible&&custom)customize(false);}}
     else{change(pick.values,false,true);if(visible&&!custom)customize(true);}
     ui.worn(pick.kind,pick.id,(pick.kind==='kart'?'Driving ':'Wearing ')+pick.label);return true;}
   function sparkle(){if(reduced)return;for(let i=0;i<20;i++){const mesh=new T.Mesh(particleGeo,particleMaterial);mesh.position.set((Math.random()-.5)*.4,.25,0);scene.add(mesh);particles.push({mesh,v:new T.Vector3((Math.random()-.5)*.9,Math.random()*.7+.2,(Math.random()-.5)*.7),life:0});}}
@@ -142,7 +154,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
       if(!reduced){const lift=Math.sin(T.MathUtils.clamp((u-.08)/.8,0,1)*Math.PI);rider.position.y=lift*.32;camera.position.z=(layout.mobile?-5.6:-4.7)-lift*.5;camera.lookAt(0,.5+lift*.10,0);if(hop)mixer.setTime(u*clip.duration);}
       lifeSignals.transition=u;
       if(u>.9&&!m.landed){m.landed=true;lifeSignals.land=1;sparkle();}
-      if(u===1){orbit=m.to;selected=m.index;state.kart=KARTS[selected][0];moving=null;mixer.stopAllAction();mixer.update(0);resize();paint();if(queued){const q=queued;queued=null;select(q.value,q.relative);}}
+      if(u===1){orbit=m.to;selected=m.index;state.kart=KARTS[selected][0];moving=null;mixer.stopAllAction();mixer.update(0);resize();paint();tracker.changed();if(queued){const q=queued;queued=null;select(q.value,q.relative);}}
     }else if(!custom&&!viewBusy)rider.position.y=reduced?0:Math.sin(time*1.5)*.008;
     for(let i=0;i<collection.length;i++){const h=collection[i],a=i*STEP+orbit;h.position.set(Math.sin(a)*RING,-.005,RING-Math.cos(a)*RING);h.rotation.y=-a+(i===selected?yaw:0);h.position.y-=sceneProgress*.6;h.scale.setScalar((.72+Math.max(0,Math.cos(a))*.28)*(1-sceneProgress));h.visible=sceneProgress<.995;}
     emiLife.update(dt,lifeSignals);
@@ -192,7 +204,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps,
       if('changeTrack' in next)changeTrack=typeof next.changeTrack==='function'?next.changeTrack:()=>{};
     },
     setVisible(on){if(on!==visible){visible=on;gesture=null;if(on)refreshLocks();ui.setVisible(on);if(on){resize();cascadeIn(ui.root.querySelectorAll('.g-menu-row'),entrance());}}},
-    refreshLocks,
+    refreshLocks,applySynced,
     setMotion(m){motion=m||'full';},
     render(dt,reduced,{gentle=false}={}){update(dt,reduced,gentle);renderer.three.render(scene,camera);},
     dispose(){canvas.style.opacity='';observer.disconnect();document.removeEventListener('keydown',keydown,true);for(const [event,fn]of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',cancel],['lostpointercapture',cancel]])canvas.removeEventListener(event,fn);contactGeo.dispose();contactMat.dispose();idle.dispose();emiLife.dispose();for(const l of vehicleLives)l.dispose();dress?.dispose();style.dispose();skin.dispose();arrows.dispose();ui.dispose();mixer.stopAllAction();environment.dispose();backdrop.dispose();particleGeo.dispose();particleMaterial.dispose();for(const m of owned)m.dispose();},

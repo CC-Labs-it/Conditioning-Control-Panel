@@ -8,6 +8,8 @@
  *                 waiting one. POST (the server takes PUT too) because the desktop host relay forwards GET and
  *                 POST only.
  * onGrants(list) gets the `grants` array a GET answers (the Prize Counter's `cos.kart.*`, meta/owned.js).
+ * The record's `garage` block rides both ways: every merge here reads the local record at answer time, so a look
+ * stamped while a call was in the air stays on top; applying a pulled block is the garage's job (render/garage.js).
  * Never throws, never blocks a race. Offline (status 0) drops the call; signed out or no access (401, 403,
  * 404) switches the sync off for the page's life, so the logbook stays local only.
  */
