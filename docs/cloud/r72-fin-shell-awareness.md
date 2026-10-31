@@ -77,3 +77,7 @@ PR #3554 targets 884cbc282726dbb2f4b2bb4c2f21078c442e5b29; reviewed parent 0f1d7
 Local validation: all three required builds had 0 errors; Core tests 4635 passed with 6 existing skips; 28 affected Avalonia tests passed, including Win32PanicKeyTests. Core guards and avalonia_docs self-check passed. All ten tooltip translations passed placeholder and punctuation checks.
 
 Fail-proofs: eager name lookup on capture, re-reading PID after dispatch, and string chip content each failed the focused tests; all mutations were restored before final validation. The two base test files and KeywordAvatarComment.cs were checked byte for byte against 884cbc282. The cloud audit retains the entire base prefix; the ledger retains its parent notes and only appends new evidence. No live desktop, native foreground lookup, AI provider, audio device or OCR capture validation; full Avalonia suite compiled, not fully run.
+
+## Part B review r2 size finding
+
+Rejected. The r2 review measured 74ac6ce3d..c946ff654 (748 lines), the whole stack under this PR. This is a stacked part B lane: gh pr view 3554 reports base avalonia-port/cloud-r72-fin-shell-awareness, which is 884cbc282 and is also the merge base. git diff --shortstat 884cbc282...HEAD gives 15 files, 304 insertions, 22 deletions (326 lines), within the 600-line cap. The parent lane carries its own 74ac6ce3d-based count. No code change; the shell-awareness row stays stub.
