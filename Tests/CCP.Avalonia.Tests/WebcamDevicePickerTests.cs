@@ -22,6 +22,7 @@ public sealed class WebcamDevicePickerTests
     {
         var provider = CameraList.Provider;
         int saved = CoreSettings.Current.WebcamDeviceIndex;
+        Window? window = null;
         try
         {
             CameraList.Provider = () => new[] { (0, "DirectShow A"), (1, "DirectShow B") };
@@ -33,7 +34,7 @@ public sealed class WebcamDevicePickerTests
                         .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var section = new DevicesSettingsSection();
-                var window = new Window { Content = section };
+                window = new Window { Content = section };
                 window.Show();
                 var picker = section.FindControl<ComboBox>("CmbWebcamDevice")!;
                 Assert.Equal("[1] DirectShow B", ((ComboBoxItem)picker.SelectedItem!).Content);
@@ -42,12 +43,12 @@ public sealed class WebcamDevicePickerTests
                 Assert.Equal(0, OpenCvFrameSource.ResolveSavedIndex());
                 CoreSettings.Current.WebcamDeviceIndex = 9;
                 Assert.Equal(0, OpenCvFrameSource.ResolveSavedIndex());
-                window.Close();
                 return Task.CompletedTask;
             });
         }
         finally
         {
+            await AvaloniaTestDispatcher.RunAsync(() => { window?.Close(); return Task.CompletedTask; });
             CameraList.Provider = provider;
             CoreSettings.Current.WebcamDeviceIndex = saved;
             CoreSettings.SaveImmediate();
@@ -69,12 +70,15 @@ public sealed class WebcamDevicePickerTests
         Node(2, "Cam B", 0);
 
         var oldRoot = V4l2Cameras.Root;
+        var oldCameraProvider = CameraList.Provider;
         var oldAvail = CoreWebcam.IsAvailableProvider;
         var s = CoreSettings.Current;
         int oldIdx = s.WebcamDeviceIndex; var oldName = s.WebcamDeviceName;
+        Window? window = null;
         try
         {
             V4l2Cameras.Root = root;
+            CameraList.Provider = V4l2Cameras.Enumerate; // The fixture is sysfs, regardless of the host OS.
             CoreWebcam.IsAvailableProvider = () => true;
             s.WebcamDeviceIndex = 2;
             await AvaloniaTestDispatcher.RunAsync(() =>
@@ -84,7 +88,7 @@ public sealed class WebcamDevicePickerTests
                         .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var section = new DevicesSettingsSection();
-                var window = new Window { Content = section };
+                window = new Window { Content = section };
                 window.Show();
                 var cmb = section.FindControl<ComboBox>("CmbWebcamDevice")!;
                 Assert.True(cmb.IsEnabled);
@@ -113,13 +117,14 @@ public sealed class WebcamDevicePickerTests
                 section.FindControl<Button>("BtnWebcamDeviceRefresh")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.Contains("Re-scanned cameras: none detected.", log.Text);
                 Assert.Equal("(no cameras detected)", ((ComboBoxItem)cmb.SelectedItem!).Content);
-                window.Close();
                 return Task.CompletedTask;
             });
         }
         finally
         {
+            await AvaloniaTestDispatcher.RunAsync(() => { window?.Close(); return Task.CompletedTask; });
             V4l2Cameras.Root = oldRoot;
+            CameraList.Provider = oldCameraProvider;
             CoreWebcam.IsAvailableProvider = oldAvail;
             s.WebcamDeviceIndex = oldIdx; s.WebcamDeviceName = oldName;
             CoreSettings.SaveImmediate();   // cancels the pick's 500 ms debounced write so it cannot land in a later test (P02)
