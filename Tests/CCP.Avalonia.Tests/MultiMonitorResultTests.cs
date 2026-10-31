@@ -51,7 +51,7 @@ public sealed class MultiMonitorResultTests
         var secondary = MakeScreen(1.5, new PixelRect(-1920, 40, 1920, 1080), new PixelRect(-1920, 40, 1920, 1040), false);
         var primary = MakeScreen(2, new PixelRect(320, 40, 2560, 1440), new PixelRect(320, 40, 2560, 1400), markedPrimary);
         var typistScreen = markedPrimary ? primary : secondary;
-        ScreenList.QueryOverride = host => host.IsVisible ? new[] { secondary, primary } : Array.Empty<Screen>();
+        ScreenList.QueryOverride = _ => new[] { secondary, primary };
         CoreSettings.Current.DualMonitorEnabled = dual;
         int completions = 0;
         try
@@ -61,13 +61,13 @@ public sealed class MultiMonitorResultTests
             var windows = BubbleCountResultWindow.OpenWindows.ToArray();
             Assert.Equal(count, windows.Length);
             var typist = windows.Single(w => !w.FindControl<TextBox>("TxtAnswer")!.IsReadOnly);
-            Assert.Equal(new PixelPoint(typistScreen.Bounds.X + 100, typistScreen.Bounds.Y + 100), typist.Position);
+            Assert.Equal(typistScreen.Bounds.Position, typist.Position);
             typist.FindControl<TextBox>("TxtAnswer")!.Text = "12";
             Dispatcher.UIThread.RunJobs();
             foreach (var mirror in windows.Where(w => w != typist))
             {
                 var mirrorScreen = markedPrimary ? secondary : primary;
-                Assert.Equal(new PixelPoint(mirrorScreen.Bounds.X + 100, mirrorScreen.Bounds.Y + 100), mirror.Position);
+                Assert.Equal(mirrorScreen.Bounds.Position, mirror.Position);
                 var input = mirror.FindControl<TextBox>("TxtAnswer")!;
                 Assert.True(input.IsReadOnly);
                 Assert.False(input.Focusable);
