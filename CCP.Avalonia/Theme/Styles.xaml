@@ -12,7 +12,7 @@
      writing down here rather than rediscovering it 193 times.
 
      Shared themes used by the ported views live here. MainWindow.xaml still has unported
-     implicit tree styles and keyed session/art/emote themes; see theme-main-window
+     keyed session/art/emote themes; see theme-main-window
      in docs/avalonia-parity.html for the named follow-up lane.
      Controls.xaml keys are shared here, including the three Deeper button themes.
      Action/Secondary/Outline carry WPF's 80ms press / 150ms BackEase(0.3) release.
@@ -794,6 +794,26 @@
     <Style Selector="^:vertical"><Setter Property="Width" Value="8"/></Style>
     <Style Selector="^:vertical /template/ Track#PART_Track"><Setter Property="IsDirectionReversed" Value="True"/></Style>
     <Style Selector="^:disabled /template/ Border#TrackBg"><Setter Property="Opacity" Value="0.1"/></Style>
+  </ControlTheme>
+
+  <!-- WPF Resources/Theme/MainWindow.xaml:502-522. Pixel scrolling, both axes Auto,
+       no extra focus stop. The shared ScrollBar theme supplies the existing pink chrome. -->
+  <ControlTheme x:Key="{x:Type TreeView}" TargetType="TreeView">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="TreeView">
+        <Border Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}">
+          <ScrollViewer x:Name="PART_ScrollViewer" Focusable="False"
+                        Padding="{TemplateBinding Padding}"
+                        HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <ItemsPresenter x:Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+          </ScrollViewer>
+        </Border>
+      </ControlTemplate>
+    </Setter>
   </ControlTheme>
 
   <!-- MainWindow.xaml:1234. Restyles the Fluent ComboBox parts rather than replacing the

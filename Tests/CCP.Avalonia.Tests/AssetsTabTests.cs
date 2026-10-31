@@ -31,6 +31,49 @@ namespace CCP.Avalonia.Tests;
 /// Avalonia Assets tab, entered through the shell's Library door like a user.</summary>
 public sealed class AssetsTabTests
 {
+    // WPF Resources/Theme/MainWindow.xaml:502-522 and Views/Tabs/AssetsTabView.xaml:793.
+    [Fact]
+    public Task FolderTreeUsesPixelScrollChromeAndStillSelectsFolders() => Run(async (shell, tab, s) =>
+    {
+        var tree = tab.AssetTreeView;
+        tree.Height = 140;
+        tree.Padding = new Thickness(7);
+        tree.ItemsSource = Enumerable.Range(0, 40).Select(i => new AssetTreeItem
+        {
+            Name = new string('x', 100) + i,
+            FullPath = Path.Combine(ConditioningControlPanel.CorePaths.EffectiveAssets, "images")
+        }).ToArray();
+        shell.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        var scroll = tree.GetVisualDescendants().OfType<ScrollViewer>()
+            .Single(v => v.Name == "PART_ScrollViewer");
+        Assert.False(scroll.Focusable);
+        Assert.Equal(tree.Padding, scroll.Padding);
+        Assert.Equal(ScrollBarVisibility.Auto, scroll.HorizontalScrollBarVisibility);
+        Assert.Equal(ScrollBarVisibility.Auto, scroll.VerticalScrollBarVisibility);
+        Assert.True(scroll.Extent.Width > scroll.Viewport.Width);
+        Assert.True(scroll.Extent.Height > scroll.Viewport.Height);
+        // Fractional offsets prove pixel scrolling, rather than item-at-a-time scrolling.
+        scroll.Offset = new Vector(10.5, 12.5);
+        shell.UpdateLayout();
+        Assert.Equal(new Vector(10.5, 12.5), scroll.Offset);
+        var bar = scroll.GetVisualDescendants().OfType<ScrollBar>()
+            .Single(b => b.Orientation == global::Avalonia.Layout.Orientation.Vertical);
+        Assert.True(bar.IsVisible);
+        Assert.Equal(8, bar.Bounds.Width);
+        Assert.Contains(bar.GetVisualDescendants().OfType<Border>(), b => b.Name == "TrackBg");
+        scroll.Offset = default;
+        shell.UpdateLayout();
+        var row = tree.GetVisualDescendants().OfType<TreeViewItem>().First();
+        var label = row.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text!.StartsWith("xxx"));
+        var point = label.TranslatePoint(new Point(5, 5), shell)!.Value;
+        shell.MouseDown(point, MouseButton.Left);
+        shell.MouseUp(point, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(row.DataContext, tree.SelectedItem);
+        await Task.CompletedTask;
+    });
+
     [Fact]
     public Task ActivePackFoldersExposeEncryptedImagesAndPersistSelection() => Run(async (shell, tab, s) =>
     {
@@ -635,7 +678,7 @@ public sealed class AssetsTabTests
     private static Task Run(Func<MainShellWindow, AssetsTabView, AppSettings, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         var root = Directory.CreateTempSubdirectory("ccp-assets-tab-").FullName;
