@@ -72,6 +72,40 @@ public sealed class KeywordTriggersPanelTests
         return Task.CompletedTask;
     });
 
+    private sealed class OcrIntervalSink : ConditioningControlPanel.Services.IScreenOcrRuntime
+    {
+        internal readonly List<int> Intervals = new();
+        public void UpdateInterval(int intervalMs) => Intervals.Add(intervalMs);
+    }
+
+    [Fact]
+    public Task IntervalEditPushesMillisecondsButSyncDoesNotRetime() => Run((_, panel, s) =>
+    {
+        var saved = ConditioningControlPanel.Services.CoreScreenOcr.Service;
+        var savedInterval = s.ScreenOcrIntervalMs;
+        var sink = new OcrIntervalSink();
+        try
+        {
+            ConditioningControlPanel.Services.CoreScreenOcr.Service = sink;
+            s.ScreenOcrIntervalMs = 4000;
+            panel.SyncFromSettings();
+            Assert.Empty(sink.Intervals);
+            Find<Slider>(panel, "SliderScreenOcrInterval").Value = 7;
+            Assert.Equal(7000, s.ScreenOcrIntervalMs);
+            Assert.Equal(7000, Assert.Single(sink.Intervals));
+            panel.SyncFromSettings();
+            Assert.Single(sink.Intervals);
+            ConditioningControlPanel.Services.CoreScreenOcr.Service = null;
+            Find<Slider>(panel, "SliderScreenOcrInterval").Value = 6;
+            Assert.Equal(6000, s.ScreenOcrIntervalMs);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.CoreScreenOcr.Service = saved;
+            s.ScreenOcrIntervalMs = savedInterval;
+        }
+    });
+
     [Fact]
     public Task AddEditAndDeleteRowsWriteTheTriggerAndSkipPresetClones() => Run((_, panel, s) =>
     {
