@@ -31,7 +31,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal async void BtnStartSession_Click(Session? selected)
         {
             if (App.Sessions is not { } runner) return;
-            if (runner.IsRunning) { await ConfirmStopSession("title_stop_session_confirm", "msg_stop_session_body"); return; }
+            if (runner.IsRunning)
+            {
+                await ConfirmStopSession("title_stop_session_confirm", "msg_stop_session_body",
+                    "btn_yes_stop_session", "btn_keep_going");
+                return;
+            }
             if (selected is null || !selected.IsAvailable) return;
 
             // WPF's text here is not localised (MainWindow.Presets.cs:1572); kept verbatim.
@@ -72,7 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF BtnStopSession_Click / the BtnStart_Click session branch: same body, own keys.</summary>
-        internal async Task ConfirmStopSession(string titleKey, string bodyKey)
+        internal async Task ConfirmStopSession(string titleKey, string bodyKey, string yesKey, string noKey)
         {
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
             if (LockdownActive)   // WPF MainWindow.Presets.cs:1993
@@ -83,14 +88,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var elapsed = runner.Elapsed;
             var remaining = runner.Remaining;
             var potentialXP = (int)Math.Round(session.BonusXP * SessionXp.Multiplier(CoreSettings.Current.PlayerLevel));
-            // WPF MainWindow.StartStop.cs:76-85 supplies these labels; ShowStyledDialog
-            // (MainWindow.Presets.cs:773-813) has no default/cancel and focuses its first (yes) button.
+            // WPF MainWindow.Presets.cs:2098 and MainWindow.StartStop.cs:85 supply distinct labels.
+            // ShowStyledDialog (MainWindow.Presets.cs:773-813) has no default/cancel
+            // and focuses its first (yes) button.
             var dialog = new MessageDialog(Loc.Get(titleKey),
                 Loc.GetF(bodyKey, session.Icon ?? "", session.Name ?? "",
                     $"{(int)elapsed.TotalMinutes:D2}:{elapsed.Seconds:D2}",
                     $"{(int)remaining.TotalMinutes:D2}:{remaining.Seconds:D2}",
                     potentialXP, runner.PauseCount > 0 ? Loc.GetF("msg_plus_pause_penalty_0", runner.XPPenalty) : ""),
-                showCancel: true, okText: Loc.Get("btn_stop_session_yes"), cancelText: Loc.Get("btn_stop_session_no"));
+                showCancel: true, okText: Loc.Get(yesKey), cancelText: Loc.Get(noKey));
             var yes = dialog.FindControl<Button>("BtnOk")!;
             yes.IsDefault = false;
             dialog.Opened += (_, _) => yes.Focus();

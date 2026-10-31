@@ -34,7 +34,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (App.Sessions?.IsRunning == true)
             {
                 Serilog.Log.Information("Start button: asking to stop the running session");
-                await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body");
+                await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body",
+                    "btn_stop_session_yes", "btn_stop_session_no");
                 if (!App.Sessions.IsRunning) StopEngine();
                 return;
             }

@@ -25,8 +25,10 @@ namespace CCP.Avalonia.Tests;
 /// and opens the Ended Early recap by itself.</summary>
 public sealed class SessionRunWireTests
 {
-    [Fact]
-    public async Task StopConfirmUsesWpfCopyAndNoKeepsTheSessionRunning()
+    [Theory]
+    [InlineData(true, "Yes, stop session")] // WPF MainWindow.Presets.cs:2098
+    [InlineData(false, "Stop the session")] // WPF MainWindow.StartStop.cs:85
+    public async Task StopConfirmUsesWpfCopyAndNoKeepsTheSessionRunning(bool presets, string yesText)
     {
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
@@ -43,16 +45,19 @@ public sealed class SessionRunWireTests
                 runner.Start(session);
                 foreach (var answer in new[] { "no", "enter-no", "close", "yes" })
                 {
-                    var pending = shell.ConfirmStopSession("title_stop_session_confirm", "msg_stop_session_body");
+                    // Drive both entry points so swapped or shared keys cannot hide in the helper.
+                    if (presets) shell.BtnStartSession_Click(null);
+                    else shell.Named<Button>("BtnStart")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                     var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
                     var no = dialog.FindControl<Button>("BtnCancel")!;
                     var yes = dialog.FindControl<Button>("BtnOk")!;
                     Assert.Equal("Keep going", Assert.IsType<TextBlock>(no.Content).Text);
-                    Assert.Equal("Stop the session", Assert.IsType<TextBlock>(yes.Content).Text);
+                    Assert.Equal(yesText, Assert.IsType<TextBlock>(yes.Content).Text);
                     Assert.False(no.IsDefault || yes.IsDefault || no.IsCancel || yes.IsCancel);
                     Assert.Same(yes, dialog.FocusManager!.GetFocusedElement());
                     dialog.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
-                    Assert.False(pending.IsCompleted);
+                    Assert.True(dialog.IsVisible);
+                    Assert.True(runner.IsRunning);
                     if (answer == "enter-no")
                     {
                         no.Focus();
@@ -60,7 +65,11 @@ public sealed class SessionRunWireTests
                     }
                     else if (answer == "close") dialog.Close();
                     else (answer == "no" ? no : yes).RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-                    await pending.WaitAsync(TimeSpan.FromSeconds(5));
+                    // The async-void entry point must settle before judging its result.
+                    var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    Dispatcher.UIThread.Post(() => settled.SetResult(), DispatcherPriority.Background);
+                    await settled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                    Assert.False(dialog.IsVisible);
                     Assert.Equal(answer != "yes", runner.IsRunning);
                     if (answer != "yes")
                     {
@@ -72,6 +81,7 @@ public sealed class SessionRunWireTests
             finally
             {
                 foreach (var dialog in shell.OwnedWindows.ToArray()) dialog.Close();
+                await Task.Yield(); // drain confirmation continuations even when an assertion fails
                 runner.Stop();
                 CoreEngine.Stop();
                 AvApp.Sessions = null;
