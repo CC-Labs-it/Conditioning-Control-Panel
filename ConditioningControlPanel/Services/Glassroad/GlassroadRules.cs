@@ -41,6 +41,8 @@ internal static class GlassroadRules
                 ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
                 // the pre-race room's "Invite a friend" asks this host (host/friendInvite.js)
                 ["friendInvite"] = true,
+                // the garage can ask the host for the player's own song (SongWordsService; solo only)
+                ["songWords"] = true,
             },
             ["identity"] = signedIn
                 ? new JObject { ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
