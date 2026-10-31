@@ -215,7 +215,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     // three (MainWindow.TabNavigation.cs:260/476/501): the Dashboard and the rack
                     // both host real dose dials, so a lock that was latched rather than re-derived
                     // could survive a crash, an abort or an out-of-order session event.
-                    case "settings": RefreshFavoritesRail(); RefreshSessionFeatureLock(); RefreshIntakePassTile(); MaybeShowFeatureIntro("daily-free", "settings"); break;
+                    case "settings":
+                        RefreshFavoritesRail();
+                        timing?.Mark("settings-favorites");
+                        // Re-derive on entry, but do not sweep the off-screen rack and tabs
+                        // again when the last complete paint was already unlocked. Active
+                        // locks still repaint so their reason/dose changes remain visible.
+                        RefreshSessionFeatureLock(force: IsSessionFeatureLockActive);
+                        timing?.Mark("settings-session-lock");
+                        RefreshIntakePassTile();
+                        timing?.Mark("settings-intake");
+                        MaybeShowFeatureIntro("daily-free", "settings");
+                        timing?.Mark("settings-intro");
+                        break;
                     case "progression": RefreshFavoritesRail(); break; // WPF TabNavigation.cs:308 (RefreshDashboardRail)
                     case "studio": StudioRack?.OnTabShown(); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("studio-rack", "studio"); break;
                     case "haptics": StudioRack?.FocusRackEntry("haptics"); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("haptics"); break;

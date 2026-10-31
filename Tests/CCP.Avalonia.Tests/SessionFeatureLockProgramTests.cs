@@ -64,6 +64,10 @@ public sealed class SessionFeatureLockProgramTests
 
             // WPF's two program fallbacks: title without a day, then an unnamed program.
             svc.State.Active.CurrentDay = 999;
+            shell.ShowTab("progression");
+            shell.ShowTab("settings");
+            Assert.Equal(Loc.GetF("program_lock_reason_no_day", svc.ActiveProgram.Title),
+                shell.SettingsPage!.TxtProgramFeatureLock.Text);
             Assert.Equal(Loc.GetF("program_lock_reason_no_day", svc.ActiveProgram.Title), shell.SessionFeatureLockReason);
             var title = svc.ActiveProgram.Title;
             try
@@ -74,6 +78,10 @@ public sealed class SessionFeatureLockProgramTests
             finally { svc.ActiveProgram.Title = title; }
 
             runner.Stop();
+            shell.ShowTab("progression");
+            shell.ShowTab("settings"); // entry re-derives a stopped run and unlocks the dials
+            Assert.False(shell.SettingsPage!.ProgramFeatureLockRibbon.IsVisible);
+            Assert.All(dials, dial => Assert.True(dial.IsEnabled));
             shell.RefreshSessionFeatureLock();
             Assert.False(shell.SettingsPage.ProgramFeatureLockRibbon.IsVisible);
             Assert.Equal(Loc.Get("session_lock_reason"), shell.SessionFeatureLockReason);
