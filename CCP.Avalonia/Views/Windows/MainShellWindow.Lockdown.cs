@@ -6,6 +6,7 @@
 
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Possession;
 
@@ -166,9 +167,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // WPF PlayLockdownActivationAnimation (Lab.cs:1254): a crimson (180,220,20,60) veil over the
         // whole window fading 1 -> 0 over 600 ms (QuadraticEase out), then removed. Stepped by a
-        // short-lived ~30 fps DispatcherTimer like the Emergency Exit breath, so tests drive frames.
+        // shared 30 fps beat; tests step BeatLoop.Time rather than racing the wall clock.
         private global::Avalonia.Controls.Border? _lockdownFlash;
-        private global::Avalonia.Threading.DispatcherTimer? _lockdownFlashTimer;
+        private BeatLoop? _lockdownFlashBeat;
         internal global::Avalonia.Controls.Border? LockdownFlash => _lockdownFlash;
 
         private void PlayLockdownActivationAnimation()
@@ -187,10 +188,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (root.RowDefinitions.Count > 1) global::Avalonia.Controls.Grid.SetRowSpan(_lockdownFlash, root.RowDefinitions.Count);
                 if (root.ColumnDefinitions.Count > 1) global::Avalonia.Controls.Grid.SetColumnSpan(_lockdownFlash, root.ColumnDefinitions.Count);
                 root.Children.Add(_lockdownFlash);
-                var clock = System.Diagnostics.Stopwatch.StartNew();
-                _lockdownFlashTimer = new global::Avalonia.Threading.DispatcherTimer(System.TimeSpan.FromMilliseconds(33),
-                    global::Avalonia.Threading.DispatcherPriority.Render, (_, _) => PaintLockdownFlash(clock.Elapsed.TotalMilliseconds));
-                _lockdownFlashTimer.Start();
+                _lockdownFlashBeat = new BeatLoop(_lockdownFlash, seconds => PaintLockdownFlash(seconds * 1000));
+                _lockdownFlashBeat.Start();
             }
             catch (System.Exception ex)
             {
@@ -205,8 +204,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var t = System.Math.Min(1, ms / 600);
             flash.Opacity = (1 - t) * (1 - t);   // 1 - QuadraticEase.EaseOut(t)
             if (t < 1) return;
-            _lockdownFlashTimer?.Stop();
-            _lockdownFlashTimer = null;
+            _lockdownFlashBeat?.Stop();
+            _lockdownFlashBeat = null;
             (flash.Parent as global::Avalonia.Controls.Panel)?.Children.Remove(flash);
             _lockdownFlash = null;
         }

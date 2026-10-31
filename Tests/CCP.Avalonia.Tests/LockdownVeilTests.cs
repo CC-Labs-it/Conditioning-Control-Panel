@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -57,6 +58,7 @@ public sealed class LockdownVeilTests
             s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);   // P76: no intro card stealing the badge's Enter
             s.WhatMovedCardShown = 1;
             var ld = LockdownService.Current = new LockdownService();
+            var oldTime = BeatLoop.Time; BeatLoop.Time = new SteppedTime();
             var shell = new MainShellWindow();
             try
             {
@@ -74,7 +76,7 @@ public sealed class LockdownVeilTests
                 CoreEngine.Stop();
                 shell.RequestExit();
                 shell.Close();
-                CoreSettings.ServiceProvider = null;
+                CoreSettings.ServiceProvider = null; BeatLoop.Time = oldTime;
             }
         });
     }
@@ -510,12 +512,12 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        ((SteppedTime)BeatLoop.Time).Advance(TimeSpan.FromMilliseconds(300)); BeatLoop.StepAll();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        ((SteppedTime)BeatLoop.Time).Advance(TimeSpan.FromMilliseconds(300)); BeatLoop.StepAll();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 

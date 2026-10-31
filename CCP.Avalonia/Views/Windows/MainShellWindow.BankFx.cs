@@ -18,8 +18,7 @@ public partial class MainShellWindow {
     // WPF MainWindow.EventFx.cs:118: particle budget, visibility, state and focus.
     private bool BankAllowed => !_bankClosed && AmbientFxCanvas.Env.AllowParticles
         && IsActive && IsVisible && WindowState != WindowState.Minimized;
-    // WPF MainWindow.BankFx.cs:199,229,250. XPAwarded precedes this head's Awarded
-    // display notification, so no speculative XPChanged arm is needed here.
+    // WPF MainWindow.BankFx.cs:199,229,250. XPAwarded precedes Awarded here, so no speculative arm is needed.
     private void HookBankFx() {
         _bankTime = BeatLoop.Time; _bankEpoch = _bankTime.GetTimestamp(); _bank = new BankAccumulator(() => BankNow); ProgressionBank.XPAwarded += QueueBankAward;
         Deactivated += BankWindowChanged;
@@ -32,8 +31,7 @@ public partial class MainShellWindow {
     }
     private void QueueBankAward(ProgressionBank.XpAward award)
         => Dispatcher.UIThread.Post(() => ReceiveBankAward(award));
-    // WPF :272-375: weather never enters the pot; weather during a flight rides
-    // its release to truth. A level change discards the pot and aborts first.
+    // WPF :272-375: weather rides an existing hold; a level change discards the pot and aborts.
     private void ReceiveBankAward(ProgressionBank.XpAward award) {
         if (_bankClosed) return;
         try {
@@ -71,8 +69,7 @@ public partial class MainShellWindow {
     private void AbortBankFlight(bool writeTruth) {
         ++_bankId; _bankLive = false; _bankStep?.Stop(); _bankLayer?.Stop(); ReleaseBankHold(writeTruth);
     }
-    // WPF :540,781,794,903: mapped source, profile then header fallback; bounded
-    // per-flight surface outside the Viewbox. Bad geometry releases immediately.
+    // WPF :540,781,794,903: mapped source, profile/header fallback; bounded surface. Bad geometry releases.
     private void LaunchBankFlight(BankAccumulator.Flight flight) {
         if (!BankAllowed || !_bankHolding || _bankNeeded <= 0
             || Named<Grid>("EventFxHost") is not { } host
@@ -134,7 +131,7 @@ public partial class MainShellWindow {
         string tail = $" / {(int)_bankNeeded} XP";
         _lastXpShown = _bankShown = value; _lastXpLevelShown = _bankLevel; _xpReadoutTarget = value.ToString("F0") + tail;
         _bankStep = new BeatLoop(txt, seconds => {
-            double p = Math.Clamp(seconds * 1000 / BankCounterScript.StepMs(last), 0, 1); txt.Text = (from + (value - from) * (1 - (1 - p) * (1 - p))).ToString("F0") + tail;
+            double p = Math.Clamp(TimeSpan.FromSeconds(seconds).TotalMilliseconds / BankCounterScript.StepMs(last), 0, 1); txt.Text = (from + (value - from) * (1 - (1 - p) * (1 - p))).ToString("F0") + tail;
             if (p >= 1) _bankStep?.Stop();
         });
         _bankStep.Start();
