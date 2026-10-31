@@ -396,11 +396,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             if (_win != null) { _win.Shutdown(); return; }
             lock (_duckLock) { if (_isDucked) ForceUnduck(); }
-            Drain();
+            Drain(2000); // Keep app exit bounded, as before.
             lock (_duckLock) { _retry?.Dispose(); _retry = null; }
         }
 
-        internal void Drain() => _duckWork.Wait(2000);
+        // A completion barrier by default; shutdown supplies its bounded exit budget.
+        internal void Drain(int ms = Timeout.Infinite) => _duckWork.Wait(ms);
 
         internal bool IsDucked { get { lock (_duckLock) return _isDucked; } }
 

@@ -125,7 +125,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (_lock) { _retry?.Dispose(); _retry = null; }
         }
 
-        internal void Drain(int ms = 2000) { try { _work.Wait(ms); } catch { } }
+        // A completion barrier by default; shutdown supplies its bounded exit budget.
+        internal void Drain(int ms = Timeout.Infinite) { try { _work.Wait(ms); } catch { } }
 
         private void DisposeDuckTimers()
         {
