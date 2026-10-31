@@ -1,4 +1,4 @@
-// The kart's stat tag in the garage: four rows of 1..5 pips and a type word, dark karts included, and it stays out of the
+// The kart's stat tag in the garage: four rows of 1..7 pips and a type word, dark karts included, and it stays out of the
 // menu's way (no button, no focus, no animation when calm). The numbers belong to sim/kartStats.js; a stub stands in
 // here, and the last test holds the tag to the real module when the table is in the tree.
 import test from 'node:test';
@@ -32,7 +32,7 @@ function fakeTag() {
 const lit = (tag, key) => tag.rows.get(`[data-stat=${key}] i`).filter((p) => p.classes.has('on')).length;
 const BARS = { speed: 5, accel: 1, handling: 2, stability: 1, word: 'Fast' };
 
-test('the markup is four named rows of five pips, a type word, and nothing a pad could land on', () => {
+test('the markup is four named rows of seven pips, a type word, and nothing a pad could land on', () => {
   const html = barsMarkup();
   assert.deepEqual(STAT_ROWS.map(([, label]) => label), ['Speed', 'Accel', 'Handling', 'Stability']);
   for (const [key, label] of STAT_ROWS) assert.match(html, new RegExp(`data-stat="${key}"><span>${label}</span><span class="g-pips">(<i></i>){${PIPS}}</span>`));
@@ -41,7 +41,7 @@ test('the markup is four named rows of five pips, a type word, and nothing a pad
 });
 
 test('pip counts stay whole and in range, whatever comes in', () => {
-  for (const [value, want] of [[0, 1], [1, 1], [3, 3], [5, 5], [9, 5], [-2, 1], [2.6, 3], [NaN, 1], [undefined, 1]]) assert.equal(pipCount(value), want, String(value));
+  for (const [value, want] of [[0, 1], [1, 1], [3, 3], [7, 7], [9, 7], [-2, 1], [2.6, 3], [NaN, 1], [undefined, 1]]) assert.equal(pipCount(value), want, String(value));
 });
 
 test('painting lights the right pips, says the type word, and says it all in words', () => {
@@ -52,13 +52,13 @@ test('painting lights the right pips, says the type word, and says it all in wor
   assert.equal(tag.slots.get('.g-bars-type').textContent, 'Fast');
   assert.equal(tag.slots.get('.g-bars-name').textContent, '');
   assert.equal(tag.classes.has('g-bars-peek'), false);
-  assert.equal(tag.attrs['aria-label'], 'Fast. Speed 5 of 5, Accel 1 of 5, Handling 2 of 5, Stability 1 of 5');
+  assert.equal(tag.attrs['aria-label'], 'Fast. Speed 5 of 7, Accel 1 of 7, Handling 2 of 7, Stability 1 of 7');
   paintKartBars(tag, { ...BARS, speed: 2 }, 'Undertow');
   assert.equal(lit(tag, 'speed'), 2, 'a repaint turns pips back off');
   assert.equal(tag.classes.has('g-bars-peek'), true);
   assert.equal(tag.slots.get('.g-bars-name').textContent, 'Undertow');
   assert.match(tag.attrs['aria-label'], /^Undertow\. Fast\. /);
-  assert.equal(barsLine({ speed: 3, accel: 3, handling: 3, stability: 3 }), 'Speed 3 of 5, Accel 3 of 5, Handling 3 of 5, Stability 3 of 5');
+  assert.equal(barsLine({ speed: 3, accel: 3, handling: 3, stability: 3 }), 'Speed 3 of 7, Accel 3 of 7, Handling 3 of 7, Stability 3 of 7');
 });
 
 function fakeGarage(barsOf) {
@@ -115,8 +115,8 @@ test('every kart gets its bars into the dots\' spoken labels, locked ones includ
   root.querySelectorAll = (s) => s === '[data-kart]' ? KARTS.map(([id]) => ({ dataset: { kart: id }, classList: { toggle() {} }, setAttribute(k, v) { if (k === 'aria-label') labels[id] = v; } })) : [];
   g.ui.paint({ ...DEFAULT, kart: 'lovebomb' }, paintOpts);
   assert.deepEqual([...asked].sort(), KARTS.map(([id]) => id).sort());
-  assert.match(labels.undertow, /^Undertow, locked\..*Fast\. Speed 5 of 5/);
-  assert.match(labels.lovebomb, /^Lovebomb\. Fast\. Speed 5 of 5/);
+  assert.match(labels.undertow, /^Undertow, locked\..*Fast\. Speed 5 of 7/);
+  assert.match(labels.lovebomb, /^Lovebomb\. Fast\. Speed 5 of 7/);
   g.ui.dispose(); g.restore();
 });
 
@@ -146,7 +146,7 @@ test('calm means still: no animation on the tag, the fill fade stops under Gentl
   assert.match(block, /pointer-events:none/);
 });
 
-test('the real table: every body reads as whole pips and a known type word, Lovebomb sits at 3 3 3 3',
+test('the real table: every body reads as whole pips and a known type word, Lovebomb sits at 4 4 4 4',
   { skip: existsSync(new URL('../sim/kartStats.js', import.meta.url)) ? false : 'sim/kartStats.js lands with feat/rt-kart-stats' }, async () => {
     const { STAT_KEYS, TYPE_LABELS, statBars } = await import('../sim/kartStats.js');
     const feel = JSON.parse(read('../feel.json'));
@@ -157,6 +157,6 @@ test('the real table: every body reads as whole pips and a known type word, Love
       assert.ok(TYPE_LABELS[bars.type], `${id} ${bars.type}`);
     }
     const { type, ...lovebomb } = statBars(feel, 'lovebomb');
-    assert.deepEqual(lovebomb, { speed: 3, accel: 3, handling: 3, stability: 3 });
+    assert.deepEqual(lovebomb, { speed: 4, accel: 4, handling: 4, stability: 4 });
     assert.equal(type, 'allround');
   });
