@@ -1,4 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Serilog;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
@@ -11,11 +16,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     ///
     /// WPF forwards the controls to MainWindow. This head keeps the toggle's local visibility
     /// and interval label here, and hoists phrase-preset selection/save/delete to the Workshop host.
-    /// Manage Phrases forwards to the owning shell. Edit Phrases and the live avatar trigger timer
-    /// still await their runtime.
+    /// Manage Phrases forwards to the owning shell. The live avatar trigger timer remains part B.
     /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
+        private bool _loading;
+        internal Func<TextEditorDialog, Window, Task<bool>> ShowTriggerEditor { get; set; } =
+            (dialog, owner) => dialog.ShowDialogSafe<bool>(owner);
+
         public event EventHandler? PhrasePresetSelectionChanged;
         public event EventHandler? SavePhrasePresetRequested;
         public event EventHandler? DeletePhrasePresetRequested;
@@ -37,8 +45,69 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             var intervalText = this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!;
 
             // WPF wired Checked/Unchecked separately; Avalonia has one event for both.
-            toggle.IsCheckedChanged += (_, _) => panel.IsVisible = toggle.IsChecked == true;
-            slider.ValueChanged += (_, _) => intervalText.Text = $"{(int)slider.Value}s";
+            toggle.IsCheckedChanged += (_, _) =>
+            {
+                panel.IsVisible = toggle.IsChecked == true;
+                if (_loading) return;
+                // WPF MainWindow.Patreon.cs:1489-1503.
+                CoreSettings.Current.TriggerModeEnabled = toggle.IsChecked == true;
+                CoreSettings.Save();
+            };
+            slider.ValueChanged += (_, _) =>
+            {
+                intervalText.Text = $"{(int)slider.Value}s";
+                // WPF MainWindow.Patreon.cs:1515-1525 does not save on a slider tick.
+                if (!_loading) CoreSettings.Current.TriggerIntervalSeconds = (int)slider.Value;
+            };
+            this.FindControl<Button>("BtnEditTriggersCompanion")!.Click += async (_, _) =>
+            {
+                if (TopLevel.GetTopLevel(this) is not Window { IsVisible: true } owner) return;
+                // WPF MainWindow.Patreon.cs:1528-1591 catches construction, showing and save failures.
+                try
+                {
+                    // WPF MainWindow.Patreon.cs:1528-1589. Empty stays empty; duplicate
+                    // phrases compare without case before the dictionary is constructed.
+                    var triggers = (CoreSettings.Current.CustomTriggers ?? new List<string>())
+                        .Where(t => !string.IsNullOrWhiteSpace(t))
+                        .Distinct(StringComparer.OrdinalIgnoreCase).ToDictionary(t => t, _ => true);
+                    var dialog = new TextEditorDialog(Loc.Get("title_trigger_phrases"), triggers);
+                    if (!await ShowTriggerEditor(dialog, owner) || dialog.ResultData == null) return;
+                    var enabled = dialog.ResultData.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
+                    var defaults = new HashSet<string>(App.Mods?.GetDefaultCustomTriggers() ?? new List<string>(),
+                        StringComparer.OrdinalIgnoreCase);
+                    var old = new HashSet<string>(triggers.Keys, StringComparer.OrdinalIgnoreCase);
+                    var current = new HashSet<string>(enabled, StringComparer.OrdinalIgnoreCase);
+                    foreach (var text in enabled)
+                        if (!old.Contains(text) && !defaults.Contains(text))
+                            CoreSettings.Current.UserAddedCustomTriggers.Add(text);
+                    foreach (var text in old)
+                        if (!current.Contains(text)) CoreSettings.Current.UserAddedCustomTriggers.Remove(text);
+                    CoreSettings.Current.CustomTriggers = enabled;
+                    CoreSettings.Save();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to open trigger editor");
+                    await MessageDialog.ShowAsync(owner, Loc.Get("title_error"),
+                        Loc.GetF("msg_error_opening_trigger_editor_0", ex.Message));
+                }
+            };
+            AttachedToVisualTree += (_, _) => SyncSettings();
+            SyncSettings();
+        }
+        // WPF MainWindow.CompanionTab.cs:38-50 fences reads with _isLoading.
+        internal void SyncSettings()
+        {
+            _loading = true;
+            try
+            {
+                var settings = CoreSettings.Current;
+                this.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked = settings.TriggerModeEnabled;
+                this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!.IsVisible = settings.TriggerModeEnabled;
+                this.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value = settings.TriggerIntervalSeconds;
+                this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text = $"{settings.TriggerIntervalSeconds}s";
+            }
+            finally { _loading = false; }
         }
     }
 

@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Serilog;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -16,6 +19,7 @@ using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Bark;
 using Xunit;
@@ -119,6 +123,235 @@ public sealed class CompanionPhraseEditorTests
             CoreSettings.ServiceProvider = oldProvider;
         }
     });
+
+    [Fact]
+    public void TriggerControlsLoadWithoutSavingAndPersistUserChanges() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        try
+        {
+            service.Current.TriggerModeEnabled = true;
+            service.Current.TriggerIntervalSeconds = 137;
+            var cell = new WorkshopTriggersCell();
+            var toggle = cell.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
+            var slider = cell.FindControl<Slider>("SliderTriggerIntervalCompanion")!;
+            var panel = cell.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!;
+            var label = cell.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!;
+            Assert.True(toggle.IsChecked);
+            Assert.True(panel.IsVisible);
+            Assert.Equal(137, slider.Value);
+            Assert.Equal("137s", label.Text);
+            Assert.False(service.HasPendingSave);
+            slider.Value = 183.9;
+            Assert.Equal(183, service.Current.TriggerIntervalSeconds);
+            Assert.Equal("183s", label.Text);
+            Assert.False(service.HasPendingSave); // WPF saves the toggle, not each slider tick.
+            toggle.IsChecked = false;
+            Assert.False(panel.IsVisible);
+            Assert.False(service.Current.TriggerModeEnabled);
+            Assert.True(service.HasPendingSave);
+            service.SaveImmediate();
+            var reload = new SettingsService();
+            Assert.False(reload.Current.TriggerModeEnabled);
+            Assert.Equal(183, reload.Current.TriggerIntervalSeconds);
+            // Reopening the page re-reads externally changed state without writing it.
+            service.Current.TriggerModeEnabled = true;
+            service.Current.TriggerIntervalSeconds = 245;
+            cell.SyncSettings();
+            Assert.True(toggle.IsChecked);
+            Assert.True(panel.IsVisible);
+            Assert.Equal("245s", label.Text);
+            Assert.False(service.HasPendingSave);
+        }
+        finally { CoreSettings.ServiceProvider = oldProvider; }
+    });
+
+    [Fact]
+    public void AiPageTriggerEditorNormalizesSavesAndCancelsWithoutRestoringDefaults() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var settings = service.Current;
+        settings.Welcomed = true;
+        settings.HasAcceptedAgeVerification = true;
+        settings.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        settings.AwarenessModeEnabled = false;
+        settings.TriggerModeEnabled = true;
+        settings.CustomTriggers = new() { "KEEP", "keep", " ", "REMOVE" };
+        settings.UserAddedCustomTriggers.Clear();
+        settings.UserAddedCustomTriggers.UnionWith(new[] { "REMOVE", "KEEP" });
+        var shell = new MainShellWindow();
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        try
+        {
+            shell.Show();
+            shell.ShowTab("companionai");
+            Dispatcher.UIThread.RunJobs();
+            var page = shell.Named<AiPage>("CompanionAiTab")!;
+            var cell = (WorkshopTriggersCell)page.FindControl<ContentControl>("TriggersHost")!.Content!;
+            Assert.True(page.IsVisualAncestorOf(cell));
+            Assert.True(cell.FindControl<Button>("BtnEditTriggersCompanion")!.IsEffectivelyVisible);
+            settings.TriggerIntervalSeconds = 229;
+            shell.ShowTab("companion");
+            shell.ShowTab("companionai");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("229s", cell.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text);
+            void Open() => cell.FindControl<Button>("BtnEditTriggersCompanion")!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            TextEditorDialog Editor() => Assert.Single(shell.OwnedWindows.OfType<TextEditorDialog>());
+            TextItem[] Items(TextEditorDialog d) => d.FindControl<ItemsControl>("ItemList")!.Items.OfType<TextItem>().ToArray();
+            void ClickEditor(TextEditorDialog d, string name) => d.FindControl<Button>(name)!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            Open();
+            var editor = Editor();
+            Assert.Equal(new[] { "KEEP", "REMOVE" }, Items(editor).Select(x => x.Text));
+            Items(editor).Single(x => x.Text == "REMOVE").IsEnabled = false;
+            editor.FindControl<TextBox>("TxtNewItem")!.Text = "hand typed";
+            ClickEditor(editor, "BtnAdd");
+            ClickEditor(editor, "BtnSave");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "KEEP", "HAND TYPED" }, settings.CustomTriggers);
+            Assert.Contains("HAND TYPED", settings.UserAddedCustomTriggers);
+            Assert.Contains("KEEP", settings.UserAddedCustomTriggers);
+            Assert.DoesNotContain("REMOVE", settings.UserAddedCustomTriggers);
+            Assert.True(service.HasPendingSave);
+            service.SaveImmediate();
+            Assert.Equal(settings.CustomTriggers, new SettingsService().Current.CustomTriggers);
+
+            Open();
+            editor = Editor();
+            ClickEditor(editor, "BtnCancel");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "KEEP", "HAND TYPED" }, settings.CustomTriggers);
+            Assert.False(service.HasPendingSave);
+            settings.CustomTriggers.Clear();
+            Open();
+            editor = Editor();
+            Assert.Empty(Items(editor));
+            ClickEditor(editor, "BtnSave");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(settings.CustomTriggers);
+
+            // Verify the real button route in every language after the existing save/cancel checks.
+            foreach (var (language, title) in new[]
+            {
+                ("en", "Trigger Phrases"),
+                ("de", "Auslösesätze"),
+                ("es", "Frases de activación"),
+                ("fr", "Phrases de déclenchement"),
+                ("it", "Frasi di attivazione"),
+                ("ja", "トリガーフレーズ"),
+                ("ko", "트리거 문구"),
+                ("pt-BR", "Frases de ativação"),
+                ("ru", "Триггерные фразы"),
+                ("zh-CN", "触发短语"),
+            })
+            {
+                LocalizationManager.Instance.SetLanguage(language);
+                Open();
+                editor = Editor();
+                Assert.Equal(title, editor.FindControl<ConditioningControlPanel.Avalonia.Controls.IconLabel>("TxtTitle")!.Text);
+                Assert.Equal(Loc.GetF("title_manager", title), editor.Title);
+                ClickEditor(editor, "BtnCancel");
+                Dispatcher.UIThread.RunJobs();
+            }
+        }
+        finally
+        {
+            foreach (var owned in shell.OwnedWindows.ToArray()) owned.Close();
+            shell.RequestExit();
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
+    [Theory]
+    [InlineData("en", false)]
+    [InlineData("fr", true)]
+    public void TriggerEditorFailureIsLoggedShownAndAllowsRetry(string language, bool afterAwait) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        var oldLogger = Log.Logger;
+        var sink = new TriggerLogSink();
+        using var logger = new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        service.Current.CustomTriggers = new() { "KEEP" };
+        service.Current.UserAddedCustomTriggers = new() { "KEEP" };
+        service.Current.TriggerModeEnabled = true;
+        var cell = new WorkshopTriggersCell();
+        var owner = new Window { Content = cell };
+        TextEditorDialog? attempted = null;
+        var failure = new InvalidOperationException("dialog unavailable");
+        var completion = new TaskCompletionSource<bool>();
+        var show = cell.ShowTriggerEditor;
+        try
+        {
+            owner.Show();
+            LocalizationManager.Instance.SetLanguage(language);
+            Log.Logger = logger;
+            cell.ShowTriggerEditor = (dialog, _) =>
+            {
+                attempted = dialog;
+                if (!afterAwait) throw failure;
+                return completion.Task;
+            };
+            void ClickEditor() => cell.FindControl<Button>("BtnEditTriggersCompanion")!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            ClickEditor();
+            if (afterAwait)
+            {
+                Assert.Empty(owner.OwnedWindows);
+                completion.SetException(failure); // The failure arrives after the handler has yielded.
+            }
+            Dispatcher.UIThread.RunJobs();
+            var error = Assert.Single(owner.OwnedWindows.OfType<MessageDialog>());
+            Assert.Equal(Loc.Get("title_error"), error.Title);
+            Assert.Equal(Loc.GetF("msg_error_opening_trigger_editor_0", failure.Message),
+                error.FindControl<TextBlock>("TxtMessage")!.Text);
+            Assert.False(error.FindControl<Button>("BtnCancel")!.IsVisible);
+            var logged = Assert.Single(sink.Events);
+            Assert.Equal(Serilog.Events.LogEventLevel.Error, logged.Level);
+            Assert.Same(failure, logged.Exception);
+            Assert.Equal("Failed to open trigger editor", logged.RenderMessage());
+            Assert.Equal(new[] { "KEEP" }, service.Current.CustomTriggers);
+            Assert.Equal(new[] { "KEEP" }, service.Current.UserAddedCustomTriggers);
+            Assert.False(service.HasPendingSave);
+            error.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(owner.OwnedWindows);
+
+            cell.ShowTriggerEditor = show;
+            ClickEditor(); // The same live cell still opens the real editor after the error is dismissed.
+            var retry = Assert.Single(owner.OwnedWindows.OfType<TextEditorDialog>());
+            retry.FindControl<Button>("BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(owner.OwnedWindows);
+        }
+        finally
+        {
+            foreach (var owned in owner.OwnedWindows.ToArray()) owned.Close();
+            attempted?.Close();
+            owner.Close();
+            Log.Logger = oldLogger;
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
+    private sealed class TriggerLogSink : Serilog.Core.ILogEventSink
+    {
+        public List<Serilog.Events.LogEvent> Events { get; } = new();
+        public void Emit(Serilog.Events.LogEvent logEvent) => Events.Add(logEvent);
+    }
 
     private static CompanionPhrase[] Rows(CompanionPhraseEditorDialog dialog) =>
         dialog.FindControl<ItemsControl>("PhraseList")!.Items.OfType<PhraseGroup>().SelectMany(g => g.Items).ToArray();
