@@ -576,6 +576,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosCursorGlowOverlay.CloseActive();   // WPF EndRun :3236
             ChaosVibeTrailOverlay.CloseActive();   // WPF EndRun :3237
             ChaosEStimOverlay.CloseActive();   // WPF EndRun :3238
+            Overlays.ChaosFieldFxOverlay.CloseActive();   // WPF ChaosModeService.cs:3236: before results
             ChaosSkiaFxOverlay.CloseActive();   // WPF EndRun
             CloseFx();   // WPF EndRun :3242
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned, rankUp);
