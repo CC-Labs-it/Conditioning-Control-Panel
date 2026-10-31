@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
@@ -13,6 +15,7 @@ public partial class LeashTabView : UserControl
     private readonly Func<ILeashService?> _resolve;
     private ILeashService? _service;
     private LeashSelfCard? _self;
+    internal Dictionary<string, LeashHolderCard> HolderCards { get; } = new();
 
     public LeashTabView() : this(() => LeashHead.Service) { }
     internal LeashTabView(Func<ILeashService?> service)
@@ -31,20 +34,22 @@ public partial class LeashTabView : UserControl
     {
         Unsubscribe();
         try { _service = _resolve(); } catch { _service = null; }
-        if (_service != null) _service.SnapshotChanged += OnSnapshot;
+        if (_service != null) { _service.SnapshotChanged += OnSnapshot; _service.ReceiptsChanged += OnReceipts; }
         Render();
     }
 
     private void Unsubscribe()
     {
-        if (_service != null) _service.SnapshotChanged -= OnSnapshot;
+        if (_service != null) { _service.SnapshotChanged -= OnSnapshot; _service.ReceiptsChanged -= OnReceipts; }
     }
+    private void OnReceipts() { foreach (var card in HolderCards.Values.ToArray()) card.Render(); }
     private void OnSnapshot(LeashSnapshot _) => Render();
 
     private void Render()
     {
-        MyLeash? me = null;
-        try { if (_service?.Available == true) me = _service.Snapshot.Me; } catch { }
+        var snapshot = LeashSnapshot.Empty;
+        try { if (_service?.Available == true) snapshot = _service.Snapshot; } catch { }
+        var me = snapshot.Me;
         SectionHost.Children.Clear();
         if (me != null)
         {
@@ -55,6 +60,16 @@ public partial class LeashTabView : UserControl
             if (IsEffectivelyVisible && me.Assignment is { } a) _service?.NoteShown(a.Aid);
         }
         else _self = null;
-        EmptyPanel.IsVisible = me == null;
+        var keep = new HashSet<string>();
+        foreach (var held in snapshot.Holding)
+        {
+            keep.Add(held.Who.Id);
+            if (!HolderCards.TryGetValue(held.Who.Id, out var card))
+                HolderCards[held.Who.Id] = card = new LeashHolderCard(held, () => _service);
+            else card.Update(held);
+            SectionHost.Children.Add(card);
+        }
+        foreach (var gone in HolderCards.Keys.Where(id => !keep.Contains(id)).ToArray()) HolderCards.Remove(gone);
+        EmptyPanel.IsVisible = me == null && HolderCards.Count == 0;
     }
 }
