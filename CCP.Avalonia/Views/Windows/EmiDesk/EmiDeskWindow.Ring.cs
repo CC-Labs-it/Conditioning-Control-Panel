@@ -9,9 +9,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// The ring half of the widget: a click on her toggles the card fan, which lives in its own
     /// <see cref="EmiRingWindow"/>. Port of ConditioningControlPanel/Windows/EmiDesk/EmiDeskWindow.Ring.cs.
     ///
-    /// <para>ponytail: the moments WPF fires around the ring (<c>ringOpen</c>, <c>ringDismissed</c>,
+    /// <para>ponytail: the remaining moments WPF fires around the ring (<c>ringDismissed</c>,
     /// <c>suggestionIgnored3x</c>, <c>pinAdded</c>) and the nudge after an opening need
-    /// <c>App.EmiDesk.Fire</c> / EmiNudges, which this head does not have. The counters behind them
+    /// host wiring beyond Fire, which now exists. The counters behind them
     /// (<see cref="EmiState.NoteRingOpen"/>, <see cref="EmiState.Current"/>.RingIgnoreStreak) are kept.</para>
     /// </summary>
     public partial class EmiDeskWindow
@@ -31,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         partial void OnTearDownCore()
         {
+            StopMomentBubble();
             try { _ring?.CloseRing(); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring tear-down failed"); }
         }
@@ -59,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             ring.SetWidgetGeometry(BodyPx(), AnchorPx());
             ring.OpenRing();
             if (!ring.IsOpen) return;
+            EmiDeskService.Instance.Fire("ringOpen");
             try { EmiState.NoteRingOpen(); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring-open bookkeeping failed"); }
         }
