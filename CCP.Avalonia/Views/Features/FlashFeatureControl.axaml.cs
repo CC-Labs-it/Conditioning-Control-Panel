@@ -173,6 +173,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             var motion = Platform.PrizeOwnership.OwnsFlashV2();
             RowDraggable.IsVisible = motion;
             BoxFlashV2.IsVisible = motion || RowShatter.IsVisible || RowMotion.IsVisible || !RowGetFlashesV2.IsRowHidden;
+            RefreshExitRow();
         }
 
         /// <summary>Still always, Drift and Bounce with its v2 pill when owned, Mix once anything v2 is

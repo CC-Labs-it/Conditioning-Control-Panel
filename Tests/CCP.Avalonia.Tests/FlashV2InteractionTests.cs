@@ -84,34 +84,43 @@ public sealed class FlashV2InteractionTests
         var secrets = new System.Collections.Generic.Dictionary<string, string?>();
         CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
         CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
-        var old = (s.OfflineMode, s.UnifiedId, s.FlashMotionStyle);
+        var old = (s.OfflineMode, s.UnifiedId, s.FlashMotionStyle, s.FlashShatterEnabled);
         Window? host = null;
         try
         {
             s.OfflineMode = false; s.UnifiedId = "test-account"; s.AuthToken = "test-token";
             s.FlashMotionStyle = FlashMotionStyle.DriftBounce;
+            s.FlashShatterEnabled = true;
             PrizeOwnership.ResetHeld();
             PrizeOwnership.IsGranted = PrizeOwnership.Held;
             var card = new FlashFeatureControl();
             host = new Window { Content = card };
             host.Show();
             Assert.False(card.FindControl<Grid>("RowDraggable")!.IsVisible);
+            Assert.True(card.FindControl<ComboBox>("CmbExit")!.IsEnabled);
+            Assert.False(card.FindControl<TextBlock>("TxtExitShatterNote")!.IsVisible);
             PrizeOwnership.ApplySnapshot("other-account", 1, new[] { PrizeOwnership.FlashDriftBounce });
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.False(card.FindControl<Grid>("RowDraggable")!.IsVisible);
+            Assert.True(card.FindControl<ComboBox>("CmbExit")!.IsEnabled);
+            Assert.False(card.FindControl<TextBlock>("TxtExitShatterNote")!.IsVisible);
             PrizeOwnership.ApplySnapshot("test-account", 1, new[] { PrizeOwnership.FlashDriftBounce });
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.True(card.FindControl<Grid>("RowDraggable")!.IsVisible);
+            Assert.False(card.FindControl<ComboBox>("CmbExit")!.IsEnabled);
+            Assert.True(card.FindControl<TextBlock>("TxtExitShatterNote")!.IsVisible);
             PrizeOwnership.ApplySnapshot("test-account", 2, Array.Empty<string>());
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.False(card.FindControl<Grid>("RowDraggable")!.IsVisible);
+            Assert.True(card.FindControl<ComboBox>("CmbExit")!.IsEnabled);
+            Assert.False(card.FindControl<TextBlock>("TxtExitShatterNote")!.IsVisible);
             Assert.Equal(FlashMotionStyle.DriftBounce, s.FlashMotionStyle);
         }
         finally
         {
             host?.Close();
             PrizeOwnership.ResetHeld();
-            (s.OfflineMode, s.UnifiedId, s.FlashMotionStyle) = old;
+            (s.OfflineMode, s.UnifiedId, s.FlashMotionStyle, s.FlashShatterEnabled) = old;
             (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
         }
     });

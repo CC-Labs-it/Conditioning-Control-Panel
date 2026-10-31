@@ -315,6 +315,12 @@
                                                    VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                                    FontSize="13" FontWeight="Bold"/>
                                     </Grid>
+                                    <Grid x:Name="RowDraggable" Height="34" Background="Transparent" ColumnDefinitions="*,Auto" IsVisible="False"
+                                          ToolTip.Tip="{loc:Str tooltip_flash_draggable}">
+                                        <TextBlock Text="{loc:Str setting_flash_draggable}" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <CheckBox Grid.Column="1" x:Name="ChkFlashDraggable" Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
+                                    </Grid>
                                     <Grid x:Name="RowShatter" Height="34" Background="Transparent" IsVisible="False"
                                           ToolTip.Tip="{loc:Str tooltip_flash_shatter}">
                                         <Grid.ColumnDefinitions>
@@ -325,12 +331,6 @@
                                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                         <CheckBox Grid.Column="1" x:Name="ChkFlashShatter"
                                                   Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
-                                    </Grid>
-                                    <Grid x:Name="RowDraggable" Height="34" Background="Transparent" ColumnDefinitions="*,Auto" IsVisible="False"
-                                          ToolTip.Tip="{loc:Str tooltip_flash_draggable}">
-                                        <TextBlock Text="{loc:Str setting_flash_draggable}" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                        <CheckBox Grid.Column="1" x:Name="ChkFlashDraggable" Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
