@@ -276,6 +276,51 @@ public sealed class FeatureCardFxTests
     });
 
     [Fact]
+    public void ReleaseDuringPressKeepsDisplayedTravelAndSpringPeak() => WithCard((window, host, card) =>
+    {
+        card.DashboardDepth = true;
+        var travel = (TranslateTransform)((TransformGroup)card.FindControl<Panel>("PressFace")!.RenderTransform!).Children[1];
+        var clock = new SharedDeeperThemeTests.StepClock();
+        travel.SetValue(SharedDeeperThemeTests.StepClock.Property, clock.Instance);
+        var at = card.TranslatePoint(new Point(90, 70), window)!.Value;
+        window.MouseMove(at);
+        clock.Step(0); clock.Step(140);
+        Assert.Equal(-2, travel.Y, 6);
+        window.MouseDown(at, MouseButton.Left);
+        clock.Step(200); clock.Step(245); // halfway through the 90 ms QuadOut press
+        double from = travel.Y;
+        Assert.Equal(1, from, 6);
+        window.MouseUp(at, MouseButton.Left);
+        Assert.Equal(from, travel.Y, 6);
+        clock.Step(300); clock.Step(391); // 65% of the 140 ms release: one pixel past rest
+        Assert.Equal(-3, travel.Y, 6);
+        clock.Step(440);
+        Assert.Equal(-2, travel.Y, 6);
+    });
+
+    [Fact]
+    public void InterruptedMuteFadeReversesFromDisplayedOpacity() => WithCard((window, host, card) =>
+    {
+        var mute = card.FindControl<Border>("ImgIconMute")!;
+        var clock = new SharedDeeperThemeTests.StepClock();
+        mute.SetValue(SharedDeeperThemeTests.StepClock.Property, clock.Instance);
+        card.DimWhenInactive = true;
+        clock.Step(0); clock.Step(100);
+        Assert.Equal(0.75, mute.Opacity, 6);
+        Hover(card, window, true);
+        Assert.Equal(0.75, mute.Opacity, 6);
+        clock.Step(200); clock.Step(250);
+        double from = mute.Opacity;
+        Assert.Equal(0.421875, from, 6);
+        Hover(card, window, false);
+        Assert.Equal(from, mute.Opacity, 6);
+        card.IsActive = true;
+        Assert.Equal(from, mute.Opacity, 6);
+        clock.Step(300); clock.Step(500);
+        Assert.Equal(0, mute.Opacity, 6);
+    });
+
+    [Fact]
     public void ContinuousPointerMovesRetargetOneTiltTransition() => WithCard((window, host, card) =>
     {
         card.DashboardDepth = true;

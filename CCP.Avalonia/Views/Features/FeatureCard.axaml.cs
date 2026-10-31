@@ -330,9 +330,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             bool mute = ShouldMute(DimWhenInactive, PaintActive, IsLocked, _hovered && !DashboardDepth, TeaseTier > 0);
             _txtTitle.Opacity = mute ? MutedTitleOpacity : 1.0;
-            _imgIconMute.Transitions = ms > 0
-                ? new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(ms), Easing = new QuadraticEaseOut() } }
-                : null;
+            var duration = TimeSpan.FromMilliseconds(ms);
+            if (ms <= 0) _imgIconMute.Transitions = null;
+            else if (_imgIconMute.Transitions is not [DoubleTransition fade] || fade.Duration != duration || fade.Property != OpacityProperty)
+                _imgIconMute.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = duration, Easing = new QuadraticEaseOut() } };
             _imgIconMute.Opacity = mute ? 1.0 : 0.0;
         }
 

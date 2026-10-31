@@ -140,7 +140,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (ms <= 0) t.Transitions = null;
             else if (t is not RotateTransform || t.Transitions is not [DoubleTransition current]
                 || current.Property != property || current.Duration != duration || current.Easing.GetType() != easing.GetType())
+            {
+                double displayed = t.GetValue(property); // capture before cancelling the old tween (WPF :124)
+                t.Transitions = null;
+                t.SetValue(property, displayed);
                 t.Transitions = new Transitions { new DoubleTransition { Property = property, Duration = duration, Easing = easing } };
+            }
             t.SetValue(property, to);
         }
 

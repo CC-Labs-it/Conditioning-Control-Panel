@@ -9,13 +9,13 @@ No WPF or Core source changes. No new localization keys.
 | Behaviour | WPF spec | Avalonia evidence and result |
 | --- | --- | --- |
 | Inactive opacity and grey art | Features/FeatureCard.xaml.cs:563,584 | Views/Features/FeatureCard.axaml.cs:315,329, ported; Core CardMuteRule and Helpers/CardArtDesaturate reused |
-| Hover restores art except on dashboard | Features/FeatureCard.xaml.cs:784 | Views/Features/FeatureCard.axaml.cs:443, ported |
+| Hover restores art except on dashboard | Features/FeatureCard.xaml.cs:784 | Views/Features/FeatureCard.axaml.cs:444, ported |
 | Lock and tease override grey; tutorial lights art | Features/FeatureCard.xaml.cs:589 | Views/Features/FeatureCard.axaml.cs:331, ported |
 | Dashboard socket, travel, bevel, tilt, release | Services/UI/DashboardCardDepth.cs:32,65 | Views/Features/DashboardCardDepth.cs:44,114, ported; Core DashboardDepthLaw reused |
-| Dashboard does not scale or pop art | Features/FeatureCard.xaml.cs:784 | Views/Features/FeatureCard.axaml.cs:453,463, ported |
+| Dashboard does not scale or pop art | Features/FeatureCard.xaml.cs:784 | Views/Features/FeatureCard.axaml.cs:454,464, ported |
 | Opt-in v2 pill | Features/FeatureCard.xaml.cs:264; Features/FeatureCard.xaml:214 | Views/Features/FeatureCard.axaml:175; FeatureCard.axaml.cs:197, ported control API; ownership wiring remains part B |
-| Inverted dashboard toggle gesture | Features/FeatureCard.xaml.cs:810 | Views/Features/FeatureCard.axaml.cs:475, already present, preserved Core DashboardClickRules |
-| Motion, focus, effective visibility and tease rim | Features/FeatureCard.xaml.cs:613 | Views/Features/FeatureCard.axaml.cs:341, already present; existing tests retained |
+| Inverted dashboard toggle gesture | Features/FeatureCard.xaml.cs:810 | Views/Features/FeatureCard.axaml.cs:476, already present, preserved Core DashboardClickRules |
+| Motion, focus, effective visibility and tease rim | Features/FeatureCard.xaml.cs:613 | Views/Features/FeatureCard.axaml.cs:342, already present; existing tests retained |
 | Scrolller launch and exit | App.xaml.cs:2567; App.xaml.cs:6284 | App.axaml.cs:624,1291; Platform/ScrolllerHead.cs:32,42, already present |
 | Copy sweep, purge and first-show copies | Services/Fyp/Online/ScrolllerCopySweeper.cs:1 | Platform/ScrolllerHead.cs:58,71; Views/Windows/WelcomeShow/FirstShowStageWindow.cs:234, already present; base retained |
 | Scrolller away admission, inherited row 211 gap | Services/Fyp/Online/ScrolllerAwayWatcher.cs:1 | Platform/ScrolllerAwayHost.cs:23, already has Windows and logind hooks; no older weaker replacement |
@@ -34,29 +34,19 @@ PR coverage is the supplied triage assignment, not an independent review of PR h
 
 FeatureCardFxTests.cs:183 covers opt-in dim, grey pixels, live hover, active,
 lock, tease, fade and motion Off. :228 covers dashboard hold, no scale,
-press/release, active sink, lock rejection, preserved click inversion. :303 covers the reversible v2 pill.
-:315 covers tilt clamping, release overshoot and endpoints. Existing tests stay intact.
+press/release, active sink, lock rejection, preserved click inversion. :348 covers the reversible v2 pill.
+:360 covers tilt clamping, release overshoot and endpoints. Existing tests stay intact.
 Mystery and Vault opt into depth (WPF Views/Tabs/SettingsTabView.xaml:933,1041;
 Avalonia Views/Tabs/SettingsTabView.axaml:806,897). Toggle tiles already opted in.
 The older Just Drop tile is now the Deeper Editor in WPF (:627); that caller
 is outside this feature-card recut.
 
-Validation on Linux, .NET 10.0.403:
-- dotnet build CCP.Core: 0 errors (50 warnings).
-- dotnet build CCP.Avalonia: 0 errors (201 warnings).
-- dotnet build Tests/CCP.Avalonia.Tests: 0 errors (144 warnings).
-- dotnet test Tests/CCP.Core.Tests: 4635 passed, 6 skipped, 0 failed.
-- bash .github/scripts/core-guards.sh: All Core guards passed.
-- python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
-- Initial FeatureCardFxTests run: 7 passed, 0 skipped, 0 failed.
-- Temporary mutants, restored after each run: opacity .62 -> .63 and release
-  overshoot removed: 3 failures; grayscale disabled and tilt neutralized:
-  3 failures; press disabled and v2 visibility disabled: 2 failures.
-  The final independent depth failure reaches IsPressed, and the badge failure
-  reaches visibility. Earlier failures masked these, so they were run separately.
+Validation on Linux, .NET 10.0.403 (initial recut):
+- Builds of CCP.Core, CCP.Avalonia and Tests/CCP.Avalonia.Tests: 0 errors.
+- Core tests: 4635 passed, 6 skipped; Core guards and avalonia_docs self-check passed.
+- Restored-source feature tests: 8 passed. Temporary opacity, grayscale, press,
+  badge, tilt and release-easing mutants failed; masked failures were rerun independently.
 - badge_v2 already exists in all 10 language JSON files; no new copy keys.
-- Final restored-source run: dotnet test Tests/CCP.Avalonia.Tests --no-restore
-  --filter FullyQualifiedName~FeatureCardFxTests: 8 passed, 0 skipped, 0 failed.
 
 ## Part B
 
@@ -77,3 +67,10 @@ Assert.Same on reviewed commit 2a25232c7 before the fix. No new copy keys.
 Review validation: all three required builds had 0 errors; Core tests: 4635
 passed, 6 skipped, 0 failed. FeatureCardFxTests plus SplitFeatureCardDepthTests:
 13 passed, 0 skipped, 0 failed. Core guards and avalonia_docs self-check passed.
+
+Review interruption P2s: travel now preserves its displayed position before replacing
+a tween (WPF Services/UI/DashboardCardDepth.cs:124); mute reuses its opacity
+transition (WPF Features/FeatureCard.xaml.cs:602). Hand-stepped interruption tests
+failed on 5ebfa524d: release jumped from 1 to 2; fade reversal jumped from .75 to 1.
+Interruption validation: required builds 0 errors; Core 4635 passed, 6 skipped;
+affected head tests 19 passed, 0 skipped. Guards/docs passed; fail-proofs above.
