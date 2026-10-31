@@ -55,6 +55,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// </summary>
     public partial class ChaosHubWindow : Window
     {
+        // WPF ChaosHubWindow.xaml.cs:30-45: one live hub, released when it closes.
+        internal static ChaosHubWindow? Current { get; private set; }
+
+        internal static Func<Window?> OwnerWindow = () => Views.Windows.MainShellWindow.Current;
+
+        // WPF ChaosOverlayWindow.xaml.cs:873-883 and DtrhHostService.cs:949-952.
+        internal static void OpenAt(string? tab = null)
+        {
+            if (ChaosRunHost.IsActive) return;
+            var hub = Current;
+            if (hub == null)
+            {
+                hub = new ChaosHubWindow();
+                var owner = OwnerWindow();
+                // Avalonia requires a visible owner; the launcher can leave the shell hidden.
+                if (owner?.IsVisible == true) hub.Show(owner);
+                else hub.Show();
+            }
+            if (tab != null) hub.NavigateTo(tab);
+            else hub.Activate();
+        }
+
         private static readonly Random _rng = new();
         private int _waves = 5;
 
@@ -118,6 +140,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
+            // A --render-all instance is never shown, so it never becomes the live hub.
+            if (!RenderProof.Rendering) Current = this;
             Closed += (_, _) =>
             {
                 UnlockCards.Stop();
@@ -126,6 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _balanceAnims.Clear();
                 _balanceTickOwner = null;
                 StopMenuArt();
+                if (ReferenceEquals(Current, this)) Current = null;
             };
             _menuView = Part<Grid>("MenuView");
             _menuLeftCol = Part<Grid>("MenuLeftCol");
