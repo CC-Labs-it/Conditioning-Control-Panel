@@ -227,6 +227,9 @@ namespace ConditioningControlPanel.Avalonia
         internal static ConditioningControlPanel.Services.AIService.IAiService? Ai { get; set; } =
             new ConditioningControlPanel.Services.AIService.AiServiceStrategy();
 
+        internal static Func<global::Avalonia.Visual?> ChaosTextHost = () =>
+            (Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+
         // WPF Services/Chaos/EffectPayloadFiring.cs:225-237. Only the global multiplier
         // applies to rain, including on a prism pop (DurationMult is deliberately ignored).
         internal static void FireChaosPayload(Services.Chaos.EffectPayload payload)
@@ -240,6 +243,13 @@ namespace ConditioningControlPanel.Avalonia
                     Services.Chaos.GifCascadePayload.FALL_SPEED,
                     Services.Chaos.GifCascadePayload.OPACITY,
                     Services.Chaos.GifCascadePayload.START_SCALE);
+                return;
+            }
+            // WPF EffectPayloadFiring.cs:177-220: reuse the bouncer for ambient text too.
+            if (payload is Services.Chaos.BouncingTextPayload)
+            {
+                if (ChaosTextHost() is { } host)
+                    Views.Chaos.ChaosBouncingTextEffect.Start(host);
                 return;
             }
             Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", payload.DisplayName);

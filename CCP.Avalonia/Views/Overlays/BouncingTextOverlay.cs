@@ -53,6 +53,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static TimeSpan _cpuAtStart;
 
         public static bool IsRunning => _running;
+        internal static bool SkipPlatformChecksForTests;
+        internal static bool ManualFramesForTests;
+        internal static event Action? Bounced;
+        internal static event Action? Stopped;
 
         /// <summary>Is a logo (engine DIPs) close enough to this screen to draw on it? Padded the way
         /// WPF pads its OCR rects, (w+h)/2 + 80, which covers the scale/rotate effects; plus the
@@ -77,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void Start(Visual host, IReadOnlyList<string>? pool = null)
         {
             if (_running) return;
-            if (!X11Overlay.IsAvailable) { Log.Warning("Bouncing text: this platform cannot show click-through overlays; skipped"); return; }
+            if (!SkipPlatformChecksForTests && !X11Overlay.IsAvailable) { Log.Warning("Bouncing text: this platform cannot show click-through overlays; skipped"); return; }
             var screens = ScreenList.Enumerate(host);
             if (screens.Count == 0) return;
 
@@ -95,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var screen in targets)
             {
                 var w = new BouncingTextOverlayWindow(screen.Bounds, k, Engine.FontSize, s.BouncingTextOpacity, Engine.Logos.Count, s.BouncingTextOutline);
-                if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screen.Bounds))
+                if (!SkipPlatformChecksForTests && (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screen.Bounds)))
                 {
                     Log.Warning("Bouncing text: the platform refused a click-through topmost overlay window; skipped");
                     w.Close();
@@ -117,7 +121,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var l = Engine.Logos[i];
                 foreach (var w in Windows) w.Move(i, l.PosX, l.PosY, 1, 1, 0);   // placed before the first paint
             }
-            NextFrame();
+            if (!ManualFramesForTests) NextFrame();
             if (Stats) { FrameMs.Clear(); Cpu.Restart(); _cpuAtStart = Process.GetCurrentProcess().TotalProcessorTime; }
             Log.Information("Bouncing text started - Logos: {Count}", Engine.Logos.Count);
         }
@@ -130,6 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Close();
             Windows.Clear();
             Engine.Stop();
+            Stopped?.Invoke();
         }
 
         /// <summary>WPF Restart: rebuild for the settings that change the element (outline, second logo).</summary>
@@ -238,6 +243,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     _ = CoreHaptics.Service?.BouncingTextBounceAsync();   // WPF BouncingTextService.cs:372
                     Platform.BarkHead.Engine?.Raise("BouncingTextBounce");   // WPF BarkService.cs:728
                     UpdateText(i);
+                    Bounced?.Invoke(); // WPF BouncingTextService.cs:381, EffectPayloadFiring.cs:201
+                    if (!_running) return;
                 }
             }
             _zAccum += realDt ?? dt;
