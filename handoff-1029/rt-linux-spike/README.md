@@ -34,8 +34,10 @@ output latency, the online course hash vs Node, WebGPU / WebGL2 adapter, local p
 ("My files"), gamepads seen. On the first WebKitGTK run it also checks the app's Scrolller block filter compiles
 and blocks.
 
-Knobs: `RACE_SECONDS=45 SIZE=1920x1080 COURSES="threshold goonworks" NO_ELECTRON=1 NO_BROWSERS=1 GLASSROAD_DIR=...`.
+Knobs: `RACE_SECONDS=45 SIZE=1920x1080 COURSES="threshold goonworks" NO_ELECTRON=1 NO_BROWSERS=1 GLASSROAD_DIR=...`,
+`WK_GDK="native x11 x11nodmabuf"` (WebKitGTK through Wayland / XWayland / XWayland without the DMABuf renderer),
+`ELECTRON_OZONE="auto x11"`, `FLATPAK_ENV="K=V ..."` (extra variables inside the Flatpak sandbox).
 
 Files: `run.sh` (driver), `bench-server.mjs` (serves the game from the public repo, collects results),
 `spike.js` (in-page probe), `wk-bench.py` (WebKitGTK window), `electron-main.js` (Electron window),
-`make-report.mjs` (report), `run-windows.ps1` (the same runs on Windows, for our reference rows).
+`make-report.mjs` (report.md + report.html), `report-html.mjs` (the HTML page; also combines result dirs), `run-windows.ps1` (the same runs on Windows, for our reference rows).

@@ -14,7 +14,9 @@
   const errors = [];
   const pushErr = (s) => { if (errors.length < 40) errors.push(String(s).slice(0, 400)); };
 
-  try { const o = qs.get('spikeOpts'); if (o) localStorage.setItem('glassroad.options.v1', o); } catch (e) { pushErr('options: ' + e); }
+  // no spikeOpts (the -auto runs) = no record at all: engines keep localStorage between runs, so an earlier pinned
+  // run's record would otherwise pin quality high again
+  try { const o = qs.get('spikeOpts'); if (o) localStorage.setItem('glassroad.options.v1', o); else localStorage.removeItem('glassroad.options.v1'); } catch (e) { pushErr('options: ' + e); }
 
   addEventListener('error', (e) => pushErr('error: ' + (e.message || e.type) + (e.filename ? ' @' + e.filename.split('/').pop() + ':' + e.lineno : '')), true);
   addEventListener('unhandledrejection', (e) => pushErr('rejection: ' + ((e.reason && (e.reason.stack || e.reason.message)) || e.reason)));

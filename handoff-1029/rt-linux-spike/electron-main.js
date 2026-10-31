@@ -8,11 +8,14 @@ const url = process.argv.find((a) => a.startsWith('http://127.0.0.1'));
 const [w, h] = (process.env.SPIKE_SIZE || '1920x1080').split('x').map(Number);
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+// SPIKE_OZONE=x11: XWayland, as the B2 race shell would run (B2 decisions, "Display"); unset = Electron's own pick
+if (process.env.SPIKE_OZONE) app.commandLine.appendSwitch('ozone-platform', process.env.SPIKE_OZONE);
 if (process.env.SPIKE_WEBGPU === '1') {
   app.commandLine.appendSwitch('enable-unsafe-webgpu');
   app.commandLine.appendSwitch('enable-features', 'Vulkan,WebGPU');
 }
 const info = { electron: process.versions.electron, chrome: process.versions.chrome, webgpuSwitches: process.env.SPIKE_WEBGPU === '1',
+  ozone: process.env.SPIKE_OZONE || 'auto',
   session: process.env.XDG_SESSION_TYPE || null, renderGone: null, timedOut: false };
 let done = false;
 function finish() {

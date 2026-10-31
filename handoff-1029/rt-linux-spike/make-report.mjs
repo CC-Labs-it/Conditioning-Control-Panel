@@ -1,9 +1,11 @@
-// rt-linux-spike/make-report.mjs - <results dir>/runs/*.json -> <results dir>/report.md (one table, a verdict per run).
+// rt-linux-spike/make-report.mjs - <results dir>/runs/*.json -> <results dir>/report.md (one table, a verdict per run)
+// and report.html (report-html.mjs: the same runs with a chart and the raw numbers embedded).
 // node make-report.mjs <results dir> [report-template.md]
 // Owner bar (B2 survey 2026-10-29): the FULL desktop look at 60 fps, small dips OK = fps mean >= 57,
 // worst 1 s >= 50, no frame over 100 ms while racing, and the course hash matches Node (online at launch).
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { verdict, loadDir, renderHtml } from './report-html.mjs';
 
 const OUT = process.argv[2];
 const TPL = process.argv[3];
@@ -11,17 +13,6 @@ const runs = readdirSync(join(OUT, 'runs')).filter((f) => f.endsWith('.json')).s
   .map((f) => { try { return JSON.parse(readFileSync(join(OUT, 'runs', f), 'utf8')); } catch (e) { return { run: f, failed: 'unreadable' }; } });
 const info = (run) => { const p = join(OUT, 'engine', run + '.info.json'); try { return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : null; } catch (e) { return null; } };
 
-function verdict(r) {
-  if (r.failed) return 'FAIL (' + r.failed + ')';
-  const x = r.race || {};
-  const why = [];
-  if (!(x.fpsMean >= 57)) why.push('mean ' + x.fpsMean);
-  if (!(x.worst1sFps >= 50)) why.push('worst 1 s ' + x.worst1sFps);
-  if (x.hitches100 > 0) why.push(x.hitches100 + ' frames > 100 ms');
-  if (r.hashes && r.hashes.match === false) why.push('course hash differs');
-  if (x.tier && x.tier !== 'high') why.push('tier ' + x.tier);
-  return why.length ? 'BELOW BAR: ' + why.join(', ') : 'MEETS BAR';
-}
 const n = (v) => (v == null || v === '' ? '-' : v);
 const rows = runs.map((r) => {
   const x = r.race || {}, i = info(r.run) || {};
@@ -64,4 +55,6 @@ for (const r of runs) {
 }
 if (TPL && existsSync(TPL)) lines.push(readFileSync(TPL, 'utf8'));
 writeFileSync(join(OUT, 'report.md'), lines.join('\n'));
-console.log('report.md written: ' + runs.length + ' runs');
+// the same runs as one self-contained page (table + SVG chart + the numbers as JSON), the template as its notes
+writeFileSync(join(OUT, 'report.html'), renderHtml([loadDir(OUT)], { notes: TPL && existsSync(TPL) ? readFileSync(TPL, 'utf8') : '' }));
+console.log('report.md + report.html written: ' + runs.length + ' runs');

@@ -7,6 +7,7 @@
 # Writes <results>/report.md and <results>.tar.gz: send the tar.gz back.
 # Knobs (env): RACE_SECONDS=45 SIZE=1920x1080 REF=feat/glassroad-a GLASSROAD_DIR=<existing glassroad tree>
 #              NO_FLATPAK=1 NO_ELECTRON=1 NO_BROWSERS=1 COURSES="threshold goonworks" OUT=<dir>
+#              WK_GDK="native x11 x11nodmabuf" FLATPAK_ENV="K=V ..."
 set -u
 KIT="$(cd "$(dirname "$0")" && pwd)"
 STAMP="$(date +%Y%m%d-%H%M)"
@@ -102,7 +103,9 @@ W="${SIZE%x*}"; H="${SIZE#*x}"
 # one run: $1 = run id, $2 = page params, rest = the command (@URL@ anywhere in an argument becomes the URL, else it is appended)
 case_run() {
   local run="$1" params="$2"; shift 2
-  local url="http://127.0.0.1:$PORT/?bot=1&seed=7&spikeRun=$run&spikeSec=$RACE_SECONDS&spikeOpts=$OPTS&$params"
+  # -auto runs measure the Quality = Auto ladder: no pinned options record (it would pin quality high again)
+  local opts="spikeOpts=$OPTS&"; [[ "$run" == *-auto ]] && opts=""
+  local url="http://127.0.0.1:$PORT/?bot=1&seed=7&spikeRun=$run&spikeSec=$RACE_SECONDS&$opts$params"
   local args=() hit=0
   for x in "$@"; do if [[ "$x" == *@URL@* ]]; then args+=("${x//@URL@/"$url"}"); hit=1; else args+=("$x"); fi; done
   [ $hit = 1 ] || args+=("$url")
@@ -121,16 +124,29 @@ case_run() {
 }
 
 # 5a. WebKitGTK, system (what the app's web view uses today)
-if python3 -c "import gi; gi.require_version('Gtk','3.0'); gi.require_version('WebKit2','4.1')" 2>/dev/null \
-   || python3 -c "import gi; gi.require_version('Gtk','3.0'); gi.require_version('WebKit2','4.0')" 2>/dev/null; then
-  first=1
-  for c in $COURSES; do
-    extra=(); sc=""
-    [ $first = 1 ] && { extra=(--scrolller-block); sc="&spikeScrolller=check"; first=0; }
-    case_run "wk-$c" "quality=high&track=$c$sc" python3 "$KIT/wk-bench.py" --size "$SIZE" --info "$OUT/engine/wk-$c.info.json" ${extra[@]+"${extra[@]}"} @URL@
+# The app is X11-only (CCP.Avalonia/Program.cs UseX11), so on a Wayland session its GTK web view runs through XWayland:
+# WK_GDK="native x11" measures both (native = whatever GDK picks, i.e. Wayland there; x11 = GDK_BACKEND=x11, the app's path).
+# x11nodmabuf adds WEBKIT_DISABLE_DMABUF_RENDERER=1 (the usual NVIDIA workaround: GBM buffers fail on the proprietary driver).
+WK_GDK="${WK_GDK:-native x11}"
+gdk_env() { case "$1" in x11) echo "GDK_BACKEND=x11" ;; x11nodmabuf) echo "GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1" ;; *) echo "SPIKE_GDK=native" ;; esac; }
+gdk_tag() { case "$1" in x11) echo "-x11" ;; x11nodmabuf) echo "-x11-nodmabuf" ;; esac; }
+# python3 on PATH may be a version manager's (mise, pyenv, conda) without GObject; the typelib lives with the distro's
+PY=""
+for p in python3 /usr/bin/python3; do
+  for v in 4.1 4.0; do "$p" -c "import gi; gi.require_version('Gtk','3.0'); gi.require_version('WebKit2','$v')" 2>/dev/null && { PY="$p"; break 2; }; done
+done
+if [ -n "$PY" ]; then
+  echo "wk python: $PY" >> "$OUT/system.txt"
+  for g in $WK_GDK; do
+    t="$(gdk_tag $g)"; first=1
+    for c in $COURSES; do
+      extra=(); sc=""
+      [ $first = 1 ] && { extra=(--scrolller-block); sc="&spikeScrolller=check"; first=0; }
+      case_run "wk$t-$c" "quality=high&track=$c$sc" env $(gdk_env $g) "$PY" "$KIT/wk-bench.py" --size "$SIZE" --info "$OUT/engine/wk$t-$c.info.json" ${extra[@]+"${extra[@]}"} @URL@
+    done
+    # the auto ladder on this box (what a player gets with Quality on Auto)
+    case_run "wk$t-threshold-auto" "track=threshold" env $(gdk_env $g) "$PY" "$KIT/wk-bench.py" --size "$SIZE" --info "$OUT/engine/wk$t-threshold-auto.info.json" @URL@
   done
-  # the auto ladder on this box (what a player gets with Quality on Auto)
-  case_run "wk-threshold-auto" "track=threshold" python3 "$KIT/wk-bench.py" --size "$SIZE" --info "$OUT/engine/wk-threshold-auto.info.json" @URL@
 else
   say "SKIP WebKitGTK system: no python3-gi WebKit2 typelib (Debian/Ubuntu: gir1.2-webkit2-4.1, Fedora: webkit2gtk4.1, Arch: webkit2gtk-4.1)"
   echo "wk: skipped, no typelib" >> "$OUT/system.txt"
@@ -146,14 +162,20 @@ if [ -z "${NO_FLATPAK:-}" ] && have flatpak; then
     flatpak install --user -y --noninteractive flathub org.gnome.Platform//50 >>"$LOG" 2>&1 && RT=org.gnome.Platform//50
   fi
   if [ -n "$RT" ]; then
-    FP=(flatpak run --die-with-parent --share=network --socket=x11 --socket=wayland --socket=pulseaudio --device=dri
+    # --share=ipc as in packaging/flatpak (finish-args): without it X11 MIT-SHM fails with BadAccess and the window dies
+    FP=(flatpak run --die-with-parent --share=ipc --share=network --socket=x11 --socket=wayland --socket=pulseaudio --device=dri
         --filesystem="$KIT":ro --filesystem="$OUT" --command=python3 "$RT")
     if "${FP[@]}" -c "import gi; gi.require_version('Gtk','3.0'); gi.require_version('WebKit2','4.1')" >>"$LOG" 2>&1; then
-      first=1
-      for c in $COURSES; do
-        extra=(); sc=""
-        [ $first = 1 ] && { extra=(--scrolller-block); sc="&spikeScrolller=check"; first=0; }
-        case_run "flatpak-$c" "quality=high&track=$c$sc" "${FP[@]}" "$KIT/wk-bench.py" --size "$SIZE" --info "$OUT/engine/flatpak-$c.info.json" ${extra[@]+"${extra[@]}"} @URL@
+      for g in $WK_GDK; do
+        t="$(gdk_tag $g)"; first=1
+        # flatpak run does not forward the caller's GDK_BACKEND / WEBKIT_* into the sandbox: pass them with --env.
+        # FLATPAK_ENV="K=V ..." adds more (e.g. GPU selection with the sandbox's own GL extension paths).
+        FPE=("${FP[@]:0:2}"); for kv in $(gdk_env $g) ${FLATPAK_ENV:-}; do FPE+=(--env="$kv"); done; FPE+=("${FP[@]:2}")
+        for c in $COURSES; do
+          extra=(); sc=""
+          [ $first = 1 ] && { extra=(--scrolller-block); sc="&spikeScrolller=check"; first=0; }
+          case_run "flatpak$t-$c" "quality=high&track=$c$sc" "${FPE[@]}" "$KIT/wk-bench.py" --size "$SIZE" --info "$OUT/engine/flatpak$t-$c.info.json" ${extra[@]+"${extra[@]}"} @URL@
+        done
       done
     else
       say "SKIP Flatpak: $RT has no python3 WebKit2 4.1 typelib"; echo "flatpak: no typelib in $RT" >> "$OUT/system.txt"
@@ -181,10 +203,13 @@ if [ -z "${NO_ELECTRON:-}" ]; then
     fi
   fi
   if [ -x "$EDIR/electron" ]; then
-    for c in $COURSES; do
-      SPIKE_SIZE="$SIZE" SPIKE_INFO="$OUT/engine/electron-gl-$c.info.json" \
-        case_run "electron-gl-$c" "quality=high&track=$c&renderer=webgl2" env SPIKE_SIZE="$SIZE" SPIKE_INFO="$OUT/engine/electron-gl-$c.info.json" "$EDIR/electron" --no-sandbox "$KIT/electron-main.js" @URL@
-      case_run "electron-gpu-$c" "quality=high&track=$c" env SPIKE_WEBGPU=1 SPIKE_SIZE="$SIZE" SPIKE_INFO="$OUT/engine/electron-gpu-$c.info.json" "$EDIR/electron" --no-sandbox "$KIT/electron-main.js" @URL@
+    # ELECTRON_OZONE="auto x11": auto = Electron's own pick (native Wayland on a Wayland session), x11 = XWayland
+    for oz in ${ELECTRON_OZONE:-auto x11}; do
+      t=""; [ "$oz" = auto ] || t="-$oz"
+      for c in $COURSES; do
+        case_run "electron$t-gl-$c" "quality=high&track=$c&renderer=webgl2" env SPIKE_OZONE="${oz#auto}" SPIKE_SIZE="$SIZE" SPIKE_INFO="$OUT/engine/electron$t-gl-$c.info.json" "$EDIR/electron" --no-sandbox "$KIT/electron-main.js" @URL@
+        case_run "electron$t-gpu-$c" "quality=high&track=$c" env SPIKE_OZONE="${oz#auto}" SPIKE_WEBGPU=1 SPIKE_SIZE="$SIZE" SPIKE_INFO="$OUT/engine/electron$t-gpu-$c.info.json" "$EDIR/electron" --no-sandbox "$KIT/electron-main.js" @URL@
+      done
     done
   else
     say "SKIP Electron"; echo "electron: skipped" >> "$OUT/system.txt"
