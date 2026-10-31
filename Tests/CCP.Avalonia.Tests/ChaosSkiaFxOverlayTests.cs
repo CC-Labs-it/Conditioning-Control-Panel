@@ -41,6 +41,41 @@ public sealed class ChaosSkiaFxOverlayTests
     }
 
     [Fact]
+    public Task NativeRefusalDoesNotLeakAcrossSnapshots() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var enabled = CoreSettings.Current.ChaosSkiaFxEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var skip = ChaosSkiaFxOverlay.SkipPlatformChecksForTests;
+        try
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            CoreSettings.Current.ChaosSkiaFxEnabled = true;
+            // Windows reports DWM composition even for headless windows. Reproduce that on every OS.
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+            var snapshot = ProcessStateSnapshot.Take();
+            ChaosSkiaFxOverlay.EnsureCreated(); // headless has no native click-through window
+            Assert.Null(ChaosSkiaFxOverlay.Active);
+            snapshot.Restore(); // equivalent to the next test's starting state
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.EnsureCreated();
+            Assert.NotNull(ChaosSkiaFxOverlay.Active);
+        }
+        finally
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            CoreSettings.Current.ChaosSkiaFxEnabled = enabled;
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = skip;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task SparkleWindowLivesOnlyWhileEffectsAreLiveAndPanicClosesIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
