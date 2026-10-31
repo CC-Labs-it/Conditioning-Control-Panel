@@ -53,6 +53,74 @@ public sealed class SessionRunnerCornerGifTests : IDisposable
         },
     };
 
+    private sealed class FailureSink : Serilog.Core.ILogEventSink
+    {
+        public readonly List<string> Steps = new();
+        public void Emit(Serilog.Events.LogEvent e)
+        {
+            if (e.Exception != null && e.Properties.TryGetValue("Step", out var step))
+                Steps.Add((string)((Serilog.Events.ScalarValue)step).Value!);
+        }
+    }
+
+    [Fact]
+    public void Stop_reports_each_failure_and_still_restores_and_notifies()
+    {
+        _runner.Start(Gamer());
+        var sink = new FailureSink();
+        var previous = Serilog.Log.Logger;
+        using var logger = new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        Serilog.Log.Logger = logger;
+        bool stopped = false;
+        _runner.Stopped += (_, _) => stopped = true;
+        CoreCornerGif.SessionCloseHandler = _ => throw new InvalidOperationException("close");
+        System.ComponentModel.PropertyChangedEventHandler failRestore = (_, _) => throw new InvalidOperationException("restore");
+        CoreSettings.Current.PropertyChanged += failRestore;
+        try
+        {
+            _runner.Stop();
+            Assert.Contains("stop:corner-gif", sink.Steps);
+            Assert.Contains("stop:restore-settings", sink.Steps);
+            Assert.True(stopped);
+            Assert.Null(_runner.CurrentSession);
+            Assert.False(_runner.IsRunning || CoreEngine.IsRunning);
+        }
+        finally
+        {
+            CoreSettings.Current.PropertyChanged -= failRestore;
+            Serilog.Log.Logger = previous;
+        }
+    }
+
+    [Fact]
+    public void Resume_reports_first_failure_per_step_and_resets_for_the_next_session()
+    {
+        _runner.Start(Gamer());
+        var sink = new FailureSink();
+        var previous = Serilog.Log.Logger;
+        using var logger = new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        Serilog.Log.Logger = logger;
+        try
+        {
+            CoreCornerGif.SessionShowHandler = _ => throw new InvalidOperationException("show");
+            for (int i = 0; i < 2; i++) { _runner.Pause(); _runner.Resume(); }
+            Assert.Equal(new[] { "resume:corner-gif" }, sink.Steps);
+            // Another guarded step gets its own first trace in the same session.
+            _runner.RunStep("resume:other", () => throw new InvalidOperationException("other"));
+            _runner.RunStep("resume:other", () => throw new InvalidOperationException("other"));
+            Assert.Equal(new[] { "resume:corner-gif", "resume:other" }, sink.Steps);
+            Assert.True(_runner.IsRunning && !_runner.IsPaused);
+            _runner.Stop();
+            CoreCornerGif.SessionShowHandler = _ => { };
+            _runner.Start(Gamer());
+            CoreCornerGif.SessionShowHandler = _ => throw new InvalidOperationException("show");
+            _runner.Pause();
+            _runner.Resume();
+            Assert.Equal(2, sink.Steps.FindAll(s => s == "resume:corner-gif").Count);
+        }
+        finally { Serilog.Log.Logger = previous; }
+    }
+
     [Fact]
     public void ShownAtStart_HiddenByPause_BackOnResume_EndMinuteHandsTheCornerBack()
     {
