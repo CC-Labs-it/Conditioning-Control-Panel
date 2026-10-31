@@ -15,7 +15,6 @@ public partial class AvatarTubeWindow
     internal void StartFloatingAnimation()
     {
         StopFloatingAnimation();
-        _imgAvatar.RenderTransform = _avatarFloat;
         _floatPhase = 0;
         _floatTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _floatTimer.Tick += (_, _) => TickFloatingAnimation();

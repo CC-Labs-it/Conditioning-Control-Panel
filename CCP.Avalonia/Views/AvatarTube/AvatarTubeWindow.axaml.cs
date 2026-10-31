@@ -829,7 +829,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 var img = this.FindControl<Image>(name);
                 if (img == null) continue;
                 img.RenderTransformOrigin = new RelativePoint(0.5, 1.0, RelativeUnit.Relative);
-                img.RenderTransform = transform;
+                // WPF Avatar.cs:765-777 scales independently of Windowing.cs:746-750's bob.
+                // Apply scale first so Tube Fit never scales the four-pixel translation.
+                img.RenderTransform = ReferenceEquals(img, _imgAvatar)
+                    ? new TransformGroup { Children = { transform ?? new ScaleTransform(), _avatarFloat } }
+                    : transform;
             }
 
             // When the mod only overrides the ATTACHED tube image, force the attached layout in the
