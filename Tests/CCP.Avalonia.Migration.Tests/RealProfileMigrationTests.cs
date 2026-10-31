@@ -77,7 +77,7 @@ public sealed class RealProfileMigrationTests
     }
 
     [Fact]
-    public async Task SyntheticWpfProfileSurvivesAvaloniaStartupAndShutdown()
+    public async Task SyntheticWpfProfilePreservesSettingsAndUserFilesOnStartupAndShutdown()
     {
         if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ProfileVariable)))
             Assert.Skip("One desktop startup per process: the real profile run owns this testhost.");
@@ -92,6 +92,9 @@ public sealed class RealProfileMigrationTests
         settings["PersonaIdentityFenceUtc"] = "2026-10-01T12:00:00Z";
         // Open drawers on a tab the run never shows (the exit write used to reset them).
         settings["CompanionSectionOpen"] = new JObject { ["EngineRoom"] = true, ["Workshop"] = true };
+        settings["VideoVolume"] = 63;
+        // User-owned files outside the manifest must survive startup and exit unchanged.
+        File.WriteAllBytes(Path.Combine(fixture, "mods", "premove", "custom.bin"), new byte[] { 0, 255, 13, 10, 42 });
         File.WriteAllText(Path.Combine(fixture, "settings.json"), settings.ToString());
         File.Copy(Fixture("mod_manifest_premove.json"), Path.Combine(fixture, "mods", "premove", "manifest.json"));
         File.Copy(Fixture("session_log_premove.json"), Path.Combine(fixture, "session_logs", "premove.json"));
@@ -102,6 +105,24 @@ public sealed class RealProfileMigrationTests
         File.Copy(Fixture("achievements_golden.json"), Path.Combine(roaming, "achievements.json"));
         await RunMigrationAsync(fixture, roaming);
         Assert.False(File.Exists(Path.Combine(MigrationTestProfile.UserData, "auth_token.dat")));
+    }
+
+    [Fact]
+    public void EvidenceRejectsVideoVolumeResetAndChangedOpaqueFiles()
+    {
+        var before = new JObject { ["VideoVolume"] = 63 };
+        var reset = new JObject { ["VideoVolume"] = 50 };
+        Assert.Contains("value changed: VideoVolume", CompareSettings(before, reset, _ => { }));
+        Assert.Empty(CompareSettings(before, before, _ => { }));
+        var fixture = Path.Combine(MigrationTestProfile.Root, "comparison");
+        var relative = Path.Combine("mods", "premove", "custom.bin");
+        var file = Path.Combine(fixture, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllBytes(file, new byte[] { 0, 255, 13, 10, 42 });
+        Assert.Contains(relative, Files(fixture));
+        var hash = Sha256(file);
+        File.WriteAllBytes(file, new byte[] { 0, 255, 13, 10, 43 });
+        Assert.NotEqual(hash, Sha256(file));
     }
 
     private static string Fixture(string name, [CallerFilePath] string here = "") =>
