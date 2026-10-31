@@ -223,9 +223,17 @@
                             <Path Fill="#FFF3EAD9" Stretch="Fill" Height="9" Margin="0,0,0,-1"
                                   Data="M 0,9 L 0,5 L 6,2 L 12,6 L 18,1 L 25,5 L 31,2 L 38,6 L 44,0 L 51,5 L 57,2 L 64,6 L 70,1 L 77,5 L 83,3 L 90,6 L 96,1 L 100,4 L 100,9 Z"/>
                             <Border Background="#FFF3EAD9" Padding="10,12,10,10">
-                                <Border BorderBrush="#38241A2E" BorderThickness="1,1,0,0" HorizontalAlignment="Left">
+                                <StackPanel>
+                                <Border x:Name="GridLines" BorderBrush="#38241A2E" BorderThickness="1,1,0,0" HorizontalAlignment="Left">
                                     <UniformGrid x:Name="Calendar" Columns="8" HorizontalAlignment="Left" VerticalAlignment="Top"/>
                                 </Border>
+                                <DockPanel x:Name="CalendarRaffleKey" Margin="1,6,0,0" IsVisible="False"
+                                           MaxWidth="{Binding Bounds.Width, ElementName=GridLines}" HorizontalAlignment="Left">
+                                    <Ellipse DockPanel.Dock="Left" Width="6" Height="6" Fill="#FF6B8A" VerticalAlignment="Top" Margin="0,4,5,0"/>
+                                    <TextBlock Text="{loc:Str chaster_cal_raffle_key}" FontFamily="Consolas, Courier New" FontSize="10"
+                                               Foreground="#FF241A2E" Opacity="0.7" TextWrapping="Wrap"/>
+                                </DockPanel>
+                                </StackPanel>
                             </Border>
                         </StackPanel>
                         <Ellipse Width="9" Height="9" Fill="#FF1A1230" Stroke="#66241A2E" StrokeThickness="1"

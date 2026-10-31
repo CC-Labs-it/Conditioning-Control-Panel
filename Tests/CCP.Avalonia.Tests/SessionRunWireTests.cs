@@ -40,6 +40,7 @@ public sealed class SessionRunWireTests
             {
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
                 var session = new Session { Id = "wire_test", Name = "Wire Test", Icon = "🧪", DurationMinutes = 1 };
+                var startBackground = shell.Named<Button>("BtnStart")!.Background;
                 shell.StartSession(session);
 
                 Assert.True(runner.IsRunning);
@@ -61,10 +62,34 @@ public sealed class SessionRunWireTests
                 Assert.Equal("\u25B6", shell.Named<TextBlock>("TxtPauseIcon")!.Text);
                 Assert.Equal(Loc.Get("tooltip_resume_session"), ToolTip.GetTip(pause));
 
+                Assert.Equal(Loc.Get("label_start"), shell.Named<TextBlock>("TxtStartLabel")!.Text);
+                Assert.Equal("▶", shell.Named<TextBlock>("TxtStartIcon")!.Text);
+                Assert.Same(startBackground, shell.Named<Button>("BtnStart")!.Background);
+                Assert.Contains(Loc.Get("label_paused"), Assert.IsType<TextBlock>(presets.BtnStartSession.Content).Text);
                 pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));   // Resume
+                Assert.True(CoreEngine.IsRunning);
                 Assert.False(runner.IsPaused);
                 Assert.Equal("\u23F8", shell.Named<TextBlock>("TxtPauseIcon")!.Text);
                 Assert.Equal(Loc.GetF("tooltip_pause_session_100_xp_penalty_per_pause_npause", 1), ToolTip.GetTip(pause));
+
+                MainShellWindow.StopEverything();
+                var runs = CoreSettings.Current.TotalSessions;
+                shell.Named<Button>("BtnStart")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.True(CoreEngine.IsRunning);
+                Assert.False(runner.IsPaused);
+                Assert.Equal(runs, CoreSettings.Current.TotalSessions);
+
+                System.Action? pendingResume = null;
+                shell.ResumeEffect = start => pendingResume = start;
+                MainShellWindow.StopEverything();
+                pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.NotNull(pendingResume);
+                MainShellWindow.StopEverything(); // a newer panic overtakes the queued Resume
+                pendingResume!();
+                Assert.False(CoreEngine.IsRunning || CoreFlash.IsRunning);
+                Assert.True(runner.IsPaused && ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+                shell.ResumeEffect = MainShellWindow.StartEffect;
+                shell.StartEngineFromUser();
 
                 runner.Stop(completed: false);   // the stop-session confirm's OK
                 Assert.False(runner.IsRunning || CoreEngine.IsRunning || pause.IsVisible);

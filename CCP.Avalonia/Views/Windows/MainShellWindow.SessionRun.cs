@@ -95,6 +95,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Platform.AccountSeed.Sync?.Nudge("session end");   // explicit end: the runner no longer counts as running
         }
 
+        internal Action<Action> ResumeEffect = StartEffect;
+
         /// <summary>WPF BtnPauseSession_Click: resume at once; a pause asks first (it costs 100 XP)
         /// unless SkipPauseXpWarning. ponytail: MessageDialog has no "don't ask again" box, so the opt-out
         /// is only settable from the WPF head. Lockdown refuses the pause, never the resume (LockdownPauseRule).</summary>
@@ -110,10 +112,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 // WPF BtnPauseSession_Click: the user's own Resume ends the post-panic quiet (PanicAftermath).
                 ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
-                StartEffect(() =>   // effects come back, so the portal panic bind comes first
+                var gen = _engineGen;
+                ResumeEffect(() =>   // effects come back, so the portal panic bind comes first
                 {
+                    if (gen != _engineGen) return;
                     if (App.Sessions is not { IsPaused: true } r) return;
-                    r.Resume();
+                    if (SessionClockSafety.ResumeStartsEngine(CoreEngine.IsRunning, RemoteControllerConnected)) StartEngineFromUser();
+                    else r.Resume();
                     PinkFilterOverlay.Refresh(this);
                     SpiralOverlay.Refresh(this);
                     SetPauseButton(false);
@@ -129,6 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
             SpiralOverlay.Refresh(this);
             SetPauseButton(true);
+            OnSessionTick();
         }
 
         /// <summary>WPF TxtPauseIcon + BtnPauseSession.ToolTip: "\u25B6" + resume while paused, else "\u23F8" + the count.</summary>
@@ -159,11 +165,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var spiralKey = (CoreSettings.Current.SpiralEnabled, runner.SpiralOpacity);
             if (spiralKey != _spiralTickKey) { _spiralTickKey = spiralKey; SpiralOverlay.Refresh(this); }
             if (Named<Button>("BtnPauseSession") is { IsVisible: false }) SetPauseButton(false);   // WPF OnSessionStarted
+            SetPauseButton(runner.IsPaused);
+            var pauseMark = SessionClockSafety.PauseMark(runner.IsPaused, Loc.Get("label_paused"));
             var remaining = runner.Remaining;
             var showCountdown = CoreSettings.Current.ShowSessionCountdown != false;
             Named<Tabs.PresetsTabView>("PresetsTab")?.SetSessionButtonLabel(SessionClockLabel.StopButton(
-                remaining, showCountdown, Loc.Get("btn_stop_session_0_1"), Loc.Get("btn_stop_session_2")));
+                remaining, showCountdown, Loc.Get("btn_stop_session_0_1"), Loc.Get("btn_stop_session_2"), pauseMark));
 
+            if (!CoreEngine.IsRunning) return;
             var mName = session.GetModeAwareName();
             var nameMax = showCountdown ? 14 : 22;
             var name = mName.Length > nameMax ? mName.Substring(0, nameMax - 3) + "..." : mName;
@@ -172,7 +181,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<TextBlock>("TxtStartIcon") is { } icon) icon.Text = "⏹";
             Named<TextBlock>("TxtStartLabel")?.Bind(TextBlock.TextProperty, new Binding
             {
-                Source = SessionClockLabel.StartButton(name, remaining, showCountdown, "", Loc.Get("label_0_1_2_3"))
+                Source = SessionClockLabel.StartButton(name, remaining, showCountdown, pauseMark, Loc.Get("label_0_1_2_3"))
             });
         }
 

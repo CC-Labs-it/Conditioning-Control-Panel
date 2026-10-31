@@ -29,9 +29,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private async void BtnStart_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
             if (RemoteControllerConnected) return;   // WPF StartStop.cs:43: a controller drives
-            if ((CoreEngine.IsRunning || App.Sessions?.IsRunning == true) && RefuseStopUnderLockdown()) return;
+            if (CoreEngine.IsRunning && RefuseStopUnderLockdown()) return;
             // WPF MainWindow.StartStop.cs:58: a running session asks first; declining keeps everything on.
-            if (App.Sessions?.IsRunning == true)
+            if (CoreEngine.IsRunning && App.Sessions?.IsRunning == true)
             {
                 Serilog.Log.Information("Start button: asking to stop the running session");
                 await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body");
@@ -47,7 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void StartEngineFromUser()
         {
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
-            StartEngine();
+            StartEngine(resumeSession: true);
         }
 
         private void MenuJumpRightIn_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => RandomizeAndStart();
@@ -77,13 +77,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine()
+        internal void StartEngine(bool resumeSession = false)
         {
             var gen = ++_engineGen;
             StartEffect(() =>
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
-                CoreEngine.Start();
+                var resuming = resumeSession && App.Sessions is { IsRunning: true, IsPaused: true };
+                CoreEngine.Start(resumingSession: resuming);
+                if (resuming) App.Sessions?.ResumeAfterEngineStart();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
@@ -116,7 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PinkFilterOverlay.Refresh(this);
             UpdateStartButton();
             // A paused session keeps its labels, lock and pause button (WPF StopEngine leaves them).
-            if (App.Sessions?.IsRunning == true) { SetPauseButton(App.Sessions.IsPaused); return; }
+            if (App.Sessions?.IsRunning == true) { SetPauseButton(App.Sessions.IsPaused); OnSessionTick(); return; }
             // WPF OnSessionStopped: the session button and the dials come back on every exit path.
             Named<Tabs.PresetsTabView>("PresetsTab")?.SetSessionButtonLabel(null);
             if (Named<Button>("BtnPauseSession") is { } pause) pause.IsVisible = false;
@@ -136,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<TextBlock>("TxtStartIcon") is { } icon) icon.Text = running ? "■" : "▶";
             Named<TextBlock>("TxtStartLabel")?.Bind(TextBlock.TextProperty,
                 (Binding)new StrExtension(running ? "label_stop" : "label_start").ProvideValue(null!));
+            if (App.Sessions?.IsRunning == true) OnSessionTick();
         }
     }
 }

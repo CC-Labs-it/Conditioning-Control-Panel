@@ -8,6 +8,8 @@ using System.Text.RegularExpressions;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
+using Avalonia;
+using Avalonia.Headless;
 using Xunit;
 using Xunit.Sdk;
 using Xunit.v3;
@@ -54,6 +56,11 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
     public override void Before(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
+            // The first platform setup wins for the entire testhost, including its font manager.
+            if (global::Avalonia.Application.Current is null)
+                ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
             Current = ProcessStateSnapshot.Take();
             OpenWindows.Mark();
             // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.
