@@ -67,12 +67,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ? rgb
                 : CoreMods.GetFilterColorRgb();
 
-        /// <summary>
-        /// Bring the tint in line with the current settings: show it, hide it, move it or repaint
-        /// it as those say. Idempotent, so every card handler can just call this.
-        /// </summary>
-        /// <param name="host">Any attached visual - it is only used to reach <c>Screens</c> and
-        /// the owning window. A detached one enumerates no screens and hides the tint.</param>
         internal static readonly TimedOverlayHold PayloadHold = new();
         internal static bool HasTimedPayload => PayloadHold.IsActive;
         internal static void ShowTimed(Visual host, int ms, double opacity)
@@ -85,6 +79,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }, TimeSpan.FromMilliseconds(Math.Max(50, ms)));
         }
 
+        /// <summary>
+        /// Bring the tint in line with the current settings: show it, hide it, move it or repaint
+        /// it as those say. Idempotent, so every card handler can just call this.
+        /// </summary>
+        /// <param name="host">Any attached visual - it is only used to reach <c>Screens</c> and
+        /// the owning window. A detached one enumerates no screens and hides the tint.</param>
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;

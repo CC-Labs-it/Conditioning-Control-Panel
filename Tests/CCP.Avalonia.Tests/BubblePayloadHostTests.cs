@@ -20,13 +20,12 @@ public sealed class BubblePayloadHostTests
     private static void EnsureApp()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options()).ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false), InlineData(true)]
     public void DashboardBoostReachesPlainAndTriggerButNotChaos(bool trigger) => AvaloniaTestDispatcher.Run(() =>
     {
         var s = new AppSettings { BubbleTriggersEnabled = trigger, BubbleTriggerChance = 50, BubbleTriggerVariants = new() { "flash" } };
@@ -42,27 +41,28 @@ public sealed class BubblePayloadHostTests
             settings.BubbleSpeedBoost = 0;
             var reference = AmbientBubble.SpawnChaos(new Random(4), 0, 0, 0, 1920, 1080, 1, spec);
             settings.BubbleSpeedBoost = 500;
-            var chaos = AmbientBubble.SpawnChaos(new Random(4), 0, 0, 0, 1920, 1080, 1, spec);
+            var chaos = BubbleOverlay.SpawnChaos(spec, new Random(4));
             chaos.Step(); reference.Step(); Assert.Equal(reference.Y, chaos.Y);
         }
-        finally { settings.BubbleSpeedBoost = saved; }
+        finally { settings.BubbleSpeedBoost = saved; BubbleOverlay.Stop(); }
     });
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false), InlineData(true)]
     public void BothHeadsRetainThePeakAcrossWeakerShorterPops(bool spiral) => AvaloniaTestDispatcher.Run(() =>
     {
-        EnsureApp(); var host = new Window();
+        EnsureApp(); var host = new Window(); var enabled = CoreSettings.Current.SpiralEnabled;
         void Show(int ms, double opacity) { if (spiral) SpiralOverlay.ShowTimed(host, ms, opacity); else PinkFilterOverlay.ShowTimed(host, ms, opacity); }
-        try { Show(10000, 0.8); Show(50, 0.2); Assert.Equal(0.8, (spiral ? SpiralOverlay.PayloadHold : PinkFilterOverlay.PayloadHold).Opacity); }
-        finally { PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll(); }
+        try { CoreSettings.Current.SpiralEnabled = false; Show(10000, 0.385); Show(50, 0.2); Assert.Equal(0.385, (spiral ? SpiralOverlay.PayloadHold : PinkFilterOverlay.PayloadHold).Opacity);
+            if (spiral) Assert.Equal(0.0385, SpiralOverlay.PaintedOpacity, 6); }
+        finally { CoreSettings.Current.SpiralEnabled = enabled; PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll(); }
     });
 
     [Fact]
     public void TriggerSpawnCapAndAmbientPopStaySeparateFromChaos() => AvaloniaTestDispatcher.Run(() =>
     {
         EnsureApp();
+        var previousFreeze = CoreSubliminal.BambiFreezeProvider;
         var s = new AppSettings { BubbleTriggersEnabled = true, BubbleTriggerChance = 100,
             BubbleTriggerVariants = new() { "flash" } };
         try
@@ -81,7 +81,7 @@ public sealed class BubblePayloadHostTests
             b.Spec = new EffectBubbleSpec { Payload = new BambiFreezePayload() };
             BubbleOverlay.Pop(b); BubbleOverlay.Pop(b); Assert.Equal(1, calls);
         }
-        finally { BubbleOverlay.Stop(); }
+        finally { CoreSubliminal.BambiFreezeProvider = previousFreeze; BubbleOverlay.Stop(); }
     });
 
     [Fact]

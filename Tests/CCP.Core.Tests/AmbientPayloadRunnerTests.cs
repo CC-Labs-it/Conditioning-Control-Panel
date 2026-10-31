@@ -10,8 +10,7 @@ namespace CCP.Core.Tests;
 public sealed class AmbientPayloadRunnerTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false), InlineData(true)]
     public void OverlappingHoldsKeepPeakUntilLastReleaseAndIgnoreStaleTimers(bool reverse)
     {
         var hold = new TimedOverlayHold();
@@ -121,9 +120,7 @@ public sealed class AmbientPayloadRunnerTests
     }
 
     [Theory]
-    [InlineData(false, false, 1)]
-    [InlineData(false, true, 0)]
-    [InlineData(true, false, 0)]
+    [InlineData(false, false, 1), InlineData(false, true, 0), InlineData(true, false, 0)]
     public void RainDeliveryRechecksServiceAndVideo(bool stopped, bool playing, int expected)
     {
         var runner = new AmbientPayloadRunner();

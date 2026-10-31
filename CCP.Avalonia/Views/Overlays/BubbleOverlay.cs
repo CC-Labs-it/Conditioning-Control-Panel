@@ -272,16 +272,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
-        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
+        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec, Random? random = null)
         {
             AmbientBubble b;
             if (Targets.Count == 0)
-                b = AmbientBubble.SpawnChaos(Field.Random, 0, 0, 0, 1920, 1080, 1, spec);
+                b = AmbientBubble.SpawnChaos((random ?? Field.Random), 0, 0, 0, 1920, 1080, 1, spec);
             else
             {
-                var i = Field.Random.Next(Targets.Count);
+                var i = (random ?? Field.Random).Next(Targets.Count);
                 var a = Targets[i].WorkingArea;
-                b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+                b = AmbientBubble.SpawnChaos((random ?? Field.Random), i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
             }
             Field.Bubbles.Add(b);
             RequestFrame();

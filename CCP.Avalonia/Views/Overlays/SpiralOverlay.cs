@@ -81,10 +81,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
-        internal static double PaintedOpacity => SpiralFrames.Paint(
-            Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+        internal static double PaintedOpacity => SpiralFrames.Paint(HasTimedPayload
+            ? Math.Max(CoreSettings.Current.SpiralEnabled && ShouldShow() ? SliderFraction : 0, PayloadHold.Opacity) : SliderFraction);
+        private static double SliderFraction => Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1);
 
-        /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         internal static readonly TimedOverlayHold PayloadHold = new();
         internal static bool HasTimedPayload => PayloadHold.IsActive;
         internal static void ShowTimed(Visual host, int ms, double opacity)
@@ -97,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }, TimeSpan.FromMilliseconds(Math.Max(50, ms)));
         }
 
+        /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
         {
             Refreshes++;
@@ -128,8 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
             var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
-            var opacity = HasTimedPayload
-                ? Math.Max(s.SpiralEnabled && ShouldShow() ? PaintedOpacity : 0, PayloadHold.Opacity) : PaintedOpacity;
+            var opacity = PaintedOpacity;
 
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
             {
