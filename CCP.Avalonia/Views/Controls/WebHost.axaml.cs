@@ -77,6 +77,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Completion outcome, for decorative embeds that must fall back on a failed load.</summary>
         public event Action<Uri, bool>? NavigationFinished;
 
+        // Spiral opts in before attachment. The native lease belongs to one adapter lifetime.
+        private Func<IntPtr, IDisposable>? _configureWindowsCore;
+        internal Func<IntPtr, IDisposable>? ConfigureWindowsCore
+        {
+            get => _configureWindowsCore;
+            set
+            {
+                _windowsCoreLease?.Dispose();
+                _windowsCoreLease = null;
+                _configureWindowsCore = value;
+            }
+        }
+        private IDisposable? _windowsCoreLease;
+        internal event Action<string>? BrowserProcessFailed;
+        internal void OnBrowserProcessFailed(string reason) => BrowserProcessFailed?.Invoke(reason);
+        internal void OnWindowsCore(IntPtr core)
+        {
+            _windowsCoreLease?.Dispose();
+            _windowsCoreLease = ConfigureWindowsCore?.Invoke(core);
+        }
+
         /// <summary>
         /// The seam the engine's NavigationCompleted routes through, internal so a headless test
         /// (which never has an engine) can drive the same path. A completion with no URL raises
@@ -328,7 +349,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
                     // the WebView2 gate on Windows, a WebKitGTK block filter on Linux. The first navigation waits for it.
-                    Platform.ScrolllerWebHostGate.Attach(_web, NewScrolllerEngine);
+                    Platform.ScrolllerWebHostGate.Attach(_web, NewScrolllerEngine, OnWindowsCore);
                     _webSlot.Children.Add(_web);
                 }
                 catch (Exception ex)
@@ -440,6 +461,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// and a late report from an older engine is dropped. Returns that engine's report.</summary>
         internal Action<bool> NewScrolllerEngine()
         {
+            _windowsCoreLease?.Dispose();
+            _windowsCoreLease = null;
             _scrolllerGate = null;
             _loadedOnThisEngine = false;
             var engine = ++_scrolllerEngine;

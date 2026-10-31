@@ -32,14 +32,16 @@ public sealed class ScrolllerWebGateTests
     public void The_first_navigation_waits_for_the_gate()
     {
         var host = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Controls", "WebHost.axaml.cs"));
-        Assert.Contains("Platform.ScrolllerWebHostGate.Attach(_web, NewScrolllerEngine);", host);
+        Assert.Contains("Platform.ScrolllerWebHostGate.Attach(_web, NewScrolllerEngine, OnWindowsCore);", host);
         // Both roads into the engine (Source and Navigate) return while the gate has not reported.
         Assert.Equal(2, Regex.Matches(host, @"if \(_scrolllerGate is null\) return;").Count);
         Assert.Contains("if (!ScrolllerGateAllows(_scrolllerGate, target))", host);
         // A rebuilt engine already names its Source: its held page is loaded with Navigate.
         Assert.Contains("try { _web!.Navigate(src!); }", host);
         var gate = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "ScrolllerWebHostGate.cs"));
-        Assert.Contains("web.AdapterDestroyed += (_, _) => OnUi(() => newEngine());", gate);
+        Assert.Contains("web.AdapterDestroyed += (_, _) => OnUi(() => { generation++; newEngine(); });", gate);
+        // WPF SpiralEmbedView.cs:178-190: native settings land before first navigation is released.
+        Assert.Contains("configureWindows?.Invoke(core); ready(AttachWebView2(core));", gate);
     }
 
     [Fact]
