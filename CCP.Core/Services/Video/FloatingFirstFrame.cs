@@ -14,7 +14,9 @@ public static class FloatingFirstFrame
     public static Verdict Decide(bool painted, long? sincePlayingMs, long advancedMs, long? sinceReadyMs)
     {
         if (painted || sincePlayingMs >= PlayingGraceMs && advancedMs >= AdvanceMs) return Verdict.Reveal;
-        if (sincePlayingMs != null) return Verdict.Wait;
+        // Lift the veil at the budget even if a playing output cannot report frame proof.
+        if (sincePlayingMs != null)
+            return (sinceReadyMs ?? sincePlayingMs) >= ReadyBudgetMs ? Verdict.Reveal : Verdict.Wait;
         return sinceReadyMs >= ReadyBudgetMs ? Verdict.Skip : Verdict.Wait;
     }
 }

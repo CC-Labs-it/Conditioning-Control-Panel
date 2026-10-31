@@ -15,14 +15,19 @@ public sealed class FloatingFirstFrameTests
 
     [Theory]
     [InlineData(true, null, 0, null, FloatingFirstFrame.Verdict.Reveal)]
-    [InlineData(false, 999, 400, 4000, FloatingFirstFrame.Verdict.Wait)]
-    [InlineData(false, 1000, 399, 4000, FloatingFirstFrame.Verdict.Wait)]
-    [InlineData(false, 1000, 400, 4000, FloatingFirstFrame.Verdict.Reveal)]
-    [InlineData(false, 5000, 0, 9000, FloatingFirstFrame.Verdict.Wait)]
+    [InlineData(false, 999, 400, 3999, FloatingFirstFrame.Verdict.Wait)]
+    [InlineData(false, 1000, 399, 3999, FloatingFirstFrame.Verdict.Wait)]
+    [InlineData(false, 1000, 400, 3999, FloatingFirstFrame.Verdict.Reveal)]
+    [InlineData(false, 5000, 0, 9000, FloatingFirstFrame.Verdict.Reveal)]
+    [InlineData(false, 0, 0, 3999, FloatingFirstFrame.Verdict.Wait)]
+    [InlineData(false, 0, 0, 4000, FloatingFirstFrame.Verdict.Reveal)]
+    [InlineData(false, 3999, 0, null, FloatingFirstFrame.Verdict.Wait)]
+    [InlineData(false, 4000, 0, null, FloatingFirstFrame.Verdict.Reveal)]
+    [InlineData(false, 5000, 0, 3999, FloatingFirstFrame.Verdict.Wait)]
     [InlineData(false, null, 0, 3999, FloatingFirstFrame.Verdict.Wait)]
     [InlineData(false, null, 0, 4000, FloatingFirstFrame.Verdict.Skip)]
     [InlineData(false, null, 0, null, FloatingFirstFrame.Verdict.Wait)]
-    public void FallbackNeedsElapsedAndPlayedTimeAndNeverSkipsPlaying(bool painted, int? playing, int advanced,
+    public void RevealUsesFrameProofOrPlayingFallbackAndOnlySkipsBeforePlaying(bool painted, int? playing, int advanced,
         int? ready, FloatingFirstFrame.Verdict expected)
         => Assert.Equal(expected, FloatingFirstFrame.Decide(painted, playing, advanced, ready));
 }
