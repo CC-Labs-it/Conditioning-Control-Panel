@@ -37,11 +37,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///    Still sample data: mantras and the codex (ChaosBoonPool / ChaosBubbleVariants are
     ///    run-engine, head-side). ponytail: <c>ChaosArt</c> returns
     ///    <c>System.Windows.Media.ImageSource</c>, so only its path half can ever move; the hub's
-    ///    ChaosSfx cues and lesson/script-locked row dressing are not ported. Unlock cards are
+    ///    lesson and script lock panels use Core state. Unlock cards are
     ///    (<see cref="ChaosUnlockCardLayer"/>).
     ///  - The four partials the WPF class spans (Bench / Reveals / Lessons / Debug) are NOT in
     ///    this layer. <c>BuildBench</c> is inlined here over Core <c>ChaosBench</c>; reveal
-    ///    flashes, the lesson panel and the CCP_CHAOS_DEBUG strip are dropped, so pills and
+    ///    flashes and the CCP_CHAOS_DEBUG strip are dropped, so pills and
     ///    headers render in their revealed state.
     ///  - The whole Skia menu scene (fog, per-frame glint masks, blooms, the crossfading
     ///    flipbook) and the NAudio menu music are gone: no SkiaSharp and no NAudio on this head,
@@ -566,6 +566,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 toggle.Click += HabitToggle_Click;
                 right.Children.Add(toggle);
             }
+            else if (ChaosLessons.IsLessonBlocked(u.Id))
+                right.Children.Add(BuildLessonLockPanel(u.Id, accent));
             else
             {
                 right.Children.Add(BuyButton(Glyphed(13, "Train", IconKind.Sparkle, $"{u.Cost}"), u.Id, afford, Buy_Click));
@@ -574,6 +576,62 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             grid.Children.Add(right);
 
             return ShelfCard(grid, on, owned, accent);
+        }
+
+        // WPF ChaosHubWindow.Lessons.cs:25-85 and xaml.cs:468-471.
+        // Core owns the lesson text, target, progress and completion rules.
+        private static Control BuildLessonLockPanel(string id, Color accent)
+        {
+            var def = ChaosLessons.ById(id);
+            if (def == null) return new StackPanel();
+            long target = Math.Max(1, def.Target);
+            long progress = Math.Clamp(ChaosLessons.Progress(id), 0, target);
+            var panel = new StackPanel { Tag = id, HorizontalAlignment = HorizontalAlignment.Right };
+            var text = new TextBlock
+            {
+                Text = def.Text, FontSize = 10.5, FontStyle = FontStyle.Italic,
+                Foreground = new SolidColorBrush(Color.FromArgb(0xB0, accent.R, accent.G, accent.B)),
+                TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Right,
+            };
+            var line = new Grid { ColumnDefinitions = new ColumnDefinitions("15,*") };
+            Grid.SetColumn(text, 1);
+            line.Children.Add(new IconGlyph { Kind = IconKind.LockClosed, Size = 11, Foreground = text.Foreground });
+            line.Children.Add(text);
+            panel.Children.Add(line);
+            panel.Children.Add(new Border
+            {
+                Width = 120, Height = 7, CornerRadius = new CornerRadius(3.5),
+                Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x26, 0x4C)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x50, accent.R, accent.G, accent.B)),
+                BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 7, 0, 4),
+                Child = new Border
+                {
+                    Width = progress <= 0 ? 0 : Math.Max(7, 120.0 * progress / target),
+                    CornerRadius = new CornerRadius(3.5), HorizontalAlignment = HorizontalAlignment.Left,
+                    Background = new LinearGradientBrush
+                    {
+                        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                        EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                        GradientStops = new GradientStops
+                        {
+                            new GradientStop(BoonAccent, 0),
+                            new GradientStop(Color.FromRgb(0x8B, 0x5C, 0xF6), 1),
+                        },
+                    },
+                },
+            });
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"lesson: {progress} of {target}", FontSize = 10.5,
+                Foreground = new SolidColorBrush(Color.FromArgb(0xA0, 0xB8, 0xB8, 0xD0)),
+                HorizontalAlignment = HorizontalAlignment.Right,
+            });
+            ToolTip.SetTip(panel, (progress <= 0 ? "the lesson" : "the lesson, half-learned")
+                + "\n" + (string.IsNullOrEmpty(def.Detail) ? def.Text : def.Detail)
+                + $"\nprogress: {progress} of {target}");
+            AutomationProperties.SetName(panel, $"{def.Text}, lesson: {progress} of {target}");
+            return panel;
         }
 
         /// <summary>The card every shelf row sits in: gold edge while switched on, pink otherwise,
@@ -804,6 +862,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     ToolTip.SetTip(held, RankLockedTip + "\n" + RankSpecifics(b.RankFloor));
                     right.Children.Add(held);
                 }
+                // WPF ChaosHubWindow.xaml.cs:735-747: script gate precedes the lesson.
+                else if (ChaosMeta.IsAccessoryScriptLocked(b.Id))
+                {
+                    var held = BuyButton(Glyphed(13, "Unlock", IconKind.Sparkle, $"{b.UnlockCost}"), b.Id, false, BoonUnlock_Click);
+                    ToolTip.SetTip(held, "she sells these in an order of her own.");
+                    ToolTip.SetShowOnDisabled(held, true);
+                    right.Children.Add(held);
+                }
+                else if (ChaosLessons.IsLessonBlocked(b.Id))
+                    right.Children.Add(BuildLessonLockPanel(b.Id, BoonAccent));
                 else
                 {
                     right.Children.Add(BuyButton(Glyphed(13, "Unlock", IconKind.Sparkle, $"{b.UnlockCost}"), b.Id, Live.Sparks >= b.UnlockCost, BoonUnlock_Click));
