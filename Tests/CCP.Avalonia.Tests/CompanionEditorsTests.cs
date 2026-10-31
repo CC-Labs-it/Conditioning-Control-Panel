@@ -204,8 +204,20 @@ public sealed class CompanionEditorsTests
             foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
+                shell.CompleteTabTransition();
                 button.BringIntoView();
                 Dispatcher.UIThread.RunJobs();
+                shell.UpdateLayout();
+                var compositor = global::Avalonia.Rendering.Composition.ElementComposition.GetElementVisual(shell)!.Compositor;
+                Task? frame = null;
+                compositor.RequestCompositionUpdate(() => frame = compositor.RequestCompositionBatchCommitAsync().Rendered);
+                var rendered = System.Diagnostics.Stopwatch.StartNew();
+                while (frame?.IsCompleted != true)
+                {
+                    Assert.True(rendered.Elapsed < TimeSpan.FromSeconds(10), "the compositor never drew the prompt link");
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    Dispatcher.UIThread.RunJobs();
+                }
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);

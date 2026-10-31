@@ -246,7 +246,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 container.Child = _video;
                 container.IsVisible = true;
 
-                _mediaPlayer = new MediaPlayer(libVLC) { EnableHardwareDecoding = true };
+                // The RV32 memory sink needs CPU frames. Windows hardware decoding can
+                // select a D3D surface with no vmem frames, leaving the tutorial blank.
+                _mediaPlayer = new MediaPlayer(libVLC) { EnableHardwareDecoding = false };
                 _sink = new VlcFrameSink(_mediaPlayer, () => _media,
                     bmp => { if (_video != null) _video.Source = bmp; },
                     () => { _video?.InvalidateVisual(); FrameShown?.Invoke(); });

@@ -31,7 +31,7 @@ public sealed class ContentHitTestTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var w = new MainShellWindow();
@@ -89,10 +89,18 @@ public sealed class ContentHitTestTests
     /// BtnAwarenessTutorial / ChkAwarenessMaster hit ScrollContentPresenter, pressed False).</summary>
     private static void RenderLiveTree(Visual w)
     {
+        // Finish the real entrance before measuring pointer coordinates. Render completion
+        // alone does not stop its next frame from moving the controls under the pointer.
+        if (w is MainShellWindow shell) shell.CompleteTabTransition();
+        if (w is Control control) control.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
-        var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
+        var compositor = ElementComposition.GetElementVisual(w)!.Compositor;
+        Task? rendered = null;
+        // Request the batch after the queued binding/layout pass. A batch requested before
+        // that pass can finish rendering while the new hit-test geometry is still pending.
+        compositor.RequestCompositionUpdate(() => rendered = compositor.RequestCompositionBatchCommitAsync().Rendered);
         var deadline = Stopwatch.StartNew();
-        while (!batch.Rendered.IsCompleted)
+        while (rendered?.IsCompleted != true)
         {
             Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never rendered the live tree");
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
