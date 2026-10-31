@@ -105,7 +105,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Text = Loc.Get(key), TextWrapping = TextWrapping.Wrap, FontSize = 12,
                 Foreground = Brushes.White,
             });
-            Line("online_hover_title");
+            var help = new Button
+            {
+                Content = "?", Tag = "online-help-open", Width = 16, Height = 16,
+                MinWidth = 0, MinHeight = 0, Padding = new Thickness(0), Focusable = false,
+                Cursor = new Cursor(StandardCursorType.Help),
+            };
+            global::Avalonia.Automation.AutomationProperties.SetName(help, Loc.Get(OnlineMeterRules.HelpTitleKey));
+            help.Click += (_, e) => { e.Handled = true; OpenOnlineMeterHelp(); };
+            var head = new DockPanel();
+            DockPanel.SetDock(help, Dock.Right);
+            head.Children.Add(help);
+            head.Children.Add(new TextBlock { Text = Loc.Get("online_hover_title"), Foreground = Brushes.White });
+            body.Children.Add(head);
             Line("online_hover_body");
             if (st.UpsellKey != null) Line(st.UpsellKey);
             if (st.SeePlansTier is int tier)
@@ -114,6 +126,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 plans.Click += (_, _) => OpenOnlinePlans(tier);
                 body.Children.Add(plans);
             }
+        }
+
+        private void OpenOnlineMeterHelp()
+        {
+            CloseOnlineHover();
+            ShowTab("assets");
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (Named<Tabs.AssetsTabView>("AssetsTab") is not { } tab) return;
+                tab.RemoteMediaBlock.BringIntoView();
+                global::ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashHelpButton.Pin(tab.OnlineHelpButton);
+            }, DispatcherPriority.Loaded);
         }
 
         private void CloseOnlineHover()

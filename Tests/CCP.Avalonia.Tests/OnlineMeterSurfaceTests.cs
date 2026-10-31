@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using ConditioningControlPanel;
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
+using Avalonia.Controls.Documents;
+using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -37,7 +40,7 @@ public sealed class OnlineMeterSurfaceTests
         tab.PaintOnlineMeter(State(42), noon, midnight);
         Assert.True(tab.OnlineMeterCard.IsVisible);
         Assert.Equal("42%", tab.TxtOnlineMeterPct.Text);
-        Assert.DoesNotContain("MB", tab.TxtOnlineMeterLine.Text);
+        Assert.DoesNotContain("MB", tab.TxtOnlineMeterSummary.Text);
         Assert.Equal(42, tab.OnlineMeterBar.ColumnDefinitions[0].Width.Value);
         Assert.False(tab.OnlineOfficialNote.IsVisible);
         Assert.False(tab.OnlineMeterStamped.IsVisible);
@@ -51,7 +54,7 @@ public sealed class OnlineMeterSurfaceTests
 
         tab.PaintOnlineMeter(State(100, spent: true), noon, midnight);
         Assert.Equal("100%", tab.TxtOnlineMeterPct.Text);
-        Assert.Contains(string.Format(Loc.Get("online_meter_hours"), 12), tab.TxtOnlineMeterLine.Text);
+        Assert.Contains(string.Format(Loc.Get("online_meter_hours"), 12), tab.TxtOnlineMeterSummary.Text);
 
         foreach (var hidden in new[] { State(5, source: "local"), State(5, consent: false), State(5, on: false) })
         {
@@ -79,7 +82,8 @@ public sealed class OnlineMeterSurfaceTests
             Assert.NotNull(shell.OnlineHoverBody);
             Assert.Contains(shell.OnlineHoverBody!.Children.OfType<global::Avalonia.Controls.Button>(), b => Equals(b.Content, Loc.Get("online_see_plans")));
             shell.PaintOnlineMeterPill(State(100, spent: true, plan: ScrolllerPlan.Prime));
-            Assert.Empty(shell.OnlineHoverBody.Children.OfType<global::Avalonia.Controls.Button>());
+            Assert.DoesNotContain(shell.OnlineHoverBody.Children.OfType<Button>(), b => Equals(b.Content, Loc.Get("online_see_plans")));
+            Assert.Single(shell.OnlineHoverBody.GetLogicalDescendants().OfType<Button>(), b => Equals(b.Tag, "online-help-open"));
             Assert.Contains(shell.OnlineHoverBody.Children.OfType<global::Avalonia.Controls.TextBlock>(), t => t.Text == Loc.Get("online_hover_body"));
             Assert.Equal(Loc.Get("online_pill_done"), shell.OnlinePillText!.Text);
             shell.PaintOnlineMeterPill(State(42, source: "local"));
@@ -187,6 +191,54 @@ public sealed class OnlineMeterSurfaceTests
             ConditioningControlPanel.Services.TierGate.ReconnectIsTheAnswerProvider = provider;
             shell.Close();
         }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task Spent_help_opens_assets_scrolls_to_media_and_pins_the_slip(int plan) => Run(() =>
+    {
+        CoreSettings.Current.RemoteMediaConsented = true;
+        CoreSettings.Current.MediaSource = "mixed";
+        ScrolllerPolicy.Apply(true, null);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("settings");
+            var tab = shell.FindControl<AssetsTabView>("AssetsTab")!;
+            var scrolled = false;
+            tab.RemoteMediaBlock.AddHandler(Control.RequestBringIntoViewEvent, (_, _) => scrolled = true);
+            shell.PaintOnlineMeterPill(State(100, spent: true, plan: (ScrolllerPlan)plan));
+            shell.OpenOnlineHover(State(100, spent: true, plan: (ScrolllerPlan)plan));
+            var help = Assert.Single(shell.OnlineHoverBody!.GetLogicalDescendants().OfType<Button>(), b => Equals(b.Tag, "online-help-open"));
+            help.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal("assets", shell.CurrentTab);
+            Assert.True(scrolled);
+            Assert.True(LeashHelpButton.IsPinned(tab.OnlineHelpButton));
+            Assert.True(LeashHelpButton.IsOpen(tab.OnlineHelpButton));
+            Assert.Equal(AssetsTabView.HelpText(), Assert.IsType<TextBlock>(Assert.IsType<Border>(LeashHelpButton.Slip(tab.OnlineHelpButton)).Child).Text);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Plans_link_is_inline_and_does_not_add_a_card_row() => Run(() =>
+    {
+        var tab = new AssetsTabView();
+        var now = DateTime.Now;
+        tab.PaintOnlineMeter(State(42), now, now.AddHours(1));
+        var inline = Assert.Single(tab.TxtOnlineMeterLine.Inlines!.OfType<InlineUIContainer>());
+        Assert.Same(tab.FindControl<Button>("BtnOnlineSeePlans"), inline.Child);
+        tab.OnlineMeterCard.Measure(new Size(1200, double.PositiveInfinity));
+        var withPlans = tab.OnlineMeterCard.DesiredSize.Height;
+        tab.PaintOnlineMeter(State(42, plan: ScrolllerPlan.Prime), now, now.AddHours(1));
+        tab.OnlineMeterCard.Measure(new Size(1200, double.PositiveInfinity));
+        Assert.Equal(tab.OnlineMeterCard.DesiredSize.Height, withPlans, precision: 2);
         return Task.CompletedTask;
     });
 

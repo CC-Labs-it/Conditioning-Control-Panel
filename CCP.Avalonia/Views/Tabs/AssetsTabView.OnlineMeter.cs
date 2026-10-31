@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Styling;
+using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Safety;
@@ -27,6 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     {
         private bool _meterWired;
         private bool _officialLanded;
+        internal Button OnlineHelpButton => (Button)OnlineMeterHelp.Content!;
 
         /// <summary>WPF ScrolllerCredit.HomeLink.</summary>
         internal const string ScrolllerHome = "https://scrolller.com";
@@ -52,7 +54,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 OnlineOfficialNote.AttachedToVisualTree += (_, _) => LandOfficialNote();
                 // The credit is the shared ScrolllerCreditLine: its own link opens scrolller.com and refuses under
                 // Strict Lock, Lockdown or a Chaos run (a second click handler here would open it twice).
-                ToolTip.SetTip(OnlineMeterHelp, HelpText());
+                OnlineMeterHelp.Content = LeashHelpButton.Create(() => new Border
+                {
+                    Background = LeashHelpSlip.Paper, Padding = new Thickness(16), CornerRadius = new CornerRadius(10),
+                    Child = new TextBlock { Text = HelpText(), Width = 340, TextWrapping = TextWrapping.Wrap, Foreground = LeashHelpSlip.Ink },
+                }, "online-help");
             }
             catch (Exception ex) { Log.Warning(ex, "Online meter wiring failed"); }
             RefreshOnlineMeter();
@@ -75,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             OnlineMeterStamped.IsVisible = st.ShowStampedLine;
             OnlineOfficialNote.IsVisible = st.ShowOfficialNote;
             BtnOnlineSeePlans.IsVisible = st.Show && st.SeePlansTier != null;
-            ToolTip.SetTip(OnlineMeterHelp, HelpText());
+            OnlinePlansSpace.Text = st.Show && st.SeePlansTier != null ? "   " : "";
             LandOfficialNote();
             if (st.ShowOfficialNote) TxtOnlineOfficialPlan.Text = Loc.Get(OnlineMeterRules.OfficialPlanKey(st.Plan));
             if (!st.Show) return;
@@ -85,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             OnlineMeterBar.ColumnDefinitions[0].Width = new GridLength(st.Percent, GridUnitType.Star);
             OnlineMeterBar.ColumnDefinitions[1].Width = new GridLength(100 - st.Percent, GridUnitType.Star);
             OnlineMeterBarFill.Background = tone;
-            TxtOnlineMeterLine.Text = OnlineMeterHead.CardLine(st, now, reset);
+            TxtOnlineMeterSummary.Text = OnlineMeterHead.CardLine(st, now, reset);
         }
 
         // The first actual appearance lands once. Repainting the allowance never replays it.
