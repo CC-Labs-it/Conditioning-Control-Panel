@@ -102,6 +102,88 @@ public sealed class ChasterMenuLimitsTests
         }
     }
 
+    // WPF ChasterTabView.xaml.cs:203,231,449-465,510-532,752-761; xaml:444-491.
+    [Fact]
+    public Task BalanceTagsFollowBookingsAndStates() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, tab, w) =>
+    {
+        await chaster.RefreshLockAsync();
+        tab.Refresh();
+        var paper = tab.FindControl<Button>("PaperTag")!;
+        var tag = tab.FindControl<Border>("CalendarTag")!;
+        var stamp = tab.FindControl<TextBlock>("TxtTagStamp")!;
+        Assert.True(paper.IsVisible);
+        Assert.Equal(Loc.Get("chaster_tag_clear"), stamp.Text);
+        Assert.False(tag.IsVisible);
+        Assert.True(chaster.Note("attention").Booked);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(CircesTab.Format(chaster.BalanceSeconds), tab.FindControl<TextBlock>("TxtTagAmount")!.Text);
+        Assert.Equal(Loc.Get("chaster_tag_unpaid"), stamp.Text);
+        Assert.True(tag.IsVisible);
+        Assert.Equal(CircesTab.Format(chaster.BalanceSeconds), tab.FindControl<TextBlock>("TxtCalendarTag")!.Text);
+        CoreSettings.Current.ChasterPaused = true;
+        tab.RefreshHero();
+        Assert.Equal(Loc.Get("chaster_tag_paused"), tab.FindControl<TextBlock>("TxtTagLands")!.Text);
+        CoreSettings.Current.ChasterPaused = false;
+        // Credit and clear use different ink and stamp text.
+        tab.RefreshTag(-60);
+        Assert.Equal(Loc.Get("chaster_tag_credit"), stamp.Text);
+        Assert.Equal(Color.Parse("#1E8A6E"), ((ISolidColorBrush)stamp.Foreground!).Color);
+        Assert.Equal(Loc.Get("chaster_tag_credit_lands"), tab.FindControl<TextBlock>("TxtTagLands")!.Text);
+        Assert.False(tag.IsVisible);
+        tab.RefreshTag(0);
+        Assert.Equal(Loc.Get("chaster_tag_clear"), stamp.Text);
+        Assert.Equal(CircesTab.Format(0, signed: false), tab.FindControl<TextBlock>("TxtTagAmount")!.Text);
+        tab.RefreshTag(60);
+        tab.BuildCalendar(null, DateTime.Today);
+        Assert.False(tag.IsVisible);
+        tab.BuildCalendar((DateTime.Today.AddDays(1), DateTime.Today.AddDays(4)), DateTime.Today);
+        Assert.False(tag.IsVisible);
+        ChasterHead.Service = null;
+        try { tab.Refresh(); Assert.False(paper.IsVisible); }
+        finally { ChasterHead.Service = chaster; }
+    }));
+
+    [Fact]
+    public Task PaperBalanceTagOpensAndClosesTheReceipt() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, tab, w) =>
+    {
+        await chaster.RefreshLockAsync();
+        tab.Refresh();
+        var paper = tab.FindControl<Button>("PaperTag")!;
+        Click(w, paper);
+        Assert.True(tab.FindControl<Border>("ReceiptHost")!.IsVisible);
+        Click(w, paper);
+        Assert.False(tab.FindControl<Border>("ReceiptHost")!.IsVisible);
+    }));
+
+    [Fact]
+    public Task TonightBalanceTagFollowsTheRotatedCellAfterLayout() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, tab, w) =>
+    {
+        await chaster.RefreshLockAsync();
+        tab.Refresh();
+        Assert.True(chaster.Note("attention").Booked);
+        Dispatcher.UIThread.RunJobs();
+        var today = DateTime.Today;
+        tab.BuildCalendar((today.AddDays(-1), today.AddDays(20)), today);
+        w.UpdateLayout();
+        var calendar = tab.FindControl<UniformGrid>("Calendar")!;
+        var row = tab.FindControl<Panel>("CalendarRow")!;
+        var tag = tab.FindControl<Border>("CalendarTag")!;
+        var tonight = calendar.Children[1];
+        void AssertAnchored()
+        {
+            // WPF TransformBounds: centre the tag on the cell, 14 px above its lowest corner.
+            var centre = tonight.TranslatePoint(new Point(tonight.Bounds.Width / 2, tonight.Bounds.Height / 2), row)!.Value;
+            var lowest = tonight.TranslatePoint(new Point(0, tonight.Bounds.Height), row)!.Value; // sheet tilt is -1.5 degrees
+            Assert.Equal(centre.X, tag.Margin.Left + tag.Bounds.Width / 2, 2);
+            Assert.Equal(lowest.Y - 14, tag.Margin.Top, 2);
+        }
+        AssertAnchored();
+        // A width change may rearrange the sheet without changing its calendar key.
+        w.Width = 1050;
+        w.UpdateLayout();
+        AssertAnchored();
+    }));
+
     [Fact]
     public Task MenuOrdersRowsAndTogglesTheSavedSetAndMatchingKey() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, tab, w) =>
     {
