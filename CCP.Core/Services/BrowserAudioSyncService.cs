@@ -15,6 +15,7 @@ namespace ConditioningControlPanel.Services
         private readonly AudioSyncSettings _settings;
         private readonly Func<string, TimeSpan, TimeSpan, CancellationToken, float[]> _read;
         private CancellationTokenSource? _session;
+        private Task _pending = Task.CompletedTask;
         private int _generation;
         private ChunkManager? _chunkManager;
 
@@ -92,8 +93,10 @@ namespace ConditioningControlPanel.Services
             if (_disposed) return;
             _stopped = false;
             var generation = _generation;
-            using var session = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            var session = new CancellationTokenSource();
             _session = session;
+            using var preparation = CancellationTokenSource.CreateLinkedTokenSource(session.Token);
+            preparation.CancelAfter(TimeSpan.FromMinutes(2));
             try
             {
                 _isProcessing = true;
@@ -107,9 +110,9 @@ namespace ConditioningControlPanel.Services
                 manager.ChunkLoadingStarted += OnChunkLoadingStarted;
 
                 manager.Initialize(videoUrl, duration);
-                await manager.StartFirstChunkAsync(session.Token);
+                await (_pending = manager.StartFirstChunkAsync(preparation.Token));
 
-                if (!manager.IsFirstChunkReady && !session.IsCancellationRequested)
+                if (!manager.IsFirstChunkReady && !preparation.IsCancellationRequested)
                 {
                     throw new AudioSyncException("Timeout waiting for first chunk to process");
                 }
@@ -126,7 +129,6 @@ namespace ConditioningControlPanel.Services
             {
                 if (generation == _generation)
                 {
-                    _session = null;
                     _isProcessing = false;
                     ProcessingCompleted?.Invoke(this, EventArgs.Empty);
                 }
@@ -224,11 +226,11 @@ namespace ConditioningControlPanel.Services
 
             if (!_chunkManager.IsChunkReady(chunkIndex))
             {
-                _ = LoadChunkForSeekAsync(chunkIndex);
+                _pending = Task.WhenAll(_pending, LoadChunkForSeekAsync(chunkIndex, _session!.Token));
             }
         }
 
-        private async Task LoadChunkForSeekAsync(int chunkIndex)
+        private async Task LoadChunkForSeekAsync(int chunkIndex, CancellationToken token)
         {
             if (_chunkManager == null) return;
             var generation = _generation;
@@ -239,7 +241,7 @@ namespace ConditioningControlPanel.Services
 
             try
             {
-                await manager.EnsureChunkReadyAsync(chunkIndex);
+                await manager.EnsureChunkReadyAsync(chunkIndex, token);
 
                 Log.Information("BrowserAudioSyncService: Chunk {Index} loaded after seek", chunkIndex);
             }
@@ -261,7 +263,11 @@ namespace ConditioningControlPanel.Services
         public void OnVideoEnded()
         {
             Log.Information("BrowserAudioSyncService: Video ended");
-            StopSync();
+            // WPF AudioSyncService.cs:322-339 keeps cached chunks replayable.
+            _isPaused = false;
+            _isWaitingForChunk = false;
+            _ = _hapticService.StopAsync();
+            _chunkManager?.Stop();
         }
 
         public void StopSync()
@@ -269,6 +275,7 @@ namespace ConditioningControlPanel.Services
             _stopped = true;
             _generation++;
             _session?.Cancel();
+            _session?.Dispose();
             _session = null;
             _isProcessing = false;
             _isPaused = false;
@@ -281,9 +288,18 @@ namespace ConditioningControlPanel.Services
         public void Reset()
         {
             StopSync();
-            _chunkManager?.Dispose();
+            var manager = _chunkManager;
             _chunkManager = null;
+            if (manager != null) _ = DisposeWhenIdleAsync(manager, _pending);
+            _pending = Task.CompletedTask;
             _isProcessing = false;
+        }
+
+        private static async Task DisposeWhenIdleAsync(ChunkManager manager, Task pending)
+        {
+            try { await pending.ConfigureAwait(false); }
+            catch (Exception) { } // Seek/prepare report errors through their existing events.
+            finally { manager.Dispose(); }
         }
 
         private async Task SendHapticAsync(float intensity)

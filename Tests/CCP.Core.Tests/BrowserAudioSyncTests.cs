@@ -72,10 +72,11 @@ public sealed class BrowserAudioSyncTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public async Task FirstChunkBecomesReadyAndResetSuppressesPendingCompletion(bool bands, bool fail)
+    [InlineData(false, false, 0)]
+    [InlineData(true, false, 1)]
+    [InlineData(false, false, 2)]
+    [InlineData(false, true, 0)]
+    public async Task FirstChunkBecomesReadyAndResetSuppressesPendingCompletion(bool bands, bool fail, int shutdown)
     {
         var settings = new HapticSettings { Enabled = true };
         settings.EnsureV2Migrated();
@@ -91,10 +92,14 @@ public sealed class BrowserAudioSyncTests
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         using var entered = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
+        CancellationToken decodingToken = default;
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var sync = new BrowserAudioSyncService(haptics, settings.AudioSync, (_, _, _, ct) =>
         {
+            decodingToken = ct;
             entered.Set();
-            release.Wait(ct);
+            try { release.Wait(ct); }
+            catch (OperationCanceledException) { cancelled.TrySetResult(); release.Wait(TimeSpan.FromSeconds(15)); throw; }
             if (fail) return Array.Empty<float>();
             return Enumerable.Range(0, 44100).Select(i => (float)Math.Sin(i * .1)).ToArray();
         });
@@ -168,9 +173,36 @@ public sealed class BrowserAudioSyncTests
             await loaded.Task.WaitAsync(TimeSpan.FromSeconds(15));
             Assert.False(sync.IsWaitingForChunk);
             sync.OnVideoEnded();
+            Assert.Equal(0, haptics.Mixer.GetLayer(HapticLayer.AudioSync));
+            sync.OnPlaybackStateUpdate(0, false);
+            Assert.True(haptics.Mixer.GetLayer(HapticLayer.AudioSync) > 0);
+            Assert.Equal(1, started); // Replay uses cached data without detection or decoding.
+            entered.Reset(); release.Reset();
+            var loads = 0;
+            sync.ChunkLoadingCompleted += (_, _) => loads++;
+            sync.OnVideoSeek(settings.AudioSync.ChunkDurationSeconds * 2 + 1);
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(15)));
+            Assert.True(decodingToken.CanBeCanceled);
+            var work = (Task)typeof(BrowserAudioSyncService).GetField("_pending",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(sync)!;
+            var manager = typeof(BrowserAudioSyncService).GetField("_chunkManager",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(sync)!;
+            var gate = (SemaphoreSlim)manager.GetType().GetField("_processingSemaphore",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(manager)!;
+            if (shutdown == 0) sync.StopSync();
+            else if (shutdown == 1) sync.Reset();
+            else sync.Dispose();
+            await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.False(work.IsCompleted);
+            Assert.NotNull(gate.AvailableWaitHandle); // Reset/dispose must wait for decoder unwind.
+            release.Set();
+            await work.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.Equal(0, loads);
+            Assert.False(sync.IsWaitingForChunk);
             sync.OnPlaybackStateUpdate(0, false);
             Assert.Equal(0, haptics.Mixer.GetLayer(HapticLayer.AudioSync));
             sync.Reset();
+            if (shutdown == 2) return;
             entered.Reset(); release.Reset();
             serve = Serve();
             pending = Task.Run(() => sync.OnVideoDetectedAsync($"http://127.0.0.1:{port}/video.mp4", TimeSpan.FromSeconds(1)));
