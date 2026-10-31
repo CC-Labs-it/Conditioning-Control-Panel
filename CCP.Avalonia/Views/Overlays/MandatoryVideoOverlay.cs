@@ -142,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             // WPF DecidePresentation: full screen or ONE floating window, on a random targeted screen.
             Floating = Floats(strict);
+            _revealAudioHeld = false;
             var screens = Targets(host, s.FillAllMonitorsWithVideo || Floating);
             if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
             foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
@@ -331,7 +332,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF: strict vetoes a user close while playing; a non-strict close is a dismiss.
             w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
-            var reveal = floating ? new FloatingVideoReveal(w) : null;
+            var reveal = floating ? new FloatingVideoReveal(w, HoldRevealAudio) : null;
             if (!floating)
             {
                 w.Show();
@@ -442,8 +443,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _gracePaused = true;
             _lastGraceUtc = _gracePausedAt = now;
             _player?.SetPause(true);
-            _sinceShow.Stop();
-            _sinceFrame.Stop();   // freezes the attention clock and the clip guards (WPF re-phases both)
+            PausePlaybackClocks();   // freezes the ready budget as well as the show and frame clocks
+
             foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; }
             SetCountdown(MandatoryVideoScheduler.GraceWindowSeconds);
             _graceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -467,6 +468,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var x in _surfaces) x.Countdown.Text = Loc.GetF("video_grace_auto_resume_in", left);
         }
 
+        internal void PausePlaybackClocks()
+        {
+            _sinceShow.Stop();
+            _sinceReady.Stop();
+            _sinceFrame.Stop();
+        }
+
+        internal void ResumePlaybackClocks()
+        {
+            _sinceShow.Start();
+            _sinceReady.Start();
+            if (FirstFrameMs >= 0) _sinceFrame.Start();
+        }
+
         internal void ResumeFromGrace(string reason)
         {
             if (!_gracePaused) return;
@@ -475,8 +490,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _graceTimer?.Stop();
             _graceTimer = null;
             foreach (var x in _surfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; }
-            _sinceShow.Start();
-            if (FirstFrameMs >= 0) _sinceFrame.Start();
+            ResumePlaybackClocks();
             FrameTs = Stopwatch.GetTimestamp();
             _player?.SetPause(false);
             Log.Information("VideoService: grace pause released ({Reason}) after {Sec:F1}s", reason, (Now - _gracePausedAt).TotalSeconds);

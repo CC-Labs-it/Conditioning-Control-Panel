@@ -31,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed partial class MandatoryVideoOverlay
     {
         private volatile bool _userMuted;
+        private bool _revealAudioHeld;
         private bool _mutedAtClose;
         private object? _lockWatchOwner;
 
@@ -42,11 +43,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private bool CloseAllowed => MandatoryVideoControls.ShowClose(_strict, LockdownActive, Chaos.ChaosRunHost.IsActive);
         private bool ControlsAllowed => MandatoryVideoControls.ShowMute(_strict, LockdownActive, Chaos.ChaosRunHost.IsActive);
 
-        private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer p)
+        internal int EffectivePlayerVolume => (_userMuted || _revealAudioHeld) ? 0 :
+            MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume);
+
+        internal void HoldRevealAudio(bool held)
         {
-            var s = CoreSettings.Current;
-            p.Volume = PlayerVolume = _userMuted ? 0 : MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
+            _revealAudioHeld = held;
+            UpdateVolume();
         }
+
+        private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer p) =>
+            p.Volume = PlayerVolume = EffectivePlayerVolume;
 
         /// <summary>WPF ShowVideoControls: once the first frame is up, on every screen. UI thread.</summary>
         private void ShowVideoControls()
