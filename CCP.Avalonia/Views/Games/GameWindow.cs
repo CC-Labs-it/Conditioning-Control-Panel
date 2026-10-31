@@ -77,12 +77,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             GameWindow? live;
-            lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
+            lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase)
+                || ((spec.Id is "breakout" or "breakoutdemo") && w.IsBreakout));
             if (live != null)
             {
                 // WPF BreakoutHostService.LaunchFull gates even a focus of the live game.
                 if (spec.Id == "breakout" && !BreakoutGate()) return null;
-                live.Activate(); return live;
+                live.Activate();
+                if (live.IsBreakout && live.Spec.Id != spec.Id)
+                {
+                    _ = live.SwitchBreakoutAsync(spec.Id);
+                    return null; // the existing run stays alive until the user answers
+                }
+                return live;
             }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
@@ -221,21 +228,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>The init every one of these pages reads defensively: language + identity, plus the
         /// Breakout access WPF BackRoomHostService.BuildInit (:566) sends.</summary>
-        internal object InitMessage() => new
+        internal object InitMessage()
         {
-            type = "init",
-            protocol = 1,
-            lang = CoreSettings.Current.Language,
-            solo = !CoreAccount.IsLoggedIn,
-            identity = new
+            var init = new
             {
-                unifiedId = CoreAccount.UnifiedUserId ?? "",
-                displayName = CoreAccount.DisplayName ?? "",
-                appVersion = CoreReleaseContent.AppVersion,
-            },
-            breakout = BreakoutEntitlementFor(Spec.Id),
-            breakoutStandalone = Spec.Id.StartsWith("breakout", StringComparison.OrdinalIgnoreCase),
-        };
+                type = "init",
+                protocol = 1,
+                lang = CoreSettings.Current.Language,
+                solo = !CoreAccount.IsLoggedIn,
+                identity = new
+                {
+                    unifiedId = CoreAccount.UnifiedUserId ?? "",
+                    displayName = CoreAccount.DisplayName ?? "",
+                    appVersion = CoreReleaseContent.AppVersion,
+                },
+                breakout = BreakoutEntitlementFor(Spec.Id),
+                breakoutStandalone = Spec.Id.StartsWith("breakout", StringComparison.OrdinalIgnoreCase),
+            };
+            if (!IsBreakout) return init;
+            // WPF BackRoomHostService.cs:589-607: the page must know Off before it starts.
+            var frame = JObject.FromObject(init);
+            var motion = CoreSettings.Current.MotionLevel;
+            frame["motion"] = motion.ToString().ToLowerInvariant();
+            frame["reduced"] = motion != ConditioningControlPanel.Models.MotionLevel.Full;
+            return frame;
+        }
 
         /// <summary>WPF BreakoutAccess.Current(demo): the demo door is 3 levels, whatever the tier.</summary>
         internal static object? BreakoutEntitlementFor(string id) =>
