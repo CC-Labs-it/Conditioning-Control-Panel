@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -15,9 +16,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Localization;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class FeatureIntroUpgradeTests
 {
     [Theory]
@@ -29,7 +28,6 @@ public sealed class FeatureIntroUpgradeTests
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         Assert.Equal(CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
     });
-
     [Fact]
     public Task ShellOpenedStampsVersionlessWelcomedProfileWithoutNotes() => Run("", shell =>
     {
@@ -40,7 +38,6 @@ public sealed class FeatureIntroUpgradeTests
         Assert.False(MainShellWindow.IsStartupDialogShowing);
         return Task.CompletedTask;
     }, detachStartup: false);
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -48,13 +45,12 @@ public sealed class FeatureIntroUpgradeTests
     {
         CoreReleaseContent.PatchNotesProvider = () => "";
         shell.UpgradeDelay = _ => throw new InvalidOperationException("missing notes must not wait");
-        if (cancelled) shell.StopUpgradeIntroForPanic();
+        if (cancelled) MainShellWindow.StopUpgradeIntroForPanic(shell);
         await shell.ShowWhatsNewIfNeeded();
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         Assert.Equal(cancelled ? "old-version" : CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
         Assert.False(StartupLadder.ModalPending);
     });
-
     [Fact]
     public Task UpgradeHoldsCardsAndStampsOnlyAfterDismissal() => Run("old-version", async shell =>
     {
@@ -80,7 +76,6 @@ public sealed class FeatureIntroUpgradeTests
         await shell.ShowWhatsNewIfNeeded();
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
     });
-
     [Fact]
     public Task BusyStartupAbandonsUnspent() => Run("old-version", async shell =>
     {
@@ -95,9 +90,10 @@ public sealed class FeatureIntroUpgradeTests
         Assert.Equal(601, delays.Count);
         Assert.All(delays.Skip(1), delay => Assert.Equal(TimeSpan.FromMilliseconds(500), delay));
     });
-
-    [Fact]
-    public Task PanicClosesUpgradeAndReleasesModalGate() => Run("old-version", async shell =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PanicClosesUpgradeAndReleasesModalGate(bool tray) => Run("old-version", async shell =>
     {
         var settle = new TaskCompletionSource();
         shell.UpgradeDelay = _ => settle.Task;
@@ -107,7 +103,7 @@ public sealed class FeatureIntroUpgradeTests
         await Task.Yield();
         Dispatcher.UIThread.RunJobs();
         Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
-        PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
+        PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(tray ? null : shell);
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         await showing;
         ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(5));
@@ -126,8 +122,7 @@ public sealed class FeatureIntroUpgradeTests
         StartupLadder.Inbox.Open(Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "intro:lockdown"));
         Dispatcher.UIThread.RunJobs();
         Assert.Single(shell.OwnedWindows.OfType<FeatureIntroPopup>());
-    });
-
+    }, desktop: true);
     [Fact]
     public Task RealShellOpenedCallbackReachesUpgradeDialog() => Run("old-version", async shell =>
     {
@@ -139,7 +134,6 @@ public sealed class FeatureIntroUpgradeTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
     }, detachStartup: false);
-
     [Fact]
     public Task QueuedUpgradeDefersFeatureCardWithoutSpendingIt() => Run("old-version", async shell =>
     {
@@ -167,7 +161,6 @@ public sealed class FeatureIntroUpgradeTests
         Assert.Single(shell.OwnedWindows.OfType<FeatureIntroPopup>());
         Assert.Contains("lockdown", CoreSettings.Current.SeenFeatureIntros);
     });
-
     [Fact]
     public Task PanicWhileWaitingNeverOpensOrSpendsUpgrade() => Run("old-version", async shell =>
     {
@@ -182,7 +175,6 @@ public sealed class FeatureIntroUpgradeTests
         Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
         Assert.False(StartupLadder.ModalPending);
     });
-
     [Fact]
     public Task CurrentVersionSkipsSettleAndModal() => Run(null, async shell =>
     {
@@ -191,7 +183,6 @@ public sealed class FeatureIntroUpgradeTests
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         Assert.False(StartupLadder.ModalPending);
     });
-
     [Fact]
     public Task TourButtonStartsUpgradeTourAfterModalCloses() => Run("old-version", async shell =>
     {
@@ -207,7 +198,6 @@ public sealed class FeatureIntroUpgradeTests
         Assert.NotNull(global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.ShellOverlay);
         global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.OnPanic();
     });
-
     [Theory]
     [InlineData("en", "What's New in v{0}", "Show me around (60s)")]
     [InlineData("de", "Neu in v{0}", "Rundgang starten (60 s)")]
@@ -265,24 +255,37 @@ public sealed class FeatureIntroUpgradeTests
         Assert.False(dismissed);
     });
 
-    [Fact]
-    public Task PanicCancelsAlreadyQueuedCardOpen() => Run(null, shell =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PanicCancelsAlreadyQueuedCardOpen(bool noShell) => Run(null, shell =>
     {
+        Assert.Null(MainShellWindow.Current);
         FeatureIntroPopup.ShowWhenStartupSettles("lockdown", shell, "play");
-        PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
+        var opened = false;
+        StartupLadder.ModalPending = true;
+        StartupLadder.PresentOrInbox(new() { Key = "held", Open = () => opened = true });
+        PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(noShell ? null : shell);
         Dispatcher.UIThread.RunJobs();
         Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
         Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
+        Assert.False(StartupLadder.ModalPending);
+        ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(5));
+        Assert.False(opened);
+        Assert.True(StartupLadder.Inbox.Contains("held"));
         return Task.CompletedTask;
     });
 
-    [Fact]
-    public Task PanicCancelsOfferAlreadyPostedFromWorker() => Run(null, shell =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PanicCancelsOfferAlreadyPostedFromWorker(bool noShell) => Run(null, shell =>
     {
+        Assert.Null(MainShellWindow.Current);
         var opened = false;
         Task.Run(() => StartupLadder.PresentOrInbox(new() { Key = "worker", Open = () => opened = true }))
             .GetAwaiter().GetResult();
-        PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
+        PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(noShell ? null : shell);
         Dispatcher.UIThread.RunJobs();
         Assert.False(StartupLadder.ModalPending);
         Assert.Empty(((StartupLadder.TestClock)StartupLadder.Time).Timers);
@@ -314,7 +317,7 @@ public sealed class FeatureIntroUpgradeTests
         return Task.CompletedTask;
     });
 
-    private static Task Run(string? previous, Func<MainShellWindow, Task> body, bool detachStartup = true) => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static Task Run(string? previous, Func<MainShellWindow, Task> body, bool detachStartup = true, bool desktop = false) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current == null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -337,13 +340,17 @@ public sealed class FeatureIntroUpgradeTests
         var shell = new MainShellWindow();
         if (detachStartup) shell.Opened -= shell.OnUpgradeShellOpened;
         shell.UpgradeDelay = _ => Task.CompletedTask;
-        shell.Show();
-        try { await body(shell); }
+        // The initialized headless app forbids the lifetime setter; restore its backing field below.
+        var lifetimeField = typeof(Application).GetField("_applicationLifetime", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var lifetime = lifetimeField.GetValue(Application.Current);
+        if (desktop) lifetimeField.SetValue(Application.Current, new ClassicDesktopStyleApplicationLifetime { MainWindow = shell, ShutdownMode = ShutdownMode.OnExplicitShutdown });
+        try { shell.Show(); await body(shell); }
         finally
         {
             foreach (var w in shell.OwnedWindows.ToArray()) w.Close();
-            shell.StopUpgradeIntroForPanic();
+            MainShellWindow.StopUpgradeIntroForPanic(shell);
             shell.Close();
+            lifetimeField.SetValue(Application.Current, lifetime);
             MainShellWindow.IsStartupDialogShowing = false;
             service.SaveImmediate();
             CoreSettings.ServiceProvider = old;

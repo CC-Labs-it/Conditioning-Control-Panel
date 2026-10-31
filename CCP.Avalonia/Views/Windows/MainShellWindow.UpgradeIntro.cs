@@ -25,7 +25,7 @@ public partial class MainShellWindow
         if (CoreSettings.Service != null && !string.IsNullOrEmpty(previous) && previous != CoreReleaseContent.AppVersion)
             Platform.StartupLadder.ModalPending = true; // hold passive cards before Opened
         Opened += OnUpgradeShellOpened;
-        Closed += (_, _) => StopUpgradeIntroForPanic();
+        Closed += (_, _) => StopUpgradeIntroForPanic(this);
     }
 
     internal void OnUpgradeShellOpened(object? sender, EventArgs e)
@@ -94,12 +94,13 @@ public partial class MainShellWindow
         Platform.AppUpdater.IsUpdateDialogActive, CoreTutorial.IsActive, IsVisible && CoreSettings.Current.HasAcceptedAgeVerification);
 
     // Stricter safety: also close/cancel this modal in the WPF MainWindow/MainWindow.xaml.cs:2017 stop-all pass.
-    internal void StopUpgradeIntroForPanic()
+    internal static void StopUpgradeIntroForPanic(MainShellWindow? shell)
     {
-        _upgradeCancelled = true;
+        var owner = shell ?? Current;
+        if (owner != null) owner._upgradeCancelled = true;
         Platform.StartupLadder.CancelDeferred();
         FeatureIntroPopup.CancelPending();
         Platform.StartupLadder.ModalPending = false;
-        _upgradeDialog?.Close();
+        owner?._upgradeDialog?.Close();
     }
 }
