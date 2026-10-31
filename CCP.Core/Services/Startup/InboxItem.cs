@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Services.Startup
         /// <summary>One line of context under the title. May be empty.</summary>
         public string Summary { get; init; } = "";
 
-        /// <summary>A single emoji or character for the row's left edge.</summary>
+        /// <summary>A semantic icon key supported by the head, or a legacy glyph for the row's left edge.</summary>
         public string Glyph { get; init; } = "";
 
         /// <summary>

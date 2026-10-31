@@ -10,6 +10,10 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using IconKind = FluentIcons.Common.Symbol;
+using IconVariant = FluentIcons.Common.IconVariant;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -85,6 +89,24 @@ public class SyncSevenTests
             shell.ApplyInviteTicket(mine);
             Dispatcher.UIThread.RunJobs();
             Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "invite:code:SYNC-CODE");
+            shell.ApplyInviteTicket(new InviteMine(true, new InviteSnapshot(new[] {
+                new InviteSlot("SYNC-CODE", InviteSlotState.Converted, "Ann", 1) }, null, 1)));
+            Assert.Equal(2, StartupLadder.Inbox.UnreadCount);
+            var flyout = new InboxFlyout();
+            var host = new Window { Content = flyout };
+            try
+            {
+                host.Show();
+                host.UpdateLayout();
+                var icons = flyout.GetVisualDescendants().OfType<IconGlyph>().ToArray();
+                var claimed = Assert.Single(icons, i => i.Kind == IconKind.TicketDiagonal);
+                var subscribed = Assert.Single(icons, i => i.Kind == IconKind.Heart);
+                Assert.Equal(IconVariant.Regular, claimed.Variant);
+                Assert.Equal(IconVariant.Filled, subscribed.Variant);
+                Assert.False(claimed.IsFallback);
+                Assert.False(subscribed.IsFallback);
+            }
+            finally { host.Close(); }
         }
         finally { shell.Close(); StartupLadder.ResetForTests(); }
         return Task.CompletedTask;
