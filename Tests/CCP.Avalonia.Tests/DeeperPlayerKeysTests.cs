@@ -194,6 +194,50 @@ public sealed class DeeperPlayerKeysTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(640, 504)]
+    [InlineData(900, 768)]
+    public Task HoldEscHintStaysOutsideNativeVideoBounds(int width, int height) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        using var cleanup = new PlayerCleanup(Create());
+        var w = cleanup.Window;
+        w.Width = width;
+        w.Height = height;
+        CoreSettings.Current.StrictLockEnabled = false;
+        Video(w);
+        w.FindControl<Border>("AudioPane")!.IsVisible = false;
+        w.FindControl<Border>("VideoPane")!.IsVisible = true;
+        var now = new DateTime(2026, 10, 31, 0, 0, 0, DateTimeKind.Utc);
+        w.UtcNow = () => now;
+        w.Show();
+        w.UpdateLayout();
+        var browser = w.FindControl<WebHost>("VideoBrowser")!;
+        var idleHeight = browser.Bounds.Height;
+        Assert.True(idleHeight > 0);
+
+        Press(w, Key.Escape);
+        now = now.AddSeconds(1);
+        Press(w, Key.Escape);
+        Tick(w);
+        w.UpdateLayout();
+        var hint = w.FindControl<Border>("HoldEscHint")!;
+        Assert.True(hint.IsVisible);
+        Assert.True(hint.Bounds.Width > 0 && hint.Bounds.Height > 0);
+        Assert.True(browser.Bounds.Width > 0 && browser.Bounds.Height > 0);
+        // WPF xaml:435-451 reserves an info row. ZIndex cannot cover a native web view.
+        var hintBottom = hint.TranslatePoint(default, w)!.Value.Y + hint.Bounds.Height;
+        var browserTop = browser.TranslatePoint(default, w)!.Value.Y;
+        Assert.True(hintBottom <= browserTop, $"hold hint ends at {hintBottom}, native video starts at {browserTop}");
+        Assert.InRange(w.FindControl<ProgressBar>("HoldEscProgress")!.Value, 0.32, 0.34);
+        Assert.True(browser.Bounds.Height < idleHeight);
+
+        Press(w, Key.Escape, false);
+        w.UpdateLayout();
+        Assert.False(hint.IsVisible);
+        Assert.Equal(idleHeight, browser.Bounds.Height);
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task TextFocusAndDeactivationDoNotLeaveAKeyHeld() => AvaloniaTestDispatcher.RunAsync(() =>
     {
