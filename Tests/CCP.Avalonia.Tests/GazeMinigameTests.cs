@@ -22,6 +22,9 @@ using OpenCvSharp;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Helpers;
+
 namespace CCP.Avalonia.Tests;
 
 /// <summary>Lab gaze minigame: the persisted Focus/Ignore packs reach Start, Start runs on the webcam
@@ -130,6 +133,8 @@ public sealed class GazeMinigameTests
                 var leftVideo = Assert.IsType<InlineLoopVideo>(leftAsset);
                 var rightVideo = Assert.IsType<InlineLoopVideo>(rightAsset);
                 Assert.Equal(Stretch.Uniform, leftVideo.Stretch);
+                Assert.False(leftVideo.Loops);
+                Assert.False(rightVideo.Loops);
                 Assert.Equal(Stretch.Uniform, rightVideo.Stretch);
                 Assert.Contains(win.CorrectIsLeftForTest ? "focus" : "noise", leftVideo.ClipPath!);
                 Assert.Contains(win.CorrectIsLeftForTest ? "noise" : "focus", rightVideo.ClipPath!);
@@ -202,6 +207,336 @@ public sealed class GazeMinigameTests
             try { dir.Delete(true); } catch { }
         }
     }
+
+    [Fact]
+    public void OverlayPulseReward_DoublesBothActiveHeadOverlays_RestoresLiveValues_AndPanicCancels() =>
+        RunRewardRound(GazeRewardEffect.OverlayPulse, (win, clock, score, panic) =>
+        {
+            var s = CoreSettings.Current;
+            var old = (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath, s.GentleVisuals);
+            var hooks = (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests, OverlayPulse.Clock);
+            var gif = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".gif");
+            File.WriteAllBytes(gif, Convert.FromBase64String(Gif));
+            using var cleanup = new Callback(() =>
+            {
+                OverlayPulse.Cancel();
+                PinkFilterOverlay.CloseAll();
+                SpiralOverlay.CloseAll();
+                (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath, s.GentleVisuals) = old;
+                (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests, OverlayPulse.Clock) = hooks;
+                File.Delete(gif);
+            });
+            CoreSession.IsEngineRunningProvider = () => true;
+            (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath, s.GentleVisuals) = (true, 50, true, 80, gif, false);
+            PinkFilterOverlay.SkipPlatformChecksForTests = SpiralOverlay.SkipPlatformChecksForTests = true;
+            OverlayPulse.Clock = clock;
+            PinkFilterOverlay.Refresh(win);
+            SpiralOverlay.Refresh(win);
+            Assert.True(SpinUntil(() => SpiralOverlay.IsShowing));
+            var tint = (SolidColorBrush)((Border)PinkFilterOverlay.Shown[0].Content!).Background!;
+            score();
+            Assert.True(OverlayPulse.IsPulsing);
+            Assert.Equal(255, tint.Color.A); // 50% (the setting's max) doubled to 100%
+            Assert.Equal(Math.Min(SpiralFrames.Paint(0.8) * 2, 1), SpiralOverlay.Shown[0].Spiral.Opacity, 10);
+            Assert.Equal(50, s.PinkFilterOpacity); // pulse must never write settings
+            Assert.Equal(80, s.SpiralOpacity);
+            s.PinkFilterOpacity = 25;
+            s.SpiralOpacity = 40;
+            clock.Now += TimeSpan.FromMilliseconds(1000);
+            OverlayPulse.Tick();
+            Assert.False(OverlayPulse.IsPulsing);
+            Assert.Equal((byte)(0.25 * 255), tint.Color.A);
+            Assert.Equal(SpiralFrames.Paint(0.4), SpiralOverlay.Shown[0].Spiral.Opacity, 10);
+            OverlayPulse.PulseOverlays();
+            Assert.True(OverlayPulse.IsPulsing);
+            panic();
+            Assert.False(OverlayPulse.IsPulsing);
+            // Cancellation restores in place; an old tick cannot re-open a stopped overlay.
+            PinkFilterOverlay.CloseAll();
+            SpiralOverlay.CloseAll();
+            clock.Now += TimeSpan.FromSeconds(2);
+            OverlayPulse.Tick();
+            Assert.False(PinkFilterOverlay.IsShowing || SpiralOverlay.IsShowing);
+        });
+
+    [Fact]
+    public void OverlayPulse_GentleVisualsEaseAndRestore_AndInactiveServiceShowsNothing() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var providers = (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, OverlayPulse.Clock);
+        var skip = (PinkFilterOverlay.SkipPlatformChecksForTests, PinkFilterOverlay.PulseHold);
+        var service = new SettingsService(); // CCP_USERDATA_DIR is the assembly's temporary sandbox
+        var s = service.Current;
+        var clock = new SteppedClock();
+        var host = new global::Avalonia.Controls.Window();
+        using var cleanup = new Callback(() =>
+        {
+            OverlayPulse.Cancel();
+            PinkFilterOverlay.CloseAll();
+            host.Close();
+            (PinkFilterOverlay.SkipPlatformChecksForTests, PinkFilterOverlay.PulseHold) = skip;
+            (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, OverlayPulse.Clock) = providers;
+        });
+        CoreSettings.ServiceProvider = () => service;
+        CoreSession.IsEngineRunningProvider = () => false;
+        OverlayPulse.Clock = clock;
+        PinkFilterOverlay.SkipPlatformChecksForTests = true;
+        PinkFilterOverlay.PulseHold = false;
+        s.PinkFilterEnabled = true;
+        s.PinkFilterOpacity = 20;
+        s.SpiralEnabled = false;
+        s.GentleVisuals = true;
+        s.GentleFadeSeconds = 0.3;
+        host.Show();
+        OverlayPulse.PulseOverlays();
+        Assert.False(OverlayPulse.IsPulsing || PinkFilterOverlay.IsShowing);
+        CoreSession.IsEngineRunningProvider = () => true;
+        OverlayPulse.PulseOverlays(); // enabled without an active overlay is still a no-op
+        Assert.False(OverlayPulse.IsPulsing || PinkFilterOverlay.IsShowing);
+        PinkFilterOverlay.Refresh(host);
+        var tint = (SolidColorBrush)((Border)PinkFilterOverlay.Shown[0].Content!).Background!;
+        OverlayPulse.PulseOverlays();
+        Assert.Equal(51, tint.Color.A);
+        clock.Now += TimeSpan.FromMilliseconds(100);
+        OverlayPulse.Tick();
+        Assert.InRange(tint.Color.A, (byte)52, (byte)101);
+        clock.Now += TimeSpan.FromMilliseconds(300);
+        OverlayPulse.Tick();
+        Assert.Equal(102, tint.Color.A);
+        clock.Now += TimeSpan.FromMilliseconds(700);
+        OverlayPulse.Tick();
+        Assert.InRange(tint.Color.A, (byte)52, (byte)101);
+        clock.Now += TimeSpan.FromMilliseconds(200);
+        OverlayPulse.Tick();
+        Assert.Equal(51, tint.Color.A);
+        Assert.False(OverlayPulse.IsPulsing);
+        // Takeover's hold is the existing head equivalent of a standalone OverlayService.Start.
+        CoreSession.IsEngineRunningProvider = () => false;
+        PinkFilterOverlay.PulseHold = true;
+        OverlayPulse.PulseOverlays();
+        Assert.True(OverlayPulse.IsPulsing);
+        PinkFilterOverlay.CloseAll();
+        Assert.False(OverlayPulse.IsPulsing); // closing the beat owner cancels without a late restore
+    });
+
+    [Fact]
+    public void OverlayPulse_ImmediatePeakRestoresLiveSettings_AndStopCancels() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var clock = new SteppedClock();
+        var host = new global::Avalonia.Controls.Window();
+        var service = new SettingsService();
+        var old = (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, OverlayPulse.Clock,
+            PinkFilterOverlay.SkipPlatformChecksForTests);
+        using var cleanup = new Callback(() =>
+        {
+            OverlayPulse.Cancel();
+            PinkFilterOverlay.CloseAll();
+            host.Close();
+            (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, OverlayPulse.Clock,
+                PinkFilterOverlay.SkipPlatformChecksForTests) = old;
+        });
+        CoreSettings.ServiceProvider = () => service;
+        CoreSession.IsEngineRunningProvider = () => true;
+        OverlayPulse.Clock = clock;
+        PinkFilterOverlay.SkipPlatformChecksForTests = true;
+        var s = service.Current;
+        s.PinkFilterEnabled = true;
+        s.PinkFilterOpacity = 50;
+        s.SpiralEnabled = false;
+        s.GentleVisuals = false;
+        host.Show();
+        PinkFilterOverlay.Refresh(host);
+        var tint = (SolidColorBrush)((Border)PinkFilterOverlay.Shown[0].Content!).Background!;
+        OverlayPulse.PulseOverlays();
+        Assert.Equal(255, tint.Color.A);
+        Assert.Equal(50, s.PinkFilterOpacity);
+        s.PinkFilterOpacity = 25;
+        clock.Now += TimeSpan.FromSeconds(1);
+        OverlayPulse.Tick();
+        Assert.False(OverlayPulse.IsPulsing);
+        Assert.Equal((byte)(0.25 * 255), tint.Color.A);
+        OverlayPulse.PulseOverlays();
+        AvApp.StopDesktopOverlays(final: false);
+        Assert.False(OverlayPulse.IsPulsing);
+        Assert.Equal((byte)(0.25 * 255), tint.Color.A);
+        clock.Now += TimeSpan.FromSeconds(2);
+        OverlayPulse.Tick();
+        Assert.Equal((byte)(0.25 * 255), tint.Color.A);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GentlePulse_CapturesEndpointsAcrossSettingsAndRampChanges_RestoresLiveValues(bool ramp) => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var service = new SettingsService();
+        var s = service.Current;
+        var clock = new SteppedClock();
+        var host = new global::Avalonia.Controls.Window();
+        var gif = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(Gif));
+        var old = (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, OverlayPulse.Clock,
+            AvApp.Sessions, CoreSession.IsSessionRunningProvider);
+        var skip = (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests);
+        SessionRunner? runner = null;
+        using var cleanup = new Callback(() =>
+        {
+            OverlayPulse.Cancel();
+            PinkFilterOverlay.CloseAll();
+            SpiralOverlay.CloseAll();
+            runner?.Stop();
+            host.Close();
+            File.Delete(gif);
+            (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, OverlayPulse.Clock,
+                AvApp.Sessions, CoreSession.IsSessionRunningProvider) = old;
+            (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests) = skip;
+        });
+        CoreSettings.ServiceProvider = () => service;
+        CoreSession.IsEngineRunningProvider = () => true;
+        AvApp.Sessions = null;
+        OverlayPulse.Clock = clock;
+        PinkFilterOverlay.SkipPlatformChecksForTests = SpiralOverlay.SkipPlatformChecksForTests = true;
+        s.PinkFilterEnabled = s.SpiralEnabled = s.GentleVisuals = true;
+        s.GentleFadeSeconds = 0.3;
+        s.PinkFilterOpacity = s.SpiralOpacity = 20;
+        s.SpiralPath = gif;
+        if (ramp)
+        {
+            runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            var session = new ConditioningControlPanel.Models.Session { Id = "pulse_ramp", DurationMinutes = 20 };
+            session.Settings.RampCurve = ConditioningControlPanel.Models.RampCurve.Linear;
+            session.Settings.PinkFilterEnabled = session.Settings.SpiralEnabled = true;
+            session.Settings.PinkFilterStartOpacity = session.Settings.SpiralOpacity = 10;
+            session.Settings.PinkFilterEndOpacity = session.Settings.SpiralOpacityEnd = 50;
+            runner.Start(session);
+            runner.Tick(TimeSpan.FromMinutes(5));
+        }
+        host.Show();
+        PinkFilterOverlay.Refresh(host);
+        SpiralOverlay.Refresh(host);
+        Assert.True(SpinUntil(() => SpiralOverlay.IsShowing));
+        var tint = (SolidColorBrush)((Border)PinkFilterOverlay.Shown[0].Content!).Background!;
+        OverlayPulse.PulseOverlays();
+        clock.Now += TimeSpan.FromMilliseconds(100);
+        OverlayPulse.Tick();
+        var before = (tint.Color.A, SpiralOverlay.Shown[0].Spiral.Opacity);
+        s.PinkFilterOpacity = s.SpiralOpacity = 2;
+        runner?.Tick(TimeSpan.FromMinutes(15));
+        PinkFilterOverlay.Refresh(host);
+        SpiralOverlay.Refresh(host);
+        OverlayPulse.Tick(); // same instant: neither a settings edit nor a moving ramp changes the envelope
+        Assert.Equal(before.Item1, tint.Color.A);
+        Assert.Equal(before.Item2, SpiralOverlay.Shown[0].Spiral.Opacity, 10);
+        clock.Now += TimeSpan.FromMilliseconds(1300);
+        OverlayPulse.Tick();
+        Assert.False(OverlayPulse.IsPulsing);
+        Assert.Equal((byte)((runner?.PinkOpacity ?? 2) / 100.0 * 255), tint.Color.A);
+        Assert.Equal(SpiralFrames.Paint((runner?.SpiralOpacity ?? 2) / 100.0), SpiralOverlay.Shown[0].Spiral.Opacity, 10);
+    });
+
+    [Fact]
+    public void RoundVideoUsesOneShotModeWithoutChangingLoopingAdopters() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var pane = GazeMinigameWindow.CreateRoundVideo("round.mp4");
+        Assert.Equal("round.mp4", pane.ClipPath);
+        Assert.False(pane.Loops);
+        Assert.InRange(pane.StartOffset!.Value, 0f, 0.5f);
+        Assert.Equal(Stretch.Uniform, pane.Stretch);
+        Assert.True(new InlineLoopVideo("poster.mp4").Loops);
+    });
+
+    private sealed class Callback(Action action) : IDisposable
+    {
+        public void Dispose() => action();
+    }
+
+    private static void RunRewardRound(GazeRewardEffect effect,
+        Action<GazeMinigameWindow, SteppedClock, Action, Action> check) => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var tracker = WebcamTracker.Instance;
+        var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory, tracker.Calibration,
+            CoreAudio.PlayOneShotProvider, CoreSession.IsEngineRunningProvider, s.FlashEnabled, CoreFlash.IsRunning);
+        var timing = (GazeMinigameWindow.Clock, GazeMinigameWindow.Delay);
+        var stoppedHook = CoreEngine.StoppedHook;
+        var clock = new SteppedClock();
+        var dir = Directory.CreateTempSubdirectory("gaze-reward-");
+        var feedback = new TaskCompletionSource();
+        GazeMinigameWindow? win = null;
+        try
+        {
+            s.WebcamConsentGiven = true;
+            s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+            WebcamTracker.SourceFactory = () => new BlankSource();
+            tracker.Calibration = new WebcamCalibrationData();
+            // App wires this desktop cleanup through the shell's OnEngineStopped, even when idle.
+            CoreEngine.StoppedHook = () => AvApp.StopDesktopOverlays(final: false);
+            CoreSession.IsEngineRunningProvider = () => false;
+            CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => { };
+            s.FlashEnabled = false; // no background timer races; Start still marks the schedule running
+            CoreFlash.Start();
+            GazeMinigameWindow.Clock = clock;
+            GazeMinigameWindow.Delay = t => t.TotalMilliseconds == 1400 ? feedback.Task : Task.CompletedTask;
+            var saved = new GazeMinigameSettings
+            {
+                ImageCount = 2, VideoCount = 0, PassTimeSec = 3, WrongHoldMs = 2000, RewardEffect = effect,
+            };
+            foreach (var role in new[] { GazePackRole.Focus, GazePackRole.Ignore })
+            {
+                var path = Directory.CreateDirectory(Path.Combine(dir.FullName, role.ToString())).FullName;
+                File.WriteAllBytes(Path.Combine(path, "1.png"), Png);
+                saved.Packs.Add(new GazePackRef { Path = path, Role = role });
+            }
+            saved.Save();
+            win = new GazeMinigameWindow();
+            win.Show();
+            win.FindControl<Button>("BtnStartGame")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(SpinUntil(() => win.FindControl<Grid>("GameplayScreen")!.IsVisible));
+            Assert.True(tracker.IsRunning);
+            Assert.False(CoreFlash.IsRunning); // Start really suspended the running schedule (#221)
+            void Score()
+            {
+                clock.Now += TimeSpan.FromMilliseconds(1100);
+                win.RoundTicker_Tick(null, EventArgs.Empty);
+                tracker.RaiseGazeSideForTest(win.CorrectIsLeftForTest ? GazeSide.Left : GazeSide.Right);
+                for (int i = 0; i < 60; i++)
+                {
+                    clock.Now += TimeSpan.FromMilliseconds(50);
+                    win.RoundTicker_Tick(null, EventArgs.Empty);
+                }
+                Assert.Equal("GOOD GIRL", win.FindControl<TextBlock>("TxtFeedback")!.Text);
+            }
+            void Panic()
+            {
+                PanicSurfaces.StopAll("test-gaze-reward");
+                Assert.False(win.IsVisible);
+                feedback.TrySetResult();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Empty(win.FindControl<Grid>("LeftPane")!.Children);
+                Assert.False(win.FindControl<Grid>("ResultsScreen")!.IsVisible);
+            }
+            check(win, clock, Score, Panic);
+        }
+        finally
+        {
+            win?.Close();
+            feedback.TrySetResult();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            tracker.Stop();
+            CoreFlash.Stop();
+            (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory, tracker.Calibration,
+                CoreAudio.PlayOneShotProvider, CoreSession.IsEngineRunningProvider, s.FlashEnabled, _) = old;
+            if (old.Item8) CoreFlash.Start();
+            CoreEngine.StoppedHook = stoppedHook;
+            (GazeMinigameWindow.Clock, GazeMinigameWindow.Delay) = timing;
+            File.Delete(Path.Combine(CorePaths.UserData, GazeMinigameSettings.FileName));
+            dir.Delete(true);
+        }
+    });
 
     [Fact]
     public Task GifFrames_LoopOnSteppedClock_AndReleaseOnDispose() => AvaloniaTestDispatcher.RunAsync(async () =>
