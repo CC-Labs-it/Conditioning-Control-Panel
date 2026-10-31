@@ -15,6 +15,32 @@ public sealed class DuckRecoveryTests : IDisposable
 
     public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
 
+    // The test host can itself be PID 4242 (CI shard 0). The real ducker must skip it,
+    // so a fixture claiming to be another app must choose a different PID.
+    private static int ForeignPid(int samplePid, int ownPid) => samplePid == ownPid ? samplePid + 1 : samplePid;
+    private static int SpotifyPid => ForeignPid(4242, Environment.ProcessId);
+    private static int RestartedSpotifyPid => ForeignPid(5555, Environment.ProcessId);
+
+    [Theory]
+    [InlineData(4242, 4242)]
+    [InlineData(5555, 5555)]
+    [InlineData(4242, 5555)]
+    [InlineData(5555, 4242)]
+    public void FixtureStreamCanBeRestoredWhenTheHostHasASamplePid(int samplePid, int ownPid)
+    {
+        var pid = ForeignPid(samplePid, ownPid);
+        var owed = new Dictionary<int, DuckRecovery.PulseStream>
+        {
+            [7] = new(pid, "spotify", new[] { "65536", "65536" }),
+        };
+        var sets = new List<string>();
+        var landed = DuckRecovery.RestorePulse(owed, args => args.StartsWith("-f json")
+            ? "[" + Stream(7, pid, "spotify", 13107) + "," + Stream(8, ownPid, "spotify", 13107) + "]"
+            : Record(sets, args), ownPid);
+        Assert.Equal(7, Assert.Single(landed));
+        Assert.Equal(new[] { "set-sink-input-volume 7 65536 65536" }, sets); // never our own stream
+    }
+
     private static string Stream(int index, int pid, string binary, int vol = 65536) =>
         $"{{\"index\":{index},\"volume\":{{\"front-left\":{{\"value\":{vol}}},\"front-right\":{{\"value\":{vol}}}}}," +
         $"\"properties\":{{\"application.process.id\":\"{pid}\",\"application.process.binary\":\"{binary}\"}}}}";
@@ -23,11 +49,11 @@ public sealed class DuckRecoveryTests : IDisposable
     public void ADuckIsJournalledUntilItsUnduckHandsItBack()
     {
         var sets = new List<string>();
-        var audio = new LibVlcAudio(args => args.StartsWith("-f json") ? "[" + Stream(7, 4242, "spotify") + "]" : Record(sets, args), Journal);
+        var audio = new LibVlcAudio(args => args.StartsWith("-f json") ? "[" + Stream(7, SpotifyPid, "spotify") + "]" : Record(sets, args), Journal);
         audio.Duck(80);
         audio.Drain();
         var owed = DuckRecovery.LoadPulse(Journal);
-        Assert.Equal((4242, "spotify"), (owed[7].Pid, owed[7].Name));
+        Assert.Equal((SpotifyPid, "spotify"), (owed[7].Pid, owed[7].Name));
         Assert.Equal(new[] { "65536", "65536" }, owed[7].Volumes);
 
         audio.Unduck(-1);
@@ -41,7 +67,7 @@ public sealed class DuckRecoveryTests : IDisposable
         var gone = false;
         var audio = new LibVlcAudio(args =>
         {
-            if (args.StartsWith("-f json")) return "[" + Stream(7, 4242, "spotify") + "]";
+            if (args.StartsWith("-f json")) return "[" + Stream(7, SpotifyPid, "spotify") + "]";
             if (gone) throw new InvalidOperationException("No such entity");
             return "";
         }, Journal);
@@ -57,7 +83,7 @@ public sealed class DuckRecoveryTests : IDisposable
     public void AParkedRestoreIsRetriedWhileTheRunGoesOn()
     {
         var gone = false;
-        var listing = "[" + Stream(7, 4242, "spotify") + "]";
+        var listing = "[" + Stream(7, SpotifyPid, "spotify") + "]";
         var sets = new List<string>();
         var audio = new LibVlcAudio(args =>
         {
@@ -72,7 +98,7 @@ public sealed class DuckRecoveryTests : IDisposable
         audio.Drain();
         Assert.True(audio.RetryArmed);         // WPF RestoreRetryTick: every 5 s for 3 min
         gone = false;
-        listing = "[" + Stream(9, 4242, "spotify", 13107) + "]";   // it plays again on a new stream
+        listing = "[" + Stream(9, SpotifyPid, "spotify", 13107) + "]";   // it plays again on a new stream
         sets.Clear();
         audio.RetryParked();
         Assert.Equal(new[] { "set-sink-input-volume 9 65536 65536" }, sets);
@@ -84,7 +110,7 @@ public sealed class DuckRecoveryTests : IDisposable
     public void ADuckOfAParkedStreamKeepsItsTrueOriginal()
     {
         var failOnce = false;
-        var listing = "[" + Stream(7, 4242, "spotify") + "]";
+        var listing = "[" + Stream(7, SpotifyPid, "spotify") + "]";
         var sets = new List<string>();
         var audio = new LibVlcAudio(args =>
         {
@@ -97,7 +123,7 @@ public sealed class DuckRecoveryTests : IDisposable
         failOnce = true;                       // the hand-back misses: 65536 is parked
         audio.Unduck(-1);
         audio.Drain();
-        listing = "[" + Stream(7, 4242, "spotify", 13107) + "]";   // still at the ducked level
+        listing = "[" + Stream(7, SpotifyPid, "spotify", 13107) + "]";   // still at the ducked level
         audio.Duck(80);
         audio.Drain();
         Assert.Equal(new[] { "65536", "65536" }, DuckRecovery.LoadPulse(Journal)[7].Volumes);
@@ -112,13 +138,13 @@ public sealed class DuckRecoveryTests : IDisposable
     {
         DuckRecovery.SavePulse(Journal, new Dictionary<int, DuckRecovery.PulseStream>
         {
-            [7] = new(4242, "spotify", new[] { "60000", "60000" }),
+            [7] = new(SpotifyPid, "spotify", new[] { "60000", "60000" }),
             [8] = new(4343, "gone-app", new[] { "50000", "50000" }),
         });
         var sets = new List<string>();
         var own = Environment.ProcessId;
         var audio = new LibVlcAudio(args => args.StartsWith("-f json")
-            ? "[" + Stream(12, 5555, "spotify", 13107) + "," + Stream(13, own, "spotify", 13107) + "]"
+            ? "[" + Stream(12, RestartedSpotifyPid, "spotify", 13107) + "," + Stream(13, own, "spotify", 13107) + "]"
             : Record(sets, args), Journal);
         audio.RecoverDucks();
         audio.Drain();
@@ -129,9 +155,9 @@ public sealed class DuckRecoveryTests : IDisposable
     [Fact]
     public void LaunchRecoveryRunsBeforeANewDuckJournals()
     {
-        DuckRecovery.SavePulse(Journal, new Dictionary<int, DuckRecovery.PulseStream> { [7] = new(4242, "spotify", new[] { "60000", "60000" }) });
+        DuckRecovery.SavePulse(Journal, new Dictionary<int, DuckRecovery.PulseStream> { [7] = new(SpotifyPid, "spotify", new[] { "60000", "60000" }) });
         var sets = new List<string>();
-        var audio = new LibVlcAudio(args => args.StartsWith("-f json") ? "[" + Stream(7, 4242, "spotify", 12000) + "]" : Record(sets, args), Journal);
+        var audio = new LibVlcAudio(args => args.StartsWith("-f json") ? "[" + Stream(7, SpotifyPid, "spotify", 12000) + "]" : Record(sets, args), Journal);
         audio.RecoverDucks();
         audio.Duck(50);
         audio.Drain();
