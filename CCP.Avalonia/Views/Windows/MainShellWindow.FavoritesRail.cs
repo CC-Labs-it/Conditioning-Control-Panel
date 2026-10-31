@@ -29,6 +29,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         private bool _favoritesRailHooked;
+        private int _railArtRevision;
+        private sealed record RailChipState(string Label, string Context, string Tip, string Glyph,
+                                             bool Locked, int ArtRevision);
+        private readonly Dictionary<Panel, Dictionary<string, (RailChipState State, Button Chip)>> _railChips = new();
+        internal int RailChipBuildCount { get; private set; }
 
         /// <summary>WPF FavoritePinMap (MainWindow.FavoritesRail.cs:63): rail/Play-wall x:Name -> palette id.</summary>
         private static readonly (string Element, string Id)[] FavoritePinMap =
@@ -54,13 +59,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 WireFavoritePinMenus();
                 EventHandler onLanguage = (_, _) => RefreshFavoritesRail();
                 LocalizationManager.Instance.LanguageChanged += onLanguage;
+                EventHandler<Models.ModPackage> onMod = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    _railArtRevision++;
+                    RefreshFavoritesRail();
+                });
+                CoreMods.ModChanged += onMod;
+                Closed += (_, _) => CoreMods.ModChanged -= onMod;
                 Closed += (_, _) => LocalizationManager.Instance.LanguageChanged -= onLanguage;
             }
             RefreshFavoritesRail();
             SettingsPage?.ApplyFavoritesDrawerSetting();
         }
 
-        /// <summary>WPF RefreshFavoritesRail (:121): rebuilds both chip stacks from settings.</summary>
+        /// <summary>WPF RefreshFavoritesRail (:121): reconcile chips, retaining unchanged visuals.</summary>
         internal void RefreshFavoritesRail()
         {
             RefreshDashboardToggleHint();
@@ -75,21 +87,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     .ToDictionary(e => e.Id, e => e, StringComparer.Ordinal);
                 bool Known(string id) => byId.TryGetValue(id, out var e) && e.Available;
 
-                dash.FavoritesList.Children.Clear();
-                foreach (var id in s.RailFavorites.Where(Known))
-                    dash.FavoritesList.Children.Add(BuildRailChip(dash, byId[id]));
+                SyncRailChips(dash, dash.FavoritesList, s.RailFavorites.Where(Known).Select(id => byId[id]));
                 dash.FavoritesEmpty.IsVisible = dash.FavoritesList.Children.Count == 0;
 
-                dash.RecentList.Children.Clear();
-                foreach (var id in FavoritesRailRule.RecentForDisplay(s.RailRecent, s.RailFavorites, Known))
-                    dash.RecentList.Children.Add(BuildRailChip(dash, byId[id]));
+                SyncRailChips(dash, dash.RecentList,
+                    FavoritesRailRule.RecentForDisplay(s.RailRecent, s.RailFavorites, Known).Select(id => byId[id]));
                 dash.RecentEmpty.IsVisible = dash.RecentList.Children.Count == 0;
             }
             catch (Exception ex) { Log.Debug("RefreshFavoritesRail: {E}", ex.Message); }
         }
 
+        private void SyncRailChips(Tabs.SettingsTabView dash, Panel panel, IEnumerable<SettingsPaletteEntry> entries)
+        {
+            if (!_railChips.TryGetValue(panel, out var cache)) _railChips[panel] = cache = new();
+            var wanted = new List<Button>();
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in entries)
+            {
+                ids.Add(entry.Id);
+                var state = new RailChipState(entry.Label, entry.Context, Loc.Get("rail_chip_tip"),
+                    entry.Glyph, IsNavEntryLocked(entry.TabKey), _railArtRevision);
+                if (!cache.TryGetValue(entry.Id, out var old) || old.State != state)
+                    cache[entry.Id] = (state, BuildRailChip(dash, entry));
+                wanted.Add(cache[entry.Id].Chip);
+            }
+            foreach (var id in cache.Keys.Where(id => !ids.Contains(id)).ToArray()) cache.Remove(id);
+            // Remove only retired/repainted chips; moves preserve the button and its handlers.
+            foreach (var child in panel.Children.ToArray())
+                if (child is not Button chip || !wanted.Contains(chip)) panel.Children.Remove(child);
+            for (var i = 0; i < wanted.Count; i++)
+            {
+                var chip = wanted[i];
+                if (i < panel.Children.Count && ReferenceEquals(panel.Children[i], chip)) continue;
+                panel.Children.Remove(chip);
+                panel.Children.Insert(i, chip);
+            }
+        }
+
         private Button BuildRailChip(Tabs.SettingsTabView dash, SettingsPaletteEntry entry)
         {
+            RailChipBuildCount++;
             bool locked = IsNavEntryLocked(entry.TabKey);
             var grid = new Grid();
             var face = BuildRailChipArt(dash, entry.Id, grid, out bool painted);
