@@ -387,6 +387,7 @@ namespace ConditioningControlPanel
             // the delta-and-provenance event that XPChanged deliberately is not.
             InitializeBankFx();
             InitializeSparkleWallet();
+            InitializeProfileEquip();
             App.Progression.XPChanged += OnXPChanged;
             App.Progression.LevelUp += OnLevelUp;
 
