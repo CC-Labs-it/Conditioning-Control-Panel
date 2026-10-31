@@ -47,3 +47,21 @@ SDK installed with `dotnet-install --channel 10.0` (10.0.403). Required Core, Av
 Fail-proof: temporarily remove the initial art paint, mod subscription and error dialog, then run the same tests. All 3 fail (exit 1): shipped art is absent, no mod subscription exists and no error dialog opens. The exact final source was restored; rerun: 3 passed, 0 failed, 0 skipped.
 
 An initial overlapping build hit a shared Avalonia PDB race. Sequential builds passed; no test or guard was weakened. Focused tests are `Tests/CCP.Avalonia.Tests/VideoFeatureLeftoverTests.cs`: shipped plates, mod switch and unsubscribe, and throwing Test action. Headless setup uses Skia per `TestIsolationTests.cs`.
+
+
+## Review follow-up
+
+The initial implementation notes above describe the original slice. Both P2 findings from the local review are fixed: the video constructor now calls `Helpers.ModArt.BindFeaturePlates` with `heroWidth: 480`. The helper keeps its original single 800px decode for callers that omit the parameter. WPF `Features/VideoFeatureControl.xaml:20` is the 480px hero spec. The copied painting and subscription code is removed.
+
+The Test error now uses existing `title_error` and `msg_error_triggering_video_0` with `Loc.GetF`, matching WPF `Features/VideoFeatureControl.xaml.cs:533`. The two duplicate keys were removed from every language file. The existing English assertions remain unchanged.
+
+The parity row keeps all earlier evidence and remains stub. Its stale statement that video art and the Test error dialog remain unported was removed. The review evidence is appended to its notes.
+
+Commit `bc0366cf94` repaired the CI failure in `MakeHerYoursCommunityTests`: pointer input could precede the tab entrance and live compositor frame. The test now completes the entrance, waits for the live rendered batch, and asserts the actual hit target and pressed state. It also registers portable fonts for standalone execution. All original behavior assertions and the ten-second dialog timeout remain. This is test hardening, with no WPF or product behavior change. Release validation for that commit passed 33 affected tests and three standalone repeats with no skips.
+
+
+Current review implementation references: `CCP.Avalonia/Views/Features/VideoFeatureControl.axaml.cs:69` binds the shared plates and `:442` uses the existing localization keys; `CCP.Avalonia/Helpers/ModArt.cs:193` owns the optional hero width. `FeaturePlateArtTests` additionally asserts that the default hero and side share the decoded source. Its standalone setup now registers bundled Inter; the first focused review run exposed the missing registration before reaching the art assertions.
+
+The video mod-switch test also reused a second app bootstrap without Inter. It now calls the fixture's existing `EnsureApp`, so either plate test can run first without a font-registration failure; all behavior assertions are unchanged.
+
+Review validation: Release build completed with zero errors; 16 focused plate, video and isolation tests passed with zero skips, and the Community test passed separately. Core tests: 4636 passed, 5 existing Vosk skips, 0 failed. Core guards, documentation self-check and the ten-language key-presence check passed. No WPF source or safety behavior changed.

@@ -66,38 +66,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             BtnTestVideo.Click += BtnTestVideo_Click;
 
             LoadFromSettings();
+            Helpers.ModArt.BindFeaturePlates(this, "features/mandatory_videos.png", HeroArt, SideArt, heroWidth: 480);
         }
-
-        // WPF Features/VideoFeatureControl.xaml.cs:563-586.
-
-        private const string FeatureArtPath = "features/mandatory_videos.png";
-
-        /// <summary>Paints the (possibly mod-overridden) art into the hero strip (480 px decode,
-        /// opacity 0.9, right-aligned) and the side plate (800 px). A null resolve leaves the
-        /// authored wash standing, as WPF leaves its pack:// default. Brushes are built here because
-        /// x:Name on a brush is AVLN2000.</summary>
-        private void ApplyFeatureArt()
-        {
-            try
-            {
-                if (Helpers.ModArt.TryLoad(FeatureArtPath, 480) is { } hero)
-                    HeroArt.Background = new global::Avalonia.Media.ImageBrush(hero)
-                    {
-                        Stretch = global::Avalonia.Media.Stretch.UniformToFill,
-                        AlignmentX = global::Avalonia.Media.AlignmentX.Right,
-                        Opacity = 0.9,
-                    };
-                if (Helpers.ModArt.TryLoad(FeatureArtPath, 800) is { } side)
-                    SideArt.Background = new global::Avalonia.Media.ImageBrush(side)
-                    {
-                        Stretch = global::Avalonia.Media.Stretch.UniformToFill,
-                    };
-            }
-            catch (Exception ex) { Log.Debug("VideoFeatureControl.ApplyFeatureArt: {E}", ex.Message); }
-        }
-
-        /// <summary>ModChanged can be raised off the UI thread, so the repaint is marshalled.</summary>
-        private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(ApplyFeatureArt);
 
         // ---- settings instance tracking (WPF: SettingsHook + ISettingsRebindable) --------------
 
@@ -108,8 +78,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
-            CoreMods.ModChanged += OnModChanged;
-            ApplyFeatureArt();
             RebindToCurrentSettings();
         }
 
@@ -117,7 +85,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
-            CoreMods.ModChanged -= OnModChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
@@ -472,7 +439,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             {
                 Serilog.Log.Error(ex, "Error in BtnTestVideo_Click");
                 if (TopLevel.GetTopLevel(this) is Window owner)
-                    await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_test_error_title"), string.Format(Loc.Get("video_test_error"), ex.Message));
+                    await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("title_error"), Loc.GetF("msg_error_triggering_video_0", ex.Message));
             }
         }
 

@@ -87,10 +87,7 @@ public sealed class VideoFeatureLeftoverTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            EnsureApp();
             LocalizationManager.Instance.SetLanguage("en");
 
             int before = ModChangedCount();

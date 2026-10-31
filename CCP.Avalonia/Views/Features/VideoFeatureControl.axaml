@@ -7,7 +7,7 @@
        Image of 🎲 (EmojiToImageSource)  ->  TextBlock "🎲"
        Content="{loc:Str ...}" on Button ->  a <TextBlock> child (trap 1)
        LinearGradientBrush "0,0"/"1,0"   ->  "0%,0%"/"100%,0%"
-       ImageBrush HeroArtBrush/SideArtBrush -> named Borders painted by ApplyFeatureArt
+       ImageBrush HeroArtBrush/SideArtBrush -> named Borders painted by ModArt.BindFeaturePlates
                                             (x:Name on a brush is AVLN2000)
        feat:AdaptiveSideArt.CollapseBelow -> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        feat:SessionLock.Owned            -> sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
@@ -292,7 +292,7 @@
                 </Button>
             </StackPanel>
 
-            <!-- SIDE ART. ApplyFeatureArt paints the mod-aware background. -->
+            <!-- SIDE ART. ModArt.BindFeaturePlates paints the mod-aware background. -->
             <Border x:Name="SideArt" Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
                     Background="{StaticResource SectionHueStudioWashBrush}"
