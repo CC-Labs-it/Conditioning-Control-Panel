@@ -142,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // An explicit choice replaces a temporary minimize mute (WPF toggles effective _isMuted).
             CoreSettings.Current.AvatarMuted = !IsMuted;
             _windowMuted = false;
+            _muteOverride = null;
             CoreSettings.Save();
             UpdateQuickMenuState();
             QuickShell?.SyncHero();   // WPF SyncQuickControlsUI(muteAvatar)
