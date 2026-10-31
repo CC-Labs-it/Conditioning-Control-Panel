@@ -50,8 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// panel's own master checkbox, which is what WPF does and what keeps the write and the Save
     /// in one place.</para>
     ///
-    /// <para><b>Shortcuts.</b> The v2 pills are read once on Loaded (no prize-grant event on this
-    /// head); marked <c>ponytail:</c> at <see cref="RefreshV2Pills"/>. The FeatureOpened bark
+    /// <para>The v2 pills follow prize-grant changes while attached. The FeatureOpened bark
     /// crosses on <see cref="CoreBark"/>.</para>
     ///
     /// <para><b>The art is real.</b> The rack's feature plates and the door medallion resolve
@@ -781,9 +780,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>
         /// WPF RefreshV2Pills: lights or hides the v2 pill on the flash and bubbles rows from
         /// ownership (<see cref="Platform.PrizeOwnership"/>, WPF V2Badges).
-        /// <para>ponytail: run on Loaded only. WPF re-runs it on <c>PrizeGrants.GrantsChanged</c>;
-        /// ownership cannot change at runtime on this head (no OwnershipService yet, parity row
-        /// svc-prize-ownership), so there is no event to hook.</para>
+        /// <para>Refreshed on attach and PrizeGrants.GrantsChanged while attached.</para>
         /// </summary>
         internal void RefreshV2Pills()
         {
@@ -1483,6 +1480,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += OnPrizeGrantsChanged;
+            RefreshV2Pills();
 
             // A cloud restore or a factory Reset SWAPS the settings instance out from under a rack
             // that lives for the whole session; without this the rack shows - and writes back to -
@@ -1505,8 +1504,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_modHooked) CoreMods.ModChanged -= OnModChanged;
             _modHooked = false;
 
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= OnPrizeGrantsChanged;
             base.OnDetachedFromVisualTree(e);
         }
+
+        // WPF StudioTabView.xaml.cs:1526 refreshes both pills on ownership changes.
+        private void OnPrizeGrantsChanged() => Dispatcher.UIThread.Post(RefreshV2Pills);
 
         private void BindDotListener()
         {

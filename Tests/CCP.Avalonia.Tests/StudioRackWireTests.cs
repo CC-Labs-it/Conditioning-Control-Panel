@@ -94,6 +94,34 @@ public sealed class StudioRackWireTests
         });
     }
 
+    [Fact]
+    public Task V2PillsRefreshOnGrantAndRevoke() => Run((shell, rack) =>
+    {
+        var previous = PrizeOwnership.IsGranted;
+        var user = CoreAccount.UnifiedUserId;
+        try
+        {
+            CoreAccount.UnifiedUserId = "rack-prizes";
+            PrizeOwnership.IsGranted = ConditioningControlPanel.Services.Prizes.PrizeGrants.IsGranted;
+            PrizeOwnership.ResetHeld();
+            PrizeOwnership.ApplySnapshot("rack-prizes", 1, new[] { PrizeOwnership.FlashPendulum, PrizeOwnership.BubbleRain });
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(rack.V2PillsFor("flash").Strip!.IsVisible);
+            Assert.True(rack.V2PillsFor("bubbles").Tile!.IsVisible);
+            PrizeOwnership.ApplySnapshot("rack-prizes", 2, System.Array.Empty<string>());
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(rack.V2PillsFor("flash").Strip!.IsVisible);
+            Assert.False(rack.V2PillsFor("bubbles").Tile!.IsVisible);
+        }
+        finally
+        {
+            PrizeOwnership.ResetHeld();
+            CoreAccount.UnifiedUserId = user;
+            PrizeOwnership.IsGranted = previous;
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
     private static void RightClick(MainShellWindow shell, StudioTabView rack, string key)
     {
         var row = rack.GetVisualDescendants().OfType<RadioButton>().First(r => r.Tag as string == key);
