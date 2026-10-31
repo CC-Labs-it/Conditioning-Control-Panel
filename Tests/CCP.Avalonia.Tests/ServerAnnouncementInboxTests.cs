@@ -158,4 +158,25 @@ public sealed class ServerAnnouncementInboxTests
         }
         finally { shell.Close(); foreach (var p in opened) p.Close(); }
     });
+    [Fact]
+    public Task RoutedServerNewsSuppressesWeeklyIntakeEvenWhenInboxed() => Run(async _ =>
+    {
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreAccount.HasPremiumAccessProvider = () => false;
+        CoreSession.IsSessionRunningProvider = () => false;
+        CoreSettings.Current.IntakeNudgeEnabled = true;
+        CoreSettings.Current.IntakeNudgeDismissedWeek = "";
+        CoreSettings.Current.IntakePassSpentWeek = "";
+        CoreSettings.Current.IntakePassSpentUtc = null;
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow();
+        try
+        {
+            await shell.CheckServerAnnouncementAsync();
+            shell.CheckIntakePassNudge();
+            Assert.Equal("announcement:a1", Assert.Single(StartupLadder.Inbox.Items).Key);
+        }
+        finally { shell.Close(); }
+    });
+
 }

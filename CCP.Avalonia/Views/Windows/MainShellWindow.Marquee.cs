@@ -32,9 +32,7 @@
 //     modal" arbitration those read from App.
 //   (RefreshMarqueeFromSettings / CheckServerUpdateBanner are PORTED: MainShellWindow.ServerBanners.cs over Core
 //     V2AuthService, as CheckServerAnnouncement is in MainShellWindow.Announcement.cs.)
-//   _serverAnnouncementShownThisLaunch - only the intake nudge reads it.
-//   CheckIntakePassNudge / StartIntakeFromNudge - App.Programs (the weekly intake pass); the
-//     accepted nudge then wants ShowTab("gradedintake"), which does exist here.
+//   Weekly intake nudge and announcement precedence are ported in MainShellWindow.IntakeNudge.cs.
 //   (BannerWebLink_Click is ported below: the beat's inline SafeHyperlinkButton opens through
 //   ExternalOpener, which has no no-default-browser prompt - WPF BrowserLauncher's fallback.)
 //   LocOr - a Loc.Get with an English literal fallback. Used only by the marquee and takeaway
