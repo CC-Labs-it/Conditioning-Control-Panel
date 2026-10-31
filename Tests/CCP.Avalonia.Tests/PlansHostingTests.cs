@@ -40,15 +40,38 @@ public sealed class PlansHostingTests
         Assert.False(plans.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible);
         Assert.Empty(plans.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource!.Cast<object>());
         Assert.Empty(plans.GetVisualDescendants().OfType<ScrollViewer>());
-        foreach (var name in new[] { "TierPlate1", "TierPlate2", "SpotlightCard" })
+        foreach (var name in new[] { "TierPlate1", "TierPlate2" })
             Assert.True(plans.FindControl<Control>(name)!.IsVisible);
-        Assert.NotNull(plans.FindControl<Control>("InvitesHost")); // signed-out card stays hidden
+        Assert.False(plans.FindControl<Control>("SpotlightCard")!.IsVisible);
+        Assert.Equal(Loc.Get("plans_header_title"), plans.FindControl<TextBlock>("TxtVaultTitle")!.Text);
+        Assert.Equal(Loc.Get("plans_header_sub"), plans.FindControl<TextBlock>("TxtVaultSub")!.Text);
+        Assert.True(plans.FindControl<Button>("BtnSeePremium")!.IsVisible);
+        Assert.Equal(Loc.Get("plans_see_premium"), ((TextBlock)plans.FindControl<Button>("BtnSeePremium")!.Content!).Text);
+        Assert.True(plans.FindControl<Control>("PlansInvitesHost")!.IsVisible);
         Assert.Null(plans.FindControl<ScrollViewer>("ContentScroll")!.Parent);
         // The separate Premium page retains its full collection and scroller.
         var full = new ExclusivesTabView();
         Assert.False(full.PlansMode);
         Assert.True(full.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible);
         Assert.NotNull(full.FindControl<ScrollViewer>("ContentScroll"));
+        Assert.True(full.FindControl<Control>("SpotlightCard")!.IsVisible);
+        Assert.False(full.FindControl<Button>("BtnSeePremium")!.IsVisible);
+        Assert.False(full.FindControl<Control>("PlansInvitesHost")!.IsVisible);
+        // An invite response can reveal the card, but never its Premium-page host.
+        full.FindControl<Control>("InvitesHost")!.IsVisible = true;
+        Assert.False(full.FindControl<Control>("PlansInvitesHost")!.IsVisible);
+        Assert.Equal(Loc.Get("premium_page_title"), full.FindControl<TextBlock>("TxtVaultTitle")!.Text);
+        Assert.Equal(Loc.Get("premium_page_sub"), full.FindControl<TextBlock>("TxtVaultSub")!.Text);
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        try
+        {
+            LocalizationManager.Instance.SetLanguage("de");
+            Assert.Equal(Loc.Get("plans_header_title"), plans.FindControl<TextBlock>("TxtVaultTitle")!.Text);
+            Assert.Equal(Loc.Get("plans_header_sub"), plans.FindControl<TextBlock>("TxtVaultSub")!.Text);
+            Assert.Equal(Loc.Get("premium_page_title"), full.FindControl<TextBlock>("TxtVaultTitle")!.Text);
+            Assert.Equal(Loc.Get("premium_page_sub"), full.FindControl<TextBlock>("TxtVaultSub")!.Text);
+        }
+        finally { LocalizationManager.Instance.SetLanguage(language); }
         return Task.CompletedTask;
     });
 
@@ -99,6 +122,14 @@ public sealed class PlansHostingTests
             Dispatcher.UIThread.RunJobs();
             Assert.False(plans.MotionRunning);
             Assert.False(plans.FindControl<AmbientFxCanvas>("ExclusivesAmbientFx")!.IsRunning);
+            shell.OpenAppSettingsSection("account");
+            Dispatcher.UIThread.RunJobs();
+            var premiumLink = plans.FindControl<Button>("BtnSeePremium");
+            Assert.NotNull(premiumLink);
+            premiumLink.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("premium", shell.CurrentTab);
+            Assert.False(plans.MotionRunning);
         }
         finally { shell.Close(); }
         return Task.CompletedTask;
