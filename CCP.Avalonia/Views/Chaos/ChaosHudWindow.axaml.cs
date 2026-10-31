@@ -59,8 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///    visual's <c>RenderTransform</c> - which would fight the <c>TransformGroup</c> assembled
     ///    in the ctor and the jitter timer that writes into it). Verified, not assumed.
     ///    The one animation that was already a timer - the hot-streak jitter - is ported as-is.
-    ///    Still missing: the heat-bar shimmer, which is a brush <c>RelativeTransform</c> and has
-    ///    no Avalonia twin at all (see <see cref="StartLustShimmer"/>).
+    ///    The heat-bar shimmer translates the gradient endpoints (see <see cref="StartLustShimmer"/>).
     ///  - <b>Settings.</b> The persisted edge (<c>ChaosHudOnRight</c>) and the panic-key hint
     ///    read and write <c>CoreSettings.Current</c>, one for one with the <c>App.Settings</c>
     ///    pair WPF used, so the side switch survives a restart again.
@@ -286,19 +285,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         }
 
-        /// <summary>A glint that sweeps the heat bar.
-        /// <para>ponytail: still a stub, but NOT for the reason the old note gave. The gate is
-        /// here - <c>ChaosSkiaFxOverlay.Enabled</c> is just <c>AppSettings.ChaosSkiaFxEnabled</c>,
-        /// which is in Core (<c>CCP.Core/Models/AppSettings.cs</c>), and the pump below could
-        /// drive the sweep. What is missing is the sweep's mechanism: WPF translated the
-        /// five-stop <c>LinearGradientBrush</c>'s <c>RelativeTransform</c>, and an Avalonia brush
-        /// has no <c>RelativeTransform</c> at all. Re-doing it means either re-offsetting the
-        /// <c>GradientStop</c>s every frame or sliding <c>StartPoint</c>/<c>EndPoint</c> with
-        /// <c>SpreadMethod.Repeat</c> - and neither is worth shipping unverified, because a brush
-        /// that does not invalidate on the change is silently inert. The bar keeps its flat XAML
-        /// orange, which is the settled frame of that sweep.</para></summary>
+        // WPF ChaosHudWindow.xaml.cs:105-145: FX-gated orange glint, -1 to +1 in 2.4s.
+        // Moving the gradient endpoints translates the relative brush without a transform.
         private void StartLustShimmer()
         {
+            if (!ChaosSkiaFxOverlay.Enabled) return;
+            var orange = Color.FromRgb(0xFF, 0x7A, 0x3D);
+            var sheen = new LinearGradientBrush
+            {
+                SpreadMethod = GradientSpreadMethod.Pad,
+                GradientStops = new GradientStops
+                {
+                    new GradientStop(orange, 0),
+                    new GradientStop(orange, 0.4),
+                    new GradientStop(Color.FromRgb(0xFF, 0xE6, 0xB0), 0.5),
+                    new GradientStop(orange, 0.6),
+                    new GradientStop(orange, 1),
+                },
+            };
+            _barLust.Foreground = sheen;
+            StartTween("lust:shimmer", 2400, t =>
+            {
+                double x = -1 + 2 * t;
+                sheen.StartPoint = new RelativePoint(x, 0.5, RelativeUnit.Relative);
+                sheen.EndPoint = new RelativePoint(x + 1, 0.5, RelativeUnit.Relative);
+            }, repeats: -1);
         }
 
         /// <summary>Themed hover cards for every sidebar element - exact numbers, lexicon voice.
