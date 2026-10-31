@@ -93,6 +93,7 @@ public sealed class LeashSelfCard : Border
         _body.Children.Add(Caption(Loc.Get("leash_self_level")));
         _body.Children.Add(Segments(new[] { "leash_level_soft", "leash_level_standard", "leash_level_strict" },
             (int)_me.Intensity, "leash-level", i => _ = SetLevelAsync((LeashIntensity)i)));
+        _body.Children.Add(new LeashLevelHelp(_me.Intensity, lines: true));
         var quiet = LeashUiRules.DndOn(_me.DndUntil, DateTimeOffset.UtcNow);
         _body.Children.Add(Caption(quiet && _me.DndUntil is { } u ? Loc.GetF("leash_self_quiet_until", LeashUiRules.DndUntilText(u)) : Loc.Get("leash_self_quiet"), "leash-self-quiet"));
         _body.Children.Add(Segments(new[] { "leash_dnd_off", "leash_dnd_1h", "leash_dnd_4h", "leash_dnd_today" },
