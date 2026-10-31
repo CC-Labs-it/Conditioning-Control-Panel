@@ -393,6 +393,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             StartSafetyTimer(_videoDurationSeconds);
         }
 
+        internal static Action? FramePresented; // UI-thread observation of a copied video frame.
+
         /// <summary>WPF's primary LibVLC start: the 30 s fallback clock (the metadata cache is not
         /// ported; LengthChanged corrects it), bubbles, then Play at master volume. False when no
         /// LibVLC is available, which ends the game as a start failure does in WPF.</summary>
@@ -412,7 +414,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _player = player;
             _sink = new VlcFrameSink(player, () => _media,
                 bmp => { foreach (var w in _allWindows) w._videoImage.Source = bmp; },
-                () => { foreach (var w in _allWindows) w._videoImage.InvalidateVisual(); });
+                () =>
+                {
+                    foreach (var w in _allWindows) w._videoImage.InvalidateVisual();
+                    FramePresented?.Invoke();
+                });
             // LibVLC raises these on its own thread; the game is torn down only on the UI thread.
             player.LengthChanged += (_, a) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) AdoptRealDuration(a.Length / 1000.0); });
             player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
