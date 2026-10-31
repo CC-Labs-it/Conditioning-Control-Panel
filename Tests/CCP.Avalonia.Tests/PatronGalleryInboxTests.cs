@@ -19,7 +19,6 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
-
 namespace CCP.Avalonia.Tests;
 
 public sealed class PatronGalleryInboxTests
@@ -64,7 +63,6 @@ public sealed class PatronGalleryInboxTests
         ?? Array.Empty<Window>();
     private static void Drain() => Dispatcher.UIThread.RunJobs();
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-
     [Fact]
     public Task UnlockFilesQuietlyAndOpenHasWpfCopyAndCheckout() => Run(shell =>
     {

@@ -31,7 +31,7 @@ public sealed class ContentHitTestTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var w = new MainShellWindow();
@@ -63,6 +63,8 @@ public sealed class ContentHitTestTests
                     if (!new Rect(w.Bounds.Size).Contains(p) || b.GetVisualAncestors().OfType<ScrollViewer>().Any(s => !Inside(s, p, w))) continue;
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
+                    w.MouseMove(p); RenderLiveTree(w); // Hover can change the tree between the probe and press.
+                    p = b.TranslatePoint(new Point(b.Bounds.Width / 2, b.Bounds.Height / 2), w)!.Value;
                     var hit = w.InputHitTest(p) as Visual;
                     bool pressed = false;
                     void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
@@ -87,7 +89,7 @@ public sealed class ContentHitTestTests
     /// committed after it is missing from the frame. Every tab's first probe ran with one batch pending,
     /// and on a slow runner the stale frame still had no hero there (Linux CI 38316007639: awareness
     /// BtnAwarenessTutorial / ChkAwarenessMaster hit ScrollContentPresenter, pressed False).</summary>
-    private static void RenderLiveTree(Visual w)
+    internal static void RenderLiveTree(Visual w)
     {
         Dispatcher.UIThread.RunJobs();
         var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();

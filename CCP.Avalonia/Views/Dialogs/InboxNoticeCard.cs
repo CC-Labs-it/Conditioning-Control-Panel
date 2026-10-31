@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
 internal sealed class InboxNoticeCard : Window, IPassiveStartupSurface
 {
     internal static InboxNoticeCard? Open { get; private set; }
-
+    internal InboxNoticeCard() : this("CC Labs", Loc.Get("conv_gallery_body"), Loc.Get("conv_get_basic"), () => { }) { }
     private InboxNoticeCard(string heading, string body, string primary, Action onPrimary)
     {
         Title = "CC Labs";
