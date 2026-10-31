@@ -30,9 +30,6 @@
     <Style Selector="TextBox">
       <Setter Property="Theme" Value="{StaticResource InputTextBoxTheme}"/>
     </Style>
-    <Style Selector="ComboBox">
-      <Setter Property="Theme" Value="{StaticResource InputComboBoxTheme}"/>
-    </Style>
     <!-- Inputs.xaml:218 and 394. Local Theme and ItemContainerTheme still win. -->
     <Style Selector="CheckBox">
       <Setter Property="Theme" Value="{StaticResource InputCheckBoxTheme}"/>
