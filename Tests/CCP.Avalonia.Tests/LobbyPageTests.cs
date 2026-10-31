@@ -4,6 +4,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Controls.Templates;
+using Avalonia.Controls.Shapes;
+using Avalonia.Media;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Services;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -166,6 +171,48 @@ public sealed class LobbyPageTests
             CoreEntitlement.IsFreeTodayProvider = free;
             CoreEntitlement.ShowDeniedHandler = refusal;
         }
+    });
+
+    [Fact]
+    public void HostLookBindsFaceAndFrameOnGameArtAndClearsForBareRow() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        var template = Assert.IsAssignableFrom<IDataTemplate>(page.Resources["LobbyRowTemplate"]);
+        var gates = LobbyGates.From(true, true, true);
+        var host = new LobbyRow { Game = LobbyGame.Chess, HostName = "ann",
+            Look = new PlayerLook("profile.avatar.emi-pixel", "profile.frame.lace") };
+        var worn = new LobbyCardView(host, gates);
+        Assert.True(worn.HasLook);
+        Assert.NotNull(worn.Art);
+        Assert.IsType<ImageBrush>(worn.FaceBrush);
+        Assert.NotNull(worn.FrameArt);
+        Assert.Equal(22 / ShopProfileArt.FrameWindowRatio, worn.FrameSize, 6);
+        Assert.Equal(-(worn.FrameSize - 22) / 2, worn.FrameMargin.Left, 6);
+        var card = template.Build(worn)!;
+        card.DataContext = worn;
+        var face = card.GetVisualDescendants().OfType<Grid>().Single(c => Equals(c.Tag, "lobby-face"));
+        var frame = face.Children.OfType<Image>().Single();
+        Assert.True(face.IsVisible);
+        Assert.False(face.IsHitTestVisible);
+        Assert.False(face.ClipToBounds);
+        Assert.IsType<ImageBrush>(face.Children.OfType<Ellipse>().Single().Fill);
+        Assert.Same(worn.FrameArt, frame.Source);
+        Assert.Equal(worn.FrameSize, frame.Width);
+        Assert.Equal(worn.FrameMargin, frame.Margin);
+        Assert.Equal(new Thickness(0, 0, -7, -7), face.Margin);
+
+        var bare = new LobbyCardView(host with { Look = PlayerLook.None }, gates);
+        card.DataContext = bare;
+        Assert.False(face.IsVisible);
+        Assert.Null(frame.Source);
+        Assert.Null(face.Children.OfType<Ellipse>().Single().Fill);
+        Assert.False(bare.HasLook);
+        Assert.Null(bare.FaceBrush);
+        Assert.Null(bare.FrameArt);
+
+        var missing = new LobbyCardView(host with { Look = new PlayerLook("missing", "missing") }, gates);
+        Assert.IsType<LinearGradientBrush>(missing.FaceBrush);
+        Assert.Null(missing.FrameArt);
     });
 
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
