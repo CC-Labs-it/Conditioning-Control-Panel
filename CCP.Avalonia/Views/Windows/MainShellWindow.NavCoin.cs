@@ -1,9 +1,5 @@
-// PORTED from ConditioningControlPanel/MainWindow/MainWindow.NavRail.cs:67-497 (nav polish waves 10
-// and 11, depth): every rail medallion is a coin in a socket: contact disc, dish, socket shade, lip,
-// outer hairline, inner shadow ring and specular crescent - that travels on press and springs back
-// on release, leans toward the pointer on hover, and stays level while selected.
-// The numbers are Core DepthLaw (WPF DepthRules reads the same); the coin sizes are WPF NavRailRules.
-// The brushes are Theme/Depth.xaml, the twin of WPF Resources/Theme/Depth.xaml.
+// PORTED from ConditioningControlPanel/MainWindow/MainWindow.NavRail.cs:67-497.
+// Coin depth, press spring and pointer tilt use Core DepthLaw and Theme/Depth.xaml.
 
 using System;
 using Avalonia;
@@ -204,14 +200,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Easing ease = spring && Math.Abs(from - travel) > 0.01
                 ? new NavSpringEase((CoinOvershoot(from, travel) - from) / (travel - from))
                 : new QuadraticEaseOut();
-            lift.Transitions = new Transitions { new DoubleTransition { Property = TranslateTransform.YProperty, Duration = span, Easing = ease } };
+            ReuseNavTransition(lift, TranslateTransform.YProperty, span, ease);
             lift.Y = travel;
             if (shadow > 0)
             {
-                coin.DiscShift.Transitions = new Transitions { new DoubleTransition { Property = TranslateTransform.YProperty, Duration = span, Easing = new QuadraticEaseOut() } };
+                ReuseNavTransition(coin.DiscShift, TranslateTransform.YProperty, span, new QuadraticEaseOut());
                 coin.DiscShift.Y = shadow;
             }
-            coin.Disc.Transitions = new Transitions { new DoubleTransition { Property = Visual.OpacityProperty, Duration = span } };
+            ReuseNavTransition(coin.Disc, Visual.OpacityProperty, span, new LinearEasing());
             coin.Disc.Opacity = discTo;
         }
 
@@ -256,14 +252,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF SettleNavTilt (:468): back to level over HoverMs (Off snaps).</summary>
         private static void SettleNavTilt(NavSectionRow row) =>
             SetNavTilt(row, 0, DepthLaw.Ms(DepthLaw.HoverMs, AmbientFxCanvas.Env.Level), new QuadraticEaseOut());
-
-        private static void SetNavTilt(NavSectionRow row, double angle, int ms, Easing? ease)
+        internal static void SetNavTilt(NavSectionRow row, double angle, int ms, Easing? ease)
         {
-            row.Tilt.Transitions = ms <= 0 ? null : new Transitions
-            {
-                new DoubleTransition { Property = RotateTransform.AngleProperty, Duration = TimeSpan.FromMilliseconds(ms), Easing = ease ?? new LinearEasing() },
-            };
+            if (ms <= 0) row.Tilt.Transitions = null;
+            else ReuseNavTransition(row.Tilt, RotateTransform.AngleProperty, TimeSpan.FromMilliseconds(ms), ease ?? new LinearEasing());
             row.Tilt.Angle = angle;
+        }
+        // WPF NavRail.cs:426-441,463,477 continues from the current animated value.
+        // Keeping the transition lets Avalonia capture that value before disposing its old animation.
+        private static void ReuseNavTransition(Animatable target, AvaloniaProperty property, TimeSpan duration, Easing ease)
+        {
+            target.Transitions ??= new Transitions { new DoubleTransition { Property = property } };
+            var transition = (DoubleTransition)target.Transitions[0];
+            transition.Duration = duration;
+            transition.Easing = ease;
         }
 
     }

@@ -13,9 +13,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 /// <summary>The rail medallions as coins (WPF MainWindow.NavRail.cs:67-497,
 /// nav polish waves 10/11), driven from the shell's own startup and real pointer input.</summary>
 public sealed class NavRailCoinTests
@@ -45,13 +43,10 @@ public sealed class NavRailCoinTests
             Dispatcher.UIThread.RunJobs();
         }
     });
-
     private static MainShellWindow.NavSectionRow Row(MainShellWindow w, string section) =>
         w.NavSectionRowsForTests.Single(r => r.Section == section);
-
     private static Point TileAt(MainShellWindow w, MainShellWindow.NavSectionRow row, double fx, double fy) =>
         row.Tile!.TranslatePoint(new Point(row.Tile.Bounds.Width * fx, row.Tile.Bounds.Height * fy), w)!.Value;
-
     [Fact]
     public void EveryRowIsACoinStackedLikeWpfAndTheLitOneSitsInItsSocket() => Run(w =>
     {
@@ -220,6 +215,57 @@ public sealed class NavRailCoinTests
         Assert.Equal(0, DepthLaw.PressTravelPx + transition.Easing.Ease(0.6) *
             (DepthLaw.ActiveSinkPx - DepthLaw.PressTravelPx), 6);
         Assert.Equal(1, transition.Easing.Ease(1));
+    });
+    // Avalonia 12 keeps the clock internal. Pulse its own ClockBase without wall time.
+    private sealed class CoinClock
+    {
+        private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(global::Avalonia.Animation.Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", true)!;
+        private static readonly System.Reflection.MethodInfo Pulse = Base.GetMethod("Pulse", Any | System.Reflection.BindingFlags.Instance)!;
+        public static readonly AvaloniaProperty Property = (AvaloniaProperty)typeof(global::Avalonia.Animation.Animatable)
+            .GetField("ClockProperty", Any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        public void Step(int ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void InterruptedCoinAndTiltContinueFromTheirDisplayedValues(bool tiltFirst) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var coin = BareCoin(); var row = new MainShellWindow.NavSectionRow(); var clock = new CoinClock();
+        foreach (var part in new global::Avalonia.Animation.Animatable[] { row.Lift, row.Tilt, coin.DiscShift, coin.Disc })
+            part.SetValue(CoinClock.Property, clock.Instance);
+        void Paint(bool pressed, bool hover, int ms, bool spring = false) =>
+            MainShellWindow.ApplyNavCoinState(coin, row.Lift, pressed, false, hover, ms, spring);
+        double[] Shown() => new[] { row.Lift.Y, row.Tilt.Angle, coin.DiscShift.Y, coin.Disc.Opacity };
+        void Continuous(double[] before) { var after = Shown(); foreach (int i in tiltFirst ? new[] { 1, 0, 2, 3 } : new[] { 0, 1, 2, 3 }) Assert.Equal(before[i], after[i], 8); }
+        var host = new Window { Content = coin.Disc }; host.Show();
+        try
+        {
+            Paint(false, false, 0);
+            Paint(false, true, 120); MainShellWindow.SetNavTilt(row, 1.2, 90, null);
+            clock.Step(0); clock.Step(30);
+            Assert.InRange(row.Lift.Y, -1.0, -0.5); Assert.InRange(row.Tilt.Angle, 0.2, 0.6);
+            Assert.InRange(coin.DiscShift.Y, 3.5, 4.0);
+            var before = Shown();
+            Paint(false, false, 120); MainShellWindow.SetNavTilt(row, 0, 120, new global::Avalonia.Animation.Easings.QuadraticEaseOut());
+            Continuous(before);
+            clock.Step(30); clock.Step(60);
+            Assert.InRange(row.Lift.Y, before[0], 0); Assert.InRange(coin.DiscShift.Y, 3, before[2]);
+            before = Shown(); Paint(true, true, 90); Continuous(before);
+            clock.Step(60); clock.Step(90);
+            Assert.InRange(row.Lift.Y, 0, 2); Assert.InRange(coin.Disc.Opacity, 0.1, 0.9);
+            before = Shown(); Paint(false, true, 140, true); Continuous(before);
+            clock.Step(90); clock.Step(174);
+            Assert.Equal(-DepthLaw.HoverLiftPx - DepthLaw.ReleaseOvershootPx, row.Lift.Y, 6);
+            clock.Step(230);
+            Assert.Equal(-DepthLaw.HoverLiftPx, row.Lift.Y, 6); Assert.Equal(1, coin.Disc.Opacity, 6);
+            Assert.Equal(0, row.Tilt.Angle, 6); Assert.Equal(5, coin.DiscShift.Y, 6);
+            Paint(false, false, 0); MainShellWindow.SetNavTilt(row, 0, 0, null);
+            Assert.Equal(0, row.Lift.Y); Assert.Null(row.Lift.Transitions); Assert.Null(row.Tilt.Transitions);
+        }
+        finally { host.Close(); Dispatcher.UIThread.RunJobs(); }
     });
 
 }
