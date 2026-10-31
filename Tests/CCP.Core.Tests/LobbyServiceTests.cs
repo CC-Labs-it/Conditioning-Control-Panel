@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.GoonGame;
@@ -74,5 +77,35 @@ public sealed class LobbyServiceTests
         pending.SetResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p", "Chess", 1, 0, 0) }, Array.Empty<PbpPlayingGame>(), true));
         await round; Assert.Equal(LobbySnapshot.Empty, lobby.Snapshot);
         lobby.Dispose(); timer.Fire(); await lobby.RefreshAsync(); Assert.Equal(1, changed);
+    }
+    private sealed class DirectoryHandler : HttpMessageHandler
+    {
+        public bool Fail;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            Assert.Equal("/v2/directory/list", request.RequestUri!.AbsolutePath);
+            Assert.Equal("caller", Assert.Single(request.Headers.GetValues("X-Caller-Unified-Id")));
+            Assert.Equal("test-token", Assert.Single(request.Headers.GetValues("X-Auth-Token")));
+            return Task.FromResult(new HttpResponseMessage(Fail ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"entries\":[{\"unified_id\":\"subject\",\"claimed\":true,\"tags\":[\"tag\",\"\"]},{\"level\":\"invalid\"}]}")
+            });
+        }
+    }
+    [Fact]
+    public async Task DirectoryUsesCallerHeadersDefaultsSkipsMalformedEntriesAndRetainsLastGoodOnError()
+    {
+        var handler = new DirectoryHandler(); using var http = new HttpClient(handler);
+        var api = new RemoteLobbyApi(http, () => ("caller", "test-token"), () => "https://example.invalid");
+        var good = await api.FetchAsync(); Assert.True(good.Ok);
+        var seat = Assert.Single(good.Seats);
+        Assert.Equal("subject", seat.UnifiedId); Assert.Equal("Anonymous", seat.Name);
+        Assert.Equal(1, seat.Level); Assert.Equal("light", seat.Tier); Assert.True(seat.Claimed);
+        Assert.Equal("tag", Assert.Single(seat.Tags));
+        handler.Fail = true;
+        var bad = await api.FetchAsync(); Assert.False(bad.Ok); Assert.Same(good.Seats, bad.Seats);
+        var signedOut = new RemoteLobbyApi(http, () => null, () => "https://example.invalid");
+        Assert.Empty((await signedOut.FetchAsync()).Seats);
     }
 }

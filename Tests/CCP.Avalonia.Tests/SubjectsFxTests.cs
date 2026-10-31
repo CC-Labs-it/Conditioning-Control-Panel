@@ -167,24 +167,12 @@ public sealed class SubjectsFxTests
     private static void Paint(AvailableSubjectsTabView view, int open)
     {
         view.ReadGates = () => LobbyGates.From(true, false, false);
-        // Seed discovery before attach: WPF paints the service's cached snapshot on entry.
-        // Subsequent rounds stay pending so the arrival assertions use a stable roster.
-        view.CreateLobby = () =>
-        {
-            bool first = true;
-            var lobby = new LobbyService(new ConditioningControlPanel.Avalonia.Platform.FriendsHead.Timer(),
-                () => true, () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>(),
-                () =>
-                {
-                    if (!first) return new TaskCompletionSource<PbpLobbyReply>().Task;
-                    first = false;
-                    return Task.FromResult(new PbpLobbyReply(Enumerable.Range(0, open)
-                        .Select(i => new PbpOpenSeat("p_fx" + i, "Host" + i, 300000, 0, 0)).ToArray(),
-                        Array.Empty<PbpPlayingGame>(), true));
-                }, () => throw new InvalidOperationException(), () => throw new InvalidOperationException());
-            lobby.RefreshAsync().GetAwaiter().GetResult();
-            return lobby;
-        };
+        // A synchronous fake round supplies the roster on attach and reopen, without network work.
+        view.CreateLobby = () => new LobbyService(new ConditioningControlPanel.Avalonia.Platform.FriendsHead.Timer(),
+            () => true, () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>(),
+            () => Task.FromResult(new PbpLobbyReply(Enumerable.Range(0, open)
+                .Select(i => new PbpOpenSeat("p_fx" + i, "Host" + i, 300000, 0, 0)).ToArray(), Array.Empty<PbpPlayingGame>(), true)),
+            () => throw new InvalidOperationException(), () => throw new InvalidOperationException());
         view.PaintSnapshot(
         new LobbySnapshot(Enumerable.Range(0, open).Select(i => new LobbyRow
             { Game = LobbyGame.Remote, Key = "r" + i, HostName = "Host" + i, RemoteTier = "light" }).ToArray(),
