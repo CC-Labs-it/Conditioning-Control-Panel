@@ -141,6 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            if (WebHost.HandlePageLog(o, Spec.Id)) return;
             if (Spec.Id == "loom") { HandleLoom(o); return; } // only the Loom bridge subset
             if (Spec.Id == FypId && HandleFyp(o)) return;
             if (Spec.Id == JustDropId) { HandleJustDrop(o); return; }   // the remote site never gets the games' frames
@@ -179,9 +180,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         type = "fx-ack", token = (string?)o["token"], fired = Array.Empty<string>(),
                         skipped = new[] { new { prim = (string?)o["fxId"] ?? "", why = "unknown" } },
                     });
-                    break;
-                case "log":
-                    Log.Debug("[Game] {Id} page: {Msg}", Spec.Id, (string?)o["msg"]);
                     break;
                 case "boot-error":
                     Log.Warning("[Game] {Id}: page boot-error: {Msg}", Spec.Id, (string?)o["msg"]);
