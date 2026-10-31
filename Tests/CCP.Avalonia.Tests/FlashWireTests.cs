@@ -69,6 +69,7 @@ public sealed class FlashWireTests
             finally
             {
                 FlashOverlay.CloseAll(final: false);
+                LuckyToastWindow.CloseToast();
                 (FlashOverlay.Clock, FlashOverlay.Present, FlashOverlay.Multiply, FlashOverlay.LuckyChime, CoreProgression.AddXPProvider) =
                     (clockWas, present, multiply, chime, xpWas);
                 AchievementsProp.SetValue(null, achWas);
@@ -93,6 +94,59 @@ public sealed class FlashWireTests
             lifetime ?? TimeSpan.FromSeconds(6), clickable: true, ambient, hydraGeneration));
         return FlashOverlay.Active[^1].Window;
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task Hydra_loads_real_disk_images_and_stop_drops_queued_children(int stop) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            await OnUi((_, _, _, _) => { }); // initialize the real head and reset queued spawns
+            var root = Directory.CreateTempSubdirectory("ccp-hydra-disk-").FullName;
+            var assets = CorePaths.EffectiveAssetsProvider;
+            var present = FlashOverlay.Present;
+            var sc = new Window().Screens.All[0];
+            var parent = new FlashOverlayWindow(Picture()) { SpawnScreen = sc, Ambient = true,
+                MotionStyle = FlashMotionStyle.Still };
+            try
+            {
+                var images = Directory.CreateDirectory(Path.Combine(root, "images")).FullName;
+                using (var picture = Picture()) picture.Save(Path.Combine(images, "child.png"));
+                CorePaths.EffectiveAssetsProvider = () => root;
+                FlashOverlay.Present = (_, _, _) => true;
+                var pending = FlashOverlay.SpawnChildrenAsync(parent, 2, TimeSpan.FromSeconds(8), 1);
+                if (stop == 1) FlashOverlay.CloseAll(final: false); // load still in flight
+                await pending;
+                if (stop == 2) FlashOverlay.CloseAll(final: false); // dispatcher spawns queued
+                if (stop != 0)
+                {
+                    await Task.Delay(250);
+                    Assert.Empty(FlashOverlay.Active);
+                }
+                else
+                {
+                    for (var i = 0; i < 100 && FlashOverlay.Active.Count < 2; i++) await Task.Delay(20);
+                    Assert.Equal(2, FlashOverlay.Active.Count);
+                    Assert.All(FlashOverlay.Active, a =>
+                    {
+                        Assert.Equal(1, a.Window.HydraGeneration);
+                        Assert.Same(sc, a.Window.SpawnScreen);
+                        Assert.True(a.Window.Ambient);
+                        Assert.Equal(TimeSpan.FromSeconds(8), a.Window.Lifetime);
+                    });
+                }
+            }
+            finally
+            {
+                FlashOverlay.CloseAll(final: false);
+                LuckyToastWindow.CloseToast();
+                parent.Close();
+                CorePaths.EffectiveAssetsProvider = assets;
+                FlashOverlay.Present = present;
+                Directory.Delete(root, true);
+            }
+        });
 
     [Fact]
     public Task A_shown_flash_pays_4_xp_and_ticks_the_flash_achievement_counter() => OnUi((s, _, xp, engine) =>

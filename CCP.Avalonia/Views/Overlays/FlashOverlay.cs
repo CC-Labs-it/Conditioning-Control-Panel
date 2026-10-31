@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
     /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
-    /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
+    /// Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
     /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), content-pack and remote pools, avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
@@ -160,6 +160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             App.Sessions?.SessionLog.RecordImages(new[] { path });
             App.MediaHistory?.RecordImages(new[] { path });   // WPF MediaHistoryService.OnFlashDisplayed
+            if (multiplier > 1) LuckyToastWindow.Post(true, multiplier); // WPF SkillTreeService.cs:206
             if (multiplier > 1 && !s.SuppressPerkNotifications) LuckyChime(s);   // WPF :4441 PerkNotificationsSuppressed
             CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying: false, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
             if (s.HydraLinkedTiming || hydraGeneration == 0)
@@ -419,7 +420,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF TriggerMultiplication: the children stay on the parent's screen, play no
         /// sound and spawn 100 ms apart; a CloseAll in between drops them.</summary>
-        private static async void SpawnChildren(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration)
+        private static async void SpawnChildren(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration) =>
+            await SpawnChildrenAsync(parent, count, lifetime, hydraGeneration);
+
+        internal static async Task SpawnChildrenAsync(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration)
         {
             if (_closed || parent.SpawnScreen is not { } screen) return;
             var generation = _generation;

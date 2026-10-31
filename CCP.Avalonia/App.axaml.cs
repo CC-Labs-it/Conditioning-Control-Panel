@@ -1257,6 +1257,7 @@ namespace ConditioningControlPanel.Avalonia
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.
             Services.Haptics.Core.MockProviderV2.Toast = null;
             try { CoreHaptics.Service?.ShutdownStop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics shutdown stop failed"); }
+            Views.Overlays.LuckyToastWindow.CloseToast(); // WPF MainWindow.WindowChrome.cs:280
             try { Views.Overlays.HapticMockToast.Close(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Mock haptics feedback close failed"); }
 
             try { (((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).MainWindow as Views.Windows.MainShellWindow)?.Tray?.Dispose(); } catch { }

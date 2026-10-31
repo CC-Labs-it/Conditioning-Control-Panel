@@ -12,6 +12,33 @@ namespace CCP.Core.Tests;
 public sealed class AmbientBubblesTests
 {
     [Fact]
+    public void Lucky_proc_precedes_budget_draw_even_when_empty_and_never_repeats()
+    {
+        var s = new AppSettings();
+        s.UnlockedSkills.Add("lucky_bubbles");
+        AmbientBubbleXp.Take(s, 300);
+        var f = new AmbientBubbleField(new AlwaysLucky());
+        var calls = 0;
+        f.LuckyProc = m => { Assert.Equal(20, m); calls++; };
+        var b = new AmbientBubble();
+        Assert.Equal(0, f.Pop(b, s));
+        Assert.Equal(1, calls);
+        Assert.False(b.Lucky); // WPF BubbleService.cs:1107: no payout flourish from an empty bucket
+        Assert.Equal(0, f.Pop(b, s));
+        Assert.Equal(1, calls);
+        s.AmbientBubbleXpPaidToday = 290;
+        b = new AmbientBubble();
+        Assert.Equal(10, f.Pop(b, s));
+        Assert.True(b.Lucky);
+        Assert.Equal(2, calls);
+    }
+
+    private sealed class AlwaysLucky : Random
+    {
+        public override double NextDouble() => 0;
+    }
+
+    [Fact]
     public void Bucket_pays_up_to_300_a_day_then_the_remainder_then_nothing()
     {
         var s = new AppSettings { AmbientBubbleXpDayKey = "2000-01-01", AmbientBubbleXpPaidToday = 999 };

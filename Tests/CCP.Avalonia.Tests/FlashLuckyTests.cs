@@ -63,6 +63,7 @@ public sealed class FlashLuckyTests
             finally
             {
                 FlashOverlay.CloseAll(final: false);
+                LuckyToastWindow.CloseToast();
                 BeatLoop.Time = beatWas;
                 (FlashOverlay.Clock, FlashOverlay.Present, FlashOverlay.LuckyChime, PrizeOwnership.IsGranted,
                     CoreProgression.AddXPProvider) =
