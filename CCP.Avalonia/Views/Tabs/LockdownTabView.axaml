@@ -36,13 +36,12 @@
        feat:AdaptiveSideArt           ->  kept (Helpers/AdaptiveSideArt.cs), same threshold as WPF.
                                           The 3*/2* split with MaxWidth="780" is kept verbatim.
        hover:HoverPop.IsEnabled       ->  dropped: its only target, ImgLockdownFeature, is not on this head.
-       poss:Possession.Role/Name/Exclude -> dropped throughout; the Possession tagger is a WPF
-                                          service. Re-add as attached properties when it moves.
+       poss:Possession.Role/Name/Exclude -> poss:PossessionTree.Role/Name/Exclude (same tags as WPF :154-:558).
        pack:// ImageSource            ->  dropped. This head ships no Resources/ PNGs yet, so the
                                           hero art strip, the side-art plate and the Emergency
                                           Exit face plate keep their geometry and scrim and draw
                                           no bitmap. Re-add as avares:// when the art moves. -->
-<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:poss="clr-namespace:ConditioningControlPanel.Avalonia.Possession" xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
@@ -189,7 +188,7 @@
                                  SettingCardStyle - that style's velvet border would survive
                                  exactly one lockdown cycle. The values here match what Restore
                                  writes. -->
-                            <Border x:Name="LockdownCardBorder" CornerRadius="12"
+                            <Border x:Name="LockdownCardBorder" poss:PossessionTree.Role="Card" poss:PossessionTree.Name="the lockdown card" CornerRadius="12"
                                     Padding="0" Margin="0,0,0,10" BorderThickness="2">
                                 <Border.Background>
                                     <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
@@ -250,7 +249,7 @@
                                                 <TextBlock Grid.Column="0" Text="{loc:Str lockdown_hide_timer}" FontSize="11.5"
                                                            Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"
                                                            TextTrimming="CharacterEllipsis"/>
-                                                <CheckBox Grid.Column="1" x:Name="ChkLockdownHideTimer"
+                                                <CheckBox Grid.Column="1" x:Name="ChkLockdownHideTimer" poss:PossessionTree.Role="Toggle" poss:PossessionTree.Name="the hidden clock toggle"
                                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           IsCheckedChanged="ChkLockdownHideTimer_Changed"/>
                                             </Grid>
@@ -273,7 +272,7 @@
                                                 <TextBlock Grid.Column="0" Text="{loc:Str lockdown_poss_title}" FontSize="13"
                                                            FontWeight="SemiBold" Foreground="{DynamicResource TextLightBrush}"
                                                            VerticalAlignment="Center"/>
-                                                <CheckBox Grid.Column="1" x:Name="ChkPossessionEnabled"
+                                                <CheckBox Grid.Column="1" x:Name="ChkPossessionEnabled" poss:PossessionTree.Role="Toggle" poss:PossessionTree.Name="the Possession switch"
                                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           ToolTip.Tip="{loc:Str lockdown_poss_on}"
                                                           IsCheckedChanged="ChkPossessionEnabled_Changed"/>
@@ -318,7 +317,7 @@
                                                         <TextBlock Text="{loc:Str lockdown_poss_tripwires_hint}" FontSize="10.5"
                                                                    Foreground="{DynamicResource TextMutedBrush}"/>
                                                     </StackPanel>
-                                                    <CheckBox Grid.Column="1" x:Name="ChkPossTripwires"
+                                                    <CheckBox Grid.Column="1" x:Name="ChkPossTripwires" poss:PossessionTree.Role="Toggle" poss:PossessionTree.Name="the tripwires toggle"
                                                               Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                               IsCheckedChanged="ChkPossTripwires_Changed"/>
                                                 </Grid>
@@ -334,7 +333,7 @@
                                                         <TextBlock Text="{loc:Str lockdown_poss_warden_hint}" FontSize="10.5"
                                                                    Foreground="{DynamicResource TextMutedBrush}"/>
                                                     </StackPanel>
-                                                    <CheckBox Grid.Column="1" x:Name="ChkPossWarden"
+                                                    <CheckBox Grid.Column="1" x:Name="ChkPossWarden" poss:PossessionTree.Role="Toggle" poss:PossessionTree.Name="the warden toggle"
                                                               Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                               IsCheckedChanged="ChkPossWarden_Changed"/>
                                                 </Grid>
@@ -350,7 +349,7 @@
                                                         <TextBlock Text="{loc:Str lockdown_poss_photosafe_hint}" FontSize="10.5"
                                                                    Foreground="{DynamicResource TextMutedBrush}"/>
                                                     </StackPanel>
-                                                    <CheckBox Grid.Column="1" x:Name="ChkPossPhotosafe"
+                                                    <CheckBox Grid.Column="1" x:Name="ChkPossPhotosafe" poss:PossessionTree.Role="Toggle" poss:PossessionTree.Name="the photosensitive-safe toggle"
                                                               Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                               IsCheckedChanged="ChkPossPhotosafe_Changed"/>
                                                 </Grid>
@@ -375,7 +374,7 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0" Text="{loc:Str lockdown_poss_safety_strict}" FontSize="11.5"
                                                            Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                <CheckBox Grid.Column="1" x:Name="ChkLockdownStrict"
+                                                <CheckBox Grid.Column="1" x:Name="ChkLockdownStrict" poss:PossessionTree.Role="Toggle" poss:PossessionTree.Name="the Strict Lock safety"
                                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           IsCheckedChanged="ChkLockdownSafety_Changed"/>
                                             </Grid>
@@ -387,7 +386,7 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0" Text="{loc:Str lockdown_poss_safety_panic}" FontSize="11.5"
                                                            Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                <CheckBox Grid.Column="1" x:Name="ChkLockdownNoPanic"
+                                                <CheckBox Grid.Column="1" x:Name="ChkLockdownNoPanic" poss:PossessionTree.Role="Toggle" poss:PossessionTree.Name="the panic key safety"
                                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           IsCheckedChanged="ChkLockdownSafety_Changed"/>
                                             </Grid>
@@ -400,7 +399,7 @@
                                                 <TextBlock Grid.Column="0" Text="{loc:Str lockdown_poss_safety_syskeys}" FontSize="11.5"
                                                            Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"
                                                            TextTrimming="CharacterEllipsis"/>
-                                                <CheckBox Grid.Column="1" x:Name="ChkLockdownSysKeys"
+                                                <CheckBox Grid.Column="1" x:Name="ChkLockdownSysKeys" poss:PossessionTree.Role="Toggle" poss:PossessionTree.Name="the system keys safety"
                                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           IsCheckedChanged="ChkLockdownSafety_Changed"/>
                                             </Grid>
@@ -414,7 +413,7 @@
                                                 <TextBlock Grid.Column="0" Text="{loc:Str lockdown_poss_safety_dose}" FontSize="11.5"
                                                            Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"
                                                            TextTrimming="CharacterEllipsis"/>
-                                                <CheckBox Grid.Column="1" x:Name="ChkLockdownDose"
+                                                <CheckBox Grid.Column="1" x:Name="ChkLockdownDose" poss:PossessionTree.Role="Toggle" poss:PossessionTree.Name="the dose safety"
                                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           IsCheckedChanged="ChkLockdownSafety_Changed"/>
                                             </Grid>
@@ -439,7 +438,7 @@
                                              Activated / Deactivated events flip it (code-behind). -->
                                         <StackPanel x:Name="LockdownActivePanel" IsVisible="False">
                                             <TextBlock Text="{loc:Str label_lockdown_active}" Foreground="#DC143C" FontWeight="Bold" FontSize="16" Margin="0,0,0,8"/>
-                                            <TextBlock x:Name="TxtLockdownTimer" Text="00:00" Foreground="#DC143C" FontWeight="Bold" FontSize="36"
+                                            <TextBlock x:Name="TxtLockdownTimer" poss:PossessionTree.Role="Timer" poss:PossessionTree.Name="the timer" Text="00:00" Foreground="#DC143C" FontWeight="Bold" FontSize="36"
                                                        Margin="0,0,0,8" Cursor="Hand" PointerPressed="TxtLockdownTimer_Click"/>
 
                                             <!-- Rung readout. The digits above are never allowed to lie
@@ -486,7 +485,7 @@
                                                  ships no PNG, so the face plate draws its inset
                                                  frame alone and the crimson slab still reads as
                                                  the button. -->
-                                            <Button x:Name="BtnEmergencyExit"
+                                            <Button x:Name="BtnEmergencyExit" poss:PossessionTree.Exclude="True"
                                                     Cursor="Hand" Background="Transparent" BorderThickness="0"
                                                     Padding="0" Margin="0,16,0,2" MinHeight="150"
                                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
@@ -589,7 +588,7 @@
                                             <TextBlock x:Name="TxtEmergencyExitNotice" IsVisible="False" TextWrapping="Wrap"
                                                        Foreground="#FFB0A0" FontSize="12.5" Margin="0,8,0,0"/>
 
-                                            <TextBox x:Name="TxtLockdownExit" IsVisible="False"
+                                            <TextBox x:Name="TxtLockdownExit" poss:PossessionTree.Exclude="True" IsVisible="False"
                                                      Background="#1A0A0A" Foreground="#DC143C" BorderBrush="#DC143C" BorderThickness="1"
                                                      FontSize="13" Padding="8,6" Margin="0,8,0,0"
                                                      KeyDown="TxtLockdownExit_KeyDown"/>

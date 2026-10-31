@@ -25,7 +25,7 @@
        WindowStyle="None" + WindowChrome   -> SystemDecorations="None" (the bar is drawn in XAML)
        ResizeMode=CanResizeWithGrip        -> CanResize="True"; the grip itself is lost
        Window.CommandBindings              -> dropped; Avalonia has no RoutedCommand/CommandBinding
-       poss:Possession.* attached props    -> dropped (Services/Possession stays in the WPF head)
+       poss:Possession.* attached props    -> PossessionTree (Core roles, Avalonia registry)
        x:Name on a non-Control              -> dropped. Avalonia only names Controls, so the 20
                                               named ScaleTransform / RotateTransform /
                                               TranslateTransform / GradientStop / DropShadowEffect
@@ -51,6 +51,7 @@
      real ":pointerover /template/" selectors instead. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:poss="clr-namespace:ConditioningControlPanel.Avalonia.Possession"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         xmlns:views="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
         xmlns:cmp="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls"
@@ -392,7 +393,7 @@
                          Exclude inherits, so the badge and everything in it stays out of the Wave 2
                          auto-tagger's deck. Visibility, the clock and the click are all owned by
                          MainWindow.Lab.cs (OnLockdownActivated / OnLockdownTick / LockdownBadge_Click). -->
-                    <Border x:Name="LockdownBadge"
+                    <Border x:Name="LockdownBadge" poss:PossessionTree.Exclude="True"
                             IsVisible="False"
                             VerticalAlignment="Center"
                             Background="#DC143C" CornerRadius="12" Padding="11,4"
@@ -530,7 +531,7 @@
                 <!-- Seven section rows, top-packed, no ScrollViewer (7 x 72 = 504px). Order is
                      NavSections.Order (NavSectionRailTests). Each row: halo, tile, art, ring, label. -->
                 <StackPanel x:Name="NavSectionRows" Grid.Row="1" VerticalAlignment="Top">
-                    <Button x:Name="DoorHome" Tag="home" Theme="{StaticResource NavSectionButton}"
+                    <Button x:Name="DoorHome" poss:PossessionTree.Role="TabHeader" poss:PossessionTree.Name="the Home door" Tag="home" Theme="{StaticResource NavSectionButton}"
                             Click="NavDoor_Click" ToolTip.Tip="{loc:Str nav_door_home}" AutomationProperties.Name="{loc:Str nav_door_home}">
                         <Grid RowDefinitions="56,Auto">
                             <Ellipse Theme="{StaticResource NavSectionGlow}"/>
@@ -540,7 +541,7 @@
                             <TextBlock Theme="{StaticResource NavSectionLabel}"/>
                         </Grid>
                     </Button>
-                    <Button x:Name="DoorStudio" Tag="studio" Theme="{StaticResource NavSectionButton}"
+                    <Button x:Name="DoorStudio" poss:PossessionTree.Role="TabHeader" poss:PossessionTree.Name="the Studio door" Tag="studio" Theme="{StaticResource NavSectionButton}"
                             Click="NavDoor_Click" ToolTip.Tip="{loc:Str nav_door_studio}" AutomationProperties.Name="{loc:Str nav_door_studio}">
                         <Grid RowDefinitions="56,Auto">
                             <Ellipse Theme="{StaticResource NavSectionGlow}"/>
@@ -550,7 +551,7 @@
                             <TextBlock Theme="{StaticResource NavSectionLabel}"/>
                         </Grid>
                     </Button>
-                    <Button x:Name="DoorCompanion" Tag="companion" Theme="{StaticResource NavSectionButton}"
+                    <Button x:Name="DoorCompanion" poss:PossessionTree.Role="TabHeader" poss:PossessionTree.Name="the Companion door" Tag="companion" Theme="{StaticResource NavSectionButton}"
                             Click="NavDoor_Click" ToolTip.Tip="{loc:Str nav_door_companion}" AutomationProperties.Name="{loc:Str nav_door_companion}">
                         <Grid RowDefinitions="56,Auto">
                             <Ellipse Theme="{StaticResource NavSectionGlow}"/>
@@ -560,7 +561,7 @@
                             <TextBlock Theme="{StaticResource NavSectionLabel}"/>
                         </Grid>
                     </Button>
-                    <Button x:Name="DoorPlay" Tag="play" Theme="{StaticResource NavSectionButton}"
+                    <Button x:Name="DoorPlay" poss:PossessionTree.Role="TabHeader" poss:PossessionTree.Name="the Play door" Tag="play" Theme="{StaticResource NavSectionButton}"
                             Click="NavDoor_Click" ToolTip.Tip="{loc:Str nav_door_play}" AutomationProperties.Name="{loc:Str nav_door_play}">
                         <Grid RowDefinitions="56,Auto">
                             <Ellipse Theme="{StaticResource NavSectionGlow}"/>
@@ -573,7 +574,7 @@
                     <!-- SOCIAL (WPF MainWindow.xaml:621): Lobby, Friends, Leaderboard, Remote, Leash.
                          The placeholder art is a pale card, so it idles under a shade that drops
                          while Social is lit (NavRail.cs PaintNavRowActive). -->
-                    <Button x:Name="DoorSocial" Tag="social" Theme="{StaticResource NavSectionButton}"
+                    <Button x:Name="DoorSocial" poss:PossessionTree.Role="TabHeader" poss:PossessionTree.Name="the Social door" Tag="social" Theme="{StaticResource NavSectionButton}"
                             Click="NavDoor_Click" ToolTip.Tip="{loc:Str nav_section_social}" AutomationProperties.Name="{loc:Str nav_section_social}">
                         <Grid RowDefinitions="56,Auto">
                             <Ellipse Theme="{StaticResource NavSectionGlow}"/>
@@ -588,7 +589,7 @@
                             <TextBlock Theme="{StaticResource NavSectionLabel}"/>
                         </Grid>
                     </Button>
-                    <Button x:Name="DoorYou" Tag="you" Theme="{StaticResource NavSectionButton}"
+                    <Button x:Name="DoorYou" poss:PossessionTree.Role="TabHeader" poss:PossessionTree.Name="the You door" Tag="you" Theme="{StaticResource NavSectionButton}"
                             Click="NavDoor_Click" ToolTip.Tip="{loc:Str nav_door_you}" AutomationProperties.Name="{loc:Str nav_door_you}">
                         <Grid RowDefinitions="56,Auto">
                             <Ellipse Theme="{StaticResource NavSectionGlow}"/>
@@ -598,7 +599,7 @@
                             <TextBlock Theme="{StaticResource NavSectionLabel}"/>
                         </Grid>
                     </Button>
-                    <Button x:Name="DoorLibrary" Tag="library" Theme="{StaticResource NavSectionButton}"
+                    <Button x:Name="DoorLibrary" poss:PossessionTree.Role="TabHeader" poss:PossessionTree.Name="the Library door" Tag="library" Theme="{StaticResource NavSectionButton}"
                             Click="NavDoor_Click" ToolTip.Tip="{loc:Str nav_door_library}" AutomationProperties.Name="{loc:Str nav_door_library}">
                         <Grid RowDefinitions="56,Auto">
                             <Ellipse Theme="{StaticResource NavSectionGlow}"/>
@@ -636,7 +637,7 @@
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                     </Button>
                     <!-- THE GEAR. Tag "appsettings" (the tab key "settings" is the dashboard). -->
-                    <Button x:Name="DoorSettings" Tag="appsettings" Theme="{StaticResource NavSectionButton}"
+                    <Button x:Name="DoorSettings" poss:PossessionTree.Role="TabHeader" poss:PossessionTree.Name="the Settings door" Tag="appsettings" Theme="{StaticResource NavSectionButton}"
                             Click="NavDoor_Click" ToolTip.Tip="{loc:Str nav_door_settings}" AutomationProperties.Name="{loc:Str nav_door_settings}">
                         <Grid RowDefinitions="56,Auto">
                             <Ellipse Theme="{StaticResource NavSectionGlow}"/>
@@ -917,7 +918,7 @@
                     <Viewbox Grid.Column="1" MaxWidth="200" Margin="0,0,12,0"
                              HorizontalAlignment="Left" VerticalAlignment="Center"
                              Stretch="Uniform" StretchDirection="DownOnly">
-                        <TextBlock x:Name="TxtPlayerTitle" Text="{loc:Str label_basic_subject}" Foreground="{DynamicResource PinkBrush}"
+                        <TextBlock x:Name="TxtPlayerTitle" poss:PossessionTree.Role="Title" poss:PossessionTree.Name="the title" Text="{loc:Str label_basic_subject}" Foreground="{DynamicResource PinkBrush}"
                                    FontSize="18" FontWeight="Bold"
                                    ToolTip.Tip="{Binding #TxtPlayerTitle.Text}">
                             <TextBlock.Effect>
@@ -1650,7 +1651,7 @@
                                 <RotateTransform/>
                             </TransformGroup>
                         </Border.RenderTransform>
-                        <TextBlock x:Name="TxtLevelLabel" Foreground="White"
+                        <TextBlock x:Name="TxtLevelLabel" poss:PossessionTree.Role="Label" poss:PossessionTree.Name="the level label" Foreground="White"
                                    FontWeight="ExtraBold" FontSize="14" VerticalAlignment="Center"/>
                     </Border>
                     <!-- x:Name is for the PR-5 level-up burst: the TRACK is where the bar's cap
@@ -2061,7 +2062,7 @@
                 <!-- StartPressScale is the ignition dip (Velvet Kit 2). It is the button's only
                      RenderTransform and nothing else may claim it - HoverPop deliberately refuses
                      named transforms, so this stays a lane-B-only surface. -->
-                <Button x:Name="BtnStart" Grid.Column="1" Theme="{StaticResource PinkButton}"
+                <Button x:Name="BtnStart" poss:PossessionTree.Role="Button" poss:PossessionTree.Name="the Start button" Grid.Column="1" Theme="{StaticResource PinkButton}"
                         Background="{DynamicResource AccentGradientBrush}"
                         Height="50" FontSize="18" Click="BtnStart_Click"
                         RenderTransformOrigin="0.5,0.5"

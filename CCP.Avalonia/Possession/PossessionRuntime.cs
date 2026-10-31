@@ -12,8 +12,7 @@
 // returns every touched control's own transform and origin at once.
 //
 // Still WPF-only (later slices):
-//   possession-head-b: the shell host (MainWindow.Possession.cs walk: Possession.Role opt-in,
-//     InferLeafRole, size/placement filter, display names, the two overlay canvases), the Lockdown
+//   The shell stage and target registry exist; still needed: the director adapters and Lockdown
 //     lifecycle (rungs from the timer, cadence NextDelay/FirstDelay, intensity/photosafe settings,
 //     scenes), EmberAttribution charge + Ghost, PossessionEvents tripwires, PossessionPointer, Warden,
 //     PossessionAudio, PossessionRemember, bark naming of IsBig effects.

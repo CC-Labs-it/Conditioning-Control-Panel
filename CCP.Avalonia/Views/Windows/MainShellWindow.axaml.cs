@@ -90,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AvaloniaXamlLoader.Load(this);
             InitializeLanguageSelector();
             InitializeQuestStamps(); // WPF header quest roster; releases service events on Closed.
+            InitializePossessionHost();
 
             // WPF put these on the Window element itself; Avalonia routes them as attached events.
             HookResizeEdges();
