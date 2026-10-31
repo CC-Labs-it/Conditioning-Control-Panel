@@ -190,8 +190,11 @@ namespace ConditioningControlPanel.Services
             // WPF (main 4adc4c476, 2a712d9da): never a blanket strict-off. The strict lock goes back to the
             // wearer's own (a running Lockdown keeps the one it forced, its record corrected), the panic key
             // comes back on except while a running Lockdown holds it off; its own end restores it.
-            if (Remote.RemoteWearer.HandBackAllButStrict() > 0) RefreshOverlays?.Invoke();
-            Remote.RemoteWearer.ReleaseSafetyState();
+            var restoredVisuals = Remote.RemoteWearer.HandBackAllButStrict();
+            Remote.RemoteWearer.ReleaseSafetyState(); // WPF RemoteControlService.cs:1036-1043: safety before head refresh
+            if (restoredVisuals > 0)
+                try { RefreshOverlays?.Invoke(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] overlay restore refresh failed"); }
         }
 
         private static void SyncPanicUi() { try { LockdownService.PanicKeyUiSync?.Invoke(); } catch { } }

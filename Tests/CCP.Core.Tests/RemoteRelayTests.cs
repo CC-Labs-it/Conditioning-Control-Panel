@@ -199,6 +199,55 @@ public sealed class RemoteRelayTests
         }
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Throwing_overlay_refresh_cannot_prevent_safety_handback(bool force, bool wearerStrict)
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldRefresh = RemoteCommands.RefreshOverlays;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        RemoteCommands.RefreshOverlays = () => { };
+        try
+        {
+            CoreEngine.Start();
+            var s = settings.Current;
+            s.StrictLockEnabled = wearerStrict;
+            s.PanicKeyEnabled = true;
+            s.PinkFilterEnabled = true;
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Take();
+            Assert.Null(RemoteCommands.Execute("enable_strict_lock", null));
+            Assert.Null(RemoteCommands.Execute("stop_pink_filter", null));
+            s.PanicKeyEnabled = false; // a stale disabled panic key must also follow the release rule
+            bool? strictAtRefresh = null, panicAtRefresh = null;
+            RemoteCommands.RefreshOverlays = () =>
+            {
+                if (!s.PinkFilterEnabled) return; // the earlier Stop pass has not restored visuals yet
+                strictAtRefresh = s.StrictLockEnabled;
+                panicAtRefresh = s.PanicKeyEnabled;
+                throw new InvalidOperationException("overlay window failed to show");
+            };
+            var error = Record.Exception(() => RemoteCommands.StopEffects(force));
+            Assert.Equal((bool?)wearerStrict, strictAtRefresh); // WPF safety release precedes refresh
+            Assert.Equal((bool?)true, panicAtRefresh);
+            Assert.Null(error);
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop(); // session-end cleanup
+            Assert.Equal(wearerStrict, s.StrictLockEnabled);
+            Assert.True(s.PanicKeyEnabled);
+        }
+        finally
+        {
+            RemoteCommands.RefreshOverlays = () => { };
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            CoreEngine.Stop(); RemoteCommands.ReleaseOverlayStop();
+            RemoteCommands.RefreshOverlays = oldRefresh;
+            CoreSettings.ServiceProvider = oldSettings;
+        }
+    }
+
     [Fact]
     public void A_sandbox_never_reaches_the_real_relay()
     {
