@@ -46,8 +46,10 @@ public sealed class MediaTempFileLedger
         lock (_gate)
         {
             _live.Add(path);
-            int over = _live.Count - _cap;
-            if (over <= 0) return;
+            int over = Math.Max(0, _live.Count - _cap);
+            // Held files are retried on every Track, not only above the cap: a consumer that
+            // releases its own files (Goon, wallpaper) may never push the live list over it.
+            if (over == 0 && _held.Count == 0) return;
             sweep = _live.GetRange(0, over);
             _live.RemoveRange(0, over);
             sweep.AddRange(_held);
@@ -60,12 +62,16 @@ public sealed class MediaTempFileLedger
     public void Release(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
+        var sweep = new List<string> { path };
         lock (_gate)
         {
             _live.Remove(path);
             _held.Remove(path);
+            // Every release is also a retry of what an earlier release could not delete.
+            sweep.AddRange(_held);
+            _held.Clear();
         }
-        DeleteOrHold(new List<string> { path });
+        DeleteOrHold(sweep);
     }
 
     /// <summary>Delete everything on the books (stop, dispose). Refused deletes stay held.</summary>

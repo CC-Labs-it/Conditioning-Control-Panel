@@ -111,4 +111,57 @@ public sealed class Sync7AudioTests
         }
         return Task.CompletedTask;
     });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task IdleDroneFollowsVolumeChangesAndUnhooksOnStop(bool panic) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var opener = MantraWindow.DroneOpener;
+        var settings = CoreSettings.Current;
+        var volume = settings.MasterVolume;
+        var drone = new Drone();
+        MantraWindow.DroneOpener = _ => drone;
+        var window = new MantraWindow();
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        void Call(string method) => typeof(MantraWindow).GetMethod(method, flags)!.Invoke(window, null);
+        bool Subscribed() => (typeof(ConditioningControlPanel.Models.AppSettings)
+            .GetField("PropertyChanged", flags)!.GetValue(settings) as Delegate)?
+            .GetInvocationList().Any(d => ReferenceEquals(d.Target, window)) == true;
+        try
+        {
+            settings.MasterVolume = 100;
+            Call("StartDrone");
+            Assert.True(drone.Last > 0);
+            settings.MasterVolume = 0;
+            Assert.Equal(0, drone.Last);
+            settings.MasterVolume = 25;
+            Assert.Equal(ToneWav.VlcVolume(0.05 * ToneWav.DronePeak * 0.25), drone.Last);
+            Task.Run(() => settings.MasterVolume = 0).GetAwaiter().GetResult();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, drone.Last);
+            Assert.True(Subscribed());
+            if (panic)
+            {
+                typeof(MantraWindow).GetField("_open", BindingFlags.NonPublic | BindingFlags.Static)!.SetValue(null, window);
+                MantraWindow.StopForPanic();
+            }
+            else Call("Cleanup");
+            Assert.False(Subscribed());
+            var stopped = drone.Last;
+            settings.MasterVolume = 100;
+            Assert.Equal(stopped, drone.Last);
+        }
+        finally
+        {
+            Call("Cleanup");
+            window.Close();
+            MantraWindow.DroneOpener = opener;
+            settings.MasterVolume = volume;
+        }
+        return Task.CompletedTask;
+    });
+
 }
