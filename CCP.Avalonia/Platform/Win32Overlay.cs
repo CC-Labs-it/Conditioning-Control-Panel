@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using ConditioningControlPanel.Services.Subliminals;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Avalonia.Controls;
@@ -40,6 +42,23 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool GetLayeredWindowAttributes(IntPtr hwnd, out uint colorKey, out byte alpha, out uint flags);
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")] internal static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+    [DllImport("user32.dll")] private static extern IntPtr GetTopWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+
+    internal static bool SlotAboveVideo(IntPtr card, IReadOnlyList<(IntPtr, IntPtr)> videos)
+    {
+        if (videos.Count == 0) return true;
+        var band = new List<IntPtr>();
+        var seen = new HashSet<IntPtr>();
+        for (var h = GetTopWindow(IntPtr.Zero); h != IntPtr.Zero && seen.Count < 1024 && seen.Add(h); h = GetWindow(h, 2 /* GW_HWNDNEXT */))
+            if ((GetWindowLong(h, GwlExStyle) & WsExTopmost) != 0) band.Add(h);
+        var slot = SubliminalOverVideo.ResolveSlot(band, videos, card, MonitorFromWindow(card, 2));
+        return slot.Kind == SubliminalOverVideo.SlotKind.Keep || SetWindowPos(card,
+            slot.Kind == SubliminalOverVideo.SlotKind.Below ? slot.InsertAfter : new IntPtr(-1),
+            0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+    }
 
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();

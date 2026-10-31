@@ -82,7 +82,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (focus(w)) return;
             global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                if (!w.IsVisible || focus(w) || _warnedFocus) return;
+                if (!w.IsVisible) return;
+                if (focus(w)) { StackOverVideo(w); return; }
+                if (_warnedFocus) return;
                 _warnedFocus = true;
                 Log.Warning("Subliminal: the platform refused the focus request; cards show without focus");
             }, global::Avalonia.Threading.DispatcherPriority.Background);
@@ -100,10 +102,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Active.Add(overlay);
             }
             card.Show();
-            if (!stealsFocus) return;
-            try { ActivateCard(card); }
-            catch (Exception ex) { Log.Debug("Subliminal: focus steal refused: {E}", ex.Message); }
+            if (stealsFocus)
+            {
+                try { ActivateCard(card); }
+                catch (Exception ex) { Log.Debug("Subliminal: focus steal refused: {E}", ex.Message); }
+            }
+            StackOverVideo(card);
         }
+
+        // WPF #1422: preserve everything above the clip, including lock cards and panic UI.
+        // Separate per-screen windows are already used here, so no compositor routing is needed.
+        internal static Action<Window> StackOverVideo = card =>
+            X11Overlay.SlotAboveVideo(card, MandatoryVideoOverlay.Instance.Windows);
 
         /// <summary>Take every card off screen now (WPF <c>TearDownSurfaces</c> on Stop).</summary>
         public static void CloseAll()
@@ -183,6 +193,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame(this, _ =>
             {
                 if (closed) return;
+                // Mapping on X11 can overtake our separate native connection. Reapply the
+                // video slot after the first frame, while the card is still transparent.
+                SubliminalOverlay.StackOverVideo(this);
                 Ramp(0, alpha, TimeSpan.Zero, fade);
                 Ramp(alpha, 0, fade + hold, fade);
                 DispatcherTimer.RunOnce(() => { if (!closed) Close(); }, fade + hold + fade + TimeSpan.FromMilliseconds(1));

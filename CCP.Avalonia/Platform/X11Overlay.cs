@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using ConditioningControlPanel.Services.Subliminals;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -409,6 +411,89 @@ internal static class X11Overlay
             finally { Marshal.FreeHGlobal(e); }
         }
     }
+
+    /// <summary>Place a subliminal immediately above the front video on its monitor (#1422).
+    /// Keep windows already above the video above the card. Headless/Wayland have no native band.</summary>
+    internal static bool SlotAboveVideo(Window card, IReadOnlyList<Window> videos)
+    {
+        if (videos.Count == 0) return true;
+        if (TryGet(card, OverlayBackend.Win32, out var hwnd))
+        {
+            var clips = new List<(IntPtr, IntPtr)>();
+            foreach (var v in videos)
+                if (v.IsVisible && TryGet(v, OverlayBackend.Win32, out var h))
+                    clips.Add((h, Win32Overlay.MonitorFromWindow(h, 2)));
+            return Win32Overlay.SlotAboveVideo(hwnd, clips);
+        }
+        if (!TryGetXid(card, out var xid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            var root = XDefaultRootWindow(_display);
+            var band = QueryChildren(root);
+            band.Reverse(); // XQueryTree is bottom to top.
+            var monitors = new List<PixelRect>();
+            IntPtr Monitor(Window w)
+            {
+                var bounds = w.Screens.ScreenFromWindow(w)?.Bounds ?? default;
+                var i = monitors.IndexOf(bounds);
+                if (i < 0) { i = monitors.Count; monitors.Add(bounds); }
+                return new IntPtr(i + 1);
+            }
+            // Managed video windows can be reparented into WM frames; stack the root children.
+            IntPtr RootChild(IntPtr h)
+            {
+                for (var i = 0; i < 32; i++)
+                {
+                    if (XQueryTree(_display, h, out _, out var parent, out var children, out _) == 0) return IntPtr.Zero;
+                    if (children != IntPtr.Zero) XFree(children);
+                    if (parent == root) return h;
+                    if (parent == IntPtr.Zero || parent == h) return IntPtr.Zero;
+                    h = parent;
+                }
+                return IntPtr.Zero;
+            }
+            var clips = new List<(IntPtr, IntPtr)>();
+            foreach (var v in videos)
+                if (v.IsVisible && TryGetXid(v, out var h)) clips.Add((RootChild(h), Monitor(v)));
+            if (clips.Count == 0) return true;
+            var self = RootChild(xid);
+            if (self == IntPtr.Zero || _xErrored) return false;
+            var slot = SubliminalOverVideo.ResolveSlot(band, clips, self, Monitor(card));
+            if (slot.Kind == SubliminalOverVideo.SlotKind.Keep) return true;
+            if (slot.Kind == SubliminalOverVideo.SlotKind.TopOfBand) XRaiseWindow(_display, self);
+            else
+            {
+                var changes = new StackChanges { Sibling = slot.InsertAfter, StackMode = 1 /* Below */ };
+                // These override-redirect cards bypass the WM; configure their root sibling order.
+                XConfigureWindow(_display, self, (1u << 5) | (1u << 6), ref changes);
+            }
+            XSync(_display, false);
+            return !_xErrored;
+        }
+    }
+
+    private static List<IntPtr> QueryChildren(IntPtr root)
+    {
+        var result = new List<IntPtr>();
+        if (XQueryTree(_display, root, out _, out _, out var children, out var count) == 0) return result;
+        try { for (var i = 0; i < count; i++) result.Add(Marshal.ReadIntPtr(children, i * IntPtr.Size)); }
+        finally { if (children != IntPtr.Zero) XFree(children); }
+        return result;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct StackChanges
+    {
+        public int X, Y, Width, Height, BorderWidth;
+        public IntPtr Sibling;
+        public int StackMode;
+    }
+    [DllImport(LibX11)] private static extern int XQueryTree(IntPtr display, IntPtr window,
+        out IntPtr root, out IntPtr parent, out IntPtr children, out uint count);
+    [DllImport(LibX11)] private static extern int XFree(IntPtr data);
+    [DllImport(LibX11)] private static extern int XConfigureWindow(IntPtr display, IntPtr window, uint mask, ref StackChanges changes);
 
     /// <summary>The window's X11 id, or false when there is not one to have.
     ///
