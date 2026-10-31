@@ -70,7 +70,7 @@ namespace ConditioningControlPanel.Services
         /// Premium bar with the daily free feature OR'd in: on the day
         /// <see cref="DailyFreeService"/> rotates <paramref name="dailyKey"/> in, the verdict
         /// allows, so the lockband hides and the click just works - no call site special-cases
-        /// "free today". Only the six pool features pass a key; everything else keeps the plain
+        /// "free today". Only the pool features and the DtRH drop pass a key; everything else keeps the plain
         /// overload and is untouched by the rotation.
         /// </summary>
         public static TierVerdict RequiresPremium(string featureName, string dailyKey)
@@ -92,7 +92,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Lab bar with the daily free feature OR'd in - the off-pool drop path. The rotation
         /// wheel never lands on T2 content; this only opens when the SERVER names the key for
-        /// the day (DtRH drop days). Same shape as the keyed premium overload above.
+        /// the day. No caller passes a key since DtRH moved to Basic (2026-10-31). Same shape as
+        /// the keyed premium overload above.
         /// </summary>
         public static TierVerdict RequiresLab(string featureName, string dailyKey)
         {
