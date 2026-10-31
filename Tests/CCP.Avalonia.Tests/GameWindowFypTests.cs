@@ -436,6 +436,52 @@ public sealed class GameWindowFypTests
     });
 
     [Fact]
+    public void Eyes_ReenableDuringLateCameraCleanup_IsNotLost() => Run((_, _) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var w = GameWindow.Launch(GameWindow.FypId)!;
+        var start = new TaskCompletionSource<bool>();
+        var stop = new TaskCompletionSource<bool>();
+        bool running = false;
+        int starts = 0;
+        w.FypConsent = () => Task.FromResult(true);
+        w.FypCameraRunning = () => running;
+        w.FypStartCamera = async () => { starts++; running = starts > 1 || await start.Task; return running; };
+        w.FypStopCamera = async () => { await stop.Task; running = false; };
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
+        var first = w.FypEyeTask!;
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":false}");
+            start.SetResult(true);                 // late start: the cleanup stop is now pending
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(first.IsCompleted);
+            w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
+            stop.SetResult(true);
+            Wait(first);
+            Wait(w.FypEyeTask!);
+            Assert.Equal(2, starts);
+            Assert.True(running);
+            Assert.True(CoreSettings.Current.FypEyeControl);
+            sent.Clear();
+            WebcamTracker.Instance.RaiseBlinkForTest();
+            Assert.Equal("blink", (string?)Assert.Single(sent)["type"]);
+        }
+        finally
+        {
+            start.TrySetResult(true);
+            stop.TrySetResult(true);
+            Wait(first);
+            Wait(w.FypEyeTask!);
+            w.Close();
+            CoreSettings.Current.FypEyeControl = false;
+        }
+    });
+
+    [Fact]
     public void Eyes_StartFailureResetsSetting_AndCalibrationNeedsCamera() => Run((_, _) =>
     {
         CoreEntitlement.HasPremiumProvider = () => true;

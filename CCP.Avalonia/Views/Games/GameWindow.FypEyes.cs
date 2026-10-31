@@ -14,7 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games;
 
 internal sealed partial class GameWindow
 {
-    private bool _fypEyeEnabling, _fypEyeSubscribed, _fypOwnsCamera;
+    private bool _fypEyeSubscribed, _fypOwnsCamera;
     internal Func<DateTime> FypEyeClock = () => DateTime.UtcNow;
     private DateTime _fypLastGaze = DateTime.MinValue;
     internal Task? FypEyeTask;
@@ -40,11 +40,11 @@ internal sealed partial class GameWindow
     // WPF FypHostService.cs:926 consent, background startup and late-close cleanup.
     private async Task EnableFypEyes()
     {
-        if (_fypEyeEnabling || _fypEyeSubscribed || _closing) return;
-        _fypEyeEnabling = true;
+        // Queue rather than drop: an enable during a pending cleanup stop must run once that stop ends.
         await FypEyeStartup.WaitAsync();
         try
         {
+            if (_fypEyeSubscribed || _closing) return;
             await Task.Yield(); // leave the browser callback before opening a modal dialog
             await _fypCameraStop; // never attach to a camera whose previous stop is still queued
             if (_closing || !CoreSettings.Current.FypEyeControl) return;
@@ -75,7 +75,7 @@ internal sealed partial class GameWindow
         {
             // A closed visit must finish returning its late camera before the next visit starts.
             try { await _fypCameraStop; }
-            finally { _fypEyeEnabling = false; FypEyeStartup.Release(); }
+            finally { FypEyeStartup.Release(); }
         }
     }
 
