@@ -129,8 +129,8 @@ public sealed class LeashSelfCard : Border
     {
         var (brush, word) = id switch
         {
-            "good" => (F.Gold, "GOOD"), "star" => (F.Gold, "★"),
-            "pet" => (F.Lilac, "PET"), "heart" => (F.Pink, "♥"), "wow" => (F.Mint, "WOW"),
+            "good" => (F.Gold, "GOOD"), "star" => (F.Gold, ""),
+            "pet" => (F.Lilac, "PET"), "heart" => (F.Pink, ""), "wow" => (F.Mint, "WOW"),
             _ => (F.Lilac, (id.Length > 4 ? id.Substring(0, 4) : id).ToUpperInvariant()),
         };
         var disc = new Grid
@@ -145,7 +145,15 @@ public sealed class LeashSelfCard : Border
             Fill = brush,
             Effect = new DropShadowEffect { Color = ((ISolidColorBrush)brush).Color, BlurRadius = 6, OffsetX = 0, OffsetY = 0, Opacity = 0.35 },
         });
-        disc.Children.Add(new TextBlock
+        // WPF's star/heart faces (LeashLook.cs:356-358) use the head's semantic icon renderer.
+        if (id is "star" or "heart")
+            disc.Children.Add(new IconGlyph
+            {
+                Kind = id == "star" ? IconKind.Star : IconKind.Heart, Variant = IconVariant.Filled,
+                Size = 13, Foreground = new SolidColorBrush(Color.Parse("#1B1026")),
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            });
+        else disc.Children.Add(new TextBlock
         {
             Text = word, FontFamily = F.Mono, FontWeight = FontWeight.Bold,
             FontSize = word.Length > 1 ? 26 * 0.26 : 26 * 0.5,

@@ -11,6 +11,9 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using IconKind = FluentIcons.Common.Symbol;
+using IconVariant = FluentIcons.Common.IconVariant;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -109,6 +112,15 @@ public sealed class LeashPageTests
                     var glow = Assert.IsType<DropShadowEffect>(circle.Effect);
                     Assert.Equal(Color.Parse(color), glow.Color);
                     Assert.Equal(6, glow.BlurRadius); Assert.Equal(0.35, glow.Opacity);
+                    if (id is "star" or "heart")
+                    {
+                        var icon = Assert.IsType<IconGlyph>(disc.Children[1]);
+                        Assert.Equal(id == "star" ? IconKind.Star : IconKind.Heart, icon.Kind);
+                        Assert.Equal(IconVariant.Filled, icon.Variant);
+                        Assert.Equal(13, icon.Size);
+                        Assert.Equal(Color.Parse("#1B1026"), Assert.IsAssignableFrom<ISolidColorBrush>(icon.Foreground).Color);
+                        continue;
+                    }
                     var face = Assert.IsType<TextBlock>(disc.Children[1]);
                     Assert.Equal(word, face.Text);
                     Assert.Equal(Color.Parse("#1B1026"), Assert.IsAssignableFrom<ISolidColorBrush>(face.Foreground).Color);
