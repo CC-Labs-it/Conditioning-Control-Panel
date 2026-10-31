@@ -302,6 +302,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
         }
 
+        // WPF MainWindow.Awareness.cs:575-642. Cursor and tooltip match the WPF chips.
+        private void RefreshSeenApps()
+        {
+            AwarenessSeenAppsPanel.Children.Clear();
+            var listed = CoreSettings.Current.KeywordTriggerApps;
+            var seen = Platform.KeywordTriggerHead.RecentApps.Snapshot()
+                .Where(a => !AwarenessAppScopeRules.MatchesAppList(listed, a)).ToArray();
+            TxtAwarenessSeenAppsLabel.IsVisible = seen.Length > 0;
+            foreach (var app in seen)
+            {
+                var chip = new Button
+                {
+                    Content = "+ " + app, Tag = app, FontSize = 10,
+                    Padding = new Thickness(7, 3), Margin = new Thickness(0, 0, 5, 5),
+                    Foreground = Brushes.White,
+                    Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x44)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x5A)),
+                    BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                };
+                ToolTip.SetTip(chip, string.Format(ConditioningControlPanel.Localization.Loc.Get("awareness_add_app_tip"), app));
+                chip.Click += (_, _) =>
+                {
+                    var s = CoreSettings.Current;
+                    var apps = (s.KeywordTriggerApps ?? new()).ToList();
+                    if (!AwarenessAppScopeRules.MatchesAppList(apps, app)) apps.Add(app);
+                    s.KeywordTriggerApps = apps;
+                    CoreSettings.Save();
+                    TxtAwarenessAppList.Text = string.Join(", ", apps);
+                    RefreshSeenApps();
+                };
+                AwarenessSeenAppsPanel.Children.Add(chip);
+            }
+        }
+
         // ------------------------------------------------------------------ app scope
 
         /// <summary>

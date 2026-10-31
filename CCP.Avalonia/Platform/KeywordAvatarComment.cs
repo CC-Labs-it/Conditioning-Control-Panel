@@ -1,5 +1,4 @@
-// Adapted from parity/trunk 4f5dfe318eac6d00a7b0ab5944a964d2df58c79f.
-// WPF KeywordTriggerService.cs:1548-1669, AI-first fallback and bounded busy retry.
+// WPF KeywordTriggerService.cs:1548-1669, AI-first fallback and bounded busy retry (parity/trunk 4f5dfe318eac).
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,9 +8,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Awareness;
 using Serilog;
 using ConditioningControlPanel.Services.Safety;
-
 namespace ConditioningControlPanel.Avalonia.Platform;
-
 internal static class KeywordAvatarComment
 {
     private static int _generation;
@@ -20,7 +17,6 @@ internal static class KeywordAvatarComment
     internal static Action<string, bool, int> Deliver = ShowLine;
     internal static Action<TimeSpan, Action> ScheduleRetry = (delay, fire) => DispatcherTimer.RunOnce(fire, delay);
     internal static void CancelPending() => Interlocked.Increment(ref _generation);
-
     internal static async Task DispatchAsync(AvatarCommentAction action, KeywordTrigger trigger)
     {
         if (PanicAftermath.TriggersSilenced()) return; // WPF KeywordTriggerService.cs:1263
@@ -50,10 +46,8 @@ internal static class KeywordAvatarComment
         }
         catch (Exception ex) { Log.Debug(ex, "Keyword avatar comment failed"); }
     }
-
     private static void ShowLine(string line, bool aiGenerated, int generation) =>
         Dispatcher.UIThread.Post(() => TryShowLine(line, aiGenerated, generation, 0));
-
     private static void TryShowLine(string line, bool aiGenerated, int generation, int attempt)
     {
         if (generation != Volatile.Read(ref _generation) || PanicAftermath.TriggersSilenced()) return;

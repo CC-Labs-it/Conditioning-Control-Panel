@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -18,13 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
-    internal static RecentForegroundApps RecentApps { get; } = new();
-    private static readonly DispatcherTimer AppSampler = new() { Interval = TimeSpan.FromSeconds(2) };
-    static KeywordTriggerHead() { AppSampler.Tick += (_, _) => SampleForegroundApp(); }
-    internal static void SampleForegroundApp()
-    {
-        if (Engine.IsActive) RecentApps.Sample();
-    }
+    internal static RecentForegroundApps RecentApps => Engine.RecentApps;
     private static bool _subscribed;
     private static int _generation;
     internal static void Sync()
@@ -32,7 +27,6 @@ internal static class KeywordTriggerHead
         if (CoreSettings.Current.KeywordTriggersEnabled)
         {
             Engine.Start();
-            AppSampler.Start();
             if (!_subscribed && OperatingSystem.IsWindows() &&
                 string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
             {
@@ -45,7 +39,7 @@ internal static class KeywordTriggerHead
     }
 
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
-    internal static void Stop() { AppSampler.Stop(); DetachKeyboard(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
+    internal static void Stop() { DetachKeyboard(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
 
     /// <summary>WPF MainWindow.Awareness.cs:493: Keyboard off drops only the key source; the engine and a playing clip stay.</summary>
     internal static void DetachKeyboard()
@@ -72,16 +66,12 @@ internal static class KeywordTriggerHead
             };
             var generation = Volatile.Read(ref _generation);
             var ch = special == null ? Translate(vk) : null;
-            uint processId = 0;
-            var needsForeground = KeywordMatchRules.NeedsForeground(CoreSettings.Current);
-            if (needsForeground) GetWindowThreadProcessId(GetForegroundWindow(), out processId);
             Dispatcher.UIThread.Post(() =>
             {
                 if (generation != Volatile.Read(ref _generation)) return;
-                var foreground = needsForeground ? Foreground(processId) : (null, false);
-                if (special is { } key) Engine.Key(key, foreground.Process, foreground.Own);
-                else if (ch is { } c) Engine.Character(c, foreground.Process, foreground.Own);
-                else Engine.Key(KeywordInputKey.None, foreground.Process, foreground.Own);
+                if (special is { } key) Engine.Key(key);
+                else if (ch is { } c) Engine.Character(c);
+                else Engine.Key(KeywordInputKey.None);
             });
         }
         catch (Exception ex) { Log.Debug(ex, "Keyword input failed"); }
@@ -89,13 +79,10 @@ internal static class KeywordTriggerHead
 
     internal static (string? Process, bool Own) ReadForegroundProcess()
     {
-        // No titles, command lines or process enumeration. Unknown on native Wayland.
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"))) return (null, false);
+        if (!OperatingSystem.IsWindows() || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"))) return (null, false);
         try
         {
-            uint id = 0;
-            if (OperatingSystem.IsWindows()) GetWindowThreadProcessId(GetForegroundWindow(), out id);
-            else if (OperatingSystem.IsLinux()) id = X11ActiveWindow.ReadProcessId();
+            GetWindowThreadProcessId(GetForegroundWindow(), out var id);
             return id == 0 ? (null, false) : Foreground(id);
         }
         catch { return (null, false); }
@@ -136,6 +123,8 @@ internal static class KeywordTriggerHead
 
 internal sealed class KeywordAudioRuntime
 {
+    internal RecentForegroundApps RecentApps { get; } = new();
+    private DateTime _lastAppSample = DateTime.MinValue;
     private readonly KeywordTextInput _input = new();
     private readonly KeywordCooldowns _cooldowns = new();
     private CancellationTokenSource? _audio;
@@ -152,6 +141,17 @@ internal sealed class KeywordAudioRuntime
         var s = CoreSettings.Current;
         if (!IsActive || !s.KeywordTriggersEnabled ||
             !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return false;
+        // WPF KeywordTriggerService.cs:218-224,650-668: access before observation.
+        if (KeywordMatchRules.NeedsForeground(s))
+        {
+            if (process == null) (process, own) = RecentApps.Source();
+            RecentApps.Remember(process, own);
+        }
+        else if ((Now().ToUniversalTime() - _lastAppSample).TotalSeconds >= 2)
+        {
+            _lastAppSample = Now().ToUniversalTime();
+            RecentApps.Sample();
+        }
         if (KeywordMatchRules.AppAllowed(s, process, own)) return true;
         _input.Clear(); // never join text typed on either side of a blocked app
         return false;
@@ -264,4 +264,25 @@ internal sealed class KeywordAudioRuntime
             catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); }
         }
     }
+}
+// WPF KeywordTriggerService.cs:489-520,582,618-622. Session-only process names.
+internal sealed class RecentForegroundApps
+{
+    private readonly LinkedList<string> _apps = new();
+    internal Func<(string? Process, bool Own)> Source = KeywordTriggerHead.ReadForegroundProcess;
+    internal string[] Snapshot() => _apps.ToArray();
+    internal void Sample()
+    {
+        try { var (name, own) = Source(); Remember(name, own); }
+        catch { /* Foreground processes may exit during lookup. */ }
+    }
+    internal void Remember(string? name, bool own)
+    {
+        if (own || string.IsNullOrWhiteSpace(name)) return;
+        var existing = _apps.FirstOrDefault(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
+        if (existing != null) _apps.Remove(existing);
+        _apps.AddFirst(existing ?? name);
+        while (_apps.Count > 8) _apps.RemoveLast();
+    }
+    internal void Clear() => _apps.Clear();
 }

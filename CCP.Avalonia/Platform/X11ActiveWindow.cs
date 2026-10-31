@@ -53,7 +53,19 @@ internal static class X11ActiveWindow
         if (Disabled) return "";
         try
         {
-            if (!EnsureDisplay()) return "";
+            if (!_tried)
+            {
+                _tried = true;
+                if (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY"))) return "";
+                _display = XOpenDisplay(IntPtr.Zero);
+                if (_display == IntPtr.Zero) return "";
+                _root = XDefaultRootWindow(_display);
+                _active = XInternAtom(_display, "_NET_ACTIVE_WINDOW", false);
+                _netWmName = XInternAtom(_display, "_NET_WM_NAME", false);
+                _utf8 = XInternAtom(_display, "UTF8_STRING", false);
+                _wmName = XInternAtom(_display, "WM_NAME", false);
+            }
+            if (_display == IntPtr.Zero) return "";
 
             var previous = XSetErrorHandler(IgnoreErrors);
             try
@@ -65,44 +77,6 @@ internal static class X11ActiveWindow
             finally { XRestoreErrorHandler(previous); }
         }
         catch { return ""; }   // no libX11 on this machine: nothing to observe
-    }
-
-    private static bool EnsureDisplay()
-    {
-        if (!_tried)
-        {
-            _tried = true;
-            if (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY"))) return false;
-            _display = XOpenDisplay(IntPtr.Zero);
-            if (_display == IntPtr.Zero) return false;
-            _root = XDefaultRootWindow(_display);
-            _active = XInternAtom(_display, "_NET_ACTIVE_WINDOW", false);
-            _netWmName = XInternAtom(_display, "_NET_WM_NAME", false);
-            _utf8 = XInternAtom(_display, "UTF8_STRING", false);
-            _wmName = XInternAtom(_display, "WM_NAME", false);
-        }
-        if (_display == IntPtr.Zero) return false;
-        return true;
-    }
-
-    // EWMH _NET_WM_PID only. Never read a title to populate app suggestions.
-    internal static uint ReadProcessId()
-    {
-        if (Disabled) return 0;
-        try
-        {
-            if (!EnsureDisplay()) return 0;
-            var previous = XSetErrorHandler(IgnoreErrors);
-            try
-            {
-                var window = ReadWindow(_root, _active);
-                if (window == IntPtr.Zero) return 0;
-                var pid = ReadWindow(window, XInternAtom(_display, "_NET_WM_PID", false));
-                return unchecked((uint)pid.ToInt64());
-            }
-            finally { XRestoreErrorHandler(previous); }
-        }
-        catch { return 0; }
     }
 
     private static IntPtr ReadWindow(IntPtr window, IntPtr property)

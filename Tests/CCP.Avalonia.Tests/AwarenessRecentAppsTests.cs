@@ -13,11 +13,11 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class AwarenessRecentAppsTests
 {
+    private static string SourceRoot([System.Runtime.CompilerServices.CallerFilePath] string path = "") =>
+        System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(path)!, "../.."));
     [Fact]
     public void RingKeepsEightDistinctNewestFirstAndIgnoresOwnUnknownAndFailedLookups()
     {
@@ -34,40 +34,58 @@ public sealed class AwarenessRecentAppsTests
         ring.Source = () => throw new InvalidOperationException(); ring.Sample();
         Assert.Equal(before, ring.Snapshot());
     }
-
     [Fact]
-    public Task SamplingRunsOnlyWithEngineAndRetainsSessionSuggestionsAfterStop() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task InputSamplingGatesAccessThrottlesOnlyUnrestrictedAndCapturesRapidSwitches() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var ring = KeywordTriggerHead.RecentApps;
-        var source = ring.Source;
+        var engine = new KeywordAudioRuntime();
+        var ring = engine.RecentApps;
+        var s = CoreSettings.Current;
+        var saved = (s.KeywordTriggersEnabled, s.KeywordTriggerAppScope, s.KeywordTriggerIgnoreOwnFocus,
+            s.KeywordTriggerApps, s.KeywordTriggers, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider);
+        var now = new DateTime(2035, 1, 1);
+        var calls = 0;
+        string app = "firefox";
+        ring.Source = () => { calls++; return (app, false); };
+        engine.Now = () => now;
         try
         {
-            ring.Clear();
-            var calls = 0;
-            ring.Source = () => { calls++; return ("firefox", false); };
-            var timer = (global::Avalonia.Threading.DispatcherTimer)typeof(KeywordTriggerHead)
-                .GetField("AppSampler", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
-            Assert.Equal(TimeSpan.FromSeconds(2), timer.Interval);
-            var enabled = CoreSettings.Current.KeywordTriggersEnabled;
-            try
-            {
-                CoreSettings.Current.KeywordTriggersEnabled = true;
-                KeywordTriggerHead.Sync(); Assert.True(timer.IsEnabled);
-                await Task.Delay(TimeSpan.FromMilliseconds(2200));
-                Assert.Equal(1, calls); // actual timer tick must reach the injected process source
-                calls = 0;
-                CoreSettings.Current.KeywordTriggersEnabled = false;
-                KeywordTriggerHead.Sync(); Assert.False(timer.IsEnabled);
-            }
-            finally { CoreSettings.Current.KeywordTriggersEnabled = enabled; }
-            KeywordTriggerHead.Stop(); KeywordTriggerHead.SampleForegroundApp(); Assert.Equal(0, calls);
-            KeywordTriggerHead.Engine.Start(); KeywordTriggerHead.SampleForegroundApp(); Assert.Equal(1, calls);
-            KeywordTriggerHead.Stop(); KeywordTriggerHead.SampleForegroundApp(); Assert.Equal(1, calls);
-            Assert.Equal(new[] { "firefox" }, ring.Snapshot());
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreEntitlement.IsFreeTodayProvider = _ => false;
+            s.KeywordTriggersEnabled = true; s.KeywordTriggers = new();
+            s.KeywordTriggerIgnoreOwnFocus = false;
+            s.KeywordTriggerAppScope = AwarenessAppScope.Everywhere;
+            engine.Key(KeywordInputKey.Clear); Assert.Equal(0, calls); // engine off
+            engine.Start(); await Task.Delay(2200); Assert.Equal(0, calls); // no idle sampling
+            engine.Key(KeywordInputKey.Clear); Assert.Equal(1, calls);
+            app = "discord"; now = now.AddMilliseconds(100);
+            engine.Character('x'); Assert.Equal(1, calls); // unrestricted throttle
+            now = now.AddMilliseconds(1900);
+            engine.Key(KeywordInputKey.Clear); Assert.Equal(2, calls); // exact boundary
+            s.KeywordTriggerAppScope = AwarenessAppScope.OnlyListed;
+            s.KeywordTriggerApps = new(); // even blocked apps are remembered, as WPF :582
+            app = "steam"; now = now.AddMilliseconds(10); engine.Character('x');
+            app = "zoom"; now = now.AddMilliseconds(10); engine.Key(KeywordInputKey.Clear);
+            Assert.Equal(new[] { "zoom", "steam", "discord", "firefox" }, ring.Snapshot());
+            s.KeywordTriggerAppScope = AwarenessAppScope.Everywhere;
+            s.KeywordTriggerIgnoreOwnFocus = true;
+            app = "teams"; engine.Key(KeywordInputKey.Clear); Assert.Equal(5, calls);
+            CoreEntitlement.HasPremiumProvider = () => false;
+            app = "private"; now = now.AddSeconds(3);
+            engine.Key(KeywordInputKey.Clear); engine.Character('x'); Assert.Equal(5, calls);
+            CoreEntitlement.IsFreeTodayProvider = _ => true;
+            engine.Key(KeywordInputKey.Clear); Assert.Equal(6, calls);
+            s.KeywordTriggersEnabled = false;
+            engine.Character('x'); engine.Key(KeywordInputKey.Clear); Assert.Equal(6, calls);
+            engine.Stop(); Assert.Equal("private", ring.Snapshot()[0]); // session ring retained
+            Assert.Null(typeof(KeywordTriggerHead).GetField("AppSampler", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic));
         }
-        finally { KeywordTriggerHead.Stop(); ring.Clear(); ring.Source = source; }
+        finally
+        {
+            engine.Stop();
+            (s.KeywordTriggersEnabled, s.KeywordTriggerAppScope, s.KeywordTriggerIgnoreOwnFocus,
+                s.KeywordTriggerApps, s.KeywordTriggers, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = saved;
+        }
     });
-
     [Fact]
     public void SuggestionsRefreshOnShowModeCommitAndClickSavesCanonicalList() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -93,6 +111,15 @@ public sealed class AwarenessRecentAppsTests
             Assert.True(label.IsVisible);
             var chip = Assert.IsType<Button>(Assert.Single(panel.Children));
             Assert.Equal("+ firefox", chip.Content);
+            Assert.Equal("Hand", chip.Cursor?.ToString());
+            Assert.Equal(string.Format(ConditioningControlPanel.Localization.Loc.Get("awareness_add_app_tip"), "firefox"), ToolTip.GetTip(chip));
+            foreach (var file in System.IO.Directory.GetFiles(System.IO.Path.Combine(SourceRoot(), "CCP.Core/Localization/Languages"), "*.json"))
+            {
+                using var json = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(file));
+                var tip = json.RootElement.GetProperty("awareness_add_app_tip").GetString()!;
+                Assert.Contains("{0}", tip); Assert.NotEqual("awareness_add_app_tip", tip);
+                Assert.Contains("firefox", string.Format(tip, "firefox"));
+            }
             chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(new[] { " DISCORD.exe ", "firefox" }, s.KeywordTriggerApps);
             Assert.True(service.HasPendingSave);

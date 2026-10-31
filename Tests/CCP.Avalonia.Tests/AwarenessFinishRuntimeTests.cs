@@ -13,9 +13,7 @@ using ConditioningControlPanel.Services.AIService;
 using ConditioningControlPanel.Services.Moderation;
 using Xunit;
 using HeadApp = ConditioningControlPanel.Avalonia.App;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class AwarenessFinishRuntimeTests
 {
     // No font manager or windows: these exercise the real engine without opening the desktop.
@@ -59,7 +57,6 @@ public sealed class AwarenessFinishRuntimeTests
                     CoreMods.PhrasesProvider, HeadApp.Ai, KeywordAvatarComment.Deliver) = saved;
             }
         });
-
     [Fact]
     public Task DemoDispatchesEditedCannedCommentWithEntitlementWhileMasterIsOff() => Run((engine, s, lines) =>
     {
@@ -74,7 +71,6 @@ public sealed class AwarenessFinishRuntimeTests
         Assert.Empty(s.KeywordTriggers);
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task SingleTriggerDispatchesEveryEnabledCommentInOrder() => Run((engine, s, lines) =>
     {
@@ -89,7 +85,6 @@ public sealed class AwarenessFinishRuntimeTests
         Assert.Equal(new[] { ("custom praise", false), ("second comment", false) }, lines);
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task TypedMergedCommentsUseFirstEnabledActionOnce() => Run((engine, s, lines) =>
     {
@@ -100,7 +95,6 @@ public sealed class AwarenessFinishRuntimeTests
         Assert.Equal(("custom praise", false), Assert.Single(lines));
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task AiSuccessEmptyFallbackAndPanicDuringRequestFollowWpf() => Run(async (_, _, lines) =>
     {
@@ -126,7 +120,6 @@ public sealed class AwarenessFinishRuntimeTests
         await KeywordAvatarComment.DispatchAsync(action, trigger);
         Assert.Empty(lines); // WPF catches exceptions without showing a fallback
     });
-
     [Fact]
     public Task RawPoolFallbackAndShutdownCancellation() => Run(async (_, s, lines) =>
     {
@@ -142,7 +135,6 @@ public sealed class AwarenessFinishRuntimeTests
         pending.SetResult("late shutdown"); await dispatch;
         Assert.Empty(lines);
     });
-
     [Fact]
     public Task PostPanicQuietRefusesNewComments() => Run(async (_, _, lines) =>
     {
@@ -154,7 +146,6 @@ public sealed class AwarenessFinishRuntimeTests
         }
         finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
     });
-
     private sealed class CommentAi : IAiService
     {
         public Task<string?> Reply = Task.FromResult<string?>(null);

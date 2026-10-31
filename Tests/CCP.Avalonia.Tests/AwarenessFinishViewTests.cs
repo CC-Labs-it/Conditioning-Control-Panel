@@ -16,9 +16,7 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class AwarenessFinishViewTests
 {
     private static void Setup()
@@ -27,7 +25,6 @@ public sealed class AwarenessFinishViewTests
             ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
-
     [Fact]
     public void CommentsWaitForBubbleAndVoiceBoundRetriesAndNeverSpeakAfterPanic() => AvaloniaTestDispatcher.Run(() =>
     {
