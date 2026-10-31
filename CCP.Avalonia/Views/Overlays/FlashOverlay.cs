@@ -108,6 +108,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             finally { if (!scheduled) _busy = false; }
         }
 
+        internal static Action<Action, TimeSpan> RunSpawnLater = (spawn, delay) => DispatcherTimer.RunOnce(spawn, delay);
+
         /// <summary>Spawn each placed picture on its own dispatcher timer: Task.Delay continuations
         /// were measured landing 1.7 s late here (thread-pool timer), dispatcher timers stayed on time.
         /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
@@ -120,11 +122,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var (bmp, rect, path, screen) = flashes[i];
                 var last = i == flashes.Count - 1;
-                DispatcherTimer.RunOnce(() =>
+                RunSpawnLater(() =>
                 {
                     try
                     {
-                        if (refused || _closed || generation != _generation || Active.Count >= cap) { bmp.Dispose(); return; }
+                        if (refused || _closed || generation != _generation ||
+                            Active.Count >= Math.Min(cap, Cap(CoreSettings.Current, ambient))) { bmp.Dispose(); return; }
                         refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion);
                     }
                     catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
