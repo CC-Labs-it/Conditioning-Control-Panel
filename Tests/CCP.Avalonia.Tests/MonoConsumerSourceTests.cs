@@ -37,9 +37,9 @@ public sealed class MonoConsumerSourceTests
     [Fact]
     public void EmiFaceChainsGoThroughTheGuardLikeWpfEmiFace()
     {
-        // WPF EmiFace.cs:172,191,232,251 passes FaceFont/PixelFont through FontGuard.Sanitize/Family.
+        // WPF Services/EmiDesk/EmiFace.cs:118,137,178,197 guards the face and pixel fallback chains.
         var root = new DirectoryInfo(RepoRoot());
-        foreach (var file in new[] { "EmiBookWindow.axaml.cs", "EmiRingWindow.axaml.cs" })
+        foreach (var file in new[] { "EmiFace.cs", "EmiBookWindow.axaml.cs", "EmiRingWindow.axaml.cs" })
         {
             var lines = Code(root, "CCP.Avalonia/Views/Windows/EmiDesk/" + file).Split('\n').Where(l => l.Contains("Consolas")).ToArray();
             Assert.NotEmpty(lines);
