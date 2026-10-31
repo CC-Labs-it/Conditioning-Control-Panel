@@ -442,6 +442,68 @@ public sealed class FeatureCardFxTests
         Assert.Equal(-2, travel.Y, 5);
     });
 
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Off)]
+    public void HidingFlatCardReturnsPoppedArtToRestBeforeTheNextVisit(MotionLevel motion) => WithCard((window, host, card) =>
+    {
+        var savedClock = HoverPop.Time;
+        var clock = new PopClock();
+        HoverPop.Time = clock;
+        var art = card.FindControl<Border>("ImgIconHost")!;
+        try
+        {
+            card.DashboardDepth = false;
+            CoreSettings.Current.MotionLevel = motion;
+            Hover(card, window, true);
+            clock.Advance(500); HoverPop.Step(art);
+            var scale = ((TransformGroup)art.RenderTransform!).Children.OfType<ScaleTransform>().Single();
+            Assert.Equal(1.06, scale.ScaleX, 5);
+            host.IsVisible = false;
+            Dispatcher.UIThread.RunJobs();
+            Hover(card, window, false); // PointerExited can arrive after the synchronous visibility refresh
+            clock.Advance(200); HoverPop.Step(art);
+            Assert.Equal(1, scale.ScaleX, 5);
+            Assert.Equal(1, scale.ScaleY, 5);
+            host.IsVisible = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, scale.ScaleX, 5);
+            Hover(card, window, true);
+            clock.Advance(500); HoverPop.Step(art);
+            Assert.Equal(1.06, scale.ScaleX, 5);
+            host.Children.Remove(card);
+            Dispatcher.UIThread.RunJobs();
+            Hover(card, window, false); // the unload path must also leave through ApplyHover
+            clock.Advance(200); HoverPop.Step(art);
+            Assert.Equal(1, scale.ScaleX, 5);
+            host.Children.Add(card);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, scale.ScaleY, 5);
+        }
+        finally { HoverPop.Leave(art); HoverPop.Time = savedClock; }
+    });
+
+    [Fact]
+    public void TeaseChangeSnapsMuteInsteadOfStartingAFade() => WithCard((window, host, card) =>
+    {
+        card.DashboardDepth = card.DimWhenInactive = true;
+        var grey = card.FindControl<Border>("ImgIconMute")!;
+        card.TeaseTier = 1;
+        Assert.Null(grey.Transitions);
+        Assert.Equal(0, grey.Opacity);
+        card.TeaseTier = 0;
+        Assert.Null(grey.Transitions);
+        Assert.Equal(1, grey.Opacity);
+    });
+
+    private sealed class PopClock : TimeProvider
+    {
+        private long _now;
+        public override long GetTimestamp() => _now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        internal void Advance(int ms) => _now += TimeSpan.FromMilliseconds(ms).Ticks;
+    }
+
     // Avalonia's animation clock is internal. Drive its real ClockBase with exact timestamps
     // so these are timed transition tests without sleeps or dependence on renderer scheduling.
     private sealed class AnimationClock

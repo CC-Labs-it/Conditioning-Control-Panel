@@ -181,7 +181,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             else if (change.Property == IsActiveProperty || change.Property == DimWhenInactiveProperty || change.Property == DashboardDepthProperty) ApplyActiveState();
             else if (change.Property == HelpSectionIdProperty) RefreshHelpTooltip();
             else if (change.Property == TierBadgeProperty) ApplyTierBadge();
-            else if (change.Property == TeaseTierProperty) { ApplyTeaseState(); ApplyRestAppearance(); }
+            else if (change.Property == TeaseTierProperty) { ApplyTeaseState(); ApplyRestAppearance(snapMute: true); }
             else if (change.Property == ShowV2BadgeProperty) this.FindControl<Border>("V2BadgeHost")!.IsVisible = ShowV2Badge;
         }
 
@@ -296,7 +296,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// the shell's ApplyDashboardFxLoops on a motion/performance change and window activation.</summary>
         internal void RefreshFx()
         {
-            if (!IsEffectivelyVisible) { _hovered = false; _pressed = false; }
+            if (!IsEffectivelyVisible) { _pressed = false; ApplyHover(false); }
             ApplyActiveState();
             RefreshHover();
             RefreshDepth();

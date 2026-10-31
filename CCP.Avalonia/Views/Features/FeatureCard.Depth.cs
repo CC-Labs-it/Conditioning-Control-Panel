@@ -46,14 +46,14 @@ public partial class FeatureCard
                     DashboardDepthLaw.TiltFor(at.X / size.Width * 2 - 1, at.Y / size.Height * 2 - 1),
                     DepthLaw.Ms(DepthLaw.HoverMs, Env.Level), new LinearEasing());
         };
-        Unloaded += (_, _) => { _hovered = false; ReleaseDepth(); };
+        Unloaded += (_, _) => { _pressed = false; ApplyHover(false); RefreshDepth(); };
         Loaded += (_, _) => RefreshDepth();
     }
 
     private void ReleaseDepth() { _pressed = false; RefreshDepth(); }
 
     // WPF FeatureCard.xaml.cs:564-608. Core owns the mute priority and transition duration.
-    private void ApplyRestAppearance()
+    private void ApplyRestAppearance(bool snapMute = false)
     {
         bool active = IsActive || TutorialPreview;
         _contentRoot.Opacity = IsLocked ? 0.35
@@ -61,7 +61,7 @@ public partial class FeatureCard
         bool muted = CardMuteRule.ShouldMute(DimWhenInactive, active, IsLocked, _hovered && !DashboardDepth, TeaseTier > 0);
         _txtTitle.Opacity = muted ? 0.72 : 1;
         var grey = this.FindControl<Border>("ImgIconMute")!;
-        int ms = CardMuteRule.TransitionMs(Env.AllowTransitions, IsLoaded);
+        int ms = snapMute ? 0 : CardMuteRule.TransitionMs(Env.AllowTransitions, IsLoaded);
         // WPF ApplyMute (:598-602) retargets from the current opacity. Replacing this
         // collection would first cancel the fade and expose its old destination.
         if (ms == 0) grey.Transitions = null;
