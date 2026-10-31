@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using global::Avalonia.Controls.ApplicationLifetimes;
 using global::Avalonia.VisualTree;
 using ConditioningControlPanel.Localization;
@@ -412,6 +413,22 @@ namespace ConditioningControlPanel.Avalonia.Tours
         /// </summary>
         public void Start(TutorialType type = TutorialType.FullTour)
         {
+            Begin(type);
+            ActivateFirstStep();
+        }
+
+        // WPF Services/TutorialService.cs:356-361 waits for TutorialStarted before activation.
+        // A shell handler can show an async modal on this head, so preserve that ordering explicitly.
+        internal async Task StartAsync(TutorialType type, Func<Task> afterStarted)
+        {
+            Begin(type);
+            var steps = _currentSteps;
+            await afterStarted();
+            if (IsActive && ReferenceEquals(steps, _currentSteps)) ActivateFirstStep();
+        }
+
+        private void Begin(TutorialType type)
+        {
             // A tutorial is nothing but spotlight cut-outs positioned over MainWindow's controls.
             // If the window is minimized, or tucked in the tray by Settings > "Start hidden", every
             // step resolves a target with no on-screen rectangle and the tour draws its boxes over
@@ -426,7 +443,10 @@ namespace ConditioningControlPanel.Avalonia.Tours
             _currentStepIndex = 0;
             IsActive = true;
             TutorialStarted?.Invoke(this, EventArgs.Empty);
+        }
 
+        private void ActivateFirstStep()
+        {
             if (CurrentStep != null)
             {
                 CurrentStep.OnActivate?.Invoke();

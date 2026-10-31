@@ -51,6 +51,100 @@ public sealed class ShellSettingsWiringTests
         (await Dialog<MessageDialog>(shell)).Close();
     });
 
+    // WPF EmiTourNarrator.cs:133-136 and MainWindow.Settings.cs:570-577.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task HelpTourSummonsOnlyEnabledEmiAndDetachesOnClose(bool enabled) => Run(async (shell, service) =>
+    {
+        var desk = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+        desk.Window?.ShutDown();
+        service.Current.EmiDeskEnabled = enabled;
+        service.Current.EmiDeskMuteAvatar = false;
+        try
+        {
+            Click(shell.Named<Button>("BtnMainHelp")!);
+            Click(shell.Named<Button>("BtnTutorialGettingStarted")!);
+            Assert.True(CoreTutorial.IsActive);
+            Assert.NotNull(EmiTourPresence.Active);
+            Assert.Equal(enabled, desk.IsOut);
+            if (enabled) Assert.True(desk.Window!.IsVisible);
+            PanicSurfaces.All.Single(s => s.Id == "tour").Stop(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(EmiTourPresence.Active);
+            Assert.False(CoreTutorial.IsActive);
+        }
+        finally { desk.Window?.ShutDown(); }
+        await Task.CompletedTask;
+    });
+
+    // WPF EmiTourNarrator.cs:134-139, MainWindow.Settings.cs:572-573.
+    [Theory]
+    [InlineData("continue")]
+    [InlineData("panic")]
+    [InlineData("close")]
+    public Task MuteQuestionFinishesBeforeFirstCardAndOverlay(string ending) => Run(async (shell, service) =>
+    {
+        var desk = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+        var oldAsk = desk.AskMute;
+        var answer = new TaskCompletionSource<ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiMuteChoice>();
+        int asked = 0, started = 0, activated = 0;
+        EventHandler onStarted = (_, _) => started++;
+        EventHandler<ConditioningControlPanel.Avalonia.Tours.TutorialStep> onStep = (_, _) => activated++;
+        TutorialHead.Service.TutorialStarted += onStarted;
+        TutorialHead.Service.StepChanged += onStep;
+        desk.Window?.ShutDown();
+        desk.ResetMutePrompt();
+        desk.AskMute = () => { asked++; return answer.Task; };
+        service.Current.EmiDeskEnabled = true;
+        service.Current.EmiDeskMuteAvatar = true;
+        service.Current.EmiDeskMuteDontAsk = false;
+        service.Current.AiChatEnabled = true;
+        try
+        {
+            Click(shell.Named<Button>("BtnMainHelp")!);
+            Click(shell.Named<Button>("BtnTutorialGettingStarted")!);
+            Assert.Equal(1, asked);
+            Assert.Equal(1, started);
+            Assert.Equal(0, activated);
+            Assert.Null(TutorialHead.ShellOverlay);
+            Assert.False(TutorialHead.ShellStartup.IsCompleted);
+            Assert.False(desk.Window!.IsVisible);
+            TutorialHead.StartOnShell(TutorialType.FullTour);
+            Assert.Equal(1, started); // no second startup behind the pending question
+            if (ending == "panic") TutorialHead.OnPanic();
+            if (ending == "close") shell.Close();
+            answer.SetResult(ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiMuteChoice.Keep);
+            await TutorialHead.ShellStartup;
+            Dispatcher.UIThread.RunJobs();
+            if (ending == "continue")
+            {
+                Assert.True(desk.Window.IsVisible);
+                Assert.Equal(1, activated);
+                Assert.NotNull(TutorialHead.ShellOverlay);
+                TutorialHead.OnPanic();
+            }
+            else
+            {
+                Assert.Equal(0, activated);
+                Assert.Null(TutorialHead.ShellOverlay);
+                Assert.False(CoreTutorial.IsActive);
+            }
+            Assert.Null(EmiTourPresence.Active);
+        }
+        finally
+        {
+            answer.TrySetResult(ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiMuteChoice.Keep);
+            await TutorialHead.ShellStartup;
+            TutorialHead.OnPanic();
+            TutorialHead.Service.TutorialStarted -= onStarted;
+            TutorialHead.Service.StepChanged -= onStep;
+            desk.AskMute = oldAsk;
+            desk.ResetMutePrompt();
+            desk.Window?.ShutDown();
+        }
+    });
+
     [Fact]
     public Task HelpRowsStartTheirTourAndPanicRestoresTheBrowser() => Run(async (shell, _) =>
     {
@@ -272,6 +366,8 @@ public sealed class ShellSettingsWiringTests
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         service.Current.PerformanceMode = true;
+        // Unrelated shell tests keep the desk away; the presence theory opts in explicitly.
+        service.Current.EmiDeskEnabled = false;
         service.Current.UserPresets.Clear();
         service.Current.CurrentPresetName = "";
         TutorialService.CompletionStore = new Store();
