@@ -10,6 +10,8 @@ using Avalonia.LogicalTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.V2;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -33,7 +35,10 @@ public sealed class PersonalityStudioTests
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         settings.Current.Welcomed = true;
+        settings.Current.WhatMovedCardShown = 1;
         settings.Current.HasAcceptedAgeVerification = true;
+        settings.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        settings.Current.AwarenessModeEnabled = false;
         settings.Current.UserPersonalityPresets.Clear();
         settings.Current.ActivePersonalityPresetId = PersonalityPresets.NeutralDefaultId;
         settings.Current.CompanionPrompt.UseCustomPrompt = false;
@@ -126,25 +131,71 @@ public sealed class PersonalityStudioTests
     });
 
     [Fact]
-    public Task MakeHerYoursCommandOpensTheHost() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task PersonalityNavigationOpensPickerMountedStudio() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var bootstrap = Boot();
         var shell = new MainShellWindow();
         try
         {
-            var view = new MakeHerYoursView();
-            shell.Content = view;
             shell.Show();
-            var button = view.GetLogicalDescendants().OfType<Button>()
-                .Single(b => ReferenceEquals(b.Command, view.ViewModel.PersonalityStudioCommand));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            shell.ShowTab("companion");
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var chat = shell.GetLogicalDescendants().OfType<ConversationPage>().Single();
+            Click(chat.FindControl<Button>("SettingsButton")!);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal("personality", shell.CurrentTab);
+            var page = shell.Named<PersonalityPage>("CompanionPersonalityTab")!;
+            var picker = Assert.IsType<CompanionPickerCard>(page.FindControl<ContentControl>("PickerHost")!.Content);
+            var button = picker.FindControl<Button>("BtnMorePersonality")!;
             Assert.True(button.IsEffectivelyVisible);
-            button.Command!.Execute(null);
+            Click(button);
+            var studio = Assert.Single(shell.OwnedWindows);
+            Field(studio, L("name")).Text = "Navigation voice";
+            Click(Button(studio, L("save")));
+            await Task.Yield();
+            Assert.Equal("Navigation voice", Assert.Single(CoreSettings.Current.UserPersonalityPresets).Name);
+            shell.ShowTab("companion");
+            shell.ShowTab("personality");
+            Assert.Same(picker, page.FindControl<ContentControl>("PickerHost")!.Content);
+            Click(button);
             Assert.Single(shell.OwnedWindows);
             PanicSurfaces.All.Single(s => s.Id == "personality-studio").Stop(shell);
             await Task.Yield();
             Assert.Empty(shell.OwnedWindows);
         }
         finally { PersonalityStudio.CloseForPanic(); shell.Close(); bootstrap.Close(); CoreSettings.ServiceProvider = null; }
+    });
+
+    [Fact]
+    public Task DeleteConfirmationRendersLocalizedYesAndNo() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var owner = Boot();
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        CoreSettings.Current.UserPersonalityPresets.Add(new PersonalityPreset
+            { Id = "labels-own", Name = "Own", PromptSettings = new() { Personality = "Voice" } });
+        CoreSettings.Current.ActivePersonalityPresetId = "labels-own";
+        try
+        {
+            foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
+            {
+                LocalizationManager.Instance.SetLanguage(code);
+                var task = PersonalityStudio.Show(owner);
+                var studio = owner.OwnedWindows.Single();
+                Click(Button(studio, L("delete")));
+                var confirmation = Assert.IsType<MessageDialog>(studio.OwnedWindows.Single());
+                Assert.NotEqual("btn_no", Loc.Get("btn_no"));
+                Assert.NotEqual("label_yes", Loc.Get("label_yes"));
+                Assert.Equal(Loc.Get("label_yes"), Assert.IsType<TextBlock>(confirmation.FindControl<Button>("BtnOk")!.Content).Text);
+                Assert.Equal(Loc.Get("btn_no"), Assert.IsType<TextBlock>(confirmation.FindControl<Button>("BtnCancel")!.Content).Text);
+                confirmation.Close(false);
+                await Task.Yield();
+                Click(Button(studio, L("cancel")));
+                await task.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Single(CoreSettings.Current.UserPersonalityPresets);
+            }
+        }
+        finally { PersonalityStudio.CloseForPanic(); owner.Close(); LocalizationManager.Instance.SetLanguage(language); CoreSettings.ServiceProvider = null; }
     });
 
     [Fact]

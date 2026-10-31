@@ -87,7 +87,7 @@ internal static class PersonalityStudio
             delete.Click += async (_, _) =>
             {
                 var confirm = new MessageDialog(L("title"), string.Format(L("delete_confirm"), own.Name), true,
-                    okText: Loc.Get("label_yes"), cancelText: Loc.Get("label_no"));
+                    okText: Loc.Get("label_yes"), cancelText: Loc.Get("btn_no"));
                 Live.Add(confirm);
                 confirm.Closed += (_, _) => Live.Remove(confirm);
                 var asked = await confirm.ShowDialogSafe<bool?>(dialog);

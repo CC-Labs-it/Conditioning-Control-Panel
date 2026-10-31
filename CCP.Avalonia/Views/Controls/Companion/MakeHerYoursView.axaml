@@ -222,9 +222,6 @@
                 </Border>
             </Grid>
 
-            <Button Content="{loc:Str companion_v2_personality}" Theme="{StaticResource CmpLinkButtonStyle}"
-                    HorizontalAlignment="Left" Command="{Binding PersonalityStudioCommand}"/>
-
             <!-- already interviewed: the spotlight compresses to a chip row -->
             <WrapPanel Orientation="Horizontal" Margin="0,13,0,12"
                        IsVisible="{Binding IsInterviewed}">
