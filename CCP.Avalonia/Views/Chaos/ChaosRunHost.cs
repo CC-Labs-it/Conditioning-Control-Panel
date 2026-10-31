@@ -251,6 +251,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.PushEvent($"{ChaosGlyphs.Gold} playing with fire +{gold} gold");
                 Pulse(Color.FromRgb(255, 140, 60), 0.30);
             }
+            // WPF ChaosModeService.cs:2035-2036: every snap emits Size Queen.
+            if (_state.RippleEnabled) BubbleOverlay.TriggerChaosRipple(b);
             if (lastBreath > 1)
             {
                 _state.PushEvent($"⏱ last breath! x{lastBreath:0}");
@@ -259,7 +261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             else Pulse(Color.FromRgb(90, 255, 150), 0.16);   // soft green confirm
             if (slowburn > 1) _state.PushEvent("🐌 slow burn! x3");
             _state.PushEvent($"✔ snapped {spec.Payload.DisplayName}");
-            // ponytail: defuse lessons, first-times, regen, aftermath, ripple, combo milestones and
+            // ponytail: defuse lessons, first-times, regen, aftermath, combo milestones and
             // the brink narrative -> chaos-payout-fallin-d; the defuse barks -> chaos-payout-barks.
         }
 
@@ -574,6 +576,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosCursorGlowOverlay.CloseActive();   // WPF EndRun :3236
             ChaosVibeTrailOverlay.CloseActive();   // WPF EndRun :3237
             ChaosEStimOverlay.CloseActive();   // WPF EndRun :3238
+            Overlays.ChaosFieldFxOverlay.CloseActive();   // WPF ChaosModeService.cs:3236: before results
             ChaosSkiaFxOverlay.CloseActive();   // WPF EndRun
             CloseFx();   // WPF EndRun :3242
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned, rankUp);
