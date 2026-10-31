@@ -25,7 +25,7 @@ public sealed class CompanionApiKeyTests
             Assert.Equal("", CompanionApiKey.Store(null));
             Assert.Null(writtenValue);
             Assert.Null(CompanionApiKey.Read(reference));
-            Assert.Null(CompanionApiKey.Read("unknown-blob"));
+            Assert.Null(CompanionApiKey.Read(Convert.ToBase64String(new byte[] { 1, 2, 3 })));
         }
         finally { SecretStore.Store(CompanionApiKey.Slot, null); SecretStore.OsWriteOverride = previous; }
     }

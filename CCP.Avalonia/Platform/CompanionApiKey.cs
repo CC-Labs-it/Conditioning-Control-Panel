@@ -23,12 +23,27 @@ internal static class CompanionApiKey
     internal static string? Read(string stored)
     {
         if (stored == Reference) return SecretStore.Retrieve(Slot);
-        // Existing WPF profiles contain a DPAPI blob with no entropy (SecureStringHelper.cs:45-46).
-        if (!OperatingSystem.IsWindows() || string.IsNullOrEmpty(stored)) return null;
+        if (string.IsNullOrEmpty(stored)) return stored;
+        byte[] data;
+        try { data = Convert.FromBase64String(stored); }
+        catch (FormatException)
+        {
+            // WPF SecureStringHelper.cs:47-51 accepts legacy plaintext. Migrate only the
+            // current setting, never replace it because an old in-flight request read a key.
+            var prompt = CoreSettings.Current?.CompanionPrompt;
+            if (prompt?.OpenAiCompatibleApiKey == stored)
+            {
+                prompt.OpenAiCompatibleApiKey = Store(stored);
+                CoreSettings.Save();
+            }
+            return stored;
+        }
+        // WPF SecureStringHelper.cs:43-45: encrypted blobs use DPAPI with no entropy.
+        // A valid base64 blob that cannot be decrypted must not become a Bearer token.
+        if (!OperatingSystem.IsWindows()) return null;
         try
         {
-            return Encoding.UTF8.GetString(ProtectedData.Unprotect(
-                Convert.FromBase64String(stored), null, DataProtectionScope.CurrentUser));
+            return Encoding.UTF8.GetString(ProtectedData.Unprotect(data, null, DataProtectionScope.CurrentUser));
         }
         catch { return null; }
     }

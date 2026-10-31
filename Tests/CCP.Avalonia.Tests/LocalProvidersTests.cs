@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -31,8 +32,10 @@ public sealed class LocalProvidersTests
 {
     /// <summary>WPF EngineRoomDrawer.xaml.cs:59-61 -> MainWindow.CompanionRoom.cs:312-321;
     /// App.xaml.cs:659 supplies the protected-key reader used by the real transport.</summary>
-    [Fact]
-    public Task ByoKeyEditPersistsOnlyAReferenceAndAuthenticates() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ByoKeyEditPersistsOnlyAReferenceAndAuthenticates(bool legacyPlaintext) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -59,7 +62,15 @@ public sealed class LocalProvidersTests
             var box = drawer.FindControl<TextBox>("CustomKeyBox")!;
             box.ApplyStyling();
             Assert.NotEqual('\0', box.PasswordChar);
-            box.Text = "sk-test-byo";
+            if (legacyPlaintext)
+            {
+                CoreSettings.Current.CompanionPrompt.OpenAiCompatibleApiKey = "sk-test-byo";
+                service.SaveImmediate(); // a synthetic legacy WPF profile, loaded afresh
+                service = new SettingsService();
+                CoreSettings.ServiceProvider = () => service;
+                Assert.Equal("sk-test-byo", OpenAiCompatibleService.ApiKeyUnprotect!("sk-test-byo"));
+            }
+            else box.Text = "sk-test-byo";
             Dispatcher.UIThread.RunJobs();
             var reference = CoreSettings.Current.CompanionPrompt.OpenAiCompatibleApiKey;
             Assert.Equal(ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Reference, reference);
@@ -83,7 +94,7 @@ public sealed class LocalProvidersTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("", CoreSettings.Current.CompanionPrompt.OpenAiCompatibleApiKey);
             Assert.Null(OpenAiCompatibleService.ApiKeyUnprotect!(reference));
-            Assert.Null(OpenAiCompatibleService.ApiKeyUnprotect!("unknown-blob"));
+            Assert.Null(OpenAiCompatibleService.ApiKeyUnprotect!(Convert.ToBase64String(new byte[] { 1, 2, 3 })));
         }
         finally
         {
