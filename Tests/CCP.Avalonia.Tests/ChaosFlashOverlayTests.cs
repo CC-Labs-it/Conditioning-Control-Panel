@@ -250,6 +250,86 @@ public sealed class ChaosFlashOverlayTests
     }
 
     [Fact]
+    public void WashDispatcherIgnoresOtherPayloadsAndAnAbsentShell()
+    {
+        var oldFirer = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+        var before = ChaosFlashOverlay.LastShow;
+        try
+        {
+            var hostCalls = 0;
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosWashPayloads.Seed(
+                () => { hostCalls++; return null; });
+            new ConditioningControlPanel.Services.Chaos.OverlayPayload("spiral").Fire();
+            Assert.Equal(0, hostCalls);
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosWashPayloads.Seed(() => null);
+            new ConditioningControlPanel.Services.Chaos.OverlayPayload("braindrain").Fire();
+            Assert.Same(before, ChaosFlashOverlay.LastShow);
+        }
+        finally { ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = oldFirer; }
+    }
+
+    // WPF Services/Chaos/EffectPayloadFiring.cs:50-59. Exercise EffectPayload.Fire, the same
+    // seam reached by ChaosRunHost's benign pop (:218) and live detonation (:287).
+    [Theory]
+    [InlineData(false, 100, 2.0, 3.0, 10700, .10)]
+    [InlineData(true, 0, 1.0, 1.0, 2200, .30)]
+    [InlineData(true, 50, 2.0, 1.5, 9700, .30)]
+    [InlineData(true, 100, 1.0, 1.0, 5200, .30)]
+    public async Task LiveWashPayloadUsesWpfDefaultsOrScaledCustomWash(
+        bool custom, int strength, double global, double mult, int endMs, double peak)
+    {
+        var gif = WriteGif(out var dir);
+        Directory.CreateDirectory(Path.Combine(dir, "images"));
+        File.Move(gif, Path.Combine(dir, "images", "tiny.gif"));
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var oldAssets = CorePaths.EffectiveAssetsProvider;
+            var oldQuery = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
+            var oldFirer = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+            var oldGlobal = ConditioningControlPanel.Services.Chaos.EffectPayload.GlobalDurationMult;
+            var schedule = ChaosFlashOverlay.Schedule;
+            try
+            {
+                CorePaths.EffectiveAssetsProvider = () => dir;
+                ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ =>
+                    TwoScreens.Select((b, i) => MultiMonitorResultTests.MakeScreen(1, b, b, i == 0)).ToArray();
+                ChaosFlashOverlay.SkipPlatformChecksForTests = true;
+                CoreSettings.Current.DualMonitorEnabled = true;
+                var steps = new List<(Action Run, TimeSpan At)>();
+                ChaosFlashOverlay.Schedule = (a, t) => steps.Add((a, t));
+                ConditioningControlPanel.Avalonia.Views.Chaos.ChaosWashPayloads.Seed(
+                    () => new global::Avalonia.Controls.Border());
+                ConditioningControlPanel.Services.Chaos.EffectPayload.GlobalDurationMult = global;
+                var payload = new ConditioningControlPanel.Services.Chaos.OverlayPayload(
+                    "braindrain", custom ? .30 : null) { Strength = strength, DurationMult = mult };
+                payload.Fire();
+                await ChaosFlashOverlay.LastShow!;
+                Assert.NotNull(Assert.Single(ChaosFlashOverlay.Shown).Spiral.Source);
+                Assert.Equal(TimeSpan.FromMilliseconds(endMs), steps[^1].At);
+                foreach (var step in steps.Where(s => s.At <= TimeSpan.FromMilliseconds(500))) step.Run();
+                Assert.Equal(peak, ChaosFlashOverlay.Alpha, 10);
+                // The live route retains panic teardown, including already scheduled fade callbacks.
+                PanicSurfaces.StopAll("payload test");
+                foreach (var step in steps.ToArray()) step.Run();
+                Assert.Empty(ChaosFlashOverlay.Shown);
+                Assert.Equal(0, ChaosFlashOverlay.Alpha);
+            }
+            finally
+            {
+                ChaosFlashOverlay.CloseActive();
+                ChaosFlashOverlay.SkipPlatformChecksForTests = false;
+                ChaosFlashOverlay.Schedule = schedule;
+                CorePaths.EffectiveAssetsProvider = oldAssets;
+                ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = oldQuery;
+                ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = oldFirer;
+                ConditioningControlPanel.Services.Chaos.EffectPayload.GlobalDurationMult = oldGlobal;
+                Directory.Delete(dir, true);
+            }
+        });
+    }
+
+    [Fact]
     public async Task PanicOrphansAnInFlightDecode()
     {
         var gif = WriteGif(out var dir);
