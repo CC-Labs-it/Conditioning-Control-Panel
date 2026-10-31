@@ -687,7 +687,10 @@ namespace ConditioningControlPanel.Services
                 // V2User is unaffected — its DateTime members still deserialize from
                 // plain strings.
                 var result = Descent.DescentReader.ParseWire(json);
-                return result?["user"] as JObject;
+                var user = result?["user"] as JObject;
+                TierReadingProvider?.Invoke(unifiedId, EntitlementTierRule.ParseTier(user?["effective_tier"]));
+                PatreonReadingProvider?.Invoke(unifiedId, PatreonActiveRule.Parse(user));
+                return user;
             }
             catch (Exception ex)
             {
@@ -736,9 +739,12 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        /// <summary>
-        /// Send heartbeat to update online status
-        /// </summary>
+        /// <summary>Head dispatches successful profile/heartbeat tier readings to its UI thread.
+        /// Unseeded heads preserve their existing entitlement host.</summary>
+        public static Action<string, int?>? TierReadingProvider;
+        public static Action<string, PatreonActiveReading?>? PatreonReadingProvider;
+
+        /// <summary>Send heartbeat to update online status.</summary>
         public async Task<bool> SendHeartbeatAsync(string unifiedId, bool isActive = true, bool inSession = false)
         {
             try
@@ -749,6 +755,8 @@ namespace ConditioningControlPanel.Services
                 var response = await _http.SendAsync(request);
 
                 if (await TryHandleMergedAsync(response)) return false;
+                if (response.IsSuccessStatusCode)
+                    TierReadingProvider?.Invoke(unifiedId, EntitlementTierRule.ParseHeartbeatTier(await response.Content.ReadAsStringAsync()));
                 return response.IsSuccessStatusCode;
             }
             catch
