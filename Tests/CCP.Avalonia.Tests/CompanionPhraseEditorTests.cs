@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Serilog;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -267,6 +270,88 @@ public sealed class CompanionPhraseEditorTests
             CoreSettings.ServiceProvider = oldProvider;
         }
     });
+
+    [Theory]
+    [InlineData("en", false)]
+    [InlineData("fr", true)]
+    public void TriggerEditorFailureIsLoggedShownAndAllowsRetry(string language, bool afterAwait) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        var oldLogger = Log.Logger;
+        var sink = new TriggerLogSink();
+        using var logger = new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        service.Current.CustomTriggers = new() { "KEEP" };
+        service.Current.UserAddedCustomTriggers = new() { "KEEP" };
+        service.Current.TriggerModeEnabled = true;
+        var cell = new WorkshopTriggersCell();
+        var owner = new Window { Content = cell };
+        TextEditorDialog? attempted = null;
+        var failure = new InvalidOperationException("dialog unavailable");
+        var completion = new TaskCompletionSource<bool>();
+        var show = cell.ShowTriggerEditor;
+        try
+        {
+            owner.Show();
+            LocalizationManager.Instance.SetLanguage(language);
+            Log.Logger = logger;
+            cell.ShowTriggerEditor = (dialog, _) =>
+            {
+                attempted = dialog;
+                if (!afterAwait) throw failure;
+                return completion.Task;
+            };
+            void ClickEditor() => cell.FindControl<Button>("BtnEditTriggersCompanion")!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            ClickEditor();
+            if (afterAwait)
+            {
+                Assert.Empty(owner.OwnedWindows);
+                completion.SetException(failure); // The failure arrives after the handler has yielded.
+            }
+            Dispatcher.UIThread.RunJobs();
+            var error = Assert.Single(owner.OwnedWindows.OfType<MessageDialog>());
+            Assert.Equal(Loc.Get("title_error"), error.Title);
+            Assert.Equal(Loc.GetF("msg_error_opening_trigger_editor_0", failure.Message),
+                error.FindControl<TextBlock>("TxtMessage")!.Text);
+            Assert.False(error.FindControl<Button>("BtnCancel")!.IsVisible);
+            var logged = Assert.Single(sink.Events);
+            Assert.Equal(Serilog.Events.LogEventLevel.Error, logged.Level);
+            Assert.Same(failure, logged.Exception);
+            Assert.Equal("Failed to open trigger editor", logged.RenderMessage());
+            Assert.Equal(new[] { "KEEP" }, service.Current.CustomTriggers);
+            Assert.Equal(new[] { "KEEP" }, service.Current.UserAddedCustomTriggers);
+            Assert.False(service.HasPendingSave);
+            error.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(owner.OwnedWindows);
+
+            cell.ShowTriggerEditor = show;
+            ClickEditor(); // The same live cell still opens the real editor after the error is dismissed.
+            var retry = Assert.Single(owner.OwnedWindows.OfType<TextEditorDialog>());
+            retry.FindControl<Button>("BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(owner.OwnedWindows);
+        }
+        finally
+        {
+            foreach (var owned in owner.OwnedWindows.ToArray()) owned.Close();
+            attempted?.Close();
+            owner.Close();
+            Log.Logger = oldLogger;
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
+    private sealed class TriggerLogSink : Serilog.Core.ILogEventSink
+    {
+        public List<Serilog.Events.LogEvent> Events { get; } = new();
+        public void Emit(Serilog.Events.LogEvent logEvent) => Events.Add(logEvent);
+    }
 
     private static CompanionPhrase[] Rows(CompanionPhraseEditorDialog dialog) =>
         dialog.FindControl<ItemsControl>("PhraseList")!.Items.OfType<PhraseGroup>().SelectMany(g => g.Items).ToArray();
