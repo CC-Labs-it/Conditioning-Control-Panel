@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
@@ -47,7 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///         goes: WPF's Left/Top are DIPs, Avalonia's <c>Window.Position</c> is a PixelPoint in
     ///         PHYSICAL pixels, which is what <c>Screen.WorkingArea</c> already is.</item>
     ///   <item><c>NoClickRaiseHook</c> (an HwndSource hook returning MA_NOACTIVATE for
-    ///         WM_MOUSEACTIVATE) has NO equivalent - see the stub below for what is lost.</item>
+    ///         WM_MOUSEACTIVATE) is handled on X11 by restoring live bubbles after pointer presses and activation.</item>
     ///   <item><c>DisableProcessWindowsGhosting</c>-class calls: none in this file to drop.</item>
     /// </list>
     ///
@@ -189,6 +190,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             // Key handler
             KeyDown += OnKeyDown;
+
+            // WPF BubbleCountWindow.xaml.cs:150-161, 1832-1840 denies click raises.
+            // X11 can raise before Avalonia receives input, so restore the bubbles afterwards.
+            AddHandler(PointerPressedEvent, (_, _) => QueueBubbleRestack(),
+                RoutingStrategies.Tunnel, handledEventsToo: true);
+            Activated += (_, _) => QueueBubbleRestack();
 
             // Reclaim focus when stolen by other windows (only primary needs focus)
             if (_isPrimary)
@@ -657,6 +664,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _bubbleAnimTimer.Start();
         }
 
+        private void QueueBubbleRestack()
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_closed || _videoEnded || _isCleaningUp) return;
+                foreach (var bubble in _activeBubbles) bubble.RestackAbove(this);
+            }, DispatcherPriority.Background);
+        }
+
         /// <summary>Advances every active count bubble and reaps finished ones. Stops the timer
         /// when no bubbles remain (it restarts on the next spawn).</summary>
         private void AnimateAllCountBubbles(object? sender, EventArgs e)
@@ -955,12 +971,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Topmost puts the bubble in the keep-above band; it does not order it against the game
             // window, which is topmost too. This pins it directly above its owner - the ordering
             // the original's SetWindowPos(HWND_TOPMOST)-per-bubble was reaching for.
-            X11Overlay.RestackAbove(_window, owner);
+            RestackAbove(owner);
 
             // Lifespan - bubble stays for 1-1.5 seconds then pops. Driven by the owning
             // window's single shared animation timer (see BubbleCountWindow.AnimateAllCountBubbles)
             // rather than per-bubble timers, which previously meant ~2 DispatcherTimers per bubble.
             _lifeRemainingMs = 1000 + random.Next(500);
+        }
+
+        // Native ordering is unavailable in headless tests and off X11.
+        internal static Action<Window, Window> Restack = (bubble, owner) => X11Overlay.RestackAbove(bubble, owner);
+
+        internal void RestackAbove(Window owner)
+        {
+            if (!_isDisposed) Restack(_window, owner);
         }
 
         /// <summary>
