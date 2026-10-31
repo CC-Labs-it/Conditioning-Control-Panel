@@ -183,7 +183,9 @@ public sealed class InvitePanel : Border
             badge.Children.Add(new Border
             {
                 CornerRadius = new CornerRadius(10), ClipToBounds = true, Opacity = reached ? 1 : 0.45,
-                Child = new Image { Source = art, Width = 60, Height = 60, Stretch = Stretch.UniformToFill },
+                // WPF Controls/Invites/InvitePanel.cs:405-414: locked badges are grey,
+                // reached badges retain the mod-resolved colour art. Reuse the head's cached grey twin.
+                Child = new Image { Source = reached ? art : Helpers.CardArtDesaturate.Of(art) ?? art, Width = 60, Height = 60, Stretch = Stretch.UniformToFill },
             });
         if (!reached)
             badge.Children.Add(new Border

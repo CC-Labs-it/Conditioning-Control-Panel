@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Animation;
@@ -37,6 +38,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class ExclusivesTabView : UserControl
     {
         private readonly AmbientFxCanvas _ambientFx;
+
+        // WPF MainWindow.Exclusives.cs:1022: use the app's existing daily-free service,
+        // whose 6h success / 10min retry gates own throttling. Null on the render path.
+        internal static Func<Task>? RefreshDailyFree { get; set; }
+
+        internal static async Task RefreshDailyFreeSafelyAsync()
+        {
+            try
+            {
+                if (RefreshDailyFree is { } refresh) await refresh();
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug("Vault daily-free refresh failed: {E}", ex.Message);
+            }
+        }
 
         public ExclusivesTabView()
         {
@@ -178,6 +195,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RefreshTierPlates();
             Dress(this.FindControl<Control>("SpotFreeToday")!);
             Dress(this.FindControl<Control>("SpotVeilLock")!);   // WPF :799 breathes only under a shown veil
+            // Same fire-and-forget path as WPF :1022. TodayChanged already marshals a
+            // shell repaint (App.axaml.cs); do not block navigation or add a view timer.
+            _ = RefreshDailyFreeSafelyAsync();
         }
 
         private void RefreshHeaderArt()
