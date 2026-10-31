@@ -376,6 +376,12 @@
     <Resource Include="..\Assets\avatar0_emotes\*.gif" Link="Resources\avatar0_emotes\%(RecursiveDir)%(Filename)%(Extension)" />
     <Resource Include="..\Assets\avatar0_emotes\emotes.json" Link="Resources\avatar0_emotes\emotes.json" Condition="Exists('..\Assets\avatar0_emotes\emotes.json')" />
     <Resource Include="..\Assets\avatar0_emotes\clip_timing.json" Link="Resources\avatar0_emotes\clip_timing.json" Condition="Exists('..\Assets\avatar0_emotes\clip_timing.json')" />
+    <!-- Rain (7.2, the V2 avatar generation on BambiSleep, Sissy and CCP Default): animated WebP with real
+         alpha, played by the tube's SkiaSharp lane (AvatarTube\EmoteClipPlayer.cs). CC BY 4.0: ATTRIBUTION.txt. -->
+    <Resource Include="..\Assets\rain_emotes\*.webp" Link="Resources\rain_emotes\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Resource Include="..\Assets\rain_emotes\emotes.json" Link="Resources\rain_emotes\emotes.json" />
+    <Resource Include="..\Assets\rain_emotes\clip_timing.json" Link="Resources\rain_emotes\clip_timing.json" />
+    <Content Include="..\Assets\rain_emotes\ATTRIBUTION.txt" Link="Resources\rain_emotes\ATTRIBUTION.txt" CopyToOutputDirectory="PreserveNewest" />
 
     <!-- Achievement images -->
     <Resource Include="..\Assets\achievements\*.png" Link="Resources\achievements\%(RecursiveDir)%(Filename)%(Extension)" />
@@ -575,6 +581,7 @@
       ..\Assets\web\piecebypiece\**\*.md;
       ..\Assets\web\piecebypiece\package.json;
       ..\Assets\web\dtrh\tests\**\*;
+      ..\Assets\web\rain-wardrobe\tests\**\*;
       ..\Assets\web\intake\tests\**\*
     </ArcademyHarnessExclude>
     <!-- Remix engine (Resources\web\remix, vendored from cclabs-site/remix for the Jackpot Remix
@@ -608,6 +615,7 @@
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\**\*.md;
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\package.json;
       $(MSBuildProjectDirectory)\..\Assets\web\dtrh\tests\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\rain-wardrobe\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\intake\tests\**\*
     </ArcademyHarnessExcludeAbs>
   </PropertyGroup>

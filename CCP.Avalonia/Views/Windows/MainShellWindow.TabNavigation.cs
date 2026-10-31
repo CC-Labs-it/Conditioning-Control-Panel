@@ -144,7 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 && Services.UI.NavSections.Redirects.TryGetValue(tab, out var moved)) { ShowTab(moved.Tab); return; }
             // The dashboard's RECENT rail, at the door before the intercepts (WPF :121), so a
             // window key counts as an open like any tab (MainShellWindow.FavoritesRail.cs).
-            NoteDestinationOpened(tab, deferRail: TabPanels.ContainsKey(tab));
+            NoteDestinationOpened(tab);
             // WPF ShowTab("patreon") -> ShowAppInfoPopup -> ShowAccountSettings (MainWindow.TabNavigation.cs:126,
             // MainWindow.AccountShell.cs:73): Settings, scrolled to Account. Before the bark, as there.
             if (tab == "patreon") { OpenAppSettingsSection("account"); return; }
@@ -163,6 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
+            using var trace = Helpers.TabWorkTrace.Start(tab);
             // Window launchers have already returned. Real tabs keep their legacy bark aliases.
             CoreBark.NotifyTabNavigated(BarkTabAliases.TryGetValue(tab, out var barkTab) ? barkTab : tab);
 
@@ -173,19 +174,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var panel = this.FindControl<Control>(name);
                 if (panel is not null) panel.IsVisible = name == target;
             }
+            trace?.Mark("visibility");
             // WPF AnimateTabIn on every arm of the switch (MainShellWindow.TabTransitions.cs).
             AnimateTabIn(this.FindControl<Control>(target), tab);
+            trace?.Mark("entrance");
             NoteTabHistory(tab); // back/forward (MainShellWindow.TabHistory.cs); unknown keys never reach it
             _tabBefore = CurrentTab;
             CurrentTab = tab;
             RefreshSectionRail(tab); // the lit rail row (MainShellWindow.NavRail.cs)
+            trace?.Mark("rail");
             SwitchTabFx(tab);
+            trace?.Mark("fx");
             SyncSectionChrome(tab); // the pill strip + breadcrumb (MainShellWindow.SectionChrome.cs)
+            trace?.Mark("section");
             // A tooltip opened by a stationary pointer outlives the tab it belongs to, because
             // nothing ever moved the pointer off its owner. Same call, same place, as WPF's
             // MainWindow.TabNavigation.cs:186 (MainShellWindow.ToolTipHygiene.cs).
             CloseStaleToolTip();
+            trace?.Mark("chrome");
             OnTabShown(tab);
+            trace?.Mark("on-shown");
         }
 
         /// <summary>

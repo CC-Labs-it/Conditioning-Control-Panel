@@ -48,6 +48,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _demoUsingA = true;
         private Action? _statusAction;
         private string? _statusActionKey, _consentKey;
+        private readonly Dictionary<TextBlock, string> _labelKeys = new();
+        private readonly List<(string Folder, string Count, Border Card)> _folderCards = new();
+        private bool? _paintedMix, _paintedConsent;
+        private IBrush? _mixBrush;
+        internal int FolderCardBuilds { get; private set; }
+
 
         /// <summary>The status row's current state; read by tests and by nothing else yet.</summary>
         internal BlinkTrainerStatusState StatusState { get; private set; }
@@ -137,6 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         internal void Refresh()
         {
+            using var trace = Helpers.TabWorkTrace.Start("blink-refresh");
             try
             {
                 var s = CoreSettings.Current;
@@ -153,13 +160,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     SetMixModeSelection(s.BlinkTrainerMixImages);
                 }
 
+                trace?.Mark("settings");
                 RebuildFolderCards();
+                trace?.Mark("folders");
                 RefreshTrackerButton();
                 RefreshWebcamColumn();
                 RefreshGate();
                 RefreshStatusRow();
+                trace?.Mark("status");
                 ApplyStageMode();
                 SyncTick();
+                trace?.Mark("stage");
             }
             catch (Exception ex) { Log.Warning(ex, "RefreshBlinkTrainerTab failed"); }
         }
@@ -361,6 +372,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 : this.FindResource("TextMutedBrush") as IBrush ?? Brushes.Gray;
             if (StatusState is BlinkTrainerStatusState.Running or BlinkTrainerStatusState.Error)
             {
+                _labelKeys.Remove(BlinkTrainerStatusText);
                 BlinkTrainerStatusText.ClearValue(TextBlock.TextProperty);   // drop the {loc} binding first
                 BlinkTrainerStatusText.Text = BlinkTrainerSession.LastError;   // WPF passes the error through as-is
                 Tick();
@@ -391,13 +403,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BlinkTrainerStatusAction.IsVisible = key != null;
             if (key != null && _statusActionKey != key)
             {
+                if (BlinkTrainerStatusAction.Content is TextBlock oldLabel) _labelKeys.Remove(oldLabel);
                 BlinkTrainerStatusAction.Content = BindLoc(new TextBlock(), key);
                 _statusActionKey = key;
             }
         }
 
-        private static TextBlock BindLoc(TextBlock tb, string key)
+        private TextBlock BindLoc(TextBlock tb, string key)
         {
+            if (_labelKeys.TryGetValue(tb, out var old) && old == key) return tb;
+            _labelKeys[tb] = key;
             tb.Bind(TextBlock.TextProperty, new Binding($"[{key}]") { Source = LocalizationManager.Instance, Mode = BindingMode.OneWay });
             return tb;
         }
@@ -413,8 +428,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void RefreshWebcamColumn()
         {
             bool consented = WebcamConsent.IsCurrent(CoreSettings.Current);
-            BlinkTrainerConsentCard.Background = new SolidColorBrush(consented ? Color.FromArgb(0x1A, 0x4A, 0xDE, 0x80) : Color.FromArgb(0x1A, 0xFF, 0xD0, 0x80));
-            BlinkTrainerConsentCard.BorderBrush = consented ? Green : Amber;
+            if (_paintedConsent != consented)
+            {
+                _paintedConsent = consented;
+                BlinkTrainerConsentCard.Background = new SolidColorBrush(consented ? Color.FromArgb(0x1A, 0x4A, 0xDE, 0x80) : Color.FromArgb(0x1A, 0xFF, 0xD0, 0x80));
+                BlinkTrainerConsentCard.BorderBrush = consented ? Green : Amber;
+            }
             BlinkTrainerConsentStatus.Key = consented ? "blink_trainer_consent_granted" : "blink_trainer_consent_required";
             // Keep the bound label while its key is unchanged: replacing Content makes the
             // button template and text layout start over on every tab show. The binding itself
@@ -422,6 +441,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var consentKey = consented ? "blink_trainer_consent_manage" : "blink_trainer_consent_grant";
             if (_consentKey != consentKey)
             {
+                if (BtnBlinkTrainerManageConsent.Content is TextBlock oldLabel) _labelKeys.Remove(oldLabel);
                 BtnBlinkTrainerManageConsent.Content = BindLoc(new TextBlock { FontSize = 11 }, consentKey);
                 _consentKey = consentKey;
             }
@@ -429,6 +449,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var cal = Platform.WebcamTracker.Instance.Calibration;
             if (cal?.MonitorBounds?.DeviceName is { Length: > 0 } device)
             {
+                _labelKeys.Remove(BlinkTrainerCalibrationStatus);
                 BlinkTrainerCalibrationStatus.ClearValue(TextBlock.TextProperty);   // drop the {loc} binding first
                 BlinkTrainerCalibrationStatus.Text = Loc.GetF("blink_trainer_calibration_calibrated_format", device);
             }
@@ -441,19 +462,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void RebuildFolderCards()
         {
-            BlinkTrainerFolderCardsHost.Children.Clear();
             var s = CoreSettings.Current;
-            foreach (var folder in s.BlinkTrainerFolders.ToList())
-                BlinkTrainerFolderCardsHost.Children.Add(BuildFolderCard(folder, s.BlinkTrainerIncludeVideos));
+            var next = new List<(string Folder, string Count, Border Card)>();
+            foreach (var folder in s.BlinkTrainerFolders)
+            {
+                // Still rescan: files may have changed while this page was hidden. Only
+                // replace the card when its displayed count/name/language actually changed.
+                var line = BlinkTrainerState.FolderCountLine(AssetPack.FromFolder(folder), s.BlinkTrainerIncludeVideos);
+                var count = line ?? Loc.Get("blink_trainer_folder_empty_or_invalid");
+                var cached = _folderCards.FirstOrDefault(x => x.Folder == folder && x.Count == count);
+                var card = cached.Card ?? BuildFolderCard(folder, count, line == null);
+                next.Add((folder, count, card));
+            }
+            for (var i = BlinkTrainerFolderCardsHost.Children.Count - 1; i >= 0; i--)
+                if (!next.Any(x => ReferenceEquals(x.Card, BlinkTrainerFolderCardsHost.Children[i])))
+                    BlinkTrainerFolderCardsHost.Children.RemoveAt(i);
+            for (var i = 0; i < next.Count; i++)
+                if (i >= BlinkTrainerFolderCardsHost.Children.Count || !ReferenceEquals(BlinkTrainerFolderCardsHost.Children[i], next[i].Card))
+                {
+                    BlinkTrainerFolderCardsHost.Children.Remove(next[i].Card);
+                    BlinkTrainerFolderCardsHost.Children.Insert(i, next[i].Card);
+                }
+            _folderCards.Clear();
+            _folderCards.AddRange(next);
         }
 
-        private Border BuildFolderCard(string folder, bool includeVideos)
+        private Border BuildFolderCard(string folder, string countLine, bool invalid)
         {
+            FolderCardBuilds++;
             var pink = this.FindResource("PinkBrush") as IBrush ?? Brushes.HotPink;
             var rest = new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4), 0.3);
             var muted = this.FindResource("TextMutedBrush") as IBrush ?? Brushes.Gray;
 
-            var countLine = BlinkTrainerState.FolderCountLine(AssetPack.FromFolder(folder), includeVideos);
             var info = new StackPanel();
             info.Children.Add(new TextBlock
             {
@@ -463,8 +503,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             });
             info.Children.Add(new TextBlock
             {
-                Text = countLine ?? Loc.Get("blink_trainer_folder_empty_or_invalid"),
-                Foreground = countLine == null ? (this.FindResource("TextDimBrush") as IBrush ?? muted) : muted,
+                Text = countLine,
+                Foreground = invalid ? (this.FindResource("TextDimBrush") as IBrush ?? muted) : muted,
                 FontSize = 11, Margin = new Thickness(0, 2, 0, 0),
             });
 
@@ -597,6 +637,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void SetMixModeSelection(bool isMix)
         {
             var pink = this.FindResource("PinkBrush") as IBrush ?? Brushes.HotPink;
+            if (_paintedMix == isMix && ReferenceEquals(_mixBrush, pink)) return;
+            _paintedMix = isMix;
+            _mixBrush = pink;
             foreach (var (b, on) in new[] { (BlinkTrainerMixOptionSame, !isMix), (BlinkTrainerMixOptionMix, isMix) })
             {
                 b.BorderBrush = on ? pink : Brushes.Transparent;

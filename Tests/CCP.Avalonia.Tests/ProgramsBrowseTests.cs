@@ -283,7 +283,7 @@ public sealed class ProgramsBrowseTests
     private static void EnsureAvalonia()
     {
         if (Application.Current is not null) return;
-        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .SetupWithoutStarting();

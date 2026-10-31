@@ -241,7 +241,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF NoteDestinationOpened (:378): RECENT's one input, called from ShowTab.</summary>
-        internal void NoteDestinationOpened(string tabKey, bool deferRail = false)
+        internal void NoteDestinationOpened(string tabKey)
         {
             try
             {
@@ -252,10 +252,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var entry = SettingsPaletteIndex.All.FirstOrDefault(e => e.Id == id);
                 if (entry == null || !entry.Available) return;
                 if (!FavoritesRailRule.NoteOpened(s.RailRecent, id)) return;
-                // Home refreshes on arrival. Building its hidden chips here adds layout and
-                // template work to every other page's first frame (including the click leaving Home).
                 CoreSettings.Save();
-                if (!deferRail) RefreshFavoritesRail();
+                RefreshFavoritesRail();
             }
             catch (Exception ex) { Log.Debug("NoteDestinationOpened({Tab}): {E}", tabKey, ex.Message); }
         }

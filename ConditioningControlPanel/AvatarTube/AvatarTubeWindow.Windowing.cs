@@ -2549,6 +2549,8 @@ namespace ConditioningControlPanel
             if (!_isAttached)
             {
                 var hit = e.OriginalSource as DependencyObject;
+                // The V1/V2 pill sits on the draggable TitleBox: a press on it is a click, never a drag.
+                if (hit != null && IsDescendantOf(hit, BtnAvatarGeneration)) return;
                 bool onAvatar = IsDescendantOf(hit, AvatarBorder)
                                 || IsDescendantOf(hit, SpeechBubble)
                                 || IsDescendantOf(hit, TitleBox)

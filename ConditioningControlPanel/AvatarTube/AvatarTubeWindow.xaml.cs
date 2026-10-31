@@ -771,6 +771,7 @@ namespace ConditioningControlPanel
                 }
 
                 layer.Visibility = Visibility.Visible;
+                UpdateGenerationPill();   // the V1/V2 pill steps aside while the tear is up
 
                 _possessionGlitchTimer = new DispatcherTimer
                 {
@@ -801,6 +802,7 @@ namespace ConditioningControlPanel
                 if (layer == null) return;
                 layer.Children.Clear();
                 layer.Visibility = Visibility.Collapsed;
+                UpdateGenerationPill();
             }
             catch (Exception ex) { App.Logger?.Debug("AvatarTube ClearGlitchPortrait failed: {Error}", ex.Message); }
         }
