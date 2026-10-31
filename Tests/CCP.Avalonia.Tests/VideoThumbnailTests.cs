@@ -51,6 +51,7 @@ public sealed class VideoThumbnailTests
         Assert.True(frames.Freed);
         Assert.Null(frames.Bitmap);
         Assert.Equal(IntPtr.Zero, decoder!.NativeReference);
+        Assert.False(OpenWindows.OpenedSinceMark); // a thumbnail is not a visible panic surface
     });
 
     // WPF MainWindow.Assets.cs:940-948: failed thumbnails leave the placeholder and finish loading.
@@ -73,6 +74,7 @@ public sealed class VideoThumbnailTests
             Assert.True(frames!.Freed);
             Assert.Null(frames.Bitmap);
             Assert.Equal(IntPtr.Zero, decoder.NativeReference);
+            Assert.False(OpenWindows.OpenedSinceMark);
         }
         finally { File.Delete(invalid); }
     });
