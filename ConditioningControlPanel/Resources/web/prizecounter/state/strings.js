@@ -74,7 +74,7 @@ export const descKey = (id) => itemKey(id).replace(/_name$/, '_desc');
 /* One short factual line per item (Astra's item-info.json, trimmed), shown on the preview strip and the confirm card.
  * A family + slot key (`shop_item_kart_body_desc`) covers every row of that slot without a key of its own. */
 const ITEM_DESCS = {
-  "shop_item_kart_body_desc": "A kart body for EMI in Racing Thoughts. Outfits and paint equip separately.",
+  "shop_item_kart_body_desc": "A kart body for EMI in Racing Thoughts. It changes how the kart drives. Outfits and paint equip separately.",
   "shop_item_kart_outfit_pit_crew_desc": "Pit crew uniform with a cap for EMI in Racing Thoughts. The kart is separate.",
   "shop_item_kart_outfit_ringmaster_desc": "Ringmaster outfit with a top hat for EMI in Racing Thoughts. The kart is separate.",
   "shop_item_kart_outfit_ballerina_desc": "Ballet outfit with a tutu for EMI in Racing Thoughts. The kart is separate.",

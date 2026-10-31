@@ -4,6 +4,8 @@
 
 import { itemName, itemDesc } from '../state/strings.js';
 import { STAR, LOCK } from './icons.js';
+import { renderBars } from './bars.js';
+import { kartBarsOf } from '../state/kart-bars.js';
 
 const KEEP = { key: 'shop_keep_looking', intent: 'back', main: false };
 const WEAR = { key: 'shop_wear', intent: 'select', main: true };
@@ -31,6 +33,7 @@ export function cardModel(card, sp, t) {
   const note = card.pending ? t('shop_pending') : card.noteKey ? t(card.noteKey) : null;
   return {
     face: card.face, name: itemName(t, card.itemId), desc: itemDesc(t, card.itemId), pending: !!card.pending,
+    bars: kartBarsOf(card.itemId),
     price: f.price ? { text: String(card.priceSp), red: card.face === 'short', label: t('shop_price', card.priceSp) } : null,
     stamp: f.stamp ? t(f.stamp === 'owned' ? 'shop_owned' : 'shop_prime') : null, stampKind: f.stamp || null,
     lines, note,
@@ -51,6 +54,7 @@ export function renderCard(doc, m, send, press = () => true) {
   name.id = 'pc-card-name';
   card.append(name);
   if (m.desc) card.append(el('p', 'pc-card-desc', m.desc));
+  if (m.bars) card.append(renderBars(doc, m.bars));
   if (m.stamp) {
     const s = el('span', `pc-stamp pc-stamp-${m.stampKind}`);
     if (m.stampKind === 'prime') s.innerHTML = LOCK;

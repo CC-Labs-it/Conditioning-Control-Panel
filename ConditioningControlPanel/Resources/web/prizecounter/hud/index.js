@@ -8,6 +8,8 @@
 import { tabKey, itemName, itemDesc } from '../state/strings.js';
 import { TAB_ICONS, STAR, LOCK, BACK } from './icons.js';
 import { cardModel, renderCard } from './card.js';
+import { renderBars } from './bars.js';
+import { kartBarsOf } from '../state/kart-bars.js';
 import { countDown, weekNo } from './wallet.js';
 import { createPressGuard, keyName } from '../state/press-guard.js';
 
@@ -39,8 +41,8 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
 
   const listEl = el('div', 'pc-list');
   const peek = el('aside', 'pc-peek'), previewSlot = el('div', 'pc-peek-view');
-  const peekName = el('p', 'pc-peek-name'), peekPrice = el('p', 'pc-peek-price'), peekDesc = el('p', 'pc-peek-desc');
-  peek.append(previewSlot, peekName, peekPrice, peekDesc);
+  const peekName = el('p', 'pc-peek-name'), peekPrice = el('p', 'pc-peek-price'), peekDesc = el('p', 'pc-peek-desc'), peekBars = el('div', 'pc-peek-bars');
+  peek.append(previewSlot, peekName, peekPrice, peekDesc, peekBars);
   peek.onclick = () => send({ type: 'select' });
   const status = el('p', 'pc-status');
   status.setAttribute('role', 'status');
@@ -105,6 +107,9 @@ export function createHud(root, { t, send, goTab, signIn = () => {}, motion = 'f
     const desc = itemDesc(t, row.id);
     peekDesc.textContent = desc || '';
     peekDesc.hidden = !desc;
+    const bars = kartBarsOf(row.id);
+    peekBars.replaceChildren(...(bars ? [renderBars(doc, bars)] : []));
+    peekBars.hidden = !bars;
     fillPrice(peekPrice, rowLook(row, v));
   }
 
