@@ -54,12 +54,12 @@ public partial class EmiDeskWindow
         if (_speech != null) return;
         _speechText = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 11,
             FontFamily = BubbleFont, Foreground = Brush.Parse("#FF69B4") };
-        _answerChips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
+        _answerChips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, IsVisible = false };
         _speech = new StackPanel { Spacing = 2, MaxWidth = 280, IsVisible = false };
         MomentBubbleTail = new Polygon { Fill = Brush.Parse("#181832"), Stroke = Brush.Parse("#FF69B4"),
             StrokeThickness = 1, Margin = new Thickness(0, -1, 0, 0), HorizontalAlignment = HorizontalAlignment.Left,
             Points = new System.Collections.Generic.List<Point> { new(10, 0), new(0, 0), new(0, 10) } };
-        _speech.Children.Add(new StackPanel { Children =
+        _speech.Children.Add(new StackPanel { IsHitTestVisible = false, Children =
         {
             new Border { Background = Brush.Parse("#181832"),
                 BorderBrush = Brush.Parse("#FF69B4"), BorderThickness = new Thickness(1),
@@ -67,7 +67,7 @@ public partial class EmiDeskWindow
             MomentBubbleTail,
         } });
         _speech.Children.Add(_answerChips); BubbleHost.Children.Add(_speech);
-        BubbleHost.IsHitTestVisible = true;
+        BubbleHost.IsHitTestVisible = false;
         _speech.SizeChanged += (_, _) => LayoutSpeech();
         Resized += (_, _) => LayoutSpeech();
         Moved += (_, _) => LayoutSpeech();
@@ -141,6 +141,7 @@ public partial class EmiDeskWindow
         EmiLineEngine.Instance.Ack(line.Id, spoke: !line.Hold);
         if (line.Hold)
         {
+            StopPatFeedback();
             if (!AskLive) { StopSpeechTimer(); PaintSpeech(null); }
             DrawFace(line.Face);
             HoldTimer.After(line.HoldMs > 0 ? line.HoldMs : 1400, () => DrawFace(EmiChains.RestFace));
@@ -153,7 +154,7 @@ public partial class EmiDeskWindow
         if (PresentationActive || AskLive) return;
         _holdTimerSlot?.Stop();
         EnsureSpeech();
-        _ask = ask; _answerChips!.Children.Clear();
+        _ask = ask; ClearChips();
         EmiLineEngine.Instance.Ack(ask.Id);
         TypeSpeech(ask.Question, string.IsNullOrEmpty(ask.Face) ? "^_^" : ask.Face, () =>
         {
@@ -165,7 +166,7 @@ public partial class EmiDeskWindow
                 chip.Click += (_, e) => { e.Handled = true; AnswerAsk(index); };
                 _answerChips.Children.Add(chip);
             }
-            LayoutSpeech();
+            _answerChips.IsVisible = true; BubbleHost.IsHitTestVisible = true; LayoutSpeech();
             _answerChips.Children[0].Focus();
         });
     }
@@ -179,15 +180,16 @@ public partial class EmiDeskWindow
         try { if (!string.IsNullOrEmpty(effect)) RunAskEffect(effect); }
         finally { ReleaseParkedLine(); }
     }
+    private void ClearChips() { _answerChips?.Children.Clear(); if (_answerChips != null) _answerChips.IsVisible = false; BubbleHost.IsHitTestVisible = false; }
     private void ClearAsk()
     {
         _ask = null; StopSpeechTimer();
-        _answerChips?.Children.Clear(); PaintSpeech(null);
+        ClearChips(); PaintSpeech(null);
     }
     public void CancelAsk()
     {
         if (!AskLive) return;
-        ClearAsk(); EmiLineEngine.Instance.NoteAskIgnored();
+        ClearAsk(); StopPatFeedback(); EmiLineEngine.Instance.NoteAskIgnored();
         EmiDeskService.Instance.Fire("askIgnored");
         DrawFace("-_-");
         AfterSpeech(1400, () => { PaintSpeech("..."); AfterSpeech(700, () =>
@@ -204,7 +206,7 @@ public partial class EmiDeskWindow
     {
         if (AskLive) { EmiLineEngine.Instance.NoteAskIgnored(); _ask = null; }
         _parkedLine = null; StopSpeechTimer(); _holdTimerSlot?.Stop();
-        _answerChips?.Children.Clear();
+        ClearChips();
         if (_speech != null) _speech.IsVisible = false;
     }
     private void OnSpeechMoment(object? sender, EmiMoment moment)
