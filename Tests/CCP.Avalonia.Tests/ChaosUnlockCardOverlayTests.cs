@@ -156,10 +156,10 @@ public sealed class ChaosUnlockCardOverlayTests
     });
 
     [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(2)]
-    public async Task Draft_pick_earns_a_deferred_lesson_and_shutdown_drops_the_handoff(int pick) => await Run(clock =>
+    [InlineData(0, false), InlineData(0, true)]
+    [InlineData(1, false), InlineData(1, true)]
+    [InlineData(2, false), InlineData(2, true)]
+    public async Task Draft_pick_earns_a_deferred_lesson_and_shutdown_drops_the_handoff(int pick, bool debut) => await Run(clock =>
     {
         bool curse = pick == 1;
         var pulses = new System.Collections.Generic.List<(uint, double)>();
@@ -167,6 +167,8 @@ public sealed class ChaosUnlockCardOverlayTests
         ChaosRunHost.PulseFx = (c, strength) => pulses.Add((c.ToUInt32(), strength));
         ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => cues.Add(System.IO.Path.GetFileNameWithoutExtension(p));
         ConditioningControlPanel.CoreSettings.Current.ChaosAnnouncerEnabled = true;
+        ChaosMeta.State.RunsCompleted = debut ? 2 : 0;
+        ChaosMeta.State.SeenSkipDebut = false;
         Begin();
         var state = ChaosRunHost.State!;
         state.ElapsedSec = 20;
@@ -181,6 +183,8 @@ public sealed class ChaosUnlockCardOverlayTests
         reroll.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(0, state.RerollsLeft);
         Assert.False(reroll.IsVisible);
+        if (debut) Assert.Equal(((string?)null, ChaosAnnounceKind.Willpower, "you're allowed to refuse now."),
+            (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
         var boon = curse ? ChaosBoonPool.Draft(true, 3, guaranteeCurse: true).First(b => b.IsCurse)
             : ChaosBoonPool.All.Single(b => b.Id == (pick == 2 ? "extra_shield" : "golden_touch"));
         int shields = state.Shields;
@@ -197,6 +201,9 @@ public sealed class ChaosUnlockCardOverlayTests
         Assert.Equal(shields + (curse ? 1 : pick == 2 ? 2 : 0), state.Shields);
         Assert.Equal(pick != 0, pulses.Contains((0xFF78DCA0u, 0.22)));
         Assert.Equal(curse, cues.Contains("sin_accept"));
+        if (debut) Assert.Equal(1, ChaosAnnouncerOverlay.QueuedCount);
+        if (debut) { clock.Advance(ChaosAnnounceTiming.TotalMs(ChaosAnnounceTiming.HoldMs)); ChaosAnnouncerOverlay.Active!.Step(); }
+        Assert.Equal(0, ChaosAnnouncerOverlay.QueuedCount);
         Assert.Equal((boon.Id, curse ? ChaosAnnounceKind.Temptation : ChaosAnnounceKind.Mantra, boon.Name),
             (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
         var icon = Assert.Single(ChaosAnnouncerOverlay.Active!.GetLogicalDescendants().OfType<IconGlyph>());
@@ -282,11 +289,17 @@ public sealed class ChaosUnlockCardOverlayTests
             Setup();
             var clock = new SteppedClock();
             ChaosUnlockCardOverlay.Clock = clock;
+            var announcerTime = ChaosAnnouncerOverlay.Clock;
+            var progression = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut);
+            (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut) = (0, false);
+            ChaosAnnouncerOverlay.Clock = clock;
             var pulse = ChaosRunHost.PulseFx;
             var audio = ConditioningControlPanel.CoreAudio.PlayOneShotProvider;
             try { body(clock); }
             finally { ChaosRunHost.ForceShutdown(); ChaosUnlockCardOverlay.Clock = TimeProvider.System;
-                ChaosRunHost.PulseFx = pulse; ConditioningControlPanel.CoreAudio.PlayOneShotProvider = audio; }
+                ChaosRunHost.PulseFx = pulse; ConditioningControlPanel.CoreAudio.PlayOneShotProvider = audio;
+                ChaosAnnouncerOverlay.Clock = announcerTime;
+                (ChaosMeta.State.RunsCompleted, ChaosMeta.State.SeenSkipDebut) = progression; }
             return Task.CompletedTask;
         });
     }
