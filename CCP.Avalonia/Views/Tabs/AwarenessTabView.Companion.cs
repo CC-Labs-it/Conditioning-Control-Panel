@@ -24,12 +24,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             privacy.ViewModel?.Sync();   // WPF vm.AwarenessVm.Sync()
         }
 
-        // Stricter than WPF: apply AwarenessPrivacyView.xaml.cs:49-53 teardown on panic,
-        // even though the hosted card stays loaded. Do not stop the shared privacy ledger.
+        // WPF AwarenessPrivacyView.xaml.cs:36-39,91-100 keeps a visible readout refreshing.
+        // Panic only stops its blink and disarms wipe (stricter than WPF unload:49-53).
         internal void StopCompanionPrivacyForPanic()
         {
             if (this.FindControl<ContentControl>("CompanionPrivacyHost")?.Content is not AwarenessPrivacyView privacy) return;
-            privacy.StopRefresh();
             privacy.StopCursorBlink();
             privacy.WipeConfirm.Disarm();
         }
