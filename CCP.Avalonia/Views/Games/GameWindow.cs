@@ -52,7 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF CaucusHostService.Launch: dtrh/race.html behind the racing-purchase door (GameWindow.Race.cs).
             ["loom"] = new("loom", "billboard_loom_title", "dtrh/loom.html"), // WPF LoomHostService: free
             ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
-            // WPF DtrhHostService.cs:196 StartUrl behind the Lab door (GameWindow.Dtrh.cs).
+            // WPF DtrhHostService.cs:196 StartUrl behind the Basic door (GameWindow.Dtrh.cs).
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
             // WPF GlassroadHostService (feat/glassroad-a): the 3D race behind CCP_GLASSROAD=1 (GameWindow.Glassroad.cs).
             [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
