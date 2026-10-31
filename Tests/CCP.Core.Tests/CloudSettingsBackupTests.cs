@@ -186,6 +186,37 @@ public sealed class CloudSettingsBackupTests : IDisposable
             AssertItemPaths((await new CloudSettingsBackup(_fake).DownloadAsync(local))!, path);
     }
 
+    // WPF ProfileSyncService.cs:4561,4738 round-trips saved paths. The port keeps rooted paths local.
+    [Theory]
+    [InlineData("/home/me/retained.wav")]
+    [InlineData("")]
+    [InlineData("AwarenessPresets/audio/bell.wav")]
+    public async Task TwoBackupsThenRestoreKeepLocalPathsAndExplicitPortableValues(string path)
+    {
+        var here = Signed();
+        SetItemPaths(here, path);
+        JObject sent = null!;
+        for (var i = 0; i < 2; i++)
+        {
+            Assert.True(await new CloudSettingsBackup(_fake).BackupAsync(here));
+            sent = Unpack((string)JObject.Parse(Uploads.Last().Body)["settings_data"]!);
+            Assert.DoesNotContain("/home/me", sent.ToString());
+            _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(sent.ToString()) } }.ToString();
+        }
+        var current = Signed();
+        SetItemPaths(current, "/home/me/retained.wav");
+        AssertItemPaths((await new CloudSettingsBackup(_fake).DownloadAsync(current))!, path);
+        if (path.StartsWith('/'))
+        {
+            Assert.Null(sent["AudioLayers"]![0]!["Path"]);
+            Assert.Null(sent["CornerGifOverlays"]![0]!["GifPath"]);
+            Assert.Null(sent["KeywordTriggers"]![0]!["AudioFilePath"]);
+            Assert.Null(sent["KeywordTriggers"]![0]!["Actions"]![0]!["filePath"]);
+            Assert.Null(sent["KeywordTriggerPresets"]![0]!["triggers"]![0]!["AudioFilePath"]);
+            Assert.Null(sent["KeywordTriggerPresets"]![0]!["triggers"]![0]!["Actions"]![0]!["filePath"]);
+        }
+    }
+
     [Theory]
     [InlineData("/unix/local.wav")]
     [InlineData(@"\rooted.wav")]
@@ -534,7 +565,7 @@ public sealed class CloudSettingsBackupTests : IDisposable
         Assert.Equal("edited", back.KeywordTriggers[0].Keyword);
         Assert.Equal(@"C:\legacy.mp3", back.KeywordTriggers[0].AudioFilePath);
         Assert.Equal(@"C:\trigger.mp3", ((PlayAudioAction)back.KeywordTriggers[0].Actions[0]).FilePath);
-        Assert.Equal("", back.KeywordTriggers[1].AudioFilePath);
+        Assert.Null(sent["KeywordTriggers"]![1]!["AudioFilePath"]); // unmatched upload path stays omitted
         Assert.Equal("preset-edited", back.KeywordTriggerPresets[0].Triggers[0].Keyword);
         Assert.Equal(@"C:\preset.mp3", back.KeywordTriggerPresets[0].Triggers[0].AudioFilePath);
         Assert.Equal(@"C:\preset-action.mp3", ((PlayAudioAction)back.KeywordTriggerPresets[0].Triggers[0].Actions[0]).FilePath);

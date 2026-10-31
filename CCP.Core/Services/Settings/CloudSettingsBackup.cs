@@ -443,10 +443,30 @@ namespace ConditioningControlPanel.Services
             foreach (var name in listNames)
             {
                 var key = upload.Properties().First(p => PropertyNameOfJsonKey(p.Name).Equals(name, StringComparison.OrdinalIgnoreCase)).Name;
-                upload[key] = merged.GetValue(name, StringComparison.OrdinalIgnoreCase)!.DeepClone();
+                var list = merged.GetValue(name, StringComparison.OrdinalIgnoreCase)!.DeepClone();
+                PreserveOmittedPaths(upload[key], list);
+                upload[key] = list;
             }
             foreach (var item in Items(upload, nameof(AppSettings.AudioLayers)))
                 Drop(item, nameof(AudioLayerTrack.DisplayName));
+        }
+
+        // Model defaults must not turn stripped paths into explicit empty choices on a later restore.
+        // Keep a carried slot path, but omit generated blanks unless the upload explicitly carried one.
+        private static void PreserveOmittedPaths(JToken? source, JToken target)
+        {
+            if (target is JObject obj)
+                foreach (var property in obj.Properties().ToList())
+                {
+                    var original = (source as JObject)?.GetValue(property.Name, StringComparison.OrdinalIgnoreCase);
+                    if (original == null && property.Value.Type == JTokenType.String && (string?)property.Value == ""
+                        && (property.Name.ToLowerInvariant() is "path" or "gifpath" or "audiofilepath" or "filepath"))
+                        property.Remove();
+                    else PreserveOmittedPaths(original, property.Value);
+                }
+            else if (target is JArray array)
+                for (var i = 0; i < array.Count; i++)
+                    PreserveOmittedPaths((source as JArray)?.ElementAtOrDefault(i), array[i]);
         }
 
         /// <summary>The slot's settings JSON; null when there is none or it cannot be read (nothing to carry then).</summary>

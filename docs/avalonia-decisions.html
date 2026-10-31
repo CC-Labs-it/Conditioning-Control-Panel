@@ -1412,6 +1412,10 @@ Linux-made list edits with the slot's matched paths (or blank), plus portable re
 older consequence that WPF loses entire lists; its whole-blob restore remains unchanged (ProfileSyncService.cs:4734-4738).
 The nine whole path settings still follow AbsolutePathFields and CarryPathFields. Tests: CloudSettingsBackupTests,
 including relative/empty paths with and without a slot and restore with and without matching local ids.</li>
+<li><strong>2026-10-31: repeated-backup omission correction.</strong> When no matched slot file path is available,
+upload keeps a stripped item path omitted instead of serializing a generated empty string. Otherwise the next restore
+would mistake that default for an explicit empty choice and erase the local file path. Genuinely explicit empty values
+and relative paths still travel unchanged. Applies to all four portable lists and nested preset/trigger audio paths.</li>
 <li>Tests: <code>Tests/CCP.Core.Tests/CloudSettingsBackupTests.cs</code>, <code>AccountSettingsSectionTests.CloudRestoreAsksFirstAndKeepsThisMachinesPaths</code>.</li>
 </ul>
 <h2 id="2026-10-14-companion-v2-room-collapse-and-the-companion-pages-avalonia-portcompanion-v2-pages-b">2026-10-14: Companion v2 room collapse and the Companion pages (avalonia-port/companion-v2-pages-b)</h2>
