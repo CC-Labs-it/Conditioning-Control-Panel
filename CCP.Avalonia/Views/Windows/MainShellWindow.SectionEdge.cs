@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
 
@@ -19,12 +20,12 @@ public partial class MainShellWindow
     private void EnsureEdgeLifts()
     {
         if (_edgeLifts != null || Named<Border>("SectionEdgeLiftTop") is not { Parent: Panel host } top) return;
-        _edgeLifts = new[] { top, new Border(), new Border(), new Border() };
+        var lifts = new[] { top, new Border { Name = "SectionEdgeLiftRight" },
+            new Border { Name = "SectionEdgeLiftBottom" }, new Border { Name = "SectionEdgeLiftLeft" } };
         for (int side = 0; side < 4; side++)
         {
-            var lift = _edgeLifts[side];
+            var lift = lifts[side];
             bool horizontal = side % 2 == 0;
-            lift.Name = "SectionEdgeLift" + new[] { "Top", "Right", "Bottom", "Left" }[side];
             lift.IsHitTestVisible = false;
             if (horizontal)
             {
@@ -48,8 +49,9 @@ public partial class MainShellWindow
                     new GradientStop(Colors.Transparent, 0.6),
                 },
             };
-            if (side > 0) host.Children.Add(lift);
         }
+        for (int side = 1; side < lifts.Length; side++) host.Children.Add(lifts[side]);
+        _edgeLifts = lifts;
         PlaceEdgeLift(0);
         Activated += (_, _) => UpdateEdgeLap();
         Deactivated += (_, _) => UpdateEdgeLap();
@@ -59,6 +61,7 @@ public partial class MainShellWindow
     private void UpdateEdgeLap()
     {
         if (_edgeLifts == null) return;
+        _edgeLevel = SectionEdgeMotion.EffectiveLevel(AmbientFxCanvas.Env.Level, AmbientFxCanvas.Env.AllowAmbientLoops);
         bool run = SectionEdgeMotion.ShouldRun(_edgeLevel, IsActive, IsVisible, WindowState == WindowState.Minimized);
         if (!run) { _edgeLap?.Stop(); _edgeLap = null; }
         if (_edgeLevel != MotionLevel.Full) { _edgeSeconds = 0; PlaceEdgeLift(0); }

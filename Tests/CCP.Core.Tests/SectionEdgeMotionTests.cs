@@ -32,4 +32,14 @@ public sealed class SectionEdgeMotionTests
         Assert.False(SectionEdgeMotion.ShouldRun(MotionLevel.Reduced, true, true, false));
         Assert.False(SectionEdgeMotion.ShouldRun(MotionLevel.Off, true, true, false));
     }
+    [Theory]
+    [InlineData(MotionLevel.Full, true, MotionLevel.Full)]
+    [InlineData(MotionLevel.Full, false, MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Reduced, true, MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Reduced, false, MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off, true, MotionLevel.Off)]
+    [InlineData(MotionLevel.Off, false, MotionLevel.Off)]
+    public void AmbientGateParksFullButNeverOverridesOff(MotionLevel level, bool ambient, MotionLevel expected) =>
+        Assert.Equal(expected, SectionEdgeMotion.EffectiveLevel(level, ambient));
+
 }

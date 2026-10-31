@@ -8,6 +8,14 @@ public static class SectionEdgeMotion
 {
     public const double LapSeconds = 12;
 
+    // WPF SectionEdgeRules.MotionFor: a tier that refuses loops keeps the fixed lift.
+    public static MotionLevel EffectiveLevel(MotionLevel level, bool ambientLoopsAllowed) => level switch
+    {
+        MotionLevel.Off => MotionLevel.Off,
+        MotionLevel.Full when ambientLoopsAllowed => MotionLevel.Full,
+        _ => MotionLevel.Reduced,
+    };
+
     // Side order: top, right, bottom, left. Position is relative to the side's centre.
     public static double Position(int side, double seconds, MotionLevel level)
     {

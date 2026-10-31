@@ -11,6 +11,10 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Models;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -117,14 +121,22 @@ public sealed class SyncS6DepthTests
         var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
         try
         {
+            var authoredTop = shell.Named<Border>("SectionEdgeLiftTop")!;
             shell.Show();
             CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
             shell.ShowTab("presets");
             shell.OnMotionChrome();
+            Assert.Same(authoredTop, shell.Named<Border>("SectionEdgeLiftTop"));
+            Assert.Equal("SectionEdgeLiftTop", authoredTop.Name);
             shell.PlaceEdgeLift(4.5);
             var lifts = shell.GetVisualDescendants().OfType<Border>()
                 .Where(b => b.Name?.StartsWith("SectionEdgeLift") == true).ToArray();
             Assert.Equal(4, lifts.Length);
+            Assert.All(lifts, lift => Assert.IsType<LinearGradientBrush>(lift.OpacityMask));
+            shell.OnMotionChrome();
+            Assert.Equal(4, ((Panel)authoredTop.Parent!).Children.OfType<Border>()
+                .Count(b => b.Name?.StartsWith("SectionEdgeLift") == true));
+            shell.PlaceEdgeLift(4.5);
             var right = Assert.Single(lifts, b => b.Name == "SectionEdgeLiftRight");
             Assert.Equal(3, right.Width);
             Assert.Equal(0.5, Assert.IsType<LinearGradientBrush>(right.OpacityMask).GradientStops[1].Offset);
@@ -175,6 +187,59 @@ public sealed class SyncS6DepthTests
         Assert.Same(Resource("DepthPressedBevel"), face.BorderBrush);
         Assert.Equal(1, Assert.IsType<TranslateTransform>(face.RenderTransform).Y);
         Assert.False(Part<Rectangle>(row, "LbRowFloat").IsVisible);
+    });
+
+    [Fact]
+    public void EdgeLapFollowsPerformanceGentleAndSystemMotionGates() => Run(host =>
+    {
+        var oldProbe = UiMotionPreference.OsProbe;
+        bool osAnimations = true;
+        UiMotionPreference.OsProbe = () => osAnimations;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        var s = CoreSettings.Current;
+        s.MotionLevel = MotionLevel.Full;
+        s.PerformanceMode = s.AutoPerformanceMode = s.GentleVisuals = false;
+        global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow? shell = null;
+        try
+        {
+            shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            shell.Show();
+            shell.Activate();
+            Dispatcher.UIThread.RunJobs();
+            shell.OnMotionChrome();
+            var top = shell.Named<Border>("SectionEdgeLiftTop")!;
+            bool Running() => BeatLoop.Running.Any(loop => loop.Owner == top);
+            Assert.True(shell.IsActive);
+            Assert.True(Running());
+            for (int gate = 0; gate < 3; gate++)
+            {
+                s.PerformanceMode = gate == 0;
+                s.GentleVisuals = gate == 1;
+                osAnimations = gate != 2;
+                UiMotionPreference.CacheStamp = long.MinValue;
+                AmbientFxCanvas.Env.RaiseMotionGateChanged();
+                Assert.False(Running());
+                shell.PlaceEdgeLift(4.5);
+                Assert.True(top.IsVisible);
+                Assert.Equal(0.5, Assert.IsType<LinearGradientBrush>(top.OpacityMask).GradientStops[1].Offset);
+                s.PerformanceMode = s.GentleVisuals = false;
+                osAnimations = true;
+                UiMotionPreference.CacheStamp = long.MinValue;
+                AmbientFxCanvas.Env.RaiseMotionGateChanged();
+                Assert.True(Running());
+            }
+            s.PerformanceMode = true;
+            s.MotionLevel = MotionLevel.Off;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(Running());
+            Assert.False(top.IsVisible);
+        }
+        finally
+        {
+            shell?.Close();
+            UiMotionPreference.OsProbe = oldProbe;
+            UiMotionPreference.CacheStamp = long.MinValue;
+        }
     });
 
 }
