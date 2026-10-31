@@ -140,9 +140,45 @@ CCP_USERDATA_DIR=&lt;fresh-dir&gt; dotnet CCP.Avalonia/bin/Release/net10.0/CCP.A
 # FAIL OpenDeviceSettings reveals Devices (saw data)
 # FAIL an unknown section still opens the door and changes nothing
 </code></pre>
+<h3 id="startup-review">Review follow-up to 51ae9e3e4</h3>
+<p>Both P2 findings accepted. AfterFirstFrame now races the render acknowledgement against selected-window
+hide/close and shell closure, detaches handlers, and reselects a live window or uses the no-frame fallback.
+The one-shot completion task also finishes when shell closure cancels startup. WPF creates presence at
+<code>App.xaml.cs:3302</code> and starts its background update check at <code>:3548</code> independently
+of renderer callbacks; losing a launcher must not permanently suppress these services.</p>
+<p><code>AfterFirstFrameTests</code> substitutes only the render acknowledgement and surface selector;
+real windows, visibility/close events and dispatcher hops prove ordering, once-only tray restore,
+shell-close cancellation, and launcher hide/close with replacement or no-frame fallback. The fail-proof
+removes both disappearance subscriptions temporarily: all four recovery cases must fail with a timeout.
+The fixed source is restored before the passing run. No existing assertion or benchmark threshold changed.</p>
+<p>The ten language JSON files parse and are byte-for-byte unchanged from the reviewed commit; no new
+user-facing strings. The requested <code>74ac6ce3d</code> comparison already had 747 added / 6845 removed
+lines across 103 files at 51ae9e3e4, including inherited non-startup changes. The 600-line total cannot be
+met by this fast-forward follow-up without unrelated reversions. WPF and Core sources remain untouched
+by this follow-up; startup-only totals are reported separately.</p>
+<pre><code>DOTNET_CLI_UI_LANGUAGE=en dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
+  --filter 'FullyQualifiedName~AfterFirstFrameTests|FullyQualifiedName~PerfBenchTests'
+# exit 0: Passed! Failed: 0, Passed: 9, Skipped: 0, Total: 9
+# Fail-proof: disable the two RenderOrDisappear surface subscriptions, then run:
+dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
+  --filter FullyQualifiedName~DisappearingLauncherReselectsOrUsesNoFrameFallback
+# expected exit 1: Failed: 4, Passed: 0, Total: 4; TimeoutException in all four cases
+# restore the subscriptions, then rebuild and repeat the passing focused command above
+dotnet build CCP.Core/CCP.Core.csproj -c Release --no-restore
+# exit 0: 0 Warning(s), 0 Error(s)
+bash .github/scripts/core-guards.sh
+# exit 0: All Core guards passed.
+# JSON parse + git-show byte comparison: PASS all 10 language files unchanged from 51ae9e3e4.
+</code></pre>
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
 <ul>
+<li>2026-10-31, cloud Debian 13, .NET SDK 10.0.403 / runtime 10.0.14, follow-up to 51ae9e3e4:
+focused tests: 9 passed / 0 failed; fail-proof mutation: 4 expected timeout failures (exit 1),
+then fixed source restored and rebuilt; ten language JSON checks and Core guards passed.
+Evidence: <code>AfterFirstFrameTests.cs</code>, <code>/tmp/ccp-review-fail-proof.log</code> and
+<code>/tmp/ccp-review-final-tests.log</code>. No performance benchmark rerun for this lifecycle fix;
+previous timings remain historical observations, and Windows parity remains unverified.</li>
 <li>2026-10-23, CI ubuntu-latest under xvfb (job perf-bench-linux, run 39869706826, snapshot 10ae4e753), Release, sandboxed profile:
 startup 12860 ms, working set 909 MB, tab switch median 108-237 ms on 23 tabs, <strong>ExclusivesTab 801 ms median / 821 ms p95</strong>.
 Artifact <code>perf-bench-linux</code>.</li>

@@ -1,65 +1,116 @@
 using System;
 using System.Linq;
-using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>Opened alone precedes layout/render. Wait for the render-thread acknowledgement
-/// before starting optional desktop work; closing the shell cancels the pending work.</summary>
+/// <summary>Wait for a live interactive surface to render. A disappearing boot surface
+/// is reselected; closing the shell cancels pending work. Tray restores never start it twice.</summary>
 internal static class AfterFirstFrame
 {
-    internal static void Schedule(Window window, Action work)
-        => Schedule(window, () => { work(); return Task.CompletedTask; });
+    internal static void Schedule(Window shell, Action work)
+        => Schedule(shell, () => { work(); return Task.CompletedTask; });
 
-    internal static void Schedule(Window window, Func<Task> work)
+    internal static void Schedule(Window shell, Func<Task> work) => _ = Schedule(shell, work,
+        () => shell.IsVisible ? shell :
+            (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?
+                .Windows.FirstOrDefault(w => w.IsVisible && w is not Views.Windows.SplashScreen), NextFrame);
+
+    // Tests substitute the render acknowledgement, not the window events or dispatcher.
+    internal static Task Schedule(Window shell, Func<Task> work,
+        Func<Window?> selectSurface, Func<Window, Task> nextFrame)
     {
-        var closed = false;
+        var closed = Signal();
+        var finished = Signal();
         var started = false;
-        window.Closed += (_, _) => closed = true;
-        window.Opened += (_, _) => Dispatcher.UIThread.Post(async () =>
+        void OnClosed(object? sender, EventArgs e)
         {
+            closed.TrySetResult();
+            if (!started) Finish();
+        }
+        void Finish()
+        {
+            shell.Opened -= OnOpened;
+            shell.Closed -= OnClosed;
+            finished.TrySetResult();
+        }
+        void OnOpened(object? sender, EventArgs e) => Dispatcher.UIThread.Post(async () =>
+        {
+            if (started || closed.Task.IsCompleted) return;
+            started = true;
+            shell.Opened -= OnOpened;
             try
             {
-                if (started || closed) return;
-                started = true; // a tray restore must not create another presence client
-                // Boot routing may have hidden the panel in favour of the launcher/game.
-                // Observe that interactive window instead, after all Opened handlers return.
-                var frameWindow = window.IsVisible ? window :
-                    (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?
-                        .Windows.FirstOrDefault(w => w.IsVisible && w is not Views.Windows.SplashScreen);
-                if (frameWindow is null)
+                // Opened routing may hide the panel in favour of a launcher/game. If that
+                // surface disappears before rendering, observe its replacement instead.
+                while (!closed.Task.IsCompleted && selectSurface() is { } surface)
                 {
-                    // StartMinimized with a tray host has no window frame to wait for.
-                    if (!closed) await work();
-                    return;
-                }
-                var compositor = ElementComposition.GetElementVisual(frameWindow)?.Compositor;
-                if (compositor is null) return;
-                var rendered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                frameWindow.RequestAnimationFrame(timestamp =>
-                {
-                    _ = CompleteFrameAsync();
-                    async Task CompleteFrameAsync()
+                    try { if (await RenderOrDisappear(surface, closed.Task, nextFrame)) break; }
+                    catch (Exception ex)
                     {
-                        try { await compositor.RequestCompositionBatchCommitAsync().Rendered; rendered.TrySetResult(); }
-                        catch (Exception ex) { rendered.TrySetException(ex); }
+                        // No usable renderer: optional services still start, as for tray-only boot.
+                        Serilog.Log.Debug(ex, "First frame unavailable; using no-frame startup fallback");
+                        break;
                     }
-                });
-                await rendered.Task;
-                // Yield back to input/layout before the optional work (no arbitrary time delay).
-                Dispatcher.UIThread.Post(async () =>
-                {
-                    if (closed) return;
-                    try { await work(); }
-                    catch (Exception ex) { Serilog.Log.Warning(ex, "After-first-frame startup work failed"); }
-                }, DispatcherPriority.Background);
+                }
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+                if (!closed.Task.IsCompleted) await work();
             }
-            catch (Exception ex) { Serilog.Log.Debug(ex, "First frame unavailable; optional startup work skipped"); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "After-first-frame startup work failed"); }
+            finally { Finish(); }
         }, DispatcherPriority.Background);
+        shell.Opened += OnOpened;
+        shell.Closed += OnClosed;
+        return finished.Task;
+    }
+
+    private static async Task<bool> RenderOrDisappear(Window surface, Task closed, Func<Window, Task> nextFrame)
+    {
+        var gone = Signal();
+        void Disappeared(object? sender, EventArgs e) => gone.TrySetResult();
+        void VisibilityChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+        {
+            if (e.Property == Visual.IsVisibleProperty && !surface.IsVisible) gone.TrySetResult();
+        }
+        surface.Closed += Disappeared;
+        surface.PropertyChanged += VisibilityChanged;
+        try
+        {
+            if (!surface.IsVisible) return false;
+            var frame = nextFrame(surface);
+            await Task.WhenAny(frame, gone.Task, closed);
+            if (closed.IsCompleted || gone.Task.IsCompleted || !surface.IsVisible) return false;
+            await frame;
+            return true;
+        }
+        finally
+        {
+            surface.Closed -= Disappeared;
+            surface.PropertyChanged -= VisibilityChanged;
+        }
+    }
+
+    private static TaskCompletionSource Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private static Task NextFrame(Window window)
+    {
+        var compositor = ElementComposition.GetElementVisual(window)?.Compositor;
+        if (compositor is null) return Task.CompletedTask;
+        var rendered = Signal();
+        window.RequestAnimationFrame(timestamp =>
+        {
+            _ = CompleteFrameAsync();
+            async Task CompleteFrameAsync()
+            {
+                try { await compositor.RequestCompositionBatchCommitAsync().Rendered; rendered.TrySetResult(); }
+                catch (Exception ex) { rendered.TrySetException(ex); }
+            }
+        });
+        return rendered.Task;
     }
 }
