@@ -809,6 +809,8 @@ namespace ConditioningControlPanel.Avalonia
                     // Main 8fe2a80a0: a Takeover pulse hands its boosted tint back before the snapshot.
                     SettleBeforeSnapshot = () => Views.Windows.MainShellWindow.Current?.SettleAutonomyPulses(),
                 };
+                // WPF Services/Session/SessionEngine.cs:396: clear session presence on every stop.
+                Platform.FriendsHead.WatchSessionStop(Sessions);
                 // WPF App.xaml.cs:2566: the media recap. FlashOverlay feeds images; the video scheduler feeds clips.
                 MediaHistory = new MediaHistoryService();
                 if (CoreEngine.Video is { } recapVideo)

@@ -282,16 +282,21 @@ internal static class FriendsLanding
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
     }
 
-    private static readonly FriendsSfxGate SfxGate = new();
+    internal static FriendsSfxGate SfxGate = new();
+
+    /// <summary>The gap rules' clock; tests step it.</summary>
+    internal static Func<DateTime> SfxNow = () => DateTime.UtcNow;
 
     /// <summary>WPF FriendsSfx.Play: master volume, the 1.5 s incoming gap, half level in a session.</summary>
-    private static void Sfx(string rel, float scale, string tag, bool incoming = false)
+    internal static void Sfx(string rel, float scale, string tag, bool incoming = false)
     {
         try
         {
             var s = CoreSettings.Current;
-            if (s.MasterVolume <= 0) return;
-            lock (SfxGate) if (!SfxGate.TryPass(DateTime.UtcNow, incoming)) return;
+            // WPF Services/Friends/FriendsSfx.cs:47-51: silence under output suppression, video or Emi hold.
+            if (s.MasterVolume <= 0 || CoreAudio.IsOutputSuppressed || CoreEngine.Video?.IsPlaying == true
+                || ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.HoldActive) return;
+            lock (SfxGate) if (!SfxGate.TryPass(SfxNow(), incoming)) return;
             var path = CoreModArt.AudioOverridePath(rel)
                 ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel.Replace('/', Path.DirectorySeparatorChar)));
             if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
