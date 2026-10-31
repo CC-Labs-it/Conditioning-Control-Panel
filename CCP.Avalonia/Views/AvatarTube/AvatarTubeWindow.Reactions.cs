@@ -85,8 +85,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 if (string.IsNullOrWhiteSpace(reaction)) return;
 
                 App.WindowAwareness.MarkReaction();
-                if (isAi) { PlayDoubleBounce(); GigglePriority(reaction); }
-                else Giggle(reaction);
+                if (isAi) { PlayDoubleBounce(); GigglePriority(reaction, unprompted: true); }
+                else Giggle(reaction, unprompted: true);
                 Log.Debug("Awareness reaction fired ({Category}, app {AppChars} chars, line {Chars} chars)",
                     e.Category, displayName.Length, reaction.Length);
             }
@@ -123,8 +123,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 }
 
                 App.WindowAwareness.MarkStillOnReaction();
-                if (isAi) GigglePriority(reaction!);
-                else Giggle(reaction!);
+                if (isAi) GigglePriority(reaction!, unprompted: true);
+                else Giggle(reaction!, unprompted: true);
             }
             catch (Exception ex) { Log.Warning(ex, "OnStillOnActivity handler failed"); }
         }
