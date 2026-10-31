@@ -165,7 +165,7 @@ internal sealed class KeywordAudioRuntime
             RecordFire(t, "Keyboard", now);   // WPF KeywordTriggerService.cs:1191-1200
             try { TriggerFired?.Invoke(t); } catch (Exception ex) { Log.Warning(ex, "Keyword fired handler failed"); }
         }
-        Dispatch(fired);
+        LastDispatch = DispatchAsync(fired);
     }
 
     /// <summary>WPF TriggerFired (KeywordTriggerService :55). Raised on the UI thread, once per fired trigger.</summary>
@@ -211,7 +211,8 @@ internal sealed class KeywordAudioRuntime
         }).OfType<string>().ToList();
 
     /// <summary>WPF KeywordTriggerService.cs:1217,1257,1674.</summary>
-    private void Dispatch(List<KeywordTrigger> fired)
+    internal Task LastDispatch { get; private set; } = Task.CompletedTask;
+    private async Task DispatchAsync(List<KeywordTrigger> fired)
     {
         // WPF KeywordTriggerService.cs:1261: keep response actions quiet after panic.
         if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
@@ -239,12 +240,16 @@ internal sealed class KeywordAudioRuntime
         var played = false;
         foreach (var action in actions)
         {
+            if (!IsActive || ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
             try
             {
                 switch (action)
                 {
                     // One clip at a time on this head: the first enabled clip wins (WPF's next play stops the last).
-                    case PlayAudioAction audio when !played: played = true; Play(audio); break;
+                    case PlayAudioAction audio when !played:
+                        played = true;
+                        if (!await PlayAsync(audio)) return;
+                        break;
                     case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
                     // WPF KeywordTriggerService.cs:1435-1444; MainWindow.xaml.cs:339 wires the session callback.
                     case AddXpAction xp when xp.Amount > 0:
@@ -287,9 +292,9 @@ internal sealed class KeywordAudioRuntime
         _duckGeneration = null;
     }
 
-    private void Play(PlayAudioAction audio)
+    private async Task<bool> PlayAsync(PlayAudioAction audio)
     {
-        if (string.IsNullOrEmpty(audio.FilePath)) return;
+        if (string.IsNullOrEmpty(audio.FilePath)) return true;
         var path = audio.FilePath;
         if (!Path.IsPathRooted(path))
         {
@@ -297,7 +302,7 @@ internal sealed class KeywordAudioRuntime
             var legacy = ContentLocator.Resolve(Path.Combine("Resources", "sub_audio", path));
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
-        if (!File.Exists(path)) return;
+        if (!File.Exists(path)) return true;
         StopAudio();
         var cancellation = _audio = new CancellationTokenSource();
         var token = cancellation.Token;
@@ -306,8 +311,7 @@ internal sealed class KeywordAudioRuntime
             CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
             _duckGeneration = CoreAudio.DuckGeneration;
         }
-        _ = Repeat();
-        async Task Repeat()
+        // WPF KeywordTriggerService.cs:1366,1513-1519: finish repeat scheduling before the next action.
         {
             try
             {
@@ -327,8 +331,9 @@ internal sealed class KeywordAudioRuntime
                         }); });
                 }
             }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); }
+            catch (OperationCanceledException) { return false; }
+            catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); return false; }
+            return true;
         }
     }
 }

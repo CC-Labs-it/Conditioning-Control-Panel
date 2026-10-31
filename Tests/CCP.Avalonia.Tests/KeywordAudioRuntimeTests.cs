@@ -115,6 +115,32 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Equal("stopped", played.Last().Path);
     });
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task RepeatGapPrecedesLaterActionsAndStopOrPanicCancelsThem(int stop) => RunAsync(async (engine, s, played) =>
+    {
+        var calls = new List<string>();
+        engine.Haptic = (_, _) => calls.Add("haptic"); engine.AddXp = _ => calls.Add("xp");
+        engine.ChasterBook = _ => { calls.Add("chaster"); return 0; };
+        var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+        audio.PlayCount = 2; audio.DelayBetweenMs = 50;
+        s.KeywordTriggers[0].Actions.AddRange(new KeywordAction[] { new HapticAction(),
+            new AddXpAction { Amount = 5 }, new ChasterAddTimeAction { Minutes = 1 } });
+        var gap = new TaskCompletionSource(); engine.Delay = (_, _) => gap.Task;
+        try
+        {
+            Type(engine, "sit"); Assert.Single(played); Assert.Empty(calls);
+            if (stop == 1) engine.Stop();
+            if (stop == 2) { engine.StopAudio(); ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet(); }
+            gap.SetResult(); await engine.LastDispatch;
+            Assert.Equal(stop == 0 ? new[] { "haptic", "xp", "chaster" } : Array.Empty<string>(), calls);
+            Assert.Equal(stop == 0 ? 2 : 1, played.Count(x => x.Path != "stopped"));
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
+
     [Fact]
     public void GlobalCooldownAndHardMuteApplyAcrossRepeatedMatches() => Run((engine, s, played) =>
     {
@@ -246,7 +272,7 @@ public sealed class KeywordAudioRuntimeTests
         view.RefreshAwarenessPulseFeed();
         var row = Assert.IsType<Border>(Assert.Single(feed.Children));
         Assert.Contains(row.GetLogicalDescendants().OfType<IconGlyph>(), g => g.Kind == IconKind.Speaker2);
-        Assert.Equal("1 fire today", view.FindControl<TextBlock>("TxtAwarenessFireCount")!.Text);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("awareness_pulse_count", 1), view.FindControl<TextBlock>("TxtAwarenessFireCount")!.Text);
         Assert.Equal(IconKind.Speaker2, AwarenessTabView.ActionChip("PlayAudio")!.Value.Kind);
         Assert.Null(AwarenessTabView.ActionChip("AddXp"));
         Assert.Equal("2m ago", AwarenessTabView.FormatTimeAgo(new DateTime(2026, 1, 1, 12, 0, 0), new DateTime(2026, 1, 1, 12, 2, 5)));
@@ -257,12 +283,19 @@ public sealed class KeywordAudioRuntimeTests
     {
         var amounts = new List<double>();
         engine.AddXp = amounts.Add;
-        s.KeywordSessionMultiplier = 2.5;
-        CoreSession.IsSessionRunningProvider = () => true;
-        s.KeywordTriggers[0].Actions = new List<KeywordAction> { new AddXpAction { Amount = 4 },
-            new AddXpAction { Amount = 90, Enabled = false } };
-        Type(engine, "sit");
-        Assert.Equal(new[] { 10.0 }, amounts);
+        var saved = (CoreSession.IsSessionRunningProvider, s.KeywordSessionMultiplier);
+        try
+        {
+            s.KeywordSessionMultiplier = 2.5;
+            CoreSession.IsSessionRunningProvider = () => true;
+            s.KeywordTriggers[0].Actions = new List<KeywordAction> { new AddXpAction { Amount = 4 },
+                new AddXpAction { Amount = 90, Enabled = false } };
+            Type(engine, "sit");
+            Assert.Equal(new[] { 10.0 }, amounts);
+        }
+        finally { (CoreSession.IsSessionRunningProvider, s.KeywordSessionMultiplier) = saved; }
+        Assert.Same(saved.Item1, CoreSession.IsSessionRunningProvider);
+        Assert.Equal(saved.Item2, s.KeywordSessionMultiplier);
     });
 
     [Fact]
@@ -326,6 +359,26 @@ public sealed class KeywordAudioRuntimeTests
             Assert.Null(subscribers.GetValue(engine));
         }
         finally { window.Close(); }
+    });
+
+    [Fact]
+    public void PulseFeedUsesTheSelectedLanguage() => Run((engine, _, _) =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var language = loc.CurrentLanguage;
+        var view = new AwarenessTabView { PulseSource = engine };
+        var window = new Window { Content = view };
+        try
+        {
+            window.Show(); Type(engine, "sit");
+            loc.SetLanguage("de"); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Auslösungen heute: 1", view.FindControl<TextBlock>("TxtAwarenessFireCount")!.Text);
+            Assert.Contains(view.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == "TASTATUR");
+            Assert.Equal("vor 10 s", AwarenessTabView.FormatTimeAgo(DateTime.Today, DateTime.Today.AddSeconds(10)));
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("deeper_friendly_action_play_audio"),
+                AwarenessTabView.ActionChip("PlayAudio")!.Value.Tip);
+        }
+        finally { window.Close(); loc.SetLanguage(language); }
     });
 
     [Fact]

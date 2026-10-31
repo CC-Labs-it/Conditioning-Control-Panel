@@ -11,6 +11,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
@@ -24,17 +25,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (_pulseSubscribed) return;
             PulseSource.TriggerFired += OnAwarenessTriggerFired;
+            LocalizationManager.Instance.LanguageChanged += OnPulseLanguageChanged;
             _pulseSubscribed = true;
         }
 
         private void DetachPulseFeed()
         {
             PulseSource.TriggerFired -= OnAwarenessTriggerFired;
+            LocalizationManager.Instance.LanguageChanged -= OnPulseLanguageChanged;
             _pulseSubscribed = false;
         }
 
         private void OnAwarenessTriggerFired(KeywordTrigger _) =>
             Dispatcher.UIThread.Post(() => { if (IsVisible) RefreshAwarenessPulseFeed(); });
+
+        private void OnPulseLanguageChanged(object? sender, EventArgs e) => RefreshAwarenessPulseFeed();
 
         /// <summary>WPF RefreshAwarenessPulseFeed :144: up to five rows, newest first.</summary>
         internal void RefreshAwarenessPulseFeed()
@@ -43,12 +48,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AwarenessPulseFeed.Children.Clear();
             if (fires.Count == 0)
             {
+                TxtAwarenessPulseEmpty.Text = Loc.Get("awareness_pulse_empty");
                 AwarenessPulseFeed.Children.Add(TxtAwarenessPulseEmpty);
                 TxtAwarenessFireCount.Text = "";
                 return;
             }
             for (var i = 0; i < fires.Count && i < 5; i++) AwarenessPulseFeed.Children.Add(BuildPulseRow(fires[i]));
-            TxtAwarenessFireCount.Text = fires.Count == 1 ? "1 fire today" : $"{fires.Count} fires today";
+            TxtAwarenessFireCount.Text = Loc.GetF("awareness_pulse_count", fires.Count);
         }
 
         private Border BuildPulseRow(TriggerFireRecord f)
@@ -78,7 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Grid.SetColumn(chips, 2);
             grid.Children.Add(chips);
 
-            var sourceText = new TextBlock { Text = f.Source.ToUpperInvariant(), FontSize = 9, FontWeight = FontWeight.Bold };
+            var sourceText = new TextBlock { Text = (f.Source == "Keyboard" ? Loc.Get("awareness_pulse_keyboard") : f.Source).ToUpperInvariant(), FontSize = 9, FontWeight = FontWeight.Bold };
             sourceText.Bind(TextBlock.ForegroundProperty, sourceText.GetResourceObservable("TextDimBrush"));
             var source = new Border { Background = new SolidColorBrush(Color.Parse("#2A2A4A")), CornerRadius = new CornerRadius(3),
                 Padding = new Thickness(6, 2, 6, 2), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = sourceText };
@@ -106,21 +112,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var arg = colon < 0 ? "" : key[(colon + 1)..];
             return type switch
             {
-                "PlayAudio" => (IconKind.Speaker2, "Plays an audio clip when the word is detected"),
-                "Highlight" => (IconKind.Eye, "Highlights the matched word (OCR only)"),
-                "Haptic" => (IconKind.PhoneVibrate, "Vibrates connected devices"),
-                "AvatarComment" => (IconKind.Chat, "Comments on the matched word"),
-                "ExtendSession" => (IconKind.Timer, arg == "" ? "Extends the current session" : $"Extends the current session by {arg} minutes"),
-                "ChasterAddTime" => (IconKind.LockClosed, arg == "" ? "Adds time to the Chaster lock" : $"Adds {arg} minutes to the Chaster lock"),
+                "PlayAudio" => (IconKind.Speaker2, Loc.Get("deeper_friendly_action_play_audio")),
+                "Highlight" => (IconKind.Eye, Loc.Get("tooltip_show_a_glowing_overlay_over_the_word_when_ocr")),
+                "Haptic" => (IconKind.PhoneVibrate, Loc.Get("deeper_friendly_action_trigger_haptic")),
+                "AvatarComment" => (IconKind.Chat, Loc.Get("awareness_pulse_avatar")),
+                "ExtendSession" => (IconKind.Timer, Loc.GetF("awareness_pulse_extend", arg)),
+                "ChasterAddTime" => (IconKind.LockClosed, Loc.GetF("awareness_pulse_chaster", arg)),
                 "VisualEffect" => arg switch
                 {
-                    "SubliminalFlash" => (IconKind.Sparkle, "Flashes a random word from your subliminal pool"),
-                    "ExactSubliminal" => (IconKind.TextFont, "Flashes the matched keyword itself as subliminal text"),
-                    "ImageFlash" => (IconKind.Flash, "Fires a flash burst image when the word is detected"),
-                    "OverlayPulse" => (IconKind.WeatherFog, "Briefly intensifies the screen overlay"),
-                    "MindWipe" => (IconKind.BrainCircuit, "Triggers the MindWipe effect"),
-                    "Bubbles" => (IconKind.BubbleMultiple, "Spawns bubbles on screen"),
-                    _ => (IconKind.Sparkle, $"Fires visual effect: {arg}"),
+                    "SubliminalFlash" => (IconKind.Sparkle, Loc.Get("kwt_effect_subliminal")),
+                    "ExactSubliminal" => (IconKind.TextFont, Loc.Get("kwt_effect_exact_subliminal")),
+                    "ImageFlash" => (IconKind.Flash, Loc.Get("kwt_effect_image_flash")),
+                    "OverlayPulse" => (IconKind.WeatherFog, Loc.Get("kwt_effect_overlay_pulse")),
+                    "MindWipe" => (IconKind.BrainCircuit, Loc.Get("kwt_effect_mind_wipe")),
+                    "Bubbles" => (IconKind.BubbleMultiple, Loc.Get("kwt_effect_bubbles")),
+                    _ => (IconKind.Sparkle, Loc.Get("deeper_friendly_action_trigger_effect")),
                 },
                 _ => null,
             };
@@ -130,10 +136,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal static string FormatTimeAgo(DateTime t, DateTime now)
         {
             var delta = now - t;
-            if (delta.TotalSeconds < 10) return "just now";
-            if (delta.TotalSeconds < 60) return $"{(int)delta.TotalSeconds}s ago";
-            if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
-            if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
+            if (delta.TotalSeconds < 10) return Loc.Get("deeper_hub_time_just_now");
+            if (delta.TotalSeconds < 60) return Loc.GetF("awareness_pulse_seconds", (int)delta.TotalSeconds);
+            if (delta.TotalMinutes < 60) return Loc.GetF("deeper_hub_time_minutes_ago", (int)delta.TotalMinutes);
+            if (delta.TotalHours < 24) return Loc.GetF("deeper_hub_time_hours_ago", (int)delta.TotalHours);
             return t.ToString("HH:mm");
         }
     }
