@@ -18,9 +18,10 @@
 // silent no-op forever.
 //
 // The shared DescentService now supplies read-only server data, sign-in/logout and gated polling.
-// ponytail: ApplyDescentToVat (the only ArmVat caller) remains follow-up wire-shell-profile-vat-b;
-// the faucet host is row shell-profile-faucet. Until the jar is armed it stays dark, and the 60 s
-// poll stays off with it (P07): one read on card open still feeds the curve-epoch follow.
+// The coordinator and persisted hold now feed the hidden glass on card entry and block changes.
+// The jar remains dark until the charge host from PR #3671 is integrated. That integration must
+// share _vatHold, arm the jar, position the ticks and show the visible-only explainer.
+
 
 using System;
 using System.Globalization;
@@ -46,6 +47,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The avatar size the hero uses when the vat is dark. Do not change.</summary>
         private const double VatDarkAvatarSize = 104;
 
+        // WPF MainWindow.ProfileVat.cs:62 and MainWindow.ProfileFaucet.cs:93.
+        private readonly VatFillCoordinator _vatCoordinator = new();
+        private readonly VatFaucetHold _vatHold = new(new AppSettingsVatPourLedger());
+        internal int VatHeldXp => _vatHold.HeldXp;
         private bool _vatArmed;
         private bool _vatOnScreen;
         private DispatcherTimer? _vatPollTimer;
@@ -58,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (ProfilePage is not { } page) return;
             _vatDescent = App.Descent;
             if (_vatDescent != null) _vatDescent.BlockChanged += OnDescentBlockChanged;
+            if (VatGlass is { } glass) glass.FillPercentChanged += OnVatFillPercentChanged;
             page.PropertyChanged += (_, e) =>
             {
                 if (e.Property == IsVisibleProperty) OnProfileVatVisibilityChanged(page.IsEffectivelyVisible);
@@ -72,6 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 _vatPollTimer?.Stop();
                 if (_vatDescent != null) _vatDescent.BlockChanged -= OnDescentBlockChanged;
+                if (VatGlass is { } closedGlass) closedGlass.FillPercentChanged -= OnVatFillPercentChanged;
             };
             if (page.IsEffectivelyVisible) OnProfileVatVisibilityChanged(true);
         }
@@ -79,7 +86,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnProfileVatVisibilityChanged(bool onScreen)
         {
             _vatOnScreen = onScreen;
-            if (onScreen) _vatDescent?.RequestRefresh("trainer card open");
+            if (onScreen)
+            {
+                // WPF MainWindow.ProfileVat.cs:99-102: restore the held level on entry.
+                if (_vatHold.HeldXp > 0) VatGlass?.SnapTo(_vatHold.DisplayFill);
+                ApplyDescentToVat();
+                _vatDescent?.RequestRefresh("trainer card open");
+            }
             // ponytail: keep the jar dark until the faucet host can honor the persisted hold.
             // A server reading alone must not auto-pour or strand held XP in a jar without a tap.
             EvaluateVatPoll();
@@ -88,7 +101,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private bool VatPollWanted => _vatArmed && _vatOnScreen && ProfilePage?.IsEffectivelyVisible == true
             && _vatDescent?.HasSeenBlock == true && VatGlassCanvas.WindowIsPresenting(this);
 
-        private void OnDescentBlockChanged(object? sender, EventArgs e) => EvaluateVatPoll();
+        private void OnDescentBlockChanged(object? sender, EventArgs e)
+        {
+            ApplyDescentToVat();
+            EvaluateVatPoll();
+        }
+
+        // WPF MainWindow.ProfileVat.cs:267-286,302-344. Keep the jar hidden until the
+        // charge host can consume this same hold. Never substitute server fill for held fill.
+        private void ApplyDescentToVat()
+        {
+            if (VatGlass is not { } glass) return;
+            var block = _vatDescent?.Current;
+            var read = _vatCoordinator.Apply(block);
+            if (block?.Vat is null)
+            {
+                // WPF ProfileVat.cs:274 and ProfileFaucet.cs:226: reset memory, not the ledger.
+                _vatHold.Reset();
+                DisarmVat();
+                return;
+            }
+            glass.SetLip(read.Lip);
+            _vatCap = read.Cap; // Before synchronous FillPercentChanged.
+            // No charge host yet, so this hidden surface cannot have an active pour.
+            var step = _vatHold.Fold(read, pouring: false);
+            switch (step.Action)
+            {
+                case FaucetActionKind.Snap: glass.SnapTo(step.Fill); break;
+                case FaucetActionKind.Ease: glass.EaseTo(step.Fill); break;
+
+            }
+            UpdateVatReadout(); // Cap retunes need repaint even without a percent change.
+        }
 
         private void EvaluateVatPoll()
         {
@@ -118,7 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private VatGlassCanvas? VatGlass => ProfilePage?.FindControl<VatGlassCanvas>("ProfileVatGlass");
 
         /// <summary>Repaint the readout when the drawn percent changes. Wired by WireProfileVat on
-        /// WPF; fill application and its subscription remain in the faucet follow-up.</summary>
+        /// WPF MainWindow.ProfileVat.cs:183-184.</summary>
         private void OnVatFillPercentChanged(object? sender, int pct)
         {
             try { UpdateVatReadout(); }
