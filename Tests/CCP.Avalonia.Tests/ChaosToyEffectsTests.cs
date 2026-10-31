@@ -56,9 +56,12 @@ public sealed class ChaosToyEffectsTests
         s.ActiveToys.Add(toy);
         return toy;
     }
+    private static global::Avalonia.Platform.Screen TestScreen(double scale, PixelRect bounds, bool primary)
+    { var screen = (global::Avalonia.Platform.Screen)typeof(object).GetMethod("MemberwiseClone", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(ChaosRunHost.Overlay!.Screens.All[0], null)!;
+      foreach (var (key, value) in new (string, object)[] { ("Scaling", scale), ("Bounds", bounds), ("WorkingArea", bounds), ("IsPrimary", primary) }) typeof(global::Avalonia.Platform.Screen).GetProperty(key)!.SetValue(screen, value); return screen; }
     private static PixelPoint PointAt(AmbientBubble b, double offset = 0)
     {
-        double scale = ChaosRunHost.Overlay!.Screens.All.ElementAtOrDefault(b.Screen)?.Scaling ?? 1;
+        double scale = BubbleOverlay.ScaleFor(b);
         return new PixelPoint((int)((b.CenterX + offset) * scale), (int)(b.CenterY * scale));
     }
     private static AmbientBubble Spawn(bool live) => BubbleOverlay.SpawnChaos(new EffectBubbleSpec
@@ -235,18 +238,32 @@ public sealed class ChaosToyEffectsTests
         Assert.Null(typeof(ChaosRunHost).GetField("_sweepTimer", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null));
         Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, b => b.Spec != null);
     });
-    [Theory][InlineData(false)][InlineData(true)]
-    public Task Sweep_uses_wand_reach_and_live_magnet(bool magnet) => Run(() =>
+    [Theory][InlineData(false, 1)][InlineData(true, 1)][InlineData(false, 2)][InlineData(true, 2)]
+    public Task Sweep_uses_wand_reach_and_live_magnet(bool magnet, double scale) => Run(() =>
     {
-        Equip("vibe_popping", 1);
-        var s = ChaosRunHost.State!;
-        s.Config.HitboxScale = magnet ? 1 : 2;
-        s.MagnetEnabled = magnet;
-        var live = Spawn(true);
-        double offset = live.Size * (magnet ? 0.6 : 0.8);
-        var point = PointAt(live, offset);
-        ChaosRunHost.ReadToyPointer = () => (point, true, false); ChaosRunHost.UseToyById("vibe_popping"); ChaosRunHost.SweepToyPointer();
-        Assert.True(live.Popping); // outside the sprite, inside the trained reach
+        var windows = (System.Collections.Generic.List<BubbleOverlayWindow>)typeof(BubbleOverlay)
+            .GetField("Windows", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        var targets = (System.Collections.Generic.List<global::Avalonia.Platform.Screen>)typeof(BubbleOverlay)
+            .GetField("Targets", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        Assert.Empty(windows); Assert.Empty(targets); Assert.Equal(1, ChaosRunHost.Overlay!.Screens.All[0].Scaling);
+        // Only the secondary overlay is targeted at 2x; its filtered index is zero, like the primary at 1x.
+        var owner = new BubbleOverlayWindow(0, new PixelRect(scale == 2 ? 1920 : 0, 0, 3840, 2160), scale);
+        windows.Add(owner); targets.Add(TestScreen(scale, owner.Bounds, scale == 1));
+        try
+        {
+            Equip("vibe_popping", 1);
+            var s = ChaosRunHost.State!;
+            s.Config.HitboxScale = magnet ? 1 : 2; s.MagnetEnabled = magnet;
+            var live = Spawn(true); live.X = 1000; live.Y = 150;
+            Assert.Equal(0, live.Screen); Assert.Equal(scale == 1, Assert.Single(targets).IsPrimary);
+            double offset = live.Size * (magnet ? 0.6 : 0.8);
+            // Fixture pixels are independent of PointAt and the production scale lookup.
+            var point = new PixelPoint((int)((live.CenterX + offset) * scale), (int)(live.CenterY * scale));
+            var away = Spawn(true); away.X = point.X - away.Size / 2; away.Y = point.Y - away.Size / 2;
+            ChaosRunHost.ReadToyPointer = () => (point, true, false); ChaosRunHost.UseToyById("vibe_popping"); ChaosRunHost.SweepToyPointer();
+            Assert.True(live.Popping); Assert.Equal(scale == 1, away.Popping);
+        }
+        finally { targets.Clear(); windows.Remove(owner); owner.Close(); }
     });
     [Fact] public Task Hidden_overlay_blocks_fire_and_sweep_and_inert_toys_do_not_award_play() => Run(() =>
     {

@@ -71,6 +71,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The ambient game is running (windows opened only for a Chaos run do not count).</summary>
         public static bool IsRunning => _running && !_chaosOpenedWindows;
         internal static bool IsFrameOwner(BubbleOverlayWindow w) => Windows.Count > 0 && Windows[0] == w;
+        // WPF BubbleService.cs:4336-4337: use the bubble owner, whose index is target-filtered.
+        internal static double ScaleFor(AmbientBubble b) => b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
 
         /// <summary><paramref name="frequency"/> per minute overrides the setting (WPF Start's).</summary>
         public static void Start(Visual host, int? frequency = null) => Start(host, frequency, ambient: true);
