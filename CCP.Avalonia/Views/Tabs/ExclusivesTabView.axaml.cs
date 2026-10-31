@@ -51,6 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // matching WPF EnsureExclusivesBuilt. This view composes it and stops it on unload;
             // the canvas also self-gates on motion, tier and window focus.
             Loaded += OnLoaded;
+            LayoutUpdated += (_, _) => UpdateVaultZones();
             Unloaded += OnUnloaded;
             // PLAYBOOK P01: the shell hides tabs with IsVisible, so the motion clock follows it too.
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) UpdateMotion(); };
@@ -82,7 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
-            AmbientFxCanvas.Env.MotionGateChanged += UpdateMotion;
+            AmbientFxCanvas.Env.MotionGateChanged += RefreshVaultMotion;
             StartAmbient();
             UpdateMotion();
         }
@@ -103,16 +104,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void StartAmbient()
             => _ambientFx.StartLayers(new AmbientFxConfig
             {
-                Layers = AmbientFxLayers.FogDrift | AmbientFxLayers.DustField | AmbientFxLayers.AuroraWash,
+                Layers = AmbientFxCanvas.Env.Level == MotionLevel.Full
+                    ? AmbientFxLayers.FogDrift | AmbientFxLayers.DustField | AmbientFxLayers.AuroraWash | AmbientFxLayers.VaultMotes
+                    : AmbientFxLayers.VaultMotes,
                 Intensity = 0.55,
                 FogPuffs = 3,
             });
+
+        private void RefreshVaultMotion() { StartAmbient(); UpdateMotion(); }
+
+        // Layout changes include scrolling and shelf reflow. Coordinates belong to the canvas,
+        // so motes stay on their cards rather than the old scroll position.
+        internal void UpdateVaultZones()
+        {
+            var zones = new List<VaultZone>();
+            foreach (var c in this.GetVisualDescendants().OfType<Control>())
+            {
+                if (!c.IsEffectivelyVisible || c.Bounds.Width <= 0) continue;
+                Services.UI.PremiumGroup group;
+                int weight = 2;
+                if (c.Name == "ExCard" && c.DataContext is ExclusiveCardRow card)
+                {
+                    group = Services.UI.PremiumShelfOrder.GroupOf(card.Feature.Key, card.Tier);
+                    weight = card.IsLocked ? 1 : 2;
+                }
+                else if (c.Name == "VaultSign" && c.DataContext is ExclusiveGroupRow head) group = head.Group;
+                else continue;
+                if (c.TranslatePoint(default, _ambientFx) is not { } at) continue;
+                var bounds = new Rect(at, c.Bounds.Size);
+                if (bounds.Bottom < 0 || bounds.Top > _ambientFx.Bounds.Height) continue;
+                var diamond = group == Services.UI.PremiumGroup.Prime;
+                var hue = Color.Parse(diamond ? "#6FE8FF" : group == Services.UI.PremiumGroup.Basic ? "#FFC85A" : "#B79CFF");
+                for (int i = 0; i < weight; i++) zones.Add(new VaultZone(bounds, hue, diamond));
+            }
+            _ambientFx.SetVaultZones(zones);
+        }
 
         private void OnUnloaded(object? sender, RoutedEventArgs e)
         {
             CoreMods.ModChanged -= OnModChanged;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
-            AmbientFxCanvas.Env.MotionGateChanged -= UpdateMotion;
+            AmbientFxCanvas.Env.MotionGateChanged -= RefreshVaultMotion;
             _ambientFx.Stop();
             UpdateMotion();
         }

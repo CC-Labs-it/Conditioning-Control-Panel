@@ -29,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         GlowBreath = 1 << 4,
         /// <summary>Warm motes rising from the bottom edge on a slow sine sway, budgeted by the tier.</summary>
         Embers = 1 << 5,
+        VaultMotes = 1 << 6,
     }
 
     /// <summary>Per-surface tuning for <see cref="AmbientFxCanvas.StartLayers(AmbientFxConfig)"/>.</summary>
@@ -118,7 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// SkiaSharp into this project and of only working on the Skia backend; not worth it until the
     /// owner says the bloom is missed.</para>
     /// </summary>
-    public class AmbientFxCanvas : Decorator
+    public partial class AmbientFxCanvas : Decorator
     {
         private const int MaxBurstParticles = 150;
         private const int FaultLimit = 5;
@@ -334,6 +335,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _burstN = 0;
             _dustN = 0;
             _emberN = 0;
+            _vaultN = 0;
             InvalidateVisual();
         }
 
@@ -638,6 +640,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 : Array.Empty<Ember>();
             _emberN = 0;
             _emberT = 0f;
+            _vaultN = 0;
+            _vaultT = 0;
             _fogT = _dustT = _sheenT = _breathT = _auroraT = 0f;
             _sheenDone = false;
             _burstN = 0;
@@ -743,7 +747,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (!oneShotLive)
             {
                 if (_targetFps <= 0) return false;
-                if (!Env.AllowAmbientLoops) return false;
+                if (!Env.AllowAmbientLoops && !ReducedVaultMayRun()) return false;
             }
             var w = _window;
             if (w != null)
@@ -788,6 +792,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (!_sheenDone) _sheenT += dt;
                 StepDust(dt);
                 StepEmbers(dt);
+                StepVault(dt);
                 StepBurst(dt);
                 StepTokens(dt);
 
@@ -1033,6 +1038,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (!_fogOnly && (layers & AmbientFxLayers.DustField) != 0) DrawDust(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.Embers) != 0) DrawEmbers(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.SheenSweep) != 0) DrawSheen(context, w, h, intensity);
+                DrawVault(context, w, h);
                 DrawBurst(context, w, h, min);
                 DrawTokens(context, w, h, min);
             }

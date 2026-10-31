@@ -466,7 +466,7 @@
                                         BorderBrush="{Binding Rule}" BorderThickness="0,0,0,1.5"
                                         AutomationProperties.Name="{Binding Title}">
                                     <Grid ColumnDefinitions="Auto,*,Auto">
-                                        <Image Source="{Binding Sign}" IsVisible="{Binding HasSign}" Height="44"
+                                        <Image x:Name="VaultSign" Source="{Binding Sign}" IsVisible="{Binding HasSign}" Height="44"
                                                Stretch="Uniform" Margin="0,0,14,0" VerticalAlignment="Center"
                                                RenderOptions.BitmapInterpolationMode="HighQuality"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
