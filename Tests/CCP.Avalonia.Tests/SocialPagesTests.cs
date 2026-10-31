@@ -63,7 +63,7 @@ public sealed class SocialPagesTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options()).ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
@@ -133,7 +133,7 @@ public sealed class SocialPagesTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options()).ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var old = CoreAccount.DisplayNameProvider;
         const string name = "CodeBambiWithAVeryLongDisplayName";
@@ -141,7 +141,10 @@ public sealed class SocialPagesTests
         try
         {
             var chip = new FriendsRailChip(Service().Svc);
-            var label = chip.Children.OfType<TextBlock>().Single(t => t.Text == name); // the rail name, not the drawer head
+            var line = chip.Children.OfType<Grid>().Single(); // tier plate has its own Auto column
+            Assert.Equal(GridUnitType.Star, line.ColumnDefinitions[0].Width.GridUnitType);
+            Assert.Equal(GridUnitType.Auto, line.ColumnDefinitions[1].Width.GridUnitType);
+            var label = line.Children.OfType<TextBlock>().Single(t => t.Text == name); // rail name, not drawer head
             Assert.Equal(TextTrimming.CharacterEllipsis, label.TextTrimming);
             Assert.Equal(name + "\n" + Loc.Get("friends_chip_tooltip"), ToolTip.GetTip(chip) as string);
 

@@ -26,7 +26,7 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>The friends rail chip and drawer over the real Core FriendsService, its wire faked in
 /// process (never a server), and the service's timer seam.</summary>
-public sealed class FriendsDrawerTests
+public sealed partial class FriendsDrawerTests
 {
     private const string State = """
         {"ok":true,"code":"CCP-ABCDE","me":{"activity":"panel","lock_day":null,"shared":false},
@@ -670,7 +670,7 @@ public sealed class FriendsDrawerTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options()).ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, _) = Service();
         var feed = new FriendsFeed(() => "u_me");
         var chip = new FriendsRailChip(svc);
@@ -755,7 +755,7 @@ public sealed class FriendsDrawerTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options()).ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, _) = Service();
         var d = new FriendsRailChip(svc).Drawer;
         d.FeedSource = () => null;
