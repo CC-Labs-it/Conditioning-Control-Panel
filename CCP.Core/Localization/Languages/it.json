@@ -1,4 +1,9 @@
 {
+  "lockcard_voice_hint_off": "Pronuncia la frase invece di digitarla (microfono offline). Senza microfono puoi digitare.",
+  "lockcard_voice_hint_on": "Attivo. Pronuncia la frase per chiudere la scheda. Puoi digitare se il microfono non ti sente.",
+  "lockcard_voice_hint_no_mic": "Nessun microfono rilevato. Le schede di blocco useranno la digitazione finché non ne colleghi uno.",
+  "lockcard_voice_hint_model_failed": "Modello vocale trovato, ma non caricato. Rimuovi i modelli aggiuntivi da {0}, poi riavvia.",
+  "lockcard_voice_hint_model_missing": "Il modello vocale non è ancora installato. Le schede di blocco useranno la digitazione nel frattempo. Estrai vosk-model-small-en-us-0.15 in {0}",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",

@@ -1,4 +1,9 @@
 {
+  "lockcard_voice_hint_off": "Di la frase en vez de escribirla (micrófono sin conexión). Sin micrófono puedes escribir.",
+  "lockcard_voice_hint_on": "Activado. Di la frase para cerrar la tarjeta. Puedes escribir si el micrófono no te oye.",
+  "lockcard_voice_hint_no_mic": "No se detectó un micrófono. Las tarjetas de bloqueo usarán texto hasta que conectes uno.",
+  "lockcard_voice_hint_model_failed": "Se encontró el modelo de voz, pero no se pudo cargar. Elimina los modelos adicionales de {0} y reinicia.",
+  "lockcard_voice_hint_model_missing": "El modelo de voz aún no está instalado. Las tarjetas de bloqueo usarán texto mientras tanto. Descomprime vosk-model-small-en-us-0.15 en {0}",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
   "deeper_submission_badge_pending": "Pendiente",

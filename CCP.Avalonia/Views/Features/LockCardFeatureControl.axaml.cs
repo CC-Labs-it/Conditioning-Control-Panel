@@ -285,21 +285,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>Refresh the grey hint under the voice toggle to reflect mic availability.</summary>
         private void UpdateVoiceHint() => TxtVoiceHint.Text = VoiceHint(ChkVoiceMode.IsChecked ?? false);
 
-        /// <summary>WPF's four hints (LockCardFeatureControl.xaml.cs:269-285) from CoreSpeech. The two
+        /// <summary>WPF's four hints (LockCardFeatureControl.xaml.cs:281-296) from CoreSpeech. The two
         /// model hints name the Linux folder: no model ships on this head, and Resources/Models/vosk
         /// sits inside a read-only install.</summary>
         internal static string VoiceHint(bool on)
         {
             if (!on)
-                return "Say the phrase out loud instead of typing it (offline mic). Falls back to typing if no mic.";
+                return Loc.Get("lockcard_voice_hint_off");
             var folder = System.IO.Path.Combine(CorePaths.UserData, "Models", "vosk");
             if (CoreSpeech.IsAvailable)
-                return "On. Speak the phrase to dismiss the card. Typing stays available if the mic can't hear you.";
+                return Loc.Get("lockcard_voice_hint_on");
             if (!CoreSpeech.HasCaptureDevice)
-                return "No microphone detected. Lock cards will use typing until one is connected.";
+                return Loc.Get("lockcard_voice_hint_no_mic");
             if (CoreSpeech.ModelStatus == CoreSpeechModelStatus.LoadFailed)
-                return $"Speech model found but it would not load. Remove any extra model you added under {folder}, then restart.";
-            return $"Speech model not installed yet. Lock cards will use typing until it is. Unzip vosk-model-small-en-us-0.15 into {folder}";
+                return Loc.GetF("lockcard_voice_hint_model_failed", folder);
+            return Loc.GetF("lockcard_voice_hint_model_missing", folder);
         }
 
         private async void BtnManagePhrases_Click(object? sender, RoutedEventArgs e)

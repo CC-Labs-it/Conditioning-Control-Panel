@@ -24,6 +24,37 @@ namespace CCP.Avalonia.Tests;
 public sealed class FeatureCardFxTests
 {
     [Fact]
+    public void PointerMovesRetargetOneTiltTransitionAndIgnoreRepeatedTargets() => WithCard((window, host, card) =>
+    {
+        card.DashboardDepth = true;
+        window.UpdateLayout();
+        var face = card.FindControl<Panel>("PressFace")!;
+        var tilt = ((TransformGroup)face.RenderTransform!).Children.OfType<RotateTransform>().Single();
+        void Move(double x) => window.MouseMove(face.TranslatePoint(new Point(x, 30), window)!.Value);
+        Move(20);
+        var transition = Assert.Single(tilt.Transitions!);
+        var target = tilt.GetBaseValue(RotateTransform.AngleProperty).Value;
+        int replacements = 0, writes = 0;
+        tilt.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == global::Avalonia.Animation.Animatable.TransitionsProperty) replacements++;
+            if (e.Property == RotateTransform.AngleProperty && e.Priority == global::Avalonia.Data.BindingPriority.LocalValue) writes++;
+        };
+        Move(20);
+        // Native pointer coordinates round to pixels on the moving face. Repeat the exact
+        // target separately, while real pointer moves below check transition continuity.
+        writes = 0;
+        var repeated = tilt.GetBaseValue(RotateTransform.AngleProperty).Value;
+        DashboardCardDepth.Move(tilt, RotateTransform.AngleProperty, repeated,
+            ConditioningControlPanel.Services.UI.DepthLaw.HoverMs, new global::Avalonia.Animation.Easings.LinearEasing());
+        Assert.Equal(0, writes);
+        Move(40); Move(60);
+        Assert.NotEqual(target, tilt.GetBaseValue(RotateTransform.AngleProperty).Value);
+        Assert.Same(transition, Assert.Single(tilt.Transitions!));
+        Assert.Equal(0, replacements);
+    });
+
+    [Fact]
     public void DashboardFaceTravelsAndParksThroughLiveMotionGates() => WithCard((window, host, card) =>
     {
         card.DashboardDepth = card.DimWhenInactive = true;

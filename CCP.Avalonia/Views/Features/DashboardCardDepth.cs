@@ -131,11 +131,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             Move(_travel, TranslateTransform.YProperty, target, ms, easing);
         }
 
-        private static void Move(Animatable t, StyledProperty<double> property, double to, int ms, Easing easing)
+        internal static void Move(Animatable t, StyledProperty<double> property, double to, int ms, Easing easing)
         {
-            t.Transitions = ms > 0
-                ? new Transitions { new DoubleTransition { Property = property, Duration = TimeSpan.FromMilliseconds(ms), Easing = easing } }
-                : null;
+            if (ms <= 0)
+            {
+                t.Transitions = null;
+                t.SetValue(property, to);
+                return;
+            }
+            if (t.GetBaseValue(property).GetValueOrDefault() == to) return;
+            var duration = TimeSpan.FromMilliseconds(ms);
+            // Retarget the existing tween; replacing it cancels the animated angle (WPF :80-82).
+            if (t.Transitions is not [DoubleTransition transition] || transition.Property != property
+                || transition.Duration != duration || transition.Easing.GetType() != easing.GetType()
+                || easing is ReleaseSpring)
+                t.Transitions = new Transitions
+                {
+                    new DoubleTransition { Property = property, Duration = duration, Easing = easing }
+                };
             t.SetValue(property, to);
         }
 

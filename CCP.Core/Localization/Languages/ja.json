@@ -1,4 +1,9 @@
 {
+  "lockcard_voice_hint_off": "入力する代わりにフレーズを声に出します（オフラインのマイク）。マイクがなければ文字入力を使えます。",
+  "lockcard_voice_hint_on": "有効。フレーズを話すとカードが閉じます。マイクが声を拾えない場合は文字入力も使えます。",
+  "lockcard_voice_hint_no_mic": "マイクが見つかりません。接続するまでロックカードは文字入力を使います。",
+  "lockcard_voice_hint_model_failed": "音声モデルが見つかりましたが読み込めません。{0} に追加したモデルを削除して再起動してください。",
+  "lockcard_voice_hint_model_missing": "音声モデルが未インストールです。それまではロックカードで文字入力を使います。vosk-model-small-en-us-0.15 を {0} に展開してください。",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",
