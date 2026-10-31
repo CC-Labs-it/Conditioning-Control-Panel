@@ -11,6 +11,7 @@
 // loom-list, report-bug, fullscreen-set, the mandatory-video pause, the grants watcher (PrizeOwnership has
 // no change event: nothing grants mid-run here), the meta frame, bubble credit and SeasonRecap TrackFeature.
 using System;
+using ConditioningControlPanel.Services.Sparkles;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
@@ -149,6 +150,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 double durationSec = Math.Max(1, (double?)o["durationSec"] ?? 60);
                 double skillMult = ChaosRunState.SkillMultProvider?.Invoke() ?? 1.0;
                 var pay = RacePayout(score, durationSec, skillMult);
+                SparklesPending = DeliverSparkles(SparklesGameEnd.Claim("caucus", "solo", SparklesResult.ForMedal(
+                    SparklesGameEnd.RatioMedal(score / 5.0, 250.0 * (durationSec / 60.0))),
+                    TimeSpan.FromSeconds(durationSec), svc: Platform.SparklesHead.Service));
                 long previousBest = ChaosMeta.State.BestScore;
                 int sparksEarned = RaceBankSparks(new ChaosMeta.ChaosRunRewardInput(
                     RunDurationSec: durationSec, DifficultyMult: 1.0, SparkGainMult: 1.0, Score: score / 5.0,

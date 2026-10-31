@@ -954,4 +954,9 @@
     <Message Importance="High" Text="Copied LibVLC files from $(LibVLCPath) to $(PublishDir)libvlc\" />
   </Target>
 
+  <ItemGroup>
+    <Compile Remove="Services\Sparkles\SparklesClaim.cs;Services\Sparkles\SparklesReceipt.cs;Services\Sparkles\SparklesClaimService.cs" />
+  </ItemGroup>
+  <ItemGroup><Compile Remove="Services\Sparkles\SparklesGameEnd.cs" /></ItemGroup>
+  <ItemGroup><Compile Remove="Services\Sparkles\SparklesPageResults.cs" /></ItemGroup>
 </Project>
