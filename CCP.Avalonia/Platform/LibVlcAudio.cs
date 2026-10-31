@@ -183,15 +183,23 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
+        private readonly Func<string, float, string, Action<TimeSpan>?, Action?, bool, Action>? _oneShotPlayer;
+
+        // Native playback substitute; validation and sound ownership stay on the production path.
+        internal LibVlcAudio(Func<string, float, string, Action<TimeSpan>?, Action?, bool, Action> play)
+        { _vlc = null!; _oneShotPlayer = play; }
+
         private readonly object _soundGate = new();
         private readonly HashSet<Action> _sounds = new();
 
-        private void PlaySound(string path, float volume, string tag, Action<TimeSpan>? started, Action? finished)
+        internal void PlaySound(string path, float volume, string tag, Action<TimeSpan>? started, Action? finished)
         {
             Action? stop = null;
             var ended = false;
             lock (_soundGate)
             {
+                // WPF AudioService.cs:833: replacement stops the old clip before validating the new path.
+                StopSounds();
                 stop = PlayOneShot(path, volume, tag, started, () =>
                 {
                     lock (_soundGate) { ended = true; if (stop != null) _sounds.Remove(stop); }
@@ -215,6 +223,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public Action PlayOneShot(string path, float volume, string tag, Action<TimeSpan>? onStarted, Action? onFinished, bool followMaster = false)
         {
             if (volume <= 0f || string.IsNullOrWhiteSpace(path) || !File.Exists(path)) { Fire(onFinished); return static () => { }; }
+
+            if (_oneShotPlayer != null) return _oneShotPlayer(path, volume, tag, onStarted, onFinished, followMaster);
 
             var media = new Media(_vlc, path, FromType.FromPath);
             media.AddOption(NoVideo);
