@@ -24,7 +24,7 @@ test('renderer: WebGL2 goes first on a compat adapter, WebGPU keeps the raised l
   assert.match(src, /const compat = !webgl2 && isCompatOnly\(adapter\)/);
   assert.match(src, /if \(context\) \{ webgl2 = true; gpu = ''; \}/);
   assert.match(src, /compat && !webgl2 \? \{ requiredLimits: compatLimits\(adapter\) \} : \{\}/);
-  assert.match(src, /if \(!context\) throw new Error\('the browser refused a WebGL2 context on this device'\)/);
+  assert.match(src, /if \(!context\) throw new Error\(\(force === 'webgl2' \|\| firefox \? 'the browser refused a WebGL2 context on this device'/);
 });
 
 test('a compat device that keeps refusing frames ends on the failure card; a core device is only counted', () => {
