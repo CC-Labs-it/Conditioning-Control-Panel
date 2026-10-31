@@ -198,7 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CardMystery.Click += CardMystery_Click;
             MysteryRevealFace.PointerReleased += MysteryRevealFace_Click;
             CardVault.Click += CardVault_Click;
-            CardJustDrop.Click += CardJustDrop_Click;
+            CardDeeperEditor.Click += CardDeeperEditor_Click;
             LogoBrandFrame.PointerPressed += ImgLogo_MouseLeftButtonDown;
             IntakePassFace.PointerPressed += IntakePassFace_MouseLeftButtonDown;
 
@@ -294,68 +294,79 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _ => null,
         };
         private void CardVault_Click(object? sender, RoutedEventArgs e) => Shell?.BtnPatreonExclusives_Click(sender, e);
-        private void CardJustDrop_Click(object? sender, RoutedEventArgs e) { }        // mw.CardJustDrop_Click(...)
+        /// <summary>WPF CardDeeperEditor_Click (MainWindow.Presets.cs:1121): opens the Deeper page, never the editor.</summary>
+        private void CardDeeperEditor_Click(object? sender, RoutedEventArgs e) => Shell?.ShowTab("deeper");
         /// <summary>
-        /// WIRED (the bark and the easter egg). WPF's handler
-        /// (MainWindow.UiUpdates.cs:1210) does four things: an achievement track, a bark
-        /// notify, the 100-clicks-in-60-seconds easter egg, and a click pulse. The bark now
-        /// crosses on <see cref="CoreBark"/> and fires FIRST, before the egg's early return,
-        /// which is where WPF fires it - the rolling 60s click count it feeds is what drives
-        /// the click-escalation eggs, so a click swallowed by the return would be a lost count.
-        ///
-        /// The counter lives on this view and not on the shell because this view owns the
-        /// click: the shell's copy would be a second set of fields nothing increments.
-        ///
-        /// ponytail: still needs App.Achievements.TrackAvatarClick
-        /// (ConditioningControlPanel/Services/Progression/AchievementService.cs), which is not in
-        /// Core. The click pulse is a ScaleTransform animation on ImgLogo and is left out with it.
+        /// WPF ImgLogo_MouseLeftButtonDown (MainWindow.UiUpdates.cs:1189): the Neon Obsession /
+        /// Needy Doll achievement track, the bark (rolling 60s click count behind the
+        /// click-escalation eggs), the 100-clicks-in-60-seconds easter egg, then the click pulse.
+        /// The counter lives on this view because this view owns the click.
         /// </summary>
-        private async void ImgLogo_MouseLeftButtonDown(object? sender, PointerPressedEventArgs e)
+        private void ImgLogo_MouseLeftButtonDown(object? sender, PointerPressedEventArgs e)
         {
-            // Bark hook: rolling 60s click count drives the click-escalation eggs.
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            App.Achievements?.TrackAvatarClick();
             CoreBark.NotifyAvatarClicked();
 
-            if (_easterEggTriggered) return;
-
-            var now = DateTime.Now;
-            if (_easterEggFirstClick == DateTime.MinValue || (now - _easterEggFirstClick).TotalSeconds > 60)
+            if (!_easterEggTriggered)
             {
-                _easterEggFirstClick = now;
-                _easterEggClickCount = 1;
-                return;
+                var now = DateTime.Now;
+                if (_easterEggFirstClick == DateTime.MinValue || (now - _easterEggFirstClick).TotalSeconds > 60)
+                {
+                    _easterEggFirstClick = now;
+                    _easterEggClickCount = 1;
+                }
+                else if (++_easterEggClickCount >= 100)
+                {
+                    _easterEggTriggered = true;
+                    _ = ShowEasterEgg();
+                }
             }
 
-            _easterEggClickCount++;
-            if (_easterEggClickCount < 100) return;
-
-            _easterEggTriggered = true;
-            await ShowEasterEgg();
+            if (!AmbientFxCanvas.Env.AllowTransitions) return;
+            PulseLogo();
         }
 
-        /// <summary>
-        /// PORTED from MainWindow.UiUpdates.ShowEasterEgg. Deviations, all of them a service
-        /// this head does not have:
-        ///  - <c>App.ProfileSync.RecordEasterEggReadAsync</c> is head-side, so the reader count
-        ///    stays -1, which is exactly what the WPF path passes when ProfileSync is null. The
-        ///    window hides its reader line on a non-positive count, so nothing invents a number.
-        ///  - <c>App.AvatarWindow.PlayNoteClip</c> plus the <c>NewYearNoteReactionSeen</c> latch
-        ///    are skipped together. Skipping BOTH is deliberate: latching the flag without the
-        ///    clip actually playing would burn a once-ever moment on silence.
-        ///  - <c>ShowDialog</c> is async here and needs a VISIBLE owner - a shell minimised to
-        ///    the tray is loaded but not visible and Avalonia throws on it.
-        /// </summary>
-        private async System.Threading.Tasks.Task ShowEasterEgg()
+        /// <summary>WPF's quick pulse: ImgLogo scales 1.0 -> 1.05 over 80 ms and back (AutoReverse),
+        /// about its centre. A transition on RenderTransform, never an Animation on a Transform (P82).</summary>
+        private void PulseLogo()
+        {
+            ImgLogo.RenderTransformOrigin = RelativePoint.Center;
+            ImgLogo.Transitions ??= new global::Avalonia.Animation.Transitions
+            {
+                new global::Avalonia.Animation.TransformOperationsTransition
+                {
+                    Property = Visual.RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(80),
+                },
+            };
+            ImgLogo.RenderTransform = global::Avalonia.Media.Transformation.TransformOperations.Parse("scale(1.05)");
+            global::Avalonia.Threading.DispatcherTimer.RunOnce(
+                () => ImgLogo.RenderTransform = global::Avalonia.Media.Transformation.TransformOperations.Parse("scale(1)"),
+                TimeSpan.FromMilliseconds(80));
+        }
+
+        /// <summary>WPF ShowEasterEgg (MainWindow.UiUpdates.cs:1919): the server counts this reader
+        /// (-1 on any failure, which hides the reader line) and the note opens over a VISIBLE shell
+        /// (a tray-minimised shell is loaded but not visible, and Avalonia throws on that owner).
+        /// ponytail: the once-ever companion voice (App.AvatarWindow.PlayNoteClip + the
+        /// NewYearNoteReactionSeen latch) - Resources/sounds/note_newyear.wav ships on no head yet, so
+        /// WPF no-ops it too; latching without the clip playing would burn the moment on silence.</summary>
+        internal async System.Threading.Tasks.Task ShowEasterEgg()
         {
             try
             {
+                int readers = await EasterEggReaders();
                 if (TopLevel.GetTopLevel(this) is not Window owner || !owner.IsVisible) return;
-                await new Views.Windows.EasterEggWindow(-1).ShowDialogSafe(owner);
+                await new Views.Windows.EasterEggWindow(readers).ShowDialogSafe(owner);
             }
             catch (Exception ex)
             {
                 Serilog.Log.Warning(ex, "Easter egg window failed to open");
             }
         }
+
+        /// <summary>Test seam for the reader count (WPF App.ProfileSync.RecordEasterEggReadAsync).</summary>
+        internal static Func<System.Threading.Tasks.Task<int>> EasterEggReaders = () => new global::ConditioningControlPanel.Services.V2AuthService().RecordEasterEggReadAsync();
 
         private int _easterEggClickCount;
         private DateTime _easterEggFirstClick = DateTime.MinValue;

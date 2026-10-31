@@ -76,8 +76,12 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             // The shell paints the section ink into the app resources (PaintSectionInk); drop the
             // overrides so the next test sees the authored (Home) ink (P02).
             if (global::Avalonia.Application.Current?.Resources is { } res)
+            {
+                foreach (var palette in res.MergedDictionaries.OfType<ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.SectionInkResources>().ToArray())
+                    res.MergedDictionaries.Remove(palette);
                 foreach (var k in new[] { "SectionInk", "SectionTint", "SectionRule", "SectionOutline" })
                 { res.Remove(k); res.Remove(k + "Brush"); }
+            }
             Current?.Restore();
             Current = null;
             // A closed window's Skia surfaces and render targets are native, freed by finalizers, and

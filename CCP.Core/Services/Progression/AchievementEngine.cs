@@ -202,6 +202,19 @@ internal sealed class AchievementEngine
         TryUnlock("corner_hit");
     }
 
+    /// <summary>WPF AchievementService.TrackAvatarClick (:610): 20 clicks in 10 s unlocks neon_obsession
+    /// (with the haptic easter-egg pattern), 150 in 60 s unlocks needy_doll.</summary>
+    public void TrackAvatarClick()
+    {
+        if (Progress.TrackAvatarClick())
+        {
+            _ = CoreHaptics.Service?.AvatarEasterEggPatternAsync();
+            TryUnlock("neon_obsession");
+        }
+        if (Progress.TrackNeedyDollClick()) TryUnlock("needy_doll");
+        _isDirty = true;
+    }
+
     /// <summary>WPF TrackAttentionCheckPassed: totals and eyes_front.</summary>
     public void TrackAttentionCheckPassed(bool isVideo = false)
     {
