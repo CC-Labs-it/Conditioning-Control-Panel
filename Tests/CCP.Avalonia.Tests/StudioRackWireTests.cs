@@ -98,8 +98,7 @@ public sealed class StudioRackWireTests
     {
         var row = rack.GetVisualDescendants().OfType<RadioButton>().First(r => r.Tag as string == key);
         row.BringIntoView();                             // the lower rows sit below the fold
-        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-        Dispatcher.UIThread.RunJobs();
+        HeadlessFrame.Publish(shell);
         var at = row.TranslatePoint(new Point(row.Bounds.Width / 2, row.Bounds.Height / 2), shell)!.Value;
         Assert.Same(row, (shell.InputHitTest(at) as Visual)?.FindAncestorOfType<RadioButton>(includeSelf: true));
         shell.MouseDown(at, MouseButton.Right);
@@ -110,7 +109,7 @@ public sealed class StudioRackWireTests
     private static Task Run(Action<MainShellWindow, StudioTabView> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var shell = new MainShellWindow();
@@ -118,8 +117,7 @@ public sealed class StudioRackWireTests
         {
             shell.Show();
             shell.ShowTab("studio");
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
+            HeadlessFrame.Publish(shell);
             body(shell, shell.StudioRack!);
         }
         finally { shell.Close(); }

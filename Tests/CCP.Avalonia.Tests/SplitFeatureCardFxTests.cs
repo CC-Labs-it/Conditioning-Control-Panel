@@ -33,7 +33,10 @@ public sealed class SplitFeatureCardFxTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
-        var (motion, perf, wipe, drain) = (s.MotionLevel, s.PerformanceMode, s.MindWipeEnabled, s.BrainDrainEnabled);
+        var (motion, perf, auto, wipe, drain) = (s.MotionLevel, s.PerformanceMode, s.AutoPerformanceMode, s.MindWipeEnabled, s.BrainDrainEnabled);
+        // Drive the explicit tier independently of live overlay counts.
+        s.AutoPerformanceMode = false;
+        var previousTime = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
         var time = new SteppedTime();
         global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
         var shell = new MainShellWindow();
@@ -88,7 +91,7 @@ public sealed class SplitFeatureCardFxTests
             Assert.Equal(0, F<Border>(card, "_activeGlow").Opacity);
 
             // Sweep gated off: hovering the OFF half B lands the seam on its end state at once, A's "?" steps aside.
-            shell.UpdateLayout();
+            HeadlessFrame.Publish(shell);
             // Headless runs no transitions, so the gate is observed as the transition being detached (Snap).
             int snaps = 0;
             card.PropertyChanged += (_, e) => { if (e.Property == global::Avalonia.Animation.Animatable.TransitionsProperty) snaps++; };
@@ -117,8 +120,8 @@ public sealed class SplitFeatureCardFxTests
         finally
         {
             shell.Close();
-            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = System.TimeProvider.System;
-            (s.MotionLevel, s.PerformanceMode, s.MindWipeEnabled, s.BrainDrainEnabled) = (motion, perf, wipe, drain);
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = previousTime;
+            (s.MotionLevel, s.PerformanceMode, s.AutoPerformanceMode, s.MindWipeEnabled, s.BrainDrainEnabled) = (motion, perf, auto, wipe, drain);
         }
         return Task.CompletedTask;
     });
