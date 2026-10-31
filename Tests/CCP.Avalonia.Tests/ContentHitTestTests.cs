@@ -13,7 +13,10 @@ using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -32,9 +35,14 @@ public sealed class ContentHitTestTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            // Keep the entrance at its first frame until the test explicitly settles it.
+            var settings = CoreSettings.Current;
+            var oldMotion = settings.MotionLevel;
+            settings.MotionLevel = MotionLevel.Full;
+            var w = new MainShellWindow { TabClock = new FrozenClock() };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -45,12 +53,18 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                Assert.Same(w.Named<Control>(panelName), w.EnteringTab);
+                Assert.Equal(0, w.EnteringTab!.Opacity);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
                 if (tab == "awareness") w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")!.IsVisible = false;
+                // A rendered batch can still contain an entrance at zero opacity or mid-slide.
+                w.CompleteTabTransition();
+                Assert.Null(w.EnteringTab);
                 RenderLiveTree(w);
                 int tested = 0;
+                var awarenessHeaderTested = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
                     // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
@@ -63,6 +77,13 @@ public sealed class ContentHitTestTests
                     if (!new Rect(w.Bounds.Size).Contains(p) || b.GetVisualAncestors().OfType<ScrollViewer>().Any(s => !Inside(s, p, w))) continue;
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
+                    if (tab == "awareness" && (b.Name == "BtnAwarenessTutorial" || b.Name == "ChkAwarenessMaster"))
+                    {
+                        var transparent = b.GetVisualAncestors().Where(v => v.Opacity <= 0)
+                            .Select(v => $"{v.GetType().Name}/{(v as Control)?.Name}").ToArray();
+                        Assert.True(transparent.Length == 0, string.Join(", ", transparent));
+                        awarenessHeaderTested.Add(b.Name!);
+                    }
                     var hit = w.InputHitTest(p) as Visual;
                     bool pressed = false;
                     void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
@@ -75,8 +96,14 @@ public sealed class ContentHitTestTests
                         misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");
                 }
                 Assert.True(tested >= 3, $"{tab}: only {tested} buttons on screen to test");
+                if (tab == "awareness")
+                {
+                    Assert.Contains("BtnAwarenessTutorial", awarenessHeaderTested);
+                    Assert.Contains("ChkAwarenessMaster", awarenessHeaderTested);
+                }
             }
             w.Close();
+            settings.MotionLevel = oldMotion;
             Assert.True(misses.Count == 0, string.Join("\n", misses));
             return Task.CompletedTask;
         });
@@ -98,6 +125,11 @@ public sealed class ContentHitTestTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
+    }
+
+    private sealed class FrozenClock : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
     }
 
     private static bool Inside(Visual v, Point p, Visual root)
