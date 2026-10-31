@@ -211,7 +211,12 @@ export function sweepMix(s, u, edgeS, L = SPECTRUM_LOOK) {
  * R = a * 40, G = b * 40, B = 128 + (edgeS - texel centre) * 2 (0.5 m steps, +-63 m), A = 255.
  */
 // Stay within the default WebGPU texture limit, including long courses.
-export const trackTableWidth = lengthM => Math.max(2, Math.min(8192, Math.ceil(lengthM)));
+// A GPU under that limit (WebGL2 at 4096) cannot hold a long course's table: the texture fails, its reads come back 0, and a
+// road width of 0 paints the whole road as white edge line (emulator, 2026-10-31). The renderer names the real limit before any
+// course builds. Paint only: the course hash never reads this.
+let trackTableLimit = 8192;
+export const setTrackTableLimit = (max) => { trackTableLimit = Number.isFinite(max) && max >= 2 ? Math.min(8192, Math.floor(max)) : 8192; };
+export const trackTableWidth = lengthM => Math.max(2, Math.min(trackTableLimit, Math.ceil(lengthM)));
 
 export function patternBytes(zones, lengthM, morphM = SPECTRUM_LOOK.morphM) {
   const n = trackTableWidth(lengthM), out = new Uint8Array(n * 4), step = lengthM / n;

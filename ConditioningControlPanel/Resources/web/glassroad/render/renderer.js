@@ -17,6 +17,7 @@
  * rect times the pixel ratio times the tier's Q.hitCam (0 = off). warmInset() builds its pipelines behind the
  * loading card (its own target, no shadow map: a different program set from the scene pass).
  */
+import { setTrackTableLimit } from './spectrum.js';
 import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu';
 import * as threeWebgpu from 'three/webgpu';
 import * as GPU from 'three/webgpu';
@@ -110,6 +111,8 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     three = new WebGPURenderer({ canvas, alpha: true, antialias: false, forceWebGL: true, powerPreference: 'high-performance', context });
     await three.init();
   }
+  // WebGL2's MAX_TEXTURE_SIZE, or the WebGPU device's own limit: the course tables must fit it (render/spectrum.js).
+  setTrackTableLimit(webgl2 ? three.backend?.gl?.getParameter?.(0x0D33) : three.backend?.device?.limits?.maxTextureDimension2D);
   trackSceneResources(three);
   shareInstancePrograms(three);
   skipUnchangedInstanceUploads(three);
