@@ -11,7 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal sealed class BrainDrainPlayer
 {
     internal static BrainDrainPlayer? Instance;
-    private readonly Func<string, double, bool, Action, MindWipePlayer.IVoice?> _play;
+    private readonly Func<string, Action, LibVlcAudio.IPreparedVoice?> _prepare;
     private readonly TimeProvider _time;
     private readonly Func<double> _roll;
     private readonly object _gate = new();
@@ -21,9 +21,9 @@ internal sealed class BrainDrainPlayer
     private long _generation;
     private AppSettings? _settings;
     private SettingsService? _service;
-    internal BrainDrainPlayer(Func<string, double, bool, Action, MindWipePlayer.IVoice?> play,
+    internal BrainDrainPlayer(Func<string, Action, LibVlcAudio.IPreparedVoice?> prepare,
         TimeProvider? time = null, Func<double>? roll = null)
-    { _play = play; _time = time ?? TimeProvider.System; _roll = roll ?? Random.Shared.NextDouble; }
+    { _prepare = prepare; _time = time ?? TimeProvider.System; _roll = roll ?? Random.Shared.NextDouble; }
     internal bool IsRunning { get { lock (_gate) return _running; } }
     internal void Start()
     {
@@ -65,18 +65,25 @@ internal sealed class BrainDrainPlayer
             if (!_running || _busy || CoreAudio.IsOutputSuppressed || _roll() >= BrainDrainAudioPolicy.Probability(CoreSettings.Current.BrainDrainIntensity, interval)) return;
             _busy = true; generation = ++_generation;
         }
-        MindWipePlayer.IVoice? voice = null;
+        LibVlcAudio.IPreparedVoice? voice = null;
         try
         {
             var clips = BrainDrainAudioPolicy.Discover(BrainDrainAudioPolicy.AudioFolder, BrainDrainAudioPolicy.LegacyFolder);
-            if (clips.Length != 0) voice = _play(clips[Random.Shared.Next(clips.Length)], Gain(), false, () =>
+            if (clips.Length != 0) voice = _prepare(clips[Random.Shared.Next(clips.Length)], () =>
             {
                 lock (_gate) if (generation == _generation) { _voice = null; _busy = false; ++_generation; }
             });
             lock (_gate)
             {
-                if (_running && generation == _generation)
-                { _voice = voice; _busy = voice != null; if (voice != null) voice.Volume = Gain(); voice = null; }
+                // WPF BrainDrainService.cs:377-388: decoder creation may outlive panic. Check
+                // and start under the same gate as Stop, so a stopped generation stays silent.
+                if (_running && generation == _generation && voice != null)
+                {
+                    voice.Volume = Gain();
+                    if (voice.Play() && _running && generation == _generation)
+                    { _voice = voice; voice = null; }
+                }
+                if (generation == _generation) _busy = _voice != null;
             }
         }
         catch { lock (_gate) if (generation == _generation) _busy = false; }

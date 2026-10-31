@@ -30,11 +30,11 @@ Ported behavior (paths relative to repository root):
   Core CCP.Core/CoreEngine.cs:26,72,96,120,140; Avalonia App.axaml.cs:784.
 - Thread-safe stop invalidates late decoder output; panic and exit dispose the voice.
   WPF ConditioningControlPanel/Services/LockCard/BrainDrainService.cs:249,354,385.
-  Avalonia CCP.Avalonia/Platform/BrainDrainPlayer.cs:83,85;
+  Avalonia CCP.Avalonia/Platform/BrainDrainPlayer.cs:80,90,92;
   CCP.Avalonia/Views/Windows/PanicSurfaces.cs:88, Platform/PanicWatchdog.cs:118, App.axaml.cs:1272.
 - Running/idle Discord presence follows audio start/stop, as existing MindWipe does.
   WPF ConditioningControlPanel/Services/LockCard/BrainDrainService.cs:240,270.
-  Avalonia CCP.Avalonia/Platform/BrainDrainPlayer.cs:41,98.
+  Avalonia CCP.Avalonia/Platform/BrainDrainPlayer.cs:41,105.
 
 Already on base:
 - KeepClear preference loads, persists and rebinds: WPF
@@ -94,3 +94,17 @@ The 6 skips are existing Vosk/device and frame-budget skips; no new skips were a
 Final dotnet test Tests/CCP.Avalonia.Tests --no-restore --filter 'FullyQualifiedName~BrainDrainAudioTests|FullyQualifiedName~PanicSurfacesTests': Failed 0, Passed 9, Skipped 0 (15 s).
 Final bash .github/scripts/core-guards.sh: All Core guards passed.
 Final python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
+
+Review P1 accepted: the original factory started LibVLC before generation arbitration.
+LibVlcAudio.cs:217-225 now prepares a silent voice; BrainDrainPlayer.cs:80-86
+checks the running generation and calls Play under the same gate as Stop, matching
+WPF Services/LockCard/BrainDrainService.cs:377-388. Losing preparations are disposed.
+BrainDrainAudioTests.cs:92 blocks preparation and checks zero playback starts for
+Stop and registered panic, each with and without a subsequent restart. The prior
+late-disposal test also now asserts zero playback starts. No UI strings were added.
+P1 fail-proof: inserted voice.Play before the gate/generation check. All four race
+cases failed at zero-start assertion (expected 0, actual 1). Production code restored.
+Review validation builds Core, Avalonia and Avalonia.Tests: 0 errors each.
+Full Core suite: Failed 0, Passed 4644, Skipped 6, Total 4650 (43 s).
+Restored review run: affected Avalonia tests Failed 0, Passed 13, Skipped 0 (10 s).
+Review guards: All Core guards passed; avalonia_docs self-check OK. Ledger remains stub.

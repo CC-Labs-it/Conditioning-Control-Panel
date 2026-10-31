@@ -781,7 +781,7 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     var vlc = new Platform.LibVlcAudio();
                     vlc.Seed();
-                    Platform.BrainDrainPlayer.Instance = new Platform.BrainDrainPlayer(vlc.PlayVoice);
+                    Platform.BrainDrainPlayer.Instance = new Platform.BrainDrainPlayer(vlc.PrepareVoice);
                     CoreEngine.StartBrainDrain = Platform.BrainDrainPlayer.Instance.Start;
                     CoreEngine.StopBrainDrain = Platform.BrainDrainPlayer.Instance.Stop;
                     // Ducking crash journal (Linux): restore what a dead run left ducked, then journal every duck.

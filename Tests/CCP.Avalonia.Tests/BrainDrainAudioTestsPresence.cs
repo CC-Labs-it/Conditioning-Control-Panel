@@ -10,7 +10,7 @@ public class BrainDrainAudioTestsPresence
         var oldRpc = global::ConditioningControlPanel.Avalonia.App.DiscordRpc;
         using var rpc = new ConditioningControlPanel.Services.DiscordRichPresenceService();
         global::ConditioningControlPanel.Avalonia.App.DiscordRpc = rpc;
-        var player = new BrainDrainPlayer((_, _, _, _) => null);
+        var player = new BrainDrainPlayer((_, _) => null);
         try
         {
             CoreSettings.Current.BrainDrainEnabled = false;
