@@ -159,9 +159,15 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF Bubble ctor with a Chaos spec, FloatUp only: the spec's size, the chaos
         /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
-            double scaling, Chaos.EffectBubbleSpec spec)
+            double scaling, Chaos.EffectBubbleSpec spec, double hitboxScale = 1, bool liveMagnet = false)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
+            // WPF BubbleService.cs:3277-3286: precision pickups keep their natural disc.
+            bool plain = !spec.IsDarter && !spec.IsFreeze && !spec.IsGolden && !spec.IsHeart
+                && !spec.IsDroplet && !spec.IsPrism && !spec.IsEscort && !spec.IsTease && !spec.IsBrittle;
+            double mult = Math.Clamp(hitboxScale, 1, 2);
+            if (liveMagnet && spec.IsLive) mult = Math.Clamp(mult * 1.4, 1, 2);
+            b._hitSize = plain ? Math.Max(b.Size, Math.Round(b.Size * mult)) : b.Size;
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
                        * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
@@ -226,13 +232,17 @@ namespace ConditioningControlPanel.Services
         private static uint Argb(double opacity, byte r, byte g, byte b) =>
             ((uint)Math.Round(Math.Clamp(opacity, 0, 1) * 255) << 24) | ((uint)r << 16) | ((uint)g << 8) | b;
 
+        private double _hitSize;
+        /// <summary>WPF _hitSize, independent of sprite size and visual animation.</summary>
+        public double HitSize => _hitSize > 0 ? _hitSize : Size;
+
         public double CenterX => X + Size / 2;
         public double CenterY => Y + Size / 2;
 
         /// <summary>WPF ContainsPx: inside the hit disc (the sprite's own size for a plain bubble).</summary>
         public bool Contains(double x, double y)
         {
-            double dx = x - CenterX, dy = y - CenterY, r = Size / 2;
+            double dx = x - CenterX, dy = y - CenterY, r = HitSize / 2;
             return dx * dx + dy * dy <= r * r;
         }
 

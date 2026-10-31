@@ -89,6 +89,36 @@ public sealed class BubbleOverlayTests
         });
     }
 
+    // WPF BubbleService.cs:1616-1617, :3284-3286, :3023-3027.
+    [Theory]
+    [InlineData(1.0, 0)]
+    [InlineData(1.5, -1920)]
+    public async Task Enlarged_disc_accepts_a_near_miss_through_native_region_and_press(double scale, int left)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var w = new BubbleOverlayWindow(0, new PixelRect(left, 0, 600, 600), scale) { Width = 600, Height = 600 };
+            BubbleOverlay.Field.Bubbles.Clear();
+            var b = BubbleOverlay.SpawnChaos(new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { SizePx = 100 }, 2);
+            b.X = (left + 200) / scale; b.Y = 200 / scale;
+            try
+            {
+                w.Show(); w.Sync();
+                var x = b.CenterX + 75; var y = b.CenterY;
+                Assert.True(Win32Overlay.Hits(w.Rects, w.InputRectCount, (int)(x * scale - left), (int)(y * scale)));
+                Assert.False(Win32Overlay.Hits(w.Rects, w.InputRectCount, (int)((b.CenterX + 101) * scale - left), (int)(y * scale)));
+                w.MouseDown(new Point((x * scale - left) / w.RenderScaling, y * scale / w.RenderScaling), MouseButton.Left);
+                Assert.True(b.Popping);
+                Assert.Equal(100, b.Size);
+            }
+            finally { BubbleOverlay.Field.Bubbles.Clear(); w.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Theory]
     [InlineData(1.0, 0, 0, 20)]
     [InlineData(1.5, -1920, -240, 20)]

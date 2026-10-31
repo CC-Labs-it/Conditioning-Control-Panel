@@ -30,6 +30,39 @@ public sealed class ChaosRunHostTests
                 .SetupWithoutStarting();
     }
 
+    // WPF ChaosModeService.cs:371, :378: current config and run-state magnet sampled at spawn.
+    [Theory]
+    [InlineData("flash", false)]
+    [InlineData("pink", true)]
+    public async Task Run_spawns_sample_hitbox_settings_and_magnet_state(string variant, bool live)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                var cfg = Cfg();
+                cfg.EnabledVariants = new() { variant };
+                cfg.HitboxScale = 1.25;
+                ChaosRunHost.StartRun(cfg);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                BubbleOverlay.Field.Bubbles.Clear();
+                ChaosRunHost.State!.MagnetEnabled = true;
+                ChaosRunHost.SpawnTick();
+                var b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null);
+                Assert.Equal(live, b.Spec!.IsLive);
+                Assert.Equal(System.Math.Round(b.Size * (live ? 1.75 : 1.25)), b.HitSize);
+                cfg.HitboxScale = 2;
+                BubbleOverlay.Field.Bubbles.Clear();
+                ChaosRunHost.SpawnTick();
+                b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null);
+                Assert.Equal(System.Math.Round(b.Size * 2), b.HitSize);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
     private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3 };
 
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }

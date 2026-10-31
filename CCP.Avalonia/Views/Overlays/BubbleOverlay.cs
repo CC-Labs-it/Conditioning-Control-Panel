@@ -256,16 +256,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
-        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
+        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec, double hitboxScale = 1, bool liveMagnet = false)
         {
             AmbientBubble b;
             if (Targets.Count == 0)
-                b = AmbientBubble.SpawnChaos(Field.Random, 0, 0, 0, 1920, 1080, 1, spec);
+                b = AmbientBubble.SpawnChaos(Field.Random, 0, 0, 0, 1920, 1080, 1, spec, hitboxScale, liveMagnet);
             else
             {
                 var i = Field.Random.Next(Targets.Count);
                 var a = Targets[i].WorkingArea;
-                b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+                b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec, hitboxScale, liveMagnet);
             }
             Field.Bubbles.Add(b);
             RequestFrame();
@@ -468,7 +468,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // physical pixel row, clipped to this screen. Keep the buffer across frames.
                 var cx = b.CenterX * Scaling - Bounds.X;
                 var cy = b.CenterY * Scaling - Bounds.Y;
-                var r = b.Size * Scaling / 2;
+                var r = b.HitSize * Scaling / 2;
                 var first = Math.Max(0, (int)Math.Ceiling(cy - r));
                 var last = Math.Min(Bounds.Height - 1, (int)Math.Floor(cy + r));
                 for (var y = first; y <= last; y++)
