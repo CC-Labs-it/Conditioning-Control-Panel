@@ -187,6 +187,9 @@ public sealed class ProgramTodayCardTests
         double Nudged(double seconds)
         {
             time.Advance(TimeSpan.FromSeconds(seconds));
+            // A forced tick needs a pending composition batch. A wall-clock frame can
+            // re-run the nudge at unchanged X, so request a commit before stepping.
+            art.InvalidateVisual();
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
             return ((TranslateTransform)art.RenderTransform!).X;
