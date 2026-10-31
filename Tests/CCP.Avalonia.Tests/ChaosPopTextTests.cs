@@ -24,7 +24,7 @@ public sealed class ChaosPopTextTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -43,6 +43,8 @@ public sealed class ChaosPopTextTests
             var prepare = ChaosPopText.Prepare;
             var canShow = ChaosPopText.PlatformCanShow;
             bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            bool tasted = ChaosMeta.State.FirstTimesAwarded.Contains(ChaosFirstTimes.Taste);
+            ChaosMeta.State.FirstTimesAwarded.Add(ChaosFirstTimes.Taste); // this test isolates existing payouts
             ChaosPopText.Prepare = (w, r) => { w.Position = r.Position; return true; };
             ChaosPopText.PlatformCanShow = () => true;
             try
@@ -94,6 +96,158 @@ public sealed class ChaosPopTextTests
                 ChaosPopText.Prepare = prepare;
                 ChaosPopText.PlatformCanShow = canShow;
                 CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+                if (!tasted) ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Taste);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF ChaosPopText.cs:80-93: teardown follows pending displays and leaves no windows.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Teardown_invalidates_a_pop_queued_before_dispatch(bool panic)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var prepare = ChaosPopText.Prepare;
+            var canShow = ChaosPopText.PlatformCanShow;
+            var hook = ChaosRunHost.PopText;
+            bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            bool tasted = ChaosMeta.State.FirstTimesAwarded.Contains(ChaosFirstTimes.Taste);
+            ChaosMeta.State.FirstTimesAwarded.Add(ChaosFirstTimes.Taste);
+            int prepared = 0;
+            ChaosPopText.Prepare = (w, r) => { prepared++; w.Position = r.Position; return true; };
+            ChaosPopText.PlatformCanShow = () => true;
+            ChaosRunHost.PopText = ChaosPopText.Show;
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                ChaosRunHost.State!.ShowPopScores = false;
+                ChaosRunHost.State.Focus = 100;
+                ChaosPopText.Show(400, 300, "existing", Colors.Red);
+                Dispatcher.UIThread.RunJobs();
+                var existing = Assert.Single(ChaosPopText.Pool.All);
+                Assert.True(existing.IsVisible);
+                Assert.Equal(1, prepared);
+
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                {
+                    VariantId = "flash", SizePx = 100, Payload = new FlashPayload()
+                });
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                Assert.True(b.Popping);
+                // No dispatcher drain between the real pop and teardown.
+                if (panic) ChaosRunHost.ForceShutdown(); else ChaosPopText.ShutdownPool();
+                Assert.False(existing.IsVisible);
+                Assert.Empty(ChaosPopText.Pool.All);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Empty(ChaosPopText.Pool.All);
+                Assert.Equal(1, prepared); // the queued word never even prepares a window
+
+                // A later run can still display text after the invalidated generation.
+                ChaosPopText.Show(400, 300, "fresh", Colors.Red);
+                Dispatcher.UIThread.RunJobs();
+                var fresh = Assert.Single(ChaosPopText.Pool.All);
+                Assert.True(fresh.IsVisible);
+                Assert.Equal("FRESH", fresh.LabelText);
+                Assert.Equal(2, prepared);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosPopText.ShutdownPool();
+                Dispatcher.UIThread.RunJobs();
+                ChaosRunHost.PopText = hook;
+                ChaosPopText.Prepare = prepare;
+                ChaosPopText.PlatformCanShow = canShow;
+                CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+                if (!tasted) ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Taste);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF ChaosModeService.cs:1844/:2002 and :208-225. Repeating the action pays once.
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task First_bubble_bonus_banks_once_and_toasts_at_the_hand(bool snap, bool enabled)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var meta = ChaosMeta.State;
+            string id = snap ? ChaosFirstTimes.Snap : ChaosFirstTimes.Taste;
+            bool awarded = meta.FirstTimesAwarded.Remove(id);
+            int sparks = meta.Sparks;
+            bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            var prepare = ChaosPopText.Prepare;
+            var canShow = ChaosPopText.PlatformCanShow;
+            var hook = ChaosRunHost.PopText;
+            ChaosRunHost.PopText = ChaosPopText.Show;
+            ChaosPopText.Prepare = (w, r) => { w.Position = r.Position; return true; };
+            ChaosPopText.PlatformCanShow = () => true;
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                {
+                    VariantId = snap ? "pink" : "flash", Tint = 0xFF00C8FF, SizePx = 200,
+                    IsLive = snap, FuseMs = 5000, Payload = new FlashPayload()
+                });
+                var t = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => t = t.AddMilliseconds(32);
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                if (snap)
+                    for (int i = 0; i < 40 && !b.Popping; i++) BubbleOverlay.Field.Step();
+                Assert.True(b.Popping);
+                Dispatcher.UIThread.RunJobs();
+                int amount = ChaosFirstTimes.Amounts[id];
+                string text = $"+{amount} {ChaosGlyphs.Drops} {ChaosFirstTimes.Labels[id]}";
+                Assert.Contains(text, ChaosRunHost.State!.RecentEvents);
+                Assert.True(ChaosFirstTimes.IsAwarded(id));
+                Assert.Equal(sparks + amount, meta.Sparks);
+                int paid = meta.Sparks;
+                if (snap) ChaosRunHost.OnDefused(b); else ChaosRunHost.OnBubblePopped(b);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(paid, meta.Sparks);
+                var words = ChaosPopText.Pool.All.Where(w => w.LabelText == text.ToUpperInvariant()).ToArray();
+                if (enabled)
+                {
+                    var w = Assert.Single(words);
+                    Assert.True(w.IsVisible);
+                    var k = w.Screens.Primary?.Scaling is > 0 and var scale ? scale : 1.0;
+                    Assert.Equal(new PixelPoint((int)Math.Round((b.CenterX - 140) * k),
+                        (int)Math.Round((b.CenterY - 30 - 44) * k)), w.Position);
+                    var (r, g, blue) = M.Lift(0xC8, 0xA8, 0xFF);
+                    Assert.Equal(Color.FromRgb(r, g, blue), ((ISolidColorBrush)w.LabelFill).Color);
+                }
+                else Assert.Empty(words);
+                ChaosRunHost.ForceShutdown();
+                Assert.Empty(ChaosPopText.Pool.All);
+                Assert.False(ChaosFirstTimes.TryAward(id));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Empty(ChaosPopText.Pool.All);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                BubbleOverlay.Field.Clock = () => DateTime.UtcNow;
+                ChaosRunHost.PopText = hook;
+                ChaosPopText.Prepare = prepare;
+                ChaosPopText.PlatformCanShow = canShow;
+                CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+                meta.Sparks = sparks;
+                if (awarded) meta.FirstTimesAwarded.Add(id); else meta.FirstTimesAwarded.Remove(id);
             }
             return Task.CompletedTask;
         });

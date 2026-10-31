@@ -39,9 +39,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
-    /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
+    /// milestones, lessons, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
-    /// first-time bonus and ripple-denial pop text. Also missing: the boon draft
+    /// ripple-denial pop text. First taste and snap now bank and toast; play/draft firsts remain missing. Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off);
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
     /// wired to CoreBark (chaos-payout-barks). NO FOCUS TO DEFUSE, last breath and UNLEASHED
@@ -78,7 +78,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static double _lastHeatTint = -1;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused;
 
-        static ChaosRunHost() => ChaosLessons.LessonCompleted += OnLessonCompleted;
+        static ChaosRunHost()
+        {
+            ChaosLessons.LessonCompleted += OnLessonCompleted;
+            ChaosFirstTimes.Awarded += OnFirstTimeAwarded; // WPF ChaosModeService.cs:126
+        }
+
+        // WPF ChaosModeService.cs:208-225: marshal the banked bonus to the feed and hand.
+        private static void OnFirstTimeAwarded(string bonusId, int amount)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_state == null) return;
+                string label = ChaosFirstTimes.Labels.TryGetValue(bonusId, out var l) ? l : bonusId;
+                string text = $"+{amount} {ChaosGlyphs.Drops} {label}";
+                _state.PushEvent(text);
+                PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY - 30,
+                    text, Color.FromRgb(0xC8, 0xA8, 0xFF));
+            });
+        }
         private static readonly List<ChaosToyButtonWindow> _toyButtons = new();
         internal static IReadOnlyList<ChaosToyButtonWindow> ToyButtons => _toyButtons;
 
@@ -216,6 +234,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return;
             }
             spec.Payload.Fire();   // benign pop = a treat
+            if (!ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Taste))
+                ChaosFirstTimes.TryAward(ChaosFirstTimes.Taste); // WPF ChaosModeService.cs:1844
             if (spec.VariantId == "subliminal") ChaosLessons.Tick("intrusive_thoughts");   // WPF OnTreatPopped
             bool focusWasLow = _state.FocusLow;
             double pts = ChaosFieldMath.ApplyTreatPop(_state, spec, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
@@ -238,6 +258,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state == null || spec == null || _manualPaused) return;
             Label(b, "SNAP", SnapColor);   // WPF CompleteDefuse :4577 / Pop :4684
             double fuseSecLeft = b.DefuseJudgeFuseSec;
+            if (!ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Snap))
+                ChaosFirstTimes.TryAward(ChaosFirstTimes.Snap); // WPF ChaosModeService.cs:2002
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
                 b.DefusedViaChannel, free: false, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
@@ -259,7 +281,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             else Pulse(Color.FromRgb(90, 255, 150), 0.16);   // soft green confirm
             if (slowburn > 1) _state.PushEvent("🐌 slow burn! x3");
             _state.PushEvent($"✔ snapped {spec.Payload.DisplayName}");
-            // ponytail: defuse lessons, first-times, regen, aftermath, ripple, combo milestones and
+            // ponytail: defuse lessons, regen, aftermath, ripple, combo milestones and
             // the brink narrative -> chaos-payout-fallin-d; the defuse barks -> chaos-payout-barks.
         }
 
