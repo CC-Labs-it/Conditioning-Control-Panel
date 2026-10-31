@@ -670,7 +670,7 @@ namespace ConditioningControlPanel.Avalonia
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
                         { RestoreAchievements = ids => Achievements?.RestoreCloudAchievements(ids),
-                            Countdown = DescentCountdown, DescentReader = Descent, LifetimeLifted = () => FeatureDayLog?.Rebaseline("v2 cloud merge") };
+                            Countdown = DescentCountdown, DescentReader = Descent };
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>

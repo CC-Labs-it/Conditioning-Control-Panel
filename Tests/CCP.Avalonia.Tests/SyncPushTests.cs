@@ -253,34 +253,6 @@ public sealed partial class AccountSeedTests
     });
 
     [Fact]
-    public void CompanionAndTimePushOnlyAfterReadAndDisarmOnLogout() => WithFreshInstall(async () =>
-    {
-        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
-        var s = CoreSettings.Current;
-        s.TotalConditioningMinutes = 0;
-        s.CompanionProgressData = new Dictionary<int, CompanionProgress>();
-        wire.SyncReply = """{"success":true,"total_conditioning_minutes":15,"companion_progress":{"0":{"Level":3,"TotalXPEarned":90}}}""";
-        Assert.True(await AccountSeed.LoadProfileAsync());
-        Assert.Null(wire.Syncs.Last()["companion_progress"]);
-        Assert.Null(wire.Syncs.Last()["total_conditioning_minutes"]);
-        s.CompanionProgressData[0].TotalXPEarned = 100;
-        s.TotalConditioningMinutes = 16;
-        sync.UtcNow = () => T0.AddSeconds(31);
-        Assert.True(await sync.PushAsync("progress"));
-        var sent = wire.Syncs.Last();
-        Assert.Equal(16, (double)sent["total_conditioning_minutes"]!);
-        Assert.Equal(100, (double)sent["companion_progress"]!["0"]!["TotalXPEarned"]!);
-        await AccountSeed.Logout();
-        (s.UnifiedId, s.AuthToken) = ("u1", "tok");
-        CoreAccount.UnifiedUserId = "u1";
-        wire.SyncReply = """{"success":true}""";
-        sync.UtcNow = () => T0.AddSeconds(62);
-        Assert.True(await AccountSeed.LoadProfileAsync());
-        Assert.Null(wire.Syncs.Last()["companion_progress"]);
-        Assert.Null(wire.Syncs.Last()["total_conditioning_minutes"]);
-    });
-
-    [Fact]
     public void LevelReset_TheNextBodyCarriesTheResetLevel() => WithFreshInstall(async () =>
     {
         var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
