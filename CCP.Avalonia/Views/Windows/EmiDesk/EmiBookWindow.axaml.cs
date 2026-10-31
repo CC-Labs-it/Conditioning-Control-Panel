@@ -385,7 +385,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             if (_closingForGood) return;
             try
             {
-                SelectCard(EmiBookCards.IndexOf(cardId) is var i and >= 0 ? i : 0, speak: false);
+                SelectCard(AvaloniaEmiBookCards.IndexOf(cardId) is var i and >= 0 ? i : 0, speak: false);
 
                 PlaceWindow();
                 if (!IsVisible)
@@ -414,7 +414,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try
             {
-                int i = EmiBookCards.IndexOf(cardId);
+                int i = AvaloniaEmiBookCards.IndexOf(cardId);
                 if (i < 0) return;
                 SelectCard(i, speak: true);
             }
@@ -673,7 +673,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 StopClock();
-                int i = EmiBookCards.IndexOf(cardId);
+                int i = AvaloniaEmiBookCards.IndexOf(cardId);
                 if (i >= 0) SelectCard(i, speak: false);
                 var p = _painter;
                 if (p == null) return;
@@ -688,7 +688,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>Move to a card by index, redraw everything, and remember where we are.</summary>
         private void SelectCard(int index, bool speak, bool note = true)
         {
-            var cards = EmiBookCards.All;
+            var cards = AvaloniaEmiBookCards.All;
             if (cards.Count == 0) return;
 
             _index = Math.Max(0, Math.Min(cards.Count - 1, index));
@@ -711,7 +711,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void Step(int delta)
         {
-            var cards = EmiBookCards.All;
+            var cards = AvaloniaEmiBookCards.All;
             if (cards.Count == 0) return;
             int next = _index + delta;
             if (next < 0 || next >= cards.Count) return;
@@ -720,7 +720,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void PickTab(int tab)
         {
-            int first = EmiBookCards.FirstOnTab(tab);
+            int first = AvaloniaEmiBookCards.FirstOnTab(tab);
             if (first < 0) return;
             if (first == _index && _tab == tab) return;
             SelectCard(first, speak: true);
@@ -894,7 +894,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void Go()
         {
-            var cards = EmiBookCards.All;
+            var cards = AvaloniaEmiBookCards.All;
             if (_index < 0 || _index >= cards.Count) return;
             var card = cards[_index];
             // WPF wraps the detour the same way (EmiBookWindow.xaml.cs:834); this head has no
@@ -930,7 +930,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     tabs[i].Content = new TextBlock { Text = EmiBookCards.TabName(i) };
                     // A tab with nothing behind it is drawn and dead, not hidden: the shape of the
                     // book is honest from day one.
-                    tabs[i].IsEnabled = EmiBookCards.TabHasCards(i);
+                    tabs[i].IsEnabled = AvaloniaEmiBookCards.TabHasCards(i);
                     tabs[i].Classes.Set("on", i == _tab);
                 }
                 catch (Exception ex) { Log.Debug(ex, "[EmiDesk] book tab {Tab} render failed", i); }
@@ -967,7 +967,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 Resources.TryGetResource("RailChip", null, out var themeRes);
                 var chipTheme = themeRes as ControlTheme;
-                var cards = EmiBookCards.All;
+                var cards = AvaloniaEmiBookCards.All;
                 for (int i = 0; i < cards.Count; i++)
                 {
                     if (cards[i].Tab != _tab) continue;
@@ -1010,7 +1010,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _dotsPanel.Children.Clear();
                 _dots.Clear();
 
-                var cards = EmiBookCards.All;
+                var cards = AvaloniaEmiBookCards.All;
                 for (int i = 0; i < cards.Count; i++)
                 {
                     if (cards[i].Tab != _tab) continue;
@@ -1059,7 +1059,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try
             {
-                var cards = EmiBookCards.All;
+                var cards = AvaloniaEmiBookCards.All;
                 if (_index < 0 || _index >= cards.Count) return;
                 var card = cards[_index];
                 if (string.IsNullOrWhiteSpace(card.MarginEn)) return;
