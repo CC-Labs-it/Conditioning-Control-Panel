@@ -83,9 +83,9 @@ public static class SparklesPageResults
     }
 
     /// <summary>Post a read claim (fire and forget); a null claim is a no-op.</summary>
-    public static Task<SparklesClaimOutcome?> Send(SparklesPageClaim? c) => c == null
+    public static Task<SparklesClaimOutcome?> Send(SparklesPageClaim? c, SparklesClaimService? service = null) => c == null
         ? Task.FromResult<SparklesClaimOutcome?>(null)
-        : SparklesGameEnd.Claim(c.Game, c.Mode, c.Result, c.Duration, c.Detail, c.Proof);
+        : SparklesGameEnd.Claim(c.Game, c.Mode, c.Result, c.Duration, c.Detail, c.Proof, service);
 
     private static string? Str(JToken? t) => t?.Type == JTokenType.String ? (string?)t : null;
 

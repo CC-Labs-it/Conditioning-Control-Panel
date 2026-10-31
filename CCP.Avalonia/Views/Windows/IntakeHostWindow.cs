@@ -1,4 +1,6 @@
 using System;
+using System.Threading.Tasks;
+using ConditioningControlPanel.Services.Sparkles;
 using System.IO;
 using System.Linq;
 using Avalonia.Controls;
@@ -38,6 +40,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private const int Protocol = 1;                                                     // WPF IntakeHostService.Protocol
         private const string ProxyBaseUrl = "https://codebambi-proxy.vercel.app";          // WPF IntakeHostService.ProxyBaseUrl
 
+        private DateTime _openedUtc;
+        internal Task SparklesPending { get; private set; } = Task.CompletedTask;
         internal IntakeRun Run { get; } = new();
         internal WebHost Web { get; } = new();
         internal string SessionsFolder { get; init; } = SessionFileService.CustomSessionsFolder;
@@ -53,7 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Content = Web;
             Web.WebMessage += OnPageMessage;
             // WPF DisposeAll: a closed window never leaves the mic open.
-            Opened += (_, _) => { lock (OpenWindows) OpenWindows.Add(this); StartLifecycle(); };
+            Opened += (_, _) => { lock (OpenWindows) OpenWindows.Add(this); _openedUtc = Now; StartLifecycle(); };
             Closed += (_, _) =>
             {
                 _closed = true;
@@ -160,8 +164,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF IntakeHostService.OnQuizResult: achievements, pass, draft, then the app and the page are told.</summary>
         private void OnQuizResult(JObject o)
         {
+            bool firstResult = !Run.ResultReceived;
             var run = Run.AcceptResult(o);
             if (run == null) return;
+            if (firstResult && _openedUtc != default)
+                SparklesPending = SparklesHead.Deliver(SparklesGameEnd.Claim("intake", "solo", SparklesResult.ForMedal(
+                    SparklesGameEnd.IntakeMedal(run.TotalScore, run.MaxScore, IntakeRun.TopMarksPercent)),
+                    Now - _openedUtc, svc: SparklesHead.Service), msg => Post(msg), () => _closed);
             var (session, path) = IntakeRun.Complete(run, SessionsFolder,
                 () => App.IntakePass.ConsumeForCompletedIntake(),
                 (_, passed, perfect, category) => App.Achievements?.TrackQuizCompleted(passed, perfect, category));

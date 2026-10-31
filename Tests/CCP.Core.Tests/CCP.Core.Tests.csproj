@@ -51,4 +51,9 @@
     <Content Include="..\..\Assets\spiral.gif" Link="Spirals\spiral.gif" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\ConditioningControlPanel.Tests\SparklesClaimServiceTests.cs" Link="SparklesClaimServiceTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\SparklesGameEndTests.cs" Link="SparklesGameEndTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\SparklesPageResultsTests.cs" Link="SparklesPageResultsTests.cs" />
+  </ItemGroup>
 </Project>

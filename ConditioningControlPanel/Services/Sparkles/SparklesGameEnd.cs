@@ -13,6 +13,7 @@ namespace ConditioningControlPanel.Services.Sparkles;
 /// </summary>
 public static class SparklesGameEnd
 {
+    public static Func<SparklesClaimService?>? Service { get; set; }
     /// <summary>Arcademy class grade: S+ and S gold, A silver, B bronze, C and pass (zen) finished.</summary>
     public static string ArcademyMedal(string? grade) => (grade ?? "").Trim().ToUpperInvariant() switch
     {
@@ -51,15 +52,15 @@ public static class SparklesGameEnd
     /// <summary>Claim a finished game. Never throws; null when there is no claim service.
     /// <paramref name="proof"/> rides only on an online claim (the server's own record of it).</summary>
     public static Task<SparklesClaimOutcome?> Claim(string game, string mode, SparklesResult result,
-        TimeSpan duration, JObject? detail = null, JObject? proof = null)
+        TimeSpan duration, JObject? detail = null, JObject? proof = null, SparklesClaimService? svc = null)
     {
-        var svc = App.Sparkles;
+        svc ??= Service?.Invoke();
         if (svc == null) return Task.FromResult<SparklesClaimOutcome?>(null);
         SparklesClaim claim;
         try { claim = SparklesClaim.Create(game, mode, result, (long)Math.Max(0, duration.TotalMilliseconds), detail, proof); }
         catch (Exception ex)
         {
-            App.Logger?.Debug("Sparkles: claim not built for {Game}: {E}", game, ex.Message);
+            Serilog.Log.Debug("Sparkles: claim not built for {Game}: {E}", game, ex.Message);
             return Task.FromResult<SparklesClaimOutcome?>(null);
         }
         return Task.Run<SparklesClaimOutcome?>(async () =>
@@ -68,13 +69,13 @@ public static class SparklesGameEnd
             {
                 var outcome = await svc.ClaimAsync(claim).ConfigureAwait(false);
                 var r = outcome.Receipt;
-                App.Logger?.Information("Sparkles: {Game}/{Mode} paid={Paid} credited={Credited} reason={Reason}{Shadow}",
+                Serilog.Log.Information("Sparkles: {Game}/{Mode} paid={Paid} credited={Credited} reason={Reason}{Shadow}",
                     game, mode, r?.Paid ?? 0, r?.Credited ?? 0, r?.Reason ?? outcome.Reason ?? "-", r?.Shadow == true ? " shadow" : "");
                 return outcome;
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("Sparkles: claim for {Game} failed: {E}", game, ex.Message);
+                Serilog.Log.Debug("Sparkles: claim for {Game} failed: {E}", game, ex.Message);
                 return null;
             }
         });
