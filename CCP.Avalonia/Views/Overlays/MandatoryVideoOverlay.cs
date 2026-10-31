@@ -50,7 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
-        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons);
+        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons, Panel Picture);
 
         private readonly List<Surface> _surfaces = new();
         private readonly List<Window> _messages = new();
@@ -58,6 +58,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly List<(List<Target> Targets, AttentionToyButtonBinding Binding)> _toyBatches = new();
         private List<double> _spawnTimes = new();
         private MediaPlayer? _player;
+        private double _videoFadeSeconds;
+        private Services.Video.VideoReveal? _videoReveal;
         private Media? _media;
         private VlcFrameSink? _sink;
         private WriteableBitmap? _fill;
@@ -124,6 +126,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private void Play(string path, bool strict)
         {
+            _videoReveal?.Dispose();
+            _videoReveal = null;
             var muted = _userMuted;
             if (_surfaces.Count > 0) CloseAll();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
@@ -140,6 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             // WPF DecidePresentation: full screen or ONE floating window, on a random targeted screen.
             Floating = Floats(strict);
+            _videoFadeSeconds = Floating ? Services.Safety.GentleVisuals.FadeSeconds : 0;
             var screens = Targets(host, s.FillAllMonitorsWithVideo || Floating);
             if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
             foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
@@ -186,7 +191,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     FirstFrameMs = _sinceShow.ElapsedMilliseconds;
                     if (!_gracePaused) _sinceFrame.Start();   // WPF arms the length/max timers once playing
                     Log.Information("VideoService: first frame after {Ms} ms", FirstFrameMs);
-                    ShowVideoControls();   // mute and close, once the clip is rolling (MandatoryVideoOverlay.Controls.cs)
+                    // WPF player.js:915 and VideoService.FloatingInstances.cs:603:
+                    // animate independently of decoded frames, then reveal the controls.
+                    var window = _surfaces[0].Window;
+                    _videoReveal = new Services.Video.VideoReveal(_videoFadeSeconds,
+                        tick => window.RequestAnimationFrame(_ => tick()),
+                        opacity => { foreach (var x in _surfaces) x.Picture.Opacity = opacity; },
+                        ShowVideoControls);
+                    _videoReveal.Start();
                 }
                 var fill = _surfaces.Any(x => x.Fill.IsVisible);
                 if (fill && _sink?.Bitmap is { } src && _fill != null)
@@ -271,6 +283,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RenderOptions.SetBitmapInterpolationMode(fill, BitmapInterpolationMode.HighQuality);
             var scrim = new Border { Background = new SolidColorBrush(Color.FromArgb(90, 0, 0, 0)), IsVisible = false };
             var video = new Image { Stretch = Stretch.Uniform };
+            var picture = new Panel { Children = { fill, scrim, video },
+                Opacity = Services.Video.MandatoryVideoPresentation.PictureOpacity(false, 0, _videoFadeSeconds) };
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
             var buttons = new VideoButtons(ToggleUserMute, CloseFromButton);
@@ -282,7 +296,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ShowInTaskbar = false,
                 CanResize = false,
                 Background = Brushes.Black,
-                Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row } },
+                Content = new Panel { ClipToBounds = true, Children = { picture, layer, grace, buttons.Row } },
             };
             var floating = Floating;
             if (floating)
@@ -333,7 +347,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
-            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
+            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, picture);
         }
 
         /// <summary>WPF GracePauseOverlayWindow's card: 360x200, centred, #1A1A2E with a 2 px pink edge,
@@ -883,6 +897,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _closing = true;
             try
             {
+                _videoReveal?.Dispose();
+                _videoReveal = null;
                 _attention = _gracePaused = false;
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;
