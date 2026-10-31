@@ -153,8 +153,7 @@ public sealed class TubeChatParityTests
             Assert.Equal(question, speech.Text);   // the thinking ticker is dead
 
             var chip = (Border)buttons.Children[0];
-            tube.UpdateLayout();
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            HeadlessInput.RenderLiveTree(tube);
             var at = chip.TranslatePoint(new Point(chip.Bounds.Width / 2, chip.Bounds.Height / 2), tube)!.Value;
             tube.MouseDown(at, MouseButton.Left);
             tube.MouseUp(at, MouseButton.Left);
