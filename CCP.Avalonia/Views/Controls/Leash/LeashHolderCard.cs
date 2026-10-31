@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -15,10 +16,7 @@ using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
 using F = ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer;
-
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Leash;
-
-/// <summary>Holder tools on the Leash page. Open sheets survive a poll.</summary>
 public sealed class LeashHolderCard : Border
 {
     internal static readonly IBrush Shade = new SolidColorBrush(Color.Parse("#241838"));
@@ -31,12 +29,9 @@ public sealed class LeashHolderCard : Border
     private ITimer? _resultTimer;
     private DateTimeOffset _resultUntil;
     private static readonly LeashTugThrottle TugThrottle = new();
-
-    // Part B: release menu, drawer host, avatar artwork, replay/help and LeashFx.
     internal LeashHolderCard() : this(new HeldLeash(new LeashPerson("sample", "Juno", null), true,
         LeashIntensity.Standard, DateTimeOffset.UtcNow.AddDays(-2), 3, null, null,
         Array.Empty<WeekDay>(), Array.Empty<Punishment>(), null, 0), () => null) { }
-
     internal LeashHolderCard(HeldLeash held, Func<ILeashService?> service)
     {
         _held = held;
@@ -53,14 +48,11 @@ public sealed class LeashHolderCard : Border
         AttachedToVisualTree += (_, _) => { if (_result != null) ArmExpiry(); };
         Render();
     }
-
-    /// <summary>Clock for the 3 s send-feedback expiry; tests swap in a stepped one.</summary>
     internal TimeProvider Clock { get; init; } = TimeProvider.System;
     internal string? OpenSheet => _sheet;
     internal string? ResultText => _result?.Text;
     internal void Update(HeldLeash held) { _held = held; Render(); }
     private bool ReceiptsOn { get { try { return _service()?.ReceiptsSupported == true; } catch { return false; } } }
-
     internal void Render()
     {
         _body.Children.Clear();
@@ -84,8 +76,12 @@ public sealed class LeashHolderCard : Border
         var week = new UniformGrid { Columns = 7, Margin = new Thickness(0, 10, 0, 0), Tag = "leash-week" };
         foreach (var day in _held.Week.TakeLast(7))
         {
-            var cell = Text(LeashUiRules.DayLetter(day.Day), 11, day.Mark == WeekMark.Did ? F.Mint : day.Mark == WeekMark.Punished ? F.Red : F.Dim, "leash-week:" + day.Mark);
-            cell.HorizontalAlignment = HorizontalAlignment.Center;
+            var cell = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Tag = "leash-week:" + day.Mark };
+            var dot = new Ellipse { Width = 15, Height = 15, HorizontalAlignment = HorizontalAlignment.Center,
+                Fill = day.Mark == WeekMark.Did ? F.Mint : day.Mark == WeekMark.Punished ? F.Red : day.Mark == WeekMark.Today ? Brushes.Transparent : new SolidColorBrush(Color.Parse("#4A3D61")) };
+            if (day.Mark == WeekMark.Today) { dot.Stroke = F.Gold; dot.StrokeThickness = 2; dot.StrokeDashArray = new global::Avalonia.Collections.AvaloniaList<double> { 1.6, 1.2 }; }
+            cell.Children.Add(dot);
+            cell.Children.Add(new TextBlock { Text = LeashUiRules.DayLetter(day.Day), FontFamily = F.Mono, FontSize = 9.5, FontWeight = FontWeight.Bold, Foreground = F.Dim, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 0) });
             ToolTip.SetTip(cell, day.Day);
             week.Children.Add(cell);
         }
@@ -108,35 +104,31 @@ public sealed class LeashHolderCard : Border
         try { service = _service(); } catch { }
         if (LeashSentList.For(service, _held.Who.Id) is { } sent) _body.Children.Add(sent);
     }
-
     private void Figures()
     {
         var r = _held.Report;
         var figures = new UniformGrid { Columns = 3, Margin = new Thickness(0, 10, 0, 0) };
-        void Fig(string value, string label, string tag, string? extra = null)
+        void Fig(string value, string label, string tag, string? extra = null, Control? visual = null)
         {
             var sp = new StackPanel();
-            sp.Children.Add(Text(value, 21, F.Text)); sp.Children.Add(Text(Loc.Get(label), 10.5, F.Muted));
+            sp.Children.Add(visual ?? Text(value, 21, F.Text)); sp.Children.Add(Text(Loc.Get(label), 10.5, F.Muted));
             if (extra != null) sp.Children.Add(Text(extra, 10.5, F.Muted));
             figures.Children.Add(new Border { Child = sp, Padding = new Thickness(4, 8), Margin = new Thickness(3, 0), CornerRadius = new CornerRadius(10), Background = Shade, Tag = tag });
         }
-        Fig(r == null ? "-" : r.Minutes.ToString(), "leash_fig_minutes", "leash-fig-minutes");
+        Fig("", "leash_fig_minutes", "leash-fig-minutes", visual: LeashHoldRing.Ring(LeashUiRules.RingFraction(r?.Minutes ?? 0, LeashUiRules.MinutesGoal(_held.Assignment)), r == null ? "-" : r.Minutes.ToString(), ((SolidColorBrush)F.Pink).Color, 48));
         Fig(r == null ? "-" : r.QuestsDone + "/" + r.QuestsTotal, "leash_fig_quests", "leash-fig-quests", r == null ? null : Loc.GetF("leash_fig_streak", r.Streak));
         if (r is { ChasterLinked: true })
             Fig(r.LockLeftSeconds is int left ? LeashUiRules.LockLeft(left) : "-", "leash_fig_lock", "leash-fig-lock", r.TabSeconds is int tab ? Loc.GetF("leash_fig_tab", LeashUiRules.Tab(tab)) : null);
         else Fig(r == null ? "-" : r.Streak + "d", "leash_fig_streak_label", "leash-fig-streak");
         _body.Children.Add(figures);
     }
-
     private static string AssignText(Assignment a) => a.Kind switch
     {
         AssignKind.Minutes => Loc.GetF("leash_assign_minutes_n", a.Size),
         AssignKind.Quests => Loc.GetF("leash_assign_quests_n", a.Size),
         _ => Loc.Get("leash_assign_video_n"),
     };
-
     internal void ToggleSheet(string id) { _sheet = _sheet == id ? null : id; _videoFor = null; Render(); }
-
     private Control BuildSheet()
     {
         var rows = new StackPanel { Spacing = 4 };
@@ -169,7 +161,7 @@ public sealed class LeashHolderCard : Border
             rows.Children.Add(SizeRow(Loc.Get("leash_rew_pardon"), new[] { (Loc.Get("leash_give"), "leash-reward:pardon", (Func<Task>)(() => SendRewardAsync(RewardKind.Pardon, null, null))) }));
             if (_held.Report?.ChasterLinked == true)
                 rows.Children.Add(SizeRow(Loc.Get("leash_rew_credit"), LeashUiRules.CreditSizes.Select(size =>
-                    ("-" + LeashUiRules.Clock(size), "leash-reward:credit:" + size, (Func<Task>)(() => SendRewardAsync(RewardKind.Credit, null, size))))));
+                    ("-" + LeashUiRules.Span(size), "leash-reward:credit:" + size, (Func<Task>)(() => SendRewardAsync(RewardKind.Credit, null, size))))));
         }
         else if (_held.PunishedToday >= 3) rows.Children.Add(Text(Loc.Get("leash_sheet_punish_cap"), 12, F.Muted));
         else
@@ -194,7 +186,6 @@ public sealed class LeashHolderCard : Border
         }
         return new Border { Child = rows, Background = Shade, CornerRadius = new CornerRadius(12), Padding = new Thickness(10), Margin = new Thickness(0, 8, 0, 0), Tag = "leash-sheet:" + _sheet };
     }
-
     private static Control SizeRow(string label, IEnumerable<(string Text, string Tag, Func<Task> Send)> chips)
     {
         var sp = new StackPanel();
@@ -209,9 +200,7 @@ public sealed class LeashHolderCard : Border
         sp.Children.Add(buttons);
         return sp;
     }
-
     private Task OpenVideo(string forWhat) { _videoFor = _videoFor == forWhat ? null : forWhat; Render(); return Task.CompletedTask; }
-
     private Control VideoPicker(Func<LeashWatch, Task> send)
     {
         var sp = new StackPanel { Spacing = 3, Tag = "leash-video-picker" };
@@ -241,7 +230,6 @@ public sealed class LeashHolderCard : Border
         sp.Children.Add(row);
         return sp;
     }
-
     internal async Task<LeashSendStatus> SendPunishAsync(PunishKind kind, int size, LeashWatch? watch)
     {
         var r = await Guarded(s => s.PunishAsync(_held.Who.Id, kind, size, watch));
@@ -249,26 +237,22 @@ public sealed class LeashHolderCard : Border
         Word(r, Loc.GetF(r.Status == LeashSendStatus.Queued ? "leash_done_punish_queued" : "leash_done_punish", _held.Who.Name));
         return r.Status;
     }
-
     internal async Task<LeashSendStatus> SendAssignAsync(AssignKind kind, int size, LeashWatch? watch)
     {
         var r = await Guarded(s => s.AssignAsync(_held.Who.Id, kind, size, watch));
         CloseGoodSheet(r, true); Word(r, Honest("leash_done_assign")); return r.Status;
     }
-
     internal async Task<LeashSendStatus> SendRewardAsync(RewardKind kind, string? token, int? size)
     {
         var r = await Guarded(s => s.RewardAsync(_held.Who.Id, kind, token, size));
         CloseGoodSheet(r, false); Word(r, Honest("leash_done_reward")); return r.Status;
     }
-
     internal async Task<LeashSendStatus> TugAsync()
     {
         var r = !TugThrottle.TryTug(_held.Who.Id, DateTime.UtcNow) ? new LeashSendResult(LeashSendStatus.TooFast)
             : await Guarded(s => s.TugAsync(_held.Who.Id));
         Word(r, Honest("leash_done_tug")); return r.Status;
     }
-
     private void CloseGoodSheet(LeashSendResult r, bool video)
     {
         if (!LeashUiRules.IsGood(r.Status)) return;
@@ -301,7 +285,6 @@ public sealed class LeashHolderCard : Border
         if (_result == null || Clock.GetUtcNow() < _resultUntil) return;
         _resultTimer?.Dispose(); _resultTimer = null; _result = null; Render();
     }
-
     private static TextBlock Text(string text, double size, IBrush brush, string? tag = null)
     {
         var t = F.Label(text, size, brush); t.TextWrapping = TextWrapping.Wrap; t.TextTrimming = TextTrimming.None; t.Tag = tag; return t;

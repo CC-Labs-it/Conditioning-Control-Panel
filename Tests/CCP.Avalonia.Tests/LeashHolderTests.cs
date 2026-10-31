@@ -8,21 +8,19 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
-using Avalonia.Interactivity;
+using Avalonia.Controls.Shapes;
+using Avalonia.Media;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
-using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Controls.Leash;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class LeashHolderTests
 {
     private sealed class SteppedClock : TimeProvider
@@ -44,7 +42,6 @@ public sealed class LeashHolderTests
             public ValueTask DisposeAsync() { drop(); return ValueTask.CompletedTask; }
         }
     }
-
     private sealed class Service : ILeashService
     {
         public bool Available => true;
@@ -70,15 +67,12 @@ public sealed class LeashHolderTests
         public Task<LeashSendResult> TugAsync(string id) => Send("tug");
         public Task<bool> ReleaseAsync(string id) { Calls.Add(("release", id, null, null)); Publish(); return Task.FromResult(true); }
         public Task<LeashAnswerResult> AnswerAsync(string id, bool accept, LeashIntensity intensity) => throw new NotSupportedException();
-        public Task CutAsync() => Task.CompletedTask;
-        public Task SetIntensityAsync(LeashIntensity i) => Task.CompletedTask;
+        public Task CutAsync() => Task.CompletedTask; public Task SetIntensityAsync(LeashIntensity i) => Task.CompletedTask;
         public Task SetDndAsync(LeashDnd d) => Task.CompletedTask;
         public Task SetRemoteModeAsync(LeashRemoteMode m) => Task.CompletedTask;
         public Task SetVideoMaxAsync(int m) => Task.CompletedTask;
-        public Task CompleteAsync(string id) => Task.CompletedTask;
-        public Task<bool> PardonAsync(string id) => Task.FromResult(false);
+        public Task CompleteAsync(string id) => Task.CompletedTask; public Task<bool> PardonAsync(string id) => Task.FromResult(false);
     }
-
     private static HeldLeash Held() => new(new LeashPerson(Guid.NewGuid().ToString("N"), "Juno", null), true,
         LeashIntensity.Standard, DateTimeOffset.UtcNow.AddDays(-2), 3, null, null,
         Array.Empty<WeekDay>(), Array.Empty<Punishment>(), null, 0);
@@ -95,7 +89,6 @@ public sealed class LeashHolderTests
         try { window.Show(); page.OnShown(); Dispatcher.UIThread.RunJobs(); action(page, service, held); }
         finally { window.Close(); }
     });
-
     [Fact]
     public void HoldingAloneReachesTheCardAndPollsKeepItsOpenSheet() => Run((page, svc, held) =>
     {
@@ -108,7 +101,6 @@ public sealed class LeashHolderTests
         Assert.Contains(card.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.GetF("leash_holder_day", 4));
         svc.Publish(); Assert.True(page.ShowingEmpty); Assert.Empty(page.HolderCards.Values);
     });
-
     [Fact]
     public void PresetButtonsSendAllThreeKindsAndOnlyGoodRepliesCloseTheSheet() => Run((page, svc, _) =>
     {
@@ -128,7 +120,6 @@ public sealed class LeashHolderTests
         Click(card, "leash-punish:lines:3");
         Assert.Null(card.OpenSheet); Assert.Equal(Loc.GetF("leash_done_punish_queued", "Juno"), card.ResultText);
     });
-
     [Fact]
     public void QuietIntensityDailyCapAndChasterLinkControlTheAvailableActions() => Run((page, svc, held) =>
     {
@@ -145,10 +136,9 @@ public sealed class LeashHolderTests
         var report = new DayReport("2026-10-23", 12, 1, 3, 2, true, 3600, 900, false, DateTimeOffset.UtcNow);
         svc.Publish(held with { Intensity = LeashIntensity.Strict, Report = report });
         Assert.Contains("leash-punish:chaster:900", Tags(card));
-        Click(card, "leash-btn:reward"); Click(card, "leash-reward:credit:900");
+        Click(card, "leash-btn:reward"); Assert.Equal("-15m", ((TextBlock)Tagged<Button>(card, "leash-reward:credit:900").Content!).Text); Assert.Equal("-30m", ((TextBlock)Tagged<Button>(card, "leash-reward:credit:1800").Content!).Text); Click(card, "leash-reward:credit:900");
         Assert.Equal(RewardKind.Credit, svc.Calls.Last().Kind); Assert.Equal(900, svc.Calls.Last().Value);
     });
-
     [Fact]
     public void VideoPickerNormalisesIdsAndLimitsPunishmentDurationToTheirCap() => Run((page, svc, held) =>
     {
@@ -170,7 +160,6 @@ public sealed class LeashHolderTests
         }
         finally { FriendsInviteCodes.CatalogueWatches = old; }
     });
-
     [Fact]
     public void ReceiptsRepaintInPlaceAndHiddenPagesStopListening() => Run((page, svc, held) =>
     {
@@ -186,7 +175,6 @@ public sealed class LeashHolderTests
         page.IsVisible = true; page.OnShown(); Assert.Contains("leash-sent-row:tug:done", Tags(card));
         svc.ReceiptsSupported = false; svc.Publish(held); Assert.DoesNotContain("leash-sent", Tags(card));
     });
-
     [Fact]
     public void TugThrottlesBeforeTheService() => Run((page, svc, held) =>
     {
@@ -194,7 +182,6 @@ public sealed class LeashHolderTests
         Click(card, "leash-btn:tug"); Click(card, "leash-btn:tug");
         Assert.Single(svc.Calls); Assert.Equal(Loc.Get(LeashUiRules.ResultKey(LeashSendStatus.TooFast)), card.ResultText);
     });
-
     [Fact]
     public void ServiceErrorsKeepTheSheetOpenAndWordTheFailure() => Run((page, svc, held) =>
     {
@@ -206,7 +193,6 @@ public sealed class LeashHolderTests
         Click(off, "leash-btn:reward"); Click(off, "leash-reward:pardon");
         Assert.Equal("reward", off.OpenSheet); Assert.Equal(Loc.Get(LeashUiRules.ResultKey(LeashSendStatus.Off)), off.ResultText);
     });
-
     [Fact]
     public Task SendFeedbackExpiresAfterThreeSeconds() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -227,7 +213,6 @@ public sealed class LeashHolderTests
         }
         finally { window.Close(); }
     });
-
     [Fact]
     public void ReportFiguresAssignmentAndTheLastSevenDaysComeFromTheSnapshot() => Run((page, svc, held) =>
     {
@@ -246,5 +231,37 @@ public sealed class LeashHolderTests
         svc.Publish(held with { Report = report with { ChasterLinked = false } });
         Assert.DoesNotContain("leash-fig-lock", Tags(card)); Assert.Contains("leash-fig-streak", Tags(card));
     });
-
+    [Fact]
+    public void MinutesRingTracksOpenGoalsCompletionAndMissingReports() => Run((page, svc, held) =>
+    {
+        var report = new DayReport("2026-10-23", 12, 1, 3, 2, false, null, null, false, DateTimeOffset.UtcNow);
+        var task = new Assignment("aid", AssignKind.Minutes, 15, null, report.Day, AssignStatus.Open, report.At);
+        void Check(Assignment? assignment, int minutes, double sweep)
+        {
+            svc.Publish(held with { Report = report with { Minutes = minutes }, Assignment = assignment });
+            var ring = Tagged<Grid>(Assert.Single(page.HolderCards.Values), "leash-ring");
+            Assert.Equal(sweep, Assert.Single(ring.Children.OfType<Arc>()).SweepAngle, 6);
+            Assert.Equal(minutes.ToString(), Tagged<TextBlock>(ring, "leash-ring-figure").Text);
+        }
+        Check(null, 12, 144); Check(task, 12, 288); Check(task with { Size = 60 }, 12, 72);
+        Check(task, 20, 360); Check(task with { Status = AssignStatus.Done }, 12, 144);
+        Check(task with { Kind = AssignKind.Quests }, 12, 144);
+        svc.Publish(held); var empty = Tagged<Grid>(Assert.Single(page.HolderCards.Values), "leash-ring");
+        Assert.Empty(empty.Children.OfType<Arc>()); Assert.Equal("-", Tagged<TextBlock>(empty, "leash-ring-figure").Text);
+    });
+    [Theory]
+    [InlineData(WeekMark.Did, "#FF5FFFD0")]
+    [InlineData(WeekMark.Punished, "#FFFF5F7A")]
+    [InlineData(WeekMark.Today, "#00FFFFFF")]
+    [InlineData(WeekMark.Idle, "#FF4A3D61")]
+    public void WeekMarkersDistinguishEveryState(WeekMark mark, string fill) => Run((page, svc, held) =>
+    {
+        svc.Publish(held with { Week = new[] { new WeekDay("20261023", mark) } });
+        var cell = Tagged<StackPanel>(Assert.Single(page.HolderCards.Values), "leash-week:" + mark);
+        var dot = Assert.Single(cell.Children.OfType<Ellipse>());
+        Assert.Equal(Color.Parse(fill), Assert.IsAssignableFrom<ISolidColorBrush>(dot.Fill).Color);
+        Assert.Equal("F", Assert.Single(cell.Children.OfType<TextBlock>()).Text);
+        if (mark == WeekMark.Today) { Assert.Same(FriendsDrawer.Gold, dot.Stroke); Assert.Equal(2, dot.StrokeThickness); Assert.Equal(new[] { 1.6, 1.2 }, dot.StrokeDashArray); }
+        else { Assert.Null(dot.Stroke); Assert.True(dot.StrokeDashArray == null || dot.StrokeDashArray.Count == 0); }
+    });
 }
