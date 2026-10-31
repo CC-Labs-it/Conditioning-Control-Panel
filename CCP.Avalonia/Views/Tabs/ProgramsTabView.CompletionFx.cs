@@ -73,8 +73,12 @@ public partial class ProgramsTabView
         var generation = _burstGeneration;
         Dispatcher.UIThread.Post(() =>
         {
-            if (generation != _burstGeneration || !IsVisible || VisualRoot == null
-                || Shell is { WindowState: WindowState.Minimized }) return;
+            if (generation != _burstGeneration) return; // newer callbacks own the pending set
+            if (!IsVisible || VisualRoot == null || Shell is { WindowState: WindowState.Minimized })
+            {
+                _pendingTaskCompletions.Clear(); // WPF consumes this moment even when it cannot be shown
+                return;
+            }
             UpdateLayout();
             // WPF ProgramsFx.cs:1006-1019 resolves the live containers after any queued rebuilds.
             var currentDay = App.Programs?.ActiveEnrollment?.CurrentDay ?? 0;

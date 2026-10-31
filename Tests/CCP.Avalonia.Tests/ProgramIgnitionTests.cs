@@ -258,6 +258,30 @@ public sealed class ProgramIgnitionTests
     });
 
     [Fact]
+    public void CompletionWhileMinimisedNeverReplaysWithTheNextTask() => WithRun(true, (shell, tab, svc, _) =>
+    {
+        var tasks = svc.Today!.Tasks.Take(2).ToArray();
+        Assert.Equal(2, tasks.Length);
+        shell.WindowState = WindowState.Minimized;
+        svc.TodayRecord!.CompletedTaskIds.Add(tasks[0].Id);
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, tab.CompletionBursts);
+        shell.WindowState = WindowState.Normal;
+        svc.TodayRecord.CompletedTaskIds.Add(tasks[1].Id);
+        tab.RefreshPrograms();
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        var cards = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tab)
+            .OfType<Border>().Where(b => b.Name == "TaskCard").ToArray();
+        var oldCard = cards.Single(b => b.DataContext is ProgramTaskItem t && t.TaskId == tasks[0].Id);
+        var newCard = cards.Single(b => b.DataContext is ProgramTaskItem t && t.TaskId == tasks[1].Id);
+        Assert.Equal(1, ((ScaleTransform)oldCard.RenderTransform!).ScaleX, 3);
+        Assert.Equal(.93, ((ScaleTransform)newCard.RenderTransform!).ScaleX, 3);
+        Assert.Equal(1, tab.CompletionBursts);
+    });
+
+    [Fact]
     public void PendingTaskCompletionsSurviveConsecutiveRebuildsOnce() => WithRun(true, (_, tab, svc, _) =>
     {
         var tasks = svc.Today!.Tasks.Take(2).ToArray();
@@ -284,6 +308,27 @@ public sealed class ProgramIgnitionTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(2, tab.CompletionBursts);
         Assert.DoesNotContain(BeatLoop.Running, b => b.Owner is Border { Name: "TaskCard" or "TaskDoneChip" });
+    });
+
+    [Fact]
+    public void CancelledCallbackLeavesNewerPendingCompletionIntact() => WithRun(true, (_, tab, svc, _) =>
+    {
+        var tasks = svc.Today!.Tasks.Take(2).ToArray();
+        Assert.Equal(2, tasks.Length);
+        svc.TodayRecord!.CompletedTaskIds.Add(tasks[0].Id);
+        tab.RefreshPrograms(); // old callback stays queued across the panic generation change
+        tab.StopProgramFxForPanic();
+        svc.TodayRecord.CompletedTaskIds.Add(tasks[1].Id);
+        tab.RefreshPrograms();
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        var cards = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tab)
+            .OfType<Border>().Where(b => b.Name == "TaskCard").ToArray();
+        var oldCard = cards.Single(b => b.DataContext is ProgramTaskItem t && t.TaskId == tasks[0].Id);
+        var newCard = cards.Single(b => b.DataContext is ProgramTaskItem t && t.TaskId == tasks[1].Id);
+        Assert.Equal(1, ((ScaleTransform)oldCard.RenderTransform!).ScaleX, 3);
+        Assert.Equal(.93, ((ScaleTransform)newCard.RenderTransform!).ScaleX, 3);
+        Assert.Equal(1, tab.CompletionBursts);
     });
 
     [Theory]
