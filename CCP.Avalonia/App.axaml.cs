@@ -1000,6 +1000,7 @@ namespace ConditioningControlPanel.Avalonia
                     CoreEngine.Stop();
                     StopDesktopOverlays();
                     Views.Overlays.CornerGifOverlay.StopAll();   // WPF CornerGifService.OnMainWindowClosing / OnExit
+                    Views.Windows.LuckyToast.Close();   // WPF MainWindow.WindowChrome.cs:280
                     Views.Overlays.SpeakCueOverlay.CloseActive();   // a topmost window must not outlive the shell
                     Views.Windows.LockCardWindow.ForceCloseAll();
                 };
