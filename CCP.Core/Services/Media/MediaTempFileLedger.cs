@@ -4,10 +4,8 @@ using System.IO;
 
 namespace ConditioningControlPanel.Services.MediaFiles;
 
-/// <summary>Tracks decrypted/downloaded temp files above a cap. Refused deletes stay on the books
-/// and are retried: players may hold files without FILE_SHARE_DELETE until playback ends.
-/// Held files are bounded by open players, so retries need no directory scan.
-/// </summary>
+/// <summary>Tracks capped temp files, retaining refused deletes until players release handles.
+/// Retries visit tracked paths, without directory scans.</summary>
 public sealed class MediaTempFileLedger
 {
     private readonly object _gate = new();
@@ -24,13 +22,9 @@ public sealed class MediaTempFileLedger
         _delete = delete ?? TryDeleteFile;
     }
 
-    /// <summary>Files whose delete was refused and is still owed.</summary>
     public int HeldCount { get { lock (_gate) return _held.Count; } }
-
-    /// <summary>Files on the books that no sweep has tried to delete yet.</summary>
     public int LiveCount { get { lock (_gate) return _live.Count; } }
 
-    /// <summary>Add a fresh file. Above the cap the oldest go, never the ones just handed out.</summary>
     public void Track(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
@@ -39,8 +33,7 @@ public sealed class MediaTempFileLedger
         {
             _live.Add(path);
             int over = Math.Max(0, _live.Count - _cap);
-            // Held files are retried on every Track, not only above the cap: a consumer that
-            // releases its own files (Goon, wallpaper) may never push the live list over it.
+            // Retry held files even below the cap, where consumers may release their own files.
             if (over == 0 && _held.Count == 0) return;
             sweep = _live.GetRange(0, over);
             _live.RemoveRange(0, over);
@@ -50,7 +43,6 @@ public sealed class MediaTempFileLedger
         DeleteOrHold(sweep);
     }
 
-    /// <summary>The consumer is done with this file: delete it now, or hold it for a retry.</summary>
     public void Release(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
@@ -59,14 +51,12 @@ public sealed class MediaTempFileLedger
         {
             _live.Remove(path);
             _held.Remove(path);
-            // Every release is also a retry of what an earlier release could not delete.
             sweep.AddRange(_held);
             _held.Clear();
         }
         DeleteOrHold(sweep);
     }
 
-    /// <summary>Delete everything on the books (stop, dispose). Refused deletes stay held.</summary>
     public void SweepAll()
     {
         List<string> sweep;
@@ -99,7 +89,6 @@ public sealed class MediaTempFileLedger
         }
     }
 
-    /// <summary>True when the file no longer exists afterwards. Never throws.</summary>
     public static bool TryDeleteFile(string path)
     {
         try

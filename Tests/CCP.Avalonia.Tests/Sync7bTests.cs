@@ -46,9 +46,11 @@ public class Sync7bTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task DrawerHandleFillsEdgeAndKeepsReferenceTypographyAndInk() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task DrawerHandleFillsEdgeAndKeepsReferenceTypographyAndInk() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
+        CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+        Assert.False(AmbientFxCanvas.Env.AllowTransitions);
         var drawer = new PageFavoritesDrawer();
         var labels = drawer.GetLogicalDescendants().OfType<TextBlock>().ToArray();
         foreach (var label in labels) label.FontFamily = new FontFamily("DejaVu Sans");
@@ -59,6 +61,12 @@ public class Sync7bTests
             host.Show(); drawer.Measure(new Size(22,400)); drawer.Arrange(new Rect(0,0,22,400));
             Assert.Equal(new Size(18,390), drawer.Handle.Bounds.Size);
             var presenter = Assert.IsType<global::Avalonia.Controls.Presenters.ContentPresenter>(Assert.Single(drawer.Handle.GetVisualChildren()));
+            void AssertNoChrome()
+            {
+                Assert.True(presenter.Background is null || presenter.Background is ISolidColorBrush { Color.A: 0 });
+                Assert.Equal(Matrix.Identity, drawer.Handle.RenderTransform?.Value ?? Matrix.Identity);
+            }
+            AssertNoChrome();
             Assert.Equal(drawer.Handle.Bounds.Size, Assert.IsType<Border>(presenter.Content).Bounds.Size);
             Assert.Equal(8, drawer.FavoritesEmpty.FontSize); Assert.Equal(0.85, drawer.FavoritesEmpty.Opacity); Assert.Same(Brushes.Blue, drawer.FavoritesEmpty.Foreground);
             Assert.Equal(new Thickness(0,0,0,6), drawer.FavoritesEmpty.Margin);
@@ -68,14 +76,16 @@ public class Sync7bTests
             var hue = Color.FromRgb(100,80,160); drawer.Paint(hue);
             Assert.Equal(ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.Lighten(hue,0.18), Assert.IsType<SolidColorBrush>(drawer.Chevron.Foreground).Color);
             host.MouseMove(new Point(10,20));
-            Assert.True(drawer.Handle.IsPointerOver);
+            Assert.True(drawer.Handle.IsPointerOver); AssertNoChrome();
+            host.MouseDown(new Point(10,20), global::Avalonia.Input.MouseButton.Left); Assert.True(drawer.Handle.IsPressed);
+            await Task.Delay(120); AssertNoChrome();
+            host.MouseUp(new Point(10,20), global::Avalonia.Input.MouseButton.Left); Assert.False(drawer.Handle.IsPressed); AssertNoChrome();
             Assert.Equal(ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.Lighten(hue,0.55), Assert.IsType<SolidColorBrush>(drawer.Chevron.Foreground).Color);
             host.MouseMove(new Point(110,20));
             Assert.True(drawer.Handle.Focus()); Assert.Null(drawer.Handle.FocusAdorner);
             Assert.Equal(ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.Lighten(hue,0.55), Assert.IsType<SolidColorBrush>(drawer.Chevron.Foreground).Color);
         }
         finally { host.Close(); }
-        return Task.CompletedTask;
     });
     [Fact]
     public Task DrawerSharesPinsPushesPageAndClosesOnNavigation() => AvaloniaTestDispatcher.RunAsync(() =>

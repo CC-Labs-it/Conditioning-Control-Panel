@@ -40,9 +40,10 @@ public sealed class PageFavoritesDrawer : Grid
         Handle = new Button { Content = _face, Padding = new Thickness(0), Margin = new Thickness(2,5), FocusAdorner = null,
             HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch,
-            Template = new FuncControlTemplate<Button>((b, _) => new ContentPresenter
+            Theme = new global::Avalonia.Styling.ControlTheme(typeof(Button)) { Setters = { new global::Avalonia.Styling.Setter(Button.TemplateProperty,
+                new FuncControlTemplate<Button>((b, _) => new ContentPresenter
                 { Name = "PART_ContentPresenter", HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch,
-                  [!ContentPresenter.ContentProperty] = b[!ContentControl.ContentProperty] }) };
+                  [!ContentPresenter.ContentProperty] = b[!ContentControl.ContentProperty] })) } } };
         Handle.Bind(ToolTip.TipProperty, Text("tooltip_rail_favorites_drawer"));
         Handle.Bind(AutomationProperties.NameProperty, Text("rail_favorites_drawer"));
         Handle.Click += (_, _) => SetOpen(!IsOpen, true);
