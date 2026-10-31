@@ -818,6 +818,51 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    // WPF ChaosModeService :2434: preserve English and localize the same regen event.
+    [Theory]
+    [InlineData("en", "♥ resistance regrows")]
+    [InlineData("de", "♥ Widerstand regeneriert sich")]
+    [InlineData("es", "♥ la resistencia se regenera")]
+    [InlineData("fr", "♥ la résistance se régénère")]
+    [InlineData("it", "♥ la resistenza si rigenera")]
+    [InlineData("ja", "♥ 抵抗力が回復")]
+    [InlineData("ko", "♥ 저항력 회복")]
+    [InlineData("pt-BR", "♥ a resistência se regenera")]
+    [InlineData("ru", "♥ сопротивление восстанавливается")]
+    [InlineData("zh-CN", "♥ 抵抗力恢复")]
+    public async Task Regen_feed_uses_the_selected_language(string language, string expected)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var localization = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+            string previousLanguage = localization.CurrentLanguage;
+            try
+            {
+                localization.SetLanguage(language);
+                Assert.Equal(expected.Substring(2), localization.Get("chaos_resistance_regrows"));
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                state.ShieldRegenPops = 1;
+                state.StartShields = 3;
+                state.Shields = 2;
+                BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "flash", SizePx = 200, Payload = new FlashPayload() }));
+                Assert.Equal(3, state.Shields);
+                Assert.Contains(expected, state.RecentEvents);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                FreshMeta();
+                localization.SetLanguage(previousLanguage);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF Pulse/Shake (:1672) honour the run's flash and shake toggles; panic clears a live
     /// field without a label, cue or effect (EndChaosMode fires nothing).</summary>
     [Fact]

@@ -5,6 +5,7 @@ using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Serilog;
@@ -368,7 +369,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (++_regenPopCount < _state.ShieldRegenPops) return;
             _regenPopCount = 0;
             _state.Shields += 1;
-            _state.PushEvent("♥ resistance regrows");
+            _state.PushEvent($"♥ {Loc.Get("chaos_resistance_regrows")}");
             Pulse(Color.FromRgb(120, 220, 160), 0.18);   // SHIELD_GAIN_COLOR
         }
 
