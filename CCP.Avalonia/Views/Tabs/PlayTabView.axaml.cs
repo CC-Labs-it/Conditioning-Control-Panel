@@ -23,8 +23,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// <para><b>This file is the host, the painter (WPF MainWindow.PlayTab.cs RefreshPlayCards)
     /// and the shims.</b> Every click WPF answers with <c>ShowTab</c> is the shell's <c>ShowTab</c>
-    /// here. Motion budget: nothing, as on WPF since the 2026-09-18 relayout took the descent hero
-    /// (and its ember canvas) to the launcher.</para>
+    /// here. Section entrances follow MainWindow/MainWindow.ChromeFx.cs:248; no ambient loop
+    /// runs on this wall.</para>
     /// </summary>
     public partial class PlayTabView : UserControl
     {
@@ -79,7 +79,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property == IsVisibleProperty && IsVisible && VisualRoot != null) RefreshPlayCards();
+            if (change.Property == IsVisibleProperty && IsVisible && VisualRoot != null)
+            {
+                RefreshPlayCards();
+                RefreshWebcamStatus();
+            }
         }
 
         internal void RefreshWebcamStatus()
@@ -93,7 +97,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // The pass is spent (or entitlement lands) off the UI thread.
         private void OnIntakePassStateChanged(object? sender, EventArgs e) =>
-            Dispatcher.UIThread.Post(RefreshPlayCards);
+            Dispatcher.UIThread.Post(() => { RefreshPlayCards(); RefreshWebcamStatus(); });
+
+        // The shell owns the one entrance: WPF MainWindow/MainWindow.ChromeFx.cs:248,375.
+        // MainShellWindow.TabTransitions.cs keeps delayed sections at base values until BeginTime.
 
         /// <summary>
         /// Every card hero, WPF's <c>PlayTabView.xaml</c> table restated: the Border that owns the
@@ -104,6 +111,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill),
             ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill),
+            ("PlayBackRoomHeroPlate", "features/backroom.png",          Stretch.UniformToFill),
+            ("PlayDtrhHeroPlate",     "features/dtrh.png",              Stretch.UniformToFill),
+            ("PlayArcademyHeroPlate", "features/arcademy.png",          Stretch.UniformToFill),
+            ("PlayRaceHeroPlate",     "features/race.png",              Stretch.UniformToFill),
+            ("PlayWebAppHeroPlate",   "billboard/webapp.png",           Stretch.UniformToFill),
             ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill),
             ("PlayGazeHeroPlate",     "features/lab_gaze_hero.png",     Stretch.UniformToFill),
             ("PlayFocusHeroPlate",    "features/lab_focusgaze_hero.png",Stretch.UniformToFill),
@@ -181,6 +193,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 // BreakoutAccess.FullAllowed (WPF Services/BackRoom/BreakoutAccess.cs:9).
                 PlayLockBreakout.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+                // WPF MainWindow/MainWindow.PlayTab.cs:130-131, tier presentation only.
+                PlayLockDtrh.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), "dtrh").Allowed;
+                PlayLockArcademy.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_arcademy_title")).Allowed;
+                // WPF MainWindow/MainWindow.PlayTab.cs:132.
+                PlayLockRacingThoughts.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_race_title")).Allowed;
                 PlayLockGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_gaze_minigame")).Allowed;
                 PlayLockFocusGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_focus_gaze")).Allowed;
                 PlayLockRemote.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed;
@@ -192,6 +209,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 bool premium = CoreEntitlement.HasPremium;
                 PlayBadgeRemote.FreeToday = !premium && CoreEntitlement.IsFreeToday("remote");
                 PlayBadgeFyp.FreeToday = !premium && CoreEntitlement.IsFreeToday("fyp");
+
+                // WPF MainWindow/MainWindow.PlayTab.cs:185, an owner gets no stamp.
+                PlayBadgeDtrh.FreeToday = !CoreEntitlement.HasLab && CoreEntitlement.IsFreeToday("dtrh");
 
                 RefreshPlayIntakeCard();
             }
@@ -236,6 +256,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF LaunchPlayChess (PieceByPieceHostService.Launch): free for everyone.</summary>
         private void BtnPlayChess_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.PbpId);
+
+        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame("dtrh");
+
+        private void BtnPlayRacingThoughts_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame("race");
+
+        private void BtnPlayWebApp_Click(object? sender, RoutedEventArgs e) => Owner?.OpenPlayWebApp();
 
         // ---- TOGETHER --------------------------------------------------------------------
 

@@ -330,7 +330,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // WPF MainWindow.TabNavigation.cs:986-994: open the web app, retire the banner beat.
         // No browser -> show the URL, as WPF's BrowserLauncher.OpenUrlOrPrompt does.
-        private async void DoorWebApp_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        private void DoorWebApp_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => OpenPlayWebApp();
+
+        // WPF MainWindow.PlayTab.cs:79, same opener and banner retirement as the rail door.
+        internal async void OpenPlayWebApp()
         {
             const string url = "https://app.cclabs.app";
             try

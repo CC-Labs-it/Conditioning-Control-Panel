@@ -32,7 +32,7 @@ public sealed class NavSectionRailTests
     private static void Run(Action<MainShellWindow> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -139,6 +139,16 @@ public sealed class NavSectionRailTests
     [Fact]
     public void PlayZonePillsScrollToTheirZone_GamesBackToTop() => Run(w =>
     {
+        // The Full-motion section entrance rises sections 10 px through RenderTransform, which
+        // TranslatePoint reads; this test measures scroll targets, so it runs without motion.
+        var motion = CoreSettings.Current.MotionLevel;
+        CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+        try { PlayZonePills(w); }
+        finally { CoreSettings.Current.MotionLevel = motion; }
+    });
+
+    private static void PlayZonePills(MainShellWindow w)
+    {
         w.OpenNavSection(NavSections.Play);
         Dispatcher.UIThread.RunJobs();
         var play = w.Named<ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>("PlayTab")!;
@@ -160,7 +170,7 @@ public sealed class NavSectionRailTests
         Click(w.PageStrip!.PillFor("play")!);   // Games: back to the top
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(0, scroll.Offset.Y);
-    });
+    }
 
     private const double play_ZoneTopGap = ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.ZoneTopGap;
 
