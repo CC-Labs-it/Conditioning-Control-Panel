@@ -1,11 +1,8 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Xml.Linq;
 using Xunit;
-
 namespace CCP.Core.Tests;
-
 // fd910ec33: follow each lost option from a registered page through its host to its control.
 // These source contracts run without a UI platform; CompanionPagesTests exercises live adoption.
 public sealed class CompanionLostOptionsTests
@@ -23,7 +20,6 @@ public sealed class CompanionLostOptionsTests
     private const string Companion = "Views/Controls/Companion/";
     private static void Named(string file, string name) => Assert.Contains(
         XDocument.Parse(Read(file)).Descendants(), e => (string?)e.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml")) == name);
-
     [Theory]
     [InlineData("personality", "Personality", "CompanionPersonalityTab")]
     [InlineData("permissions", "Permissions", "CompanionPermissionsTab")]
@@ -36,7 +32,6 @@ public sealed class CompanionLostOptionsTests
         Assert.Contains($"[\"{key}\"] = \"{host}\"", nav);
         Assert.Contains($"{page}Page>(\"{host}\")?.OnShown(RoomView())", nav);
     }
-
     [Theory]
     [InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "SliderBubbleDurationCompanion")]
     [InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "SliderIdleIntervalCompanion")]
@@ -57,7 +52,6 @@ public sealed class CompanionLostOptionsTests
         Assert.Contains($"CompanionPageHost.Adopt(workshop.Parts.{part}, {host})", Read(Companion + $"Pages/{page}Page.axaml.cs"));
         Named(Companion + $"Runtime/{cell}.axaml", control);
     }
-
     [Fact]
     public void PickerPresetsPromptEditorPermissionsAndLinksHavePageHosts()
     {
@@ -67,4 +61,8 @@ public sealed class CompanionLostOptionsTests
         foreach (var file in new[] { Companion + "Pages/LinksPage.axaml", "Views/Dialogs/CompanionPromptEditorDialog.axaml" }) Named(file, "KnowledgeLinks");
         foreach (var name in new[] { "LstKnowledgeLinks", "BtnAddKnowledgeLink", "BtnRemoveKnowledgeLink" }) Named(Companion + "KnowledgeLinksEditor.axaml", name);
     }
+    [Fact]
+    public void WpfStudioDelegatesItsDraftPolicyToCore() => Assert.Contains(
+        "=> PersonalityStudioDraft.Create(source, activeOverride);",
+        File.ReadAllText(Path.Combine(Root, "ConditioningControlPanel/Services/Companion/PersonalityStudio.cs")));
 }

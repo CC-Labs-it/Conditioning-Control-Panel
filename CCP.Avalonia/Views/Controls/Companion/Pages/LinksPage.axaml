@@ -16,9 +16,9 @@
                 </StackPanel>
             </Border>
             <Border Background="#14FFFFFF" CornerRadius="10" Padding="16">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="{loc:Str companion_page_links_known}" FontSize="15" FontWeight="SemiBold"/>
-                    <TextBlock Text="{loc:Str companion_page_links_known_note}" TextWrapping="Wrap"/>
+                <StackPanel>
+                    <TextBlock x:Name="TxtKnownTitle" Text="{loc:Str companion_page_links_known}" FontSize="15" FontWeight="SemiBold" Foreground="#FF69B4"/>
+                    <TextBlock x:Name="TxtKnownNote" Text="{loc:Str companion_page_links_known_note}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,10"/>
                     <companion:KnowledgeLinksEditor x:Name="KnowledgeLinks" SaveImmediately="True"/>
                 </StackPanel>
             </Border>

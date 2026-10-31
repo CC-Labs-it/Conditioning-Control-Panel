@@ -6,16 +6,13 @@ using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
-
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion;
-
 /// <summary>One links editor for the page (immediate save) and prompt dialog (save on acceptance).</summary>
 public partial class KnowledgeLinksEditor : UserControl
 {
     internal ObservableCollection<KnowledgeBaseLink> Links { get; } = new();
     public bool SaveImmediately { get; set; }
     public event EventHandler? Changed;
-
     public KnowledgeLinksEditor()
     {
         InitializeComponent();
@@ -23,28 +20,23 @@ public partial class KnowledgeLinksEditor : UserControl
         Links.CollectionChanged += (_, _) => UpdateEmpty();
         UpdateEmpty();
     }
-
     public void Load()
     {
         Links.Clear();
         foreach (var link in CoreSettings.Current.GlobalKnowledgeBaseLinks) Links.Add(link);
     }
-
     public void SaveToSettings()
     {
         var target = CoreSettings.Current.GlobalKnowledgeBaseLinks;
         target.Clear();
         foreach (var link in Links) target.Add(link);
     }
-
     private void UpdateEmpty() => TxtKnowledgeLinksEmpty.IsVisible = Links.Count == 0;
-
     private void Commit()
     {
         if (SaveImmediately) { SaveToSettings(); CoreSettings.Save(); }
         Changed?.Invoke(this, EventArgs.Empty);
     }
-
     private async void Add_Click(object? sender, RoutedEventArgs e)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner) return;
@@ -54,7 +46,6 @@ public partial class KnowledgeLinksEditor : UserControl
         Links.Add(link);
         Commit();
     }
-
     private async void Remove_Click(object? sender, RoutedEventArgs e)
     {
         if (LstKnowledgeLinks.SelectedItem is KnowledgeBaseLink link)

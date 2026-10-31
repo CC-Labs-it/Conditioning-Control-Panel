@@ -5,12 +5,10 @@ using Avalonia.Media;
 using Avalonia.VisualTree;
 using Avalonia.LogicalTree;
 using ConditioningControlPanel.Avalonia;
-using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Localization;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -21,9 +19,7 @@ using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class Sync6CompanionLinksTests
 {
     [Fact]
@@ -31,8 +27,12 @@ public sealed class Sync6CompanionLinksTests
     {
         var link = new KnowledgeBaseLink { Title = "Example", Url = "https://example.org" };
         CoreSettings.Current.GlobalKnowledgeBaseLinks.Add(link);
-        var page = new LinksPage();
+        var page = new LinksPage(); page.Resources["TextSecondaryBrush"] = Brushes.Gray;
         page.OnShown(null);
+        Assert.Equal(Color.Parse("#FF69B4"), ((ISolidColorBrush)page.FindControl<TextBlock>("TxtKnownTitle")!.Foreground!).Color);
+        var note = page.FindControl<TextBlock>("TxtKnownNote")!;
+        Assert.Equal(12, note.FontSize); Assert.Equal(new Thickness(0,2,0,10), note.Margin);
+        Assert.Equal(page.FindResource("TextSecondaryBrush"), note.Foreground); page.Resources["TextSecondaryBrush"] = Brushes.Teal; Assert.Equal(Brushes.Teal, note.Foreground); Assert.Equal(0, ((StackPanel)note.Parent!).Spacing);
         var editor = page.FindControl<KnowledgeLinksEditor>("KnowledgeLinks")!;
         Assert.True(editor.SaveImmediately);
         Assert.Same(link, Assert.Single(editor.Links));
@@ -46,7 +46,6 @@ public sealed class Sync6CompanionLinksTests
         Assert.Same(link, Assert.Single(editor.Links));
         Assert.False(editor.FindControl<TextBlock>("TxtKnowledgeLinksEmpty")!.IsVisible);
     });
-
     [Theory]
     [InlineData("save")][InlineData("cancel")][InlineData("closeSave")][InlineData("closeDiscard")][InlineData("closeCancel")]
     public Task DialogButtonsPersistOnlyWhenAccepted(string action) => RunAsync(async () =>
@@ -78,7 +77,6 @@ public sealed class Sync6CompanionLinksTests
             else Assert.Same(link, Assert.Single(CoreSettings.Current.GlobalKnowledgeBaseLinks));
         } finally { foreach (var w in dialog.OwnedWindows.ToArray()) w.Close(); owner.Close(); }
     });
-
     [Fact]
     public void EmptyPopulatedAndLongLinksKeepTheWpfLayout() => Run(() =>
     {
@@ -101,7 +99,6 @@ public sealed class Sync6CompanionLinksTests
         editor.Links.Clear(); Assert.True(empty.IsVisible);
         } finally { owner.Close(); }
     });
-
     [Fact]
     public Task PickerOpensStudioAndRefreshesAfterSaveOrCancel() => RunAsync(async () =>
     {
@@ -130,20 +127,21 @@ public sealed class Sync6CompanionLinksTests
             Assert.Equal(count, CoreSettings.Current.UserPersonalityPresets.Count);
         } finally { foreach (var w in owner.OwnedWindows.ToArray()) w.Close(); owner.Close(); }
     });
-
     [Fact]
     public void PersonalityPageReusesItsLivePickerOnReturn() => Run(() =>
     {
         var page = new PersonalityPage();
         page.OnShown(null);
         var host = page.FindControl<ContentControl>("PickerHost")!;
+        var card = Assert.IsType<Border>(host.Parent);
+        Assert.Equal(new Thickness(16), card.Padding); Assert.Equal(new CornerRadius(10), card.CornerRadius);
+        Assert.Equal(new Thickness(0,0,0,16), card.Margin); Assert.Equal(Color.Parse("#14FFFFFF"), ((ISolidColorBrush)card.Background!).Color);
         var picker = Assert.IsType<CompanionPickerCard>(host.Content);
         Assert.True(picker.IsVisible);
         Assert.NotEmpty(picker.FindControl<ComboBox>("CmbPersonality")!.Items.Cast<object>());
         page.OnShown(null);
         Assert.Same(picker, host.Content);
     });
-
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     private static void Answer(Window owner, string key) { Click(owner.OwnedWindows.OfType<UnsavedChangesDialog>().Single().GetLogicalDescendants().OfType<Button>().Single(b => (b.Content as TextBlock)?.Text == Loc.Get(key))); Dispatcher.UIThread.RunJobs(); }
     private static async Task Until(Func<bool> done) {
