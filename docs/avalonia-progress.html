@@ -5019,6 +5019,72 @@ Tests: ShellLabTabTests (fail-proven x3), MandatoryVideoOverlayTests, WebcamTrac
 <li>Mechanical format move: exceeds the 600-line cap by design. Ledger rows moved: none.</li>
 <li>Not run: the reference-render workflow (it needs Windows renders); its two scripts were run on the converted ledger locally.</li>
 </ul>
+<h2 data-branch="avalonia-port/r72-sync8-audio-duck" data-pr="3164" data-added="7" data-removed="2">avalonia-port/r72-sync8-audio-duck (#3164): +7/-2</h2>
+<ul>
+<li>8e22cf6ea: Linux/Windows duck recovery was already on the reconcile line (DuckRecovery.cs, LibVlcAudio Journal/RetryParked, DuckRecoveryTests). Added the WPF panic unduck (MainWindow.xaml.cs:2101) as PanicSurfaces "audio-duck" after "engine", like StartStop.cs:547, and pinned it in PanicSurfacesTests. The plain Stop unduck is still not wired.</li>
+<li>ad1626943: n/a. The RES-JUMP markers are in Core BugReportService:75; the VirtualQuery collector has no Avalonia hook.</li>
+<li>Fail-proof rcheck 40979077411; rgate 40982916036 GATE-OK.</li>
+</ul>
+<h2 data-branch="avalonia-port/sync9-fixes" data-pr="3165" data-added="142" data-removed="10">avalonia-port/sync9-fixes (#3165): +142/-10</h2>
+<ul>
+<li>JustDrop: a refused sign-in handoff (completion on /api/auth/desktop-session) navigates once to the signed-out page (main 97eca18de; Core JustDropHandoff.IsRefusedHandoff, GameWindow.JustDrop.cs).</li>
+<li>Blink Trainer live preview decodes stills off the UI thread; stale decodes dropped by a sequence number (main cdda883ac, BlinkTrainerTabView).</li>
+<li>n/a: 08bb30ba7 (Avalonia never draws through SubliminalLayer; SubliminalOverlay already honours SubliminalFont), 81bc9fa21 (no web takeover script), cdda883ac software target and BenignTaskFault (no WebView2 host windows, no crash-log task handler).</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-sync8-factory-reset" data-pr="3166" data-added="114" data-removed="7">avalonia-port/r72-sync8-factory-reset (#3166): +114/-7</h2>
+<ul>
+<li>baf86f0ac (reset part): Avalonia factory reset disables the window and leaves off the UI thread through Core <code>Services/Reset/UiThreadExit</code> (5 s backstop) instead of <code>Environment.Exit(0)</code> on it; seal and relaunch delay were already on the line.</li>
+<li>b2317b818: n/a, the sweep with the exact WPF list was already on the reconcile line (<code>FactoryResetSweep.cs:41</code>).</li>
+<li>Tests: <code>UiThreadExitTests</code> (2), order check in <code>FactoryResetSweepTests</code>; fail-proof rcheck 40979108962 red / 40979571862 green; rgate 40982922585 red only on base <code>PresetsFocalFxTests</code>.</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-perf-bench-wpf-compare" data-pr="3167" data-added="443" data-removed="10">avalonia-port/r72-perf-bench-wpf-compare (#3167): +443/-10</h2>
+<ul><li>WPF <code>--perf-bench</code> twin (ccp-perf-bench/1, TerminateProcess exits 0/1/2/3/4, flag-only startup changes), report-only <code>perf-bench-windows</code> job (step-level continue-on-error, 5 published pairs + WPF missing-tab check), <code>perf-compare.py</code> (startup info-only; ×1.10+20 ms / ×1.10 memory).</li>
+<li>First Windows numbers (rgate 40982914646): Avalonia fails working set 1172/1031 MB and 12/48 tab rows, worst ExclusivesTab 423 vs 109 ms; ledgered in docs/avalonia-perf.html.</li></ul>
+<h2 data-branch="avalonia-port/r72-sync8-account-name" data-pr="3168" data-added="226" data-removed="4">avalonia-port/r72-sync8-account-name (#3168): +226/-4</h2>
+<ul>
+<li>Port WPF 5f666d8ef: NeedsDisplayNameRule moved unchanged into CCP.Core (git mv, shared by WPF and Avalonia); the server's needs_display_name wins both ways, a missing flag falls back to an empty name.</li>
+<li>Provider and device-code sign-ins carry the server answer, register/account pass none (WPF LoginDialog.xaml.cs:227/915 vs :430/:614); the shell asks right after sign-in (WPF MainWindow.Login.cs:209) via DisplayNameDialog's required mode, and a save refreshes the quick-login UI and welcome banner.</li>
+<li>Tests: Core NeedsDisplayNameRuleTests, DisplayNameAskTests, LoginDeviceCodeTests.AServerThatNeedsADisplayNameMakesTheShellAskAfterDeviceSignIn; fail-proofs red when broken. rgate 40986951309 GATE-OK.</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-sync8-friends-links" data-pr="3169" data-added="24" data-removed="1">avalonia-port/r72-sync8-friends-links (#3169): +24/-1</h2>
+<ul>
+<li>f37d8a58f (Hypnotube watch links): n/a, already on the 7.2 line (CCP.Core FriendsLandingRules.cs:228, used by CCP.Avalonia LeashTaskHost.cs:211). Added Linux Core coverage Tests/CCP.Core.Tests/FriendsWatchLinkTests.cs (exact video-&lt;id&gt;.html URL, eligibility, id round-trip, invalid ids); goes beyond NOOP on purpose. Fail-proof 40978962099, rcheck 40979429364, rgate 40982916716 GATE-OK.</li>
+<li>Friends watch-delivery opener stays deferred with the corner notices (FriendsLanding.cs:25,235).</li>
+</ul>
+
+<h2 data-branch="avalonia-port/sync8-rows-on-reconcile" data-pr="3170" data-added="25" data-removed="23">avalonia-port/sync8-rows-on-reconcile (#3170): +25/-23</h2>
+<ul>
+<li>Main sync #8 rows 1, 3, 9, 12, 16, 17, 20, 25, 27, 28, 29 closed: their behaviour was already on the 7.2 reconcile line (legend <code>ported (reconcile line sha: file:line)</code>); row 12 n/a by design. Old lanes remote-end, crash-exit, hunt-oct22, scrolller, chaster-leash dropped as superseded.</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-sync8-real-time" data-pr="3171" data-added="23" data-removed="15">avalonia-port/r72-sync8-real-time (#3171): +23/-15</h2>
+<ul>
+<li>a4a5aa43b: Pink filter / spiral quest minutes credit late ticks in full up to the Core RunningTimeCredit 3 min ceiling instead of dropping gaps of 6 s or more (CCP.Avalonia/Platform/OverlayQuestMinutes.cs:18; WPF AchievementService.cs:45-46/:228/:249); OverlayQuestMinutesTests fail-proven.</li>
+<li>Gaze game dwell was already on the reconcile line (3cd113665, GazeMinigameWindow.axaml.cs:1058); GazeMinigameTests now has a 62.5 ms tick case that fails on tick counting. Calibration dwell already in Core; attention check n/a.</li>
+<li>rgate GATE-OK run 40986902597.</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-sync8-ai-gates" data-pr="3172" data-added="20" data-removed="1">avalonia-port/r72-sync8-ai-gates (#3172): +20/-1</h2>
+<ul>
+<li>61eeb4d0d (AI effects obey the user's gates): already on the 7.2 reconcile line (lock card follows the strict setting, panic quiet armed by the panic key, the panic stop list, the panic watchdog and remote panic, StartEngineFromUser). Re-cut ports only the missing part: "Start today's session" ends the post-panic quiet (WPF ProgramsTab.cs:2210-2214, Avalonia MainShellWindow.ProgramsTab.cs:282).</li>
+<li>Behaviour test ProgramsSessionProgressTests.StartTodaysSessionEndsThePostPanicQuiet (proven to fail with the line removed); WPF PanicAftermathTests expects the new Avalonia EndQuiet call site. rgate 40988184272 GATE-OK.</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-sync8-settings-freeze" data-pr="3173" data-added="121" data-removed="5">avalonia-port/r72-sync8-settings-freeze (#3173): +121/-5</h2>
+<ul>
+<li>Exit with a remote controller connected hands its strict lock back (wearer's own kept, panic key per the Lockdown rule) before the final save, and refuses a command already queued (WPF bafe52cfc ReleaseHoldingsForExit): Core <code>RemoteRelay.ReleaseHoldingsForExit</code>, called from <code>App.SaveSettingsOnExit</code>.</li>
+<li>Tests: Core <code>RemoteRelayTests.Exit_releases_the_controllers_strict_lock_keeps_the_wearers_and_refuses_late_commands</code> and <code>Exit_mid_lockdown_keeps_the_forced_strict_lock_and_the_panic_key_off</code>, Avalonia <code>RemoteControlShellTests.Exit_save_hands_back_the_controllers_strict_lock</code>; each shown red with the behaviour removed.</li>
+<li>Already on the reconcile line, ledger set n/a: 8fe2a80a0 (SessionRunner SettleBeforeSnapshot), 9f2065296 (engine stop hook cancels pulses), 36370021a (no ramp timer on this head).</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-sync8-lockdown" data-pr="3174" data-added="28" data-removed="2">avalonia-port/r72-sync8-lockdown (#3174): +28/-2</h2>
+<ul>
+<li>605c451ae and 2b3e44432 were already on the 7.2 reconcile line (c1ae0f6bb via b15840ea6: MainShellWindow.Patreon.cs:161/:115, Lockdown.cs:82, TabNavigation.cs:199); no product code changed.</li>
+<li>Tests: PanicReachHeadTests now checks that reopening the Lockdown tab keeps the padlock off during a run (2b3e44432). The new LockdownVeilTests case checks that the padlock goes down when a run starts after a sign-out and comes back when it ends, through the shell's own lockdown events (605c451ae). Both fail when the behaviour is broken.</li>
+<li>Ledger rows 21 and 22 changed from needs-port to n/a with file:line and commit evidence.</li>
+</ul>
+<h2 data-branch="avalonia-port/r72-test-plan-areas" data-pr="3175" data-added="375" data-removed="41">avalonia-port/r72-test-plan-areas (#3175): +375/-41</h2>
+<ul>
+<li>docs/avalonia-test-plan.html: tester steps for every ledger area (safety, shell/views/windows/dialogs/feature supplements, main syncs 7/8, DTRH feel, retained rows), render-only notes for dead WPF paths; sync 7 steps the build lacks are marked "Not on this build yet" (checked against the Avalonia/Core source).</li>
+<li>.github/scripts/test-plan-coverage.sh + build.yml core-guards step: CI checks that every wired/stub/improved/verified parity row has a step (412 IDs), reading the HTML through avalonia_docs.py.</li>
+</ul>
+
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
 const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();

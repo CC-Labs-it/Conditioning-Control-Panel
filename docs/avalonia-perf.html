@@ -19,7 +19,7 @@ th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockq
 </head>
 <body>
 <h1 id="avalonia-performance-parity">Avalonia performance parity</h1>
-<p>Numbers come from <code>--perf-bench &lt;out.json&gt;</code> (<code>CCP.Avalonia/PerfBench.cs</code>, <code>ConditioningControlPanel/PerfBench.cs</code>), run on the real windowing platform, never headless.
+<p>Numbers come from <code>--perf-bench &lt;out.json&gt;</code> (<code>CCP.Avalonia/PerfBench.cs</code>), run on the real windowing platform, never headless.
 Decision and threshold: <code>docs/avalonia-decisions.html</code> (2026-10-23). A row passes when the Avalonia median is ≤ WPF median × 1.10 + 20 ms
 (memory: ≤ WPF × 1.10), both heads measured back to back on the same <code>windows-latest</code> runner. Linux is information only. A row
 with no WPF number is a gap, not a pass.</p>
@@ -27,165 +27,100 @@ with no WPF number is a gap, not a pass.</p>
 <ul>
 <li><strong>Startup</strong>: a <code>Stopwatch</code> started on the first line of <code>Main</code>, stopped when the render thread has drawn the first frame after
 the shell's <code>Opened</code>. The shell is built straight after <code>SetupWithoutStarting</code>: no splash, no account/session seeding, no
-launcher routing. WPF starts the clock on the first line of its custom <code>Main</code>, runs its normal service startup, then shows
-the real main window directly, timed with <code>CompositionTarget.Rendering</code> and sampled after that Render-priority pass returns.
-Splash, launcher routing and modal onboarding are bypassed only under the flag; the WPF startup ladder is held and the sandbox is an
-onboarded offline user. <code>startup_since_process_ms</code> adds the runtime's own start-up (process start time to the same frame).
-<strong>Startup is informational, not a gate:</strong> the scopes differ (WPF includes its full service init, Avalonia does not), so
-<code>perf-compare.py</code> reports both startup rows as <code>info</code> and never fails on them.</li>
+launcher routing. <code>startup_since_process_ms</code> adds the runtime's own start-up (process start time to the same frame).</li>
 <li><strong>Tab switch</strong>: <code>ShowTab</code> (the call every rail handler makes) to the next rendered frame, for every panel in
-<code>NavCheck.TabPanels</code>, 21 cycles with the first discarded; median (middle pair averaged) and p95 (nearest rank) per tab. Frame done differs slightly: Avalonia waits for <code>RequestCompositionBatchCommitAsync().Rendered</code> (render thread included), WPF stops at a Background hop after <code>CompositionTarget.Rendering</code> (UI thread committed, before the render thread presents), so tab rows lean slightly against Avalonia; the 20 ms slack is meant to absorb it.</li>
+<code>NavCheck.TabPanels</code>, 21 cycles with the first discarded; median (middle pair averaged) and p95 (nearest rank) per tab.</li>
 <li><strong>Memory</strong>: working set after the cycles and two <code>GC.Collect</code> + <code>WaitForPendingFinalizers</code> passes.</li>
-<li>Exit 0 with the JSON written; 3 when a tab is missing or does not show; 4 on a frame timeout (30 s). WPF also exits 2 with usage on a bad command line or a non-absolute <code>CCP_USERDATA_DIR</code>, and every WPF benchmark exit goes through <code>PerfBench.Exit</code> (flush, then <code>TerminateProcess</code>), because <code>Environment.Exit</code> crashes WPF in ProcessExit and loses the code.</li>
+<li>Exit 0 with the JSON written; 3 when a tab is missing or does not show; 4 on a frame timeout (30 s).</li>
 </ul>
 <p>JSON shape <code>ccp-perf-bench/1</code> (the WPF twin writes the same shape, <code>head: &quot;wpf&quot;</code>):</p>
 <pre><code class="language-json">{ &quot;schema&quot;: &quot;ccp-perf-bench/1&quot;, &quot;head&quot;: &quot;avalonia&quot;, &quot;os&quot;: &quot;...&quot;, &quot;runtime&quot;: &quot;...&quot;,
   &quot;startup_ms&quot;: 0, &quot;startup_since_process_ms&quot;: 0, &quot;working_set_mb&quot;: 0, &quot;cycles&quot;: 20,
   &quot;tabs&quot;: [ { &quot;tab&quot;: &quot;SettingsTab&quot;, &quot;median_ms&quot;: 0, &quot;p95_ms&quot;: 0 } ] }
 </code></pre>
-<p>CI: <code>perf-bench-linux</code> (xvfb, artifact <code>perf-bench-linux</code>) and <code>perf-bench-windows</code> (artifact <code>perf-bench-windows</code>)
-in <code>.github/workflows/build.yml</code>. Windows publishes both heads as they ship (Avalonia win-x64 profile, WPF ReadyToRun single-file),
-runs five Avalonia/WPF pairs sequentially on the same runner with a fresh <code>CCP_USERDATA_DIR</code> per process (four-minute outer timeout each),
-and checks that a WPF run with a missing tab exits 3 without JSON. The job is report-only until three consecutive stable runs have been reviewed.</p>
-<p>Compare reports (Python stdlib only): <code>python3 .github/scripts/perf-compare.py --self-test</code>, then
-<code>python3 .github/scripts/perf-compare.py --avalonia 'perf-results/avalonia-*.json' --wpf 'perf-results/wpf-*.json'</code>.
-It takes each metric's median across runs (per-tab median and p95 too), applies the rule above, prints a Markdown table and exits 1 on a
-regression, missing reports, missing/extra tabs or invalid measurements. Tab keys are <code>NavCheck.TabPanels</code>; WPF's legacy
-<code>ExclusivesTab</code> goes through <code>ShowTab(&quot;exclusives&quot;)</code> to the lazy Premium page, whose visibility is checked.</p>
+<p>CI: job <code>perf-bench-linux</code> in <code>.github/workflows/build.yml</code> (xvfb, report-only, artifact <code>perf-bench-linux</code>).</p>
 <h2 id="results">Results</h2>
 
 <table>
 <tr><th>metric</th><th>Linux Avalonia</th><th>Windows Avalonia</th><th>Windows WPF</th><th>verdict</th></tr>
-<tr><td>startup (ms)</td><td>see ledger</td><td>5124 (info: scope differs)</td><td>4268</td><td>info</td></tr>
-<tr><td>tab switch median, worst tab (ms)</td><td>see ledger</td><td>423.0 (ExclusivesTab)</td><td>171.4 (AchievementsTab; ExclusivesTab 108.7)</td><td>FAIL</td></tr>
-<tr><td>tab switch p95, worst tab (ms)</td><td>see ledger</td><td>492.6 (ExclusivesTab)</td><td>223.5 (AchievementsTab; ExclusivesTab 123.8)</td><td>FAIL</td></tr>
-<tr><td>working set after GC (MB)</td><td>see ledger</td><td>1172.4</td><td>1030.8</td><td>FAIL (limit 1133.9)</td></tr>
+<tr><td>startup (ms)</td><td>see ledger</td><td>pending perf-bench-wpf-compare</td><td>pending perf-bench-wpf-compare</td><td>gap</td></tr>
+<tr><td>tab switch median, worst tab (ms)</td><td>see ledger</td><td>pending perf-bench-wpf-compare</td><td>pending perf-bench-wpf-compare</td><td>gap</td></tr>
+<tr><td>tab switch p95, worst tab (ms)</td><td>see ledger</td><td>pending perf-bench-wpf-compare</td><td>pending perf-bench-wpf-compare</td><td>gap</td></tr>
+<tr><td>working set after GC (MB)</td><td>see ledger</td><td>pending perf-bench-wpf-compare</td><td>pending perf-bench-wpf-compare</td><td>gap</td></tr>
 </table>
-<h2 id="startup-audit">Startup audit (cloud r72)</h2>
-<p>Base <code>abe6c1925e80fba227cb7cbad903c037625705b2</code>. The benchmark's
-Avalonia path is Program.Main → logging/phrase pools → font configuration/App.Initialize
-(language table) → MainShellWindow XAML/constructor → Opened → render-thread acknowledgement.
-It does not execute App.StartDesktop; changes to that method benefit normal launches, not this startup metric.
-WPF's benchmark executes its desktop service startup before MainWindow construction.</p>
+<h2 id="startup-audit">Startup deferral and review reconciliation</h2>
+<p>The final lane tree matches <code>74ac6ce3d5e0ae082c2871c00e864943e15aa2ad</code> outside
+seven startup files. WPF, Core, all ten language files, Rain assets/web modules and original tests
+are restored byte-for-byte. This replaces the earlier inherited-diff exemption: the final full diff
+must be under 600 changed lines. History is retained by one corrective fast-forward commit.</p>
 <ul>
-<li>ExclusivesTabView eagerly built the hidden shelf and decoded its spotlight/backdrop. WPF's
-<code>MainWindow.Exclusives.cs:EnsureExclusivesBuilt</code> builds on navigation. The Avalonia
-catalogue/backdrop now load on first visibility; entitlement and language changes still refresh a shown
-catalogue, and hidden mod changes invalidate the backdrop for the next visit.</li>
-<li>StudioTabView still constructs its module controls, subscribes to settings and applies safety locks
-before input. Its hidden rack art/door image decode now waits for visibility. Mod changes invalidate
-that art, and first arrival loads the current mod before rendering the tab.</li>
-<li>Normal desktop startup now schedules Discord presence construction, Linux dependency diagnostics
-and updater startup after a render-thread acknowledgement, rather than before the shell or via an
-ordinary dispatcher Post that can run before render. Launcher/game routing uses that visible window;
-StartMinimized-to-tray has no window frame and runs the optional work after Opened routing returns.
-Closing the shell cancels work that has not started.</li>
-<li>Program logging and phrase custody, localization and the first frame's fonts remain eager.
-The font collection owns its stream during emoji copies to avoid the documented native crash;
-this patch does not alter font lifetime or the presentation backend.</li>
-<li>Settings/secrets migration, session/lockdown/remote recovery, age/first-run gates and panic setup
-remain in their existing order. The passive StartupLadder constructs no service catalogue; its timers
-start only when a surface is held. WebAssetServer is a shared lazy instance, first requested by a web
-surface, rather than an App startup server.</li>
-<li>LibVLC is still initialized before normal shell input, including duck-journal recovery and audio
-seeding. WPF's VideoService preloads in the background; simply moving Avalonia's audio block would
-leave early playback without CoreAudio and skip the recovery-before-duck ordering. That requires a
-separate on-demand audio readiness contract. Existing account/session setup and network operations
-whose results feed gates remain ordered before the shell.</li>
+<li>ExclusivesTabView defers its hidden shelf, spotlight and backdrop until navigation, following
+WPF <code>MainWindow.Exclusives.cs:EnsureExclusivesBuilt</code>. Studio defers hidden rack art;
+its module controls, settings subscriptions and safety locks remain eager. Hidden mod/language/
+entitlement changes are applied on the next visit.</li>
+<li>Normal desktop startup defers Discord presence, dependency diagnostics and updater work until
+render acknowledgement. AfterFirstFrame races that acknowledgement against surface hide/close and
+shell closure; a disappearing launcher/game selects a replacement or the no-frame tray fallback.
+Work runs once, and shell closure cancels pending startup. WPF initializes presence and its updater
+independently of rendering; loss of a launcher must not suppress either service permanently.</li>
+<li>Program logging, phrase custody, localization/fonts, settings/secrets migration, session/lockdown/
+remote recovery, age gates and panic setup retain their order. LibVLC and duck-journal recovery remain
+before normal shell input; the web server remains lazy. StartupLadder's passive queue is unchanged.</li>
 </ul>
-<p>The startup regression guard in <code>PerfBenchTests.HiddenCataloguesDoNotLoadArtAtStartup</code>
-asserts that shell construction and Loaded leave the hidden shelf empty and Studio art unloaded,
-then asserts that navigating to each tab performs the work. Production font setup makes the test
-independent of test order on Linux. No WPF source or benchmark thresholds changed.</p>
-<h3>Cloud validation, 2026-10-31</h3>
-<p>Debian 13, Xvfb 1920×1080×24, .NET 10 SDK 10.0.100/runtime 10.0.14,
-framework-dependent Release builds. Three sequential base/changed pairs, fresh CCP_USERDATA_DIR
-and XDG_CONFIG_HOME per process, no concurrent builds or tests. The unchanged benchmark used
-<code>--perf-bench out.json --perf-bench-tabs SettingsTab</code>; the tab restriction shortens the
-post-startup cycles without changing the startup path.</p>
-<table>
-<tr><th>startup_ms</th><th>base abe6c1925</th><th>changed</th></tr>
-<tr><td>pair 1</td><td>8030.4</td><td>6760.0</td></tr>
-<tr><td>pair 2</td><td>7903.6</td><td>7344.7</td></tr>
-<tr><td>pair 3</td><td>7858.7</td><td>6939.2</td></tr>
-<tr><td>median</td><td>7903.6</td><td>6939.2 (−12.2%)</td></tr>
-</table>
-<p>A final binary check after the hidden dirty-state and one-shot tray-restore fixes exited 0 at
-7766.9 ms. Those fixes do not add pre-frame work, but this sample shows the size of local timing
-variation; do not extrapolate the paired median reduction to the Windows bench.</p>
-<p>Earlier full-tab exploratory runs overlapped compilation/tests: startup 7696.4 → 8473.4 ms,
-working set 890.9 → 1319.5 MB, Exclusives median 768.71 → 1271.37 ms. These contended runs
-are retained here as observations, not evidence of an improvement or a stable regression. The
-sequential startup-only pairs above are the startup comparison. Neither Linux series proves
-Windows parity; the published Windows benchmark must be rerun before claiming any row meets WPF.</p>
-<pre><code># SDK installed locally under /tmp/ccp-dotnet; PATH includes that directory.
-dotnet build CCP.Avalonia/CCP.Avalonia.csproj -c Release
-# 0 Error(s) (existing compiler/XAML warnings)
+<p>The Avalonia benchmark builds the shell directly and does not run normal desktop service startup;
+it measures the hidden-art changes, not the service deferrals. Earlier Linux measurements were on
+<code>abe6c1925</code> and its startup patch, not this reconciled tree: three paired startup medians
+7903.6 → 6939.2 ms, final-binary sample 7766.9 ms. Contended exploratory full-tab runs were slower
+(7696.4 → 8473.4 ms; memory 890.9 → 1319.5 MB; Exclusives median 768.71 → 1271.37 ms).
+These are historical observations, not a performance result for this revision or proof of Windows parity.</p>
+<p>AfterFirstFrameTests exercises real window events/dispatcher hops with controlled render acknowledgements:
+render ordering, once-only tray restore, shell-close cancellation and launcher close/hide with replacement
+or no-frame fallback. PerfBenchTests also verifies hidden art stays unloaded through shell Loaded and
+loads on navigation. The lifecycle fail-proof disables the surface close/hide subscriptions temporarily;
+all four recovery cases must fail with TimeoutException before restoring and rebuilding the fixed source.</p>
+<h3 id="reconciliation-validation">Reconciliation validation</h3>
+<pre><code># dotnet is /tmp/ccp-dotnet/dotnet (SDK 10.0.403, runtime 10.0.14).
 dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
-  --filter 'FullyQualifiedName~PerfBenchTests|FullyQualifiedName~Exclusives|FullyQualifiedName~Studio|FullyQualifiedName~DiscordRichPresenceTests'
-# Passed! Failed: 0, Passed: 30, Skipped: 0, Total: 30
-dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --no-build \
-  --filter 'FullyQualifiedName~PerfBenchTests'
-# Test Run Successful. Total tests: 3, Passed: 3
-bash .github/scripts/core-guards.sh
-# All Core guards passed.
-DISPLAY=:99 CCP_USERDATA_DIR=&lt;fresh-dir&gt; XDG_CONFIG_HOME=&lt;fresh-dir&gt; \
-  dotnet CCP.Avalonia/bin/Release/net10.0/CCP.Avalonia.dll \
-  --perf-bench out.json --perf-bench-tabs SettingsTab
-# All six sequential samples exited 0 and wrote ccp-perf-bench/1 JSON.
-# --perf-bench missing.json --perf-bench-tabs SettingsTab,NoSuchTab:
-# exit 3; perf-bench: tab NoSuchTab is missing or did not show; no JSON written.
-CCP_USERDATA_DIR=&lt;fresh-dir&gt; dotnet CCP.Avalonia/bin/Release/net10.0/CCP.Avalonia.dll --nav-check
-# Both exact base and changed: exit 1, nav-check: 2 failure(s).
-# FAIL OpenDeviceSettings reveals Devices (saw data)
-# FAIL an unknown section still opens the door and changes nothing
-</code></pre>
-<h3 id="startup-review">Review follow-up to 51ae9e3e4</h3>
-<p>Both P2 findings accepted. AfterFirstFrame now races the render acknowledgement against selected-window
-hide/close and shell closure, detaches handlers, and reselects a live window or uses the no-frame fallback.
-The one-shot completion task also finishes when shell closure cancels startup. WPF creates presence at
-<code>App.xaml.cs:3302</code> and starts its background update check at <code>:3548</code> independently
-of renderer callbacks; losing a launcher must not permanently suppress these services.</p>
-<p><code>AfterFirstFrameTests</code> substitutes only the render acknowledgement and surface selector;
-real windows, visibility/close events and dispatcher hops prove ordering, once-only tray restore,
-shell-close cancellation, and launcher hide/close with replacement or no-frame fallback. The fail-proof
-removes both disappearance subscriptions temporarily: all four recovery cases must fail with a timeout.
-The fixed source is restored before the passing run. No existing assertion or benchmark threshold changed.</p>
-<p>The ten language JSON files parse and are byte-for-byte unchanged from the reviewed commit; no new
-user-facing strings. The requested <code>74ac6ce3d</code> comparison already had 747 added / 6845 removed
-lines across 103 files at 51ae9e3e4, including inherited non-startup changes. The 600-line total cannot be
-met by this fast-forward follow-up without unrelated reversions. WPF and Core sources remain untouched
-by this follow-up; startup-only totals are reported separately.</p>
-<pre><code>DOTNET_CLI_UI_LANGUAGE=en dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
+  --filter 'FullyQualifiedName~AfterFirstFrameTests|FullyQualifiedName~PerfBenchTests|FullyQualifiedName~Exclusives|FullyQualifiedName~Studio'
+# exit 0: Passed: 31, Failed: 0; includes the six lifecycle cases and three startup guards.
+dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
   --filter 'FullyQualifiedName~AfterFirstFrameTests|FullyQualifiedName~PerfBenchTests'
-# exit 0: Passed! Failed: 0, Passed: 9, Skipped: 0, Total: 9
-# Fail-proof: disable the two RenderOrDisappear surface subscriptions, then run:
-dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
-  --filter FullyQualifiedName~DisappearingLauncherReselectsOrUsesNoFrameFallback
-# expected exit 1: Failed: 4, Passed: 0, Total: 4; TimeoutException in all four cases
-# restore the subscriptions, then rebuild and repeat the passing focused command above
-dotnet build CCP.Core/CCP.Core.csproj -c Release --no-restore
-# exit 0: 0 Warning(s), 0 Error(s)
+# final restored-source rerun: exit 0, Passed: 9, Failed: 0.
+# Lifecycle fail-proof: temporarily disable surface close/hide subscriptions, filter the four recovery cases.
+# expected exit 1: Failed: 4, Passed: 0, TimeoutException; fixed source restored before final rebuild.
+node --test Assets/web/rain-wardrobe/tests/*.test.mjs
+# exit 0: tests 21, pass 21, fail 0 (restored bake/shop tests).
+# viewer import graph: 13 local modules resolve; deleting the bridge in an isolated copy fails with exit 1.
+# Bridge import/protocol probe: viewer exports, lock check and rain-ready/ready handshake PASS.
+dotnet build Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release \
+  -p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false
+# exit 0: 0 Error(s); restored WPF and original tests compile. Windows tests cannot execute on Linux.
 bash .github/scripts/core-guards.sh
 # exit 0: All Core guards passed.
-# JSON parse + git-show byte comparison: PASS all 10 language files unchanged from 51ae9e3e4.
+git diff --exit-code 74ac6ce3d -- ConditioningControlPanel CCP.Core Assets Tests/ConditioningControlPanel.Tests .github
+# exit 0: byte-identical trees. All ten language JSON files also parse; no keys or translations changed.
+DISPLAY=:101 CCP_USERDATA_DIR=$(mktemp -d) XDG_CONFIG_HOME=$(mktemp -d) \
+  dotnet CCP.Avalonia/bin/Release/net10.0/CCP.Avalonia.dll \
+  --perf-bench /tmp/ccp-recut-startup.json --perf-bench-tabs SettingsTab
+# exit 0: ccp-perf-bench/1, startup_ms 6443.4 (one informational sample, not a paired comparison).
 </code></pre>
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
 <ul>
-<li>2026-10-31, cloud Debian 13, .NET SDK 10.0.403 / runtime 10.0.14, follow-up to 51ae9e3e4:
-focused tests: 9 passed / 0 failed; fail-proof mutation: 4 expected timeout failures (exit 1),
-then fixed source restored and rebuilt; ten language JSON checks and Core guards passed.
-Evidence: <code>AfterFirstFrameTests.cs</code>, <code>/tmp/ccp-review-fail-proof.log</code> and
-<code>/tmp/ccp-review-final-tests.log</code>. No performance benchmark rerun for this lifecycle fix;
-previous timings remain historical observations, and Windows parity remains unverified.</li>
+<li>2026-10-31, cloud Debian 13, follow-up to c69b41db2: reconciled the lane to 74ac6ce3d while retaining
+only startup changes. Restored WPF V1/V2/Rain/wardrobe features, settings, assets and original tests;
+restored the wardrobe host bridge and dependencies. Tests: 31/31 affected Avalonia, final startup guards
+9/9, wardrobe bake/shop 21/21; lifecycle fail-proof 4 expected timeout failures then restored/rebuilt,
+missing-bridge fail-proof exit 1 then live import/protocol probe PASS. WPF/original tests compile with
+0 errors (not executed on Linux); Core guards and ten-language/baseline identity checks PASS.
+Xvfb 1920×1080×24, .NET SDK 10.0.403/runtime 10.0.14, fresh-profile Release startup-only sample:
+<strong>6443.4 ms</strong>, exit 0, evidence <code>/tmp/ccp-recut-startup.json</code>.
+Initial attempt used a defunct display and aborted before measurement (XOpenDisplay failed); the sample
+uses a fresh Xvfb server. One sample with no paired 74ac6ce3d baseline: no improvement or Windows
+parity claim. Earlier timings remain historical only.</li>
 <li>2026-10-23, CI ubuntu-latest under xvfb (job perf-bench-linux, run 39869706826, snapshot 10ae4e753), Release, sandboxed profile:
 startup 12860 ms, working set 909 MB, tab switch median 108-237 ms on 23 tabs, <strong>ExclusivesTab 801 ms median / 821 ms p95</strong>.
 Artifact <code>perf-bench-linux</code>.</li>
-<li>2026-10-30, CI windows-latest (job perf-bench-windows, rgate run 40982914646, snapshot 4fea68912 of avalonia-port/r72-perf-bench-wpf-compare), published Release, 5 Avalonia/WPF pairs, medians:
-startup (info) Avalonia 5124 / WPF 4268 ms; working set 1172.4 / 1030.8 MB (FAIL); 12 of 48 tab rows FAIL: SettingsTab 99.7/18.4, ProgramsTab 64.3/31.1,
-EnhancementsTab 72.6/44.4, AvailableSubjectsTab 64.0/12.9, BlinkTrainerTab 65.1/24.3, <strong>ExclusivesTab 423.0/108.7 ms median</strong> (p95 also DiscordTab, RemoteControlTab).
-WPF missing-tab run exited 3 with no JSON. One run; report-only until three stable runs are reviewed. Artifact <code>perf-bench-windows</code>.</li>
 </ul>
 
 <script>
