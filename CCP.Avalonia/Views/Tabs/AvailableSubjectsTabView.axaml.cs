@@ -6,6 +6,8 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Games;
+using Serilog;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Lobby;
@@ -94,8 +96,23 @@ public partial class AvailableSubjectsTabView : UserControl
         RemoteHostLock.IsVisible = !gates.CanHost(LobbyGame.Remote);
         BtnBecomeASubject.Opacity = gates.CanHost(LobbyGame.Remote) ? 1 : 0.7;
         TxtBecomeASubjectSubtitle.IsVisible = gates.SignedIn && !gates.CanHost(LobbyGame.Remote);
-        // ponytail: Chess/Goon host and all row Join flows wait for the Lobby service/hosts in the b-lane.
+        // ponytail: Chess/Goon host and row Join flows wait for the Lobby service/hosts in the b-lane.
         // Keep those destinations disabled instead of constructing a made-up game or remote claim flow.
+    }
+
+    private void LobbyRow_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: LobbyCardView view }) WatchRow(view.Row);
+    }
+
+    internal void WatchRow(LobbyRow row)
+    {
+        if (!row.CanWatch || row.Game != LobbyGame.Chess || string.IsNullOrEmpty(row.Key)) return;
+        if (TopLevel.GetTopLevel(this) is not MainShellWindow shell) return;
+        var gates = ReadGates();
+        if (!gates.SignedIn || !gates.CanJoin(LobbyGame.Chess)) { _ = shell.OpenUnifiedLoginDialog(); return; }
+        try { GameWindow.HostSpectate(row.Key); }
+        catch (Exception ex) { Log.Warning(ex, "[Lobby] watch failed"); }
     }
 
     private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e)
@@ -112,6 +129,7 @@ public sealed class LobbyCardView
 {
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {
+        Row = row;
         Title = LobbyPageRules.Title(row, Loc.Get);
         Line = LobbyPageRules.Line(Loc.Get(LobbyPageRules.LabelKey(row.Game)), LobbySummary.For(row, Loc.Get));
         Friend = row.Friend;
@@ -120,6 +138,8 @@ public sealed class LobbyCardView
         ButtonText = Loc.Get(row.CanJoin ? "lobby_btn_join" : "lobby_btn_watch");
         ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
     }
+    public LobbyRow Row { get; }
+    public bool CanWatch => Row.CanWatch && Row.Game == LobbyGame.Chess && !string.IsNullOrEmpty(Row.Key);
     public string Title { get; }
     public string Line { get; }
     public bool Friend { get; }

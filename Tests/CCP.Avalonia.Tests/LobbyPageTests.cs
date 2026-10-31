@@ -1,7 +1,10 @@
 using System;
 using System.Linq;
 using Avalonia;
+using Avalonia.Skia;
+using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -168,10 +171,45 @@ public sealed class LobbyPageTests
         }
     });
 
+    [Fact]
+    public void WatchRowRequiresSignInAndChessGate() => Run(() =>
+    {
+        var shell = new MainShellWindow();
+        shell.Show();
+        try
+        {
+            var page = Named<AvailableSubjectsTabView>(shell, "AvailableSubjectsTab");
+            var row = new LobbyRow { Game = LobbyGame.Chess, State = LobbyRowState.Playing,
+                Key = "m_" + new string('a', 16), CanWatch = true, Watchers = 3 };
+            var card = new LobbyCardView(row, LobbyGates.From(false, false, false));
+            Assert.True(card.CanWatch);
+            Assert.Equal(Loc.Get("lobby_btn_watch"), card.ButtonText);
+            Assert.Contains(Loc.GetF("lobby_watchers", 3), card.Line);
+            Assert.False(new LobbyCardView(row with { CanWatch = false }, LobbyGates.From(true, false, false)).CanWatch);
+            foreach (var gates in new[] { LobbyGates.From(false, false, false), LobbyGates.From(true, false, false) with { ChessJoin = false } })
+            {
+                page.ReadGates = () => gates;
+                shell.ShowTab("availablesubjects");
+                page.SelectColumn(1);
+                page.PaintSnapshot(new LobbySnapshot(Array.Empty<LobbyRow>(), new[] { row }, Array.Empty<LobbyRow>(), gates.SignedIn), gates);
+                Dispatcher.UIThread.RunJobs();
+                shell.UpdateLayout();
+                var watch = Named<ItemsControl>(page, "LobbyPlayingList").GetVisualDescendants().OfType<Button>().Single();
+                Assert.True(watch.IsEnabled);
+                watch.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Contains(shell.OwnedWindows, w => w is LoginDialog);
+                foreach (var child in shell.OwnedWindows.ToArray()) child.Close();
+            }
+        }
+        finally { shell.Close(); }
+    });
+
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         body();
