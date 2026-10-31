@@ -61,6 +61,85 @@ regression, missing reports, missing/extra tabs or invalid measurements. Tab key
 <tr><td>tab switch p95, worst tab (ms)</td><td>see ledger</td><td>492.6 (ExclusivesTab)</td><td>223.5 (AchievementsTab; ExclusivesTab 123.8)</td><td>FAIL</td></tr>
 <tr><td>working set after GC (MB)</td><td>see ledger</td><td>1172.4</td><td>1030.8</td><td>FAIL (limit 1133.9)</td></tr>
 </table>
+<h2 id="startup-audit">Startup audit (cloud r72)</h2>
+<p>Base <code>abe6c1925e80fba227cb7cbad903c037625705b2</code>. The benchmark's
+Avalonia path is Program.Main → logging/phrase pools → font configuration/App.Initialize
+(language table) → MainShellWindow XAML/constructor → Opened → render-thread acknowledgement.
+It does not execute App.StartDesktop; changes to that method benefit normal launches, not this startup metric.
+WPF's benchmark executes its desktop service startup before MainWindow construction.</p>
+<ul>
+<li>ExclusivesTabView eagerly built the hidden shelf and decoded its spotlight/backdrop. WPF's
+<code>MainWindow.Exclusives.cs:EnsureExclusivesBuilt</code> builds on navigation. The Avalonia
+catalogue/backdrop now load on first visibility; entitlement and language changes still refresh a shown
+catalogue, and hidden mod changes invalidate the backdrop for the next visit.</li>
+<li>StudioTabView still constructs its module controls, subscribes to settings and applies safety locks
+before input. Its hidden rack art/door image decode now waits for visibility. Mod changes invalidate
+that art, and first arrival loads the current mod before rendering the tab.</li>
+<li>Normal desktop startup now schedules Discord presence construction, Linux dependency diagnostics
+and updater startup after a render-thread acknowledgement, rather than before the shell or via an
+ordinary dispatcher Post that can run before render. Launcher/game routing uses that visible window;
+StartMinimized-to-tray has no window frame and runs the optional work after Opened routing returns.
+Closing the shell cancels work that has not started.</li>
+<li>Program logging and phrase custody, localization and the first frame's fonts remain eager.
+The font collection owns its stream during emoji copies to avoid the documented native crash;
+this patch does not alter font lifetime or the presentation backend.</li>
+<li>Settings/secrets migration, session/lockdown/remote recovery, age/first-run gates and panic setup
+remain in their existing order. The passive StartupLadder constructs no service catalogue; its timers
+start only when a surface is held. WebAssetServer is a shared lazy instance, first requested by a web
+surface, rather than an App startup server.</li>
+<li>LibVLC is still initialized before normal shell input, including duck-journal recovery and audio
+seeding. WPF's VideoService preloads in the background; simply moving Avalonia's audio block would
+leave early playback without CoreAudio and skip the recovery-before-duck ordering. That requires a
+separate on-demand audio readiness contract. Existing account/session setup and network operations
+whose results feed gates remain ordered before the shell.</li>
+</ul>
+<p>The startup regression guard in <code>PerfBenchTests.HiddenCataloguesDoNotLoadArtAtStartup</code>
+asserts that shell construction and Loaded leave the hidden shelf empty and Studio art unloaded,
+then asserts that navigating to each tab performs the work. Production font setup makes the test
+independent of test order on Linux. No WPF source or benchmark thresholds changed.</p>
+<h3>Cloud validation, 2026-10-31</h3>
+<p>Debian 13, Xvfb 1920×1080×24, .NET 10 SDK 10.0.100/runtime 10.0.14,
+framework-dependent Release builds. Three sequential base/changed pairs, fresh CCP_USERDATA_DIR
+and XDG_CONFIG_HOME per process, no concurrent builds or tests. The unchanged benchmark used
+<code>--perf-bench out.json --perf-bench-tabs SettingsTab</code>; the tab restriction shortens the
+post-startup cycles without changing the startup path.</p>
+<table>
+<tr><th>startup_ms</th><th>base abe6c1925</th><th>changed</th></tr>
+<tr><td>pair 1</td><td>8030.4</td><td>6760.0</td></tr>
+<tr><td>pair 2</td><td>7903.6</td><td>7344.7</td></tr>
+<tr><td>pair 3</td><td>7858.7</td><td>6939.2</td></tr>
+<tr><td>median</td><td>7903.6</td><td>6939.2 (−12.2%)</td></tr>
+</table>
+<p>A final binary check after the hidden dirty-state and one-shot tray-restore fixes exited 0 at
+7766.9 ms. Those fixes do not add pre-frame work, but this sample shows the size of local timing
+variation; do not extrapolate the paired median reduction to the Windows bench.</p>
+<p>Earlier full-tab exploratory runs overlapped compilation/tests: startup 7696.4 → 8473.4 ms,
+working set 890.9 → 1319.5 MB, Exclusives median 768.71 → 1271.37 ms. These contended runs
+are retained here as observations, not evidence of an improvement or a stable regression. The
+sequential startup-only pairs above are the startup comparison. Neither Linux series proves
+Windows parity; the published Windows benchmark must be rerun before claiming any row meets WPF.</p>
+<pre><code># SDK installed locally under /tmp/ccp-dotnet; PATH includes that directory.
+dotnet build CCP.Avalonia/CCP.Avalonia.csproj -c Release
+# 0 Error(s) (existing compiler/XAML warnings)
+dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release \
+  --filter 'FullyQualifiedName~PerfBenchTests|FullyQualifiedName~Exclusives|FullyQualifiedName~Studio|FullyQualifiedName~DiscordRichPresenceTests'
+# Passed! Failed: 0, Passed: 30, Skipped: 0, Total: 30
+dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --no-build \
+  --filter 'FullyQualifiedName~PerfBenchTests'
+# Test Run Successful. Total tests: 3, Passed: 3
+bash .github/scripts/core-guards.sh
+# All Core guards passed.
+DISPLAY=:99 CCP_USERDATA_DIR=&lt;fresh-dir&gt; XDG_CONFIG_HOME=&lt;fresh-dir&gt; \
+  dotnet CCP.Avalonia/bin/Release/net10.0/CCP.Avalonia.dll \
+  --perf-bench out.json --perf-bench-tabs SettingsTab
+# All six sequential samples exited 0 and wrote ccp-perf-bench/1 JSON.
+# --perf-bench missing.json --perf-bench-tabs SettingsTab,NoSuchTab:
+# exit 3; perf-bench: tab NoSuchTab is missing or did not show; no JSON written.
+CCP_USERDATA_DIR=&lt;fresh-dir&gt; dotnet CCP.Avalonia/bin/Release/net10.0/CCP.Avalonia.dll --nav-check
+# Both exact base and changed: exit 1, nav-check: 2 failure(s).
+# FAIL OpenDeviceSettings reveals Devices (saw data)
+# FAIL an unknown section still opens the door and changes nothing
+</code></pre>
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
 <ul>
