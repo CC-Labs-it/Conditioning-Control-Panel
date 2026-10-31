@@ -85,6 +85,7 @@ public sealed class PanicSurfacesTests
     {
         "intake",
         "leash-task",
+        "emi-moment-bubble",
         "tour",
         "games",
         "first-show",
@@ -110,6 +111,7 @@ public sealed class PanicSurfacesTests
         "intake",
         "knock-cards",
         "leash-task",
+        "emi-moment-bubble",
         "lock-cards",
         "mantra",
         "panic-quiet",
