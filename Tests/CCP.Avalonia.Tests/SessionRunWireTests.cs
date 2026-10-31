@@ -28,7 +28,7 @@ public sealed class SessionRunWireTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
@@ -90,6 +90,72 @@ public sealed class SessionRunWireTests
             {
                 runner.Stop();
                 CoreEngine.StoppedHook = null;
+                CoreSession.IsSessionRunningProvider = null;
+                AvApp.Sessions = null;
+                CoreEngine.Stop();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+    private sealed class NoVideoHost : IMandatoryVideoHost
+    {
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, System.Action then) { }
+    }
+
+    /// <summary>WPF MainWindow.Presets.cs:1756-1793: short video finishes before a modal recap;
+    /// playback surviving the 3s wait gets a passive recap.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RecapWaitsForVideoThenRechecksPlayback(bool survivesTimeout)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+
+            var shell = new MainShellWindow();
+            shell.Show();
+            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            runner.SessionLog.LogReady += shell.OnSessionLogReady;
+            var previousVideo = CoreEngine.Video;
+            var video = new MandatoryVideoScheduler(new NoVideoHost(), library: () => new[] { "a.mp4" });
+            try
+            {
+                var session = new Session { Id = "wire_video", Name = "Wire Video", Icon = "🧪", DurationMinutes = 1 };
+                shell.StartSession(session);
+
+                CoreEngine.Video = video;
+                runner.Stop(completed: true);
+                Assert.True(video.Trigger(path: "a.mp4"));   // a new clip, before the recap posts
+                int retries = 0;
+                shell.SessionSummaryDelay = interval =>
+                {
+                    Assert.Equal(System.TimeSpan.FromMilliseconds(200), interval);
+                    Assert.Empty(shell.OwnedWindows.OfType<SessionCompleteWindow>());
+                    retries++;
+                    if (!survivesTimeout) video.ForceCleanup();
+                    return Task.CompletedTask;
+                };
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(survivesTimeout ? 15 : 1, retries);
+                var recap = Assert.Single(shell.OwnedWindows.OfType<SessionCompleteWindow>());
+                Assert.Equal(!survivesTimeout, recap.Topmost);
+                Assert.Equal(!survivesTimeout, recap.ShowActivated);
+                // Avalonia modal ownership disables the backend, not Window.IsEnabled.
+                Assert.Equal(!survivesTimeout, recap.IsDialog);
+                recap.Close();
+            }
+            finally
+            {
+                runner.Stop();
+                video.ForceCleanup();
+                CoreEngine.Video = previousVideo;
                 CoreSession.IsSessionRunningProvider = null;
                 AvApp.Sessions = null;
                 CoreEngine.Stop();
