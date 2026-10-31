@@ -1,15 +1,14 @@
 using System;
 using Avalonia.Media;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
     public partial class AvatarTubeWindow
     {
-        private DispatcherTimer? _floatTimer;
+        private BeatLoop? _floatLoop;
         private readonly TranslateTransform _avatarFloat = new();
-        private double _floatPhase;
-        internal Action? FloatingFrame { get; private set; }
+        internal Action<double>? FloatingFrame { get; private set; }
 
         // WPF Windowing.cs:733-755,804-808: legacy avatar bob. Keep this on the image,
         // separate from AvatarBounceHost so a reply's double bounce cannot replace it.
@@ -17,24 +16,22 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void StartFloatingAnimation()
         {
             StopFloatingAnimation();
-            _floatPhase = 0;
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-            _floatTimer = timer;
-            FloatingFrame = () =>
+            BeatLoop? loop = null;
+            FloatingFrame = seconds =>
             {
-                if (_floatTimer != timer) return;
-                _floatPhase += 0.05;
-                _avatarFloat.Y = Math.Sin(_floatPhase) * 4;
+                if (_floatLoop != loop) return;
+                // WPF Windowing.cs:740-751: +0.05 radians per 16 ms. Sample the same
+                // nominal speed on the existing shared 30 Hz beat, without a private timer.
+                _avatarFloat.Y = Math.Sin(seconds * (0.05 / 0.016)) * 4;
             };
-            var frame = FloatingFrame;
-            timer.Tick += (_, _) => frame();
-            timer.Start();
+            _floatLoop = loop = new BeatLoop(this, FloatingFrame);
+            loop.Start();
         }
 
         private void StopFloatingAnimation()
         {
-            _floatTimer?.Stop();
-            _floatTimer = null;
+            _floatLoop?.Stop();
+            _floatLoop = null;
             FloatingFrame = null;
             _avatarFloat.Y = 0;
         }
