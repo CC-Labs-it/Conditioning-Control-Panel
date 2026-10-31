@@ -51,8 +51,8 @@ public sealed class SectionTabStripShellTests
                 w.ShowTab("presets");
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(strip.IsVisible);
-                // Studio's pills in table order; Just Drop has no window on this head, so no pill.
-                Assert.Equal(new[] { "studio", "presets", "haptics", "ramp" }, strip.PillKeys);
+                // Studio pills follow Core order, including the ask-first window door.
+                Assert.Equal(new[] { "studio", "presets", "haptics", "justdrop", "ramp" }, strip.PillKeys);
                 Assert.Equal("presets", strip.ActivePillKey);
                 Assert.Equal($"{Loc.Get("nav_door_studio")} {Loc.Get("nav_crumb_sep")} {Loc.Get("tab_presets")}", strip.CrumbText);
 

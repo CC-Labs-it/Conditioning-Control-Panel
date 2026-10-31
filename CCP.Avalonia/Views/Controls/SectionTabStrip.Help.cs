@@ -1,8 +1,6 @@
 // PORTED from ConditioningControlPanel/Controls/NavRail/SectionTabStrip.Help.cs (d0ec7aa8d, owner
-// 2026-10-07): a "?" badge over every strip pill. Colour math through NavStripRules (Core
-// NavStripPaint). ponytail: WPF's other half, a Window pill (Just Drop) asking "Open it?" before
-// opening (AskBeforeOpening), has no pill to ask on: Just Drop has no window on this head, so
-// CanOpen hides its pill. Port the card with the Just Drop window.
+// 2026-10-07): help badges and the window pill confirmation card. Colour math through Core.
+// The window host is now available; window pills use the WPF ask-first card below.
 
 using System;
 using System.Collections.Generic;
@@ -94,6 +92,121 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (!string.IsNullOrEmpty(tier))
                 body.Children.Add(new TextBlock { Text = tier, FontSize = 11.5, Opacity = 0.75, Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap });
             return body;
+        }
+
+        private Popup? _confirm;
+        private NavTab? _confirmTab;
+        internal string? ConfirmingKey => _confirmTab?.Key;
+        internal Control? ConfirmationCard => _confirm?.Child;
+
+        private void AskBeforeOpening(NavTab tab)
+        {
+            var target = PillFor(tab.Key)?.Parent as Control ?? PillFor(tab.Key);
+            if (target == null) { TabRequested?.Invoke(tab); return; }
+            CloseConfirm();
+            _confirmTab = tab;
+            var yes = ConfirmButton(SafeLoc("nav_open_window_yes", "Open it"), true);
+            var no = ConfirmButton(SafeLoc("nav_open_window_no", "Not now"), false);
+            yes.Name = "NavOpenWindowYes";
+            no.Name = "NavOpenWindowNo";
+            global::Avalonia.Automation.AutomationProperties.SetAutomationId(yes, yes.Name);
+            global::Avalonia.Automation.AutomationProperties.SetAutomationId(no, no.Name);
+            yes.Click += (_, _) => AnswerConfirm(true);
+            no.Click += (_, _) => AnswerConfirm(false);
+            var card = new Border
+            {
+                CornerRadius = new CornerRadius(14), Padding = new Thickness(16, 12),
+                MinWidth = 240, MaxWidth = 340,
+                Background = new SolidColorBrush(Color.FromArgb(0xF5, 0x1B, 0x10, 0x26)),
+                BorderBrush = new SolidColorBrush(NavStripRules.WithAlpha(_hue, 0.85)),
+                BorderThickness = new Thickness(1.5),
+                Child = new StackPanel { Children =
+                {
+                    new TextBlock { Text = string.Format(SafeLoc("nav_open_window_title", "Open {0}?"), SafeLoc(tab.LabelKey, tab.Key)),
+                        FontSize = 14, FontWeight = FontWeight.Bold, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap },
+                    new TextBlock { Text = SafeLoc("nav_open_window_body", "It opens in its own window."),
+                        FontSize = 12.5, Margin = new Thickness(0, 3, 0, 12), Foreground = Brushes.White,
+                        Opacity = 0.85, TextWrapping = TextWrapping.Wrap },
+                    new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right,
+                        Spacing = 8, Children = { yes, no } },
+                } },
+            };
+            // WPF PopupAnimation.Fade uses the platform's 150 ms fade above Off.
+            if (Level != ConditioningControlPanel.Models.MotionLevel.Off)
+            {
+                card.Opacity = 0;
+                card.Transitions = new global::Avalonia.Animation.Transitions
+                {
+                    new global::Avalonia.Animation.DoubleTransition
+                    { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(150) },
+                };
+            }
+            var popup = new Popup
+            {
+                PlacementTarget = target, Placement = PlacementMode.Bottom, VerticalOffset = 8,
+                IsLightDismissEnabled = true, Child = card,
+            };
+            _confirm = popup;
+            popup.Closed += (_, _) =>
+            {
+                if (_confirm != popup) return;
+                _confirm = null;
+                _confirmTab = null;
+            };
+            card.KeyDown += (_, e) =>
+            {
+                if (e.Key != Key.Escape) return;
+                CloseConfirm();
+                e.Handled = true;
+                PillFor(tab.Key)?.Focus();
+            };
+            popup.IsOpen = true;
+            card.Opacity = 1;
+            yes.Focus();
+        }
+
+        internal void CloseConfirm()
+        {
+            var popup = _confirm;
+            _confirm = null;
+            _confirmTab = null;
+            if (popup != null) popup.IsOpen = false;
+        }
+
+        private void AnswerConfirm(bool open)
+        {
+            var tab = _confirmTab;
+            CloseConfirm();
+            if (open && tab != null) { FxOnChosen(tab); TabRequested?.Invoke(tab); }
+        }
+
+        /// <summary>WPF ConfirmButton: own template (a rounded Border that dims to 0.85 on hover), hand
+        /// cursor, text in a TextBlock so a '_' in a translation is never an access key.</summary>
+        private Button ConfirmButton(string text, bool filled)
+        {
+            var button = new Button
+            {
+                Background = filled ? new SolidColorBrush(_hue) : new SolidColorBrush(Color.FromArgb(0x1F, 255, 255, 255)),
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Content = new TextBlock
+                {
+                    Text = text, FontSize = 13, FontWeight = FontWeight.SemiBold,
+                    Foreground = filled ? new SolidColorBrush(NavStripRules.ActiveTextOn(_hue)) : Brushes.White,
+                },
+                Template = new global::Avalonia.Controls.Templates.FuncControlTemplate<Button>((b, _) => new Border
+                {
+                    Name = "Bd", CornerRadius = new CornerRadius(11), Padding = new Thickness(14, 5, 14, 6),
+                    [!Border.BackgroundProperty] = b[!BackgroundProperty],
+                    Child = new global::Avalonia.Controls.Presenters.ContentPresenter
+                    {
+                        Name = "PART_ContentPresenter", HorizontalAlignment = HorizontalAlignment.Center,
+                        [!global::Avalonia.Controls.Presenters.ContentPresenter.ContentProperty] = b[!ContentProperty],
+                    },
+                }),
+            };
+            button.PointerEntered += (_, _) => button.Opacity = 0.85;
+            button.PointerExited += (_, _) => button.Opacity = 1;
+            return button;
         }
 
         // ---- test seams ---------------------------------------------------------------------
