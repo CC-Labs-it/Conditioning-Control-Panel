@@ -381,9 +381,12 @@ jobs:
   # The coverage guarantee the sequential script used to give: the shards' Total: counts must add up to
   # the suite's own --list-tests count, so a test can never fall between shards (or a shard go missing).
   # !cancelled() also keeps this running when avalonia-linux is skipped (scope=windows).
+  # A partial rerun can leave a prerequisite cancelled without cancelling this attempt. It has
+  # no complete shard set to count; keep the cancelled prerequisite as the blocking result.
+  # Failed (but not cancelled) shards still reach the strict coverage check below.
   avalonia-coverage:
     needs: [avalonia-linux, avalonia-windows]
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
