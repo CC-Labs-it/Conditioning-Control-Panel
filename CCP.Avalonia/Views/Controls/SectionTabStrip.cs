@@ -108,6 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         public SectionTabStrip()
         {
+            TabRequested += FxOnChosen; // WPF runs choose effects only when navigation is requested.
             IsVisible = false;
             _crumbSection = new Button
             {
@@ -149,6 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            CloseConfirm();
             _sheenClock?.Stop();   // P65: a detached strip never ticks
             base.OnDetachedFromVisualTree(e);
         }
@@ -244,6 +246,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             _pillRow.Children.Clear();
             _pills.Clear();
+            CloseConfirm();
             _helpBadges.Clear();
             _activePill = null;
             _activeFill.Width = 0;
@@ -386,7 +389,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // Launchers and windows open something else; the page on screen keeps its pill.
             if (tab.Kind is NavTabKind.Tab or NavTabKind.Zone) SetActive(tab.Key, animate: true);
             if (focus) PillFor(tab.Key)?.Focus();
-            FxOnChosen(tab);
+            if (NavStripTable.AsksBeforeOpening(tab)) { AskBeforeOpening(tab); return; }
             TabRequested?.Invoke(tab);
         }
 
