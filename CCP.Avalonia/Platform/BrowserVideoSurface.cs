@@ -5,11 +5,11 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Services.Video.Browser;
-
 namespace ConditioningControlPanel.Avalonia.Platform;
 internal sealed class BrowserVideoSurface : IDisposable
 {
     private static object? _owner;
+    internal static bool StoodDown;
     internal static bool SessionActive => _owner != null;
     internal static Func<BrowserVideoSurface?> Create = () =>
     {
@@ -22,10 +22,8 @@ internal sealed class BrowserVideoSurface : IDisposable
         catch { /* Adapter construction is an availability failure: keep the LibVLC path. */ }
         return null;
     };
-
     internal static void Seed() => BrowserVideoGate.EngineAccepts = (path, key) =>
-        WebHost.IsAvailable && !BrowserUnsafeVideoCache.Contains(path, key) && Map(path) != null;
-
+        !StoodDown && WebHost.IsAvailable && !BrowserUnsafeVideoCache.Contains(path, key) && Map(path) != null;
     internal static string? Map(string path)
     {
         try
@@ -40,18 +38,13 @@ internal sealed class BrowserVideoSurface : IDisposable
         }
         catch { return null; }
     }
-
     internal static bool TryAcquire(object owner, string path)
     {
-        if (_owner != null || !BrowserVideoGate.ShouldUseBrowser(path)) return false;
+        if (StoodDown || _owner != null || !BrowserVideoGate.ShouldUseBrowser(path)) return false;
         _owner = owner; // All acquisition/release is on the UI thread, before creating any surface.
         return true;
     }
-
-    internal static void Release(object owner)
-    {
-        if (ReferenceEquals(_owner, owner)) _owner = null;
-    }
+    internal static void Release(object owner) { if (ReferenceEquals(_owner, owner)) _owner = null; }
     internal WebHost View { get; } = new();
     internal event Action<JsonElement>? Message;
     internal event Action? Failed;
@@ -62,7 +55,6 @@ internal sealed class BrowserVideoSurface : IDisposable
     private DispatcherTimer? _startup;
     private bool _closed, _loaded;
     private string _url = "";
-
     internal BrowserVideoSurface(Func<string, Task<string?>>? execute = null)
     {
         _execute = execute ?? View.InvokeScriptAsync;
@@ -70,7 +62,6 @@ internal sealed class BrowserVideoSurface : IDisposable
         View.NavigationCompleted += Navigated;
         View.WebMessage += Receive;
     }
-
     internal void Start(string url, bool primary, int masterVolume)
     {
         _url = url;
@@ -80,7 +71,6 @@ internal sealed class BrowserVideoSurface : IDisposable
         _startup.Start();
         View.Navigate(new Uri("about:blank"));
     }
-
     private async void Navigated(Uri uri)
     {
         if (_closed || _loaded || uri.ToString() != "about:blank") return;
@@ -93,7 +83,6 @@ internal sealed class BrowserVideoSurface : IDisposable
         }
         catch { if (!_closed) Fail(); }
     }
-
     internal void Receive(string body)
     {
         if (_closed || !_loaded) return;
@@ -105,7 +94,8 @@ internal sealed class BrowserVideoSurface : IDisposable
             switch (message.GetProperty("type").GetString())
             {
                 case "playing": Playing = true; _startup?.Stop(); break;
-                case "error": Message?.Invoke(message); Fail(); return;
+                case "error": Message?.Invoke(message);
+                    Fail(message.TryGetProperty("code", out var e) && e.TryGetInt32(out var code) && code is >= 1 and <= 4 or 100 or 101); return;
             }
             Message?.Invoke(message);
         }
@@ -114,9 +104,10 @@ internal sealed class BrowserVideoSurface : IDisposable
         catch (System.Collections.Generic.KeyNotFoundException) { }
     }
     internal string SessionId => _id;
-    private void Fail()
+    private void Fail(bool mediaFailure = false)
     {
         if (_closed) return;
+        if (!mediaFailure) StoodDown = true;
         _startup?.Stop();
         Failed?.Invoke();
     }

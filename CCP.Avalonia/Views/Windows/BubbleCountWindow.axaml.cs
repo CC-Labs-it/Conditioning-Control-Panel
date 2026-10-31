@@ -430,7 +430,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private bool StartBrowserPlayback()
         {
             var url = BrowserVideoSurface.Map(_videoPath);
-            if (url == null || (_browser = BrowserVideoSurface.Create()) == null) return false;
+            if (url == null) return false;
+            if ((_browser = BrowserVideoSurface.Create()) == null) { BrowserVideoSurface.StoodDown = true; return false; }
             _videoImage.IsVisible = false;
             _videoContainer.Children.Add(_browser.View);
             _browser.Message += OnBrowserMessage;

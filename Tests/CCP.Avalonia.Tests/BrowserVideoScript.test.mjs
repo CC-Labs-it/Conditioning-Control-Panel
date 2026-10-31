@@ -1,10 +1,8 @@
-// Execute the production raw JS body without a native browser or font dependency.
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const source = readFileSync(process.env.CCP_BROWSER_SCRIPT_SOURCE || new URL('../../CCP.Avalonia/Platform/BrowserVideoSurface.cs', import.meta.url), 'utf8');
 const script = source.slice(source.indexOf('"""') + 3, source.lastIndexOf('"""'));
-
 function page(play = () => Promise.resolve()) {
   let now = 0, nextId = 0;
   const timers = new Map(), messages = [], listeners = new Map();
@@ -32,7 +30,6 @@ function page(play = () => Promise.resolve()) {
     now = end;
   } };
 }
-
 test('no first frame reports file error 101 at ten seconds', () => {
   const p = page();
   p.advance(9999);
@@ -40,7 +37,6 @@ test('no first frame reports file error 101 at ten seconds', () => {
   p.advance(1);
   assert.deepEqual(p.messages, [{ type: 'error', code: 101, session: 'test' }]);
 });
-
 test('advancing frames keep playback healthy; a ten-second stall reports 100 once', () => {
   const p = page();
   p.video.onplaying();
@@ -56,7 +52,6 @@ test('advancing frames keep playback healthy; a ten-second stall reports 100 onc
   p.advance(30000);
   assert.equal(p.messages.length, 2);
 });
-
 test('pause and end do not count as stalls; resume gets a fresh deadline', () => {
   const p = page();
   p.video.onplaying();
@@ -71,7 +66,6 @@ test('pause and end do not count as stalls; resume gets a fresh deadline', () =>
   p.advance(30000);
   assert.equal(p.messages.at(-1).type, 'ended');
 });
-
 test('media errors retain their code; a rejected start without MediaError stays unclassified', async () => {
   const p = page();
   p.video.error = { code: 4 };
@@ -81,7 +75,6 @@ test('media errors retain their code; a rejected start without MediaError stays 
   await Promise.resolve();
   assert.equal(rejected.messages.at(-1).code, 0);
 });
-
 test('context menu is cancelled before native playback controls appear', () => {
   const p = page();
   let cancelled = false;

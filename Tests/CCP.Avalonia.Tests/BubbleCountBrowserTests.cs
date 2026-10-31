@@ -1,12 +1,10 @@
 using System;
 using System.IO;
-using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
 using ConditioningControlPanel.Services.Video.Browser;
 using System.Threading.Tasks;
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -94,13 +92,13 @@ public sealed class BubbleCountBrowserTests
         Send(browser, "error", code: 4); // first failure wins before dispatcher drain
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Assert.Equal(unsafeFile, BrowserUnsafeVideoCache.Contains(game.Clip));
+        Assert.Equal(!unsafeFile, BrowserVideoSurface.StoodDown);
         Assert.Equal(!unsafeFile, BrowserVideoGate.ShouldUseBrowser(game.Clip));
         Assert.Equal(1, game.Completed);
         Assert.Equal(0, game.Skipped);
         Assert.Empty(BubbleCountResultWindow.OpenWindows);
         return Task.CompletedTask;
     });
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -125,8 +123,8 @@ public sealed class BubbleCountBrowserTests
         Assert.Empty(BubbleCountWindow.OpenWindows);
         Assert.Empty(BubbleCountResultWindow.OpenWindows);
         Assert.False(BrowserUnsafeVideoCache.Contains(game.Clip));
+        Assert.Equal(!nativeClose, BrowserVideoSurface.StoodDown);
     });
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -145,17 +143,42 @@ public sealed class BubbleCountBrowserTests
         Assert.Equal(strict, BubbleCountWindow.IsAnyOpen());
         return Task.CompletedTask;
     });
-
+    [Fact]
+    public Task MissingNativeAndFailedBrowserConstructionCompletesOnceThenSkips() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        var host = BubbleCountHost.Instance;
+        var shared = typeof(LibVlcAudio).GetProperty("Shared", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var (previous, scheduler) = (shared.GetValue(null), new BubbleCountScheduler(host, library: () => new[] { game.Clip }));
+        shared.SetValue(null, null);
+        try
+        {
+            (game.Settings.Current.BubbleCountStrictLock, game.Settings.Current.MercySystemEnabled) = (true, false);
+            BrowserVideoSurface.Create = () => null;
+            Assert.True(host.CanPlayPath(game.Clip));
+            BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+                ok => { Assert.False(ok); game.Completed++; });
+            Assert.Equal(1, game.Completed);
+            Assert.True(BrowserVideoSurface.StoodDown);
+            Assert.False(host.CanPlayPath(game.Clip));
+            scheduler.Trigger(forceTest: true);
+            for (var n = 0; n < 200 && scheduler.IsBusy; n++) await Task.Delay(10);
+            Assert.False(scheduler.IsBusy);
+            Assert.Empty(host.Messages);
+            Assert.Empty(BubbleCountWindow.OpenWindows);
+            Assert.Equal(1, game.Completed);
+        }
+        finally { scheduler.ForceCleanup(); shared.SetValue(null, previous); }
+    });
     private static void Send(BrowserVideoSurface surface, string type, double durationMs = 0, int code = 0) =>
         surface.View.OnWebMessage(JsonSerializer.Serialize(new { session = surface.SessionId, type, durationMs, code }));
-
     private static void EnsureApp()
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
-
     private sealed class BrowserGame : IDisposable
     {
         private readonly Func<string>? _assets = CorePaths.EffectiveAssetsProvider;
@@ -164,32 +187,24 @@ public sealed class BubbleCountBrowserTests
         private readonly Func<BrowserVideoSurface?> _create = BrowserVideoSurface.Create;
         private readonly string _dir = Directory.CreateTempSubdirectory("ccp-bcount-browser-").FullName;
         internal readonly SettingsService Settings = new();
-        internal readonly List<BrowserVideoSurface> Surfaces = new();
         internal int Completed, Skipped;
-        internal string Clip { get; }
+        internal string Clip => Path.Combine(_dir, "clip.mp4");
         internal BrowserGame()
         {
-            Clip = Path.Combine(_dir, "clip.mp4");
             File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4"), Clip);
             CorePaths.EffectiveAssetsProvider = () => _dir;
             CoreSettings.ServiceProvider = () => Settings;
-            Settings.Current.BrowserVideoEngineEnabled = true;
-            Settings.Current.AudioOutputDeviceId = "";
-            Settings.Current.DualMonitorEnabled = false;
-            Settings.Current.MasterVolume = 75;
+            (Settings.Current.BrowserVideoEngineEnabled, Settings.Current.AudioOutputDeviceId, Settings.Current.DualMonitorEnabled, Settings.Current.MasterVolume) = (true, "", false, 75);
+            BrowserVideoSurface.StoodDown = false;
             BrowserVideoGate.EngineAccepts = (p, k) => !BrowserUnsafeVideoCache.Contains(p, k) && BrowserVideoSurface.Map(p) != null;
-            BrowserVideoSurface.Create = () => { var s = new BrowserVideoSurface(_ => Task.FromResult<string?>("true")); Surfaces.Add(s); return s; };
+            BrowserVideoSurface.Create = () => { return new BrowserVideoSurface(_ => Task.FromResult<string?>("true")); };
         }
         public void Dispose()
         {
             BubbleCountWindow.ForceCloseAll();
             BubbleCountResultWindow.ForceCloseAll();
-            BrowserVideoSurface.Create = _create;
-            BrowserVideoGate.EngineAccepts = _gate;
-            CorePaths.EffectiveAssetsProvider = _assets;
-            CoreSettings.ServiceProvider = _settings;
+            (BrowserVideoSurface.Create, BrowserVideoGate.EngineAccepts, CorePaths.EffectiveAssetsProvider, CoreSettings.ServiceProvider) = (_create, _gate, _assets, _settings);
             Directory.Delete(_dir, true);
         }
     }
-
 }
