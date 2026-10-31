@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { kartStats, statBars, bodyOfVehicle, isKartBody, maxTopMul, STAT_KEYS, TYPE_LABELS, NEUTRAL_KART } from '../sim/kartStats.js';
+import { BAR_LEVELS, kartStats, statBars, bodyOfVehicle, isKartBody, maxTopMul, STAT_KEYS, TYPE_LABELS, NEUTRAL_KART } from '../sim/kartStats.js';
 import { KARTS, raceLook, DEFAULT } from '../hud/garageState.js';
 import { createRacers, createFeelOverlay } from '../sim/racers.js';
 import { createContact } from '../sim/contact.js';
@@ -58,19 +58,27 @@ test('kartStats: the row, the default row when unknown, never throws', () => {
   assert.equal(isKartBody(feel, 'constructor'), false);
 });
 
-test('statBars: integers 1..5, Lovebomb 3 3 3 3, unknown reads as Lovebomb, the bars tell the types apart', () => {
+test('statBars: integers 1..7, Lovebomb 4 4 4 4, unknown reads as Lovebomb, the bars tell the types apart', () => {
   assert.deepEqual(STAT_KEYS, ['speed', 'accel', 'handling', 'stability']);
-  assert.deepEqual(statBars(feel, 'lovebomb'), { speed: 3, accel: 3, handling: 3, stability: 3, type: 'allround' });
+  assert.deepEqual(statBars(feel, 'lovebomb'), { speed: 4, accel: 4, handling: 4, stability: 4, type: 'allround' });
   assert.deepEqual(statBars(feel, 'nope'), statBars(feel, 'lovebomb'));
   for (const id of IDS) {
     const b = statBars(feel, id);
-    for (const k of STAT_KEYS) assert.ok(Number.isInteger(b[k]) && b[k] >= 1 && b[k] <= 5 && !Object.is(b[k], -0), id + ' ' + k);
+    for (const k of STAT_KEYS) assert.ok(Number.isInteger(b[k]) && b[k] >= 1 && b[k] <= BAR_LEVELS && !Object.is(b[k], -0), id + ' ' + k);
   }
   const { speed: us, accel: ua, handling: uh, stability: ub } = statBars(feel, 'undertow');
-  assert.ok(us > 3 && ua < 3 && uh < 3 && ub < 3, 'fast: speed for everything else');
+  assert.ok(us > 4 && ua < 4 && uh < 4 && ub < 4, 'fast: speed for everything else');
   const pe = statBars(feel, 'petal');
-  assert.ok(pe.speed < 3 && pe.accel > 3 && pe.handling > 3 && pe.stability > 3, 'easy: the reverse');
-  assert.ok(statBars(feel, 'checkmate').stability > 3 && statBars(feel, 'checkmate').accel < 3, 'heavy');
+  assert.ok(pe.speed < 4 && pe.accel > 4 && pe.handling > 4 && pe.stability > 4, 'easy: the reverse');
+  assert.ok(statBars(feel, 'checkmate').stability > 4 && statBars(feel, 'checkmate').accel < 4, 'heavy');
+});
+
+test('no kart reads as beating another on every bar: the shop sells trade-offs, not upgrades', () => {
+  for (const a of IDS) for (const b of IDS) {
+    if (a === b) continue;
+    const x = statBars(feel, a), y = statBars(feel, b);
+    assert.ok(STAT_KEYS.some((k) => x[k] < y[k]), a + ' reads as at least as good as ' + b + ' on every bar');
+  }
 });
 
 test('the vehicle a look names is the body; anything else reads as none', () => {
