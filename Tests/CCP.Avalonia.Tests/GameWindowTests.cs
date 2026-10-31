@@ -896,6 +896,8 @@ public sealed partial class GameWindowTests
         var (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider,
             CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
         var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
+        var oldRelaunched = GameWindow.DtrhRelaunchedOnce;
+        GameWindow.DtrhRelaunchedOnce = false;
         var lib = Directory.CreateTempSubdirectory("dtrh-lib-").FullName;
         var xp = new List<double>();
         var runs = new List<bool>();
@@ -923,6 +925,7 @@ public sealed partial class GameWindowTests
                 CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
             GameWindow.CloseAllForPanic();
+            GameWindow.DtrhRelaunchedOnce = oldRelaunched;
             Directory.Delete(lib, true);
         }
     });
@@ -1159,5 +1162,128 @@ public sealed partial class GameWindowTests
             Assert.Equal(frame, (string?)Assert.Single(sent)["type"]);
         }
         finally { w.Close(); }
+    });
+    [Fact]
+    public void Dtrh_Heartbeat_RelaunchesOnceAndStopsWatching() => RunDtrh(lab: true, (_, xp, _, _) =>
+    {
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        GameWindow.DtrhUtcNow = () => now;
+        var w = GameWindow.Launch("dtrh")!;
+        Assert.True(w.DtrhWatchRunning);
+        Assert.Equal("idle", w.CheckDtrhHeartbeat(now.AddMinutes(1))); // loading is not a vanished page
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal("ok", w.CheckDtrhHeartbeat(now.AddSeconds(20))); // the hub's strict deadline
+        w.Web.OnWebMessage("{\"type\":\"run-started\"}");
+        Assert.Equal("ok", w.CheckDtrhHeartbeat(now.AddSeconds(10)));
+        w.HandleMessage("{\"type\":\"run-progress\",\"score\":100,\"durationSec\":120}");
+        now = now.AddSeconds(11);
+        Assert.Equal("recovering", w.CheckDtrhHeartbeat(now));
+        Assert.Equal("recovering", w.CheckDtrhHeartbeat(now)); // no second queued recovery
+        Dispatcher.UIThread.RunJobs();
+        var replacement = GameWindow.OpenForTests("dtrh");
+        Assert.NotNull(replacement);
+        Assert.NotSame(w, replacement);
+        Assert.Single(xp); // recovery uses the existing abandoned-run booking exactly once
+        Assert.False(w.DtrhWatchRunning);
+        Assert.True(replacement.DtrhWatchRunning);
+        replacement.Web.OnNavigationCompleted(replacement.PageUrl);
+        replacement.Web.OnWebMessage("{\"type\":\"ready\"}");
+        replacement.Web.OnWebMessage("{\"type\":\"heartbeat\"}");
+        Assert.Equal("ok", replacement.CheckDtrhHeartbeat(now.AddSeconds(20)));
+        now = now.AddSeconds(21);
+        Assert.Equal("recovering", replacement.CheckDtrhHeartbeat(now));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(replacement.DtrhWatchRunning);
+        Assert.True(GameWindow.DtrhRelaunchedOnce);
+
+        // The once-per-session budget is not refilled by manually reopening the game.
+        var reopened = GameWindow.Launch("dtrh")!;
+        reopened.Web.OnNavigationCompleted(reopened.PageUrl);
+        reopened.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal("recovering", reopened.CheckDtrhHeartbeat(now.AddSeconds(21)));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    [Theory]
+    [InlineData("heartbeat")]
+    [InlineData("pong")]
+    public void Dtrh_Heartbeat_BeatsRefreshDeadline_ExitAndQueuedPanicCannotRelaunch(string frame) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        GameWindow.DtrhUtcNow = () => now;
+        var w = GameWindow.Launch("dtrh")!;
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        now = now.AddSeconds(19);
+        w.Web.OnWebMessage(new JObject { ["type"] = frame }.ToString());
+        Assert.Equal("ok", w.CheckDtrhHeartbeat(now.AddSeconds(20)));
+        w.Web.OnWebMessage("{\"type\":\"exit\"}");
+        Assert.Equal("idle", w.CheckDtrhHeartbeat(now.AddMinutes(1)));
+        w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+        Assert.False(w.DtrhWatchRunning);
+
+        w = GameWindow.Launch("dtrh")!;
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal("recovering", w.CheckDtrhHeartbeat(now.AddSeconds(21)));
+        GameWindow.CloseAllForPanic(); // recovery is queued, not permitted to resurrect this surface
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.DtrhWatchRunning);
+        Assert.False(GameWindow.DtrhRelaunchedOnce);
+        Assert.Equal("idle", w.CheckDtrhHeartbeat(now.AddMinutes(2)));
+    });
+
+    [Fact]
+    public void Dtrh_Heartbeat_SlowReadyRestartsTheClock() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        // WPF OnPageReady (DtrhHostService.cs:275): a 25 s page load must not spend the hub's 20 s deadline.
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        GameWindow.DtrhUtcNow = () => now;
+        var w = GameWindow.Launch("dtrh")!;
+        now = now.AddSeconds(25);
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal("ok", w.CheckDtrhHeartbeat(now));
+        Assert.True(GameWindow.IsAnyOpen());
+    });
+
+    [Fact]
+    public void Dtrh_Heartbeat_PanicDuringRecoveryCloseCannotRelaunch() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        GameWindow.DtrhUtcNow = () => now;
+        var w = GameWindow.Launch("dtrh")!;
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        w.Closed += (_, _) => GameWindow.CloseAllForPanic();
+        Assert.Equal("recovering", w.CheckDtrhHeartbeat(now.AddSeconds(21)));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.DtrhWatchRunning);
+    });
+
+    [Fact]
+    public void Dtrh_Heartbeat_FailedRelaunchDoesNotEscapeTheDispatcher() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        GameWindow.DtrhUtcNow = () => now;
+        var w = GameWindow.Launch("dtrh")!;
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        var oldServer = GameWindow.Server;
+        try
+        {
+            GameWindow.Server = () => throw new IOException("test recovery server failure");
+            Assert.Equal("recovering", w.CheckDtrhHeartbeat(now.AddSeconds(21)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.False(w.DtrhWatchRunning);
+            Assert.True(GameWindow.DtrhRelaunchedOnce);
+        }
+        finally { GameWindow.Server = oldServer; }
     });
 }
