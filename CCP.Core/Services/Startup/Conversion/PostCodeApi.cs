@@ -6,7 +6,8 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Services.BackRoom;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-namespace ConditioningControlPanel.Services.Startup.Conversion
+using ConditioningControlPanel.Services.Startup.Conversion;
+namespace ConditioningControlPanel.Services.Startup.PostCodes
 {
     public sealed record PostCodeLive(bool Live, string? Feature, DateTime? EndsUtc, bool Redeemed);
     public sealed record PostCodeRedeem(bool Ok, string? Feature, DateTime? UntilUtc, string? Reason);

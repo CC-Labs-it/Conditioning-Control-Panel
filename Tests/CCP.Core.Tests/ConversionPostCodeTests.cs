@@ -1,5 +1,5 @@
 using System;
-using ConditioningControlPanel.Services.Startup.Conversion;
+using ConditioningControlPanel.Services.Startup.PostCodes;
 using Xunit;
 namespace CCP.Core.Tests;
 /// <summary>The post code wire (brief C6): live reads, redeem replies and the code field.</summary>

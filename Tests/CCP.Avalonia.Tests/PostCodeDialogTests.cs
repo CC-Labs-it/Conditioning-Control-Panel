@@ -5,7 +5,7 @@ using Avalonia.Input;
 using Avalonia.VisualTree;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
-using ConditioningControlPanel.Services.Startup.Conversion;
+using ConditioningControlPanel.Services.Startup.PostCodes;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -16,16 +16,14 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public class PostCodeDialogTests
 {
     [Fact]
     public Task EmptyPressKeepsTheBoxEditableAndShowsTheReason() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
-        var box = new PostCodeDialog();
+        var box = (PostCodeDialog)Activator.CreateInstance(typeof(PostCodeDialog), nonPublic: true)!;
         try
         {
             box.Show();
@@ -68,9 +66,9 @@ public class PostCodeDialogTests
     }
     private static void Setup()
     {
-        if (Application.Current == null)
-            AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var builder = ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp();
+        if (Application.Current == null) builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        else builder.AfterSetupCallback(builder);
     }
     [Theory]
     [InlineData(false, false)]
@@ -84,6 +82,7 @@ public class PostCodeDialogTests
         try
         {
             if (quiet) StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+            Assert.True(ConditioningControlPanel.Avalonia.Controls.IconMap.TryGet(PostCodeFlow.Glyph, out var icon)); Assert.Equal("Bookmark", icon.Kind.ToString());
             PostCodeDialog.Offer(owner, "Feature body");
             if (quiet) { Assert.Null(PostCodeDialog.Notice); StartupLadder.Inbox.Open(Assert.Single(StartupLadder.Inbox.Items)); }
             else Assert.Empty(StartupLadder.Inbox.Items);

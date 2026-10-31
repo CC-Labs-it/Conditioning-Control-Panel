@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
-namespace ConditioningControlPanel.Services.Startup.Conversion;
+namespace ConditioningControlPanel.Services.Startup.PostCodes;
 public sealed class PostCodeFlow
 {
-    public const string RowKey = "post_code_live";
+    public const string RowKey = "post_code_live", Glyph = "🔖";
     private DateTime _checkedUtc = DateTime.MinValue;
     private bool _checking;
     private bool _redeeming;

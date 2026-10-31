@@ -3,10 +3,9 @@ using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Startup.Conversion;
+using ConditioningControlPanel.Services.Startup.PostCodes;
 using Xunit;
-
 namespace CCP.Core.Tests;
-
 [Collection(CoreSecretsStatics.Name)]
 public class PostCodeFlowTests : IDisposable
 {
@@ -19,11 +18,9 @@ public class PostCodeFlowTests : IDisposable
         CoreSecrets.StoreProvider = (_, value) => _token = value;
     }
     public void Dispose() { CoreSecrets.RetrieveProvider = _oldGet; CoreSecrets.StoreProvider = _oldSet; }
-
     private static readonly DateTime Now = new(2026, 10, 31, 12, 0, 0, DateTimeKind.Utc);
     private static AppSettings Member() => new() { PatreonMember = true, AuthToken = "test" };
     private static PostCodeLive Live => new(true, "dtrh", Now.AddDays(1), false);
-
     [Fact]
     public async Task PollWaitsThirtyMinutesAndNeverOverlaps()
     {
@@ -40,7 +37,6 @@ public class PostCodeFlowTests : IDisposable
         Assert.Equal(Live, await flow.CheckAsync(s, Now.AddMinutes(30), Fetch));
         Assert.Equal(2, calls);
     }
-
     [Theory]
     [InlineData(false, false, "test")]
     [InlineData(true, true, "test")]
@@ -50,7 +46,6 @@ public class PostCodeFlowTests : IDisposable
         var s = new AppSettings { PatreonMember = member, OfflineMode = offline, AuthToken = token };
         Assert.Null(await new PostCodeFlow().CheckAsync(s, Now, () => throw new Exception("must not send")));
     }
-
     [Fact]
     public void RowOnlyForUnheldUnredeemedLiveFeatureOncePerDay()
     {
@@ -62,7 +57,6 @@ public class PostCodeFlowTests : IDisposable
         Assert.False(PostCodeFlow.StampRow(s, Live, false, Now));
         Assert.True(PostCodeFlow.StampRow(s, Live, false, Now.AddDays(1)));
     }
-
     [Fact]
     public async Task RedeemSerializesPressesAndSavesWholeGrantBeforeRepaint()
     {
@@ -82,7 +76,6 @@ public class PostCodeFlowTests : IDisposable
         Assert.True(ProfileExtras.GrantOpen(s.PostGrants, "dtrh", Now));
         Assert.False(ProfileExtras.GrantOpen(s.PostGrants, "dtrh", Now.AddDays(2)));
     }
-
     [Fact]
     public async Task InvalidOrRefusedCodeDoesNotSaveAGrant()
     {

@@ -61,6 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.Keyboard, R, null, "⌨", "📐"); M(IconKind.Window, R, null, "🪟"); M(IconKind.ArrowCircleUp, R, null, "⬆");
             M(IconKind.ArrowDown, R, null, "⬇", "↓");
 
+            M(IconKind.Bookmark, R, null, "🔖");
             // D2 media, files, data
             M(IconKind.Play, F, null, "▶");
             M(IconKind.Pause, F, null, "⏸");

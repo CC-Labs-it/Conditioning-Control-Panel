@@ -13,10 +13,9 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
-using ConditioningControlPanel.Services.Startup.Conversion;
+using ConditioningControlPanel.Services.Startup.PostCodes;
 using Serilog;
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
-/// <summary>WPF d545a21cb: one code field, one request per press.</summary>
 public class PostCodeDialog : Window
 {
     private static PostCodeDialog? _open;
@@ -29,7 +28,8 @@ public class PostCodeDialog : Window
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12.5, Margin = new Thickness(0, 10, 0, 0), IsVisible = false };
     private readonly PostCodeFlow _flow = new();
     private bool _closed;
-    internal PostCodeDialog(bool notice = false, string? body = null, Window? owner = null)
+    internal PostCodeDialog() : this(false) { }
+    internal PostCodeDialog(bool notice, string? body = null, Window? owner = null)
     {
         Title = "CC Labs";
         Width = 400;
@@ -70,7 +70,7 @@ public class PostCodeDialog : Window
     internal static bool CanDrag(object? source) => source is Control c && !c.GetSelfAndVisualAncestors().Any(x => x is Button or TextBox or TextBlock { Name: "CloseLink" }) && !c.GetSelfAndLogicalAncestors().Any(x => x is Button or TextBox or TextBlock { Name: "CloseLink" });
     internal static void Offer(Window owner, string body) => StartupLadder.PresentOrInbox(new InboxItem
     {
-        Key = "conv:" + PostCodeFlow.RowKey, Glyph = "🔖", Title = Loc.Get("conv_postcode_title"), Summary = body,
+        Key = "conv:" + PostCodeFlow.RowKey, Glyph = PostCodeFlow.Glyph, Title = Loc.Get("conv_postcode_title"), Summary = body,
         Open = () => { Notice?.Close(); Notice = new NoticeCard(body, owner); if (owner.IsVisible) Notice.Show(owner); else Notice.Show(); },
     });
     private sealed class NoticeCard(string body, Window owner) : PostCodeDialog(true, body, owner), IPassiveStartupSurface { }
