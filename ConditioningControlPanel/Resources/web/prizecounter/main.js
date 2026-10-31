@@ -25,7 +25,7 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
   canvas.className = 'pc-canvas';
   root.append(canvas);
 
-  const shop = createShop({ request: host.request, newIdem: mintIdem, tab: init.tab || null, wears: init.wears });
+  const shop = createShop({ request: host.request, newIdem: mintIdem, tab: init.tab || null, wears: init.wears, rain: init.rainV2 === true });
   // Stray keys never spend (desk bug 2026-10-30): Space, Enter and pad A confirm only as a deliberate press and
   // release after the counter has held focus a while (state/press-guard.js). Mounting counts as gaining focus.
   const guard = createPressGuard({ now: () => performance.now(), focused: document.hasFocus() });
