@@ -20,6 +20,100 @@ namespace CCP.Avalonia.Tests;
 /// SpiralTabView.Refresh reading Core SpiralRoom.StateFor.</summary>
 public sealed class SpiralRoomShellTests
 {
+    // WPF SpiralTabView.xaml.cs:307-335,419-429,892-908: server state selects and feeds the map.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task LiveBlock_SelectsSeedsUpdatesAndWithdrawsTheRoom(bool blockBeforeEntry) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+        settings.Current.DescentMigrationCompleted = true;
+        settings.Current.UnifiedId = "spiral-fixture";
+        var oldRetrieve = CoreSecrets.RetrieveProvider;
+        CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? "fixture" : null;
+        settings.Current.OfflineMode = false;
+        var node = Newtonsoft.Json.Linq.JObject.Parse("{\"descent\":{\"devotion_days\":3}}");
+        var reader = new DescentService(_ => Task.FromResult<Newtonsoft.Json.Linq.JObject?>(node));
+        var oldReader = global::ConditioningControlPanel.Avalonia.App.Descent;
+        var oldEngine = SpiralTabView.EngineAvailable;
+        var oldStart = SpiralTabView.StartEmbed;
+        var oldPost = CoreDispatch.PostProvider;
+        CoreDispatch.PostProvider = action => Dispatcher.UIThread.Post(action);
+        global::ConditioningControlPanel.Avalonia.App.Descent = reader;
+        SpiralTabView.EngineAvailable = () => true;
+        var sent = new System.Collections.Generic.List<string>();
+        var attempts = 0;
+        SpiralTabView.StartEmbed = embed =>
+        {
+            attempts++;
+            embed.SendJson = json => { sent.Add(json); return Task.CompletedTask; };
+            embed.Receive("{\"type\":\"spiral:ready\"}");
+            embed.OnNavigated(new Uri(embed.Url), true);
+        };
+        var shell = new MainShellWindow();
+        try
+        {
+            if (blockBeforeEntry) Assert.True(await reader.RefreshAsync("fixture", force: true));
+            shell.Show();
+            shell.ShowTab("spiral");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.Named<SpiralTabView>("SpiralTab")!;
+            if (!blockBeforeEntry)
+            {
+                Assert.True(tab.FindControl<Border>("WaitingPanel")!.IsVisible);
+                Assert.True(await reader.RefreshAsync("arrival", force: true));
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.Equal(1, attempts);
+            Assert.NotEmpty(sent);
+            Assert.Equal(3, (int)Newtonsoft.Json.Linq.JObject.Parse(sent[0])["devotion_days"]!);
+            Assert.True(tab.FindControl<Grid>("EmbedHost")!.IsVisible);
+            Assert.False(tab.FindControl<Border>("WaitingPanel")!.IsVisible);
+
+            node = Newtonsoft.Json.Linq.JObject.Parse("{\"descent\":{\"devotion_days\":9}}");
+            Assert.True(await reader.RefreshAsync("update", force: true));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, attempts); // repaint preserves the browser and splash state
+            Assert.Equal(9, (int)Newtonsoft.Json.Linq.JObject.Parse(sent[^1])["devotion_days"]!);
+            node = new Newtonsoft.Json.Linq.JObject();
+            Assert.True(await reader.RefreshAsync("withdrawal", force: true));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(tab.FindControl<Grid>("EmbedHost")!.Children);
+            Assert.True(tab.FindControl<Border>("WaitingPanel")!.IsVisible);
+
+            shell.ShowTab("discord");
+            Dispatcher.UIThread.RunJobs();
+            node = Newtonsoft.Json.Linq.JObject.Parse("{\"descent\":{\"devotion_days\":12}}");
+            Assert.True(await reader.RefreshAsync("hidden", force: true));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, attempts);
+            shell.ShowTab("spiral");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, attempts);
+            shell.Close();
+            reader.NotifySurfaces("after detach");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, attempts);
+            Assert.Empty(tab.FindControl<Grid>("EmbedHost")!.Children);
+        }
+        finally
+        {
+            shell.Close();
+            reader.Reset();
+            CoreDispatch.PostProvider = oldPost;
+            CoreSecrets.RetrieveProvider = oldRetrieve;
+            global::ConditioningControlPanel.Avalonia.App.Descent = oldReader;
+            SpiralTabView.EngineAvailable = oldEngine;
+            SpiralTabView.StartEmbed = oldStart;
+        }
+    });
+
     // WPF MainWindow.TabNavigation.cs:725: ShowTab("spiral") calls OnTabShown, so explicit navigation
     // to the tab already showing retries a failed embed (the visibility flip alone never fires).
     [Fact]
