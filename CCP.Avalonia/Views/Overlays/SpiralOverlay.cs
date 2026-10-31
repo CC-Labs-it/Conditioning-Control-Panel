@@ -162,7 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             if (_frames.Count > 1 && Windows.Count > 0)
             {
-                _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = _delay };
+                _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(ConditioningControlPanel.Services.Safety.GentleVisuals.ScaleDelayMs(_delay.TotalMilliseconds)) };
                 _timer.Tick += (_, _) => Tick();
                 _timer.Start();
             }
@@ -173,6 +173,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void Tick()
         {
             if (_frames.Count == 0 || Windows.Count == 0) return;
+            // WPF Compositor/SpiralLayer.cs:136-140 re-reads Gentle speed each update.
+            // Always scale the decoded delay, never the previous timer interval.
+            if (_timer is { } timer)
+            {
+                var delay = TimeSpan.FromMilliseconds(ConditioningControlPanel.Services.Safety.GentleVisuals.ScaleDelayMs(_delay.TotalMilliseconds));
+                if (timer.Interval != delay) timer.Interval = delay;
+            }
             _index = (_index + 1) % _frames.Count;
             var frame = _frames[_index];
             for (var i = 0; i < Windows.Count; i++) Windows[i].Spiral.Source = frame;
