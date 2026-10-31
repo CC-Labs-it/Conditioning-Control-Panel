@@ -53,8 +53,7 @@ public sealed class BarkEngineTests : IDisposable
             var gated = Rule("Idle", "gated"); gated.Conditions = new() { ["master_volume_gt"] = 0 };
             var plain = Rule("Idle", "plain");
             var e = new BarkEngine(() => new BarkRuleSet(new[] { gated, plain }), new IdleRandom(roll)) { Speak = _said.Add };
-            e.Start();
-            Assert.True(e.DispatchIdle());
+            e.Start(); Assert.True(e.DispatchIdle());
             Assert.Equal(expected, Assert.Single(_said).Text);
         }
         finally { _s.BarkIdleRotation = saved; }
@@ -86,8 +85,7 @@ public sealed class BarkEngineTests : IDisposable
             Assert.False(e.Raise("Log"));
             var fire = Assert.Single(sink.Events, x => x.Properties.ContainsKey("Chars"));
             Assert.Equal("23", fire.Properties["Chars"].ToString());
-            Assert.Contains("Mood", fire.Properties.Keys);
-            Assert.Contains("Priority", fire.Properties.Keys);
+            Assert.Contains("Mood", fire.Properties.Keys); Assert.Contains("Priority", fire.Properties.Keys);
             Assert.Contains(sink.Events, x => x.Properties.ContainsKey("Reason"));
             Assert.DoesNotContain(sink.Events, x => x.RenderMessage().Contains("private companion words"));
         }
@@ -119,15 +117,12 @@ public sealed class BarkEngineTests : IDisposable
             _s.BarkIdleRotation = new();
             var rules = new[] { Rule("Idle", "a"), Rule("Idle", "b"), Rule("Idle", "c") };
             var clock = new PopQuizSchedulerTests.FakeClock();
-            var e = Engine(rules);
-            e.Clock = clock;
-            Assert.True(e.DispatchIdle());
-            Assert.False(e.DispatchIdle());
+            var e = Engine(rules); e.Clock = clock;
+            Assert.True(e.DispatchIdle()); Assert.False(e.DispatchIdle());
             clock.Advance(TimeSpan.FromSeconds(60)); Assert.True(e.DispatchIdle());
             Assert.True(Engine(rules).DispatchIdle()); // third rule after restart
             Assert.Equal(3, _said.Select(x => x.Text).Distinct().Count());
-            e = Engine(rules);
-            e.Clock = clock;
+            e = Engine(rules); e.Clock = clock;
             Assert.True(e.DispatchIdle()); // recycle
             var last = _said.Last().Text;
             clock.Advance(TimeSpan.FromSeconds(60)); Assert.True(e.DispatchIdle());
@@ -139,15 +134,11 @@ public sealed class BarkEngineTests : IDisposable
     public void IdleSkipsMutedSpeakingAndIneligibleRulesWithoutSpendingThem()
     {
         var r = Rule("Idle", "eligible");
-        var no = Rule("Idle", "wrong");
-        no.Conditions = new() { ["player_level_gt"] = 999999 };
-        var e = Engine(r, no);
-        _s.MasterVolume = 0; Assert.False(e.DispatchIdle());
-        _s.MasterVolume = 50;
-        e.IsSpeaking = () => true; Assert.False(e.DispatchIdle());
+        var no = Rule("Idle", "wrong"); no.Conditions = new() { ["player_level_gt"] = 999999 };
+        var e = Engine(r, no); _s.MasterVolume = 0; Assert.False(e.DispatchIdle());
+        _s.MasterVolume = 50; e.IsSpeaking = () => true; Assert.False(e.DispatchIdle());
         e.IsSpeaking = () => false; Assert.True(e.DispatchIdle());
-        Assert.Equal("eligible", Assert.Single(_said).Text);
-        Assert.True(_said[0].Unprompted);
+        Assert.Equal("eligible", Assert.Single(_said).Text); Assert.True(_said[0].Unprompted);
         Assert.DoesNotContain(no.Id, _s.BarkIdleRotation);
     }
     [Theory]
@@ -162,10 +153,8 @@ public sealed class BarkEngineTests : IDisposable
         e.BarkSpoken += (_, text) => { Assert.Single(_said); echo = text; };
         Assert.True(e.Raise(trigger, c => c.Set("name", "friend")));
         Assert.Equal("hello friend", echo);
-        echo = null;
-        e.IsSpeaking = () => true;
-        Assert.False(e.Raise(trigger));
-        Assert.Null(echo);
+        echo = null; e.IsSpeaking = () => true;
+        Assert.False(e.Raise(trigger)); Assert.Null(echo);
     }
     [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()

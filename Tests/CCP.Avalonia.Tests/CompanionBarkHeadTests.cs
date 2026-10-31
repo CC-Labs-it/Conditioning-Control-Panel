@@ -52,8 +52,9 @@ public sealed class CompanionBarkHeadTests
     public void IdleMouthKeepsPresetRoutingAndRecoversAfterPanicQuiet() => WithSeamsRestored(s =>
     {
         var old = (BarkHead.Engine, s.MasterVolume, s.IdleGiggleIntervalSeconds, s.BarkIdleRotation);
-        var providers = (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider, CoreAudio.PlayStoppableProvider, CoreModArt.OverridePathProvider);
+        var providers = (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider, CoreAudio.PlayStoppableProvider, CoreModArt.OverridePathProvider, CoreEntitlement.HasPremiumProvider);
         var voice = (s.CompanionSpeaksIdleWhenEngineOff, s.AvatarMuted, CompanionBrain.IdleLineVoiced);
+        var autonomy = (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.AutonomyIdleTriggerEnabled, s.AutonomyIdleTimeoutMinutes);
         var lifetime = Application.Current!.ApplicationLifetime;
         // SetupWithoutStarting seals the public setter; supply the lifetime only for this live-window lookup.
         var lifetimeField = typeof(Application).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
@@ -93,11 +94,19 @@ public sealed class CompanionBarkHeadTests
             Assert.True(tube.IdleTimerRunning);
             tube.SpeechClock = clock;
             var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            s.AutonomyModeEnabled = s.AutonomyConsentGiven = s.AutonomyIdleTriggerEnabled = true; s.AutonomyIdleTimeoutMinutes = 5;
+            shell.Autonomy.Stop(); shell.Autonomy.Clock = () => clock.GetLocalNow().DateTime;
+            Assert.True(shell.Autonomy.Start(withTimer: false));
+            var idleDue = shell.Autonomy.GetType().GetField("_nextIdle", flags)!;
+            Assert.Equal(clock.GetLocalNow().DateTime.AddMinutes(5), idleDue.GetValue(shell.Autonomy));
+            clock.Advance(120); // WPF's default idle chatter interval
             var counter = tube.GetType().GetField("_presetGiggleCounter", flags)!;
             counter.SetValue(tube, 4); // the next preset would make its every-fifth sound
             var latch = tube.GetType().GetField("_isGiggling", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
             latch.SetValue(tube, true); // a collapsed bubble left the WPF speech latch stranded
             tube.OnIdleTick();
+            Assert.Equal(clock.GetLocalNow().DateTime.AddMinutes(5), idleDue.GetValue(shell.Autonomy));
             Assert.True(tube.IsSpeaking);
             Assert.Equal("idle hello", spoken());
             Assert.False(Assert.Single(brain.Session.Turns).Voiced);
@@ -174,8 +183,9 @@ public sealed class CompanionBarkHeadTests
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             lifetimeField.SetValue(Application.Current, lifetime);
             BarkHead.Stop(); var stoppedVoice = CompanionBrain.IdleLineVoiced;
-            (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider, CoreAudio.PlayStoppableProvider, CoreModArt.OverridePathProvider) = providers;
+            (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider, CoreAudio.PlayStoppableProvider, CoreModArt.OverridePathProvider, CoreEntitlement.HasPremiumProvider) = providers;
             (s.CompanionSpeaksIdleWhenEngineOff, s.AvatarMuted, CompanionBrain.IdleLineVoiced) = voice;
+            (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.AutonomyIdleTriggerEnabled, s.AutonomyIdleTimeoutMinutes) = autonomy;
             (BarkHead.Engine, s.MasterVolume, s.IdleGiggleIntervalSeconds, s.BarkIdleRotation) = old;
             Assert.Null(stoppedVoice);
         }

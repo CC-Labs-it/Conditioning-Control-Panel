@@ -1301,6 +1301,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     StartBubbleHideTimer(text);
                     RestartIdleTimer();
+                    QuickShell?.Autonomy.ReportUserActivity(); // WPF AvatarTubeWindow.Speech.cs:1585
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
                 }
                 catch (Exception ex) { Log.Warning(ex, "AvatarTube GigglePriority failed"); }
