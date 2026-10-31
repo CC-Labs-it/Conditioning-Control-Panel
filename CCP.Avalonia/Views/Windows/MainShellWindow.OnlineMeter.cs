@@ -92,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 pill.PointerPressed += (_, e) =>
                 {
                     e.Handled = true;   // never a title bar drag
+                    CloseOnlineMeterHover();
                     try { ShowTab("assets"); }
                     catch (Exception ex) { Log.Debug("Online meter pill click: {E}", ex.Message); }
                 };

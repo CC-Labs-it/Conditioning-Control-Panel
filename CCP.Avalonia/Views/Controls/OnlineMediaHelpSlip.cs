@@ -10,6 +10,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls;
 /// <summary>The daily share explained in the same paper slip as the leash help.</summary>
 public sealed class OnlineMediaHelpSlip : Border
 {
+    private static readonly FontFamily Sans = new("Segoe UI");
+
     public OnlineMediaHelpSlip()
     {
         Width = 320;
@@ -26,13 +28,15 @@ public sealed class OnlineMediaHelpSlip : Border
         body.Children.Add(new TextBlock
         {
             Text = Loc.Get(OnlineMeterRules.HelpTitleKey), FontWeight = FontWeight.ExtraBold,
-            FontSize = 17, Foreground = LeashHelpSlip.Ink, TextWrapping = TextWrapping.Wrap,
+            FontFamily = Sans, FontSize = 17, Foreground = LeashHelpSlip.Ink, TextWrapping = TextWrapping.Wrap,
         });
         var lines = OnlineMeterRules.HelpParagraphs(Loc.Get);
         for (int i = 0; i < lines.Length; i++)
             body.Children.Add(new TextBlock
             {
                 Text = lines[i], FontSize = i == lines.Length - 1 ? 11.5 : 13,
+                FontFamily = i == lines.Length - 1 ? FriendsDrawer.Mono : Sans,
+                LineHeight = i == lines.Length - 1 ? double.NaN : 18,
                 Foreground = i == lines.Length - 1 ? LeashHelpSlip.Muted : LeashHelpSlip.Ink,
                 TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, i == 0 ? 10 : 8, 0, 0),
             });
