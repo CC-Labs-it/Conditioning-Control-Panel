@@ -70,7 +70,7 @@ public partial class MainShellWindow
         Platform.StartupLadder.PresentOrInbox(new InboxItem
         {
             Key = "conv:" + MemberHelloKey, Glyph = "🎁", Title = title, Summary = summary,
-            Open = () => _ = Dialogs.MessageDialog.ShowAsync(this, title, MemberHelloBody(summary)),
+            Open = () => Dialogs.InboxNoticeCard.Present(this, title, MemberHelloBody(summary), null, null, Loc.Get("conv_ok")),
         });
     }
 

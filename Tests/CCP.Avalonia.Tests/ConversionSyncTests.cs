@@ -174,6 +174,43 @@ public sealed class ConversionSyncTests
         finally { shell.Close(); StartupLadder.ResetForTests(); MainShellWindow.ConversionClient = null; AvApp.DailyFree = null; }
     });
 
+    [Fact]
+    public Task MemberWelcomeIsNonModalAndHoldsTheNextPassiveSurfaceUntilDismissed() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        StartupLadder.ResetForTests();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            CoreAccount.HasPremiumAccessProvider = () => false;
+            CoreSettings.Current.PatreonMember = true;
+            CoreSettings.Current.InboxStamps.Clear();
+            shell.MaybePostMemberHello();
+            var card = Assert.Single(shell.OwnedWindows.OfType<InboxNoticeCard>());
+            Assert.True(card.IsVisible);
+            Assert.True(shell.IsEnabled);
+            Assert.IsAssignableFrom<ConditioningControlPanel.Services.Startup.IPassiveStartupSurface>(card);
+            Assert.True(StartupLadder.PassiveWindowUp());
+            Assert.Contains(card.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("conv_member_hello_title"));
+            var dismiss = Assert.Single(card.GetVisualDescendants().OfType<Button>());
+            Assert.Equal(Loc.Get("conv_ok"), Assert.IsType<TextBlock>(dismiss.Content).Text);
+            var nextOpened = false;
+            StartupLadder.PresentOrInbox(new ConditioningControlPanel.Services.Startup.InboxItem
+                { Key = "after-member", Open = () => nextOpened = true });
+            var clock = Assert.IsType<StartupLadder.TestClock>(StartupLadder.Time);
+            clock.Advance(TimeSpan.FromSeconds(5));
+            Assert.False(nextOpened);
+            dismiss.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(card.IsVisible);
+            Assert.False(StartupLadder.PassiveWindowUp());
+            clock.Advance(TimeSpan.FromSeconds(1));
+            Assert.True(nextOpened);
+        }
+        finally { InboxNoticeCard.Open?.Close(); shell.Close(); StartupLadder.ResetForTests(); }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(true, false, false, true)]
     [InlineData(true, true, false, false)]
