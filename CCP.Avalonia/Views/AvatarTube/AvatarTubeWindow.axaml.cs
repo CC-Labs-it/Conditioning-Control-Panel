@@ -829,7 +829,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 var img = this.FindControl<Image>(name);
                 if (img == null) continue;
                 img.RenderTransformOrigin = new RelativePoint(0.5, 1.0, RelativeUnit.Relative);
-                img.RenderTransform = transform;
+                // WPF Avatar.cs:762-777 scales layout independently of the bob
+                // (Windowing.cs:751). Scale first, then translate without scaling the bob.
+                img.RenderTransform = name == "ImgAvatar"
+                    ? new TransformGroup { Children = { transform ?? new ScaleTransform(1, 1), _avatarFloat } }
+                    : transform;
             }
 
             // When the mod only overrides the ATTACHED tube image, force the attached layout in the

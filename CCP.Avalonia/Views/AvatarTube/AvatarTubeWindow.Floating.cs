@@ -1,5 +1,4 @@
 using System;
-using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 
@@ -19,7 +18,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         {
             StopFloatingAnimation();
             _floatPhase = 0;
-            this.FindControl<Image>("ImgAvatar")!.RenderTransform = _avatarFloat;
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
             _floatTimer = timer;
             FloatingFrame = () =>
