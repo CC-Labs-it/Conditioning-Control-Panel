@@ -22,6 +22,9 @@ namespace ConditioningControlPanel.Services
     /// </summary>
     public sealed class SyncPush
     {
+        /// <summary>Head callback after an authenticated sync receipt, before look sync clamps owned items.</summary>
+        public Action<string, PrizesBlock>? PrizesReceived { get; set; }
+
         public const SyncBody.Field Sent = SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
             | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements;
         public const SyncBody.Field Privacy = SyncBody.Field.AllowDiscordDm | SyncBody.Field.ShowOnlineStatus
@@ -292,6 +295,8 @@ namespace ConditioningControlPanel.Services
                 {
                     var reply = JObject.Parse(json);
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
+                    if (reply["prizes"] is JObject prizes && prizes.ToObject<PrizesBlock>() is { } snapshot)
+                        PrizesReceived?.Invoke(id, snapshot);
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.
                     Descent.DescentMigrationAck.Apply(s, reply);

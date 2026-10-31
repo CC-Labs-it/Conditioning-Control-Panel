@@ -45,6 +45,7 @@ internal static class AccountSeed
             Log.Warning(ex, "Account providers unavailable: signed out, no entitlement");
             return false;
         }
+        ProviderSubscription.PrizesSink = RainLookSyncHead.ApplyPrizes;
         (Patreon, SubscribeStar, Discord) = (patreon, substar, discord);
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
 
