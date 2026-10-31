@@ -95,13 +95,39 @@ public sealed class LeashCardsTests
         var held = Held() with { Assignment = TaskVideo,
             Week = Enumerable.Range(1, 9).Select(i => new WeekDay("202610" + i.ToString("00"), WeekMark.Did)).ToArray() };
         var card = new LeashHolderCard(held, () => null);
-        Assert.EndsWith(": 30", Find<TextBlock>(card, "leash-fig-minutes").Text);
-        Assert.EndsWith(": 2/3", Find<TextBlock>(card, "leash-fig-quests").Text);
+        Assert.Equal("30", Find<TextBlock>(card, "leash-ring-figure").Text);
+        Assert.Equal(360, Find<global::Avalonia.Controls.Shapes.Arc>(card, "leash-ring-arc").SweepAngle);
+        Assert.Contains(Find<Border>(card, "leash-fig-quests").GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == "2/3");
         Assert.Equal(7, Find<WrapPanel>(card, "leash-week").Children.Count);
         Assert.Equal(Loc.GetF("leash_task_open", Loc.Get("leash_assign_video_n")), Find<TextBlock>(card, "leash-holder-task").Text);
-        Assert.DoesNotContain(card.GetLogicalDescendants().OfType<TextBlock>(), t => t.Tag as string == "leash-fig-lock");
+        Assert.DoesNotContain(card.GetLogicalDescendants().OfType<Border>(), t => t.Tag as string == "leash-fig-lock");
         card.Update(Held(linked: true));
-        Assert.NotNull(Find<TextBlock>(card, "leash-fig-lock"));
+        Assert.NotNull(Find<Border>(card, "leash-fig-lock"));
+    });
+    [Fact]
+    public void MissingReportKeepsAllThreeFiguresUnknownAndTheRingEmpty() => Run(() =>
+    {
+        var card = new LeashHolderCard(Held() with { Report = null }, () => null);
+        var figures = Find<global::Avalonia.Controls.Primitives.UniformGrid>(card, "leash-figures");
+        Assert.Equal(3, figures.Columns); Assert.Equal(3, figures.Children.Count);
+        foreach (var tag in new[] { "leash-fig-minutes", "leash-fig-quests", "leash-fig-streak" })
+            Assert.Contains(Find<Border>(card, tag).GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == "-");
+        Assert.DoesNotContain(figures.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.GetF("leash_fig_streak", 0));
+        Assert.Empty(figures.GetLogicalDescendants().OfType<global::Avalonia.Controls.Shapes.Arc>());
+    });
+    [Theory]
+    [InlineData(AssignKind.Minutes, AssignStatus.Open, 60, 180)]
+    [InlineData(AssignKind.Minutes, AssignStatus.Open, 120, 90)]
+    [InlineData(AssignKind.Minutes, AssignStatus.Open, 15, 360)]
+    [InlineData(AssignKind.Minutes, AssignStatus.Done, 60, 360)]
+    [InlineData(AssignKind.Minutes, AssignStatus.Missed, 60, 360)]
+    [InlineData(AssignKind.Quests, AssignStatus.Open, 60, 360)]
+    public void MinutesRingUsesOnlyAnOpenMinutesAssignmentGoal(AssignKind kind, AssignStatus status, int goal, double sweep) => Run(() =>
+    {
+        var card = new LeashHolderCard(Held() with { Assignment = TaskVideo with { Kind = kind, Status = status, Size = goal } }, () => null);
+        var arc = Find<global::Avalonia.Controls.Shapes.Arc>(card, "leash-ring-arc");
+        Assert.Equal(-90, arc.StartAngle); Assert.Equal(sweep, arc.SweepAngle);
+        Assert.Equal("30", Find<TextBlock>(card, "leash-ring-figure").Text);
     });
     [Theory]
     [InlineData(LeashIntensity.Soft, false, 2)]

@@ -103,14 +103,7 @@ public sealed class LeashHolderCard : Border
         _body.Children.Add(LeashCardUi.Text(Loc.GetF("leash_holder_day", h.Day)));
         _body.Children.Add(LeashCardUi.Text(Loc.Get(dnd ? "leash_state_quiet" : h.Online ? "leash_state_online" : "leash_state_offline"), "leash-holder-state"));
         var r = h.Report;
-        _body.Children.Add(LeashCardUi.Text(Loc.Get("leash_fig_minutes") + ": " + (r?.Minutes.ToString() ?? "-"), "leash-fig-minutes"));
-        _body.Children.Add(LeashCardUi.Text(Loc.Get("leash_fig_quests") + ": " + (r == null ? "-" : $"{r.QuestsDone}/{r.QuestsTotal}"), "leash-fig-quests"));
-        _body.Children.Add(LeashCardUi.Text(Loc.GetF("leash_fig_streak", r?.Streak ?? 0), "leash-fig-streak"));
-        if (r?.ChasterLinked == true)
-        {
-            _body.Children.Add(LeashCardUi.Text(Loc.Get("leash_fig_lock") + ": " + (r.LockLeftSeconds is int left ? R.LockLeft(left) : "-"), "leash-fig-lock"));
-            if (r.TabSeconds is int tab) _body.Children.Add(LeashCardUi.Text(Loc.GetF("leash_fig_tab", R.Tab(tab))));
-        }
+        _body.Children.Add(Figures());
         if (h.Assignment is { } a) _body.Children.Add(LeashCardUi.Text(Loc.GetF(a.Status switch
         { AssignStatus.Done => "leash_task_done", AssignStatus.Missed => "leash_task_missed", _ => "leash_task_open" }, LeashCardUi.TaskText(a)), "leash-holder-task"));
         var week = new WrapPanel { Tag = "leash-week" };
@@ -189,6 +182,36 @@ public sealed class LeashHolderCard : Border
         if (LeashSentList.For(_service(), h.Who.Id) is { } receipts) _body.Children.Add(receipts);
         if (_result != null) _body.Children.Add(LeashCardUi.Text(_result, "leash-holder-result", F.Gold));
     }
+    // WPF LeashHolderCard.cs:339-397: three figures, with goal-relative minutes and unknowns kept unknown.
+    private Control Figures()
+    {
+        var r = _held.Report;
+        var row = new global::Avalonia.Controls.Primitives.UniformGrid { Columns = 3, Tag = "leash-figures", Margin = new Thickness(0, 10, 0, 0) };
+        row.Children.Add(Fig(LeashHoldRing.Ring(R.RingFraction(r?.Minutes ?? 0, R.MinutesGoal(_held.Assignment)),
+            r?.Minutes.ToString() ?? "-", ((ISolidColorBrush)F.Pink).Color, 48), "leash_fig_minutes", null, "leash-fig-minutes"));
+        row.Children.Add(Fig(Figure(r == null ? "-" : $"{r.QuestsDone}/{r.QuestsTotal}", F.Text), "leash_fig_quests",
+            r == null ? null : Loc.GetF("leash_fig_streak", r.Streak), "leash-fig-quests"));
+        if (r?.ChasterLinked == true)
+            row.Children.Add(Fig(Figure(r.LockLeftSeconds is int left ? R.LockLeft(left) : "-", F.Gold, 17), "leash_fig_lock",
+                r.TabSeconds is int tab ? Loc.GetF("leash_fig_tab", R.Tab(tab)) : null, "leash-fig-lock",
+                r.TabSeconds > 0 ? F.Red : F.Mint));
+        else row.Children.Add(Fig(Figure(r == null ? "-" : r.Streak + "d", F.Lilac), "leash_fig_streak_label", null, "leash-fig-streak"));
+        return row;
+    }
+    private static Control Figure(string text, IBrush ink, double size = 21) => new Grid
+    {
+        Height = 48, Children = { new TextBlock { Text = text, Foreground = ink, FontSize = size, FontFamily = F.Mono,
+            FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } },
+    };
+    private static Border Fig(Control visual, string key, string? extra, string tag, IBrush? extraInk = null)
+    {
+        var body = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+        body.Children.Add(visual);
+        body.Children.Add(LeashCardUi.Text(Loc.Get(key), ink: F.Muted));
+        if (extra != null) body.Children.Add(LeashCardUi.Text(extra, ink: extraInk ?? F.Muted));
+        return new Border { Child = body, Tag = tag, Background = F.Foot, CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(4, 8, 4, 7), Margin = new Thickness(3, 0) };
+    }
     private int _videoCap = LeashVideoCap.Default;
     private Control VideoPicker(Func<LeashWatch, Task> send, bool punish)
     {
@@ -250,4 +273,3 @@ public sealed class LeashHolderCard : Border
         Render();
     }
 }
-
