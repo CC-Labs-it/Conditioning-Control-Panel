@@ -483,6 +483,13 @@ public sealed class LockdownVeilTests
         finally { CoreSettings.Current.HideLockdownTimer = false; }
     });
 
+    private sealed class FlashClock : TimeProvider
+    {
+        public long Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Now;
+    }
+
     private static string? Hex(object? brush) => (brush as global::Avalonia.Media.ISolidColorBrush)?.Color.ToUInt32().ToString("x8");
 
     /// <summary>WPF ApplyLockdownTheme / RestoreLockdownTheme / PlayLockdownActivationAnimation
@@ -491,6 +498,10 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        // Frame() pumps real timers. A busy runner may spend >600 ms laying out the shell;
+        // only this clock advances the flash, so its lifetime cannot race the assertions.
+        var clock = new FlashClock();
+        shell.LockdownFlashTime = clock;
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -513,9 +524,11 @@ public sealed class LockdownVeilTests
         var flash = shell.LockdownFlash!;
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        clock.Now = TimeSpan.FromMilliseconds(300).Ticks;
+        shell.TickLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Now = TimeSpan.FromMilliseconds(600).Ticks;
+        shell.TickLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 
