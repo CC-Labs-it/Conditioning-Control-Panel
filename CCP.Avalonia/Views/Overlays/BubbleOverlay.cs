@@ -200,6 +200,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Held = held;
             Field.CursorX = x; Field.CursorY = y;
         }
+        // WPF BubbleService.cs:263-270,4329-4341. Desktop pixels are mapped per bubble screen.
+        internal static bool VibePopOn, VibeHoverPops;
+        internal static void SetVibePop(bool on, bool hoverPops = false)
+        {
+            VibePopOn = on && _chaosPopped != null;
+            VibeHoverPops = VibePopOn && hoverPops;
+        }
+
+        internal static void SweepVibe(PixelPoint at, bool pressed)
+        {
+            if (!VibePopOn || Field.HoldChaos || (!pressed && !VibeHoverPops)) return;
+            foreach (var b in Field.Bubbles.ToArray())
+            {
+                if (b.Spec == null || b.Spec.IsFreeze || b.Spec.IsBrittle || b.Spec.IsTease || b.Spec.IsSweeper || b.Popping) continue;
+                double scale = b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+                if (!b.Contains(at.X / scale, at.Y / scale)) continue;
+                if (b.IsLiveThreat)
+                {
+                    if (b.Snap()) Field.ChaosDefused?.Invoke(b);
+                }
+                else PopChaos(b);
+            }
+        }
+
         private static bool _chaosOpenedWindows;
         /// <summary>WPF BubbleService.ChaosLastPopXDip/YDip: the last chaos pop's centre, global DIPs.</summary>
         internal static double ChaosLastPopX, ChaosLastPopY;
@@ -243,6 +267,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
+            SetVibePop(false);
             Field.HoldChaos = false;
             _chaosPopped = null;
             _chaosCanChannel = null;
@@ -330,6 +355,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
+                if (VibePopOn && X11Pointer.Read() is { } pointer) SweepVibe(pointer.At, pointer.Pressed);
                 Field.Step();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);

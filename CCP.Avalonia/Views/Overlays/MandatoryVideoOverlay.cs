@@ -265,6 +265,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return targets;
         }
 
+        // WPF Services/Video/VideoService.cs:5810-5822; ChaosModeService.cs:747-762,816-827.
+        // Post after video activation, including handled attention-target clicks.
+        internal static Action<Action, TimeSpan> ScheduleTrailRaise = (a, delay) => DispatcherTimer.RunOnce(a, delay);
+        internal static void WireVibeTrailRestacking(Window w)
+        {
+            void Raise() => Dispatcher.UIThread.Post(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.RaiseVibeTrailAboveVideo);
+            w.Opened += (_, _) =>
+            {
+                Raise();
+                ScheduleTrailRaise(Raise, TimeSpan.FromMilliseconds(60));
+            };
+            w.AddHandler(InputElement.PointerPressedEvent, (_, _) => ScheduleTrailRaise(Raise, TimeSpan.FromMilliseconds(50)),
+                global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+        }
+
         private Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
         {
             var fill = new Image { Stretch = Stretch.UniformToFill, IsVisible = false };
@@ -327,6 +342,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF: strict vetoes a user close while playing; a non-strict close is a dismiss.
             w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
+            WireVibeTrailRestacking(w);
             w.Show();
             if (!floating)
             {
