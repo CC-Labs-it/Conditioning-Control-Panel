@@ -91,7 +91,7 @@ public sealed partial class FriendsRailChip
         if (_faceHost != null) _faceHost.Activated -= OnFaceActivated;
         _faceHost = null;
     }
-    private void OnFaceActivated(object? sender, EventArgs e) => RefreshFace();
+    private void OnFaceActivated(object? sender, EventArgs e) { Rebind(); RefreshFace(); }
 
     // WPF FriendsRailChip.cs:279-296, FriendsLook.cs:260-275.
     internal void RefreshFace()

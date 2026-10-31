@@ -144,4 +144,89 @@ public sealed partial class FriendsDrawerTests
         }
         finally { window.Close(); svc.Dispose(); }
     });
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public Task ActivationRebindsServiceAndFeedBeforePainting(bool injected) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        ChipApp();
+        var (first, _) = Service(); var (second, wire) = Service("u_second");
+        wire.StateBody = State.Replace("\"online\":false", "\"online\":true");
+        await first.RefreshAsync(); await second.RefreshAsync();
+        FriendsHead.Service = first;
+        var firstFeed = new FriendsFeed(() => "u_first"); var secondFeed = new FriendsFeed(() => "u_second");
+        var feed = firstFeed;
+        var chip = new FriendsRailChip(injected ? first : null);
+        chip.Drawer.FeedSource = () => feed;
+        var window = new Window { Content = chip }; window.Show();
+        bool Wired(FriendsService svc) => (typeof(FriendsService).GetField("SnapshotChanged", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(svc) as Delegate)?.GetInvocationList().Any(d => ReferenceEquals(d.Target, chip)) == true;
+        FriendEvent Ev(string key) => new(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, key, Detail: PokeSet.Shipped[0]);
+        try
+        {
+            chip.Drawer.OnOpened(); chip.Drawer.OnClosed(); // prime its cached old service
+            Assert.Equal(1, chip.PillCount);
+            FriendsHead.Service = second; feed = secondFeed;
+            secondFeed.Add(Ev("replacement"));
+            typeof(WindowBase).GetMethod("HandleActivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(window, null);
+            Assert.Equal(injected ? 1 : 2, chip.PillCount);
+            Assert.Equal(injected, Wired(first)); Assert.Equal(!injected, Wired(second));
+            Assert.Equal(1, chip.UnreadBadge);
+            firstFeed.Add(Ev("old")); Assert.Equal(1, chip.UnreadBadge);
+            secondFeed.Add(Ev("new")); Assert.Equal(2, chip.UnreadBadge);
+            window.Content = null; Assert.False(Wired(first)); Assert.False(Wired(second));
+        }
+        finally { window.Close(); first.Dispose(); second.Dispose(); }
+    });
+
+    [Theory]
+    [InlineData(MotionLevel.Full, false)] [InlineData(MotionLevel.Reduced, false)]
+    [InlineData(MotionLevel.Full, true)] [InlineData(MotionLevel.Reduced, true)]
+    public Task BumpsRenderWpfsRiseSettleAndCancel(MotionLevel level, bool unread) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        ChipApp();
+        var (svc, wire) = Service(); await svc.RefreshAsync();
+        var feed = new FriendsFeed(() => "u_clock");
+        var chip = new FriendsRailChip(svc); chip.Drawer.FeedSource = () => feed;
+        var window = new Window { Content = chip }; window.Show();
+        CoreSettings.Current.MotionLevel = level;
+        var target = chip.GetVisualDescendants().OfType<Border>().Single(b => Equals(b.Tag, unread ? "friends-chip-unread" : "friends-chip-online"));
+        var clock = new RailStepClock(); target.SetValue(RailStepClock.Property, clock.Instance);
+        double k = level == MotionLevel.Full ? 1 : .5;
+        void Scale(double expected)
+        {
+            Assert.Equal(expected, target.RenderTransform!.Value.M11, 5);
+            Assert.Equal(expected, target.RenderTransform.Value.M22, 5);
+        }
+        void Step(double ms) { clock.Step(ms); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }
+        async Task Increase(string key)
+        {
+            if (unread) feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "u_on", "Mia", DateTime.UtcNow, key, Detail: PokeSet.Shipped[0]));
+            else { wire.StateBody = State.Replace("\"online\":false", "\"online\":true"); await svc.RefreshAsync(); }
+        }
+        try
+        {
+            await Increase("first");
+            Step(0); Step(60); Scale(1 + .225 * k);
+            Step(120); Step(120); Scale(1 + .45 * k);
+            Step(270); Scale(1 - .45 * k * (Math.Exp(2) - 1) / (Math.Exp(4) - 1) * Math.Sqrt(.5));
+            Step(419); Assert.NotEqual(1, target.RenderTransform!.Value.M11);
+            Step(420); Step(421); Scale(1); Assert.Equal(0, chip.ActiveBumps);
+            if (!unread) { wire.StateBody = State; await svc.RefreshAsync(); }
+            await Increase("second"); Step(500); Step(560); Scale(1 + .225 * k);
+            window.Content = null; Step(1000); Scale(1); Assert.Equal(0, chip.ActiveBumps);
+            window.Content = chip; Step(1200); Scale(1);
+        }
+        finally { window.Close(); svc.Dispose(); }
+    });
+
+    // Avalonia 12 hides IClock. Use its real ClockBase, as SharedDeeperThemeTests does.
+    private sealed class RailStepClock
+    {
+        private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(global::Avalonia.Animation.Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", true)!;
+        private static readonly System.Reflection.MethodInfo Pulse = Base.GetMethod("Pulse", Any | System.Reflection.BindingFlags.Instance)!;
+        public static readonly AvaloniaProperty Property = (AvaloniaProperty)typeof(global::Avalonia.Animation.Animatable).GetField("ClockProperty", Any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        public void Step(double ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
+    }
 }
