@@ -20,6 +20,48 @@ namespace CCP.Avalonia.Tests;
 public sealed class ShellTrayTests
 {
     [Fact]
+    public async Task DeniedBusNameIsHandledButOtherDispatcherExceptionsAreNot()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+
+            MainShellWindow.InstallDeniedBusNameFilter();
+            MainShellWindow.InstallDeniedBusNameFilter(); // repeated tray creation must be harmless
+            var errors = new Exception[]
+            {
+                new Tmds.DBus.Protocol.DBusErrorReplyException("org.freedesktop.DBus.Error.AccessDenied", "RequestName refused"),
+                new InvalidOperationException("wrapper", new Exception("nested",
+                    new Tmds.DBus.Protocol.DBusErrorReplyException("org.freedesktop.DBus.Error.AccessDenied", "RequestName refused"))),
+                new Tmds.DBus.Protocol.DBusErrorReplyException("org.freedesktop.DBus.Error.Failed", "RequestName refused"),
+                new InvalidOperationException("org.freedesktop.DBus.Error.AccessDenied"),
+                new Exception("wrapper", new Tmds.DBus.Protocol.DBusErrorReplyException("org.freedesktop.DBus.Error.NoReply", "timeout")),
+            };
+            var handled = new System.Collections.Generic.List<bool>();
+            void Observe(object sender, DispatcherUnhandledExceptionEventArgs e)
+            {
+                handled.Add(e.Handled); // observe the production handler's result first
+                e.Handled = true;       // keep negative cases from killing the test dispatcher
+            }
+            Dispatcher.UIThread.UnhandledException += Observe;
+            try
+            {
+                foreach (var error in errors)
+                {
+                    Dispatcher.UIThread.Post(() => throw error);
+                    Dispatcher.UIThread.RunJobs();
+                }
+                Assert.Equal(new[] { true, true, false, false, false }, handled);
+            }
+            finally { Dispatcher.UIThread.UnhandledException -= Observe; }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task TrayMenuStopsOverlaysHidesOnCloseAndExits()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

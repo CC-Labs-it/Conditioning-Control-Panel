@@ -18,6 +18,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Localization;
 using Tmds.DBus.Protocol;
@@ -40,8 +41,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF TrayIconService._hasShownFirstMinimizeNotification.
         private bool _shownFirstMinimizeNotification;
 
+        private static bool _deniedBusNameFilterInstalled;
+        private static bool _deniedBusNameLogged;
+
+        internal static void InstallDeniedBusNameFilter()
+        {
+            Dispatcher.UIThread.VerifyAccess();
+            if (_deniedBusNameFilterInstalled) return;
+            Dispatcher.UIThread.UnhandledException += SwallowDeniedBusName;
+            _deniedBusNameFilterInstalled = true;
+        }
+
+        internal static bool IsDeniedBusName(Exception? exception)
+        {
+            for (var current = exception; current != null; current = current.InnerException)
+                if (current is DBusErrorReplyException reply &&
+                    reply.ErrorName == "org.freedesktop.DBus.Error.AccessDenied") return true;
+            return false;
+        }
+
+        internal static void SwallowDeniedBusName(object? sender, DispatcherUnhandledExceptionEventArgs e)
+        {
+            if (!IsDeniedBusName(e.Exception)) return;
+            // Avalonia's async-void CreateTrayIcon can outlive CreateTray's synchronous call.
+            // Flatpak refuses SNI names beyond -2-3 after watcher restarts: lose the icon, not the app.
+            e.Handled = true;
+            if (_deniedBusNameLogged) return;
+            _deniedBusNameLogged = true;
+            try { Serilog.Log.Warning(e.Exception, "Tray bus name refused; the tray icon may be unavailable"); }
+            catch { } // Even a failing log sink must not turn this optional icon into a fatal error.
+        }
+
         internal TrayIcon CreateTray()
         {
+            InstallDeniedBusNameFilter();
             Tray = new TrayIcon
             {
                 ToolTipText = "Conditioning Control Panel",
