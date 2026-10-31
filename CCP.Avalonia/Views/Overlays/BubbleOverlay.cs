@@ -181,6 +181,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // ---- Chaos field (WPF BubbleService.BeginChaosMode / SpawnChaosBubble / EndChaosMode) ----
         private static Action<AmbientBubble>? _chaosPopped;
         private static Func<AmbientBubble, bool>? _chaosCanChannel;
+        private static Func<double>? _chaosHitboxScale;
+        private static Func<bool>? _chaosLiveMagnet;
 
         /// <summary>WPF Detonate/CompleteDefuse anchor the pop point at the bubble's centre.</summary>
         private static void AnchorPop(AmbientBubble b) { ChaosLastPopX = b.CenterX; ChaosLastPopY = b.CenterY; }
@@ -238,10 +240,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// if the ambient field is not already running.</summary>
         internal static void BeginChaos(Visual host, Action<AmbientBubble> onPop,
             Action<AmbientBubble>? onDefuse = null, Action<AmbientBubble>? onDetonate = null,
-            Func<AmbientBubble, bool>? canChannel = null)
+            Func<AmbientBubble, bool>? canChannel = null,
+            Func<double>? hitboxScale = null, Func<bool>? liveMagnet = null)
         {
             _chaosPopped = onPop;
             _chaosCanChannel = canChannel;
+            _chaosHitboxScale = hitboxScale;
+            _chaosLiveMagnet = liveMagnet;
             Field.Held = false;
             Field.ChaosDefused = onDefuse == null ? null : b =>
             {
@@ -271,6 +276,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.HoldChaos = false;
             _chaosPopped = null;
             _chaosCanChannel = null;
+            _chaosHitboxScale = null;
+            _chaosLiveMagnet = null;
             Field.ChaosDefused = Field.ChaosDetonated = null;
             Field.Held = false;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
@@ -282,14 +289,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
         {
+            // WPF BubbleService.cs:1616-1617; ChaosModeService.cs:371,378.
+            double hitboxScale = _chaosHitboxScale?.Invoke() ?? 1;
+            bool liveMagnet = _chaosLiveMagnet?.Invoke() ?? false;
             AmbientBubble b;
             if (Targets.Count == 0)
-                b = AmbientBubble.SpawnChaos(Field.Random, 0, 0, 0, 1920, 1080, 1, spec);
+                b = AmbientBubble.SpawnChaos(Field.Random, 0, 0, 0, 1920, 1080, 1, spec, hitboxScale, liveMagnet);
             else
             {
                 var i = Field.Random.Next(Targets.Count);
                 var a = Targets[i].WorkingArea;
-                b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+                b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec, hitboxScale, liveMagnet);
             }
             Field.Bubbles.Add(b);
             RequestFrame();
@@ -481,8 +491,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var b = bubbles[i];
                 if (b.Screen != Index || !b.Clickable || b.Popping) continue;
-                Rects[n++] = new PixelRect((int)(b.X * Scaling) - Bounds.X, (int)(b.Y * Scaling) - Bounds.Y,
-                    (int)(b.Size * Scaling), (int)(b.Size * Scaling));
+                int left = (int)Math.Floor((b.CenterX - b.HitRadius) * Scaling) - Bounds.X;
+                int top = (int)Math.Floor((b.CenterY - b.HitRadius) * Scaling) - Bounds.Y;
+                int right = (int)Math.Ceiling((b.CenterX + b.HitRadius) * Scaling) - Bounds.X;
+                int bottom = (int)Math.Ceiling((b.CenterY + b.HitRadius) * Scaling) - Bounds.Y;
+                Rects[n++] = new PixelRect(left, top, right - left, bottom - top);
             }
             var drawn = HasBubbles();
             if (!drawn && _lastCount == 0) return;   // stayed empty: region already empty, nothing to repaint

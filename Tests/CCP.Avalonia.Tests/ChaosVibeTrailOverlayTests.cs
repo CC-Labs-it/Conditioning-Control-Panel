@@ -161,7 +161,10 @@ public sealed class ChaosVibeTrailOverlayTests
                 Assert.False(treat.Popping);
                 BubbleOverlay.SweepVibe(at, true);
                 Assert.Equal((1, 1), (popped, snapped));
-                Assert.True(live.Deflating);
+                Assert.False(live.Deflating);
+                double before = live.Scale;
+                live.Step();
+                Assert.True(live.Scale > before);
                 Assert.False(live.DefusedViaChannel);
                 Assert.False(freeze.Popping);
                 Assert.False(ambient.Popping);
@@ -173,6 +176,48 @@ public sealed class ChaosVibeTrailOverlayTests
                 BubbleOverlay.SweepVibe(at, false);
                 Assert.True(hover.Popping);
                 Assert.Equal(2, popped);
+            }
+            finally { BubbleOverlay.EndChaos(); BubbleOverlay.Field.Bubbles.Clear(); host.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF BubbleService.cs:1616-1617,3286,4338: Silk Touch reaches beyond the sprite.
+    [Fact]
+    public async Task Sweep_uses_spawned_hit_radius_for_live_magnet_and_treats()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var host = new Window();
+            int popped = 0, snapped = 0;
+            double hitScale = 1.25;
+            bool magnet = true;
+            try
+            {
+                BubbleOverlay.BeginChaos(host, _ => popped++, _ => snapped++,
+                    hitboxScale: () => hitScale, liveMagnet: () => magnet);
+                var treat = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { SizePx = 100 });
+                var live = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { SizePx = 100, IsLive = true, FuseMs = 5000 });
+                treat.X = treat.Y = live.X = live.Y = 100;
+                hitScale = 1; magnet = false;   // WPF samples modifiers once at birth.
+                Assert.Equal(62.5, treat.HitRadius);
+                Assert.Equal(87.5, live.HitRadius);
+                var region = new BubbleOverlayWindow(0, new PixelRect(0, 0, 1280, 720), 1);
+                try
+                {
+                    region.Sync();
+                    Assert.Equal(new PixelRect(62, 62, 176, 176), region.Rects[1]);
+                }
+                finally { region.Close(); }
+                BubbleOverlay.SetVibePop(true);
+                BubbleOverlay.SweepVibe(new PixelPoint(238, 150), true);
+                Assert.False(live.Popping);
+                BubbleOverlay.SweepVibe(new PixelPoint(225, 150), true);
+                Assert.Equal((0, 1), (popped, snapped));
+                Assert.False(treat.Popping);
+                BubbleOverlay.SweepVibe(new PixelPoint(210, 150), true);
+                Assert.Equal((1, 1), (popped, snapped));
             }
             finally { BubbleOverlay.EndChaos(); BubbleOverlay.Field.Bubbles.Clear(); host.Close(); }
             return Task.CompletedTask;

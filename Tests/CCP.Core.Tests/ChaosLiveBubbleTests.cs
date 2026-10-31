@@ -26,6 +26,36 @@ public class ChaosLiveBubbleTests
         return (f, b, log);
     }
 
+    // WPF BubbleService.cs:3277-3286,4338: clamp, rounding and precision-pickup exclusions.
+    [Theory]
+    [InlineData(1.25, true, true, false, 87.5)]
+    [InlineData(1.25, false, false, false, 62.5)]
+    [InlineData(3, true, true, false, 100)]
+    [InlineData(0.5, false, false, false, 50)]
+    [InlineData(2, true, true, true, 50)]
+    public void Configured_hit_disc_is_sampled_at_spawn(double mult, bool magnet, bool live, bool precision, double radius)
+    {
+        var b = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1,
+            new EffectBubbleSpec { SizePx = 100, IsLive = live, IsPrism = precision }, mult, magnet);
+        Assert.Equal(radius, b.HitRadius);
+        Assert.True(b.Contains(b.CenterX + radius, b.CenterY));
+        Assert.False(b.Contains(b.CenterX + radius + 0.01, b.CenterY));
+    }
+
+    // WPF BubbleService.cs:4593,4669-4711: a sweep Pop bursts, a held defuse stays limp.
+    [Fact]
+    public void A_sweep_snap_expands_without_deflation_or_channel_credit()
+    {
+        var (_, b, _) = Field(Live(5000));
+        Assert.True(b.Snap());
+        Assert.False(b.Deflating);
+        Assert.False(b.DefusedViaChannel);
+        double size = b.Scale;
+        b.Step();
+        Assert.True(b.Scale > size);
+        Assert.False(b.Snap());
+    }
+
     [Fact]
     public void The_fuse_burns_32ms_a_step_and_fuse_out_detonates_once()
     {

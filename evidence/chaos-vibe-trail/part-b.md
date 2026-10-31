@@ -64,3 +64,32 @@ is available; Windows/native Wayland pointer support is still not implemented.
 
 A final parallel rebuild hit MSB4166 (child node exited prematurely). Retried
 with `-m:1 -p:UseSharedCompilation=false`; no test or assertion was weakened.
+
+## Critical review follow-up
+
+Both P2 findings accepted and fixed; no findings rejected.
+
+- Enlarged hit disc: WPF BubbleService.cs:1616-1617,3277-3286,4338 and
+  ChaosModeService.cs:371,378. Core AmbientBubbles.cs:61,164-173,244 now carries
+  the spawn-sampled radius, including the 1.4 live magnet, 2.0 cap and precision
+  pickup exclusions. Avalonia ChaosRunHost.cs:156-157 supplies the run settings;
+  BubbleOverlay.cs:241-249,292-306 passes them to Core. The native input region
+  encloses the same disc, including fractional edges (BubbleOverlay.cs:494-498).
+- Sweep burst: WPF BubbleService.cs:4593,4669-4711. Core AmbientBubbles.cs:109-114
+  now marks a sweep as popping without deflation. Held completion still sets
+  Deflating, and its existing assertion is retained at ChaosLiveBubbleTests.cs:101.
+- Focused tests: ChaosLiveBubbleTests.cs:30-56 covers radius bounds, clamping,
+  precision exclusion and burst growth. ChaosVibeTrailOverlayTests.cs:164-168,187-226
+  checks the corrected sweep animation and real field sweeps beyond the sprite,
+  plus the enclosing input rectangle and spawn-time modifier sampling.
+- Fail-proof 1 executed: temporarily set HitRadius to Size / 2. Core radius filter
+  failed 3 cases, passed 2. Fail-proof 2 executed: temporarily restore
+  Popping = Deflating = true in Snap. Burst filter failed 1, passed 0. Both mutants
+  compiled and returned test exit 1; sources restored in finally. Restored Core
+  ChaosLiveBubbleTests: 18 passed, 0 failed.
+- Required builds: Core 50 warnings / 0 errors; Avalonia 201 / 0; Avalonia tests
+  144 / 0. Full Core suite: 4641 passed, 6 skipped, 0 failed. Executable affected
+  Avalonia subset: 16 passed, 0 failed. SDK: /tmp/ccp-dotnet/dotnet (10.0.403).
+- No new UI copy. Both existing keys remain in all ten language files. No WPF
+  changes. The prior font-blocked lifecycle/restacking and live platform gaps
+  remain open; ledger stays wired on X11, never verified.

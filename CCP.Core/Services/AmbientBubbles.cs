@@ -56,6 +56,9 @@ namespace ConditioningControlPanel.Services
         public int Screen;
         public double X, Y, Size, Angle, Scale = 1, Fade = 1;
         public bool Clickable, Popping, Lucky;
+        private double _hitSize;
+        /// <summary>WPF BubbleService.cs:3274-3286: target size is sampled at spawn, not draw scale.</summary>
+        public double HitRadius => (_hitSize > 0 ? _hitSize : Size) / 2;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
@@ -71,7 +74,7 @@ namespace ConditioningControlPanel.Services
         public bool DefusedViaChannel { get; private set; }
         /// <summary>Why a live bubble went off by hand: "click", "release" or "nofocus"; null for a fuse-out or escape.</summary>
         public string? BrokenReason { get; private set; }
-        /// <summary>The bubble deflates (a snap) instead of bursting.</summary>
+        /// <summary>A completed hold deflates; a sweep snap bursts (WPF BubbleService.cs:4593,4711).</summary>
         public bool Deflating { get; private set; }
         private double _channelMs, _channelStartFuseSec;
         private DateTime _channelStartUtc;
@@ -107,7 +110,7 @@ namespace ConditioningControlPanel.Services
         {
             if (Popping || !IsLiveThreat) return false;
             Channeling = false;
-            Popping = Deflating = true;
+            Popping = true;   // WPF BubbleService.cs:4669-4711: sweep Pop bursts, unlike CompleteDefuse
             return true;
         }
 
@@ -159,9 +162,15 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF Bubble ctor with a Chaos spec, FloatUp only: the spec's size, the chaos
         /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
-            double scaling, Chaos.EffectBubbleSpec spec)
+            double scaling, Chaos.EffectBubbleSpec spec, double hitboxScale = 1, bool liveMagnet = false)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
+            // WPF BubbleService.cs:3277-3286: precision pickups keep the natural hit disc.
+            bool plain = !spec.IsDarter && !spec.IsFreeze && !spec.IsGolden && !spec.IsHeart
+                         && !spec.IsDroplet && !spec.IsPrism && !spec.IsEscort && !spec.IsTease && !spec.IsBrittle;
+            double hitMult = Math.Clamp(hitboxScale, 1, 2);
+            if (liveMagnet && spec.IsLive) hitMult = Math.Clamp(hitMult * 1.4, 1, 2);
+            b._hitSize = plain ? Math.Max(b.Size, Math.Round(b.Size * hitMult)) : b.Size;
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
                        * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
@@ -232,7 +241,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ContainsPx: inside the hit disc (the sprite's own size for a plain bubble).</summary>
         public bool Contains(double x, double y)
         {
-            double dx = x - CenterX, dy = y - CenterY, r = Size / 2;
+            double dx = x - CenterX, dy = y - CenterY, r = HitRadius;
             return dx * dx + dy * dy <= r * r;
         }
 
