@@ -287,6 +287,10 @@
                     </Grid>
                 </Border>
 
+                <CheckBox x:Name="ChkReplayFailedCheck" sessionLock:SessionLock.Owned="True" Theme="{StaticResource ToggleStyle}"
+                          ToolTip.Tip="{loc:Str tooltip_video_replay_failed_check}">
+                    <TextBlock Text="{loc:Str setting_video_replay_failed_check}"/>
+                </CheckBox>
                 <Button x:Name="BtnTestVideo" Theme="{DynamicResource OutlineButton}" HorizontalAlignment="Stretch">
                     <fx:IconLabel Key="btn_test_2"/>
                 </Button>

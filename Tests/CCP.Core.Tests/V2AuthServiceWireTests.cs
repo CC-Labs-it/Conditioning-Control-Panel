@@ -72,6 +72,18 @@ public sealed class V2AuthServiceWireTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData("{\"available\":false}", false)]
+    [InlineData("{\"available\":true}", true)]
+    [InlineData("{}", null)]
+    [InlineData("invalid", null)]
+    public async Task Name_precheck_escapes_name_and_tolerates_unavailable_server(string body, bool? expected)
+    {
+        _fake.Body = body;
+        Assert.Equal(expected, await Client().IsDisplayNameAvailableAsync("A & B"));
+        Assert.StartsWith("GET " + Url + "/v2/auth/check-name?name=A%20%26%20B", Assert.Single(_fake.Seen));
+    }
+
     [Fact]
     public async Task EveryRequestMatchesTheWpfFixture()
     {

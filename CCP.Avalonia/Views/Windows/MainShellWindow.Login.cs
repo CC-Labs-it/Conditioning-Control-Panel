@@ -35,8 +35,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var s = CoreSettings.Current;
                 // Not WPF's `s.UnifiedId ||`: a stored id with nothing to prove it is not restored (AccountSeed.RestoreSession).
                 var isLoggedIn = CoreAccount.IsLoggedIn;
-                var displayName = s.UserDisplayName ?? AccountSeed.Patreon?.DisplayName ?? AccountSeed.Discord?.DisplayName
-                                  ?? AccountSeed.SubscribeStar?.DisplayName ?? "User";
+                var displayName = NeedsDisplayNameRule.FirstName(s.UserDisplayName, AccountSeed.Patreon?.DisplayName,
+                    AccountSeed.Discord?.DisplayName, AccountSeed.SubscribeStar?.DisplayName)
+                    ?? (isLoggedIn ? Loc.Get("account_name_not_set") : "User");
 
                 var settings = SettingsPage;
                 SetVisible(settings?.FindControl<Button>("BtnUnifiedLogin"), !isLoggedIn);
@@ -72,6 +73,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (await dialog.ShowDialogSafe<bool>(owner ?? this) && dialog.Result is not null)
             {
                 UpdateQuickLoginUI(accountChanged: true);
+                try { await dialog.ProfileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
+                await AskDisplayNameAfterSignIn(owner ?? this, dialog.Result);
                 if (SecretStore.NotRemembered && !_notRememberedShown)
                 {
                     _notRememberedShown = true;
@@ -79,12 +82,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 // WPF MainWindow.Login.cs:209 (#749): a first sign-in through Discord attaches it too, so
                 // offer sharing here as the link flow does. The offer self-guards on consent.
-                // WPF Login.cs:214: the sharing question does not wait for the background profile load,
-                // and the profile load does not wait for the answer.
+                // The name ask finishes before the sharing question.
                 var offer = AccountSeed.Discord?.IsAuthenticated == true
                     ? OfferAchievementSharingAfterDiscordLink() : Task.CompletedTask;
-                // The cloud profile may adopt a different level (WPF OnProfileLoaded -> UpdateLevelDisplay).
-                try { await dialog.ProfileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
+                // The loaded profile may adopt a different level.
                 UpdateLevelDisplay();
                 await offer;
             }
@@ -99,6 +100,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             UpdateQuickLoginUI(accountChanged: true);
             if (SecretStore.ClearFailed)
                 await MessageDialog.ShowAsync(this, Loc.Get("title_error"), Loc.Get("logout_not_complete_body"));
+        }
+
+        private readonly System.Collections.Generic.HashSet<string> _nameAskedFor = new();
+
+        internal async Task AskDisplayNameAfterSignIn(Window owner, LoginDialog.LoginResult result)
+        {
+            var uid = CoreAccount.UnifiedUserId;
+            if (!NeedsDisplayNameRule.ShouldAsk(CoreAccount.IsLoggedIn, result.DisplayName, result.ServerNeedsDisplayName)
+                || string.IsNullOrEmpty(uid) || !_nameAskedFor.Add(uid)) return;
+            var dialog = new DisplayNameDialog(NeedsDisplayNameRule.Suggest(AccountSeed.Discord?.Username,
+                AccountSeed.Discord?.DisplayName), async name =>
+            {
+                if (CoreAccount.UnifiedUserId != uid) return Loc.Get("msg_failed_to_change_display_name");
+                var (ok, error, saved) = await NeedsDisplayNameRule.SaveRequiredAsync(name,
+                    CoreAccount.ChangeDisplayNameAsync, value => AccountSeed.NewV2().IsDisplayNameAvailableAsync(value));
+                if (!ok) return error ?? Loc.Get("msg_failed_to_change_display_name");
+                if (CoreAccount.UnifiedUserId != uid) return Loc.Get("msg_failed_to_change_display_name");
+                CoreSettings.Current.UserDisplayName = saved ?? name;
+                CoreSettings.Save();
+                UpdateQuickLoginUI();
+                UpdateBannerWelcomeMessage();
+                if (ProfilePage?.FindControl<TextBlock>("TxtProfileViewerName") is { } label
+                    && label.Text == Loc.Get("account_name_not_set")) label.Text = saved ?? name;
+                return null;
+            });
+            await dialog.ShowDialogSafe<bool>(owner.IsVisible ? owner : this);
         }
 
         private bool _achievementShareOfferUp;

@@ -65,6 +65,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             BtnAttentionStyle.Click += BtnAttentionStyle_Click;
             BtnTestVideo.Click += BtnTestVideo_Click;
 
+            ChkReplayFailedCheck.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.MandatoryVideoReplayAfterFailedCheck = ChkReplayFailedCheck.IsChecked == true;
+                CoreSettings.Save();
+            };
             LoadFromSettings();
 
             // ponytail: WPF also repaints the hero and side art plates here (ApplyFeatureArt +
@@ -140,6 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 TxtVideoMinDur.Text = FormatDuration(s.VideoMinDurationSeconds);
                 SliderVideoMaxDur.Value = s.VideoMaxDurationSeconds;
                 TxtVideoMaxDur.Text = FormatDuration(s.VideoMaxDurationSeconds);
+                ChkReplayFailedCheck.IsChecked = s.MandatoryVideoReplayAfterFailedCheck;
                 ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
                 SliderTargets.Value = s.AttentionDensity;
                 TxtTargets.Text = s.AttentionDensity.ToString();
@@ -190,6 +197,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.AttentionLifespan) ||
                 e.PropertyName == nameof(AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(AppSettings.VideoGazeClickEnabled) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoReplayAfterFailedCheck) ||
                 e.PropertyName == nameof(AppSettings.MandatoryVideoFloating) ||
                 e.PropertyName == nameof(AppSettings.VideoTargetMonitor) ||
                 e.PropertyName == nameof(AppSettings.MercySystemEnabled) ||
