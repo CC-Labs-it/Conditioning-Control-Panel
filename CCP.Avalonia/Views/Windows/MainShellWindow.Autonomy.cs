@@ -17,6 +17,7 @@ using System.Threading.Tasks;
 using System.IO;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services.Companion;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -30,6 +31,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        // Host boundary for the toast action. Tests observe the requested URL before the
+        // sandbox guard; production still opens exclusively through ExternalOpener.
+        internal Func<TopLevel?, string?, Task<bool>> TakeoverOpenLink = Platform.ExternalOpener.OpenAsync;
+
         // WPF MainWindow.StartStop.cs:286-311. Only the user arming Keep earns this notice.
         internal void WarnIfWallpaperLibraryEmpty()
         {
@@ -44,8 +49,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     string.Format(Loc.Get("msg_no_wallpaper_images"), Loc.Get("nav_door_library"), Loc.Get("tab_assets")),
                     NotificationType.Warning, TimeSpan.FromSeconds(18),
                     actionLabel: Loc.Get("btn_open_media_manager"), action: () => ShowTab("assets"),
-                    secondaryActionLabel: Loc.Get("btn_get_packs"),
-                    secondaryAction: () => { _ = Platform.ExternalOpener.OpenAsync(this, DiscordLinks.PackCatalogue); });
+                    secondaryActionLabel: IconText.BareLoc("btn_get_packs"),
+                    secondaryAction: () => { _ = TakeoverOpenLink(this, DiscordLinks.PackCatalogue); });
             }
             catch (Exception ex) { Log.Debug(ex, "Wallpaper library check failed"); }
         }

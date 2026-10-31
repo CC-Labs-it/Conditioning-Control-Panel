@@ -61,10 +61,10 @@ public sealed class TakeoverWallpaperWarningTests
     [InlineData("local", ".png", true, false)]
     [InlineData("local", "", true, true)]
     public Task KeepWarnsOnlyForAnEmptyLocalWallpaperPool(string source, string extension,
-        bool missingCustom, bool warn) => AvaloniaTestDispatcher.RunAsync(() =>
+        bool missingCustom, bool warn) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            AppBuilder.Configure<AvApp>().WithInterFont().With(AppFonts.Options()).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var root = Path.Combine(Path.GetTempPath(), "ccp-wallpaper-" + Guid.NewGuid().ToString("N"));
         var custom = Path.Combine(root, "custom");
@@ -116,8 +116,21 @@ public sealed class TakeoverWallpaperWarningTests
                     string.Format(Loc.Get("msg_no_wallpaper_images"), Loc.Get("nav_door_library"), Loc.Get("tab_assets")));
                 var buttons = toast.GetLogicalDescendants().OfType<Button>().ToArray();
                 string? opened = null;
-                ExternalOpener.Shell = target => { opened = target; return true; };
-                buttons.Single(b => b.Content is TextBlock t && t.Text == Loc.Get("btn_get_packs"))
+                // The real default still refuses the public URL in the test sandbox.
+                var launches = 0;
+                ExternalOpener.Shell = _ => { launches++; return true; };
+                Assert.False(await shell.TakeoverOpenLink(shell, DiscordLinks.PackCatalogue));
+                Assert.Equal(0, launches);
+                // Observe the requested URL at the host boundary. ExternalOpener deliberately
+                // refuses public URLs in this sandbox before reaching its Shell seam.
+                shell.TakeoverOpenLink = (owner, target) =>
+                {
+                    Assert.Same(shell, owner);
+                    opened = target;
+                    return Task.FromResult(true);
+                };
+                ExternalOpener.Shell = _ => throw new InvalidOperationException("No real browser launch");
+                buttons.Single(b => b.Content is TextBlock t && t.Text == ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("btn_get_packs"))
                     .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.Equal(DiscordLinks.PackCatalogue, opened);
                 buttons.Single(b => b.Content is TextBlock t && t.Text == Loc.Get("btn_open_media_manager"))
@@ -140,6 +153,5 @@ public sealed class TakeoverWallpaperWarningTests
             ExternalOpener.Shell = opener;
             Directory.Delete(root, true);
         }
-        return Task.CompletedTask;
     });
 }
