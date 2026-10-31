@@ -43,6 +43,26 @@ public sealed class SubliminalWhisperShowTests
         }
     }
 
+    // WPF SubliminalService.PlayTriggerAudio: voice only, no duplicate haptic/card/reset.
+    [Fact]
+    public void Tube_trigger_audio_uses_linked_clip_without_a_card()
+    {
+        With(audible: true, roll: 0.5, run =>
+        {
+            SubliminalWhisperShow.PlayTriggerAudio("freeze");
+            Assert.Equal(new[] { "duck 70", "play freeze.mp3 whisper" }, run.Log);
+            Fire(run, 500);
+            Assert.Empty(run.Timers); // fail-proof: routing through Whisper schedules the card
+            Assert.DoesNotContain(run.Log, l => l.StartsWith("card"));
+        });
+        With(audible: false, roll: 0.5, run =>
+        {
+            SubliminalWhisperShow.PlayTriggerAudio("freeze");
+            Assert.Empty(run.Log);
+            Assert.Empty(run.Timers);
+        });
+    }
+
     private static void Fire(Run run, int ms)
     {
         var i = run.Timers.FindIndex(t => t.Ms == ms);

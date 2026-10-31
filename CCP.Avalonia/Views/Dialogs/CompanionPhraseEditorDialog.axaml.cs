@@ -216,6 +216,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// Voice-line folder resolution, enumeration and stable-ID migration are shared with WPF
         /// through CompanionVoiceLines, including the install/content-pack union.
         /// </summary>
+        // WPF CompanionPhraseService.cs:378-381: count the same enabled rows the editor uses.
+        internal static int ActivePhraseCount() => LoadPhrases().Count(p => p.IsEnabled);
+
         private static List<CompanionPhrase> LoadPhrases()
         {
             var settings = CoreSettings.Current;

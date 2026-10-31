@@ -10,13 +10,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
     public partial class AvatarTubeWindow
     {
-        /// <summary>Where a line came from: decides the gap after it (WPF Speech.cs:71). WPF's Trigger
-        /// source has no producer on this head (no trigger loop), so it is not here.</summary>
-        internal enum SpeechSource { Preset, AI }
+        /// <summary>Where a line came from: decides the gap after it (WPF Speech.cs:71); a queued
+        /// Trigger replays through its own bubble (ShowSpeechBySource :217).</summary>
+        internal enum SpeechSource { Preset, AI, Trigger }
 
         // WPF Speech.cs:35: a QUEUED line carries text only - its clip is dropped, as WPF ("audio is
         // still text-only on this delayed path", Speech.cs:283).
-        private readonly Queue<string> _speechQueue = new();
+        private readonly Queue<(string Text, SpeechSource Source)> _speechQueue = new();
         private DateTime _lastSpeechEndTime = DateTime.MinValue;
         private SpeechSource _lastSpeechSource = SpeechSource.Preset;
         private int _lastSpeechLength;
@@ -76,15 +76,18 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 _cancelSpeechDelay = SpeechDelayScheduler(TimeSpan.FromSeconds(remaining), () =>
                 {
                     _cancelSpeechDelay = static () => { };
-                    ShowQueuedPreset(next);
+                    ShowQueued(next);
                 });
             else
-                ShowQueuedPreset(next);
+                ShowQueued(next);
         }
 
-        /// <summary>WPF ShowSpeechBySource for a Preset: the giggle cue on every fifth.</summary>
-        private void ShowQueuedPreset(string text) =>
-            ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true);
+        /// <summary>WPF ShowSpeechBySource: a trigger gets its own bubble, a preset the giggle cue on every fifth.</summary>
+        private void ShowQueued((string Text, SpeechSource Source) line)
+        {
+            if (line.Source == SpeechSource.Trigger) ShowTriggerBubbleImmediate(line.Text);
+            else ShowSpeech(line.Text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true);
+        }
 
         /// <summary>WPF GigglePriority / PanicSilence: drop every waiting line and the pending gap.</summary>
         private void ClearSpeechQueue()
