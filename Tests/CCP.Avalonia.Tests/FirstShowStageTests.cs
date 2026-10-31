@@ -59,6 +59,46 @@ public sealed class FirstShowStageTests
         return Task.CompletedTask;
     });
 
+    // WPF Presentation.cs:71 -> Alive.cs:162 resets the poke ladder when the show ends.
+    // Use the service's real replay path, with a short show inside the four-second poke window.
+    [Fact]
+    public Task ReplayReturnsHerWithAFreshPokeLadder() => Run(stage =>
+    {
+        var emi = EmiDeskService.Instance.Window!;
+        var clock = new PresentationPatClock();
+        emi.PatClock = clock;
+        var pat = typeof(EmiDeskWindow).GetMethod("PetFromClick",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        void Pat() => pat.Invoke(emi, null);
+        void FinishPat(int ms) { clock.Advance(ms); emi.AdvancePatFeedback(); }
+
+        Assert.True(FirstShowService.Stop());
+        Pat();                         // first pat is counted
+        FinishPat(1000);
+        Pat();                         // second touch is a cooldown flick
+        Assert.Equal("^_~", emi.Face);
+        FinishPat(1000);
+        int pets = EmiState.Current.PetsTotal;
+
+        Assert.True(FirstShowService.Open());
+        Assert.True(emi.PresentationActive);
+        Assert.True(FirstShowService.Stop());
+        Assert.False(emi.PresentationActive);
+        Pat();                         // still in cooldown, but no inherited third-touch glee
+        Assert.Equal("^_~", emi.Face);
+        FinishPat(300);
+        Assert.Equal("^_~", emi.Face); // stale ladder would show (≧◡≦) here
+        Assert.Equal(pets, EmiState.Current.PetsTotal);
+        return Task.CompletedTask;
+    });
+
+    private sealed class PresentationPatClock : TimeProvider
+    {
+        private DateTimeOffset _now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(int ms) => _now += TimeSpan.FromMilliseconds(ms);
+    }
+
     /// <summary>WPF Load :145 / Bundled :206 -> Confirm :222 -> Start: pictures load through the seams, the
     /// warning names the stop key, "ready" starts the show, and the flash beat plays its cue.</summary>
     [Theory]
