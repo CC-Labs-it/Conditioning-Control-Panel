@@ -288,6 +288,8 @@
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
     <!-- Wardrobe registry + art, read off disk by Core WardrobeCatalog; as WPF ConditioningControlPanel.csproj:236. -->
+    <Content Include="..\Assets\emi\desk-items\**\*.png" Link="Resources\emi\desk-items\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\Assets\cosmetics\shop\ATTRIBUTION.txt" Link="Resources\cosmetics\shop\ATTRIBUTION.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\Assets\cosmetics\**\*.png;..\Assets\cosmetics\*.json" Link="Resources\cosmetics\%(RecursiveDir)%(Filename)%(Extension)"
              Exclude="..\Assets\cosmetics\**\*_28.png;..\Assets\cosmetics\**\*_104.png;..\Assets\cosmetics\**\*_guide.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

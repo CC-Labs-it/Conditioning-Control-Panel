@@ -163,6 +163,8 @@
                  WPF gave it a private PropTilt / PropRise transform pair. Dropped here with the
                  layout code that drove them: LayoutProp lives in EmiDeskWindow.Props.cs, which is
                  not part of this port. -->
+            <Image x:Name="DeskHatOverImage" Stretch="Fill" IsHitTestVisible="False" IsVisible="False" RenderOptions.BitmapInterpolationMode="None"/>
+            <Image x:Name="DeskToyOverImage" Stretch="Fill" IsHitTestVisible="False" IsVisible="False" RenderOptions.BitmapInterpolationMode="None"/>
             <Image x:Name="PropImage"
                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
                    Stretch="Fill"

@@ -355,6 +355,11 @@
                                   Theme="{StaticResource EmiPanelSwitch}"/>
                     </Grid>
 
+                    <TextBlock Text="{loc:Str emi_desk_opt_head_things}" Theme="{StaticResource EmiPanelSectionHeader}"/>
+                    <TextBlock Text="{loc:Str emi_desk_opt_hat}" Theme="{StaticResource EmiPanelLabel}"/>
+                    <WrapPanel x:Name="DeskHatPicks" Margin="0,5,0,0"/>
+                    <TextBlock Text="{loc:Str emi_desk_opt_toy}" Theme="{StaticResource EmiPanelLabel}" Margin="0,9,0,0"/>
+                    <WrapPanel x:Name="DeskToyPicks" Margin="0,5,0,0"/>
                     <!-- 3. HER RING. The same control the settings tab hosts, writing the same
                             EmiState.Pins through the same EmiSuggester. Header shown here: this
                             panel has no other place to put the count or the reset. -->
