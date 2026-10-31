@@ -56,11 +56,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             ChkFlashGazePop.IsCheckedChanged += ChkFlashGazePop_Changed;
             ChkFlashGazeLinger.IsCheckedChanged += ChkFlashGazeLinger_Changed;
             SliderFlashLingerMs.ValueChanged += SliderFlashLingerMs_Changed;
+            ChkFlashRoundedCorners.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.FlashRoundedCorners = ChkFlashRoundedCorners.IsChecked == true;
+                CoreSettings.Save();
+            };
+            ChkFlashDraggable.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.FlashDraggable = ChkFlashDraggable.IsChecked == true;
+                CoreSettings.Save();
+            };
             CmbMotion.SelectionChanged += CmbMotion_Changed;
             SliderDriftSpeed.ValueChanged += SliderDriftSpeed_Changed;
 
             // WPF OnLoaded: Configure, then RowChanged re-measures the box (OnGetRowChanged -> RefreshV2Box).
-            RowGetFlashesV2.RowChanged += (_, _) => OnGetRowChanged();
+            RowGetFlashesV2.RowChanged += (_, _) => RefreshV2Box();
             RowGetFlashesV2.Configure(ConditioningControlPanel.Services.Prizes.V2PurchaseRule.FlashesPrizeId, "v2_get_flash_blurb", "section_flash_v2");
 
             LoadFromSettings();
@@ -80,12 +92,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
+            Platform.PrizeOwnership.GrantsChanged += OnGrantsChanged;
             RebindToCurrentSettings();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
+            Platform.PrizeOwnership.GrantsChanged -= OnGrantsChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
@@ -132,6 +146,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 ChkHydraLinked.IsChecked = s.HydraLinkedTiming;
                 ChkGlow.IsChecked = s.FlashGlowEnabled;
                 ChkSolidMode.IsChecked = s.FlashSolidMode;
+                ChkFlashRoundedCorners.IsChecked = s.FlashRoundedCorners;
+                ChkFlashDraggable.IsChecked = s.FlashDraggable;
                 ChkFlashGazePop.IsChecked = s.FlashGazePopEnabled;
                 ChkFlashGazeLinger.IsChecked = s.FlashGazeLingerEnabled;
                 SliderFlashLingerMs.Value = s.FlashGazeLingerExtensionMs;
@@ -147,13 +163,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // ---- Flashes v2 motion picker (WPF FlashFeatureControl.xaml.cs:414-560) ----------------
-        // WPF rebuilds on PrizeGrants.GrantsChanged. On this head ownership changes at runtime only
-        // when a Get it buy lands its grants (PrizeOwnership.ApplySnapshot), and that is exactly when
-        // the row turns Hidden: rebuild then, so the bought Drift & Bounce shows at once.
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(OnGetRowChanged);
+
         private void OnGetRowChanged()
         {
-            if (!RowGetFlashesV2.IsRowHidden || RowMotion.IsVisible
-                || !Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce)) { RefreshV2Box(); return; }
             var wasLoading = _isLoading;
             _isLoading = true;
             try { BuildMotionPicker(); }
@@ -161,9 +174,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         /// <summary>WPF RefreshV2Box: the box holds the offer while nothing is owned and collapses once
-        /// no motion, Shatter or Get it row is left.</summary>
-        private void RefreshV2Box() =>
-            BoxFlashV2.IsVisible = RowMotion.IsVisible || RowShatter.IsVisible || !RowGetFlashesV2.IsRowHidden;
+        /// no motion, Shatter, rounding, drag or Get it row is left.</summary>
+        private void RefreshV2Box()
+        {
+            var motion = Platform.PrizeOwnership.OwnsFlashV2();
+            RowRoundedCorners.IsVisible = RowDraggable.IsVisible = motion;
+            BoxFlashV2.IsVisible = motion || RowShatter.IsVisible || RowMotion.IsVisible || !RowGetFlashesV2.IsRowHidden;
+        }
 
         /// <summary>Still always, Drift and Bounce with its v2 pill when owned, Mix once anything v2 is
         /// owned. Pendulum is not offered: this head cannot play it yet (it would play Still).</summary>
@@ -265,6 +282,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.FlashAvoidCenter) ||
                 e.PropertyName == nameof(AppSettings.FlashMotionStyle) ||
                 e.PropertyName == nameof(AppSettings.FlashDriftSpeed) ||
+                e.PropertyName == nameof(AppSettings.FlashRoundedCorners) ||
+                e.PropertyName == nameof(AppSettings.FlashDraggable) ||
                 e.PropertyName == nameof(AppSettings.FlashCenterExclusionPercent))
             {
                 Dispatcher.UIThread.Post(LoadFromSettings);

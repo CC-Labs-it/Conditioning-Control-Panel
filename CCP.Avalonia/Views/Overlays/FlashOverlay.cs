@@ -296,6 +296,50 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _driftTimer.Start();
         }
 
+        internal static FlashMotionState? BeginDrag(FlashOverlayWindow w, PixelPoint pointer, double nowMs)
+        {
+            if (!CoreSettings.Current.FlashDraggable || !PrizeOwnership.OwnsFlashV2() || (w.Exit != null || w.Shatter != null || w.IsFadingOut)
+                || Drifting.Any(e => e.Motion.Drag is { Held: true })) return null;
+            var entry = Active.FirstOrDefault(e => e.Window == w);
+            if (entry.Window == null) return null;
+            var m = Drifting.FirstOrDefault(e => e.Window == w).Motion;
+            if (m == null)
+            {
+                var b = w.SpawnScreen?.WorkingArea ?? entry.Rect;
+                m = new FlashMotionState
+                {
+                    X = entry.Rect.X, Y = entry.Rect.Y, W = entry.Rect.Width, H = entry.Rect.Height,
+                    MediaW = entry.Rect.Width, MediaH = entry.Rect.Height,
+                    BoundsX = b.X, BoundsY = b.Y, BoundsW = b.Width, BoundsH = b.Height,
+                };
+                StartDrift(w, m);
+            }
+            FlashDrag.Begin(m, pointer.X, pointer.Y, nowMs);
+            return m;
+        }
+
+        internal static FlashDragOutcome EndDrag(FlashOverlayWindow w, FlashMotionState m, PixelPoint pointer, double nowMs)
+        {
+            if (m.Drag == null) return FlashDragOutcome.Place;
+            FlashDrag.Sample(m.Drag, pointer.X, pointer.Y, nowMs);
+            // The release monitor's work area keeps a thrown image above its taskbar (WPF EndLayerDrag).
+            var screen = TopLevel.GetTopLevel(w)?.Screens?.ScreenFromPoint(pointer);
+            if (screen != null)
+            {
+                var b = screen.WorkingArea;
+                m.BoundsX = b.X; m.BoundsY = b.Y; m.BoundsW = b.Width; m.BoundsH = b.Height;
+            }
+            // Apply the last sample before Release discards a tap/place's drag state.
+            FlashDrag.Step(m, 0.001);
+            var pos = new PixelPoint((int)Math.Round(m.X), (int)Math.Round(m.Y));
+            w.Position = new PixelPoint(pos.X - w.GlowPadPx, pos.Y - w.GlowPadPx);
+            for (var i = 0; i < Active.Count; i++)
+                if (Active[i].Window == w) Active[i] = (w, new PixelRect(pos, Active[i].Rect.Size));
+            var outcome = FlashDrag.Release(m, nowMs, global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level);
+            if (outcome == FlashDragOutcome.Tap) Pop(w);
+            return outcome;
+        }
+
         /// <summary>True while the shared drift tick is running.</summary>
         internal static bool DriftRunning => _driftTimer != null;
 
@@ -317,6 +361,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     for (var i = 0; i < Active.Count; i++)   // a loop, not FindIndex: no closure per frame
                         if (Active[i].Window == w) Active[i] = (Active[i].Window, new PixelRect(p, Active[i].Rect.Size));
                 }
+            // A placed or settled grab no longer needs the shared clock.
+            if (Drifting.RemoveAll(e => e.Motion is { Drag: null, Vx: 0, Vy: 0, Style: not FlashMotionStyle.Pendulum }) > 0
+                && Drifting.Count == 0) { _driftTimer?.Stop(); _driftTimer = null; }
         }
 
         /// <summary>Close every flash on screen and drop the spawns still queued. <paramref name="final"/>

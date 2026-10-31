@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -85,7 +86,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void MakeClickable(Action onPop)
         {
             IsHitTestVisible = true;
-            PointerPressed += (_, e) => { e.Handled = true; onPop(); };
+            FlashMotionState? dragging = null;
+            PointerPressed += (_, e) =>
+            {
+                e.Handled = true;
+                if (e.GetCurrentPoint(this).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed
+                    && CoreSettings.Current.FlashDraggable && PrizeOwnership.OwnsFlashV2())
+                {
+                    dragging = FlashOverlay.BeginDrag(this, this.PointToScreen(e.GetPosition(this)), Environment.TickCount64);
+                    if (dragging != null) e.Pointer.Capture(this);
+                    return;
+                }
+                onPop();
+            };
+            PointerMoved += (_, e) =>
+            {
+                if (dragging?.Drag is not { Held: true } d) return;
+                var p = this.PointToScreen(e.GetPosition(this));
+                FlashDrag.Sample(d, p.X, p.Y, Environment.TickCount64);
+            };
+            PointerReleased += (_, e) =>
+            {
+                if (dragging == null) return;
+                var m = dragging;
+                dragging = null;
+                FlashOverlay.EndDrag(this, m, this.PointToScreen(e.GetPosition(this)), Environment.TickCount64);
+                e.Pointer.Capture(null);
+                e.Handled = true;
+            };
+            PointerCaptureLost += (_, _) =>
+            {
+                // Lost capture cancels a grab, never pops or throws it.
+                if (dragging != null) { dragging.Drag = null; dragging.Vx = dragging.Vy = 0; dragging = null; }
+            };
         }
 
         /// <summary>Play <paramref name="exit"/> (WPF FlashLayer draws FlashExit.Sample the same way)
