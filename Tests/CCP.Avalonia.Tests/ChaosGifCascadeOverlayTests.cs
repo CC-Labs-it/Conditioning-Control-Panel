@@ -124,6 +124,10 @@ public sealed class ChaosGifCascadeOverlayTests
                         .SetupWithoutStarting();
                 var clock = new SteppedClock();
                 ChaosGifCascadeOverlay? rain = null;
+                var previousAssets = CorePaths.EffectiveAssetsProvider;
+                var previousFirer = EffectPayload.Firer;
+                var previousDuration = EffectPayload.GlobalDurationMult;
+                var previousAudio = CoreAudio.PlayOneShotProvider;
                 try
                 {
                     CorePaths.EffectiveAssetsProvider = () => dir;
@@ -178,13 +182,23 @@ public sealed class ChaosGifCascadeOverlayTests
                 }
                 finally
                 {
-                    ChaosRunHost.ForceShutdown();
-                    ChaosGifCascadeOverlay.CloseActive();
-                    if (rain != null) await rain.PendingDecodes;
-                    Dispatcher.UIThread.RunJobs();
-                    ChaosGifCascadeOverlay.Clock = TimeProvider.System;
-                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
-                    ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                    try
+                    {
+                        ChaosRunHost.ForceShutdown();
+                        ChaosGifCascadeOverlay.CloseActive();
+                        if (rain != null) await rain.PendingDecodes;
+                        Dispatcher.UIThread.RunJobs();
+                        ChaosGifCascadeOverlay.Clock = TimeProvider.System;
+                        ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
+                        ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                    }
+                    finally
+                    {
+                        CorePaths.EffectiveAssetsProvider = previousAssets;
+                        EffectPayload.Firer = previousFirer;
+                        EffectPayload.GlobalDurationMult = previousDuration;
+                        CoreAudio.PlayOneShotProvider = previousAudio;
+                    }
                 }
             });
         }
@@ -204,6 +218,7 @@ public sealed class ChaosGifCascadeOverlayTests
             var previousClock = BubbleOverlay.Field.Clock;
             BubbleOverlay.Field.Clock = () => now;
             int fired = 0;
+            var previousFirer = EffectPayload.Firer;
             EffectPayload.Firer = _ => fired++;
             void Detonate(EffectPayload payload) =>
                 ChaosRunHost.FirePayloadForDetonation(new EffectBubbleSpec { Payload = payload });
@@ -235,6 +250,7 @@ public sealed class ChaosGifCascadeOverlayTests
             finally
             {
                 BubbleOverlay.Field.Clock = previousClock;
+                EffectPayload.Firer = previousFirer;
                 ChaosRunHost.ForceShutdown();
                 ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
                 ChaosGifCascadeOverlay.ManualFramesForTests = false;
@@ -258,6 +274,9 @@ public sealed class ChaosGifCascadeOverlayTests
             var now = DateTime.UtcNow;
             var previousClock = BubbleOverlay.Field.Clock;
             BubbleOverlay.Field.Clock = () => now;
+            var previousFirer = EffectPayload.Firer;
+            var previousAudio = CoreAudio.PlayOneShotProvider;
+            var previousVolume = CoreSettings.Current.MasterVolume;
             CoreSettings.Current.MasterVolume = 100;
             var events = new List<(string Key, float Volume)>();
             CoreAudio.PlayOneShotProvider = (path, volume, _, _, _) =>
@@ -281,6 +300,9 @@ public sealed class ChaosGifCascadeOverlayTests
             finally
             {
                 BubbleOverlay.Field.Clock = previousClock;
+                EffectPayload.Firer = previousFirer;
+                CoreAudio.PlayOneShotProvider = previousAudio;
+                CoreSettings.Current.MasterVolume = previousVolume;
                 ChaosRunHost.ForceShutdown();
             }
             return Task.CompletedTask;
@@ -372,6 +394,51 @@ public sealed class ChaosGifCascadeOverlayTests
             });
         }
         finally { Directory.Delete(dir, true); }
+    }
+
+    [Theory]
+    [InlineData("live")]
+    [InlineData("heavy")]
+    [InlineData("htlink")]
+    [InlineData("other")]
+    public async Task Nested_cases_restore_the_callers_providers_duration_and_volume(string testCase)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var previous = (CorePaths.EffectiveAssetsProvider, EffectPayload.Firer,
+                EffectPayload.GlobalDurationMult, CoreAudio.PlayOneShotProvider, CoreSettings.Current.MasterVolume);
+            Func<string> assets = () => Path.Combine(TestUserDataProfile.Root, "sentinel-assets");
+            Action<EffectPayload> firer = _ => { };
+            CorePaths.EffectiveAssetsProvider = assets;
+            EffectPayload.Firer = firer;
+            EffectPayload.GlobalDurationMult = 1.25;
+            CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => { };
+            var audio = CoreAudio.PlayOneShotProvider;
+            CoreSettings.Current.MasterVolume = 37;
+            try
+            {
+                if (testCase == "live")
+                    await Live_bubble_detonation_fires_payload_with_global_duration_and_panic_cancels_pending_pick();
+                else if (testCase == "heavy")
+                    await Heavy_detonations_are_dropped_during_pick_grace_and_real_rain_then_reset_on_shutdown();
+                else
+                    await Rain_stinger_uses_variant_and_only_plays_after_heavy_gate_accepts(testCase, testCase == "htlink");
+                Assert.Same(assets, CorePaths.EffectiveAssetsProvider);
+                Assert.Same(firer, EffectPayload.Firer);
+                Assert.Equal(1.25, EffectPayload.GlobalDurationMult);
+                Assert.Same(audio, CoreAudio.PlayOneShotProvider);
+                Assert.Equal(37, CoreSettings.Current.MasterVolume);
+            }
+            finally
+            {
+                (CorePaths.EffectiveAssetsProvider, EffectPayload.Firer, EffectPayload.GlobalDurationMult,
+                    CoreAudio.PlayOneShotProvider, CoreSettings.Current.MasterVolume) = previous;
+            }
+        });
     }
 
     private static void Show(string gif) => ChaosGifCascadeOverlay.ShowWithFiles(new() { gif },
