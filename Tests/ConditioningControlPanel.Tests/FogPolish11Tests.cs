@@ -21,6 +21,7 @@ namespace ConditioningControlPanel.Tests;
 /// <para>Set <c>CCP_FOG_RENDER_DIR</c> to a folder to also write the review PNGs (corner frames
 /// one second apart and a full window for Social and Studio) and the bench line there.</para>
 /// </summary>
+[Collection(nameof(SkiaRasterBudgetCollection))]
 public class FogPolish11Tests
 {
     private static readonly Color Lilac = Color.FromRgb(0xB7, 0x9C, 0xFF);
