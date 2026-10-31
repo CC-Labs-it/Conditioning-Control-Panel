@@ -506,7 +506,8 @@ public sealed class FriendsApi : IFriendsApi
         }
         var expires = ParseTime(o["expires_at"], at + life);
         return new InboxItem(id, kind, from, Str(o["from_name"]) ?? "", Str(o["from_avatar"]), poke, destination, code, watch,
-            at, expires) { Room = room };
+            at, expires) { Room = room, Track = room != null
+                && Lobby.RaceOpenApi.TrackName(Str(o["track"])).Length > 0 ? Str(o["track"]) : null };
     }
 
     internal static bool IsJoinCode(string s)

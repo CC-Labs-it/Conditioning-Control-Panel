@@ -56,7 +56,7 @@
       <TextBlock Text="{Binding Line}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="0,2,0,0" MaxLines="1" TextTrimming="CharacterEllipsis"/>
      </StackPanel>
      <!-- ponytail: the row's game/claim door is not wired in this slice. -->
-     <Button Grid.Column="1" IsEnabled="False" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
+     <Button Grid.Column="1" IsEnabled="{Binding CanLaunch}" Click="RaceJoin_Click" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
       <StackPanel Orientation="Horizontal" Spacing="4"><fx:IconGlyph Kind="LockClosed" Size="12" IsVisible="{Binding Locked}"/><TextBlock Text="{Binding ButtonText}"/></StackPanel>
      </Button>
     </Grid>

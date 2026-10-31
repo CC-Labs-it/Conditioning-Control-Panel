@@ -29,14 +29,15 @@ public partial class AvailableSubjectsTabView : UserControl
         SizeChanged += (_, e) => SetNarrow(LobbyPageRules.IsNarrowWidth(e.NewSize.Width));
         // The shell hides tabs with IsVisible, so Loaded fires once; WPF redraws on every open
         // (MainWindow.Lobby.cs:84), which picks up sign-in, Remote gate and language changes.
-        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && IsVisible) Repaint(); };
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { if (IsVisible) { Repaint(); StartRaceRows(); } else StopRaceRows(); } };
         Loaded += (_, _) =>
         {
+            StartRaceRows();
             Repaint();
             SubjectsAmbientFx.StartLayers(new AmbientFxConfig
                 { Layers = AmbientFxLayers.FogDrift, FogPuffs = 2, Intensity = 0.40 });
         };
-        Unloaded += (_, _) => SubjectsAmbientFx.Stop();
+        Unloaded += (_, _) => { StopRaceRows(); SubjectsAmbientFx.Stop(); };
     }
 
     private void Repaint()
@@ -94,7 +95,7 @@ public partial class AvailableSubjectsTabView : UserControl
         RemoteHostLock.IsVisible = !gates.CanHost(LobbyGame.Remote);
         BtnBecomeASubject.Opacity = gates.CanHost(LobbyGame.Remote) ? 1 : 0.7;
         TxtBecomeASubjectSubtitle.IsVisible = gates.SignedIn && !gates.CanHost(LobbyGame.Remote);
-        // ponytail: Chess/Goon host and all row Join flows wait for the Lobby service/hosts in the b-lane.
+        // ponytail: Chess/Goon host and non-race row Join flows wait for the Lobby service/hosts in the b-lane.
         // Keep those destinations disabled instead of constructing a made-up game or remote claim flow.
     }
 
@@ -110,8 +111,11 @@ public partial class AvailableSubjectsTabView : UserControl
 
 public sealed class LobbyCardView
 {
+    public LobbyRow Row { get; }
+    public bool CanLaunch => Row.Game == LobbyGame.Race;
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {
+        Row = row;
         Title = LobbyPageRules.Title(row, Loc.Get);
         Line = LobbyPageRules.Line(Loc.Get(LobbyPageRules.LabelKey(row.Game)), LobbySummary.For(row, Loc.Get));
         Friend = row.Friend;

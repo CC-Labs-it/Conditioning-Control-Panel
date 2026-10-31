@@ -160,7 +160,9 @@ public sealed class PresetsFocalFxTests
             var a = Write("sync_a", 30); Write("sync_b", 20);
             var manager = new SessionManager(files); manager.LoadAllSessions();
             var added = 0; manager.SessionAdded += _ => added++;
-            var view = new PresetsTabView(); view.UseSessionManager(manager);
+            var clock = new SharedDeeperThemeTests.StepClock();
+            var view = new PresetsTabView(); view.SetValue(SharedDeeperThemeTests.StepClock.Property, clock.Instance);
+            view.UseSessionManager(manager);
             host = new Window { Width = 1200, Height = 900, Content = view }; host.Show(); host.Activate(); Settle();
             var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
             string[] Ids() => rack.Children.OfType<Border>().Select(b => ((Session)b.Tag!).Id).Where(id => id.StartsWith("sync_")).ToArray();
@@ -179,6 +181,7 @@ public sealed class PresetsFocalFxTests
             Assert.Equal(new[] { "sync_c", "sync_a", "sync_b" }, Ids());
             Assert.Contains(manager.AllSessions, s => s.Id == "sync_c");
             Assert.Equal(0, added);
+            clock.Step(0); clock.Step(1); // Observe the entrance before advancing its controlled animation clock.
             Assert.Contains(rack.Children.OfType<Border>(), c => c.Opacity < 1);
             Assert.Contains(view.FindControl<StackPanel>("RackSourceChips")!.Children.OfType<ToggleButton>(),
                 chip => chip.Content is TextBlock t && t.Text!.EndsWith("  3"));
