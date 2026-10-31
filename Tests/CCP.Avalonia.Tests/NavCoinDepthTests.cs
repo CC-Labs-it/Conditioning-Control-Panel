@@ -1,9 +1,13 @@
+using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Media;
+using Avalonia.Input;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -15,8 +19,7 @@ namespace CCP.Avalonia.Tests;
 
 public class NavCoinDepthTests
 {
-    [Fact]
-    public void StandaloneCoinPaintsDepthWithoutTextOrAWindow() => AvaloniaTestDispatcher.Run(() =>
+    private static MainShellWindow.NavSectionRow Coin()
     {
         if (Application.Current == null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
@@ -27,12 +30,19 @@ public class NavCoinDepthTests
             face.Resources[key] = Application.Current!.FindResource(key); // detached fixture has no resource parent
         var row = new MainShellWindow.NavSectionRow
         {
-            Button = new Button { Content = face }, Hue = Colors.Coral,
+            Button = new Button { Content = face, Background = Brushes.Transparent }, Hue = Colors.Coral,
             Tile = new Border { Width = 56, Height = 56, CornerRadius = new CornerRadius(15) },
             Art = new Border(), Tint = new Border(), Ring = new Border(), Badge = new Border(),
         };
         foreach (var part in new[] { row.Tile, row.Art, row.Tint, row.Ring, row.Badge }) face.Children.Add(part);
         MainShellWindow.BuildNavCoin(row, face);
+        return row;
+    }
+
+    [Fact]
+    public void StandaloneCoinPaintsDepthWithoutTextOrAWindow() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var row = Coin();
         var c = row.Coin!;
         Assert.Equal(Application.Current!.FindResource("DepthCoinSpecular"), c.Specular.Fill);
         Assert.False(c.Specular.Data!.FillContains(new Point(40, 40)));
@@ -55,6 +65,59 @@ public class NavCoinDepthTests
         Assert.Equal(-3, c.Lift.Y, 6);
         MainShellWindow.StepNavCoin(c, 0.14);
         Assert.Equal(-2, c.Lift.Y);
+    });
+
+    private sealed class Clock : TimeProvider
+    {
+        public long Now;
+        public override long GetTimestamp() => Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+    }
+
+    [Theory]
+    [InlineData(0)] // exit
+    [InlineData(1)] // press
+    [InlineData(2)] // Motion Off
+    [InlineData(3)] // Performance tier
+    [InlineData(4)] // Reduced press
+    public void TiltIsLinearAndOldTracksCannotUndoSettling(int change) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var row = Coin();
+        var c = row.Coin!;
+        var oldClock = BeatLoop.Time;
+        var clock = new Clock();
+        BeatLoop.Time = clock;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.GentleVisuals = CoreSettings.Current.PerformanceMode = CoreSettings.Current.AutoPerformanceMode = false;
+        var w = new Window { Content = row.Button, Width = 120, Height = 120 };
+        void Advance(double ms) { clock.Now += (long)(ms * TimeSpan.TicksPerMillisecond); BeatLoop.StepAll(); }
+        try
+        {
+            w.Show(); Dispatcher.UIThread.RunJobs(); w.UpdateLayout();
+            var at = row.Button.TranslatePoint(new Point(row.Button.Bounds.Width / 2, row.Button.Bounds.Height / 2), w)!.Value;
+            w.MouseMove(at);
+            Assert.True(row.Button.IsPointerOver);
+            MainShellWindow.AnimateNavTilt(row, 1.2);
+            Advance(45);
+            Assert.Equal(0.6, c.Tilt.Angle, 6); // halfway through a linear 90 ms track
+            if (change == 0) w.MouseMove(new Point(-20, -20));
+            if (change == 2) CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            if (change == 3) CoreSettings.Current.PerformanceMode = true;
+            if (change == 4) CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            if (change == 1 || change == 4) { w.MouseDown(at, MouseButton.Left); Assert.True(row.Pressed); }
+            BeatLoop.StepAll();
+            if (change == 2) { Assert.Equal(0, c.Tilt.Angle); Assert.False(c.TiltBeat!.IsRunning); }
+            else
+            {
+                Assert.Equal(0.6, c.Tilt.Angle, 6); // settling starts at the visible angle
+                Advance(change == 4 ? 30 : 60);
+                Assert.Equal(0.15, c.Tilt.Angle, 6); // quadratic settle, 120 ms or Reduced 60 ms
+            }
+            Advance(120);
+            Assert.Equal(0, c.Tilt.Angle, 6);
+            Assert.False(c.TiltBeat!.IsRunning);
+        }
+        finally { w.Close(); BeatLoop.Time = oldClock; }
     });
 
     [Fact]

@@ -22,7 +22,8 @@ public partial class MainShellWindow
         internal TranslateTransform Lift = new(), DiscShift = new(1.5, 0);
         internal RotateTransform Tilt = new();
         internal BeatLoop? Beat, TiltBeat;
-        internal double TiltFrom, TiltTo;
+        internal double TiltFrom, TiltTo, TiltDuration;
+        internal bool Settling;
         internal double From, To, ShadowFrom, ShadowTo, OpacityFrom, OpacityTo, Duration;
         internal bool Spring;
     }
@@ -83,8 +84,12 @@ public partial class MainShellWindow
         coin.Beat = new BeatLoop(face, seconds => StepNavCoin(coin, seconds));
         coin.TiltBeat = new BeatLoop(face, seconds =>
         {
-            double p = Math.Clamp(seconds / (DepthLaw.Ms(90, AmbientFxCanvas.Env.Level) / 1000.0), 0, 1);
-            coin.Tilt.Angle = NavCoinLaw.Travel(coin.TiltFrom, coin.TiltTo, p, false);
+            if (AmbientFxCanvas.Env.Level == Models.MotionLevel.Off || !coin.Settling &&
+                (row.Pressed || !NavCoinLaw.Tilts(row.Active, AmbientFxCanvas.Env.Level, AmbientFxCanvas.Env.CurrentTier)))
+            { AnimateNavTilt(row, 0, settling: true); return; }
+            double p = Math.Clamp(seconds / coin.TiltDuration, 0, 1);
+            coin.Tilt.Angle = coin.Settling ? NavCoinLaw.Travel(coin.TiltFrom, coin.TiltTo, p, false)
+                : coin.TiltFrom + (coin.TiltTo - coin.TiltFrom) * p;
             if (p >= 1) coin.TiltBeat!.Stop();
         });
         face.DetachedFromVisualTree += (_, _) => { coin.Beat.Stop(); coin.TiltBeat.Stop(); StepNavCoin(coin, coin.Duration); };
@@ -99,17 +104,27 @@ public partial class MainShellWindow
             row.Pressed = false; row.Hovered = row.Button.IsPointerOver;
             PaintNavCoin(row, spring: true);
         }, RoutingStrategies.Bubble, handledEventsToo: true);
+        row.Button.PointerExited += (_, _) => AnimateNavTilt(row, 0, settling: true);
         row.Button.PointerMoved += (_, e) =>
         {
             if (row.Pressed || !NavCoinLaw.Tilts(row.Active, AmbientFxCanvas.Env.Level, AmbientFxCanvas.Env.CurrentTier))
-            { coin.Tilt.Angle = 0; return; }
+            { AnimateNavTilt(row, 0, settling: true); return; }
             if (tile.Bounds.Width <= 0 || tile.Bounds.Height <= 0) return;
             var at = e.GetPosition(tile);
-            coin.TiltBeat.Stop();
-            coin.TiltFrom = coin.Tilt.Angle;
-            coin.TiltTo = NavCoinLaw.Tilt(at.X / tile.Bounds.Width * 2 - 1, at.Y / tile.Bounds.Height * 2 - 1);
-            coin.TiltBeat.Start();
+            AnimateNavTilt(row, NavCoinLaw.Tilt(at.X / tile.Bounds.Width * 2 - 1, at.Y / tile.Bounds.Height * 2 - 1));
         };
+    }
+
+    internal static void AnimateNavTilt(NavSectionRow row, double target, bool settling = false)
+    {
+        var c = row.Coin!;
+        c.TiltBeat!.Stop(); // replace the old track before either settling or snapping
+        c.TiltFrom = c.Tilt.Angle;
+        c.TiltTo = target;
+        c.Settling = settling;
+        c.TiltDuration = DepthLaw.Ms(settling ? DepthLaw.HoverMs : 90, AmbientFxCanvas.Env.Level) / 1000.0;
+        if (c.TiltDuration <= 0 || c.TiltFrom == target) { c.Tilt.Angle = target; return; }
+        c.TiltBeat.Start();
     }
 
     internal static void PaintNavCoin(NavSectionRow row, bool spring = false)
@@ -118,8 +133,7 @@ public partial class MainShellWindow
         bool seated = row.Pressed || row.Active;
         if (row.Face!.TryFindResource(seated ? "DepthPressedBevel" : "DepthCoinRim", out var brush)) c.Rim.BorderBrush = brush as IBrush;
         c.Socket.Opacity = seated ? 1 : 0;
-        c.TiltBeat?.Stop();
-        c.Tilt.Angle = 0;
+        AnimateNavTilt(row, 0, settling: true);
         c.Beat!.Stop();
         c.From = c.Lift.Y;
         c.To = DepthLaw.TravelFor(true, row.Pressed, row.Active, row.Hovered);

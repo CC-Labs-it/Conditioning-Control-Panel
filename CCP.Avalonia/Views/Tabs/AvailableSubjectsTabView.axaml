@@ -28,7 +28,9 @@
    <Style Selector="^:disabled /template/ Border#bd"><Setter Property="Opacity" Value="0.45"/></Style>
   </ControlTheme>
   <ControlTheme x:Key="LobbyJoin" TargetType="Button" x:DataType="tabs:LobbyCardView">
-   <Setter Property="Foreground" Value="White"/><Setter Property="Padding" Value="12,8"/>
+   <Setter Property="Foreground" Value="#2A0618"/><Setter Property="Padding" Value="15,5,15,6"/>
+   <Setter Property="FontFamily" Value="Fredoka, Segoe UI"/><Setter Property="FontSize" Value="13.5"/>
+   <Setter Property="FontWeight" Value="Bold"/><Setter Property="Cursor" Value="Hand"/>
    <Setter Property="Template"><ControlTemplate TargetType="Button">
     <Grid>
      <Border CornerRadius="13" Background="#B23A6B" Margin="0,3,0,0"/>
@@ -40,7 +42,8 @@
      </Border>
     </Grid>
    </ControlTemplate></Setter>
-   <Style Selector="^:pressed /template/ Border#face"><Setter Property="Margin" Value="0,3,0,0"/></Style>
+   <Style Selector="^:pointerover /template/ Border#face"><Setter Property="Opacity" Value="0.92"/></Style>
+   <Style Selector="^:pressed /template/ Border#face"><Setter Property="RenderTransform"><TranslateTransform Y="3"/></Setter></Style>
   </ControlTheme>
   <ControlTheme x:Key="LobbyColumn" TargetType="Border">
    <Setter Property="CornerRadius" Value="18"/><Setter Property="Padding" Value="12,12,6,8"/>
