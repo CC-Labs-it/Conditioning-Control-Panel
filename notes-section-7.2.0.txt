@@ -5,6 +5,7 @@ RACING THOUGHTS, NOW IN 3D
 - five courses: Threshold, The Keep, Mainframe, GOONWORKS and Boudoir. the song lays the road and its words, and the floor plays along.
 - Prime only, solo included. without Prime the door stays visible, with a lock.
 - Customize track under each course sets its pictures and niches. your own files stay on your PC.
+- on the phone the race shows Scrolller pictures too, once you say yes. they count against your daily share.
 - Time Trial, medals, ghosts, achievements and a record of your races. Escape pauses, panic ends it, Gentle visuals calm it down.
 
 RACING ONLINE
@@ -28,14 +29,15 @@ TOYS IN THE RACE
 - a new Racing Thoughts row in the haptics settings starts at 60%. Options in the race picks Full, Moments or Off. your own limits apply and panic stops it.
 
 PRIZE COUNTER
-- a 3D counter in the desktop app. it takes Sparkles and nothing else.
+- a 3D counter on desktop, the website and the phone. one wallet, and it takes Sparkles and nothing else.
+- what you buy and wear carries across: kart look, chess pieces, profile frame and picture. EMI's desk items can be bought anywhere and go on her desk on desktop.
 - kart bodies, outfits, paints and the lace umbrella; chess skins, banners and insignias; profile frames and pictures; hats and toys for EMI's desk; a Back Room shelf and a Prime shelf.
-- open it from the wallet chip on the launcher or the panel, from the garage or chess, or walk up to the Back Room counter and press E.
+- on desktop, open it from the wallet chip on the launcher or the panel, from the garage or chess, or walk up to the Back Room counter and press E. How it works is one button away, and shows itself on your first visit.
 - stock changes every week and items come back. what you own stays on the shelf, stamped.
 - a buy asks once to confirm. no refunds, no gifts. Prime items need Prime to buy and stay yours after.
 
 SPARKLES IN EVERY GAME
-- Racing Thoughts, chess, Goon, Breakout, Arcademy, Down the Rabbit Hole, the Caucus race and Intake pay Sparkles by finishing place or medal. Back Room tables keep their own bank.
+- Racing Thoughts, chess, Goon, Breakout, Arcademy, Down the Rabbit Hole, the Caucus race and Intake pay Sparkles by finishing place or medal, on desktop, website and phone. the website's Goon and Intake don't pay yet. Back Room tables keep their own bank.
 - online pays five times solo once two real players race. first of 8: 20 solo, 100 online. a solo race of one lap pays a third, three laps all of it.
 - a small slip shows what you earned. quit early and it pays nothing.
 - solo pay tapers after five rounds of one game in a day, and solo and online each have a daily ceiling. the day turns over at midnight UTC.
@@ -55,6 +57,8 @@ SINCE 7.1.0
 - nothing comes back on its own after a panic, the voice panic follows the panic key rules, and a session that crashes leaves your settings as they were.
 
 FIXES
+- Racing Thoughts: the road no longer turns white on phones with an older graphics chip.
+- the white dot at the end of the level bar is gone.
 - Goon: a refused game card comes back with a reason.
 - Circe's Tab: a lock that ended or ran out no longer hides the credit behind a raffle day slip-up.
 every 7.1.x fix is in here too. coming from 7.0.x or older? read the 7.1.0 notes on the release
