@@ -165,21 +165,24 @@ namespace CCP.Avalonia.Tests
             }
         }
 
-        /// <summary>The kill is per profile like the mutex: a sandbox (kc, tests) never kills the user's app or
-        /// another sandbox running the same binary, and an unreadable profile is never a target.</summary>
+        /// <summary>Profile proof is absent before registration and after disposal; a sandbox never proves
+        /// the default profile or another sandbox, even within the same process.</summary>
         [Fact]
         public void TheStaleKillNeverCrossesAProfile()
         {
-            static byte[] Env(params string[] vars) => System.Text.Encoding.UTF8.GetBytes(string.Join('\0', vars) + "\0");
-            Assert.True(SingleInstance.SameProfile(null, Env("HOME=/home/u"), true));                         // real app, real app
-            Assert.True(SingleInstance.SameProfile("/s/a", Env("HOME=/h", "CCP_USERDATA_DIR=/s/a"), true));   // same sandbox
-            Assert.False(SingleInstance.SameProfile("/s/a", Env("HOME=/home/u"), true));                      // sandbox -> real app
-            Assert.False(SingleInstance.SameProfile(null, Env("CCP_USERDATA_DIR=/s/a"), true));               // real app -> sandbox
-            Assert.False(SingleInstance.SameProfile("/s/a", Env("CCP_USERDATA_DIR=/s/b"), true));             // other sandbox
-            Assert.False(SingleInstance.SameProfile("/s/a", Env("XCCP_USERDATA_DIR=/s/a"), true));            // not the variable
-            Assert.False(SingleInstance.SameProfile(null, null, true));                                       // unreadable: skip
-            Assert.False(SingleInstance.SameProfile("/s/a", null, false));                                    // no environ, sandboxed: never
-            Assert.False(SingleInstance.SameProfile(null, null, false));                                       // cannot prove the target profile: skip
+            using var me = System.Diagnostics.Process.GetCurrentProcess();
+            var suffix = "_marker_test_" + Guid.NewGuid().ToString("N");
+            Assert.False(SingleInstance.HasProfileMarker(me, suffix));
+            using (SingleInstance.RegisterProfileMarker(suffix))
+            {
+                Assert.True(SingleInstance.HasProfileMarker(me, suffix));
+                Assert.False(SingleInstance.HasProfileMarker(me, suffix + "_other"));
+                Assert.False(SingleInstance.HasProfileMarker(me, ""));
+                using (SingleInstance.RegisterProfileMarker(""))
+                    Assert.True(SingleInstance.HasProfileMarker(me, ""));
+                Assert.False(SingleInstance.HasProfileMarker(me, ""));
+            }
+            Assert.False(SingleInstance.HasProfileMarker(me, suffix));
         }
 
         /// <summary>WPF's kill fails closed (App.xaml.cs:4141-4155): only our exact, readable executable path is a

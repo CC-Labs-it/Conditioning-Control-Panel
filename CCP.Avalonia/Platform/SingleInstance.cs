@@ -27,13 +27,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         readonly Mutex _mutex;
         readonly bool _owned;
+        readonly Mutex? _profileMarker;
         readonly CancellationTokenSource _cts = new();
         volatile bool _startupPhase = true;
 
-        SingleInstance(Mutex mutex, bool owned, string pipe, Func<string?, Task> show)
+        SingleInstance(Mutex mutex, bool owned, string pipe, string suffix, Func<string?, Task> show)
         {
             _mutex = mutex;
             _owned = owned;
+            if (owned) _profileMarker = RegisterProfileMarker(suffix);
             // Only the mutex owner answers; an unowned run (wedged primary) would fight it for the pipe.
             if (owned) _ = Task.Run(() => ListenAsync(pipe, show, () => _startupPhase, _cts.Token));
         }
@@ -74,7 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 catch (AbandonedMutexException) { owned = true; }
                 if (!owned && acked == null) { mutex.Dispose(); return null; }
             }
-            return new SingleInstance(mutex, owned, pipe, show);
+            return new SingleInstance(mutex, owned, pipe, suffix, show);
         }
 
         /// <summary>The options of the instance mutex on Unix, null on Windows. Windows keeps WPF's plain
@@ -121,19 +123,41 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try { return proc.MainModule?.FileName; } catch { return null; }
         }
 
-        /// <summary>The mutex is per profile (SandboxSuffix), so the kill is too: a sandboxed run never kills the
-        /// user's app or another sandbox, nor the other way round. Linux reads the target's /proc environ and skips
-        /// it when unreadable; other OSes cannot prove the profile, so takeover skips every target there.</summary>
-        internal static bool SameProfile(string? ourDir, byte[]? theirEnviron, bool environReadable)
+        // WPF App.xaml.cs:4157 targets this executable. CCP_USERDATA_DIR adds a profile boundary:
+        // a live kernel object proves the target claimed our profile, on Windows as well as Unix.
+        // PID + start time prevent an old marker from identifying a reused PID. No target memory is read.
+        static string ProfileMarkerName(Process process, string suffix)
         {
-            ourDir ??= "";
-            if (!environReadable) return false;
-            if (theirEnviron == null) return false;
-            const string key = "CCP_USERDATA_DIR=";
-            string theirs = "";
-            foreach (var entry in Encoding.UTF8.GetString(theirEnviron).Split('\0'))
-                if (entry.StartsWith(key, StringComparison.Ordinal)) { theirs = entry[key.Length..]; break; }
-            return string.Equals(theirs, ourDir, StringComparison.Ordinal);
+            // Linux Process.StartTime converts boot ticks through a per-process boot-time estimate.
+            // Use the kernel's stable start tick directly so two processes compute the same marker.
+            string started;
+            if (OperatingSystem.IsLinux())
+            {
+                string stat = File.ReadAllText($"/proc/{process.Id}/stat");
+                started = stat[(stat.LastIndexOf(')') + 2)..].Split(' ', StringSplitOptions.RemoveEmptyEntries)[19];
+            }
+            else started = process.StartTime.ToUniversalTime().Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return $"CCP_InstanceProfile_{process.Id}_{started}{suffix}";
+        }
+
+        internal static Mutex RegisterProfileMarker(string suffix)
+        {
+            using var me = Process.GetCurrentProcess();
+            return CreateMutex(ProfileMarkerName(me, suffix), out _);
+        }
+
+        internal static bool HasProfileMarker(Process process, string suffix)
+        {
+            try
+            {
+                string name = ProfileMarkerName(process, suffix);
+                bool found = UnixMutexOptions() is { } options
+                    ? Mutex.TryOpenExisting(name, options, out var marker)
+                    : Mutex.TryOpenExisting(name, out marker);
+                marker?.Dispose();
+                return found;
+            }
+            catch { return false; } // Missing, inaccessible or exited: never a kill target.
         }
 
         /// <summary>WPF App.xaml.cs:4157-4217: terminate every OTHER process running our exact executable;
@@ -144,7 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try
             {
                 string? self = Normalize(Environment.ProcessPath);
-                string? ourDir = Environment.GetEnvironmentVariable("CCP_USERDATA_DIR");
+                string suffix = SandboxSuffix();
                 if (!IsAppExecutable(self))
                 {
                     Serilog.Log.Warning("[LIFECYCLE] Takeover aborted: we run {Self}, not the app executable, so no other process can be confirmed to be this build", self);
@@ -164,9 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                             Serilog.Log.Warning("[LIFECYCLE] Takeover skipped pid {Pid}: it runs {Other}, we run {Self}", id, other ?? "(unreadable)", self);
                             continue;
                         }
-                        byte[]? environ = null;
-                        if (OperatingSystem.IsLinux()) try { environ = File.ReadAllBytes($"/proc/{id}/environ"); } catch (Exception) { }
-                        if (!SameProfile(ourDir, environ, OperatingSystem.IsLinux()))
+                        if (!HasProfileMarker(proc, suffix))
                         {
                             Serilog.Log.Warning("[LIFECYCLE] Takeover skipped pid {Pid}: not provably the same profile (CCP_USERDATA_DIR)", id);
                             continue;
@@ -251,6 +273,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             _cts.Cancel();
             if (_owned) try { _mutex.ReleaseMutex(); } catch (ApplicationException) { }
             _mutex.Dispose();
+            if (_profileMarker != null)
+            {
+                try { _profileMarker.ReleaseMutex(); } catch (ApplicationException) { }
+                _profileMarker.Dispose();
+            }
         }
     }
 }

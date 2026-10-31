@@ -25,4 +25,11 @@
     <None Include="Assets\bubblecount-2s.mp4" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets\help-clip-audio-2s.mp4" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CCP.SingleInstance.Probe/CCP.SingleInstance.Probe.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <Target Name="CopySingleInstanceProbe" AfterTargets="Build">
+    <ItemGroup><ProbeFiles Include="../CCP.SingleInstance.Probe/bin/$(Configuration)/net10.0/*" /></ItemGroup>
+    <Copy SourceFiles="@(ProbeFiles)" DestinationFolder="$(OutDir)SingleInstanceProbe" />
+  </Target>
 </Project>
