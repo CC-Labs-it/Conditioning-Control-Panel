@@ -2,6 +2,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using Avalonia.Controls;
+using Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Chaos;
 using Newtonsoft.Json.Linq;
@@ -11,6 +13,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Games;
 
 internal sealed partial class GameWindow
 {
+    // WPF Services/Chaos/LoomHostService.cs:58-59: keep Loom browser state separate from games.
+    private static void ConfigureLoomEnvironment(WebViewEnvironmentRequestedEventArgs e)
+    {
+        var folder = Path.Combine(CorePaths.UserData, "browser_data_loom");
+        Directory.CreateDirectory(folder);
+        switch (e)
+        {
+            case WindowsWebView2EnvironmentRequestedEventArgs win:
+                win.UserDataFolder = folder;
+                break;
+            case GtkWebViewEnvironmentRequestedEventArgs gtk:
+                gtk.BaseDataDirectory = folder;
+                gtk.BaseCacheDirectory = Path.Combine(folder, "cache");
+                break;
+            case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
+                wpe.DataDirectory = folder;
+                wpe.CacheDirectory = Path.Combine(folder, "cache");
+                break;
+        }
+    }
+
     private static void DirectoryForLoom()
     {
         Directory.CreateDirectory(DtrhLoomStore.SpiralsFolder);
@@ -40,8 +63,8 @@ internal sealed partial class GameWindow
                 break;
             case "loom-reveal":
                 var path = DtrhLoomStore.GifPathFor((string?)message["slug"]);
-                // ponytail: the portable launcher opens the containing folder (Windows Explorer selects the file).
-                if (path != null) ExternalOpener.Open(Path.GetDirectoryName(path));
+                // WPF Services/Chaos/LoomHostService.cs:111-119: reveal the store-validated file.
+                if (path != null) ExternalOpener.Reveal(path);
                 break;
             case "sfx":
                 var cue = (string?)message["name"];
