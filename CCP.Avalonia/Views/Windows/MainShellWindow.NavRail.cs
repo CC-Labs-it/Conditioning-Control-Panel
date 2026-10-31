@@ -8,8 +8,8 @@
 // ponytail: not yet here: the coin depth (BuildNavCoin, press travel, tilt, specular), the
 // rail shadow (PaintDepthRail) - lane
 // wire-shell-nav-rail-b; the possession reroute seam (WPF PossessionReroute, written only by
-// Services/Possession/Effects/MisrouteEffect.cs - that effect has no writer on this head). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
-// Social pill stays down until the Lobby service lands.
+// Services/Possession/Effects/MisrouteEffect.cs - that effect has no writer on this head). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d.
+// MainShellWindow.Lobby feeds the Social count from shared discovery.
 
 using System;
 using System.Collections.Generic;
