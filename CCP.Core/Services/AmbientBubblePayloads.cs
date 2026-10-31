@@ -62,3 +62,26 @@ public sealed class AmbientPayloadRunner
         else post(Deliver);
     }
 }
+
+/// <summary>WPF OverlayService.cs:950-1070: keep the peak until the last timed hold ends.</summary>
+public sealed class TimedOverlayHold
+{
+    private int _holds, _generation;
+    public bool IsActive => _holds > 0;
+    public double Opacity { get; private set; }
+    public Func<bool> Acquire(double opacity)
+    {
+        Opacity = Math.Max(Opacity, Math.Clamp(opacity, 0, 1));
+        _holds++;
+        var generation = _generation;
+        var released = false;
+        return () =>
+        {
+            if (released || generation != _generation) return false;
+            released = true;
+            if (--_holds == 0) Opacity = 0;
+            return true;
+        };
+    }
+    public void Clear() { _generation++; _holds = 0; Opacity = 0; }
+}

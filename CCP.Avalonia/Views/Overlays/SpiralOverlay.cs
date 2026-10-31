@@ -85,23 +85,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
-        private static DateTime _payloadUntil;
-        private static double _payloadOpacity;
-        private static int _payloadGeneration;
-        internal static bool HasTimedPayload => DateTime.UtcNow < _payloadUntil;
+        internal static readonly TimedOverlayHold PayloadHold = new();
+        internal static bool HasTimedPayload => PayloadHold.IsActive;
         internal static void ShowTimed(Visual host, int ms, double opacity)
         {
-            _payloadGeneration++;
-            _payloadUntil = DateTime.UtcNow.AddMilliseconds(Math.Max(1, ms));
-            _payloadOpacity = Math.Clamp(opacity, 0, 1);
+            var release = PayloadHold.Acquire(opacity);
             Refresh(host);
-            var generation = _payloadGeneration;
             global::Avalonia.Threading.DispatcherTimer.RunOnce(() =>
             {
-                if (generation != _payloadGeneration) return;
-                _payloadUntil = default;
-                Refresh(host);
-            }, TimeSpan.FromMilliseconds(Math.Max(1, ms)));
+                if (release()) Refresh(host);
+            }, TimeSpan.FromMilliseconds(Math.Max(50, ms)));
         }
 
         public static void Refresh(Visual host)
@@ -136,7 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
             var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var opacity = HasTimedPayload
-                ? Math.Max(s.SpiralEnabled && ShouldShow() ? PaintedOpacity : 0, _payloadOpacity) : PaintedOpacity;
+                ? Math.Max(s.SpiralEnabled && ShouldShow() ? PaintedOpacity : 0, PayloadHold.Opacity) : PaintedOpacity;
 
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
             {
@@ -205,8 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _configuredPath = null;
             _randomizeAtStart = null;
             _repicked = false;
-            _payloadUntil = default;
-            _payloadGeneration++;
+            PayloadHold.Clear();
             CloseWindows();
         }
 

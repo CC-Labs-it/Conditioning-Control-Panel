@@ -9,6 +9,38 @@ namespace CCP.Core.Tests;
 
 public sealed class AmbientPayloadRunnerTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OverlappingHoldsKeepPeakUntilLastReleaseAndIgnoreStaleTimers(bool reverse)
+    {
+        var hold = new TimedOverlayHold();
+        var strong = hold.Acquire(0.8); var weak = hold.Acquire(0.2);
+        Assert.Equal(0.8, hold.Opacity);
+        Assert.True((reverse ? strong : weak)());
+        Assert.True(hold.IsActive); Assert.Equal(0.8, hold.Opacity);
+        Assert.True((reverse ? weak : strong)()); Assert.False(hold.IsActive);
+        var stale = hold.Acquire(1); hold.Clear(); var fresh = hold.Acquire(0.3);
+        Assert.False(stale()); Assert.Equal(0.3, hold.Opacity);
+        Assert.True(fresh()); Assert.False(hold.IsActive); Assert.False(fresh());
+    }
+
+    [Theory]
+    [InlineData(ChaosMotion.RainDown)]
+    [InlineData(ChaosMotion.RoamBounce)]
+    [InlineData(ChaosMotion.SideDrift)]
+    public void AmbientBoostScalesMotionVelocities(ChaosMotion motion)
+    {
+        var spec = AmbientBubblePayloads.Build("flash")!;
+        double Travel(int boost)
+        {
+            var b = AmbientBubble.SpawnChaos(new Random(4), 0, 0, 0, 1920, 1080, 1, spec, motion, boost);
+            var x = b.X; var y = b.Y; b.Step();
+            return motion == ChaosMotion.SideDrift ? Math.Abs(b.X - x) : motion == ChaosMotion.RainDown ? b.Y - y : Math.Sqrt(Math.Pow(b.X - x, 2) + Math.Pow(b.Y - y, 2));
+        }
+        Assert.Equal(6 * Travel(0), Travel(500), 6);
+    }
+
     [Fact]
     public void TriggerRollHonoursSwitchChanceCapAndRetiredIds()
     {

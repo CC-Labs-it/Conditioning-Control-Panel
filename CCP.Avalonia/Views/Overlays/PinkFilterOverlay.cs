@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;               // MonitorTarget
 using Serilog;
 
@@ -72,23 +73,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// </summary>
         /// <param name="host">Any attached visual - it is only used to reach <c>Screens</c> and
         /// the owning window. A detached one enumerates no screens and hides the tint.</param>
-        private static DateTime _payloadUntil;
-        private static double _payloadOpacity;
-        private static int _payloadGeneration;
-        internal static bool HasTimedPayload => DateTime.UtcNow < _payloadUntil;
+        internal static readonly TimedOverlayHold PayloadHold = new();
+        internal static bool HasTimedPayload => PayloadHold.IsActive;
         internal static void ShowTimed(Visual host, int ms, double opacity)
         {
-            _payloadGeneration++;
-            _payloadUntil = DateTime.UtcNow.AddMilliseconds(Math.Max(1, ms));
-            _payloadOpacity = Math.Clamp(opacity, 0, 1);
+            var release = PayloadHold.Acquire(opacity);
             Refresh(host);
-            var generation = _payloadGeneration;
             global::Avalonia.Threading.DispatcherTimer.RunOnce(() =>
             {
-                if (generation != _payloadGeneration) return;
-                _payloadUntil = default;
-                Refresh(host);
-            }, TimeSpan.FromMilliseconds(Math.Max(1, ms)));
+                if (release()) Refresh(host);
+            }, TimeSpan.FromMilliseconds(Math.Max(50, ms)));
         }
 
         public static void Refresh(Visual host)
@@ -104,7 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var (r, g, b) = EffectiveColor();
             var opacity = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;   // a session ramps it without writing it (#471)
             // WPF ResolveAdHocOverlayOpacity: an effect raises a live tint, never lowers it.
-            if (HasTimedPayload) opacity = s.PinkFilterEnabled && ShouldShow() ? Math.Max(opacity, _payloadOpacity) : _payloadOpacity;
+            if (HasTimedPayload) opacity = s.PinkFilterEnabled && ShouldShow() ? Math.Max(opacity, PayloadHold.Opacity) : PayloadHold.Opacity;
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.
@@ -148,8 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public static void CloseAll()
         {
-            _payloadUntil = default;
-            _payloadGeneration++;
+            PayloadHold.Clear();
             CloseWindows();
         }
 

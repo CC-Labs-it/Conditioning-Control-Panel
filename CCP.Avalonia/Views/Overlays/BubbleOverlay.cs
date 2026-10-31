@@ -180,8 +180,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var spec = AmbientBubblePayloads.Roll(settings, rng,
                 Field.Bubbles.Count(b => b.AmbientTrigger || b.Spec is { IsLive: false }));
             var b = spec == null
-                ? AmbientBubble.Spawn(Field.Random, screen, a.X, a.Y, a.Width, a.Height, scaling, settings, mod, clickable)
-                : AmbientBubble.SpawnChaos(Field.Random, screen, a.X, a.Y, a.Width, a.Height, scaling, spec, spec.Motion);
+                ? AmbientBubble.Spawn(rng, screen, a.X, a.Y, a.Width, a.Height, scaling, settings, mod, clickable)
+                : AmbientBubble.SpawnChaos(rng, screen, a.X, a.Y, a.Width, a.Height, scaling, spec, spec.Motion, settings.BubbleSpeedBoost);
             b.AmbientTrigger = spec != null;
             b.Clickable = clickable;
             return b;

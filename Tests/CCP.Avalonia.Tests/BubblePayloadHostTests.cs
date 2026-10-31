@@ -24,6 +24,41 @@ public sealed class BubblePayloadHostTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DashboardBoostReachesPlainAndTriggerButNotChaos(bool trigger) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var s = new AppSettings { BubbleTriggersEnabled = trigger, BubbleTriggerChance = 50, BubbleTriggerVariants = new() { "flash" } };
+        AmbientBubble Spawn(int boost) { s.BubbleSpeedBoost = boost; return BubbleOverlay.CreateAmbient(0, new PixelRect(0, 0, 1920, 1080), 1, s, null, true, new Random(1)); }
+        var normal = Spawn(0); var fast = Spawn(500);
+        Assert.Equal(trigger, fast.AmbientTrigger);
+        var y = normal.Y; normal.Step(); var fy = fast.Y; fast.Step();
+        Assert.Equal(6 * (y - normal.Y), fy - fast.Y, 6);
+        var spec = AmbientBubblePayloads.Build("flash")!;
+        var settings = CoreSettings.Current; var saved = settings.BubbleSpeedBoost;
+        try
+        {
+            settings.BubbleSpeedBoost = 0;
+            var reference = AmbientBubble.SpawnChaos(new Random(4), 0, 0, 0, 1920, 1080, 1, spec);
+            settings.BubbleSpeedBoost = 500;
+            var chaos = AmbientBubble.SpawnChaos(new Random(4), 0, 0, 0, 1920, 1080, 1, spec);
+            chaos.Step(); reference.Step(); Assert.Equal(reference.Y, chaos.Y);
+        }
+        finally { settings.BubbleSpeedBoost = saved; }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BothHeadsRetainThePeakAcrossWeakerShorterPops(bool spiral) => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp(); var host = new Window();
+        void Show(int ms, double opacity) { if (spiral) SpiralOverlay.ShowTimed(host, ms, opacity); else PinkFilterOverlay.ShowTimed(host, ms, opacity); }
+        try { Show(10000, 0.8); Show(50, 0.2); Assert.Equal(0.8, (spiral ? SpiralOverlay.PayloadHold : PinkFilterOverlay.PayloadHold).Opacity); }
+        finally { PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll(); }
+    });
+
     [Fact]
     public void TriggerSpawnCapAndAmbientPopStaySeparateFromChaos() => AvaloniaTestDispatcher.Run(() =>
     {

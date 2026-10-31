@@ -164,12 +164,14 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF Bubble ctor with a Chaos spec on its motion row (chaos runs pass FloatUp): the spec's size, the chaos
         /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
-            double scaling, Chaos.EffectBubbleSpec spec, Chaos.ChaosMotion motion = Chaos.ChaosMotion.FloatUp)
+            double scaling, Chaos.EffectBubbleSpec spec, Chaos.ChaosMotion motion = Chaos.ChaosMotion.FloatUp, int ambientSpeedBoost = 0)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
                        * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
+            // WPF BubbleService.cs:3308: ambient boost precedes motion velocity calculation.
+            b._speed *= 1.0 + Math.Clamp(ambientSpeedBoost, 0, 500) / 100.0;
             b._animType = r.Next(4);
             b._wobbleOffset = r.NextDouble() * 100;
             b.Angle = r.Next(360);
