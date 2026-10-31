@@ -48,6 +48,7 @@ import { createAi } from './sim/ai.js';
 import { createContact } from './sim/contact.js';
 import { createStandings } from './sim/standings.js';
 import { createItems } from './sim/items.js';
+import { createArchOnlyItems } from './sim/boostArches.js';
 import { loadTrack } from './track/load.js';
 import { selectTrack, allowsOnline, courseSongs, courseSongRows } from './track/selection.js';
 import { createMainframeScan, scanClock } from './sim/mainframeScan.js';
@@ -775,8 +776,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const ghostView = { st: createState(), meta: { i: 1, id: 'ghost', name: 'Ghost', isBot: false, tint: 0, slot: 1 },
     fxv: { spinRad: 0, shield: null, echo: 0, effect: null, ghost: true, slip: 0, place: 1 } };
   const ghostPose = {}, ghostKarts = [null, ghostView];
-  const NO_ITEM_VIEW = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
-  const noItems = () => ({ update() {}, view: () => NO_ITEM_VIEW, reset() {}, nearOpenEdge: () => false, trapRows: () => [], lobTarget: () => -1 });
+  const noItems = (events) => createArchOnlyItems(track, feel, events);
   function ghostSlotShadow(off) {
     world.karts?.[1]?.traverse((o) => {
       if (!o.isMesh) return;
@@ -828,7 +828,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     perfume = createBoudoirPerfume(track, q);
     standings = createStandings(track, feel, q);
-    items = s ? s.mount(racers, race, q) : solo ? noItems() : createItems(track, feel, q, { seed: sd });
+    items = s ? s.mount(racers, race, q) : solo ? noItems(q) : createItems(track, feel, q, { seed: sd });
     P = racers.player;
     assist = createAssist(track, P.feel);
     // online too (owner 2026-10-30), and with no song at all: the flights fall back to stock words
