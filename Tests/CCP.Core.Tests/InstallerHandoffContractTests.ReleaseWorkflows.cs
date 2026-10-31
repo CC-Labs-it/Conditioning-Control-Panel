@@ -22,7 +22,7 @@ public partial class InstallerHandoffContractTests
             if (!Scalars(yaml).Append(Path.GetFileName(path)).Any(s => Regex.IsMatch(s,
                     @"avalonia|tarball|flatpak|packaging[/\\]linux|linux[^\s]*\.tar\.", RegexOptions.IgnoreCase))) continue;
             inspected.Add(Path.GetFileName(path));
-            var errors = ReleasePolicyErrors(yaml, artifactOnly: Path.GetFileName(path) == "build.yml");
+            var errors = ReleasePolicyErrors(yaml);
             Assert.True(errors.Count == 0, Path.GetFileName(path) + ": " + string.Join("; ", errors));
         }
         Assert.Contains("build.yml", inspected);
@@ -41,13 +41,13 @@ public partial class InstallerHandoffContractTests
             Scalar(MapOrEmpty(step, "with"), "name") == "avalonia-installer-unsigned-not-for-release"));
         Assert.StartsWith("actions/upload-artifact@", Scalar(upload, "uses"));
         Assert.Equal("installer-output/*-Setup.UNSIGNED-avalonia.exe", Scalar(MapOrEmpty(upload, "with"), "path"));
-        Assert.Empty(ReleasePolicyErrors(yaml, artifactOnly: true));
+        Assert.Empty(ReleasePolicyErrors(yaml));
     }
 
-    // The supported publishing shape is an explicit action-gh-release preview step. Shell/API
-    // publishing and upload-to-existing-release actions are rejected, even if another step has
-    // safe flags. Arbitrary scripts cannot be proved safe by searching for flags elsewhere.
-    private static List<string> ReleasePolicyErrors(YamlNode yaml, bool artifactOnly = false)
+    // Block release publishing until a reviewed flow refuses existing releases before mutation.
+    // action-gh-release can find a WPF release by tag and replace assets/metadata even with
+    // prerelease: true and make_latest: false. Those flags alone are not a new-release guarantee.
+    private static List<string> ReleasePolicyErrors(YamlNode yaml)
     {
         var errors = new List<string>();
         foreach (var map in Mappings(yaml))
@@ -55,16 +55,7 @@ public partial class InstallerHandoffContractTests
             var uses = Scalar(map, "uses");
             var action = uses.Split('@')[0].ToLowerInvariant();
             if (action.Contains("release"))
-            {
-                var inputs = MapOrEmpty(map, "with");
-                if (artifactOnly || action != "softprops/action-gh-release")
-                    errors.Add("Release publishing/upload action is not allowed: " + uses);
-                else if (!Scalar(inputs, "prerelease").Equals("true", StringComparison.OrdinalIgnoreCase) ||
-                         !Scalar(inputs, "make_latest").Equals("false", StringComparison.OrdinalIgnoreCase))
-                    errors.Add("Each preview release step requires literal prerelease: true and make_latest: false");
-                if (inputs.Children.Keys.OfType<YamlScalarNode>().Any(k => k.Value is "release_id" or "upload_url"))
-                    errors.Add("Uploading assets to an existing release is forbidden");
-            }
+                errors.Add("Release publishing/upload is blocked until a flow refuses existing releases: " + uses);
             // Includes run blocks and github-script's with.script, in either shell. Reject raw
             // release API access rather than pretending to interpret shell/JS conditionals.
             foreach (var key in new[] { "run", "script" })
@@ -81,6 +72,15 @@ public partial class InstallerHandoffContractTests
         return errors;
     }
 
+    [Fact]
+    public void PreviewReleaseGuardRejectsExistingWpfTagWithoutReleaseIdOrUploadUrl()
+    {
+        // action-gh-release finds an existing release by tag and can mutate its assets/metadata.
+        // These two flags do not prove the target is a new preview release.
+        var step = ReleaseStep("tag_name: v7.1.15\nfiles: linux.tar.gz\nprerelease: true\nmake_latest: false");
+        Assert.NotEmpty(ReleasePolicyErrors(ParseWorkflow(step)));
+    }
+
     [Theory]
     [InlineData("prerelease: false\nmake_latest: false")]
     [InlineData("prerelease: true\nmake_latest: true")]
@@ -93,12 +93,13 @@ public partial class InstallerHandoffContractTests
     }
 
     [Fact]
-    public void PreviewReleaseGuardChecksEachStepAndKeepsBuildArtifactOnly()
+    public void ReleaseGuardAllowsArtifactsButRejectsEveryReleaseStep()
     {
+        Assert.Empty(ReleasePolicyErrors(ParseWorkflow(ArtifactStep)));
         var preview = ReleaseStep("prerelease: true\nmake_latest: false");
-        Assert.Empty(ReleasePolicyErrors(ParseWorkflow(preview)));
-        Assert.NotEmpty(ReleasePolicyErrors(ParseWorkflow(preview), artifactOnly: true));
-        Assert.NotEmpty(ReleasePolicyErrors(ParseWorkflow(preview + "\n- uses: softprops/action-gh-release@v2")));
+        Assert.NotEmpty(ReleasePolicyErrors(ParseWorkflow(preview)));
+        Assert.NotEmpty(ReleasePolicyErrors(ParseWorkflow(ArtifactStep + "\n" + preview)));
+        Assert.NotEmpty(ReleasePolicyErrors(ParseWorkflow(preview + "\n" + ArtifactStep)));
         Assert.NotEmpty(ReleasePolicyErrors(ParseWorkflow(ReleaseStep("prerelease: true\nmake_latest: false\nrelease_id: 123"))));
     }
 
@@ -114,11 +115,12 @@ public partial class InstallerHandoffContractTests
     [InlineData("- uses: actions/github-script@v7\n  with:\n    script: octokit.request('POST /repos/{owner}/{repo}/releases')")]
     public void PreviewReleaseGuardRejectsOtherPublishingRoutes(string step)
     {
-        // Safe flags in another step must not authorize an upload or an unsafe edit.
-        var preview = ReleaseStep("prerelease: true\nmake_latest: false");
-        Assert.NotEmpty(ReleasePolicyErrors(ParseWorkflow(preview + "\n" + step)));
+        // The prefix must pass on its own, so each route independently proves rejection.
+        Assert.Empty(ReleasePolicyErrors(ParseWorkflow(ArtifactStep)));
+        Assert.NotEmpty(ReleasePolicyErrors(ParseWorkflow(ArtifactStep + "\n" + step)));
     }
 
+    private const string ArtifactStep = "- uses: actions/upload-artifact@v4\n  with:\n    name: linux-preview\n    path: linux.tar.gz";
     private static string ReleaseStep(string inputs) =>
         "- uses: softprops/action-gh-release@v2\n  with:\n    " + inputs.Replace("\n", "\n    ");
     private static YamlNode ParseWorkflow(string text)
