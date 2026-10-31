@@ -143,4 +143,33 @@ public sealed partial class FriendsDrawerTests
         }
         finally { FriendsLanding.OpenRace = open; FriendsLanding.Service = service; CoreEntitlement.HasLabProvider = lab; svc.Dispose(); }
     });
+    [Fact]
+    public Task RaceStartupHoldsRoomsUntilReady() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        SetupSync7(); var w = new GameWindow(GameWindow.Games[GameWindow.GlassroadId]);
+        var frames = new System.Collections.Generic.List<string>(); w.Posted += frames.Add;
+        w.HandoffRaceRoom("abcdefghijkl"); Assert.Empty(frames);
+        w.HandleMessage("""{"type":"ready"}"""); Assert.Single(frames.Where(f => f.Contains("join-room") && f.Contains("abcdefghijkl")));
+        w.HandleMessage("""{"type":"ready"}"""); Assert.Single(frames.Where(f => f.Contains("join-room")));
+        w.Close(); w.HandoffRaceRoom("mnopqrstuvwx"); Assert.DoesNotContain(frames, f => f.Contains("mnopqrstuvwx"));
+        var closed = new GameWindow(GameWindow.Games[GameWindow.GlassroadId]); closed.Posted += frames.Add;
+        closed.HandoffRaceRoom("abcdefgh1234"); closed.Close(); closed.HandleMessage("""{"type":"ready"}"""); Assert.DoesNotContain(frames, f => f.Contains("abcdefgh1234"));
+        return Task.CompletedTask;
+    });
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public Task LinkMotionUsesGentleAndOsCaps(bool gentle, bool os) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        SetupSync7(); var probe = UiMotionPreference.OsProbe;
+        try
+        {
+            CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full; CoreSettings.Current.GentleVisuals = gentle;
+            UiMotionPreference.OsProbe = () => os; UiMotionPreference.CacheStamp = long.MinValue;
+            var d = new FriendsDrawer(); d.PlayLinkFx(new Border(), false);
+            Assert.Equal(6, Tagged<FriendsDrawer.LinkBurst>(d, "friends-link-pop")!.Sparks);
+        }
+        finally { UiMotionPreference.OsProbe = probe; UiMotionPreference.CacheStamp = long.MinValue; }
+        return Task.CompletedTask;
+    });
 }

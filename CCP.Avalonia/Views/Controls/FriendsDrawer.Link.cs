@@ -2,16 +2,13 @@ using System;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Layout;
 using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
-
 namespace ConditioningControlPanel.Avalonia.Views.Controls;
-
 // Friend links share Core's grammar, account cache and wire. Clipboard stays in the head.
 public sealed partial class FriendsDrawer
 {
@@ -24,7 +21,6 @@ public sealed partial class FriendsDrawer
     internal string LinkNoteText => _linkNoteText ?? "";
     internal Func<DateTimeOffset> LinkClock { get; set; } = () => Services.ServerClock.UtcNow;
     internal Func<string, Task<bool>>? CopyText { get; set; }
-
     private Button LinkPill()
     {
         var pill = Pill(Loc.Get("friends_link_copy"), Raised, Text, "friends-copy-link", Line2);
@@ -35,7 +31,6 @@ public sealed partial class FriendsDrawer
         pill.Click += async (_, _) => await CopyLinkAsync();
         return _linkPill = pill;
     }
-
     private Control NewLinkLine()
     {
         var link = Pill(Loc.Get("friends_link_new"), Brushes.Transparent, Pink, "friends-new-link");
@@ -43,7 +38,6 @@ public sealed partial class FriendsDrawer
         return new WrapPanel { Tag = "friends-new-link-line", Children =
             { Wrap(Label(Loc.Get("friends_link_new_line"), 11.5, Muted)), link } };
     }
-
     internal async Task<bool> CopyLinkAsync()
     {
         if (_svc == null || _linkBusy) return false;
@@ -72,7 +66,6 @@ public sealed partial class FriendsDrawer
         }
         finally { _linkBusy = false; }
     }
-
     private async Task<bool> WriteClipboard(string text)
     {
         try
@@ -164,7 +157,7 @@ public sealed partial class FriendsDrawer
         cue == "click" ? .12f : cue == "accepted" ? .18f : .14f, "friends-" + cue);
     internal void PlayLinkFx(Control from, bool wave)
     {
-        var k = global::ConditioningControlPanel.CoreSettings.Current.MotionLevel switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => .5, _ => 1.0 };
+        var k = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => .5, _ => 1.0 };
         if (k == 0) return;
         var fx = new LinkBurst(from, wave, k, from.TranslatePoint(new Point(from.Bounds.Width / 2, from.Bounds.Height / 2), _linkFx) ?? default);
         _linkFx.Children.Add(fx);

@@ -84,7 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
-            if (live != null) { if (InviteDestination.IsRoomId(room)) live.Post(new { type = "join-room", roomId = room }); live.Activate(); return live; }
+            if (live != null) { live.HandoffRaceRoom(room); live.Activate(); return live; }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", spec.Id); return null; }
             var window = new GameWindow(spec);
@@ -110,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
             Closing += (_, _) => _closing = true;
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); _raceRooms.Clear(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
@@ -131,6 +131,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             PageUrl = new Uri(server.Url(Spec.Page, RaceQuery(Spec, room)));
             Web.Navigate(PageUrl);
         }
+
+        private readonly Queue<string> _raceRooms = new();
+        internal void HandoffRaceRoom(string? room)
+        {
+            if (_closing || !InviteDestination.IsRoomId(room)) return;
+            _raceRooms.Enqueue(room!); FlushRaceRooms();
+        }
+        private void FlushRaceRooms()
+        { if (IsReady) while (_raceRooms.TryDequeue(out var room)) Post(new { type = "join-room", roomId = room }); }
 
         internal static string? RaceQuery(Game spec, string? room) => spec.Id == GlassroadId && InviteDestination.IsRoomId(room) ? "join=" + room : spec.Query;
 
