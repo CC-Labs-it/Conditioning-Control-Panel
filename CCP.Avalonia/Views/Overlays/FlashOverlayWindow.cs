@@ -1,4 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
+using ConditioningControlPanel.Services.Safety;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -39,6 +43,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private double _alpha = 1;
         private DispatcherTimer? _lifetimeTimer;
         private TimeSpan _fade;
+        private DispatcherTimer? _fadeTimer, _gifTimer;
+        private Action? _fadeDone;
+        private double _popSpan, _fadeTarget, _lastAppliedOpacity = double.NaN;
+        private long _fadeStamp, _animationStart;
+        private TimeSpan _ramp;
+        private bool _closed;
+        private List<Bitmap> _frames = new();
+        internal double CurrentOpacity { get; private set; }
+        internal TimeSpan FrameDelay => _gifTimer?.Interval ?? TimeSpan.Zero;
+        internal Image Picture => _image;
+        internal Task AnimationLoad { get; set; } = Task.CompletedTask;
         private long _expiresAt;
         internal long ExpiresAt => _expiresAt;
         internal bool IsFadingOut { get; private set; }
@@ -69,7 +84,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             _lifetimeTimer?.Stop(); _lifetimeTimer = null;
             IsFadingOut = true;
-            Fade(_alpha, 0, _fade, Close);
+            Fade(CurrentOpacity, 0, _fade, Close);
+        }
+        // WPF FlashService.cs:4865: the full selected duration, independent of alpha/ordinary fade.
+        internal void GentlePop()
+        {
+            _lifetimeTimer?.Stop(); IsFadingOut = true; _popSpan = CurrentOpacity;
+            IsHitTestVisible = false; X11Overlay.SetClickThrough(this, true);
+            Fade(CurrentOpacity, 0, TimeSpan.FromSeconds(GentleVisuals.FadeSeconds), Close);
         }
         private DispatcherTimer? _exitTimer;
         private long _lastExitTick;
@@ -345,7 +367,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             _root = new Panel { Children = { _card } };
             Content = _root;
-            Closed += (_, _) => { _lifetimeTimer?.Stop(); _lifetimeTimer = null; picture.Dispose(); };
+            Closed += (_, _) =>
+            {
+                _closed = true;
+                _lifetimeTimer?.Stop(); _fadeTimer?.Stop(); _gifTimer?.Stop();
+                _image.Source = null;
+                foreach (var frame in _frames) frame.Dispose();
+                _frames.Clear();
+                picture.Dispose();
+            };
         }
 
         /// <summary>
@@ -362,20 +392,72 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ScheduleExpiry();
         }
 
-        /// <summary>WPF's heartbeat ramp - linear, alpha written in 1/32 steps (FADE_ALPHA_EPSILON) -
+        /// <summary>WPF's heartbeat ramp - linear alpha with the live gentle fade floor -
         /// applied by the compositor through <see cref="X11Overlay.SetOpacity"/>.</summary>
         private void Fade(double from, double to, TimeSpan fade, Action? done = null)
         {
-            // WPF moves alpha by dt/fadeSeconds per frame, so a ramp takes |to-from| x fade:
-            // at Opacity 50% the fade is half as long, not a slower full-length one.
-            var span = fade * Math.Abs(to - from);
-            var steps = Math.Max(1, (int)Math.Ceiling(Math.Abs(to - from) * 32));
-            for (var i = 1; i <= steps; i++)
-            {
-                var v = from + (to - from) * i / steps;
-                var last = i == steps;
-                DispatcherTimer.RunOnce(() => { if (Exit != null || Shatter != null) return; X11Overlay.SetOpacity(this, v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
-            }
+            _fadeTimer?.Stop();
+            (CurrentOpacity, _fadeTarget, _ramp, _fadeDone) = (from, to, fade, done);
+            _fadeStamp = FlashOverlay.Clock.GetTimestamp();
+            _fadeTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => FadeFrame());
+            _fadeTimer.Start();
+            FadeFrame();
         }
+
+        // WPF FlashService.cs:3198-3202,3258: read the gentle floor live, alpha advances by dt / fade.
+        internal void FadeFrame()
+        {
+            if (_closed || Exit != null || Shatter != null) { _fadeTimer?.Stop(); return; }
+            var now = FlashOverlay.Clock.GetTimestamp();
+            var dt = FlashOverlay.Clock.GetElapsedTime(_fadeStamp, now).TotalSeconds;
+            _fadeStamp = now;
+            var seconds = _popSpan > 0 ? _ramp.TotalSeconds : GentleVisuals.Fade(_ramp).TotalSeconds;
+            var step = seconds > 0 ? dt / seconds * (_popSpan > 0 ? _popSpan : 1) : 1;
+            CurrentOpacity += Math.Sign(_fadeTarget - CurrentOpacity) * Math.Min(step, Math.Abs(_fadeTarget - CurrentOpacity));
+            if (Math.Abs(CurrentOpacity - _fadeTarget) < 1e-12) CurrentOpacity = _fadeTarget;
+            // Retain the base 1/32 native-alpha write budget, even during a long gentle ramp.
+            if (double.IsNaN(_lastAppliedOpacity) || Math.Abs(CurrentOpacity - _lastAppliedOpacity) >= 1.0 / 32 || CurrentOpacity == _fadeTarget)
+            {
+                X11Overlay.SetOpacity(this, CurrentOpacity);
+                _lastAppliedOpacity = CurrentOpacity;
+            }
+            if (CurrentOpacity != _fadeTarget) return;
+            _fadeTimer?.Stop();
+            var done = _fadeDone; _fadeDone = null;
+            done?.Invoke();
+        }
+
+        // WPF FlashService.cs:1773-1778,3331: decode once, scale the GIF delay once per spawn.
+        internal async Task Animate(string path)
+        {
+            if (!Path.GetExtension(path).Equals(".gif", StringComparison.OrdinalIgnoreCase)
+                && !Path.GetExtension(path).Equals(".webp", StringComparison.OrdinalIgnoreCase)) return;
+            var size = (int)Math.Clamp(Math.Max(_image.Source?.Size.Width ?? 1, _image.Source?.Size.Height ?? 1), 1, 1280);
+            var maxFrames = (int)Math.Clamp(30L * 1024 * 1024 / (4L * size * size), 1, 60);
+            var (frames, delay) = await Task.Run(() => SpiralOverlay.Decode(path, size, maxFrames));
+            if (_closed || frames.Count < 2)
+            {
+                foreach (var frame in frames) frame.Dispose();
+                return;
+            }
+            _frames = frames;
+            var speed = CoreSettings.Current.FlashGifSpeedMultiplier;
+            if (!double.IsFinite(speed) || speed <= 0) speed = 1;
+            var ms = Math.Max(10, delay.TotalMilliseconds / Math.Clamp(speed, 0.25, 4));
+            _gifTimer = new DispatcherTimer(DispatcherPriority.Render)
+                { Interval = TimeSpan.FromMilliseconds(GentleVisuals.ScaleDelayMs(ms)) };
+            _animationStart = FlashOverlay.Clock.GetTimestamp();
+            AnimationFrame();
+            _gifTimer.Tick += (_, _) => AnimationFrame();
+            _gifTimer.Start();
+        }
+
+        internal void AnimationFrame()
+        {
+            if (_closed || _frames.Count == 0) return;
+            var elapsed = FlashOverlay.Clock.GetElapsedTime(_animationStart).TotalMilliseconds;
+            _image.Source = _frames[(int)(elapsed / FrameDelay.TotalMilliseconds) % _frames.Count];
+        }
+
     }
 }

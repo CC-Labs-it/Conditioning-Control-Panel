@@ -34,6 +34,8 @@ public class TestIsolationTests
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
     [Fact]
+    public void SharedSetupIncludesPortableFonts() => Assert.NotNull(new global::Avalonia.Media.Typeface("Consolas, Courier New").GlyphTypeface);
+    [Fact]
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]

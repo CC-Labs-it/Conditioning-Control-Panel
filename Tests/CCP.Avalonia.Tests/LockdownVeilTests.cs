@@ -34,10 +34,6 @@ public sealed class LockdownVeilTests
     {
         AvaloniaTestDispatcher.Run(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             var s = CoreSettings.Current;
@@ -501,6 +497,8 @@ public sealed class LockdownVeilTests
         var root = shell.Named<Grid>("RootGrid")!;
         Assert.Null(shell.LockdownFlash);
 
+        var time = new SteppedTime();
+        MainShellWindow.LockdownFlashTime = time;
         ld.Activate(TimeSpan.FromMinutes(30));
         Frame();
         Assert.True(res.TryGetResource("PinkBrush", null, out pb));
@@ -513,8 +511,11 @@ public sealed class LockdownVeilTests
         var flash = shell.LockdownFlash!;
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
+        time.Advance(TimeSpan.FromMilliseconds(300)); shell.TickLockdownFlash();
+        Assert.Equal(0.25, flash.Opacity, 3);
         shell.PaintLockdownFlash(300);
         Assert.Equal(0.25, flash.Opacity, 3);
+        time.Advance(TimeSpan.FromMilliseconds(300)); shell.TickLockdownFlash(); Assert.Null(shell.LockdownFlash);
         shell.PaintLockdownFlash(600);
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
