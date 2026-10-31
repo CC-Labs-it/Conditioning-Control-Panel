@@ -906,6 +906,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void CancelChain()
         {
             StopPatFeedback();
+            StopTourSpeech();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -2607,7 +2608,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private void HideProp() { }
 
         /// <summary>ponytail: EmiDeskWindow.Bubble.cs - drops the voice hooks.</summary>
-        private void TearDownVox() { }
+        private void TearDownVox() => StopTourSpeech();
 
         /// <summary>WPF EmiDeskWindow.xaml.cs:1832 - the pat sound.</summary>
         private void PlayPatSfx() => EmiSfx.Pat();

@@ -26,6 +26,141 @@ namespace CCP.Avalonia.Tests;
 public sealed class ShellSettingsWiringTests
 {
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task HelpTourSpeaksOnTheVisibleDeskAndPanicClearsSpeech(bool complete) => Run(async (shell, settings) =>
+    {
+        settings.Current.EmiDeskEnabled = true;
+        settings.Current.EmiDeskMuteAvatar = false;
+        var desk = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+        try
+        {
+            await desk.Summon("test");
+            Assert.True(desk.IsOut);
+            Click(shell.Named<Button>("BtnMainHelp")!);
+            Click(shell.Named<Button>("BtnTutorialGettingStarted")!);
+            Assert.Equal(".", desk.Window!.TourSpeechText);
+            if (complete)
+            {
+                var startedLine = desk.Window.TourSpeechLine;
+                while (TutorialHead.Service.IsActive) TutorialHead.Service.Next();
+                Assert.NotEqual(startedLine, desk.Window.TourSpeechLine);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(EmiTourNarrator.Active);
+                TutorialHead.StartOnShell(TutorialType.GettingStarted);
+            }
+            TutorialHead.OnPanic();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(desk.Window.TourSpeechText);
+            Assert.Null(EmiTourNarrator.Active);
+            TutorialHead.StartOnShell(TutorialType.GettingStarted);
+            Assert.Null(desk.Window.TourSpeechText);
+        }
+        finally { desk.Window?.Close(); }
+    });
+
+    [Theory]
+    [InlineData("tourStarted", true)]
+    [InlineData("specific", true)]
+    [InlineData("tourStep", false)]
+    [InlineData("tourFinished", true)]
+    [InlineData("tourSkipped", false)]
+    public Task TourNarrationMapsEachMoment(string expected, bool complete) => Run(async (_, _) =>
+    {
+        var tutorial = new TutorialService();
+        var moments = new List<string>();
+        using var narrator = new EmiTourNarrator(tutorial, moments.Add, _ => expected == "specific");
+        tutorial.Start(TutorialType.GettingStarted);
+        if (expected == "specific") expected = "tour." + tutorial.CurrentStep!.Id;
+        if (complete) while (tutorial.IsActive) tutorial.Next();
+        else tutorial.Skip();
+        Assert.Contains(expected, moments);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task DisposedNarratorDoesNotSpeakOnAnotherTour() => Run(async (_, _) =>
+    {
+        var tutorial = new TutorialService();
+        var moments = new List<string>();
+        var narrator = new EmiTourNarrator(tutorial, moments.Add, _ => false);
+        tutorial.Start(TutorialType.GettingStarted);
+        tutorial.Skip();
+        int count = moments.Count;
+        narrator.Dispose();
+        tutorial.Start(TutorialType.GettingStarted);
+        tutorial.Skip();
+        Assert.Equal(count, moments.Count);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task MissingStepPoolFallsBackAndNarrationFailureDoesNotBlockTheTour() => Run(async (_, _) =>
+    {
+        var tutorial = new TutorialService();
+        var moments = new List<string>();
+        using var narrator = new EmiTourNarrator(tutorial, id =>
+        {
+            moments.Add(id);
+            throw new InvalidOperationException("desk unavailable");
+        }, _ => false);
+        tutorial.Start(TutorialType.GettingStarted);
+        Assert.True(tutorial.IsActive);
+        Assert.Equal(new[] { "tourStarted", "tourStep" }, moments);
+        tutorial.Skip();
+        Assert.Equal("tourSkipped", moments.Last());
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task TourBubbleUsesDeskPaletteAndStaysInsideTheWorkArea() => Run(async (_, _) =>
+    {
+        var desk = new ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskWindow();
+        try
+        {
+            desk.Show();
+            var area = desk.Screens.ScreenFromWindow(desk)!.WorkingArea;
+            desk.Position = new PixelPoint(area.Right - (int)(desk.Width * desk.RenderScaling / 2), area.Y + 200);
+            desk.SayTourLine("A tour line", "^_^");
+            var bubble = desk.BubbleHost.Children.OfType<Border>().Single();
+            var text = Assert.IsType<TextBlock>(bubble.Child);
+            Assert.Equal(global::Avalonia.Media.Color.Parse("#181832"), Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(bubble.Background).Color);
+            Assert.Equal(global::Avalonia.Media.Color.Parse("#FF69B4"), Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(text.Foreground).Color);
+            Assert.Equal(11, text.FontSize);
+            Assert.Equal(330, bubble.MaxWidth);
+            var left = desk.PointToScreen(new Point(Canvas.GetLeft(bubble), Canvas.GetTop(bubble)));
+            var right = desk.PointToScreen(new Point(Canvas.GetLeft(bubble) + bubble.DesiredSize.Width, Canvas.GetTop(bubble)));
+            Assert.True(left.X >= area.X, $"left {left.X}, work area {area}");
+            Assert.True(right.X <= area.Right, $"right {right.X}, work area {area}");
+        }
+        finally { desk.Close(); }
+        await Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(0, ".", 420)]
+    [InlineData(1, "..", 420)]
+    [InlineData(2, "...", 520)]
+    [InlineData(3, "A tour line", 4050)]
+    [InlineData(4, null, 0)]
+    public Task TourSpeechUsesLockedCadenceAndCancellationClearsIt(int stage, string? expected, int interval) => Run(async (_, _) =>
+    {
+        var desk = new ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskWindow();
+        try
+        {
+            desk.Show();
+            desk.SayTourLine("A tour line", "^_^");
+            for (int i = 0; i < Math.Min(stage, 3); i++) desk.AdvanceTourSpeech();
+            if (stage == 4) desk.CancelChain();
+            Assert.Equal(expected, desk.TourSpeechText);
+            if (stage != 4) Assert.Equal(interval, desk.TourSpeechInterval);
+            else { desk.AdvanceTourSpeech(); Assert.Null(desk.TourSpeechText); }
+        }
+        finally { desk.Close(); }
+        await Task.CompletedTask;
+    });
+
+    [Theory]
     [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Off)]
     public Task SaveDrawsTheTickAndRippleUnlessMotionIsOff(MotionLevel level) => Run(async (shell, service) =>
@@ -62,12 +197,14 @@ public sealed class ShellSettingsWiringTests
             Assert.False(browser.IsVisible);
             Click(shell.Named<Button>(name == "FullTour" ? "BtnStartTutorial" : "BtnTutorial" + name)!);
             Assert.True(CoreTutorial.IsActive);
+            Assert.NotNull(EmiTourNarrator.Active);
             Assert.Equal(name, CoreTutorial.CurrentTourName);
             Assert.False(shell.Named<Control>("MainTutorialOverlay")!.IsVisible);
             Assert.False(browser.IsVisible);
             PanicSurfaces.All.Single(s => s.Id == "tour").Stop(shell);
             Dispatcher.UIThread.RunJobs();
             Assert.False(CoreTutorial.IsActive);
+            Assert.Null(EmiTourNarrator.Active);
             Assert.True(browser.IsVisible);
         }
         await Task.CompletedTask;
@@ -275,6 +412,7 @@ public sealed class ShellSettingsWiringTests
         service.Current.UserPresets.Clear();
         service.Current.CurrentPresetName = "";
         TutorialService.CompletionStore = new Store();
+        ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.ResetForTests();
         TutorialHead.Seed();
         TutorialHead.ResetForTests();
         var shell = new MainShellWindow();
@@ -283,6 +421,7 @@ public sealed class ShellSettingsWiringTests
         finally
         {
             TutorialHead.ResetForTests();
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.ResetForTests();
             foreach (var w in shell.OwnedWindows.ToArray()) w.Close();
             shell.Close();
             service.SealForReset();
