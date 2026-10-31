@@ -262,10 +262,31 @@ public sealed partial class GameWindowTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(GameWindow.IsAnyOpen());
             Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
-            shell.HandlePanicKeyPress(t1.AddSeconds(1));
+            shell.HandlePanicKeyPress(t1.AddMilliseconds(100));
             Dispatcher.UIThread.RunJobs();
             Assert.False(GameWindow.IsAnyOpen());
         }
         finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
+    });
+    [Fact]
+    public void Glassroad_LinuxWaylandShellEscapePausesThenPanicsWithXWaylandListening() => RunGlassroad("1", (shell, _, _) =>
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var start = new System.Diagnostics.ProcessStartInfo("/usr/bin/setsid") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add("/bin/cat");
+        using var p = System.Diagnostics.Process.Start(start)!;
+        using var observer = System.Diagnostics.Process.GetProcessById(p.Id);
+        var now = DateTime.Now; var press = 0;
+        using var host = new LinuxRaceHost(p, _ => shell.HandlePanicKeyPress(now.AddMilliseconds(100 * press++)), x11Listening: () => true);
+        host.Receive(new JObject { ["type"] = "shell-loaded", ["displayBackend"] = "wayland" });
+        host.Receive(new JObject { ["type"] = "ready" });
+        host.Receive(new JObject { ["type"] = "shell-focus", ["active"] = true });
+        var escape = new JObject { ["type"] = "shell-escape", ["sequence"] = 1 };
+        host.Receive(escape);
+        host.Receive(escape);
+        Assert.False(p.HasExited);
+        escape["sequence"] = 2; host.Receive(escape);
+        Assert.True(observer.WaitForExit(5000));
+        Assert.Null(LinuxRaceHost.Current);
     });
 }

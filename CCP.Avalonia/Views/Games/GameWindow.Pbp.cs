@@ -227,7 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         /// <summary>The CCP auth token, NOT the Patreon bearer; empty with no cloud session (WPF SafeAuthToken :632).</summary>
-        private static string PbpAuthToken()
+        internal static string PbpAuthToken()
         {
             try { return CoreSettings.Current.AuthToken ?? string.Empty; } catch { return string.Empty; }
         }
