@@ -4,6 +4,8 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -112,6 +114,7 @@ public sealed class LobbyCardView
 {
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {
+        Row = row;
         Title = LobbyPageRules.Title(row, Loc.Get);
         Line = LobbyPageRules.Line(Loc.Get(LobbyPageRules.LabelKey(row.Game)), LobbySummary.For(row, Loc.Get));
         Friend = row.Friend;
@@ -120,6 +123,24 @@ public sealed class LobbyCardView
         ButtonText = Loc.Get(row.CanJoin ? "lobby_btn_join" : "lobby_btn_watch");
         ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
     }
+    private LobbyRow Row { get; }
+    public const double FaceSize = 22;
+    public double FrameSize => FaceSize / ShopProfileArt.FrameWindowRatio;
+    public Thickness FrameMargin => new(-(FrameSize - FaceSize) / 2);
+    public bool HasLook => !Row.Look.IsEmpty;
+    public IBrush? FaceBrush => !HasLook ? null :
+        (ModArt.AvatarPreset(Row.Look.AvatarId) ?? ModArt.ShopProfile(Row.Look.AvatarId, "avatar")) is { } image
+            ? new ImageBrush(image) { Stretch = Stretch.UniformToFill }
+            : LeaderboardRow.BuildAvatarBrush(Row.HostName);
+    public IImage? FrameArt => HasLook ? ModArt.ShopProfile(Row.Look.FrameId, "frame") : null;
+    public IImage? Art => ModArt.TryLoadBuiltIn(Row.Game switch
+    {
+        LobbyGame.Chess => "features/piecebypiece.png",
+        LobbyGame.Goon => "features/goon_game_tile.png",
+        LobbyGame.Race => "features/race.png",
+        _ => "features/lobby_remote.png"
+    }, 96);
+
     public string Title { get; }
     public string Line { get; }
     public bool Friend { get; }

@@ -158,6 +158,25 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             }
         }
 
+        // WPF ShopCosmetics.GetImage: immutable shipped art, cached misses included.
+        internal static Bitmap? ShopProfile(string? id, string type)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return null;
+            lock (WardrobeCache)
+            {
+                var key = "shop:" + type + ":" + id;
+                if (WardrobeCache.TryGetValue(key, out var cached)) return cached;
+                Bitmap? art = null;
+                try
+                {
+                    var path = ConditioningControlPanel.Services.ShopProfileArt.ArtPath(id, type);
+                    if (path != null && File.Exists(path)) { using var file = File.OpenRead(path); art = Decode(file, 256); }
+                }
+                catch (Exception ex) { Log.Debug("Shop profile art {Id} failed: {E}", id, ex.Message); }
+                return WardrobeCache[key] = art;
+            }
+        }
+
         private static readonly System.Collections.Generic.Dictionary<(string, string, int?), Bitmap?> FirstOfCache = new();
 
         /// <summary>
