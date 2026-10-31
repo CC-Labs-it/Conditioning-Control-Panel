@@ -34,13 +34,11 @@ public sealed class BarkEngineTests : IDisposable
         return e;
     }
 
-    private sealed class DecisionSink : Serilog.Core.ILogEventSink
-    {
+    private sealed class DecisionSink : Serilog.Core.ILogEventSink {
         public readonly List<Serilog.Events.LogEvent> Events = new();
         public void Emit(Serilog.Events.LogEvent e) => Events.Add(e);
     }
-    private sealed class IdleRandom(double roll) : Random
-    {
+    private sealed class IdleRandom(double roll) : Random {
         public override double NextDouble() => roll;
         public override int Next(int maxValue) => maxValue - 1;
     }
@@ -50,8 +48,7 @@ public sealed class BarkEngineTests : IDisposable
     public void IdleGatedPreferenceHasTheWpfThirtyFivePercentBoundary(double roll, string expected)
     {
         var saved = _s.BarkIdleRotation;
-        try
-        {
+        try {
             _s.BarkIdleRotation = new();
             var gated = Rule("Idle", "gated");
             gated.Conditions = new() { ["master_volume_gt"] = 0 };
@@ -90,8 +87,7 @@ public sealed class BarkEngineTests : IDisposable
         var sink = new DecisionSink();
         using var logger = new Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger();
         Serilog.Log.Logger = logger;
-        try
-        {
+        try {
             var r = Rule("Log", "private companion words");
             r.Mood = "happy";
             var e = Engine(r);
@@ -110,8 +106,7 @@ public sealed class BarkEngineTests : IDisposable
     public void TierLatchUsesTheRawAccountTierAndRetainsTheWpfSessionLatch()
     {
         var old = CoreAccount.CurrentTierProvider;
-        try
-        {
+        try {
             var r = Rule("Tier", "hello");
             (r.Repeatable, r.ScopeRaw) = (false, "tier");
             CoreAccount.CurrentTierProvider = () => ConditioningControlPanel.Models.PatreonTier.Level1;
@@ -132,8 +127,7 @@ public sealed class BarkEngineTests : IDisposable
     public void IdleRotationSurvivesRestartRecyclesWithoutImmediateRepeatAndHonorsTheFloor()
     {
         var saved = _s.BarkIdleRotation;
-        try
-        {
+        try {
             _s.BarkIdleRotation = new();
             var rules = new[] { Rule("Idle", "a"), Rule("Idle", "b"), Rule("Idle", "c") };
             var clock = new PopQuizSchedulerTests.FakeClock();
@@ -174,15 +168,9 @@ public sealed class BarkEngineTests : IDisposable
         Assert.DoesNotContain(no.Id, _s.BarkIdleRotation);
     }
     [Theory]
-    [InlineData("PossessionEffect")]
-    [InlineData("PossessionTripwire")]
-    [InlineData("PossessionWarden")]
-    [InlineData("PossessionRungChanged")]
-    [InlineData("PossessionTimerRestarted")]
-    [InlineData("PossessionRemember")]
-    [InlineData("LockdownConscript")]
-    [InlineData("EmergencyExitOpened")]
-    [InlineData("EmergencyExitVerdict")]
+    [InlineData("PossessionEffect"), InlineData("PossessionTripwire"), InlineData("PossessionWarden")]
+    [InlineData("PossessionRungChanged"), InlineData("PossessionTimerRestarted"), InlineData("PossessionRemember")]
+    [InlineData("LockdownConscript"), InlineData("EmergencyExitOpened"), InlineData("EmergencyExitVerdict")]
     public void AttributionEchoContainsFinalTextOnlyAfterTheMouth(string trigger)
     {
         var e = Engine(Rule(trigger, "hello {name}"));

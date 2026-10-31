@@ -26,8 +26,7 @@ public sealed class CompanionBarkHeadTests
         var session = CoreSession.IsSessionRunningProvider;
         var s = CoreSettings.Current;
         var opt = s.CompanionSpeaksIdleWhenEngineOff;
-        try
-        {
+        try {
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             CoreSession.IsEngineRunningProvider = () => false;
             CoreSession.IsSessionRunningProvider = () => false;
@@ -41,15 +40,13 @@ public sealed class CompanionBarkHeadTests
             ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
             Assert.True(BarkHead.HoldIdleVoice());
         }
-        finally
-        {
+        finally {
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             CoreSession.IsEngineRunningProvider = engine;
             CoreSession.IsSessionRunningProvider = session;
             s.CompanionSpeaksIdleWhenEngineOff = opt;
         }
     }
-
     [Fact]
     public void IdleMouthKeepsPresetRoutingAndRecoversAfterPanicQuiet() => WithSeamsRestored(s =>
     {
@@ -63,12 +60,14 @@ public sealed class CompanionBarkHeadTests
         desktop.GetType().GetMethod("SubscribeGlobalEvents", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(desktop, null);
         lifetimeField.SetValue(Application.Current, desktop);
         var shell = new MainShellWindow();
-        try
-        {
+        try {
             s.MasterVolume = 50;
             s.IdleGiggleIntervalSeconds = 120;
             s.BarkIdleRotation = new();
-            var e = Seeded(Rule("Idle", "idle hello"), out var spoken);
+            var rule = Rule("Idle", "idle hello");
+            rule.Priority = 50; rule.VariantPool![0] = new BarkVariant("idle hello", "idle_hum_1.mp3");
+            var e = Seeded(rule, out var spoken);
+            e.ResolveAudio = _ => typeof(BarkHead).Assembly.Location;
             var clock = new BarkClock();
             e.Clock = clock;
             CoreSession.IsEngineRunningProvider = () => false;
@@ -78,7 +77,7 @@ public sealed class CompanionBarkHeadTests
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             int audio = 0;
             CoreModArt.OverridePathProvider = path => path.StartsWith("sounds/") ? typeof(BarkHead).Assembly.Location : null;
-            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { audio++; return () => { }; };
+            CoreAudio.PlayStoppableProvider = (_, _, tag, _, _) => { Assert.Equal("bark-voice", tag); audio++; return () => { }; };
             BarkHead.Engine = e;
             shell.Show();
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -114,6 +113,20 @@ public sealed class CompanionBarkHeadTests
             Assert.Equal(0, audio);
             tube.EndSpeechBubble();
             clock.Advance(2);
+            CoreSession.IsEngineRunningProvider = () => true;
+            clock.Advance(60);
+            Assert.True(e.DispatchIdle()); // shipped shape: priority 50, clip present, voice not held
+            Assert.Empty(tube.ChatHistory);
+            Assert.Equal(false, tube.GetType().GetField("_isShowingAiBubble", flags)!.GetValue(tube));
+            Assert.Equal(1, audio);
+            BarkHead.Speak(new BarkSpeech("queued voiced idle", e.ResolveAudio("idle_hum_1.mp3"), false, null, false, true));
+            Assert.Equal(1, tube.QueuedSpeechCount);
+            tube.EndSpeechBubble(); clock.Advance(2); counter.SetValue(tube, 0); delayed!();
+            Assert.Equal(1, audio); // queued path drops the clip, as WPF Speech.cs:283
+            Assert.Empty(tube.ChatHistory);
+            tube.EndSpeechBubble(); clock.Advance(2);
+            Assert.True(tube.IsSpeechReady()); // voiced presets also keep the 2 s gap
+            CoreSession.IsEngineRunningProvider = () => false; audio = 0;
             s.IdleGiggleIntervalSeconds = 60;
             BarkHead.OnSettingChanged(e, nameof(s.IdleGiggleIntervalSeconds));
             Assert.Equal(System.TimeSpan.FromSeconds(60), tube.IdleInterval);
@@ -146,22 +159,18 @@ public sealed class CompanionBarkHeadTests
             shell.Close();
             Assert.False(tube.IdleTimerRunning);
         }
-        finally
-        {
+        finally {
             shell.Close();
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             lifetimeField.SetValue(Application.Current, lifetime);
             (BarkHead.Engine, s.MasterVolume, s.IdleGiggleIntervalSeconds, s.BarkIdleRotation) = old;
         }
     });
-
-    private sealed class BarkClock : System.TimeProvider
-    {
+    private sealed class BarkClock : System.TimeProvider {
         private global::System.DateTimeOffset _now = global::System.DateTimeOffset.UtcNow;
         public override global::System.DateTimeOffset GetUtcNow() => _now;
         public void Advance(int seconds) => _now = _now.AddSeconds(seconds);
     }
-
     [Fact]
     public void AppStartupStartsBothHeadsOnceQuestsExist()
     {
