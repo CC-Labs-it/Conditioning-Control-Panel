@@ -1322,7 +1322,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _stopPreview = null;
             if (_activePlayButton is { } button)
             {
-                button.Content = new IconGlyph { Kind = IconKind.Play, Size = 11 };
+                button.Content = new IconGlyph { Kind = IconKind.Play, Variant = IconVariant.Filled, Size = 12 };
                 button.Foreground = new SolidColorBrush(Color.FromRgb(100, 200, 100));
                 _activePlayButton = null;
             }

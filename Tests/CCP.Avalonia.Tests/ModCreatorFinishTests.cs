@@ -75,7 +75,8 @@ public sealed class ModCreatorFinishTests
                 Call(w, "ToggleAudioPreview", path, b); Assert.Equal(1, stops);
                 stale!(); Dispatcher.UIThread.RunJobs(); Assert.Equal(1, stops);
                 Call(w, "ToggleAudioPreview", path, b); Assert.Equal(2, stops);
-                Assert.Equal(IconKind.Play, Assert.IsType<IconGlyph>(b.Content).Kind);
+                Assert.Equal((IconKind.Play, FluentIcons.Common.IconVariant.Filled, 12d),
+                    (Assert.IsType<IconGlyph>(b.Content).Kind, ((IconGlyph)b.Content!).Variant, ((IconGlyph)b.Content!).Size));
                 Call(w, "ToggleAudioPreview", path, a);
                 finish!(); Dispatcher.UIThread.RunJobs(); Assert.Equal(3, stops);
                 Call(w, "ToggleAudioPreview", path, a);
@@ -180,5 +181,4 @@ public sealed class ModCreatorFinishTests
         }
         finally { loc.SetLanguage(previous); }
     });
-
 }
