@@ -47,6 +47,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
@@ -98,9 +99,13 @@
                                     <CheckBox Grid.Column="0" Theme="{StaticResource ItemCheckBox}"
                                               IsChecked="{Binding IsEnabled, Mode=TwoWay}"
                                               Margin="0,0,10,0"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding Text}"
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <fx:IconGlyph Kind="SpeakerMute" Size="14" IsVisible="{Binding IsSilent}"
+                                        ToolTip.Tip="{Binding $parent[Window].((vm:TextEditorViewModel)DataContext).LocSilentTooltip}"/>
+                                    <TextBlock Text="{Binding Text}"
                                                Foreground="White" FontSize="13"
                                                VerticalAlignment="Center"/>
+                                    </StackPanel>
                                     <fx:IconGlyph x:Name="BtnRemove" Grid.Column="2" Kind="Dismiss" Foreground="{DynamicResource TextMutedBrush}"
                                                Size="14" VerticalAlignment="Center"
                                                Cursor="Hand"
@@ -123,8 +128,10 @@
             </ScrollViewer>
         </Border>
 
+        <TextBlock Grid.Row="3" x:Name="TxtSilentHint" Text="{Binding LocSilentHint}" IsVisible="False"
+                   TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}" Margin="0,8,0,0"/>
         <!-- Footer Buttons -->
-        <Grid Grid.Row="3" Margin="0,15,0,0">
+        <Grid Grid.Row="4" Margin="0,15,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
