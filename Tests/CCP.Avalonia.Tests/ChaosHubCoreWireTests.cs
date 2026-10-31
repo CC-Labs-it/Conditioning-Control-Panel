@@ -12,6 +12,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -102,7 +103,7 @@ public sealed class ChaosHubCoreWireTests
                     bare.FindControl<ToggleButton>("TabDiary")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     Assert.True(bare.FindControl<ScrollViewer>("PanelLoadout")!.IsVisible);
                     Assert.False(bare.FindControl<ScrollViewer>("PanelDiary")!.IsVisible);
-    
+
                     // Buying it on the bench re-applies the gates at once (WPF Bench.cs:223 ApplyReveals).
                     bare.FindControl<StackPanel>("ImprovementsHost")!.GetLogicalDescendants().OfType<Button>()
                         .First(b => b.Tag as string == BenchIds.Diary)
@@ -177,6 +178,47 @@ public sealed class ChaosHubCoreWireTests
             return Task.CompletedTask;
         });
     }
+
+    // WPF ChaosHubWindow.xaml.cs:1587-1591 supplies the thresholds, price and English oracle.
+    [Theory]
+    [InlineData("en")]
+    [InlineData("de")]
+    [InlineData("es")]
+    [InlineData("fr")]
+    [InlineData("it")]
+    [InlineData("pt-BR")]
+    [InlineData("ru")]
+    [InlineData("ja")]
+    [InlineData("ko")]
+    [InlineData("zh-CN")]
+    public Task Unlock_tooltip_uses_the_selected_language(string language) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        ChaosHubWindow? hub = null;
+        try
+        {
+            loc.SetLanguage("en");
+            var english = Loc.Get("chaos_inescapable_unlock_tip");
+            loc.SetLanguage(language);
+            var translated = Loc.Get("chaos_inescapable_unlock_tip");
+            Assert.NotEqual("chaos_inescapable_unlock_tip", translated);
+            if (language != "en") Assert.NotEqual(english, translated); // rejects missing-key fallback
+            foreach (var placeholder in new[] { "{0}", "{1}", "{2}" }) Assert.Contains(placeholder, translated);
+            ChaosMetaStore.Save(new ChaosMetaState(), 1);
+            ChaosMetaStore.SetActiveSlot(1);
+            hub = new ChaosHubWindow();
+            Assert.Equal(Loc.GetF("chaos_inescapable_unlock_tip", ChaosLessons.T_EXTREME_TIER,
+                ChaosRanks.Thresholds[(int)ChaosRank.Devoted], ChaosUpgrades.ById("extreme_tier")!.Cost),
+                ToolTip.GetTip(hub.FindControl<ToggleButton>("SegExtreme")!));
+        }
+        finally { hub?.Close(); loc.SetLanguage(previous); }
+        return Task.CompletedTask;
+    });
 
     private static void Preset(Control root, string tag) =>
         root.GetLogicalDescendants().OfType<Button>().First(b => b.Tag as string == tag)

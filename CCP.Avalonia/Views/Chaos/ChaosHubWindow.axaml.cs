@@ -16,6 +16,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -1636,9 +1637,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 // The lock keeps its mystery on the face; the hover gives the exact path (WPF xaml.cs:1585-1590).
                 int cost = ChaosUpgrades.ById("extreme_tier")?.Cost ?? 0;
-                ToolTip.SetTip(_segExtreme, "a deeper door. she sells the key in the Toybox: "
-                    + $"finish {ChaosLessons.T_EXTREME_TIER} relentless descents, reach Devoted "
-                    + $"({ChaosRanks.Thresholds[(int)ChaosRank.Devoted]} descents), then train it for ✦{cost}.");
+                ToolTip.SetTip(_segExtreme, Loc.GetF("chaos_inescapable_unlock_tip",
+                    ChaosLessons.T_EXTREME_TIER, ChaosRanks.Thresholds[(int)ChaosRank.Devoted], cost));
                 ToolTip.SetShowOnDisabled(_segExtreme, true);
             }
             ApplyDifficultyPillTips(extremeUnlocked: unlocked);
