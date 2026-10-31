@@ -282,6 +282,13 @@ re-sends `owned { grants, wear: '<counter row id>' }` (`kart.body.<id>`, `kart.o
 `kart.umbrella.lace`, `prime.paint.host-gold`, `prime.trail.podium`). The garage adopts the grants first, then puts the
 item on like its own picker (`hud/garageState.js wearPick`; the bundle keeps hearts or spiral if worn, else hearts),
 saves it, turns to the kart or opens Customize on the section, and shows a short note. Unknown or unowned ids are ignored.
+Toys (7.2, `host/raceToys.js`, the feel table is `fx/toyPlan.js`): a host with a toy stack sets `caps.toys: true`, and
+`caps.toysConnected` drives the Options "Toys" row (host -> page `toys { connected }` when it changes). page -> host:
+`toy { level 0..1, ms, tag }`, `toy-bed { level 0..1 }` re-sent while it runs (the host zeroes it within 1.5 s when the
+sends stop, so a dead page cannot pin a toy) and `toy-stop`. The player's own events only, nothing crosses the network.
+Pause, a hidden page and leaving send `toy-stop`. The host clamps everything and scales it: the page is untrusted.
+The numbers stay out of feel.json, which would move the course hash.
+
 Web Scrolller pictures (2026-10-26, `host/scrolllerFeed.js`): a host that can feed them sets `caps.scrolller:
 { consent: boolean }` (the web shim; the desktop never does). Host -> page `scrolller-feed { v: 1, rows: [{ url, kind:
 'image' }] }` (https on a scrolller.com host, at most 12 used; an empty list when consent is off) and the `setting
