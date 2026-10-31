@@ -242,6 +242,11 @@ internal sealed class ProcessStateSnapshot
             .Where(t => !t.ContainsGenericParameters).ToList();
         var byName = types.ToLookup(t => t.Name);
         var found = new HashSet<MemberInfo>();
+        // Native refusal is cached internally, without a Type.Member assignment for the scanner.
+        // DWM is available on Windows headless CI, but its windows have no native input shape.
+        found.Add(typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosSkiaFxOverlay)
+            .GetField("_refused", AnyStatic)!);
+
 
         // Whole seam classes: the head's service locator and Core's static Core* seams.
         foreach (var t in types.Where(t => t == typeof(ConditioningControlPanel.Avalonia.App)

@@ -76,6 +76,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (LockdownActive) return;   // PLAYBOOK P05, like OpenInvitesCard
             switch (key)
             {
+                // WPF MainWindow.Exclusives.cs:208, :217-223: the same door as the launcher.
+                case "dtrh":
+                    if (!CoreAccount.IsLoggedIn) { _ = OpenUnifiedLoginDialog(); break; }
+                    Games.GameWindow.Launch(Games.GameWindow.DtrhId);
+                    break;
                 case "gazeminigame": Named<Tabs.PlayTabView>("PlayTab")?.OpenGazeMinigame(); break;
                 default: ShowTab(key); break;
             }

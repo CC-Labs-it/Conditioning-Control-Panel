@@ -89,6 +89,22 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task HoverSupersedesDelayedRowEntranceAtMotionOff() => WithPresets((host, view) =>
+    {
+        // Hold the entrance in its backwards fill, so machine speed cannot hide the conflict.
+        view.StaggerZones(TimeSpan.FromHours(1)); Settle();
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        Assert.Equal(10, slide.Y);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, slide.Y); // WPF LiftSessionRow clears the previous Y animation first.
+        host.MouseMove(new Point(1, 1)); Settle();
+        Assert.Equal(0, slide.Y);
+    });
+
+    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view) =>
     {
         view.IsVisible = false; Settle();
