@@ -6,7 +6,7 @@
 // Open goon tables are in FriendsDrawer.Tables.cs.
 // The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
 // The blocked fallback and once-only presence ask share Core rules with WPF.
-// ponytail: no leash section, no lock-day chip, no juice (.Juice.cs), no bell
+// ponytail: no leash section, no juice (.Juice.cs), no bell
 // (the corner notices are not on this head). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
@@ -353,10 +353,27 @@ public sealed partial class FriendsDrawer : Border
         Grid.SetColumn(mid, 1);
         top.Children.Add(avatar);
         top.Children.Add(mid);
+        if (f.Presence.LockDay is int day)
+        {
+            // WPF Controls/Friends/FriendsDrawer.cs:568-585. Keep the chip beside the status,
+            // including when a table adds its own Join column.
+            var lockChip = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0x5F, 0xB4)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0x5F, 0xB4)),
+                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(6, 1, 6, 1), VerticalAlignment = VerticalAlignment.Center,
+                Tag = "friends-lock",
+                Child = Label("\U0001F512 " + Loc.GetF("friends_lock_day", day), 10, Pink, Mono),
+            };
+            Grid.SetColumn(lockChip, 2);
+            top.Children.Add(lockChip);
+        }
         if (table != null)
         {
+            top.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
             var join = TableJoinButton(f, table);
-            Grid.SetColumn(join, 2);
+            Grid.SetColumn(join, 3);
             top.Children.Add(join);
         }
         var outer = new StackPanel { Children = { top } };
