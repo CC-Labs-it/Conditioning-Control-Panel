@@ -41,7 +41,10 @@ public sealed class CompanionPickerCardTests
     [Fact]
     public Task PickingAPersonalityWritesSettingsThroughTheGate() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        CompanionPickerHostTests.Setup();
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
@@ -57,12 +60,12 @@ public sealed class CompanionPickerCardTests
         try
         {
             shell.Show();
-            var host = new ModManagerDialog();
+            // No Avalonia host yet (lane companion-picker-host): a window owned by the shell, as the
+            // Customise dialog is in WPF, so the card finds the shell's gate the same way.
+            var host = new Window { Width = 900, Height = 500 };
+            var card = new CompanionPickerCard();
+            host.Content = card;
             host.Show(shell);
-            var card = host.FindControl<CompanionPickerCard>("CompanionCard")!;
-            Assert.NotNull(card);
-            Assert.Null(host.FindControl<TextBlock>("TxtCompanion"));
-            Assert.Null(host.FindControl<Button>("BtnTubeFit"));
             Dispatcher.UIThread.RunJobs();
             var combo = card.FindControl<ComboBox>("CmbPersonality")!;
             Assert.True(card.FindControl<Control>("LivePanel")!.IsVisible);   // active mod: live face
