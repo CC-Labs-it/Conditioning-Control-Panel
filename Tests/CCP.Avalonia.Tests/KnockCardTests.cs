@@ -280,6 +280,7 @@ public sealed class KnockCardTests
             @"//[^\n]*|/\*.*?\*/|@?""(?:[^""\\]|\\.)*""", " ", RegexOptions.Singleline);
         Assert.Matches(@"friends\.Start\([\s\S]{0,900}Platform\.FriendsLanding\.Start\(\)", src);
         Assert.Matches(@"Platform\.FriendsLanding\.Stop\(\)[^\n]*\n[^\n]*FriendsHead\.Service as IDisposable", src);
+        Assert.Matches(@"try\s*\{\s*Platform\.LobbyHead\.Stop\(\);\s*\}\s*catch\s*\{", src);
     }
 
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
