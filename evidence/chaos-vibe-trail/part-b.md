@@ -111,3 +111,6 @@ Both P2 findings accepted and fixed; no findings rejected.
 - Final build: 345 warnings, 0 errors. Filter: ChaosVibeTrailOverlayTests,
   AmbientBeatLoopsTests, ChaosRunHostTests, TestIsolationTests: 45 passed, 0 skipped.
   Core suite: 4641 passed, 6 existing skips, 0 failed. Guards and docs check passed.
+- Local gate P2: Start is synchronous on UI and stale starts require VibePopOn (ChaosVibeTrailOverlay.cs:47-56); WPF ChaosVibeTrailOverlay.cs:58-64 has the inherited queued shape. WPF unchanged. Ledger status is stub with all earlier notes retained and new evidence appended.
+- Panic fail-proof executed: restore HEAD's queued Start, run the lifecycle test, observe exit 1 with Assert.Null failure at ChaosVibeTrailOverlayTests.cs:142 after ForceShutdown and RunJobs. Fixed source restored in finally; all earlier assertions retained.
+- Local gate validation: Core build 50 warnings/0 errors; Avalonia 201/0; final tests build 345/0; affected Avalonia tests 45 passed/0 skipped/0 failed; Core 4641 passed/6 existing skips/0 failed; Core guards and docs self-check passed. No WPF or localization changes.

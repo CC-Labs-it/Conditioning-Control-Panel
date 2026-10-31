@@ -44,11 +44,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         });
 
         /// <summary>The vibe started: show the glow + trail and follow the pointer (WPF :57).</summary>
-        public static void Start() => Dispatcher.UIThread.Post(() =>
+        public static void Start()
+        {
+            if (Dispatcher.UIThread.CheckAccess()) StartNow();
+            else Dispatcher.UIThread.Post(StartNow);
+        }
+        private static void StartNow()
         {
             try
             {
-                if (_refused) return;
+                if (_refused || !Overlays.BubbleOverlay.VibePopOn) return;
                 if (!SkipPlatformChecksForTests && (!X11Overlay.IsAvailable || X11Pointer.Read() == null))
                 { Log.Debug("ChaosVibeTrail: no desktop pointer, no trail"); return; }
                 _active ??= new ChaosVibeTrailOverlay();
@@ -69,7 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 w.BeginFollow();
             }
             catch (Exception ex) { Log.Debug("ChaosVibeTrail.Start: {E}", ex.Message); }
-        });
+        }
 
         /// <summary>The vibe ended: stop following and hide; the window stays for the next buzz (WPF :82).</summary>
         public static void Stop() => Dispatcher.UIThread.Post(() => { try { _active?.EndFollow(); } catch { } });

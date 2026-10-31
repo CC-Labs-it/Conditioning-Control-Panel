@@ -135,7 +135,10 @@ public sealed class ChaosVibeTrailOverlayTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(BubbleOverlay.VibeHoverPops);
                 Assert.True(trail.IsFollowing);
+                toy.CooldownRemainingSec = 0;
+                ChaosRunHost.UseToyById(toy.Id);   // panic before any queued Start could run
                 ChaosRunHost.ForceShutdown();
+                Dispatcher.UIThread.RunJobs();
                 Assert.Null(ChaosVibeTrailOverlay.Active);
                 Assert.False(BubbleOverlay.VibePopOn);
             }
