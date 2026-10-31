@@ -24,6 +24,34 @@ namespace CCP.Avalonia.Tests;
 public sealed class FeatureCardFxTests
 {
     [Fact]
+    public void QuickReleaseRetargetsFromAnimatedPressAndOvershootsOnePixel() => WithCard((window, host, card) =>
+    {
+        card.DashboardDepth = true;
+        var travel = ((TransformGroup)card.FindControl<Panel>("PressFace")!.RenderTransform!)
+            .Children.OfType<TranslateTransform>().Single();
+        var clock = new SharedDeeperThemeTests.StepClock();
+        travel.SetValue(SharedDeeperThemeTests.StepClock.Property, clock.Instance);
+        window.UpdateLayout();
+        var at = card.TranslatePoint(new Point(80, 100), window)!.Value;
+        window.MouseMove(at);
+        clock.Step(0); clock.Step(140);
+        Assert.Equal(-2, travel.Y, 6);
+        window.MouseDown(at, MouseButton.Left);
+        var transition = Assert.Single(travel.Transitions!);
+        clock.Step(1000); clock.Step(1030); // 30 of the 90 ms press, still travelling down
+        double from = travel.Y;
+        Assert.Equal(2.0 / 9, from, 6);
+        window.MouseUp(at, MouseButton.Left);
+        clock.Step(2000);
+        Assert.Equal(from, travel.Y, 6); // no jump back to the press target
+        Assert.Same(transition, Assert.Single(travel.Transitions!));
+        clock.Step(2091); // 65 percent of the 140 ms release: WPF target minus exactly 1 px
+        Assert.Equal(-3, travel.Y, 6);
+        clock.Step(2140);
+        Assert.Equal(-2, travel.Y, 6);
+    });
+
+    [Fact]
     public void PointerMovesRetargetOneTiltTransitionAndIgnoreRepeatedTargets() => WithCard((window, host, card) =>
     {
         card.DashboardDepth = true;

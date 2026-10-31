@@ -141,14 +141,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             }
             if (t.GetBaseValue(property).GetValueOrDefault() == to) return;
             var duration = TimeSpan.FromMilliseconds(ms);
-            // Retarget the existing tween; replacing it cancels the animated angle (WPF :80-82).
-            if (t.Transitions is not [DoubleTransition transition] || transition.Property != property
-                || transition.Duration != duration || transition.Easing.GetType() != easing.GetType()
-                || easing is ReleaseSpring)
-                t.Transitions = new Transitions
-                {
-                    new DoubleTransition { Property = property, Duration = duration, Easing = easing }
-                };
+            // Keep transition state so Avalonia samples the current animated value (WPF :124-147).
+            if (t.Transitions is not [DoubleTransition transition] || transition.Property != property)
+            {
+                transition = new DoubleTransition { Property = property };
+                t.Transitions = new Transitions { transition };
+            }
+            transition.Duration = duration;
+            transition.Easing = easing;
             t.SetValue(property, to);
         }
 
