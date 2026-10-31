@@ -1,3 +1,6 @@
+using System;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.UI;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -24,6 +27,50 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class SectionTabStripShellTests
 {
+    [Theory]
+    [InlineData(MotionLevel.Off)]
+    [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Full)]
+    public async Task ChangedCrumbFadesAndAnUnchangedCrumbKeepsItsAnimation(MotionLevel level)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var strip = new SectionTabStrip { MotionOverride = level };
+            var w = new Window { Content = strip };
+            try
+            {
+                w.Show();
+                strip.Show(NavSections.Studio, "presets");
+                Assert.True(strip.CrumbFadeCompletion.IsCompleted);
+                strip.Show(NavSections.Studio, "ramp");
+                var fade = strip.CrumbFadeCompletion;
+                Assert.Equal(level == MotionLevel.Off, fade.IsCompleted);
+                strip.Show(NavSections.Studio, "ramp");
+                Assert.Same(fade, strip.CrumbFadeCompletion);
+                var deadline = DateTime.UtcNow.AddSeconds(2);
+                while (!fade.IsCompleted && DateTime.UtcNow < deadline)
+                {
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    Dispatcher.UIThread.RunJobs();   // the render clock is real time; no sleep (P08)
+                }
+                Assert.True(fade.IsCompletedSuccessfully);
+                Assert.Equal(1, strip.CrumbOpacity);
+                strip.MotionOverride = MotionLevel.Off;
+                strip.Show(NavSections.Studio, "presets");
+                Assert.Equal(1, strip.CrumbOpacity);
+                strip.Show(NavSections.Studio, "ramp"); // repeated Off changes after cancelling a fade
+                Assert.Equal(1, strip.CrumbOpacity);
+            }
+            finally { w.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+
     [Fact]
     public async Task StripFollowsShowTabAndItsPillsNavigate()
     {
