@@ -34,7 +34,11 @@ public sealed class ContentHitTestTests
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            // Hold the real entrance at its first frame, so a slow runner cannot accidentally
+            // finish it before the pointer checks. The shared hook restores these settings.
+            global::ConditioningControlPanel.CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
+            global::ConditioningControlPanel.CoreSettings.Current.PerformanceMode = false;
+            var w = new MainShellWindow { TabClock = new FrozenClock() };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -45,6 +49,10 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                // Commit the entrance's final geometry before comparing live coordinates with
+                // the compositor's hit-test frame. Waiting for a frame alone leaves it moving.
+                w.CompleteTabTransition();
+                Assert.Null(w.EnteringTab);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
@@ -98,6 +106,11 @@ public sealed class ContentHitTestTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
+    }
+
+    private sealed class FrozenClock : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
     }
 
     private static bool Inside(Visual v, Point p, Visual root)
