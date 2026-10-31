@@ -566,9 +566,12 @@ public sealed class FirstShowStageTests
         t += 1; stage.Frame(); Assert.Single(spoken);
         t += .2; stage.Frame();
         Assert.Equal(2, spoken.Count);
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Loc.Get("first_show_warning") + "idle")));
+        // WPF FirstShowDesktopWindow.cs:225-229: TextBlock.Text includes both LineBreaks,
+        // the panic label and the hint after the warning paragraph.
+        var warning = Loc.Get("first_show_warning") + "\r\n\r\n" + S.PanicLabel("Enter") + " " + Loc.Get("first_show_panicHint");
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(warning + "idle")));
         Assert.Equal(hash + ".wav", Path.GetFileName(spoken[1]));
-    });
+    }, panicKey: "Enter");
 
     private static void Click(FirstShowStageWindow stage, int i) => stage.ChoiceButtons[i].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 

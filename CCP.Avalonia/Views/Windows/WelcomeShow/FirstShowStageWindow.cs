@@ -355,6 +355,8 @@ internal sealed partial class FirstShowStageWindow : Window
     {
         Ask(Text("warning"), true);
         SetInlines(new Run(Text("warning")), new LineBreak(), new LineBreak(), PanicRun(), new Run(" " + Text("panicHint")));
+        // WPF FirstShowDesktopWindow.cs:225-229 voices the entire card, including its panic hint.
+        _pendingSpeech = Text("warning") + "\r\n\r\n" + S.PanicLabel(_panic) + " " + Text("panicHint");
         AddButton(Text("ready"), Start); AddButton(Text("later"), Close);
     }
     internal void Start()
