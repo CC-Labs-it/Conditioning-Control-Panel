@@ -1,5 +1,11 @@
 using System;
 using System.Collections.Specialized;
+using System.Linq;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Startup;
+using ConditioningControlPanel.Services.Startup.Conversion;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.LogicalTree;
@@ -21,10 +27,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void InitializeInboxBadge()
         {
+            var poll = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+            poll.Tick += async (_, _) => await CheckPostCode();
+            Opened += async (_, _) => { poll.Start(); await CheckPostCode(); };
+            Closed += (_, _) => { _postCodeClosed = true; poll.Stop(); };
             var inbox = StartupLadder.Inbox.Items;
             inbox.CollectionChanged += OnInboxCollectionChanged;
             Closed += (_, _) => inbox.CollectionChanged -= OnInboxCollectionChanged;
             RefreshInboxBadge();
+        }
+
+        private readonly PostCodeFlow _postCodeFlow = new();
+        private bool _postCodeClosed;
+
+        private async System.Threading.Tasks.Task CheckPostCode()
+        {
+            try
+            {
+                var settings = CoreSettings.Current;
+                var account = settings.UnifiedId;
+                var live = await _postCodeFlow.CheckAsync(settings, DateTime.UtcNow, () => PostCodeApi.LiveAsync());
+                if (_postCodeClosed || !ReferenceEquals(settings, CoreSettings.Current)
+                    || settings.UnifiedId != account || settings.OfflineMode || !settings.PatreonMember) return;
+                var info = ExclusiveFeature.All.FirstOrDefault(f => f.DailyFreeKey == live?.Feature);
+                var held = info?.Tier >= 2 ? CoreAccount.HasLabAccess : CoreAccount.HasPremiumAccess;
+                if (!PostCodeFlow.StampRow(settings, live, held, DateTime.Now)) return;
+                CoreSettings.Save();
+                PostCodeDialog.Offer(this, Loc.GetF("conv_postcode_body", info == null ? live!.Feature! : Loc.Get(info.TitleLocKey)));
+            }
+            catch (Exception ex) { Log.Debug(ex, "Post code live check failed"); }
         }
 
         private void OnInboxCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
