@@ -20,8 +20,9 @@ public sealed class BrainDrainIntegrationTests
 {
     private static Window Setup(bool supported = true)
     {
+        // First setup owns process-wide fonts, including later card and panic tests.
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         BrainDrainOverlay.CloseAll();
         var owner = new Window(); owner.Show();
