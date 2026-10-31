@@ -62,15 +62,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     ///  - <b>Click-through.</b> On Windows a layered window does not hit-test fully transparent
     ///    pixels, which is what let a click land on the desktop THROUGH a gap in the fan. X11 hit
     ///    tests the whole rectangle, and <c>X11Overlay.SetClickThrough</c> is all-or-nothing - the
-    ///    whole window, which would kill the cards too. ponytail: POSSIBLE, and blocked on one
-    ///    member the shim does not expose yet, not on a service:
-    ///    <c>X11Overlay.SetInputRegion(TopLevel, IReadOnlyList&lt;PixelRect&gt;)</c>, the cards'
-    ///    own rectangles. <c>SetClickThrough</c> already builds an XFixes region and passes it to
-    ///    <c>XFixesSetWindowShapeRegion</c> - it just only ever builds the EMPTY one - and that
-    ///    method's own doc says a non-empty region is strictly more capable than
-    ///    <c>WS_EX_TRANSPARENT</c>. It is a CCP.Avalonia/Platform/ change, not a view one. Until
-    ///    then a click in a gap does not reach the desktop - but it is no longer swallowed
-    ///    either, see <see cref="InstallHooks"/>.
+    ///    whole window, which would kill the cards too. ponytail: <c>X11Overlay.SetInputRects</c>
+    ///    could cut input to the cards, but then a gap click reaches the desktop and NOTHING folds
+    ///    the ring (WPF's global hook did both); it waits for an X11 passive XI2 grab, lane
+    ///    x11-input-rects-adopters-b. Until then a click in a gap does not reach the desktop - but
+    ///    it is no longer swallowed either, see <see cref="InstallHooks"/>.
     ///  - <b>The global hooks.</b> <c>GlobalMouseHook</c> / <c>GlobalKeyboardHook</c> are
     ///    <c>SetWindowsHookEx</c>, which has NO equivalent on this head, and with them goes
     ///    <c>_hotPx</c> - the frozen rect snapshot existed only to answer the hook thread. The half
