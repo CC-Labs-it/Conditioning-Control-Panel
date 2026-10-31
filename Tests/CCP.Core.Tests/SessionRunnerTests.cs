@@ -439,6 +439,100 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.Null(_runner.SpiralOpacity);
     }
 
+    private sealed class NoVideoHost : IMandatoryVideoHost
+    {
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }
+    }
+
+    /// <summary>WPF SessionEngine.cs:1400 (duck level), :1528-1547 (videos), :531 (pause stops them)
+    /// and :580 (resume restarts them).</summary>
+    [Fact]
+    public void VideosAndDucking_FollowTheSession_ThroughPauseAndResume()
+    {
+        var previousVideo = CoreEngine.Video;
+        var video = new MandatoryVideoScheduler(new NoVideoHost());
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel);
+        try
+        {
+            CoreEngine.Video = video;
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel) = (false, 3, false, 10);
+            var session = OneMinute();
+            session.DurationMinutes = 3;
+            var ss = session.Settings;
+            (ss.MandatoryVideosEnabled, ss.VideosPerHour, ss.MandatoryVideosStartMinute) = (true, 9, 1);
+            ss.AudioDuckLevel = 55;
+
+            _runner.Start(session);
+            Assert.Equal((true, 9, true, 55), (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel));
+            Assert.False(video.IsRunning);                              // minute 1: deferred
+
+            _runner.Tick(TimeSpan.FromSeconds(60));
+            Assert.True(video.IsRunning);
+
+            _runner.Pause();
+            Assert.False(video.IsRunning);
+
+            _runner.Resume();
+            Assert.True(video.IsRunning);
+
+            _runner.Stop();
+            Assert.False(video.IsRunning);
+            Assert.Equal((false, 3, false, 10), (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel));
+        }
+        finally
+        {
+            _runner.Stop();
+            video.Stop();
+            CoreEngine.Video = previousVideo;
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel) = saved;
+        }
+    }
+
+    [Theory]
+    [InlineData(true, 0, true)]
+    [InlineData(true, 1, false)]
+    [InlineData(false, 0, false)]
+    public void VideoAdmissionAndPendingResumeRespectPreset(bool enabled, int minute, bool running)
+    {
+        var previous = CoreEngine.Video;
+        var video = new MandatoryVideoScheduler(new NoVideoHost());
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel);
+        try
+        {
+            CoreEngine.Video = video;
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel) = (true, 7, true, 35);
+            var session = OneMinute();
+            session.DurationMinutes = 3;
+            session.Settings.MandatoryVideosEnabled = enabled;
+            session.Settings.MandatoryVideosStartMinute = minute;
+            session.Settings.VideosPerHour = null;
+            session.Settings.AudioDuckLevel = 0;
+            _runner.Start(session);
+            Assert.Equal(enabled, s.MandatoryVideosEnabled);
+            Assert.Equal(running, video.IsRunning);
+            Assert.Equal((7, true, 35), (s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel));
+            _runner.Pause();
+            _runner.Tick(TimeSpan.FromMinutes(2));
+            Assert.False(video.IsRunning);
+            _runner.Resume();
+            Assert.Equal(running, video.IsRunning);
+            _runner.Stop();
+            Assert.False(video.IsRunning);
+            _runner.Tick(TimeSpan.FromMinutes(2));
+            Assert.False(video.IsRunning);
+            Assert.Equal((true, 7, true, 35), (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel));
+        }
+        finally
+        {
+            _runner.Stop(); video.Stop(); CoreEngine.Video = previous;
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel) = saved;
+        }
+    }
+
     private static string Fixture([CallerFilePath] string here = "") =>
         Path.Combine(Path.GetDirectoryName(here)!, "Fixtures", "session_log_runner_wpf.json");
 }

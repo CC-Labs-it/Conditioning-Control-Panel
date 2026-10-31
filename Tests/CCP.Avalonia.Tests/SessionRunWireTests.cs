@@ -98,4 +98,55 @@ public sealed class SessionRunWireTests
             return Task.CompletedTask;
         });
     }
+    private sealed class NoVideoHost : IMandatoryVideoHost
+    {
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, System.Action then) { }
+    }
+
+    /// <summary>WPF MainWindow.Presets.cs ShowSessionSummaryWhenClear: video keeps the recap passive.</summary>
+    [Fact]
+    public async Task RecapGoesPassiveOverAPlayingVideo()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<AvApp>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+
+            var shell = new MainShellWindow();
+            shell.Show();
+            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            runner.SessionLog.LogReady += shell.OnSessionLogReady;
+            var previousVideo = CoreEngine.Video;
+            var video = new MandatoryVideoScheduler(new NoVideoHost(), library: () => new[] { "a.mp4" });
+            try
+            {
+                var session = new Session { Id = "wire_video", Name = "Wire Video", Icon = "🧪", DurationMinutes = 1 };
+                shell.StartSession(session);
+
+                CoreEngine.Video = video;
+                runner.Stop(completed: true);
+                Assert.True(video.Trigger(path: "a.mp4"));   // a new clip, before the recap posts
+                Dispatcher.UIThread.RunJobs();
+                var recap = Assert.Single(shell.OwnedWindows.OfType<SessionCompleteWindow>());
+                Assert.False(recap.Topmost);
+                Assert.False(recap.ShowActivated);
+                recap.Close();
+            }
+            finally
+            {
+                runner.Stop();
+                video.ForceCleanup();
+                CoreEngine.Video = previousVideo;
+                CoreSession.IsSessionRunningProvider = null;
+                AvApp.Sessions = null;
+                CoreEngine.Stop();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
 }
