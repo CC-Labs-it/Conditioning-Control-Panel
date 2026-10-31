@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// desktop: a signed-out player gets <c>identity: null</c> and the lobby asks them to sign in. <c>songs</c>
         /// stays empty: the private race song never ships in the app.</summary>
         public static JObject InitFrame(string? unifiedId, string? displayName, int tier,
-            bool gentleOn, double gentleFadeSeconds, double gentleSpeed)
+            bool gentleOn, double gentleFadeSeconds, double gentleSpeed, bool picturesOn = false)
         {
             bool signedIn = !string.IsNullOrWhiteSpace(unifiedId);
             return new JObject
@@ -41,6 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     ["platform"] = "desktop", ["net"] = true, ["relayBase"] = null, ["texturableRemote"] = false,
                     ["gamepad"] = true, ["touch"] = false, ["forceRenderer"] = null, ["hostSfx"] = false,
                     ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
+                    ["scrolller"] = new JObject { ["consent"] = picturesOn, ["origin"] = "device" },
                 },
                 ["identity"] = signedIn
                     ? new JObject

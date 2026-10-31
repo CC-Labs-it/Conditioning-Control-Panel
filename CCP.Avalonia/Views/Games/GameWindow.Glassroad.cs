@@ -58,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_grOpen) return;
             _grOpen = true;
+            CoreSettings.Current.PropertyChanged += OnGlassroadSettingsChanged;
             _grEarlyInitSent = _grPinged = false;
             _grLastBeatUtc = _grLastProgressUtc = DateTime.UtcNow;
             Closed += (_, _) => CloseGlassroad();
@@ -74,8 +75,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_grOpen) return;
             _grOpen = false;
+            CoreSettings.Current.PropertyChanged -= OnGlassroadSettingsChanged;
             try { _grWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _grWatch = null;
+            DisposeGlassroadPictures();
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("GlassroadHost: closed");
         }
@@ -89,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var uid = CoreAccount.UnifiedUserId;
                 bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(PbpAuthToken());
                 Post(GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed));
+                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, GlassroadPicturesOn()));
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
         }
@@ -127,6 +130,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "pong":
                         _grLastBeatUtc = DateTime.UtcNow;
                         _grPinged = false;
+                        return true;
+                    case "set-setting":
+                        _ = SetGlassroadPicturesAsync(o);
+                        return true;
+                    case "scrolller-niches":
+                        SetGlassroadNiches(o);
                         return true;
                     case "net":
                         OnGlassroadNet(o);
