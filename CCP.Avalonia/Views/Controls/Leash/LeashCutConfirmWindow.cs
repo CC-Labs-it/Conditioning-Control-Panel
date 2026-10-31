@@ -99,11 +99,19 @@ internal sealed class LeashCutConfirmWindow : Window
             var settings = CoreSettings.Current;
             var level = Platform.UiMotionPreference.ResolveLevel(settings.MotionLevel,
                 Platform.UiMotionPreference.AnimationsEnabled, settings.GentleVisuals);
-            scale.Transitions = level == MotionLevel.Off ? null : new Transitions
+            if (level == MotionLevel.Off) scale.Transitions = null;
+            else
             {
-                new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = TimeSpan.FromMilliseconds(milliseconds), Easing = new QuadraticEaseOut() },
-                new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = TimeSpan.FromMilliseconds(milliseconds), Easing = new QuadraticEaseOut() },
-            };
+                // Replacing the collection cancels active tweens and snaps to their old targets.
+                // WPF MotionFx.cs:279-286 starts the replacement animation at the current scale.
+                scale.Transitions ??= new Transitions
+                {
+                    new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Easing = new QuadraticEaseOut() },
+                    new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Easing = new QuadraticEaseOut() },
+                };
+                foreach (var transition in scale.Transitions)
+                    ((DoubleTransition)transition).Duration = TimeSpan.FromMilliseconds(milliseconds);
+            }
             scale.ScaleX = scale.ScaleY = target;
         }
         b.PointerEntered += (_, _) => { if (b.IsEnabled) Move(1.02, 150); };
