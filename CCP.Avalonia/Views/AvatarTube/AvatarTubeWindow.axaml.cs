@@ -1285,7 +1285,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
-                    if (!IsMuted && Services.Companion.CompanionIdleVoice.ShouldVoiceNow(unprompted)) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken); spokenHandled = true; }
+                    if (!IsMuted && Services.Companion.CompanionIdleVoiceRule.ShouldVoiceNow(unprompted)) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken); spokenHandled = true; }
 
                     SyncAskButtonsFor(text);
                     _txtSpeech.Text = text;

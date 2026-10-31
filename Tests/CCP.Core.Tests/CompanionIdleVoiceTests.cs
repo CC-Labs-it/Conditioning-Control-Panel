@@ -16,7 +16,7 @@ public class CompanionIdleVoiceTests
     [InlineData(true, false, true, true)]
     [InlineData(false, false, false, true)]
     public void VoiceRule(bool idle, bool running, bool optedIn, bool expected) =>
-        Assert.Equal(expected, CompanionIdleVoice.ShouldVoice(idle, running, optedIn));
+        Assert.Equal(expected, CompanionIdleVoiceRule.ShouldVoice(idle, running, optedIn));
 
     [Theory]
     [InlineData("Idle")]
@@ -28,14 +28,14 @@ public class CompanionIdleVoiceTests
     [InlineData("ActivityChanged")]
     [InlineData("StillOnActivity")]
     public void SensingTriggersAreUnprompted(string trigger) =>
-        Assert.True(CompanionIdleVoice.IsUnprompted(trigger));
+        Assert.True(CompanionIdleVoiceRule.IsUnprompted(trigger));
 
     [Theory]
     [InlineData(null)]
     [InlineData("UserMessageSent")]
     [InlineData("AvatarClicked")]
     public void PlayerActionsArePrompted(string? trigger) =>
-        Assert.False(CompanionIdleVoice.IsUnprompted(trigger));
+        Assert.False(CompanionIdleVoiceRule.IsUnprompted(trigger));
 
     [Theory]
     [InlineData(false, false, true, false)] // paused session, no opt-in
@@ -59,12 +59,12 @@ public class CompanionIdleVoiceTests
             CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff = optedIn;
             PanicAftermath.EndQuiet();
             if (panic) PanicAftermath.ArmQuiet();
-            Assert.Equal(expected, CompanionIdleVoice.ShouldVoiceNow(true));
-            Assert.True(CompanionIdleVoice.ShouldVoiceNow(false));
+            Assert.Equal(expected, CompanionIdleVoiceRule.ShouldVoiceNow(true));
+            Assert.True(CompanionIdleVoiceRule.ShouldVoiceNow(false));
             if (panic)
             {
                 CoreSession.IsEngineRunningProvider = () => true;
-                Assert.False(CompanionIdleVoice.ShouldVoiceNow(true));
+                Assert.False(CompanionIdleVoiceRule.ShouldVoiceNow(true));
             }
         }
         finally

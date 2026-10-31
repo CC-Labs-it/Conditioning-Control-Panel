@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace ConditioningControlPanel.Services.Companion;
 
 /// <summary>Unprompted lines keep their bubble while their audio is held.</summary>
-public static class CompanionIdleVoice
+public static class CompanionIdleVoiceRule
 {
     public const string IdleTrigger = "Idle";
     public static readonly IReadOnlySet<string> UnpromptedTriggers = new HashSet<string>(
