@@ -26,6 +26,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!CoreAccount.IsLoggedIn) { _ = OpenUnifiedLoginDialog(); return; }
             // WPF GlassroadHostService.cs:82 checks even before focusing an existing host.
             if (id == "race" && !TierGate.DemandLab(Loc.Get("launcher_game_race_title"))) return;
+            // WPF LauncherCatalogue.cs:243-248: DtRH's gate runs before Launch can focus a live host.
+            if (id == Games.GameWindow.DtrhId && !Games.GameWindow.DtrhGate()) return;
             // WPF LauncherCatalogue.cs:235-238: Racing Thoughts is now Glassroad.
             Tabs.PlayTabView.LaunchGame(id == "race" ? Games.GameWindow.GlassroadId : id);
         }
