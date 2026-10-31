@@ -80,6 +80,67 @@ public sealed class ChaosEStimOverlayTests
         }
     });
 
+    [Fact]
+    public void Equipped_run_precreates_hidden_windows_reuses_them_and_shutdown_closes_them() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var canShow = ChaosEStimOverlay.CanShow;
+        var meta = ConditioningControlPanel.Services.Chaos.ChaosMeta.State;
+        bool equipped = meta.ActiveLifetimeBoons.Contains("e_stim");
+        bool hadLevel = meta.LifetimeBoonLevels.TryGetValue("e_stim", out int level);
+        ChaosEStimOverlay.SkipPlatformChecksForTests = true;
+        ChaosEStimOverlay.CanShow = () => true;
+        try
+        {
+            meta.ActiveLifetimeBoons.Remove("e_stim");
+            ChaosRunHost.StartRun();
+            ChaosRunHost.Overlay!.FinishCountdown();
+            Assert.Null(ChaosEStimOverlay.Active);
+            ChaosRunHost.ForceShutdown();
+
+            meta.ActiveLifetimeBoons.Add("e_stim");
+            meta.LifetimeBoonLevels["e_stim"] = 1;
+            ChaosRunHost.StartRun();
+            Assert.Null(ChaosEStimOverlay.Active); // countdown has not completed
+            ChaosRunHost.Overlay!.FinishCountdown();
+            var bolt = Assert.IsType<ChaosEStimOverlay>(ChaosEStimOverlay.Active);
+            var halo = Assert.IsType<ChaosEStimGlow>(ChaosEStimGlow.Active);
+            Assert.False(bolt.IsVisible);
+            Assert.False(halo.IsVisible);
+            Assert.Equal(0, bolt.BoltCount);
+            ChaosEStimOverlay.EnsureCreated();
+            Assert.Same(bolt, ChaosEStimOverlay.Active);
+            Assert.Same(halo, ChaosEStimGlow.Active);
+            ChaosEStimOverlay.Strike(new[] { (new PixelPoint(100, 100), new PixelPoint(200, 200)) });
+            ChaosEStimOverlay.Arm();
+            Assert.Same(bolt, ChaosEStimOverlay.Active);
+            Assert.Same(halo, ChaosEStimGlow.Active);
+            Assert.True(bolt.IsVisible);
+            Assert.True(halo.IsVisible);
+            ChaosRunHost.ForceShutdown();
+            Assert.Null(ChaosEStimOverlay.Active);
+            Assert.Null(ChaosEStimGlow.Active);
+
+            ChaosEStimOverlay.CanShow = () => false;
+            ChaosEStimOverlay.EnsureCreated();
+            Assert.Null(ChaosEStimOverlay.Active);
+            Assert.Null(ChaosEStimGlow.Active);
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            ChaosEStimOverlay.CloseActive();
+            ChaosEStimOverlay.CanShow = canShow;
+            ChaosEStimOverlay.SkipPlatformChecksForTests = false;
+            if (!equipped) meta.ActiveLifetimeBoons.Remove("e_stim");
+            if (hadLevel) meta.LifetimeBoonLevels["e_stim"] = level;
+            else meta.LifetimeBoonLevels.Remove("e_stim");
+        }
+    });
+
     private sealed class SteppedClock : TimeProvider
     {
         public long Now;
