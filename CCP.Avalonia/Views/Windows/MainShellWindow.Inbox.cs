@@ -87,6 +87,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return flat.Length <= max ? flat : flat.Substring(0, max - 1).TrimEnd() + "…";
         }
 
+        /// <summary>WPF MainWindow.Patreon.cs TierOnNoticePass: a repeat rise after the one-time celebration.</summary>
+        internal void TierOnNoticePass(bool mayShow)
+        {
+            try
+            {
+                var settings = CoreSettings.Current;
+                // WPF EntitlementTierSync.EffectiveTierNow: an invite week is not a plan.
+                var current = CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess
+                    && !global::ConditioningControlPanel.Services.ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, settings) ? 1 : 0;
+                // ponytail: no authoritative server-answered signal on this head yet. Never record a cached drop.
+                var verdict = Services.TierOnNoticeRule.Decide(settings.LastKnownEffectiveTier, current, mayRecordDrop: false);
+                if (verdict.Record != settings.LastKnownEffectiveTier)
+                {
+                    // Unlike WPF MainWindow.Patreon.cs:1209, keep the first reading in memory
+                    // until the next normal save so opening the shell does not write settings.json.
+                    var known = settings.LastKnownEffectiveTier.HasValue;
+                    settings.LastKnownEffectiveTier = verdict.Record;
+                    if (known) CoreSettings.Save();
+                }
+                if (!verdict.Owed || !mayShow
+                    || Services.TierCelebration.IsOwed(settings.SeenFeatureIntros, current, onRise: true)) return;
+                var title = global::ConditioningControlPanel.Localization.Loc.Get(Services.TierOnNoticeRule.TitleKey(current));
+                var body = global::ConditioningControlPanel.Localization.Loc.Get("tier_on_body");
+                StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "tier-on:" + current,
+                    Glyph = "💖",
+                    Title = title,
+                    Summary = body,
+                    Open = () => InboxNoticeCard.Present(this, title, body, null, null),
+                });
+            }
+            catch (Exception ex) { Log.Debug(ex, "Tier-on notice failed"); }
+        }
+
         private void CloseInboxPopup()
         {
             try
