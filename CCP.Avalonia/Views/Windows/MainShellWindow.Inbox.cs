@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Specialized;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.LogicalTree;
@@ -18,6 +19,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         private Popup? _inboxPopup;
+
+        // WPF MainWindow.Inbox.cs:462-493. Never present this offer on the achievement toast.
+        internal void PostPatronGalleryRow(Models.Achievement achievement)
+        {
+            if (achievement == null || achievement.IsExclusive || CoreAccount.HasPremiumAccess) return;
+            if (CoreSettings.Service == null) return;
+            var settings = CoreSettings.Current;
+            var more = Models.Achievement.All.Values.Count(a => a.IsExclusive && !a.IsHidden);
+            if (more <= 0) return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                const string key = "patron_gallery";
+                var stamps = settings.InboxStamps;
+                var today = Platform.StartupLadder.Time.GetLocalNow().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                if (stamps.TryGetValue(key, out var last) && last == today) return;
+                stamps[key] = today;
+                CoreSettings.Save();
+                var title = global::ConditioningControlPanel.Localization.Loc.GetF("conv_gallery_title", more);
+                var body = global::ConditioningControlPanel.Localization.Loc.Get("conv_gallery_body");
+                StartupLadder.Inbox.File(new Services.Startup.InboxItem
+                {
+                    Key = "conv:" + key, Glyph = "🏅", Title = title, Summary = body,
+                    Open = () => Dialogs.InboxNoticeCard.Present(this, title, body,
+                        global::ConditioningControlPanel.Localization.Loc.Get("conv_get_basic"), () => Dialogs.VaultGateDialog.Launch(
+                            "https://www.patreon.com/checkout/CodeBambi?rid=27604786")),
+                });
+            });
+        }
 
         private void InitializeInboxBadge()
         {
