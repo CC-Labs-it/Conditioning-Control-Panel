@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// <para>The room owns live zone viewmodels and Workshop cells. Roster card clicks forward
     /// to the shell's Core switch; visibility forwards the room's effective edge. ponytail:
-    /// WPF's aggregate runtime viewmodel, v2 ConversationPage/PersonalityStudio mount and ~110
+    /// WPF's aggregate runtime viewmodel, PersonalityStudio path and ~110
     /// compatibility accessors still need a coordinated port with their shell consumers in
     /// wire-views-tab-companion-b. Do not publish null compatibility controls.</para>
     /// </summary>
@@ -27,8 +27,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // WPF WorkshopRosterCell forwards its card action through the tab to MainWindow.
             if (Room.WorkshopParts is { } shelf)
+            {
                 shelf.Roster.CompanionCardClicked += (_, index) =>
                     (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.SwitchCompanionFromRoster(index, Room);
+
+                shelf.Roster.PersonalityAssignRequested += async (_, index) =>
+                {
+                    if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell)
+                        await shell.AssignCompanionPersonalityAsync(index, shelf.Roster);
+                };
+            }
 
             // WPF CompanionTabView.xaml.cs:36-40: the room is collapsed (XAML) and the page reads its zones.
             Conversation.Room = Room;
