@@ -11,7 +11,7 @@ test('Options and the Power-ups card: a top close that acts as Back, on those tw
   assert.match(cards, /btn\('back', '<span aria-hidden="true">&times;<\/span>', 'c-close', ' aria-label="Close" title="Close"'\)/,
     'the close is a Back button with a spoken name');
   assert.match(cards, /title\.before\(topClose\)/, 'it sits above the title');
-  assert.ok(cards.includes('topClose.hidden = true;'), 'shown on Options and Power-ups only');
+  assert.ok(cards.includes("topClose.hidden = k !== 'options' && k !== 'glossary';"), 'shown on Options and Power-ups only');
   assert.match(cards, /const BACKS = \['options',/, 'Back on Options returns to the opener');
   assert.match(cards, /list\.find\(\(e\) => !e\.classList\.contains\('c-close'\)\)/, 'the pad focus starts on the list, not the close');
   assert.match(css, /#card \.c-top-close \{ position: sticky;/, 'sticky while the list scrolls');
