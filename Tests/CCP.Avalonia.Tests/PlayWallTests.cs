@@ -27,7 +27,7 @@ public sealed class PlayWallTests
 {
     [Theory]
     [InlineData("BtnPlayDtrh", "dtrh")]
-    [InlineData("BtnPlayRacingThoughts", "race")]
+    [InlineData("BtnPlayRacingThoughts", "glassroad")]
     public void AvailableGameCardUsesTheExistingLauncherDoor(string buttonName, string gameId)
     {
         AvaloniaTestDispatcher.Run(() =>
@@ -36,11 +36,18 @@ public sealed class PlayWallTests
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var previous = PlayTabView.LaunchGame;
+            var (oldLogin, oldLab) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider);
+            CoreAccount.IsLoggedInProvider = () => true;
+            CoreEntitlement.HasLabProvider = () => true;
+            var shell = new MainShellWindow();
             var launches = new System.Collections.Generic.List<string>();
             PlayTabView.LaunchGame = id => launches.Add(id);
             try
             {
-                var play = new PlayTabView();
+                shell.Show();
+                shell.ShowTab("play");
+                Dispatcher.UIThread.RunJobs();
+                var play = shell.Named<Control>("PlayTab")!;
                 var button = play.FindControl<Button>(buttonName)!;
                 Assert.True(button.IsEnabled);
                 Assert.Null(ToolTip.GetTip(button));
@@ -48,7 +55,41 @@ public sealed class PlayWallTests
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.Equal(gameId, Assert.Single(launches));
             }
-            finally { PlayTabView.LaunchGame = previous; }
+            finally { shell.Close(); PlayTabView.LaunchGame = previous; CoreAccount.IsLoggedInProvider = oldLogin; CoreEntitlement.HasLabProvider = oldLab; }
+        });
+    }
+
+    [Theory]
+    [InlineData("BtnPlayDtrh")]
+    [InlineData("BtnPlayRacingThoughts")]
+    public void SignedOutGameCardOpensLoginWithoutLaunching(string buttonName)
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var (oldLogin, oldLaunch) = (CoreAccount.IsLoggedInProvider, PlayTabView.LaunchGame);
+            CoreAccount.IsLoggedInProvider = () => false;
+            var launches = new System.Collections.Generic.List<string>();
+            PlayTabView.LaunchGame = id => launches.Add(id);
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.Show();
+                shell.ShowTab("play");
+                shell.Named<Control>("PlayTab")!.FindControl<Button>(buttonName)!
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Single(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog>());
+                Assert.Empty(launches);
+            }
+            finally
+            {
+                foreach (var w in shell.OwnedWindows.ToArray()) w.Close();
+                shell.Close();
+                (CoreAccount.IsLoggedInProvider, PlayTabView.LaunchGame) = (oldLogin, oldLaunch);
+            }
         });
     }
 

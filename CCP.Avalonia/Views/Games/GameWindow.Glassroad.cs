@@ -1,6 +1,6 @@
 // PORTED from ConditioningControlPanel/Services/Glassroad/GlassroadHostService.cs (feat/glassroad-a 5121933ee):
-// GLASSROAD, the 3D race (Assets/web/glassroad/index.html), private preview behind CCP_GLASSROAD=1. With the switch
-// on, the Racing Thoughts door opens this page instead (GameWindow.Launch); without it nothing changes for anyone.
+// GLASSROAD, the 3D race (Assets/web/glassroad/index.html). Play uses the current WPF Lab door.
+// CCP_GLASSROAD still selects this host from the older launcher route; it never bypasses the Lab gate.
 // INIT GOES OUT BEFORE READY: the page awaits init at boot (3 s, then defaults with no net) but says ready only once
 // shaders are warm, so init is posted at the page's load (NavigationCompleted, this engine's nearest seam to WPF's
 // DOMContentLoaded), on the first message and on ready (a repeat is harmless). The relay signs as the player, so it
@@ -33,17 +33,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The live read of the door switch. Never throws.</summary>
         internal static bool GlassroadDoorOpen() { try { return GlassroadHostRules.DoorOpen(GlassroadDoorEnv()); } catch { return false; } }
 
-        /// <summary>WPF LauncherCatalogue "race": with the switch on, every Racing Thoughts door opens Glassroad.</summary>
+        /// <summary>The older launcher route uses the preview switch; Play explicitly selects Glassroad.</summary>
         internal static string ResolveDoor(string id) =>
             string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) && GlassroadDoorOpen() ? GlassroadId : id;
 
-        /// <summary>A direct launch of the page needs the switch too.</summary>
-        internal static bool GlassroadGate()
-        {
-            if (GlassroadDoorOpen()) return true;
-            Log.Information("GlassroadHost: launch refused, {Env} is not 1", GlassroadHostRules.DoorEnv);
-            return false;
-        }
+        // WPF GlassroadHostService.cs:55-60,82: Prime means Lab, including solo play.
+        internal static bool GlassroadGate() =>
+            TierGate.DemandLab(global::ConditioningControlPanel.Localization.Loc.Get("launcher_game_race_title"));
 
         private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
         private bool _grOpen, _grEarlyInitSent, _grPinged;

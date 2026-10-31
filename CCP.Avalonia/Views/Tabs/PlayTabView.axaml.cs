@@ -251,9 +251,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void BtnPlayChess_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.PbpId);
 
         // WPF PlayTabView.Cards.cs:59-66: the same game doors as the launcher; each host owns its gate.
-        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.DtrhId);
+        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame(Games.GameWindow.DtrhId);
 
-        private void BtnPlayRacingThoughts_Click(object? sender, RoutedEventArgs e) => LaunchGame("race");
+        private void BtnPlayRacingThoughts_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame("race");
 
         // ---- TOGETHER --------------------------------------------------------------------
 

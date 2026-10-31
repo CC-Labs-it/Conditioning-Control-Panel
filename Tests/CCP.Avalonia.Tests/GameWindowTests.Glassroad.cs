@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Threading;
+using Avalonia.Controls;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -36,14 +37,16 @@ public sealed partial class GameWindowTests
     }
 
     /// <summary>Signed in, no Racing Thoughts track, the door at <paramref name="door"/>, the relay on a fake transport.</summary>
-    private static void RunGlassroad(string? door, Action<MainShellWindow, LauncherWindow, GrHttp> body) => Run((shell, launcher) =>
+    private static void RunGlassroad(string? door, Action<MainShellWindow, LauncherWindow, GrHttp> body, bool lab = true) => Run((shell, launcher) =>
     {
         var (oldDoor, oldOwns, oldHttp, oldBase) = (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var (oldUid, oldSecret, oldGate) = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider);
+        var oldLab = CoreEntitlement.HasLabProvider;
         var fake = new GrHttp();
         using var http = new System.Net.Http.HttpClient(fake);
         try
         {
+            CoreEntitlement.HasLabProvider = () => lab;
             GameWindow.GlassroadDoorEnv = () => door;
             RacingAccess.IsGrantedProvider = _ => false;
             GameWindow.PbpHttpClient = () => http;
@@ -57,10 +60,46 @@ public sealed partial class GameWindowTests
         }
         finally
         {
+            CoreEntitlement.HasLabProvider = oldLab;
             (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
     });
+
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(false, "1")]
+    [InlineData(true, null)]
+    [InlineData(true, "1")]
+    public void PlayRaceOpensGlassroadAndRequiresLab(bool lab, string? preview)
+        => RunGlassroad(preview, (shell, _, _) =>
+        {
+            CoreEntitlement.HasPremiumProvider = () => true; // Tier 1 alone must still be refused.
+            var denied = new List<TierVerdict>();
+            var oldDenied = CoreEntitlement.ShowDeniedHandler;
+            CoreEntitlement.ShowDeniedHandler = v => denied.Add(v);
+            try
+            {
+                shell.ShowTab("play");
+                shell.Named<global::Avalonia.Controls.Control>("PlayTab")!
+                    .FindControl<global::Avalonia.Controls.Button>("BtnPlayRacingThoughts")!
+                    .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                if (!lab)
+                {
+                    Assert.Empty(GameWindow.OpenWindowsForTests());
+                    Assert.False(Assert.Single(denied).Allowed);
+                    return;
+                }
+                Assert.Empty(denied);
+                var w = Assert.Single(GameWindow.OpenWindowsForTests());
+                Assert.Equal(GameWindow.GlassroadId, w.Spec.Id);
+                Assert.EndsWith("/glassroad/index.html", w.PageUrl!.AbsolutePath);
+                PanicSurfaces.All.Single(p => p.Id == "games").Stop(shell);
+                Assert.False(GameWindow.IsAnyOpen());
+            }
+            finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
+        }, lab);
 
     // ---- pure rules ----
 
@@ -151,7 +190,7 @@ public sealed partial class GameWindowTests
             Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
             Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
             Assert.False(GameWindow.IsAnyOpen());
-        });
+        }, lab: false);
         RunGlassroad("1", (shell, launcher, _) =>
         {
             Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
