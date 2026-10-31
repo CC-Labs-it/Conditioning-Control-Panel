@@ -32,8 +32,7 @@ internal sealed class FriendNotices : Window
     private readonly BeatLoop _beat;
     private Window? _anchor;
     private double _lastT;
-    internal FriendNotices()
-    {
+    internal FriendNotices() {
         WindowDecorations = WindowDecorations.None;
         Background = Brushes.Transparent;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
@@ -57,8 +56,7 @@ internal sealed class FriendNotices : Window
         _beat = new BeatLoop(this, t => { Advance((t - _lastT) * 1000); _lastT = t; });
         Closed += (_, _) => { _beat.Stop(); if (ReferenceEquals(Current, this)) Current = null; };
     }
-    internal static void Present(Window? anchor, FriendNotice notice, NoticeLook look)
-    {
+    internal static void Present(Window? anchor, FriendNotice notice, NoticeLook look) {
         try
         {
             var w = Current ??= new FriendNotices();
@@ -72,60 +70,52 @@ internal sealed class FriendNotices : Window
         }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Friend notice presentation failed"); }
     }
-    internal static void CloseAll(bool fold = false)
-    {
+    internal static void CloseAll(bool fold = false) {
         var w = Current;
         if (w == null) return;
         if (fold) foreach (var n in new List<FriendNotice>(w.Stack.All)) w.Leave(n, false, true);
         w.Stack.Clear();
         w.Close();
     }
-    internal void Advance(double ms)
-    {
+    internal void Advance(double ms) {
         var gone = Stack.Tick(ms);
         foreach (var n in Stack.Visible)
             if (_drawn.TryGetValue(n, out var d)) { d.Bar.ScaleX = n.Fraction; d.Ago.Text = Ago(n); }
         foreach (var n in gone) Leave(n, false, true);
         if (gone.Count > 0) AfterRemoval();
     }
-    private void Leave(FriendNotice n, bool acted, bool missed)
-    {
+    private void Leave(FriendNotice n, bool acted, bool missed) {
         if (!_looks.Remove(n, out var look) || acted) return;
         try { look.Left?.Invoke(n.Payload); }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Friend notice left"); }
         if (missed) try { look.Missed?.Invoke(n.Payload); }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Friend notice missed"); }
     }
-    internal void Dismiss(FriendNotice n, bool acted, bool open = false)
-    {
+    internal void Dismiss(FriendNotice n, bool acted, bool open = false) {
         if (!_looks.TryGetValue(n, out var look) || !Stack.Remove(n)) return;
         Leave(n, acted, false);
         AfterRemoval();
         try { if (acted) look.Act?.Invoke(n.Payload); else if (open) look.Open?.Invoke(n.Payload); }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Friend notice action"); }
     }
-    private void AfterRemoval()
-    {
-        if (Stack.All.Count == 0) Close(); else Rebuild();
+    private void AfterRemoval() { if (Stack.All.Count == 0) Close(); else Rebuild(); }
+    private void Place() {
+        // WPF Windows/Friends/FriendNotices.cs:204-225: closed anchors fall back; placement never escapes.
+        try
+        {
+            if (!IsVisible) return;
+            var screen = (_anchor is { PlatformImpl: not null } anchor ? Screens.ScreenFromWindow(anchor) : null) ?? Screens.Primary;
+            if (screen == null) return;
+            var area = screen.WorkingArea;
+            var scale = screen.Scaling;
+            var (x, y) = FriendNoticeRules.Place(area.X / scale, area.Y / scale,
+                area.Width / scale, area.Height / scale, Bounds.Width, Bounds.Height);
+            Position = new PixelPoint((int)Math.Round(x * scale), (int)Math.Round(y * scale));
+        }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Friend notice place"); }
     }
-    private void Place()
-    {
-        if (!IsVisible) return;
-        var screen = (_anchor == null ? null : Screens.ScreenFromWindow(_anchor)) ?? Screens.Primary;
-        if (screen == null) return;
-        var area = screen.WorkingArea;
-        var scale = screen.Scaling;
-        var (x, y) = FriendNoticeRules.Place(area.X / scale, area.Y / scale,
-            area.Width / scale, area.Height / scale, Bounds.Width, Bounds.Height);
-        Position = new PixelPoint((int)Math.Round(x * scale), (int)Math.Round(y * scale));
-    }
-    private static string Ago(FriendNotice n)
-    {
-        var (key, arg) = FriendNoticeRules.Ago(n.At, DateTimeOffset.UtcNow);
-        return string.Format(Loc.Get(key), arg);
-    }
-    private void Rebuild()
-    {
+    private static string Ago(FriendNotice n) { var (key, arg) = FriendNoticeRules.Ago(n.At, DateTimeOffset.UtcNow); return string.Format(Loc.Get(key), arg); }
+    private void Rebuild() {
         _column.Children.Clear();
         _drawn.Clear();
         foreach (var n in Stack.Visible)

@@ -21,14 +21,12 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 public sealed class FriendNoticesTests
 {
-    private static void Platform()
-    {
+    private static void Platform() {
         if (Application.Current == null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
     [Fact]
-    public Task RepeatsActOnNewestPayloadAndNeverFileMissed() => AvaloniaTestDispatcher.RunAsync(() =>
-    {
+    public Task RepeatsActOnNewestPayloadAndNeverFileMissed() => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
         object? acted = null;
         int missed = 0;
@@ -53,8 +51,7 @@ public sealed class FriendNoticesTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task HoverPausesAndOnlyUnseenDeparturesFileInbox(bool hold) => AvaloniaTestDispatcher.RunAsync(() =>
-    {
+    public Task HoverPausesAndOnlyUnseenDeparturesFileInbox(bool hold) => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
         int missed = 0, left = 0;
         try
@@ -76,8 +73,7 @@ public sealed class FriendNoticesTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task CloseAndBodyClickAreSeenDepartures() => AvaloniaTestDispatcher.RunAsync(() =>
-    {
+    public Task CloseAndBodyClickAreSeenDepartures() => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
         int opened = 0, missed = 0;
         try
@@ -93,8 +89,7 @@ public sealed class FriendNoticesTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task OverflowFilesTheOldestAndOnlyThreeTimersRun() => AvaloniaTestDispatcher.RunAsync(() =>
-    {
+    public Task OverflowFilesTheOldestAndOnlyThreeTimersRun() => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
         int missed = 0;
         try
@@ -115,8 +110,7 @@ public sealed class FriendNoticesTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task RequestBellAndWaitingSummaryFollowWpf() => AvaloniaTestDispatcher.RunAsync(() =>
-    {
+    public Task RequestBellAndWaitingSummaryFollowWpf() => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
         var bell = CoreSettings.Current.FriendNotificationsEnabled;
         try
@@ -164,8 +158,7 @@ public sealed class FriendNoticesTests
         Dispatcher.UIThread.RunJobs();
     }
     [Fact]
-    public Task RealInputActsOpensOnLeftOnlyAndHoverPauses() => AvaloniaTestDispatcher.RunAsync(() =>
-    {
+    public Task RealInputActsOpensOnLeftOnlyAndHoverPauses() => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
         int acted = 0, opened = 0;
         try
@@ -199,10 +192,10 @@ public sealed class FriendNoticesTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task RequestAcceptAndSafetyTeardown() => AvaloniaTestDispatcher.RunAsync(async () =>
-    {
+    public Task RequestAcceptAndSafetyTeardown() => AvaloniaTestDispatcher.RunAsync(async () => {
         Platform();
         var (svc, wire) = FriendsDrawerTests.Service();
+        var bell = CoreSettings.Current.FriendNotificationsEnabled;
         var panel = new Window();
         try
         {
@@ -235,19 +228,19 @@ public sealed class FriendNoticesTests
             FriendsLanding.Stop();
             Assert.Null(FriendNotices.Current);
         }
-        finally { FriendsLanding.Stop(); panel.Close(); }
+        finally { CoreSettings.Current.FriendNotificationsEnabled = bell; FriendsLanding.Stop(); panel.Close(); }
     });
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task OpenDrawerRaisesTheShellsRailChipOnTheFriend(bool fromLauncher) => AvaloniaTestDispatcher.RunAsync(() =>
-    {
+    public Task OpenDrawerRaisesTheShellsRailChipOnTheFriend(bool fromLauncher) => AvaloniaTestDispatcher.RunAsync(() => {
         Platform();
-        CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
-        CoreSettings.Current.PerformanceMode = false;
+        var (motion, performance) = (CoreSettings.Current.MotionLevel, CoreSettings.Current.PerformanceMode);
         var shell = new MainShellWindow();
         try
         {
+            CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
+            CoreSettings.Current.PerformanceMode = false;
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             var launcher = fromLauncher ? LauncherWindow.OpenFor(shell) : null;
@@ -268,7 +261,24 @@ public sealed class FriendNoticesTests
             Assert.True(chip.IsOpen);
             Assert.Equal("u_on", chip.Drawer.OpenId);
         }
-        finally { LauncherWindow.Instance?.Close(); shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        finally { (CoreSettings.Current.MotionLevel, CoreSettings.Current.PerformanceMode) = (motion, performance); LauncherWindow.Instance?.Close(); shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        return Task.CompletedTask;
+    });
+    [Fact]
+    public Task AClosedAnchorFallsBackWhenANoticeLeaves() => AvaloniaTestDispatcher.RunAsync(() => {
+        Platform(); var anchor = new Window(); anchor.Show();
+        try
+        {
+            for (int i = 0; i < 2; i++) FriendNotices.Present(anchor,
+                new FriendNotice(NoticeKind.Request, i.ToString(), "Friend", DateTimeOffset.UtcNow, 8000), new NoticeLook());
+            var notice = FriendNotices.Current!; notice.Stack.Paused = true; Dispatcher.UIThread.RunJobs(); var height = notice.Bounds.Height;
+            anchor.Close(); notice.Dismiss(notice.Stack.All[0], false); notice.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            Assert.Single(notice.Stack.All); Assert.True(notice.Bounds.Height < height);
+            var screen = notice.Screens.Primary!; var area = screen.WorkingArea; var scale = screen.Scaling;
+            var (x, y) = FriendNoticeRules.Place(area.X / scale, area.Y / scale, area.Width / scale, area.Height / scale, notice.Bounds.Width, notice.Bounds.Height);
+            Assert.Equal(new PixelPoint((int)Math.Round(x * scale), (int)Math.Round(y * scale)), notice.Position);
+        }
+        finally { FriendNotices.CloseAll(); anchor.Close(); }
         return Task.CompletedTask;
     });
 }
