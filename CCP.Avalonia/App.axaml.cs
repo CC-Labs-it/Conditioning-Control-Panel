@@ -781,6 +781,9 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     var vlc = new Platform.LibVlcAudio();
                     vlc.Seed();
+                    Platform.BrainDrainPlayer.Instance = new Platform.BrainDrainPlayer(vlc.PrepareVoice);
+                    CoreEngine.StartBrainDrain = Platform.BrainDrainPlayer.Instance.Start;
+                    CoreEngine.StopBrainDrain = Platform.BrainDrainPlayer.Instance.Stop;
                     // Ducking crash journal (Linux): restore what a dead run left ducked, then journal every duck.
                     vlc.StartDuckJournal(Path.Combine(CorePaths.UserData, Platform.DuckRecovery.PulseFileName));
                     // Mind wipe plays through the same LibVLC (WPF App.MindWipe, App.xaml.cs:385).
@@ -1266,6 +1269,7 @@ namespace ConditioningControlPanel.Avalonia
 
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
             try { Platform.KeywordTriggerHead.Stop(); } catch { }
+            try { Platform.BrainDrainPlayer.Instance?.Stop(); } catch { }
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }
