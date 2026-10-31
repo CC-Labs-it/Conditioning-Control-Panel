@@ -34,11 +34,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>Chaos runs share the field: ChaosRunHost spawns treat bubbles here (BeginChaos/
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
-    /// <para>ponytail: FloatUp bubbles only. Not here yet: live chaos bubbles (fuses, defuse,
-    /// detonation), the dashboard's ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
-    /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, the lucky gold glow and
-    /// sparkles, pop haptics, mod pop-sound overrides, Discord presence, and the achievement
-    /// (no AchievementService on this head; quests are credited).</para>
+    /// <para>Ambient FloatUp, pop particles and live Chaos fuses share this field. Remaining
+    /// ambient parity gaps are recorded in docs/avalonia-parity.html.</para>
     /// </summary>
     internal static class BubbleOverlay
     {
@@ -549,8 +546,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             dc.DrawEllipse(null, FusePen(b.FuseRingArgb), new Point(cx, cy), rr, rr);
                         }
                     }
+                    // WPF BubbleService.cs:3477, :3517, :3791: sparkles are above the sprite,
+                    // outside its breathe/rotate transform, with particle alpha times field fade.
+                    foreach (var sp in b.Sparkles)
+                    {
+                        if (sp.Alpha <= 0) continue;
+                        using (dc.PushOpacity(Math.Clamp(sp.Alpha * b.Fade, 0, 1)))
+                            dc.DrawEllipse(b.Lucky ? GoldSparkle : PinkSparkle, null,
+                                new Point((b.X + sp.X - ox) * k, (b.Y + sp.Y - oy) * k),
+                                sp.Size * k / 2, sp.Size * k / 2);
+                    }
                 }
             }
+            private static readonly IBrush GoldSparkle = new ImmutableSolidColorBrush(Color.FromUInt32(0xFFFFD700));
+            private static readonly IBrush PinkSparkle = new ImmutableSolidColorBrush(Color.FromUInt32(0xFFFF69B4));
         }
     }
 }
