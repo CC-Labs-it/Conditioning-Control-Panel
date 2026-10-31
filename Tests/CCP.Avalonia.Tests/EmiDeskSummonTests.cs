@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -148,6 +149,38 @@ public sealed class EmiDeskSummonTests
             svc.Dismiss();
             await WaitForDismiss(svc);
         });
+
+    private static void PanicDesk() => global::ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "emi-desk-feedback").Stop(null);
+
+    [Fact]
+    public Task PanicPreservesDismissCompletion() => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>
+    {
+        await svc.Summon();
+        svc.Dismiss();
+        var player = (EmiChainPlayer)typeof(EmiDeskWindow).GetField("_chainPlayer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(svc.Window)!;
+        PanicDesk();
+        Assert.True(player.IsLive);
+        foreach (var frame in ConditioningControlPanel.Services.EmiDesk.EmiChains.Get("wink")!.Seq) EmiChainPlaybackTests.Tick(player, frame.Ms);
+        await WaitForDismiss(svc);
+        Assert.False(svc.Window!.InputLocked);
+    });
+
+    [Fact]
+    public Task PanicFinishesWakeBookkeepingOnce() => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async svc =>
+    {
+        await svc.Summon();
+        await Pump(700);
+        var window = svc.Window!;
+        int done = 0;
+        typeof(EmiDeskWindow).GetField("_summonDone", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(window, (Action)(() => done++));
+        Assert.True(window.ChainLive);
+        PanicDesk();
+        Assert.Equal(1, done);
+        window.FinishSummon();
+        Assert.Equal(1, done);
+        Assert.False(window.ChainLive);
+        Assert.False(window.InputLocked);
+    });
 
     /// <summary>WPF ShowGiggle (Speech.cs:461): with EMI out and the mute accepted, the tube does not speak.</summary>
     [Fact]
