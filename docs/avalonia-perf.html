@@ -52,6 +52,18 @@ and checks that a WPF run with a missing tab exits 3 without JSON. The job is re
 It takes each metric's median across runs (per-tab median and p95 too), applies the rule above, prints a Markdown table and exits 1 on a
 regression, missing reports, missing/extra tabs or invalid measurements. Tab keys are <code>NavCheck.TabPanels</code>; WPF's legacy
 <code>ExclusivesTab</code> goes through <code>ShowTab(&quot;exclusives&quot;)</code> to the lazy Premium page, whose visibility is checked.</p>
+<h2 id="discord-remote-first-show">Discord and Remote Control first-show work</h2>
+<p>The Discord gallery now keeps achievement ids while its all-achievements expander is folded,
+materializes tiles on expansion using keyed registry lookups, and reuses them on repeated expansion.
+Previously assigning ItemsSource eagerly could create every gallery container while folded; WPF also
+populates that gallery eagerly. Remote Control previously read and decoded its hero PNG synchronously
+at full resolution on visual-tree attachment; it now loads on a worker at WPF's 800px decode cap,
+retains the brush across reattachment, and rejects stale mod-load completions. WPF supplies its hero
+from an existing image source. Both tab views are constructed with the shell, not lazily in ShowTab.</p>
+<p>Focused headless coverage: <code>TabFirstShowWorkTests</code>. These checks establish deferred gallery
+work, worker-thread image loading, bounded decoding and reuse, not latency parity. The effect on the
+reported p95 failures must be verified after the PR opens using GitHub CI's
+<code>perf-bench-windows</code> artifact, with the unchanged median and p95 comparison rule.</p>
 <h2 id="results">Results</h2>
 
 <table>

@@ -62,7 +62,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 LocalizationManager.Instance.SetLanguage("en");
@@ -96,6 +96,7 @@ public sealed partial class AccountSeedTests
                 Assert.Contains("GET /user/lookup?display_name=Nyx", wire.Seen);
                 Assert.Equal("Offline", Text("TxtProfileViewerOnline"));      // the lookup's fresh presence
                 Assert.True(F<Border>("StaffBadge").IsVisible && F<Border>("WhitelistBadge").IsVisible);
+                F<Expander>("ProfileAllAchievementsExpander").IsExpanded = true;
                 var tiles = ((IEnumerable<ProfileAchievementTile>)F<ItemsControl>("ProfileAchievementGrid").ItemsSource!).ToList();
                 Assert.Equal(new[] { "plastic_initiation", "dumb_bimbo" }, tiles.Select(t => t.Id));
 
@@ -150,7 +151,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();

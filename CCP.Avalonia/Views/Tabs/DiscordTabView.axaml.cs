@@ -69,6 +69,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             InitializeComponent();
             PrivacyPanel = new ProfilePrivacyPanel();
+            ProfileAllAchievementsExpander.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == Expander.IsExpandedProperty && ProfileAllAchievementsExpander.IsExpanded)
+                    PopulateAchievements();
+            };
         }
 
         // ------------------------------------------------------------------
@@ -279,14 +284,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             WhitelistBadge.IsVisible = isWhitelisted;
         }
 
-        /// <summary>WPF LoadProfileAchievementImages. No achievement art on this head, so each tile draws as its plate.</summary>
-        private void ShowAchievements(IEnumerable<string>? ids, string emptyText)
+        // Keep the folded gallery as data. ItemsControl creates containers even while its
+        // ancestor expander is closed; assigning ItemsSource on first show paid for every unlock.
+        private string[]? _achievementIds;
+        private string _achievementEmptyText = "";
+        private bool _achievementsDirty;
+
+        internal void ShowAchievements(IEnumerable<string>? ids, string emptyText)
         {
-            var tiles = ids?.Select(id => Achievement.All.Values.FirstOrDefault(a => a.Id == id)).OfType<Achievement>()
+            _achievementIds = ids?.ToArray();
+            _achievementEmptyText = emptyText;
+            TxtNoAchievements.Text = emptyText;
+            _achievementsDirty = true;
+            if (ProfileAllAchievementsExpander.IsExpanded) PopulateAchievements();
+            else ProfileAchievementGrid.ItemsSource = null; // do not retain a previous user's gallery
+        }
+
+        private void PopulateAchievements()
+        {
+            if (!_achievementsDirty) return;
+            _achievementsDirty = false;
+            var tiles = _achievementIds?.Select(id => Achievement.All.TryGetValue(id, out var a) ? a : null)
+                .OfType<Achievement>()
                 .Select(a => new ProfileAchievementTile(a.Id, CoreMods.MakeModAware(a.Name))).ToList();
             var any = tiles is { Count: > 0 };
             ProfileAchievementGrid.ItemsSource = any ? tiles : null;
-            TxtNoAchievements.Text = emptyText;
+            TxtNoAchievements.Text = _achievementEmptyText;
             TxtNoAchievements.IsVisible = !any;
         }
 
