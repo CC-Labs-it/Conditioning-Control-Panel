@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Skia;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -48,6 +49,45 @@ public sealed class IntakeLifecycleTests
             CoreSettings.Current.IntakeFullscreen = fullscreen;
         }
     }
+
+    [Fact]
+    public Task NativeDeathBeforeReadyRetriesWindowedOnceAndIgnoresClosedEngines() => WithCleanState(() =>
+    {
+        IntakeHostWindow.RelaunchedOnce = false;
+        CoreSettings.Current.IntakeFullscreen = true;
+        var first = GradedIntakeTabView.OpenIntake(null, duckMain: false);
+        first.Web.OnBrowserProcessFailed(); Dispatcher.UIThread.RunJobs(); // a crash during boot has no heartbeat yet
+        var second = Only();
+        Assert.NotSame(first, second);
+        Assert.NotEqual(WindowState.FullScreen, second.WindowState);
+        Assert.True(CoreSettings.Current.IntakeFullscreen); // recovery does not overwrite the preference
+        first.Web.OnBrowserProcessFailed(); Dispatcher.UIThread.RunJobs();
+        Assert.Same(second, Only());
+        second.Web.OnBrowserProcessFailed(); Dispatcher.UIThread.RunJobs();
+        Assert.Empty(IntakeHostWindow.Snapshot());
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task NativeRecoveryKeepsDuckChoiceAndRestoresMainOnSecondDeath() => WithCleanState(() =>
+    {
+        IntakeHostWindow.RelaunchedOnce = false;
+        var main = new Window();
+        main.Show();
+        try
+        {
+            var first = GradedIntakeTabView.OpenIntake(main, duckMain: true);
+            first.Web.OnBrowserProcessFailed(); Dispatcher.UIThread.RunJobs();
+            var second = Only();
+            Assert.NotSame(first, second);
+            Assert.Equal(WindowState.Minimized, main.WindowState);
+            second.Web.OnBrowserProcessFailed(); Dispatcher.UIThread.RunJobs();
+            Assert.Empty(IntakeHostWindow.Snapshot());
+            Assert.NotEqual(WindowState.Minimized, main.WindowState);
+        }
+        finally { main.Close(); }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task TheRunDucksTheControlPanelAndEveryCloseGivesItBack() => WithCleanState(() =>
