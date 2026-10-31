@@ -100,6 +100,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <see cref="ShowDialogWithRecalibrate"/> re-opens while this is true.</summary>
         public bool WantsRecalibrate { get; private set; }
 
+        private static readonly HashSet<WebcamCalibrationWindow> Active = new();
+        internal static void CloseAllForPanic()
+        {
+            foreach (var window in Active.ToArray()) window.Close();
+        }
+
         public WebcamCalibrationWindow()
         {
             AvaloniaXamlLoader.Load(this);
@@ -147,6 +153,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             this.FindControl<Button>("BtnVerifyDone")!.Click += (_, _) => BtnVerifyDone_Click();
             KeyDown += Window_KeyDown;
             Loaded += Window_Loaded;
+            Active.Add(this);
+            Closed += (_, _) => Active.Remove(this);
             Closed += Window_Closed;
 
             IsShowing = true;

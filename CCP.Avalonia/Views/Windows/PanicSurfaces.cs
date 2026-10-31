@@ -104,7 +104,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
             new("quick-recal", _ => WebcamQuickRecalWindow.CloseAllForPanic()),
             new("asset-preview", _ => MiniPlayerWindow.CloseAllForPanic()),  // Library local and encrypted-pack previews (P06; WPF left the preview open)
-            new("camera", _ => MainShellWindow.StopCameraForPanic(), After: ["gaze-minigame"]),   // decision C: last, fire-and-forget; gaze reads it
+            // Stricter than WPF MainWindow.xaml.cs:1934-2013: retire calibration before camera teardown.
+            new("webcam-calibration", _ => WebcamCalibrationWindow.CloseAllForPanic()),
+            new("camera", _ => MainShellWindow.StopCameraForPanic(), After: ["gaze-minigame", "webcam-calibration"]),   // decision C: last, fire-and-forget; gaze reads it
         };
 
         /// <summary>WPF AnyGameSurfaceOwnsTheScreen. Sample BEFORE <see cref="StopAll"/>.</summary>
