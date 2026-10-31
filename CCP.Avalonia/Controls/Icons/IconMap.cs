@@ -98,7 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.Money, R, null, "💰");
             M(IconKind.Star, F, Gold, "⭐", "★");
             M(IconKind.Star, R, Gold, "☆");
-            M(IconKind.Trophy, F, Gold, "🏆");
+            M(IconKind.Trophy, F, Gold, "🏆", "🏅");
             M(IconKind.Crown, F, Gold, "👑");
             M(IconKind.Gift, R, null, "🎁"); M(IconKind.TicketDiagonal, R, null, "🎟");
             M(IconKind.Sparkle, F, null, "✨", "✦", "🎉", "🔮"); // Confetti missing -> listed fallback

@@ -19,6 +19,7 @@ public sealed class IconMapTests
     [InlineData("⚙", IconKind.Settings, IconVariant.Regular, null)]
     [InlineData("▶", IconKind.Play, IconVariant.Filled, null)]
     [InlineData("✕", IconKind.Dismiss, IconVariant.Regular, null)]
+    [InlineData("🏅", IconKind.Trophy, IconVariant.Filled, IconBrushes.Gold)]
     [InlineData("⭐", IconKind.Star, IconVariant.Filled, IconBrushes.Gold)]
     [InlineData("☆", IconKind.Star, IconVariant.Regular, IconBrushes.Gold)]
     [InlineData("💖", IconKind.Heart, IconVariant.Filled, IconBrushes.Heart)]
