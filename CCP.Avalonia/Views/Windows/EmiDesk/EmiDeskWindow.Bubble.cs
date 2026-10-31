@@ -2,7 +2,6 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
-using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using ConditioningControlPanel.Services.EmiDesk;
@@ -14,14 +13,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     {
         private static readonly IBrush BubbleFill = new ImmutableSolidColorBrush(Color.FromRgb(0x18, 0x18, 0x32));
         private static readonly IBrush BubbleInk = new ImmutableSolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4));
-        private const double BubbleLeftFrac = 0.58;
-        private const double BubbleBottomFrac = 0.96;
-        private const double BubbleFontAtDefaultWidth = 11.0;
-        private const double BubbleFontFloor = 10.0;
-        private const double BubbleFontRefWidth = 220.0;
-        private const double BubbleMinWidth = 220.0;
-        private const double BubbleMaxWidth = 380.0;
-        private const double BubbleWidthOfBody = 1.5;
+        private const double BubbleLeftFrac = 0.58, BubbleBottomFrac = 0.96;
+        private const double BubbleFontAtDefaultWidth = 11.0, BubbleFontFloor = 10.0, BubbleFontRefWidth = 220.0;
+        private const double BubbleMinWidth = 220.0, BubbleMaxWidth = 380.0, BubbleWidthOfBody = 1.5;
         /// <summary>WPF EmiFace.PixelFont: Press Start 2P (shipped), then the mono chain.</summary>
         private static readonly FontFamily PixelFont = new(
             "avares://CCP.Avalonia/Resources/emi/fonts#Press Start 2P, Noto Sans Mono, Cascadia Mono, Consolas, Courier New, monospace");

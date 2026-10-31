@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -72,11 +73,8 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.Equal(2, CoreSettings.Current.EmiDeskSpice);
         desk.Fire("resized");
         Assert.Equal(".", desk.Window.BubbleText);
-        desk.Window.AdvanceSpeech();
-        desk.Window.AdvanceSpeech();
-        desk.Window.AdvanceSpeech();
-        Assert.Equal("high spice", desk.Window.BubbleText);
-        Assert.Equal("^_~", desk.Window.Face);
+        for (int i = 0; i < 3; i++) desk.Window.AdvanceSpeech();
+        Assert.Equal("high spice", desk.Window.BubbleText); Assert.Equal("^_~", desk.Window.Face);
         return Task.CompletedTask;
     });
     [Fact]
@@ -87,22 +85,15 @@ public sealed class EmiDeskSettingsSpeechTests
         window.Say("test line", "^_~", () => done = true);
         Assert.False(done);
         var timer = (DispatcherTimer)typeof(EmiDeskWindow).GetField("_speechTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(window)!;
-        Assert.Equal(TimeSpan.FromMilliseconds(420), timer.Interval);
-        Assert.Equal(".", window.BubbleText);
-        Assert.Equal("0_0", window.Face);
+        Assert.Equal(TimeSpan.FromMilliseconds(420), timer.Interval); Assert.Equal(".", window.BubbleText); Assert.Equal("0_0", window.Face);
         window.AdvanceSpeech();
         Assert.Equal("..", window.BubbleText);
         window.AdvanceSpeech();
-        Assert.Equal("...", window.BubbleText);
-        Assert.Equal(TimeSpan.FromMilliseconds(520), timer.Interval);
+        Assert.Equal("...", window.BubbleText); Assert.Equal(TimeSpan.FromMilliseconds(520), timer.Interval);
         window.AdvanceSpeech();
-        Assert.Equal("test line", window.BubbleText);
-        Assert.Equal(TimeSpan.FromMilliseconds(EmiChains.SayHoldMs("test line")), timer.Interval);
-        Assert.Equal("^_~", window.Face);
-        Assert.False(done);
+        Assert.Equal("test line", window.BubbleText); Assert.Equal(TimeSpan.FromMilliseconds(EmiChains.SayHoldMs("test line")), timer.Interval); Assert.Equal("^_~", window.Face); Assert.False(done);
         window.AdvanceSpeech();
-        Assert.Null(window.BubbleText);
-        Assert.Equal("0_0", window.Face);
+        Assert.Null(window.BubbleText); Assert.Equal("0_0", window.Face);
         window.AdvanceSpeech();
         Assert.True(done);
         return Task.CompletedTask;
@@ -110,18 +101,13 @@ public sealed class EmiDeskSettingsSpeechTests
     [Fact]
     public Task GreetingIsReachableOnSummonAndPanicCutsIt() => InDesk(desk =>
     {
-        // InDesk summoned her: the summon's greeting timer is what greets, not a direct call.
         desk.GreetingDue();
-        Assert.Equal(".", desk.Window!.BubbleText);
-        Assert.True(desk.LineEngine.EverSpent("firstContact"));
+        Assert.Equal(".", desk.Window!.BubbleText); Assert.True(desk.LineEngine.EverSpent("firstContact"));
         desk.GreetNow();
-        desk.Window.AdvanceSpeech();
-        desk.Window.AdvanceSpeech();
-        desk.Window.AdvanceSpeech();
+        for (int i = 0; i < 3; i++) desk.Window.AdvanceSpeech();
         Assert.Equal("desktop hello", desk.Window.BubbleText);
         PanicSurfaces.All.Single(x => x.Id == "emi-desk-feedback").Stop(null);
-        Assert.True(desk.Window.HoldPending);
-        Assert.Null(desk.Window.BubbleText);
+        Assert.True(desk.Window.HoldPending); Assert.Null(desk.Window.BubbleText);
         desk.Window.AdvanceSpeech();
         desk.Fire("resized");
         Assert.Null(desk.Window.BubbleText);
@@ -152,7 +138,6 @@ public sealed class EmiDeskSettingsSpeechTests
     [Fact]
     public Task WordlessRowDrawsItsFaceWithoutAHold() => InDesk(desk =>
     {
-        // WPF EmiDeskWindow.Bubble.cs:524-530: no text, no chain -> just the face, no held revert.
         desk.Fire("wordless");
         Assert.Equal("o_o", desk.Window!.Face);
         Assert.Null(desk.Window.BubbleText);
@@ -215,5 +200,25 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.Equal(face, window.Face);
         Assert.False(done);
         return Task.CompletedTask;
+    });
+    [Theory]
+    [InlineData("panicPressed", "-_-"), InlineData("dismissed", "T_T")]
+    public Task RightClickDuringHoldStillReturnsToRest(string moment, string face) => InDesk(async desk =>
+    {
+        var window = desk.Window!;
+        for (int i = 0; window.Transiting && i < 100; i++) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+        Assert.False(window.Transiting);
+        desk.Fire(moment);
+        Assert.Equal(face, window.Face);
+        var body = window.FindControl<Control>("BodyRoot")!;
+        var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+        body.RaiseEvent(new PointerReleasedEventArgs(body, pointer, window, default, 0,
+            new PointerPointProperties(0, PointerUpdateKind.RightButtonReleased), 0, MouseButton.Right));
+        Assert.True(window.RingOpen);
+        Assert.True(window.HoldPending);
+        Assert.Equal(face, window.Face);
+        window.ExpireHold();
+        Assert.Equal(EmiChains.RestFace, window.Face);
+        Assert.False(window.HoldPending);
     });
 }

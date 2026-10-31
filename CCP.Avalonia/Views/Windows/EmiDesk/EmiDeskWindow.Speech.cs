@@ -25,7 +25,6 @@ public partial class EmiDeskWindow
         _speechTimer.Tick += (_, _) => AdvanceSpeech();
         _speechTimer.Start();
     }
-    // The timer and the headless tests drive the same frames; no wall-clock waits in the tests.
     internal void AdvanceSpeech()
     {
         if (_speechTimer == null) return;
@@ -100,7 +99,6 @@ public partial class EmiDeskWindow
         _holdTimer.Tick += (_, _) => ExpireHold();
         _holdTimer.Start();
     }
-    // The timer and the headless tests drive the same step.
     internal void ExpireHold()
     {
         if (_holdTimer == null) return;

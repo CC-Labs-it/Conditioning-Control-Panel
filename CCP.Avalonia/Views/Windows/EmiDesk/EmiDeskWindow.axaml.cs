@@ -906,7 +906,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             StopPatFeedback();
             CancelSpeech();
-            CancelHold();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -2257,6 +2256,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopIdleBeats();
                 DisarmPet();
                 CancelChain();
+                CancelHold();
                 TearDownReactions();
 
                 try { OnTearDownCore(); }
@@ -2646,6 +2646,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 TearDownReactions();
                 TearDownVox();
                 CancelChain();
+                CancelHold();
                 SweepFx(all: true);
                 Close();
             }
@@ -2668,7 +2669,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopChromeGrace();
                 TearDownReactions();
                 TearDownVox();
-                CancelChain();
+                CancelChain(); CancelHold();
             }
             catch (Exception ex)
             {
