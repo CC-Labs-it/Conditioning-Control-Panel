@@ -167,11 +167,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
             var mod = (CoreMods.ActiveModTokenProvider?.Invoke() as ModManifest)?.BubbleScale;
             // WPF AmbientBubbleMotion.RollForSpawn: picker + grants + motion level -> one concrete style.
+            var level = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level; // WPF MotionFx.Level, capped by OS and Gentle Visuals
             var motion = BubbleMotionRoll.Resolve(s.BubbleMotionStyle,
                 PrizeOwnership.IsGranted(PrizeOwnership.BubbleRain),
                 PrizeOwnership.IsGranted(PrizeOwnership.BubbleSpiralIn),
-                s.MotionLevel, Field.Random.NextDouble());
-            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable, motion));
+                level, Field.Random.NextDouble());
+            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable, level, motion));
             RequestFrame();
         }
 

@@ -87,19 +87,22 @@ public sealed class BubbleMotionPickerTests
     {
         Setup();
         var settings = CoreSettings.Current;
-        settings.OfflineMode = false;
-        settings.UnifiedId = "bubble-owner";
-        CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "test-token" : null;
-        PrizeOwnership.IsGranted = PrizeOwnership.Held;
-        PrizeOwnership.ResetHeld();
-        settings.BubbleMotionStyle = BubbleMotionStyle.SpiralIn;
-        var panel = new BubblePopFeatureControl();
-        var picker = panel.FindControl<ComboBox>("CmbMotion")!;
-        var box = panel.FindControl<Border>("V2Box")!;
-        var host = new Window { Content = panel };
-        host.Show();
+        var old = (settings.OfflineMode, settings.UnifiedId, CoreAccount.UnifiedUserId,
+            CoreSecrets.RetrieveProvider, PrizeOwnership.IsGranted, settings.BubbleMotionStyle);
+        Window? host = null;
         try
         {
+            settings.OfflineMode = false;
+            settings.UnifiedId = "bubble-owner";
+            CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "test-token" : null;
+            PrizeOwnership.IsGranted = PrizeOwnership.Held;
+            PrizeOwnership.ResetHeld();
+            settings.BubbleMotionStyle = BubbleMotionStyle.SpiralIn;
+            var panel = new BubblePopFeatureControl();
+            var picker = panel.FindControl<ComboBox>("CmbMotion")!;
+            var box = panel.FindControl<Border>("V2Box")!;
+            host = new Window { Content = panel };
+            host.Show();
             Assert.False(box.IsVisible);
             // The same accepted snapshot a purchase reply supplies, arriving off the UI thread.
             Task.Run(() => PrizeOwnership.ApplySnapshot("bubble-owner", 1, new[] { PrizeOwnership.BubbleRain })).GetAwaiter().GetResult();
@@ -132,9 +135,26 @@ public sealed class BubbleMotionPickerTests
             Assert.False(box.IsVisible); // reload catches the snapshot missed while detached
             Assert.Single(picker.Items);
         }
-        finally { host.Close(); Dispatcher.UIThread.RunJobs(); }
+        finally
+        {
+            host?.Close(); Dispatcher.UIThread.RunJobs();
+            (settings.OfflineMode, settings.UnifiedId, CoreAccount.UnifiedUserId,
+                CoreSecrets.RetrieveProvider, PrizeOwnership.IsGranted, settings.BubbleMotionStyle) = old;
+            PrizeOwnership.ResetHeld();
+        }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public async Task GrantProbeRestoresIdentitySettingsAndSeams()
+    {
+        var s = CoreSettings.Current;
+        var before = (s.OfflineMode, s.UnifiedId, CoreAccount.UnifiedUserId,
+            CoreSecrets.RetrieveProvider, PrizeOwnership.IsGranted, s.BubbleMotionStyle);
+        await GrantsAfterConstructionRefreshOnUiThreadAndDetachStopsListening();
+        Assert.Equal(before, (s.OfflineMode, s.UnifiedId, CoreAccount.UnifiedUserId,
+            CoreSecrets.RetrieveProvider, PrizeOwnership.IsGranted, s.BubbleMotionStyle));
+    }
 
     private static void Setup()
     {

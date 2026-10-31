@@ -27,7 +27,7 @@ public sealed class BubbleMotionRollTests
     public void Rain_starts_above_the_top_falls_and_misses_below_the_bottom()
     {
         var s = new AppSettings();
-        var b = AmbientBubble.Spawn(new Random(1), 0, 0, 0, 1920, 1080, 1, s, null, true, BubbleMotionStyle.Rain);
+        var b = AmbientBubble.Spawn(new Random(1), 0, 0, 0, 1920, 1080, 1, s, null, true, MotionLevel.Full, BubbleMotionStyle.Rain);
         Assert.Equal(-b.Size, b.Y);
         var y = b.Y;
         Assert.Equal(AmbientBubble.Result.Alive, b.Step());
@@ -41,7 +41,7 @@ public sealed class BubbleMotionRollTests
     public void Spiral_in_walks_a_ring_inward_fades_and_ends_at_the_core_as_a_miss()
     {
         var s = new AppSettings();
-        var b = AmbientBubble.Spawn(new Random(2), 0, 0, 0, 1920, 1080, 1, s, null, true, BubbleMotionStyle.SpiralIn);
+        var b = AmbientBubble.Spawn(new Random(2), 0, 0, 0, 1920, 1080, 1, s, null, true, MotionLevel.Full, BubbleMotionStyle.SpiralIn);
         double R(AmbientBubble x) => Math.Sqrt(Math.Pow(x.CenterX - 960, 2) + Math.Pow(x.CenterY - 540, 2));
         Assert.Equal(1080 * BubbleSpiralPath.StartRadiusFrac, R(b), 6);
         var r0 = R(b);
@@ -55,4 +55,34 @@ public sealed class BubbleMotionRollTests
         Assert.Equal(0.0, b.MotionFade);
         Assert.Equal(BubbleSpiralPath.CoreDip, R(b), 6);
     }
+    [Fact]
+    public void Effective_reduced_level_halves_rain_speed_and_spiral_turns()
+    {
+        // WPF MotionFx.cs:36-53; BubbleService.cs:3316,3373. Raw settings stay Full.
+        var settings = new AppSettings { MotionLevel = MotionLevel.Full };
+        AmbientBubble Spawn(BubbleMotionStyle motion, MotionLevel level) =>
+            AmbientBubble.Spawn(new Random(2), 0, 0, 0, 1920, 1080, 1, settings, null, true, level, motion);
+        double Fall(MotionLevel level)
+        {
+            var b = Spawn(BubbleMotionStyle.Rain, level); var y = b.Y;
+            b.Step(); return b.Y - y;
+        }
+        Assert.Equal(Fall(MotionLevel.Full) / 2, Fall(MotionLevel.Reduced), 8);
+        double Turns(MotionLevel level)
+        {
+            var b = Spawn(BubbleMotionStyle.SpiralIn, level);
+            System.Numerics.Complex Point() => new(b.CenterX - 960, b.CenterY - 540);
+            var previous = Point(); var angle = 0d;
+            for (var i = 0; i < 5000; i++)
+            {
+                var result = b.Step(); var next = Point();
+                angle += (next / previous).Phase; previous = next;
+                if (result == AmbientBubble.Result.Missed) return Math.Abs(angle / (2 * Math.PI));
+            }
+            throw new InvalidOperationException("Spiral did not finish");
+        }
+        Assert.InRange(Turns(MotionLevel.Full), 2.5, 2.51);
+        Assert.InRange(Turns(MotionLevel.Reduced), 1.25, 1.26);
+    }
+
 }

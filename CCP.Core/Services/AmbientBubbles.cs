@@ -147,7 +147,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF Bubble ctor for a plain ambient bubble. <paramref name="area"/> is the screen's
         /// working area in px, <paramref name="scaling"/> its DPI scale.</summary>
         public static AmbientBubble Spawn(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
-            double scaling, AppSettings s, double? modScale, bool clickable,
+            double scaling, AppSettings s, double? modScale, bool clickable, MotionLevel level,
             BubbleMotionStyle motion = BubbleMotionStyle.FloatUp)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = clickable };
@@ -158,7 +158,7 @@ namespace ConditioningControlPanel.Services
             // Bubbles v2: the owned styles honour MotionLevel.Reduced at half speed (FloatUp untouched).
             if (motion == BubbleMotionStyle.Mix) motion = BubbleMotionStyle.FloatUp;
             b.Motion = motion;
-            if (motion != BubbleMotionStyle.FloatUp) b._speed *= BubbleMotionRoll.SpeedMult(s.MotionLevel);
+            if (motion != BubbleMotionStyle.FloatUp) b._speed *= BubbleMotionRoll.SpeedMult(level);
             b._animType = r.Next(4);
             b._wobbleOffset = r.NextDouble() * 100;
             b.Angle = r.Next(360);
@@ -175,7 +175,7 @@ namespace ConditioningControlPanel.Services
                 b._spiralCy = (areaY + areaH / 2.0) / scaling;
                 b._spiralR0 = BubbleSpiralPath.StartRadius(Math.Min(areaW, areaH) / scaling);
                 b._spiralRadial = b._speed * BubbleSpiralPath.RadialPerSpeed;
-                b._spiralTurns = BubbleSpiralPath.Turns(s.MotionLevel);
+                b._spiralTurns = BubbleSpiralPath.Turns(level);
                 b._spiralDir = r.Next(2) == 0 ? 1 : -1;
                 b._spiral = BubbleSpiralPath.Start(b._spiralR0, r.NextDouble() * Math.PI * 2);
                 b.PlaceOnSpiral();
