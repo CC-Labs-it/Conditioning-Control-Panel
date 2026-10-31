@@ -21,6 +21,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
 using Xunit;
+using ConditioningControlPanel.Avalonia.Platform;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
@@ -30,13 +31,20 @@ namespace CCP.Avalonia.Tests;
 /// the panel half is a table of every control WPF greys or refuses under Lockdown.</summary>
 public sealed class LockdownVeilTests
 {
+    private sealed class FlashClock : TimeProvider
+    {
+        public long Now;
+        public override long GetTimestamp() => Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+    }
+
     private static void Run(Action<MainShellWindow, LockdownService> body)
     {
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
                 AppBuilder.Configure<AvApp>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
@@ -57,6 +65,8 @@ public sealed class LockdownVeilTests
             s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);   // P76: no intro card stealing the badge's Enter
             s.WhatMovedCardShown = 1;
             var ld = LockdownService.Current = new LockdownService();
+            var oldFlashClock = MainShellWindow.LockdownFlashTime;
+            MainShellWindow.LockdownFlashTime = new FlashClock();
             var shell = new MainShellWindow();
             try
             {
@@ -75,6 +85,7 @@ public sealed class LockdownVeilTests
                 shell.RequestExit();
                 shell.Close();
                 CoreSettings.ServiceProvider = null;
+                MainShellWindow.LockdownFlashTime = oldFlashClock;
             }
         });
     }
@@ -513,9 +524,12 @@ public sealed class LockdownVeilTests
         var flash = shell.LockdownFlash!;
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        var clock = (FlashClock)MainShellWindow.LockdownFlashTime;
+        clock.Now += TimeSpan.FromMilliseconds(300).Ticks;
+        shell.TickLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Now += TimeSpan.FromMilliseconds(300).Ticks;
+        shell.TickLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 
