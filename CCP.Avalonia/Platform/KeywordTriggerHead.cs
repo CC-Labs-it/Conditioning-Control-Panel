@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -14,7 +15,6 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>Keyboard/audio slice of WPF KeywordTriggerService. OCR and the other actions remain a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -118,6 +118,7 @@ internal sealed class KeywordAudioRuntime
     private readonly KeywordCooldowns _cooldowns = new();
     private CancellationTokenSource? _audio;
     private Action? _stop;
+    private int _playGeneration;
     private long? _duckGeneration;
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
@@ -161,34 +162,130 @@ internal sealed class KeywordAudioRuntime
         {
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
+            RecordFire(t, "Keyboard", now);   // WPF KeywordTriggerService.cs:1191-1200
+            try { TriggerFired?.Invoke(t); } catch (Exception ex) { Log.Warning(ex, "Keyword fired handler failed"); }
         }
-        // WPF merge: preset first, and only the first enabled PlayAudio action wins.
-        var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
-        if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
+        LastDispatch = DispatchAsync(fired);
+    }
+    internal event Action<KeywordTrigger>? TriggerFired;
+    internal Action QuestCredit = () => App.Quests?.TrackKeywordTrigger();
+    internal Action<string, double> Haptic = (keyword, intensity) => _ = CoreHaptics.Service?.TriggerKeywordPatternAsync(keyword, intensity);
+    internal Action<double> AddXp = amount => CoreProgression.AddXP(amount, "KeywordTrigger");
+    internal Func<int, int> ChasterBook = seconds => ChasterHead.Service?.NoteSeconds("watcher", seconds).AppliedSeconds ?? 0;
+    internal Func<string> ChasterCapPath = () => Path.Combine(CorePaths.UserData, "chaster_trigger_caps.json");
+    private const int PulseBufferCapacity = 20;   // WPF :64
+    private readonly LinkedList<TriggerFireRecord> _recentFires = new();
+    private KeywordTriggerChasterCap? _chasterCap;
+    internal IReadOnlyList<TriggerFireRecord> GetRecentFires() { lock (_recentFires) return _recentFires.ToArray(); }
+    private void RecordFire(KeywordTrigger t, string source, DateTime now)
+    {
+        var record = new TriggerFireRecord { Keyword = t.Keyword, TriggerId = t.Id, VisualEffect = t.VisualEffect,
+            Source = source, FiredAt = now, ActionKeys = ActionKeys(t) };
+        lock (_recentFires)
         {
-            var t = fired[0];
-            audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
-                PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
+            _recentFires.AddFirst(record);
+            while (_recentFires.Count > PulseBufferCapacity) _recentFires.RemoveLast();
         }
-        if (audio != null) Play(audio);
+    }
+    internal static List<string> ActionKeys(KeywordTrigger t) => (t.Actions ?? new()).Where(a => a is { Enabled: true })
+        .Select(a => a switch
+        {
+            PlayAudioAction => "PlayAudio",
+            HighlightAction => "Highlight",
+            HapticAction => "Haptic",
+            AvatarCommentAction => "AvatarComment",
+            ExtendSessionAction ext => $"ExtendSession:{ext.Minutes}",
+            ChasterAddTimeAction ch => $"ChasterAddTime:{ch.Minutes}",
+            VisualEffectAction ve => $"VisualEffect:{ve.Effect}",
+            _ => null,
+        }).OfType<string>().ToList();
+    internal Task LastDispatch { get; private set; } = Task.CompletedTask;
+    private async Task DispatchAsync(List<KeywordTrigger> fired)
+    {
+        if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+        foreach (var _ in fired)
+            try { QuestCredit(); } catch (Exception ex) { Log.Warning(ex, "Keyword quest credit failed"); }
+        var first = fired[0];
+        List<KeywordAction> actions;
+        if (fired.Count == 1 && (first.Actions == null || first.Actions.Count == 0))
+        {
+            actions = new();
+            if (first.VisualEffect == KeywordVisualEffect.HighlightOnly) return;
+            actions.Add(new PlayAudioAction { FilePath = first.AudioFilePath, Volume = first.AudioVolume,
+                PlayCount = first.AudioPlayCount, DelayBetweenMs = first.AudioDelayBetweenMs, DuckSystemAudio = first.DuckAudio });
+            if (first.HapticEnabled) actions.Add(new HapticAction { Intensity = first.HapticIntensity });
+            if (first.XPAward > 0) actions.Add(new AddXpAction { Amount = first.XPAward });
+        }
+        else if (fired.Count == 1) actions = first.Actions!.Where(a => a is { Enabled: true }).ToList();
+        else
+        {
+            var seen = new HashSet<string>();   // WPF KeywordTriggerService.cs:1322: one slot per type, VisualEffect per effect
+            actions = fired.SelectMany(t => t.Actions ?? new()).Where(a => a is { Enabled: true } &&
+                seen.Add(a is VisualEffectAction ve ? $"VisualEffect:{ve.Effect}" : a.GetType().Name)).ToList();
+        }
+        var played = false;
+        foreach (var action in actions)
+        {
+            if (!IsActive || ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+            try
+            {
+                switch (action)
+                {
+                    case PlayAudioAction audio when !played:
+                        played = true;
+                        if (!await PlayAsync(audio)) return;
+                        break;
+                    case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
+                    case AddXpAction xp when xp.Amount > 0:
+                        AddXp(xp.Amount * (CoreSession.IsSessionRunning ? CoreSettings.Current.KeywordSessionMultiplier : 1));
+                        break;
+                    case ChasterAddTimeAction chaster: BookChaster(chaster, first); break;
+                }
+            }
+            catch (Exception ex) { Log.Warning(ex, "Keyword action {Action} failed", action.GetType().Name); }
+        }
     }
 
+    private void BookChaster(ChasterAddTimeAction chaster, KeywordTrigger trigger)
+    {
+        var id = string.IsNullOrEmpty(trigger.Id) ? "keyword:" + (trigger.Keyword ?? "") : trigger.Id;
+        var now = Now();
+        var path = ChasterCapPath();
+        _chasterCap ??= KeywordTriggerChasterCap.Load(path);
+        var allowed = _chasterCap.Allowance(id, Math.Clamp(chaster.Minutes, 0, 60) * 60, now);
+        if (allowed <= 0) { Log.Information("Keyword Chaster time for '{Keyword}' is at its day cap", trigger.Keyword); return; }
+        var applied = ChasterBook(allowed);
+        if (applied <= 0) return;
+        _chasterCap.Record(id, applied, now);
+        _chasterCap.Save(path);
+    }
     // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic
-    // Highlight+AvatarComment trigger with no audio and no settings; both actions land with wire-shell-keyword-triggers-b.
-    internal void FireDemo(string keyword, string source) { }
+    internal void FireDemo(string keyword, string source) {
+        if (string.IsNullOrWhiteSpace(keyword) || !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return;
+        var demo = new KeywordTrigger { Id = "tutorial:demo", Keyword = keyword, VisualEffect = KeywordVisualEffect.HighlightOnly,
+            Actions = [new HighlightAction(), new AvatarCommentAction { FallbackPhraseCategory = "PuppyPraise", RequireAiAvailable = false }] };
+        RecordFire(demo, source, Now());
+        try { TriggerFired?.Invoke(demo); } catch (Exception ex) { Log.Debug(ex, "Keyword demo handler failed"); }
+        // ponytail: Highlight/AvatarComment dispatch remains wire-shell-keyword-triggers-b-next (WPF KeywordTriggerService.cs:428).
+    }
 
     internal void StopAudio()
     {
         _audio?.Cancel(); _audio?.Dispose(); _audio = null;
+        StopClip();
+    }
+    private void StopClip()
+    {
+        _playGeneration++;
         var stop = _stop; _stop = null;
         try { stop?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "Keyword clip stop failed"); }
         if (_duckGeneration is { } generation) CoreAudio.Unduck(generation);
         _duckGeneration = null;
     }
 
-    private void Play(PlayAudioAction audio)
+    private async Task<bool> PlayAsync(PlayAudioAction audio)
     {
-        if (string.IsNullOrEmpty(audio.FilePath)) return;
+        if (string.IsNullOrEmpty(audio.FilePath)) return true;
         var path = audio.FilePath;
         if (!Path.IsPathRooted(path))
         {
@@ -196,17 +293,15 @@ internal sealed class KeywordAudioRuntime
             var legacy = ContentLocator.Resolve(Path.Combine("Resources", "sub_audio", path));
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
-        if (!File.Exists(path)) return;
-        StopAudio();
-        var cancellation = _audio = new CancellationTokenSource();
+        if (!File.Exists(path)) return true;
+        StopClip();
+        var cancellation = _audio ??= new CancellationTokenSource();
         var token = cancellation.Token;
         if (audio.DuckSystemAudio && CoreSettings.Current.AudioDuckingEnabled)
         {
             CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
             _duckGeneration = CoreAudio.DuckGeneration;
         }
-        _ = Repeat();
-        async Task Repeat()
         {
             try
             {
@@ -217,17 +312,19 @@ internal sealed class KeywordAudioRuntime
                     token.ThrowIfCancellationRequested();
                     _stop?.Invoke();
                     var last = i == count - 1;
+                    var generation = ++_playGeneration;
                     _stop = CoreAudio.PlayStoppable(path,
                         KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
                         onFinished: () => { if (last) Dispatcher.UIThread.Post(async () =>
                         {
-                            try { await Delay(500, token); if (!token.IsCancellationRequested) StopAudio(); }
+                            try { await Delay(500, token); if (!token.IsCancellationRequested && generation == _playGeneration) StopClip(); }
                             catch (OperationCanceledException) { }
                         }); });
                 }
             }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); }
+            catch (OperationCanceledException) { return false; }
+            catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); return false; }
+            return true;
         }
     }
 }
