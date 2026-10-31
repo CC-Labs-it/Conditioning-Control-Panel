@@ -34,7 +34,7 @@ public sealed class GameWindowFypTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -53,6 +53,9 @@ public sealed class GameWindowFypTests
             var shell = new MainShellWindow();
             try
             {
+                // SetupWithoutStarting skips the desktop startup's toast-host attachment (App.axaml.cs:945).
+                global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(
+                    shell.FindControl<Panel>("NotificationHost")!);
                 shell.Show();
                 Dispatcher.UIThread.RunJobs();
                 body(shell, lib);
@@ -61,6 +64,7 @@ public sealed class GameWindowFypTests
             {
                 GameWindow.CloseAllForPanic();
                 shell.Close();
+                global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(new StackPanel());
                 (GameWindow.Server, CoreEntitlement.HasPremiumProvider, CoreEntitlement.ShowDeniedHandler) = (oldServer, oldPremium, oldDenied);
                 (CorePaths.EffectiveAssetsProvider, CoreProgression.AddXPProvider) = (oldAssets, oldXp);
                 CoreSettings.ServiceProvider = null;
