@@ -16,6 +16,10 @@ namespace ConditioningControlPanel.Services
         /// <see cref="MandatoryVideoScheduler.End"/> at the clip's end or on Esc, and
         /// <see cref="MandatoryVideoScheduler.ForceCleanup"/> on the in-window panic key.</summary>
         void Show(string path, bool strict);
+        /// <summary>WPF VideoService.cs:1982: a visible, non-ghosted For You feed owns the screen.</summary>
+        bool FeedOwnsTheScreen => false;
+        /// <summary>WPF VideoService.cs:2280: an explicit press gets a six-second notice.</summary>
+        void AnnounceFeedDefer() { }
         /// <summary>Close every video window; returns the seconds of the clip that were watched.</summary>
         double CloseAll();
         /// <summary>WPF ShowMessage: the attention-check verdict over every screen for
@@ -42,7 +46,7 @@ namespace ConditioningControlPanel.Services
     /// <see cref="IMandatoryVideoHost"/>.
     /// Content-pack clips come through <see cref="PackVideos"/>.
     /// ponytail: remote clips, the duration filter
-    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed/DND/browser-media defers and the
+    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/DND/browser-media defers and the
     /// interaction queue are WPF-head services; add each here when it reaches Core.
     /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
     /// schedule. WPF returns from ContinueTriggerVideo (:2424) without ScheduleNext, so its schedule
@@ -63,7 +67,8 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _preroll;
+        private ITimer? _scheduler, _preroll, _feedDefer;
+        private DateTimeOffset? _feedDeadline;
         private volatile bool _running, _playing;
         private int _retryGeneration, _noVideosShown;
 
@@ -316,7 +321,25 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
         /// pre-roll. False when nothing was started (no clip, or one is already playing).
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
-        public bool Trigger(bool? strictOverride = null, string? path = null)
+        public bool Trigger(bool? strictOverride = null, string? path = null, bool userEarned = false, bool userInitiated = false)
+        {
+            if (_playing) return false;
+            // WPF VideoService.cs:2270, :2630: earned and explicit-path videos bypass the ambient feed gate.
+            if (path == null && _host.FeedOwnsTheScreen && !userEarned)
+            {
+                if (userInitiated) _host.AnnounceFeedDefer();
+                if (_feedDefer == null)
+                {
+                    _feedDeadline = _time.GetUtcNow() + TimeSpan.FromSeconds(90);
+                    PollFeed(strictOverride, path);
+                }
+                return false;
+            }
+            return PlayVideo(strictOverride, path);
+        }
+
+        // WPF VideoService.cs:2630, :5965: specific clips and attention retries enter playback directly.
+        private bool PlayVideo(bool? strictOverride, string? path = null)
         {
             if (_playing) return false;
             path ??= PickNext();
@@ -356,6 +379,28 @@ namespace ConditioningControlPanel.Services
             created.Change(PreRoll, Timeout.InfiniteTimeSpan);
             Log.Information("VideoService: playing {File} (strict={Strict})", Path.GetFileName(path), strict);
             return true;
+        }
+
+        // WPF VideoService.cs:2014-2118: one pending replay, 500 ms polls, 90 s ceiling.
+        private void PollFeed(bool? strictOverride, string? path)
+        {
+            ITimer? created = null;
+            created = _time.CreateTimer(_ => { var mine = created; CoreDispatch.Post(() =>
+            {
+                if (!ReferenceEquals(mine, _feedDefer)) return;
+                Dispose(ref _feedDefer);
+                if (_host.FeedOwnsTheScreen)
+                {
+                    if (_time.GetUtcNow() < _feedDeadline) PollFeed(strictOverride, path);
+                    else _feedDeadline = null;
+                    return;
+                }
+                _feedDeadline = null;
+                // WPF :2047: a deferred test press also requires a running, enabled scheduler.
+                if (_running && CoreSettings.Current.MandatoryVideosEnabled) Trigger(strictOverride, path);
+            }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            _feedDefer = created;
+            created.Change(TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
         }
 
         /// <summary>WPF Cleanup: the natural end or an Esc dismiss. The flash resumes and, while the
@@ -405,13 +450,15 @@ namespace ConditioningControlPanel.Services
             _host.ShowMessage(mercy ? AttentionVerdict.Mercy : verdict, mercy ? 2500 : 2000, () =>
             {
                 if (gen != _retryGeneration) return;   // stopped or replaced while the message was up
-                if (mercy || !Trigger(strict)) AfterEnd();
+                if (mercy || !PlayVideo(strict)) AfterEnd();
             });
         }
 
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            Dispose(ref _feedDefer);
+            _feedDeadline = null;
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
