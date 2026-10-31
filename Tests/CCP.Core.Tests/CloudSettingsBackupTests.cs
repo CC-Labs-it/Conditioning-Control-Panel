@@ -210,6 +210,108 @@ public sealed class CloudSettingsBackupTests : IDisposable
         Assert.NotSame(here.BlinkTrainerFolders, restored.BlinkTrainerFolders);
     }
 
+    // WPF MainWindow.CloudBackup.cs:138-160 keeps local entitlements. The old lane's
+    // stricter safety floor additionally prevents a cloud snapshot enabling lock/OCR or disabling panic.
+    [Theory]
+    [InlineData("StrictLockEnabled")]
+    [InlineData("LockdownForceStrictLock")]
+    [InlineData("BubbleCountStrictLock")]
+    [InlineData("ScreenOcrEnabled")]
+    [InlineData("PanicKeyEnabled")]
+    public async Task DownloadHoldsTheLocalSafetyFloor(string name)
+    {
+        var property = typeof(AppSettings).GetProperty(name)!;
+        var here = Signed();
+        var panic = name == "PanicKeyEnabled";
+        property.SetValue(here, panic);
+        var cloud = new AppSettings();
+        property.SetValue(cloud, !panic);
+        _fake.Body = new JObject { ["backup"] = new JObject
+            { ["settings_data"] = Pack(JsonConvert.SerializeObject(cloud)) } }.ToString();
+
+        var restored = await new CloudSettingsBackup(_fake).DownloadAsync(here);
+
+        Assert.NotNull(restored);
+        Assert.Equal(panic, property.GetValue(restored));
+        // Safer cloud choices still apply, rather than simply copying all local booleans.
+        property.SetValue(here, !panic);
+        property.SetValue(cloud, panic);
+        CloudSettingsBackup.HoldSafetyFloor(here, cloud);
+        Assert.Equal(panic, property.GetValue(cloud));
+    }
+
+    [Fact]
+    public async Task LabEntitlementIsNeverUploadedAndRestoreKeepsLocalWindow()
+    {
+        var here = Signed();
+        here.PatreonLabValidUntil = DateTime.UtcNow.AddDays(2);
+        Assert.True(await new CloudSettingsBackup(_fake).BackupAsync(here));
+        var sent = Unpack((string)JObject.Parse(Assert.Single(Uploads).Body)["settings_data"]!);
+        Assert.Null(sent["patreon_lab_valid_until"]);
+        _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(
+            JsonConvert.SerializeObject(new AppSettings { PatreonLabValidUntil = DateTime.UtcNow.AddYears(1) })) } }.ToString();
+        var restored = await new CloudSettingsBackup(_fake).DownloadAsync(here);
+        Assert.Equal(here.PatreonLabValidUntil, restored!.PatreonLabValidUntil);
+    }
+
+    [Theory]
+    [InlineData("FutureToken")]
+    [InlineData("FutureApiKey")]
+    [InlineData("FutureSecret")]
+    [InlineData("FuturePassword")]
+    [InlineData("FutureWebhook")]
+    [InlineData("FutureCredential")]
+    public void SecretsAreExcludedByName(string name) => Assert.True(CloudSettingsBackup.IsExcludedFromBackup(name));
+
+    [Theory]
+    [InlineData("active")]
+    [InlineData("disabled")]
+    [InlineData("folders")]
+    [InlineData("presetPaths")]
+    [InlineData("presetFolders")]
+    [InlineData("triggers")]
+    [InlineData("tier")]
+    public async Task RestoreNormalizesRelativeAssetsAndKeepsLocalTriggerPresetsAndTierReading(string check)
+    {
+        var here = Signed();
+        here.LastKnownEffectiveTier = 2;
+        var presets = here.KeywordTriggerPresets;
+        _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(new JObject
+        {
+            ["ActiveAssetPaths"] = new JArray(@"images\a.png"),
+            ["DisabledAssetPaths"] = new JArray(@"images\b.png"),
+            ["DisabledAssetFolders"] = new JArray(@"images\folder"),
+            ["AssetPresets"] = new JArray(new JObject { ["Name"] = "cloud",
+                ["DisabledAssetPaths"] = new JArray(@"videos\a.mp4"),
+                ["DisabledAssetFolders"] = new JArray(@"videos\folder") }),
+            ["KeywordTriggerPresets"] = new JArray(),
+            ["LastKnownEffectiveTier"] = 99,
+            ["AuthToken"] = "cloud-token"
+        }.ToString()) } }.ToString();
+        var restored = await new CloudSettingsBackup(_fake).DownloadAsync(here);
+        Assert.NotNull(restored);
+        if (check == "active") Assert.Contains("images/a.png", restored.ActiveAssetPaths);
+        if (check == "disabled") Assert.Contains("images/b.png", restored.DisabledAssetPaths);
+        if (check == "folders") Assert.Contains("images/folder", restored.DisabledAssetFolders);
+        if (check == "presetPaths") Assert.Contains("videos/a.mp4", Assert.Single(restored.AssetPresets).DisabledAssetPaths);
+        if (check == "presetFolders") Assert.Contains("videos/folder", Assert.Single(restored.AssetPresets).DisabledAssetFolders);
+        if (check == "triggers") Assert.Same(presets, restored.KeywordTriggerPresets);
+        if (check == "tier") Assert.Equal(2, restored.LastKnownEffectiveTier);
+        Assert.Equal("TOK", here.AuthToken); // deserialization must not write the backup's token to the secret store
+    }
+
+    [Fact]
+    public async Task RestoreDropsExcludedFieldsBeforeDeserializing()
+    {
+        var here = Signed();
+        _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(
+            "{\"PlayerLevel\":{\"untrusted\":true},\"FlashEnabled\":false}") } }.ToString();
+        var restored = await new CloudSettingsBackup(_fake).DownloadAsync(here);
+        Assert.NotNull(restored);
+        Assert.Equal(here.PlayerLevel, restored.PlayerLevel);
+        Assert.False(restored.FlashEnabled);
+    }
+
     [Fact]
     public async Task OverBudgetTrimsTheAssetListsFirstAndSkipsWhenStillTooBig()
     {
