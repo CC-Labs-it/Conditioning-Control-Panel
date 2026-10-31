@@ -1,12 +1,14 @@
 using System;
 using System.IO;
 using System.Linq;
+using BindingFlags = System.Reflection.BindingFlags;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -23,6 +25,29 @@ namespace CCP.Avalonia.Tests;
 /// close-time cleanup (no voice, no singleton hook left behind).</summary>
 public sealed class TubeQuickMenuTests
 {
+    // Pure tube helpers can be the first caller on a worker. The menu cache must
+    // remain readable there and on the UI thread (WPF ChatInput.cs:1447-1492 colors).
+    [Theory]
+    [InlineData("MenuRed", "#FFFF6347")]
+    [InlineData("MenuGreen", "#FF90EE90")]
+    [InlineData("MenuPatreon", "#FF9B59B6")]
+    [InlineData("MenuLocked", "#FF606070")]
+    public async Task CachedMenuColorsAreSafeAcrossWorkerAndUiThreads(string field, string expected)
+    {
+        Color ReadColor()
+        {
+            _ = AvatarTubeWindow.TubeMotesBox(detached: false);
+            return ((ISolidColorBrush)typeof(AvatarTubeWindow)
+                .GetField(field, BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!).Color;
+        }
+        Assert.Equal(Color.Parse(expected), await Task.Run(ReadColor));
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Assert.Equal(Color.Parse(expected), ReadColor());
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Click(AvatarTubeWindow tube, string name) =>
         tube.FindControl<MenuItem>(name)!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
