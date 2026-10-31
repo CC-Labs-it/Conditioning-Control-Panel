@@ -63,6 +63,7 @@ public partial class MainShellWindow
         tap.Margin = new Thickness(left, top, 0, 0);
         tap.IsVisible = true;
         glass.ExternalSpoutXFraction = (left + 27) / w;
+        if (FaucetControl<Canvas>("ProfileVatSparks") is { } sparks) { sparks.Width = w; sparks.Height = h; }
         if (FaucetControl<Grid>("ProfileVatChargeRing") is { } ring)
             ring.Margin = new Thickness(left - 2, top + 1, 0, 0);
         if (FaucetControl<Border>("ProfileVatChip") is { } chip)
@@ -145,8 +146,9 @@ public partial class MainShellWindow
         if (!_vatArmed || glass == null || _faucetHold.HeldXp <= 0) return;
         bool wasOver = glass.IsPastBrim(glass.Fill);
         var step = _faucetHold.PourAll();
+        StartFaucetFeedback(true);
         PlayFaucetSfx("faucet_pour.wav", .35f);
-        glass.PourTo(step.Fill, userGesture: true);
+        glass.PourTo(step.Fill, userGesture: true); FireFaucetPourHaptic();
         if (!wasOver && glass.IsPastBrim(step.Fill)) { glass.PulseOverflow(); PlayFaucetSfx("faucet_brim.wav", .30f); }
         _faucetPours++;
         _faucetChargeTimer?.Start();
@@ -161,7 +163,8 @@ public partial class MainShellWindow
         _faucetClock.Stop();
         _faucetChargeTimer?.Stop();
         if (FaucetControl<Grid>("ProfileVatChargeRing") is { } ring) { ring.IsVisible = false; ring.Opacity = 0; }
-        if (charging && feedback) PlayFaucetSfx("faucet_charge_drop.wav", .15f);
+        if (!feedback && (charging || !_vatOnScreen || !_vatArmed || !IsActive || !IsVisible)) StopFaucetFeedback();
+        if (charging && feedback) { StartFaucetFeedback(false); PlayFaucetSfx("faucet_charge_drop.wav", .15f); }
         UpdateFaucetPresentation();
     }
 
