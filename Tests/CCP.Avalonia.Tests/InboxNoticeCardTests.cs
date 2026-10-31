@@ -13,6 +13,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
@@ -108,6 +109,24 @@ public sealed class InboxNoticeCardTests
             else new SyncPush(() => null, () => false, wire) { TierReceived = AccountSeed.NoteTierReading }
                 .HeartbeatAsync().GetAwaiter().GetResult();
         }
+    });
+
+    [Theory]
+    [InlineData("", false, false)]
+    [InlineData("?", true, true)]
+    public void InboxGlyphKeepsEmptyAndUnmappedData(string glyph, bool visible, bool fallback) => Run(() =>
+    {
+        StartupLadder.Inbox.File(new ConditioningControlPanel.Services.Startup.InboxItem { Key = "glyph", Glyph = glyph });
+        var host = new Window { Content = new InboxFlyout() };
+        try
+        {
+            host.Show();
+            var icon = host.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Name == "RowGlyph");
+            Assert.Equal(visible, icon.IsVisible);
+            Assert.Equal(fallback, icon.IsFallback);
+            Assert.Equal(glyph, icon.Emoji);
+        }
+        finally { host.Close(); }
     });
 
     [Fact]
@@ -206,6 +225,11 @@ public sealed class InboxNoticeCardTests
             var flyout = new InboxFlyout();
             host = new Window { Content = flyout };
             host.Show();
+            var icon = flyout.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Name == "RowGlyph");
+            Assert.Equal("Heart", icon.Kind.ToString());
+            Assert.Equal("Filled", icon.Variant.ToString());
+            Assert.False(icon.IsFallback);
+            Assert.True(icon.IsVisible);
             Click(flyout.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("open")));
             Assert.Empty(StartupLadder.Inbox.Items);
             var title = InboxNoticeCard.Current!.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "Heading");
