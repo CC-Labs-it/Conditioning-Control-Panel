@@ -28,7 +28,7 @@ internal sealed class EmergencyExitWindow : Window
     private readonly WebHost _web = new();
     private readonly string _game;
     private Uri? _page;
-    private bool _closed, _verdict, _ready;
+    private bool _closed, _verdict;
     private IDisposable? _deadline;
     internal TimeSpan OutroTimeout { get; init; } = TimeSpan.FromSeconds(8);
     internal Func<double> Roll { get; set; } = Random.Shared.NextDouble;
@@ -102,8 +102,8 @@ internal sealed class EmergencyExitWindow : Window
         switch ((string?)message["type"])
         {
             case "ready":
-                if (!_lockdown.IsActive || _verdict || _ready) return;
-                _ready = true;
+                // WPF EmergencyExitHostService.cs:242-247 answers every ready, including reloads.
+                if (!_lockdown.IsActive || _verdict) return;
                 Post(new
                 {
                     type = "init", game = _game, attempt = Math.Max(1, _attempt),

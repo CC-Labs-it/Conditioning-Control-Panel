@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -6,6 +7,9 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
+using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -113,10 +117,62 @@ public sealed class LockdownEmergencyExitTests
         });
     }
 
+    [Fact]
+    public async Task ReloadReadyThroughWebHostRefreshesInitWithoutReapplyingVerdict()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var now = DateTime.UtcNow;
+            using var ld = new LockdownService { UtcNow = () => now };
+            ld.Activate(TimeSpan.FromMinutes(30));
+            try
+            {
+                EmergencyExitWindow.Open(null, ld);
+                var window = EmergencyExitWindow.Current!;
+                var web = Assert.IsType<WebHost>(window.Content);
+                var frames = new List<JObject>();
+                web.ScriptInvoker = script =>
+                {
+                    frames.Add(JObject.Parse(script[(script.LastIndexOf("})(", StringComparison.Ordinal) + 3)..^2]));
+                    return Task.FromResult<string?>(null);
+                };
+                var page = web.Source!;
+                web.OnNavigationCompleted(page);
+                var first = Assert.Single(frames);
+                Assert.Equal("init", (string?)first["type"]);
+                Assert.Equal(1800, (int)first["remainingSec"]!);
+                now = now.AddSeconds(70);
+                // Reload the same document, then exercise the native message event, not HandleMessage.
+                web.OnNavigationCompleted(page);
+                frames.Clear();
+                web.OnWebMessage("{\"type\":\"ready\"}");
+                var reloaded = Assert.Single(frames);
+                Assert.Equal("init", (string?)reloaded["type"]);
+                Assert.Equal(1730, (int)reloaded["remainingSec"]!);
+                Assert.Equal(first["game"], reloaded["game"]);
+                Assert.Equal(first["attempt"], reloaded["attempt"]);
+                Assert.Equal(0, ld.RestartCount);
+                web.OnWebMessage("{\"type\":\"game-finished\",\"result\":\"failed\"}");
+                Assert.Equal(1, ld.RestartCount);
+                Assert.True(ld.IsActive);
+                frames.Clear();
+                web.OnNavigationCompleted(page);
+                web.OnWebMessage("{\"type\":\"ready\"}");
+                web.OnWebMessage("{\"type\":\"game-finished\",\"result\":\"failed\"}");
+                Assert.Empty(frames);
+                Assert.Equal(1, ld.RestartCount);
+            }
+            finally { EmergencyExitWindow.Current?.Close(); ld.Deactivate(); }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void EnsureApp()
     {
         if (Application.Current == null)
             AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 }
