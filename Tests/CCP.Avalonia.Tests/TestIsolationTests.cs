@@ -1,3 +1,7 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using CCP.Avalonia.Testing;
 using System.IO;
 using System.Linq;
 using ConditioningControlPanel;
@@ -32,6 +36,26 @@ public class TestIsolationTests
     }
 
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
+
+    /// <summary>The isolation hook supplies desktop fonts before any fixture, independent of test order.</summary>
+    [Fact]
+    public void TheHookProvidesDesktopFontsBeforeAnyFixture() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.NotNull(Application.Current);
+        foreach (var (family, weight) in new[]
+        {
+            ("fonts:Inter#Inter", FontWeight.Normal),
+            ("Segoe UI Black, Segoe UI", FontWeight.Black),
+            ("Fredoka, Segoe UI", FontWeight.DemiBold),
+            ("Consolas, Courier New, monospace", FontWeight.Bold),
+        })
+        {
+            var text = new TextBlock { Text = "Ready 123", FontFamily = new FontFamily(family), FontWeight = weight };
+            text.Measure(Size.Infinity);
+            Assert.True(text.DesiredSize.Width > 0, family);
+            Assert.True(text.DesiredSize.Height > 0, family);
+        }
+    });
 
     [Fact]
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
