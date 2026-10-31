@@ -21,7 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// PORTED from ConditioningControlPanel/Windows/WebcamQuickRecalWindow.xaml.cs over
     /// Platform/WebcamTracker (OnGazeMove / Calibration / SetRuntimeOffset); the median maths is
     /// Core GazeEngine.MedianAfterSaccadeSettle, matching WPF's local median. The target is the
-    /// calibrated monitor's DIP center, with the window center as a legacy fallback. Deviations: DialogResult
+    /// current window's DIP center, where the dot is displayed, as in WPF. Deviations: DialogResult
     /// becomes Close(x) (ShowDialog&lt;bool?&gt;); the hotkey hint is hidden (below).
     /// </summary>
     public partial class WebcamQuickRecalWindow : Window
@@ -138,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ShowError($"Didn't capture enough gaze samples ({_samples.Count}). Make sure your face is visible and try again.");
                 return;
             }
-            var (dx, dy) = OffsetFor(Tracker.Calibration, Bounds.Size, _samples);
+            var (dx, dy) = OffsetFor(Bounds.Size, _samples);
             Tracker.SetRuntimeOffset(new RuntimeOffsetData { Dx = dx, Dy = dy, CapturedAt = DateTime.UtcNow }, persist: true);
             Log.Information("WebcamQuickRecalWindow: offset captured dx={Dx:F1} dy={Dy:F1} from {N} samples", dx, dy, _samples.Count);
 
@@ -149,13 +149,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Close(true);
         }
 
-        /// <summary>Drift of the settled gaze from the centre of the calibrated monitor (falling back to
-        /// <paramref name="window"/>'s centre when the calibration predates MonitorBounds).</summary>
-        internal static (double Dx, double Dy) OffsetFor(WebcamCalibrationData? cal, global::Avalonia.Size window, IReadOnlyList<(double X, double Y)> samples)
+        /// <summary>WPF WebcamQuickRecalWindow.xaml.cs:168-176: target the displayed dot at the
+        /// current window's DIP center, even when saved monitor dimensions are stale.</summary>
+        internal static (double Dx, double Dy) OffsetFor(global::Avalonia.Size window, IReadOnlyList<(double X, double Y)> samples)
         {
             var (mx, my) = GazeEngine.MedianAfterSaccadeSettle(samples, dropFirst: 10);
-            var (w, h) = cal?.MonitorBounds is { Width: > 0, Height: > 0 } b ? ((double)b.Width, (double)b.Height) : (window.Width, window.Height);
-            return (w / 2.0 - mx, h / 2.0 - my);
+            return (window.Width / 2.0 - mx, window.Height / 2.0 - my);
         }
 
         /// <summary>CalibrationSoundService.Play: master volume on the ^1.5 curve, silence when missing.</summary>
