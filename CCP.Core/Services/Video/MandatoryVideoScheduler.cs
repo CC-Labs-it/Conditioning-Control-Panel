@@ -65,6 +65,7 @@ namespace ConditioningControlPanel.Services
         private Queue<string> _queue = new();
         private ITimer? _scheduler, _preroll, _bubbleWait;
         private volatile bool _running, _playing;
+        private bool _waitEndsRun;
         private int _retryGeneration, _noVideosShown;
 
         /// <summary>The library came back empty for the first time this launch (WPF's "no videos"
@@ -372,17 +373,28 @@ namespace ConditioningControlPanel.Services
             {
                 if (!ReferenceEquals(mine, _bubbleWait)) return;
                 Dispose(ref _bubbleWait);
+                var endsRun = _waitEndsRun;
+                _waitEndsRun = false;
                 try
                 {
-                    if (CoreEngine.BubbleCount?.IsBusy == true) WaitForBubbleCount(strictOverride, path);
-                    else if (!Trigger(strictOverride, path) && _running) ScheduleNext();
+                    if (CoreEngine.BubbleCount?.IsBusy == true)
+                    {
+                        WaitForBubbleCount(strictOverride, path);
+                        _waitEndsRun = endsRun;
+                    }
+                    else if (!Trigger(strictOverride, path))
+                    {
+                        if (endsRun) AfterEnd();
+                        else if (_running) ScheduleNext();
+                    }
                 }
                 catch (Exception ex)
                 {
                     // WPF VideoService.cs:2358-2363 catches selection failures; keep Tick's recovery here too.
                     Log.Error(ex, "VideoService: deferred trigger failed - re-arming scheduler if running");
                     _playing = false;
-                    if (_running) ScheduleNext();
+                    if (endsRun) AfterEnd();
+                    else if (_running) ScheduleNext();
                 }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _bubbleWait = created;
@@ -438,6 +450,8 @@ namespace ConditioningControlPanel.Services
             {
                 if (gen != _retryGeneration) return;   // stopped or replaced while the message was up
                 if (mercy || !Trigger(strict)) AfterEnd();
+                // WPF VideoService.cs:7930-7968: a failed replay must finish the run, even after queueing.
+                else if (_bubbleWait != null) _waitEndsRun = true;
             });
         }
 
@@ -445,6 +459,7 @@ namespace ConditioningControlPanel.Services
         public void ForceCleanup()
         {
             Dispose(ref _bubbleWait); // WPF InteractionQueue.ForceReset: panic drops pending work
+            _waitEndsRun = false;
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.

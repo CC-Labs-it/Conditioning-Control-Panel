@@ -54,7 +54,12 @@ public sealed class BubbleCountSchedulerTests
         public readonly List<(string Path, bool Strict)> Shown = new();
         public void Show(string path, bool strict) => Shown.Add((path, strict));
         public double CloseAll() => 0;
-        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();
+        public bool HoldMessage;
+        public Action? MessageThen;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then)
+        {
+            if (HoldMessage) MessageThen = then; else then();
+        }
     }
 
     [Fact]
@@ -200,6 +205,67 @@ public sealed class BubbleCountSchedulerTests
             Assert.True(v.Trigger()); // cancelled latch must allow a later explicit request
         }
         finally { v.Stop(); b.ForceCleanup(); CoreEngine.BubbleCount = previous; }
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Failed_deferred_attention_retry_finishes_the_run(bool throws, bool flash) => With(true, true, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        var videoHost = new VideoHost { HoldMessage = true }; var unavailable = false;
+        var v = new MandatoryVideoScheduler(videoHost, clock, () =>
+        {
+            if (unavailable && throws) throw new System.IO.IOException("Video folder unavailable");
+            return unavailable ? Array.Empty<string>() : new[] { "/v/only.mp4" };
+        });
+        var previous = CoreEngine.BubbleCount;
+        var oldRpc = CoreDiscord.ServiceProvider;
+        using var rpc = new DiscordRichPresenceService();
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.AttentionChecksEnabled, s.FlashEnabled,
+            s.BubbleCountPauseEffects, s.DiscordRichPresenceEnabled, s.MercyAfterFails);
+        (s.MandatoryVideosEnabled, s.AttentionChecksEnabled, s.FlashEnabled,
+            s.BubbleCountPauseEffects, s.DiscordRichPresenceEnabled, s.MercyAfterFails) = (true, true, flash, false, false, 3);
+        CoreEngine.BubbleCount = b;
+        CoreDiscord.ServiceProvider = () => rpc;
+        try
+        {
+            v.Start();
+            if (flash) CoreFlash.Start();
+            Assert.True(v.Trigger(true));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            v.NoteSpawn(); v.Ended(); // missed target, verdict message still up
+            Assert.Equal(1, v.Penalties);
+            Assert.False(CoreFlash.IsRunning);
+            b.Trigger(forceTest: true); // the game takes the screen inside the verdict gap
+            clock.Advance(BubbleCountScheduler.LeadIn);
+            videoHost.MessageThen!();
+            unavailable = true;
+            clock.Advance(BubbleCountScheduler.QueuePoll * 2); // marker must survive repeated polls
+            Assert.Equal(1, v.Penalties);
+            host.Shown[0].Done(true);
+            Assert.Null(Record.Exception(() => clock.Advance(BubbleCountScheduler.QueuePoll)));
+            Assert.Equal(0, v.Penalties);
+            Assert.Equal(flash, CoreFlash.IsRunning);
+            if (flash) Assert.Equal("Flash training", rpc.CurrentDetails);
+            else Assert.Equal("Browsing", rpc.CurrentState);
+            Assert.Single(videoHost.Shown);
+            unavailable = false;
+            clock.Advance(TimeSpan.FromHours(1));
+            Assert.Equal(2, videoHost.Shown.Count); // AfterEnd also rearmed the schedule
+            Assert.Equal(0, v.Penalties);
+        }
+        finally
+        {
+            v.Stop(); b.ForceCleanup(); CoreFlash.Stop();
+            CoreEngine.BubbleCount = previous; CoreDiscord.ServiceProvider = oldRpc;
+            (s.MandatoryVideosEnabled, s.AttentionChecksEnabled, s.FlashEnabled,
+                s.BubbleCountPauseEffects, s.DiscordRichPresenceEnabled, s.MercyAfterFails) = saved;
+        }
     });
 
     [Fact]
