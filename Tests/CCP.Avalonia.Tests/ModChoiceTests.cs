@@ -31,6 +31,73 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class ModChoiceTests
 {
+    [Theory]
+    [InlineData(1, "BASIC BIMBO")]
+    [InlineData(19, "BASIC BIMBO")]
+    [InlineData(20, "DUMB AIRHEAD")]
+    [InlineData(49, "DUMB AIRHEAD")]
+    [InlineData(50, "SYNTHETIC BLOWDOLL")]
+    [InlineData(99, "SYNTHETIC BLOWDOLL")]
+    [InlineData(100, "PERFECT FUCKPUPPET")]
+    public Task RankTitleFollowsWpfLevelBoundaries(int level, string title) => Run(async (shell, svc, server) =>
+    {
+        CoreSettings.Current.PlayerLevel = level;
+        shell.UpdateLevelDisplay();
+        Assert.Equal(title, shell.FindControl<TextBlock>("TxtPlayerTitle")!.Text);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task RankTitleRefreshesOnExternalModAndLanguageChanges() => Run(async (shell, svc, server) =>
+    {
+        CoreSettings.Current.PlayerLevel = 20;
+        AvApp.Mods!.ActivateMod(BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        var title = shell.FindControl<TextBlock>("TxtPlayerTitle")!;
+        Assert.Equal("STANDARD UNIT", title.Text);
+        var manager = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var old = manager.CurrentLanguage;
+        try
+        {
+            manager.SetLanguage(old == "fr" ? "en" : "fr");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("STANDARD UNIT", title.Text);
+            AvApp.Mods.ActivateMod(BuiltInMods.CCPDefaultId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("DUMB AIRHEAD", title.Text);
+        }
+        finally { manager.SetLanguage(old); Dispatcher.UIThread.RunJobs(); }
+        await Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("PillConditioningTime", "Total uptime (Uptime Hours enhancement)", "tooltip_total_conditioning_time_pink_hours_skill")]
+    [InlineData("PillOnlineUsers", "Units online now (Hive Network enhancement)", "tooltip_bimbos_online_now_hive_mind_skill")]
+    [InlineData("PillRankPercentile", "Your rank percentile (Network Popularity enhancement)", "tooltip_your_rank_percentile_popular_girl_skill")]
+    public Task StatTooltipRefreshesOnModAndLanguageChanges(string name, string modTip, string key) => Run(async (shell, svc, server) =>
+    {
+        var pill = shell.FindControl<Border>(name)!;
+        AvApp.Mods!.ActivateMod(BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(modTip, ToolTip.GetTip(pill));
+        var manager = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var old = manager.CurrentLanguage;
+        try
+        {
+            manager.SetLanguage(old == "fr" ? "en" : "fr");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(modTip, ToolTip.GetTip(pill));
+            AvApp.Mods.ActivateMod(BuiltInMods.CCPDefaultId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get(key), ToolTip.GetTip(pill));
+            manager.SetLanguage(old);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get(key), ToolTip.GetTip(pill));
+        }
+        finally { manager.SetLanguage(old); Dispatcher.UIThread.RunJobs(); }
+        await Task.CompletedTask;
+    });
+
     [Fact]
     public Task LanguageChangeRepaintsHomeFallbackWithoutSpendingPendingChoice() => Run(async (shell, svc, server) =>
     {

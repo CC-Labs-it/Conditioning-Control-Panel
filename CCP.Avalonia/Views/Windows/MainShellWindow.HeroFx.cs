@@ -13,7 +13,7 @@
 //
 // STILL MISSING vs WPF, so the row stays a stub:
 //   the level-up burst (FireBurstAt) and THE BANK hold
-//   (MainWindow.BankFx.cs); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
+//   (MainWindow.BankFx.cs);
 //   the Start button's charge/exhale/ignition/heartbeat set and FlashSaveAbsorb - no caller here
 //   (BtnStart_Click and the settings-save half are stubs); level-up sound and toast.
 // Sign-in, startup profile restore and logout repaint through UpdateQuickLoginUI
@@ -68,6 +68,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var s = CoreSettings.Current;
                 var level = s.PlayerLevel;
+                // WPF MainWindow.UiUpdates.cs:71-79. Rank titles are deliberately the
+                // English rank passed through the active mod, including after a language switch.
+                var rankTitle = level switch
+                {
+                    < 20 => "BASIC BIMBO",
+                    < 50 => "DUMB AIRHEAD",
+                    < 100 => "SYNTHETIC BLOWDOLL",
+                    _ => "PERFECT FUCKPUPPET"
+                };
+                if (Named<TextBlock>("TxtPlayerTitle") is { } title)
+                    title.Text = App.Mods?.MakeModAware(rankTitle) ?? rankTitle;
                 var xp = s.PlayerXP;
                 var needed = XpCurve.GetXPForLevel(level, XpCurve.EpochOf(s));
                 if (Named<TextBlock>("TxtLevelLabel") is { } label) label.Text = $"LVL {level}";
