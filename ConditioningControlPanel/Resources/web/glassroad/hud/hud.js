@@ -93,7 +93,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     const list = (listeners[name] || []).length ? listeners[name] : fns[name] || [];
     for (const fn of list.slice()) { if (disposed) break; try { fn(payload); } catch (e) { console.warn('[hud]', name, e); } }
   }
-  const cards = createCards(card, { doc, emit: fire, devices, kit });
+  const cards = createCards(card, { doc, emit: fire, devices, kit, feel });
   let garageNav=null;
   // A pad step moves focus from script, which the browser never paints as :focus-visible after a mouse
   // click: html.pad-nav paints :focus (styles.css, garage.css) until the pointer is used again.
