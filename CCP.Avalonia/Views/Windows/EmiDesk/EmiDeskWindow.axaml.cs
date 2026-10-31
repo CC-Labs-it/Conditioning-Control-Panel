@@ -355,6 +355,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // layered-window compositor bug and has no X11 twin.
             ScalingChanged += OnScalingSettled;
             Closed += OnClosedCleanup;
+            Opened += (_, _) => ApplyInputRegion();
+            // WPF Bubble.cs:666/757 opens the bubble layer to clicks only while the ask chips show.
+            _bubbleCanvas.PropertyChanged += (_, e) => { if (e.Property == IsHitTestVisibleProperty) ApplyInputRegion(); };
 
             ApplyBodyWidth(_bodyWidth);
             SetPose("idle");
@@ -391,6 +394,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try
             {
+                ApplyInputRegion();
                 ClampIntoWorkArea();
                 SavePlacement();
             }
@@ -403,6 +407,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             if (double.IsNaN(w) || double.IsInfinity(w)) return DefaultBodyWidth;
             return Math.Max(MinBodyWidth, Math.Min(MaxBodyWidth, w));
+        }
+
+        /// <summary>The X11 input region (window px) as last set: BodyRoot's rect, or null (the
+        /// whole window) while the bubble layer takes clicks.</summary>
+        internal PixelRect? InputRect { get; private set; }
+
+        // Instance seam: tests observe the native request without needing an X server.
+        internal Action<PixelRect?>? InputRegionWriter { get; set; }
+
+        /// <summary>WPF's layered window let a click on the transparent pad fall through to the
+        /// desktop; an X11 window takes clicks on every pixel, so input is cut to BodyRoot (the
+        /// chips and the grip sit inside it). The ask bubble lives in the pad, so while its layer is
+        /// hit-testable the whole window takes input again. No-op on Windows (no XID).</summary>
+        private void ApplyInputRegion()
+        {
+            double s = RenderScaling > 0 ? RenderScaling : 1;
+            InputRect = _bubbleCanvas.IsHitTestVisible ? null
+                : new PixelRect((int)Math.Round(OverlayPadX * s), (int)Math.Round(OverlayPad * s),
+                                (int)Math.Round(_bodyWidth * s), (int)Math.Round(_bodyWidth * BodyAspect * s));
+            try
+            {
+                if (InputRegionWriter is { } write) write(InputRect);
+                else global::ConditioningControlPanel.Avalonia.Platform.X11Overlay.SetInputRect(this, InputRect);
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] input region failed"); }
         }
 
         /// <summary>
@@ -506,6 +535,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // A plate in her hand mid-resize moves with her. No-ops when she is holding nothing,
                 // which is always on this head.
                 LayoutProp();
+                ApplyInputRegion();
 
                 Resized?.Invoke(this, _bodyWidth);
             }
