@@ -99,11 +99,14 @@ public sealed class InputChromeThemeTests
             HorizontalContentAlignment = HorizontalAlignment.Right, VerticalContentAlignment = VerticalAlignment.Bottom };
         var keyed = new ComboBox { Theme = Res("DarkComboBoxStyle"), ItemsSource = new[] { "local" } }; window.Content = new StackPanel { Children = { combo, keyed } };
         window.Show(); Dispatcher.UIThread.RunJobs(); Assert.Same(Res("InputComboBoxTheme"), combo.Theme); Assert.Same(Res("DarkComboBoxStyle"), keyed.Theme);
+        var arrow = Part<IconGlyph>(combo, "Arrow"); Assert.Equal("ChevronDown", arrow.Kind.ToString()); Assert.Equal(12d, arrow.Size);
+        Assert.Same(window.FindResource("TextSecondaryBrush"), arrow.Foreground);
         Assert.Equal(28, combo.MinHeight); var chrome = Part<Border>(combo, "Chrome"); Assert.Equal(new CornerRadius(8), chrome.CornerRadius);
         Assert.Same(combo.Background, chrome.Background); combo.Background = Brushes.Navy; Dispatcher.UIThread.RunJobs(); Assert.Same(Brushes.Navy, chrome.Background);
         var click = combo.TranslatePoint(new Point(10, 10), window)!.Value;
         window.MouseMove(click); window.MouseDown(click, MouseButton.Left); window.MouseUp(click, MouseButton.Left); Dispatcher.UIThread.RunJobs();
         Assert.True(combo.IsDropDownOpen); Assert.Equal(89, chrome.BoxShadow[0].Color.A); var popup = Part<Popup>(combo, "PART_Popup");
+        Assert.Same(window.FindResource("PinkBrush"), arrow.Foreground);
         var border = Assert.IsType<Border>(popup.Child); Assert.Equal(new Thickness(0, 4, 0, 0), border.Margin); Assert.Equal(new CornerRadius(10), border.CornerRadius);
         Assert.True(border.Bounds.Width >= combo.Bounds.Width); var selected = (ComboBoxItem)combo.ContainerFromIndex(0)!; var plain = (ComboBoxItem)combo.ContainerFromIndex(1)!;
         Assert.Same(Res("InputComboBoxItemTheme"), selected.Theme); Assert.Equal(HorizontalAlignment.Right, plain.HorizontalContentAlignment);
@@ -118,8 +121,7 @@ public sealed class InputChromeThemeTests
         window.MouseMove(new Point(450, 350)); window.MouseMove(click); Dispatcher.UIThread.RunJobs(); Assert.True(combo.IsPointerOver);
         Assert.Same(window.FindResource("InputHoverBorderBrush"), chrome.BorderBrush); combo.IsEnabled = false; Dispatcher.UIThread.RunJobs(); Assert.Equal(0.45, combo.Opacity);
         Assert.Equal("Arrow", combo.Cursor!.ToString()); combo.IsEnabled = true; combo.ItemsSource = Array.Empty<string>();
-        combo.IsDropDownOpen = true; Dispatcher.UIThread.RunJobs(); Assert.Equal(28, border.MinHeight);
-        return Task.CompletedTask;
+        combo.IsDropDownOpen = true; Dispatcher.UIThread.RunJobs(); Assert.Equal(28, border.MinHeight); return Task.CompletedTask;
     });
 
     [Fact]
