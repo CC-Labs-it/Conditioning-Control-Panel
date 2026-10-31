@@ -30,11 +30,10 @@ public sealed class ContentHitTestTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            AmbientBeatLoopsTests.Setup();
+            global::ConditioningControlPanel.CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
+            global::ConditioningControlPanel.CoreSettings.Current.PerformanceMode = false;
+            var w = new MainShellWindow { TabClock = new SteppedTime() };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -45,6 +44,10 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                // Keep entrances enabled and frozen, then settle them before sampling pointer geometry.
+                Assert.NotNull(w.EnteringTab);
+                w.CompleteTabTransition();
+                Assert.Null(w.EnteringTab);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
@@ -72,7 +75,7 @@ public sealed class ContentHitTestTests
                     Dispatcher.UIThread.RunJobs();
                     b.RemoveHandler(InputElement.PointerPressedEvent, (System.EventHandler<PointerPressedEventArgs>)Swallow);
                     if (hit is null || (hit != b && !b.IsVisualAncestorOf(hit)) || !pressed)
-                        misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");
+                        misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name} ({(hit as TextBlock)?.Text}), pressed {pressed}");
                 }
                 Assert.True(tested >= 3, $"{tab}: only {tested} buttons on screen to test");
             }

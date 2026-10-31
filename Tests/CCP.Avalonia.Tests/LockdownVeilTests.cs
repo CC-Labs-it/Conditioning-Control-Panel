@@ -34,10 +34,7 @@ public sealed class LockdownVeilTests
     {
         AvaloniaTestDispatcher.Run(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            AmbientBeatLoopsTests.Setup();
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             var s = CoreSettings.Current;
@@ -491,6 +488,9 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        // CI can spend longer than the whole flash in Frame(); freeze the real timer's clock.
+        var time = new SteppedTime();
+        shell.LockdownFlashTime = time;
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -513,9 +513,11 @@ public sealed class LockdownVeilTests
         var flash = shell.LockdownFlash!;
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        time.Advance(TimeSpan.FromMilliseconds(300));
+        shell.TickLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        time.Advance(TimeSpan.FromMilliseconds(300));
+        shell.TickLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 

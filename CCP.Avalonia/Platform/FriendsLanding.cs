@@ -145,6 +145,7 @@ internal static class FriendsLanding
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
+        InviteDestination.Breakout => Str("friends_land_dest_breakout", "Breakout"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
 
@@ -263,8 +264,12 @@ internal static class FriendsLanding
     }
 
     /// <summary>Destinations this head can open. ponytail: Back Room / Goon / chess hosts are not on this head
-    /// (GameWindow has the Breakout demo only), so their cards carry Not now and the x only.</summary>
-    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp;
+    /// so their cards carry Not now and the x only. Breakout uses the demo until a full host exists.</summary>
+    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp
+        || item.Destination == InviteDestination.Breakout && (!BreakoutFullAllowed || GameWindow.Games.ContainsKey("breakout"));
+
+    private static bool BreakoutFullAllowed => TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+    internal static Action<string> LaunchGame { get; set; } = id => GameWindow.Launch(id);
 
     /// <summary>WPF LauncherHost.OpenPanelTab: the panel up (it may be hidden behind the launcher), then the tab.
     /// Tests replace it.</summary>
@@ -276,21 +281,29 @@ internal static class FriendsLanding
     };
 
     /// <summary>WPF Join :522. Ramp: link to Ramp lives on the Ramp card in the Studio tab.</summary>
-    private static void Join(InboxItem item)
+    internal static void Join(InboxItem item)
     {
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
+        // WPF Services/Friends/FriendsLanding.cs:572-581: use the station's full/demo door.
+        if (item.Destination == InviteDestination.Breakout && CanJoin(item))
+        {
+            try { LaunchGame(BreakoutFullAllowed ? "breakout" : "breakoutdemo"); }
+            catch (Exception ex) { Log.Warning(ex, "[Friends] breakout launch failed"); }
+        }
     }
 
-    private static readonly FriendsSfxGate SfxGate = new();
+    internal static FriendsSfxGate SfxGate = new();
 
     /// <summary>WPF FriendsSfx.Play: master volume, the 1.5 s incoming gap, half level in a session.</summary>
-    private static void Sfx(string rel, float scale, string tag, bool incoming = false)
+    internal static void Sfx(string rel, float scale, string tag, bool incoming = false)
     {
         try
         {
             var s = CoreSettings.Current;
-            if (s.MasterVolume <= 0) return;
+            // WPF Services/Friends/FriendsSfx.cs:47-54: silence must not consume the cue gate.
+            if (CoreAudio.IsOutputSuppressed || CoreEngine.Video?.IsPlaying == true
+                || s.MasterVolume <= 0 || Services.EmiDesk.EmiLineEngine.Instance.HoldActive) return;
             lock (SfxGate) if (!SfxGate.TryPass(DateTime.UtcNow, incoming)) return;
             var path = CoreModArt.AudioOverridePath(rel)
                 ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel.Replace('/', Path.DirectorySeparatorChar)));
