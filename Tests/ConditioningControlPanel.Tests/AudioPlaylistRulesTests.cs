@@ -11,6 +11,14 @@ namespace ConditioningControlPanel.Tests;
 /// <summary>The audio player's playlist rules: order, loop, shuffle, removal, skipped files.</summary>
 public class AudioPlaylistRulesTests
 {
+    [Fact]
+    public void CoreOwnsRulesAndLoopContractType()
+    {
+        Assert.Equal("CCP.Core", typeof(AudioPlaylistRules).Assembly.GetName().Name);
+        Assert.Same(typeof(AudioPlaylistRules).Assembly, typeof(AudioPlaylistLoop).Assembly);
+        Assert.Equal(typeof(AudioPlaylistLoop), typeof(IAudioPlaylistService).GetProperty(nameof(IAudioPlaylistService.Loop))!.PropertyType);
+    }
+
     private const string A = @"C:\music\a.mp3", B = @"C:\music\b.mp3", C = @"D:\other\a.mp3", D = @"C:\music\d.flac";
 
     private static AudioPlaylistRules List(params string[] paths)

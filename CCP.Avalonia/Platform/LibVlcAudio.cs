@@ -180,6 +180,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             player.Playing += (_, _) =>
             {
+                CoreAudioDiagnostics.Note("oneshot:" + tag, path);
                 // Setting volume before Play, or inside this libvlc event, is lost: the pulse
                 // output only takes it once it exists, from a thread that is not libvlc's own.
                 ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { ApplyPreferredDevice(player); player.Volume = vol; } });
@@ -216,10 +217,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             var media = new Media(_vlc, path, FromType.FromPath);
             media.AddOption(NoVideo);
-            return new Voice(new MediaPlayer(media), media, onEnded);
+            return new Voice(new MediaPlayer(media), media, path, onEnded);
         }
 
-        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : MindWipePlayer.IVoice
+        private sealed class Voice(MediaPlayer player, Media media, string path, Action onEnded) : MindWipePlayer.IVoice
         {
             private int _vol, _done;
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
@@ -237,6 +238,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 player.Playing += (_, _) =>
                 {
                     Apply();
+                    CoreAudioDiagnostics.Note("mindwipe", path);
                     if (Interlocked.Exchange(ref started, 1) == 0) Fire(() => Started?.Invoke(Math.Max(0, player.Length)));
                 };
                 player.EndReached += (_, _) => Dispose();

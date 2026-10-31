@@ -69,6 +69,8 @@
     <!-- Platform-agnostic engine (net10.0). Types moved there keep their original namespaces,
          so consuming files here need no changes. -->
     <ProjectReference Include="..\CCP.Core\CCP.Core.csproj" />
+    <!-- Playlist rules and loop enum are supplied by Core for both heads. -->
+    <Compile Remove="Services\AudioPlayer\AudioPlaylistRules.cs" />
   </ItemGroup>
 
   <ItemGroup>

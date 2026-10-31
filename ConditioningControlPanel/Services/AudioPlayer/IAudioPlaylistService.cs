@@ -78,11 +78,4 @@ namespace ConditioningControlPanel.Services.AudioPlayer
         /// <summary>About 10 times a second while playing. Argument is PositionSeconds.</summary>
         event Action<double>? PositionChanged;
     }
-
-    public enum AudioPlaylistLoop
-    {
-        Off = 0,
-        All = 1,
-        One = 2,
-    }
 }

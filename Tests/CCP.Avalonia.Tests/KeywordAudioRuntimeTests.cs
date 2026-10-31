@@ -30,7 +30,8 @@ public sealed class KeywordAudioRuntimeTests
         var s = CoreSettings.Current;
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
             s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled);
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled,
+            CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider, CoreAudio.DuckProvider, s.AudioDuckingEnabled);
         var engine = new KeywordAudioRuntime();
         var played = new List<(string, float)>();
         var file = Path.GetTempFileName();
@@ -45,6 +46,7 @@ public sealed class KeywordAudioRuntimeTests
             CoreEntitlement.IsFreeTodayProvider = _ => false;
             CoreAudio.PlayStoppableProvider = (path, volume, _, _, _) => { played.Add((path, volume)); return () => played.Add(("stopped", 0)); };
             engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 0);
+            CoreSession.IsEngineRunningProvider = () => true;
             engine.Start();
             await body(engine, s, played);
         }
@@ -53,11 +55,74 @@ public sealed class KeywordAudioRuntimeTests
             engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled) = saved;
+                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled,
+                CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider, CoreAudio.DuckProvider, s.AudioDuckingEnabled) = saved;
         }
     });
 
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RuntimeFixtureRestoresAudioStateEvenWhenBodyThrows(bool throws)
+    {
+        var s = CoreSettings.Current;
+        var original = (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider,
+            CoreAudio.DuckProvider, s.AudioDuckingEnabled);
+        Func<bool> engine = () => false, session = () => false;
+        Action<int> duck = _ => { };
+        try
+        {
+            CoreSession.IsEngineRunningProvider = engine;
+            CoreSession.IsSessionRunningProvider = session;
+            CoreAudio.DuckProvider = duck;
+            s.AudioDuckingEnabled = false;
+            void Body(KeywordAudioRuntime runtime, AppSettings settings, List<(string Path, float Volume)> played)
+            {
+                CoreSession.IsEngineRunningProvider = () => true;
+                CoreSession.IsSessionRunningProvider = () => true;
+                CoreAudio.DuckProvider = _ => { };
+                settings.AudioDuckingEnabled = true;
+                if (throws) throw new InvalidOperationException("fixture cleanup probe");
+            }
+            if (throws) Assert.Throws<InvalidOperationException>(() => Run(Body));
+            else Run(Body);
+            Assert.Same(engine, CoreSession.IsEngineRunningProvider);
+            Assert.Same(session, CoreSession.IsSessionRunningProvider);
+            Assert.Same(duck, CoreAudio.DuckProvider);
+            Assert.False(s.AudioDuckingEnabled);
+        }
+        finally
+        {
+            (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider,
+                CoreAudio.DuckProvider, s.AudioDuckingEnabled) = original;
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    public void AutomaticAudioRequiresEngineOrSession(bool engineOn, bool sessionOn, bool plays) => Run((engine, s, played) =>
+    {
+        CoreSession.IsEngineRunningProvider = () => engineOn;
+        CoreSession.IsSessionRunningProvider = () => sessionOn;
+        var ducks = 0;
+        CoreAudio.DuckProvider = _ => ducks++;
+        s.AudioDuckingEnabled = true;
+        ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).DuckSystemAudio = true;
+        Type(engine, "sit");
+        Assert.Equal(plays ? 1 : 0, played.Count);
+        Assert.Equal(plays ? 1 : 0, ducks);
+        engine.StopAudio();
+        s.KeywordTriggers[0].AudioFilePath = ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).FilePath;
+        s.KeywordTriggers[0].Actions.Clear();
+        played.Clear();
+        engine.Now = () => new DateTime(2026, 10, 15);
+        Type(engine, "sit");
+        Assert.Equal(plays ? 1 : 0, played.Count);
+    });
 
     [Fact]
     public void TypedMatchPlaysConfiguredClipAtWpfVolumeAndStopCutsIt() => Run((engine, s, played) =>
