@@ -244,10 +244,10 @@ namespace ConditioningControlPanel.Services
         /// <see cref="GuardHeals"/>. "max length" (VideoMaxDurationSeconds cap), "overran" (length + 5 s
         /// safety timer, or 600 s with no length) end the clip. Null = fine.</summary>
         public static string? Guard(double sinceShow, double played, bool framed, bool hasVideo, double lengthSeconds,
-            double sinceFrame, int maxSeconds, double capSpentBefore = 0)
+            double sinceFrame, int maxSeconds, double capSpentBefore = 0, double? capPlayed = null)
         {
             if (!framed && hasVideo) return sinceShow >= NoFrameSeconds ? "no frame" : null;
-            if (VideoMaxCap.CapLeft(maxSeconds, capSpentBefore + played) <= 0) return "max length";
+            if (VideoMaxCap.CapLeft(maxSeconds, capSpentBefore + (capPlayed ?? played)) <= 0) return "max length";
             if (lengthSeconds > 0 ? played >= lengthSeconds + 5 : played >= FallbackSeconds) return "overran";
             return framed && sinceFrame >= OutputLostSeconds ? "output lost" : null;
         }
@@ -471,13 +471,13 @@ namespace ConditioningControlPanel.Services
         public int LastFunnelEnabled { get; private set; } = -1;
         public int LastFunnelDuration { get; private set; } = -1;
 
-        /// <summary>WPF RefillVideoQueues' duration filter: drop clips shorter than <paramref name="min"/> or
-        /// longer than <paramref name="max"/> seconds (0 = unset). A clip with no cached length is kept
+        /// <summary>WPF RefillVideoQueues' duration filter: drop clips shorter than <paramref name="min"/> (0 = unset).
+        /// The maximum cuts playback rather than dropping long clips from the slice pool. A clip with no cached length is kept
         /// (fall open; <paramref name="durationOf"/> starts its parse for the next refill).</summary>
         public static List<string> KeepByLength(IReadOnlyList<string> files, int min, int max, Func<string, double?>? durationOf)
         {
-            if ((min <= 0 && max <= 0) || durationOf == null) return files.ToList();
-            return files.Where(f => durationOf(f) is not double d || ((min <= 0 || d >= min) && (max <= 0 || d <= max))).ToList();
+            if (min <= 0 || durationOf == null) return files.ToList();
+            return files.Where(f => durationOf(f) is not double d || d >= min).ToList();
         }
 
         /// <summary>WPF RefillVideoQueues' local walk: assets/videos, recursive, supported extensions,

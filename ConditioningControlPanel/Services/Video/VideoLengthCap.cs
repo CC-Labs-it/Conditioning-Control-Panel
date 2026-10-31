@@ -20,10 +20,7 @@ public static class VideoLengthCap
 
     /// <summary>Uniform millisecond offset leaving a whole capped slice. Unknown lengths start at 0.</summary>
     public static long StartOffsetMs(int maxSeconds, long durationMs, Random random)
-    {
-        if (!IsSet(maxSeconds) || durationMs <= maxSeconds * 1000L) return 0;
-        return random.NextInt64(durationMs - maxSeconds * 1000L + 1);
-    }
+        => VideoLengthCapRules.StartOffsetMs(maxSeconds, durationMs, random);
 
     /// <summary>
     /// A window that knows how much of its clip has played (floating windows): true once it has
