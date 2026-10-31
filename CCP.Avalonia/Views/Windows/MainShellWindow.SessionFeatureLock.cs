@@ -25,8 +25,6 @@
 //     Studio rack's Haptics page (WPF :276).
 //
 // WHAT IS NOT, and why - not one of these is "wired when a service moves to Core":
-//   - BubblePop CmbMotion has no Avalonia control to carry its marker yet. The five LockCard
-//     repeat/target controls and their Owned markers are already present.
 //   - ApplySessionLockToFeaturePopup's OTHER caller: _activeFeaturePopupContent, the dashboard
 //     tile popup. The popup host is MainShellWindow.TakeoverUi.cs / FeatureSettingsPopup, still a
 //     stub, so nothing sets that field and the painter is called for the rack only.
