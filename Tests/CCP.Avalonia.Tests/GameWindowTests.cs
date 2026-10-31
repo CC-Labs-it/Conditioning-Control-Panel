@@ -196,6 +196,50 @@ public sealed partial class GameWindowTests
         finally { Directory.Delete(root, true); }
     }
 
+    /// <summary>WPF PieceByPieceHostService.cs:164-168 and SeasonRecapService.cs:182-197.
+    /// One day event per fresh board, no recap Catalog entry, no credit for a refused launch.</summary>
+    [Fact]
+    public void PieceByPiece_FreshLaunchCreditsDayLog_RefocusDoesNot() => Run((shell, launcher) =>
+    {
+        var property = typeof(ConditioningControlPanel.Avalonia.App).GetProperty("FeatureDayLog",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var previous = property.GetValue(null);
+        var folder = Directory.CreateTempSubdirectory("pbp-credit-").FullName;
+        using var log = new FeatureDayLogService(() => null, Path.Combine(folder, "day.json"));
+        try
+        {
+            property.SetValue(null, log);
+            int Uses() => log.BuildWirePayload(10).Sum(d => d.TryGetValue("e_pb", out var n) ? Convert.ToInt32(n) : 0);
+            var bucket = CoreSettings.Current.SeasonStatsSeason;
+            var counts = CoreSettings.Current.SeasonFeatureUse.ToArray();
+            launcher.Hide();
+            MainShellWindow.LeashGateDueProvider = () => true;
+            MainShellWindow.PresentLeashGateProvider = _ => { };
+            launcher.Play(LauncherCards.Find(GameWindow.PbpId)!);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, Uses());
+            MainShellWindow.LeashGateDueProvider = () => false;
+            var first = GameWindow.Launch(GameWindow.PbpId)!;
+            Assert.Equal(1, Uses());
+            Assert.Same(first, GameWindow.Launch(GameWindow.PbpId));
+            Assert.Equal(1, Uses());
+            first.Close();
+            Dispatcher.UIThread.RunJobs();
+            var second = GameWindow.Launch(GameWindow.PbpId)!;
+            Assert.NotSame(first, second);
+            Assert.Equal(2, Uses());
+            Assert.Equal(bucket, CoreSettings.Current.SeasonStatsSeason);
+            Assert.Equal(counts, CoreSettings.Current.SeasonFeatureUse.ToArray());
+            second.Close();
+        }
+        finally
+        {
+            property.SetValue(null, previous);
+            log.Dispose();
+            Directory.Delete(folder, true);
+        }
+    });
+
     private sealed class FakeHttp : System.Net.Http.HttpMessageHandler
     {
         public System.Net.Http.HttpRequestMessage? Seen;

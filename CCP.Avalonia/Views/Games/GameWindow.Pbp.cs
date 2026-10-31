@@ -2,7 +2,7 @@
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
 // media-flavour / media-more / online-media), friend / Lobby intents (.Friends.cs),
-// MergedAccountRecovery and SeasonRecapService.TrackFeature.
+// MergedAccountRecovery.
 
 using System;
 using System.Collections.Generic;
@@ -92,6 +92,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _pbpWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _pbpWatch.Tick += (_, _) => CheckPbpWatch(DateTime.UtcNow);
             _pbpWatch.Start();
+            // WPF PieceByPieceHostService.cs:168: fresh launch only, never a refocus.
+            try { SeasonFeatureTracking.Track(CoreSettings.Current, SeasonFeatureKeys.PieceByPiece, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow); }
+            catch (Exception ex) { Diag.Swallowed(ex); }
             try { FriendsHead.Service?.EnterActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("PieceByPieceHost: launched");
         }
