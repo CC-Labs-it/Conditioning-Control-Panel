@@ -61,6 +61,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) return Open.FirstOrDefault(w => w.IsDtrh && w.IsActive);
         }
 
+        // WPF MainWindow.xaml.cs:1719-1727; DtrhHostService.cs:250-266,1017-1023.
+        internal static bool TryDtrhPanic()
+        {
+            GameWindow? live;
+            lock (Open) live = Open.FirstOrDefault(w => w.IsDtrh);
+            if (live == null) return false;
+            if (live.IsReady && !live._dtrhExiting)
+            {
+                live._dtrhExiting = true;
+                live.Post(new { type = "end-run", reason = "host" });
+                var timer = DispatcherTimer.RunOnce(live.Close, TimeSpan.FromMilliseconds(1200));
+                live.Closed += (_, _) => timer.Dispose();
+            }
+            else live.Close();
+            return true;
+        }
+
         // WPF PostKeptEscape (:119): GameWindow.Escape.cs, shared with the race, the board and Breakout.
 
         /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>

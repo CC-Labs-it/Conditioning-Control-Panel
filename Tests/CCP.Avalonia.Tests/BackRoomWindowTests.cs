@@ -264,6 +264,37 @@ public sealed class BackRoomWindowTests
         Assert.Same(room, GameWindow.OpenForTests(GameWindow.BackRoomId));
     });
 
+    // WPF MainWindow.xaml.cs:1719-1747: DtRH consumes panic before the room, even during boot.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DtrhConsumesLegacyPanicBeforeBackRoom(bool ready) => Run(() =>
+    {
+        using var shell = new ShellLifetime();
+        var s = CoreSettings.Current;
+        s.PanicKeyEnabled = true; s.PanicKey = "F8"; s.PanicOverridesAll = false;
+        var room = GameWindow.Launch(GameWindow.BackRoomId)!;
+        var dtrh = new GameWindow(GameWindow.Games[GameWindow.DtrhId]);
+        dtrh.Show();
+        if (ready) dtrh.HandleMessage("{type:'ready'}");
+        Dispatcher.UIThread.RunJobs();
+        var roomFrames = new List<JObject>(); var dtrhFrames = new List<JObject>();
+        room.Posted += json => roomFrames.Add(JObject.Parse(json));
+        dtrh.Posted += json => dtrhFrames.Add(JObject.Parse(json));
+        shell.Window.HandlePanicKeyPress(DateTime.Now); Dispatcher.UIThread.RunJobs();
+        Assert.Empty(roomFrames);
+        if (ready)
+        {
+            Assert.Equal("end-run", (string?)Assert.Single(dtrhFrames)["type"]);
+            Assert.Equal("host", (string?)dtrhFrames[0]["reason"]);
+            Assert.False(dtrh.KeptEscapeReady);
+            var until = DateTime.UtcNow.AddSeconds(3);
+            while (GameWindow.OpenForTests(GameWindow.DtrhId) != null && DateTime.UtcNow < until) Dispatcher.UIThread.RunJobs();
+        }
+        Assert.Null(GameWindow.OpenForTests(GameWindow.DtrhId));
+        Assert.Same(room, GameWindow.OpenForTests(GameWindow.BackRoomId));
+    });
+
     private sealed class Relay : IBackRoomRelay
     {
         public int Calls;
