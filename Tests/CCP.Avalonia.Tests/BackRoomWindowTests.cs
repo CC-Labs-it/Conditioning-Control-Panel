@@ -288,8 +288,8 @@ public sealed class BackRoomWindowTests
             Assert.Equal("end-run", (string?)Assert.Single(dtrhFrames)["type"]);
             Assert.Equal("host", (string?)dtrhFrames[0]["reason"]);
             Assert.False(dtrh.KeptEscapeReady);
-            var until = DateTime.UtcNow.AddSeconds(3);
-            while (GameWindow.OpenForTests(GameWindow.DtrhId) != null && DateTime.UtcNow < until) Dispatcher.UIThread.RunJobs();
+            var until = DateTime.UtcNow.AddSeconds(3); // RunJobs needs a queued job to promote due timers.
+            while (GameWindow.OpenForTests(GameWindow.DtrhId) != null && DateTime.UtcNow < until) { Dispatcher.UIThread.Post(() => { }); Dispatcher.UIThread.RunJobs(); }
         }
         Assert.Null(GameWindow.OpenForTests(GameWindow.DtrhId));
         Assert.Same(room, GameWindow.OpenForTests(GameWindow.BackRoomId));
