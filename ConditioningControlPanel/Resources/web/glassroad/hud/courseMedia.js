@@ -59,7 +59,10 @@ export function createCourseMedia({root, mediaFor = () => ({})}) {
       // RACE YOUR OWN SONG (desktop host): the host opens its own file dialog and listens for the words; the row
       // appears in the list above when it is ready. A job in flight shows its line here instead of a button.
       const job = view.songProgress, busy = job?.status === 'progress';
-      button(songs, busy ? 'Listening' : 'Choose music file', () => {if (!busy) emit('song-pick', {});}).dataset.focus = 'song-file';
+      const heard = (view.songs || []).find(row => row.user && row.id === view.songId);
+      if (heard && !busy) button(songs, 'Remove this song', () => emit('song-forget', {songId:heard.id})).dataset.focus = 'song-forget';
+      const pick = button(songs, busy ? 'Listening' : 'Choose music file', () => {if (!busy) emit('song-pick', {});});
+      pick.dataset.focus = 'song-file';pick.disabled = busy;pick.setAttribute('aria-busy', String(busy));
       const note = document.createElement('p');
       note.textContent = job?.status === 'error' ? job.note || 'That did not work. Try another file.'
         : busy ? (job.note || 'Working') + (job.phase === 'model' || job.phase === 'listen' ? ' ' + Math.round((job.pct || 0) * 100) + '%' : '')

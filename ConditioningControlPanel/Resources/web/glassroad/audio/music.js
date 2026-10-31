@@ -36,6 +36,20 @@ export function analyzeAudioBuffer(buf) {
   } catch (e) { console.warn('[music] analysis', e); return null; }
 }
 
+/**
+ * RACE YOUR OWN SONG: a heard chart (desktop host, `userSong: true`) carries words and a placeholder bpm; the
+ * recording's own analysis becomes its grid, written on BOTH the raw chart (music.beat, sectionAt) and the
+ * normalized song (road, spiral, cleanPace) so every consumer follows one grid. No beat found: the placeholder stays.
+ */
+export function heardGrid(c, song, buffer) {
+  const a = analyzeAudioBuffer(buffer);
+  if (!a || !(a.bpm > 0)) return null;
+  const downbeatS = a.downbeats && a.downbeats.length ? a.downbeats[0] : 0;
+  c.bpm = a.bpm; c.downbeatS = downbeatS; c.beats = Array.from(a.beats); c.downbeats = Array.from(a.downbeats);
+  song.bpm = a.bpm; song.downbeatS = downbeatS; song.beats = a.beats; song.downbeats = a.downbeats;
+  return a;
+}
+
 /** Beat at song time tS: { bpm, phase 0..1, index } (index < 0 before the first downbeat). */
 export function beatAt(chart, tS) {
   const bpm = chart && chart.bpm > 0 ? chart.bpm : 96;
@@ -156,17 +170,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch, lowRat
     const t = ctx.currentTime;
     durS = buffer && buffer.duration > 0 ? buffer.duration : 0;
     chart = c; bpm = b; song = c ? (cached && cached.chart === c ? cached.song : normalizeChart(c)) : null;
-    if (c && c.userSong) {
-      // RACE YOUR OWN SONG: the host's chart carries heard words and a placeholder bpm; the beat grid comes
-      // from the recording itself, as for a dropped file, and lands on the chart so every consumer sees one song.
-      if (analyzed !== buffer) { analysis = analyzeAudioBuffer(buffer); analyzed = buffer; }
-      const a = analysis;
-      if (a && a.bpm > 0 && song) {
-        const downbeatS = a.downbeats && a.downbeats.length ? a.downbeats[0] : 0;
-        bpm = a.bpm; c.bpm = a.bpm; c.downbeatS = downbeatS;
-        song.bpm = a.bpm; song.downbeatS = downbeatS; song.beats = a.beats; song.downbeats = a.downbeats;
-      }
-    } else if (c) analysis = null;
+    if (c) analysis = null;
     else if (analyzed !== buffer) { analysis = analyzeAudioBuffer(buffer); analyzed = buffer; }
     let pos = null;
     if (typeof align === 'function') { try { pos = align(song); } catch (e) { pos = null; } }
@@ -219,7 +223,9 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch, lowRat
         if (my !== token) return false;
         const buf = await decode(bytes);
         if (my !== token) return false;           // a later play or stop won
-        cached = { url: String(chartUrl), buffer: buf, chart: c, song: normalizeChart(c) };
+        const song = normalizeChart(c);
+        if (c.userSong) heardGrid(c, song, buf);  // once, at decode (the menu prepares here), never on the GO frame
+        cached = { url: String(chartUrl), buffer: buf, chart: c, song };
         return prepareOnly || start(buf, c, c.bpm, align);
       } catch (e) { console.warn('[music] chart', e); return false; }
     },

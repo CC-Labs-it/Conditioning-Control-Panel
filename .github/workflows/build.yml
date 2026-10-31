@@ -23,7 +23,7 @@ on:
 
 jobs:
   glassroad:
-    if: github.base_ref == 'feat/glassroad-a' || startsWith(github.head_ref, 'codex/glassroad-smooth-')
+    if: github.base_ref == 'feat/glassroad-a' || startsWith(github.head_ref, 'codex/glassroad-smooth-') || startsWith(github.head_ref, 'feat/song-words')
     runs-on: windows-latest
     timeout-minutes: 25
     steps:

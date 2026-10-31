@@ -44,10 +44,12 @@ test('a heard song gives bubbles to confident plain words (impactOnly off), one 
     { w: 'sunlight', startS: 9, endS: 9.5, line: 2, bubble: true, gate: false },
     { w: 'mm', startS: 12, endS: 12.2, line: 3, bubble: false, gate: false },
   ];
+  const authored = normalizeChart({ bpm: 96, sections: [], words });
+  const strict = pickWords(authored);
+  assert.ok(strict.every((k) => k === ROAD), 'an authored chart: none of these is an IMPACT word');
   const song = normalizeChart({ bpm: 96, sections: [], userSong: true, words });
-  const strict = pickWords(song);
-  assert.ok(strict.every((k) => k === ROAD), 'default pick: none of these is an IMPACT word');
-  const open = [...pickWords(song, { ...PICK, impactOnly: false })];
+  const open = [...pickWords(song)];   // the default pick: road, air and bubble runs all call it this way
+  assert.deepEqual(open, [...pickWords(song, PICK)]);
   assert.equal(open[1], BUBBLE, 'the longer word of the first line');
   assert.equal(open[0], ROAD, 'one bubble per line');
   assert.equal(open[2], ROAD, 'river is inside minGapS of closer');
@@ -140,12 +142,28 @@ test('garage dialog on a desktop host: Choose music file asks the host; a job in
   songs = root.children[0].querySelector('.g-media-songs').children;
   const busy = chooser(songs);
   assert.equal(busy.textContent, 'Listening');
+  assert.equal(busy.disabled, true);
+  assert.equal(busy.attrs['aria-busy'], 'true');
   busy.onclick();
   assert.equal(events.length, 1, 'no second pick while listening');
+  assert.equal(choose.disabled, false);
   assert.equal(note(songs), 'Listening for the words 42%');
   view = { ...view, songProgress: { trackId: 'threshold', status: 'error', note: 'Could not read this file.' } };
   picker.refresh();
   songs = root.children[0].querySelector('.g-media-songs').children;
   assert.equal(note(songs), 'Could not read this file.');
   assert.equal(chooser(songs).textContent, 'Choose music file');
+  // a selected heard song can be removed; a catalog song cannot
+  view = { ...view, songProgress: null, songs: [{ id: 'u1', label: 'My song', user: true }, { id: 'boudoir', label: 'Think Pink' }], songId: 'u1' };
+  picker.refresh();
+  songs = root.children[0].querySelector('.g-media-songs').children;
+  const remove = songs.filter((n) => n.dataset?.focus === 'song-forget').at(-1);
+  assert.equal(remove.textContent, 'Remove this song');
+  remove.onclick();
+  assert.deepEqual(events.at(-1), { trackId: 'threshold', kind: 'song-forget', songId: 'u1' });
+  view = { ...view, songId: 'boudoir' };
+  const before = songs.filter((n) => n.dataset?.focus === 'song-forget').length;
+  picker.refresh();
+  songs = root.children[0].querySelector('.g-media-songs').children;
+  assert.equal(songs.filter((n) => n.dataset?.focus === 'song-forget').length, before, 'no remove button on a catalog song');
 });

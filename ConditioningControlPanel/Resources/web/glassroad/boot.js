@@ -78,7 +78,6 @@ import { createSongCache } from './audio/songCache.js';
 import { createHud } from './hud/hud.js';
 import { createDirectionWarning } from './hud/direction.js';
 import { createWordRun } from './sim/words.js';
-import { pickWords, PICK } from './sim/wordPick.js';
 import { userSongRows } from './host/bridge.js';
 import { createWordCoins, coinTuning } from './sim/wordCoins.js';
 import { createAirWordRun, bindAirWords } from './sim/airWords.js';
@@ -659,8 +658,9 @@ async function boot(course, options, lifetime, isCurrent) {
       const saved = shared.coursePicks[id] || {}, local = shared.courseSongs[id];
       return { source: id === TRACK_ID ? view().source : saved.source || (consentOn() ? 'scrolller' : 'off'),
         files: id === TRACK_ID ? library.count : Math.min(24, shared.courseFiles[id]?.length || 0), catalog: scrolller?.catalog || [], scrolllerAvailable: !!scrolller,
-        niches: nichesFor(id), custom: !isDefault(id), songs: shared.songRows.map(({id,label}) => ({id,label})),
-        songWords: !!init.caps.songWords, songProgress: shared.songWords?.trackId === id ? shared.songWords : null,
+        niches: nichesFor(id), custom: !isDefault(id), songs: shared.songRows.map(({id,label}) => ({id, label, user: shared.userSongRows.some(row => row.id === id)})),
+        // one listening job at a time: every course shows it (a pick from another course would kill it)
+        songWords: !!init.caps.songWords, songProgress: shared.songWords,
         songId: local ? 'file' : saved.songId || 'default',
         songName: local?.name || shared.songRows.find(row => row.id === ((saved.songId && saved.songId !== 'default' ? saved.songId : null) || ({threshold:'pink-road',mainframe:'mainframe',keep:'keep',boudoir:'boudoir',goonworks:'goonworks'})[id]))?.label || 'Track default' };
     };
@@ -684,19 +684,30 @@ async function boot(course, options, lifetime, isCurrent) {
       } else if (d.kind === 'song-file' && /^audio\//.test(d.file?.type || '')) {
         shared.courseSongs[id] = d.file; saved.songId = 'default';
         if (id === TRACK_ID) { pickedSong = d.file; stopSong(); void menuSong(); }
-      } else if (d.kind === 'song-pick' && init.caps.songWords) {
-        shared.bridge.send({ type: 'song-pick', trackId: id });   // the host's own file dialog, then whisper (song-words frames)
+      } else if (d.kind === 'song-pick' && init.caps.songWords && shared.songWords?.status !== 'progress') {
+        shared.songWords = null;   // a stale error line goes; the host's own file dialog follows, then whisper (song-words frames)
+        shared.bridge.send({ type: 'song-pick', trackId: id });
+      } else if (d.kind === 'song-forget' && init.caps.songWords && shared.userSongRows.some(row => row.id === d.songId)) {
+        shared.bridge.send({ type: 'song-forget', id: d.songId });
+        shared.userSongRows = shared.userSongRows.filter(row => row.id !== d.songId); mergeSongRows();
+        for (const c of COURSES) if (shared.coursePicks[c.id]?.songId === d.songId) shared.coursePicks[c.id].songId = 'default';
+        if (!shared.courseSongs[TRACK_ID] && !soloCharts().length) { stopSong(); void menuSong(); }
       }
       saveCustomization(shared.coursePicks); refreshMedia();
     });
     // A heard song is picked for its course as soon as the host says ready (the player asked for it from that course).
-    shared.onSongReady = (id, song) => {
+    // Only on the menu: a ready frame during a race leaves the pick alone (the row is in the list for later). The
+    // handler belongs to this course scope and goes with it.
+    const onSongReady = (id, song) => {
       if (!song || !COURSES.some(c => c.id === id) || !shared.songRows.some(row => row.id === song.id)) return;
+      if (!['menu', 'boot'].includes(state)) return;
       const saved = shared.coursePicks[id] ||= {};
       delete shared.courseSongs[id]; saved.songId = song.id;
-      if (id === TRACK_ID && ['menu', 'boot'].includes(state)) { pickedSong = null; stopSong(); void menuSong(); }
+      if (id === TRACK_ID) { pickedSong = null; stopSong(); void menuSong(); }
       saveCustomization(shared.coursePicks); refreshMedia();
     };
+    shared.onSongReady = onSongReady;
+    lifetime.defer(() => { if (shared.onSongReady === onSongReady) shared.onSongReady = null; });
     garage.setVisible(false);
     lifetime.defer(() => { garage.setVisible(false); garage.setHandlers({ action: null, sound: null, changeTrack: null }); });
     // not enumerable: the garage holds its three.js scene, and every status JSON.stringify of the debug
@@ -998,9 +1009,7 @@ async function boot(course, options, lifetime, isCurrent) {
     }
     if (!song || !song.words.length) { words = null; wordCount.show(false); coinNote(0); return; }
     if (!words || words.song !== song) {
-      // A heard song has no authored IMPACT list: its confident longer words (chart bubble marks) ride the bubbles.
-      const pick = song.userSong ? s => pickWords(s, { ...PICK, impactOnly: false }) : undefined;
-      words = createWordRun(song, track, { seed, songGates: true, pick }); words.song = song;
+      words = createWordRun(song, track, { seed, songGates: true }); words.song = song;
       words.onPop((e) => {
         bus.emit('word-pop', e); wordCount.pop(!!feel.get('gentle.on'), e);
         songWordCaught();
