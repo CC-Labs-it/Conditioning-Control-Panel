@@ -1,4 +1,7 @@
 {
+  "deeper_editor_haptic_test_no_device": "Kein Haptikgerät verbunden. Verbinde zum Testen ein Gerät in den Einstellungen.",
+  "deeper_editor_haptic_test_row_off": "Die Deeper-Zeile ist im Haptik-Tab ausgeschaltet. Schalte sie für den Test ein.",
+  "deeper_editor_haptic_test_premium": "Für den Gerätetest ist Premium-Zugang erforderlich.",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
@@ -33,6 +34,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private OverlayLayer? _layer;
         private IDisposable? _layerBoundsSub;
         private bool _tornDown;
+        private static readonly System.Collections.Generic.HashSet<TutorialOverlay> Live = new();
+        internal static void CloseForPanic()
+        {
+            foreach (var overlay in Live.ToArray()) overlay.Close();
+        }
+        private bool _fadingOut;
+        internal static readonly TimeSpan FadeInDuration = TimeSpan.FromMilliseconds(300);
+        internal static readonly TimeSpan FadeOutDuration = TimeSpan.FromMilliseconds(200);
+        private static Transitions OpacityFade(TimeSpan d) =>
+            new() { new DoubleTransition { Property = OpacityProperty, Duration = d } };
 
         /// <summary>The tour's card left the screen (finished, skipped, panic, host closed). Hides
         /// Window.Closed: a live overlay is never a shown window, so the base event would never fire.</summary>
@@ -59,6 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Close();
                 return;
             }
+            Live.Add(this);
             _loaded = true;
             if (CoreTutorial.CurrentStep is { } first) UpdateStep(first);
         }
@@ -74,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_tornDown) return;
             _tornDown = true;
+            Live.Remove(this);
             _closed = true;
             try { _spotlightDelayTimer?.Stop(); } catch { /* already stopped */ }
             _spotlightDelayTimer = null;
@@ -83,7 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreTutorial.Finished -= OnSeamFinished;
             Detach();
             // The host window closing must not strand a running tour (WPF OnClosed does the same).
-            if (CoreTutorial.IsActive) CoreTutorial.Skip();
+            if (!_fadingOut && CoreTutorial.IsActive) CoreTutorial.Skip();
             base.Close(); // dispose the never-shown Window platform implementation too
             try { Closed?.Invoke(this, EventArgs.Empty); } catch { /* a subscriber's fault is not the tour's */ }
         }
@@ -96,13 +109,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var root = _stage ?? (Content as Control);
             if (root == null) return false;
-            if (_stage == null) Content = null;     // out of the never-shown window, once
+            bool first = _stage == null;
+            if (first)
+            {
+                Content = null;     // out of the never-shown window, once
+                root.Opacity = 0;
+                root.Transitions = OpacityFade(FadeInDuration);
+            }
 
             _stage = root;
             _layer = layer;
             root.Width = layer.Bounds.Width;
             root.Height = layer.Bounds.Height;
             layer.Children.Add(root);
+            if (first) root.Opacity = 1;     // WPF fades the card in over 300 ms on Loaded
             _layerBoundsSub = layer.GetObservable(BoundsProperty).Subscribe(new BoundsObserver(this));
 
             window.AddHandler(KeyDownEvent, OnStageKeyDown, RoutingStrategies.Tunnel);
@@ -133,6 +153,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public void OnCompleted() { }
             public void OnError(Exception error) { }
             public void OnNext(Rect value) => _o.OnLayerBounds(value);
+        }
+        private void FadeOutAndTeardown()
+        {
+            if (_tornDown || _fadingOut) return;
+            if (TutorialHead.EndingInstantly || _stage == null || !IsOnStage) { Teardown(); return; }
+            _fadingOut = true;
+            _closed = true;
+            try { _spotlightDelayTimer?.Stop(); } catch { /* already stopped */ }
+            _spotlightDelayTimer = null;
+            UnsubscribeAdvanceTrigger();
+            CoreTutorial.StepChanged -= OnSeamStepChanged;
+            CoreTutorialEvents.Event -= OnTutorialEvent;
+            CoreTutorial.Finished -= OnSeamFinished;
+            _stage.Transitions = OpacityFade(FadeOutDuration);
+            _stage.Opacity = 0;
+            _ = System.Threading.Tasks.Task.Delay(FadeOutDuration)
+                .ContinueWith(_ => Dispatcher.UIThread.Post(Teardown), System.Threading.Tasks.TaskScheduler.Default);
         }
 
         private void OnLayerBounds(Rect b)
@@ -170,7 +207,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Escape typed into one of the host's text boxes stays with that box.
         private void OnStageKeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.Key != Key.Escape || _tornDown || e.Source is TextBox) return;
+            if (e.Key != Key.Escape || _closed || e.Source is TextBox) return;
             SkipTutorial();
             e.Handled = true;
         }

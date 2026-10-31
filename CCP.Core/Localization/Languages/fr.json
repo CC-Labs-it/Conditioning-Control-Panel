@@ -1,4 +1,7 @@
 {
+  "deeper_editor_haptic_test_no_device": "Aucun appareil haptique connecté. Connectez-en un dans les paramètres pour le tester.",
+  "deeper_editor_haptic_test_row_off": "La ligne Deeper est désactivée dans l’onglet Haptique. Activez-la pour tester les motifs.",
+  "deeper_editor_haptic_test_premium": "Le test de l’appareil nécessite un accès Premium.",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",

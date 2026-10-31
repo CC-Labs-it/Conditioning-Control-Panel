@@ -1,4 +1,7 @@
 {
+  "deeper_editor_haptic_test_no_device": "触覚デバイスが接続されていません。設定で接続してからテストしてください。",
+  "deeper_editor_haptic_test_row_off": "触覚タブの Deeper 行がオフです。パターンを試すにはオンにしてください。",
+  "deeper_editor_haptic_test_premium": "デバイスのテストには Premium が必要です。",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

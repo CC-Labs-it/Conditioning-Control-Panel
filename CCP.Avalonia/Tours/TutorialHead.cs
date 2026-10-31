@@ -113,9 +113,13 @@ namespace ConditioningControlPanel.Avalonia.Tours
         }
 
         /// <summary>Panic: a tour ends at once, by the abandon route (never latched as walked).</summary>
+        internal static bool EndingInstantly { get; private set; }
+
         internal static void OnPanic()
         {
+            EndingInstantly = true;
             try { if (Service.IsActive) Service.Skip(); } catch { /* panic never throws */ }
+            finally { TutorialOverlay.CloseForPanic(); EndingInstantly = false; }
         }
 
         /// <summary>One snapshot per head step, so the overlay's "is this still my step" check holds.</summary>
