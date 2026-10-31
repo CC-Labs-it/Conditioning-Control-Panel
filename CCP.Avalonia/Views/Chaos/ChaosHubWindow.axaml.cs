@@ -35,8 +35,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///    switch / bench buy spend and save it with WPF's prices and gates (see <c>Shelf</c>).
     ///    The constructor reloads the save via <c>ChaosMeta.Init</c>, except under
     ///    <c>RenderProof.Rendering</c>, where it draws the in-memory state and writes nothing.
-    ///    Mantras and codex read Core catalogues and persisted discovery. Art overrides
-    ///    remain unported. Lesson/script locks and unlock cards are
+    ///    Still sample data: mantras and the codex (ChaosBoonPool / ChaosBubbleVariants are
+    ///    run-engine, head-side). ponytail: <c>ChaosArt</c> returns
+    ///    <c>System.Windows.Media.ImageSource</c>, so only its path half can ever move; the bench's
+    ///    remaining ChaosSfx cues are not ported. Lesson/script locks and unlock cards are
     ///    (<see cref="ChaosUnlockCardLayer"/>).
     ///  - The four partials the WPF class spans (Bench / Reveals / Lessons / Debug) are NOT in
     ///    this layer. <c>BuildBench</c> is inlined here over Core <c>ChaosBench</c>; reveal
@@ -1026,17 +1028,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF Bench.cs BenchBuy_Click: Core prices, gates, the gift and the save.</summary>
         private void BenchBuy(string id)
         {
-            // WPF ChaosHubWindow.Bench.cs:208-220: silent gated rows, one cue per purchase.
-            var item = ChaosBench.Items.FirstOrDefault(i => i.Id == id);
-            if (item == null) return;
-            if (ChaosBench.TryBuy(id) == ChaosBenchBuy.Denied)
-            {
-                if (!ChaosBench.IsOwned(item) && !ChaosBench.IsRankShort(item) && !ChaosBench.IsHazy(item))
-                    ChaosOverlayWindow.ChaosSfx.Play("ui_denied", 0.45f);
-                return;
-            }
-            var card = ChaosUnlockCardRules.ForBench(id);
-            if (card == null) ChaosOverlayWindow.ChaosSfx.Play("ui_unlock", 0.55f);
+            if (ChaosBench.TryBuy(id) == ChaosBenchBuy.Denied) return;
             RevealService.Sync("purchase");
             BuildBench();
             if (_herCornerCard.IsVisible) BuildHerCorner();
@@ -1044,7 +1036,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             BuildLoadoutTiles();
             RefreshTopBar();
             RefreshStats();
-            UnlockCards.Show(card);   // pockets only (WPF Bench.cs:234)
+            UnlockCards.Show(ChaosUnlockCardRules.ForBench(id));   // pockets only (WPF Bench.cs:234)
         }
 
         private void AfterBoonChange()
@@ -1459,20 +1451,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         // ============================ mantras box ============================
 
-        // WPF ChaosHubWindow.xaml.cs:1258-1349: catalogue, discovery and saved start selection.
         private void BuildMantras()
         {
             _mantrasHost.Children.Clear();
-            foreach (var b in ChaosBoonPool.All) _mantrasHost.Children.Add(MantraRow(b));
+            foreach (var b in Sample.Mantras) _mantrasHost.Children.Add(MantraRow(b));
         }
 
         /// <summary>One mantra/sin row: ??? until met in a draft; discovered mantras are clickable
         /// to set/clear the start mantra (gold ring + ★ on the whispered one). Sins are listed but
         /// can only be taken mid-fall, never chosen.</summary>
-        private Border MantraRow(ChaosBoon b)
+        private Border MantraRow(SampleMantra b)
         {
-            bool seen = ChaosMeta.IsDiscovered("boon:" + b.Id);
-            bool isStart = Live.EquippedStartBoon == b.Id;
+            bool seen = b.Seen;
+            bool isStart = Sample.StartMantra == b.Id;
             bool pickable = seen && !b.IsCurse;
             var accent = b.IsCurse ? Color.FromRgb(0xFF, 0x8A, 0x8A) : Color.FromRgb(0x9C, 0xE8, 0xA0);
 
@@ -1547,7 +1538,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 card.PointerPressed += (_, e) =>
                 {
                     if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
-                    ChaosMeta.EquipStartBoon(isStart ? null : b.Id);
+                    Sample.StartMantra = isStart ? null : b.Id;
                     BuildMantras();
                 };
             return card;
@@ -1584,20 +1575,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             host.Children.Add(SubHeader("VERBS · how to play down there"));
             foreach (var v in DiaryVerbs) host.Children.Add(VerbRow(v.Glyph, v.Name, v.Desc, maxWidth));
             host.Children.Add(SubHeader("WHAT YOU'VE MET"));
-            // WPF ChaosHubWindow.xaml.cs:1374-1395: pool plus seven special encounters.
-            foreach (var v in ChaosBubbleVariants.All)
-                Add(v.Id, v.Name, "●", Color.FromRgb((byte)(v.Tint >> 16), (byte)(v.Tint >> 8), (byte)v.Tint));
-            Add("darter", "White Rabbit", "✧", Color.FromRgb(0xFF, 0x4D, 0xC4));
-            Add("golden", "Lucky Bubble", "🍀", Color.FromRgb(0xFF, 0xD7, 0x00));
-            Add("echo", "The Echo", "◌", Color.FromRgb(0xC9, 0xC4, 0xE8));
-            Add("chaperone", "The Chaperone", "💞", Color.FromRgb(0x9C, 0xE8, 0xFF));
-            Add("tease", "The Tease", "✖", Color.FromRgb(0xB3, 0x0E, 0x2E));
-            Add("bound", "The Bound", "⛓", Color.FromRgb(0xFF, 0x69, 0xB4));
-            Add("brittle", "The Brittle", "◇", Color.FromRgb(0xD9, 0xEF, 0xFF));
-
-            void Add(string id, string name, string glyph, Color accent) => host.Children.Add(
-                CodexRow(name, ChaosBubbleVariants.DescriptionFor(id), glyph, accent,
-                    ChaosMeta.IsDiscovered("bubble:" + id), maxWidth));
+            foreach (var c in Sample.Codex)
+                host.Children.Add(CodexRow(c.Name, c.Desc, c.Glyph, c.Accent, c.Seen, maxWidth));
         }
 
         private Window? _diaryPopout;
@@ -2294,7 +2273,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         }
 
-        // Row projections used by the shelf builders.
+        // ============================ sample data ============================
+        // Mantras and the codex still stand in for head-side services (ChaosBoonPool and the
+        // bubble variants); the row records above are shared with the real shelves.
 
         private sealed record SampleHabit(string Id, string Glyph, string Name, string Desc, string Flavor,
                                           string Branch, int Cost, bool Owned, bool On);
@@ -2305,5 +2286,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                                          string RankFloor, string CapstoneDesc, bool IsActiveUse,
                                          double UseCooldownSec);
 
+        private sealed record SampleMantra(string Id, string Name, string Desc, string Flavor, bool Seen, bool IsCurse);
+
+        private sealed record SampleCodexEntry(string Name, string Desc, string Glyph, Color Accent, bool Seen);
+
+        /// <summary>Mantras + codex stand-ins. ponytail: needs ChaosBoonPool / ChaosBubbleVariants
+        /// (head-side, run engine), wired when they move to Core.</summary>
+        private static class Sample
+        {
+            public static string? StartMantra = "soft_focus";
+
+            public static readonly List<SampleMantra> Mantras = new()
+            {
+                new("soft_focus", "Soft Focus", "trances start 20% deeper, and hold.", "you stopped blinking a while ago.", true, false),
+                new("open_hands", "Open Hands", "treats pay double for the first wave.", "", true, false),
+                new("the_slip", "The Slip", "one free snap, no focus spent.", "", false, false),
+                new("greedy_little_thing", "Greedy Little Thing", "gold doubles, focus never refills.", "she wrote this one down.", true, true),
+            };
+
+            public static readonly List<SampleCodexEntry> Codex = new()
+            {
+                new("Flash", "a treat carrying an image. pops clean, pays focus back.", "●", Color.FromRgb(0xFF, 0x9F, 0xD0), true),
+                new("Subliminal", "a treat that whispers on the way past.", "●", Color.FromRgb(0xC9, 0xC4, 0xE8), true),
+                new("Spiral", "live. snap it or it takes the screen for a while.", "●", Color.FromRgb(0x8B, 0x5C, 0xF6), true),
+                new("White Rabbit", "fast, small, and worth chasing — everything slows when you catch one.", "✧", Color.FromRgb(0xFF, 0x4D, 0xC4), true),
+                new("Lucky Bubble", "pays gold on the spot. rare.", "🍀", Color.FromRgb(0xFF, 0xD7, 0x00), true),
+                new("The Echo", "it repeats the last thing that got through.", "◌", Color.FromRgb(0xC9, 0xC4, 0xE8), false),
+                new("The Chaperone", "it wants to help. it does not help.", "💞", Color.FromRgb(0x9C, 0xE8, 0xFF), false),
+                new("The Tease", "it never goes off. that is the whole trick.", "✖", Color.FromRgb(0xB3, 0x0E, 0x2E), false),
+                new("The Bound", "it hunts on relentless.", "⛓", Color.FromRgb(0xFF, 0x69, 0xB4), false),
+                new("The Brittle", "one touch and it shatters into three.", "◇", Color.FromRgb(0xD9, 0xEF, 0xFF), false),
+            };
+        }
     }
 }
