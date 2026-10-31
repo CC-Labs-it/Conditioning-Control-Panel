@@ -670,6 +670,27 @@
                     </Grid>
                 </Border>
             </StackPanel>
+            <Popup x:Name="Trailer" Placement="Bottom" VerticalOffset="6" IsLightDismissEnabled="False">
+                <Border x:Name="TrailerCard" Width="320" Background="#FF1A1230" BorderBrush="{DynamicResource GlassBorderBrush}"
+                        BorderThickness="1" Padding="8" PointerEntered="Trailer_PointerEntered" PointerExited="Trailer_PointerExited">
+                    <StackPanel>
+                        <Panel x:Name="TrailerPlate" Height="190" ClipToBounds="True" Background="#FF120C1F">
+                            <Image x:Name="TrailerArt" Stretch="UniformToFill" RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                        </Panel>
+                        <Grid Margin="6,8,6,0" ColumnDefinitions="*,Auto">
+                            <TextBlock x:Name="TxtTrailerFlavour" Grid.Column="0" FontFamily="Fredoka, Segoe UI" FontSize="14" FontWeight="Medium"
+                                       Foreground="{DynamicResource TextLightBrush}" TextWrapping="Wrap"/>
+                            <Border x:Name="TrailerBadgeHost" Grid.Column="1" VerticalAlignment="Top" Margin="8,0,0,0"/>
+                        </Grid>
+                        <Grid Margin="6,4,6,4" ColumnDefinitions="*,Auto">
+                            <TextBlock x:Name="TxtTrailerWhy" Grid.Column="0" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.85"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock x:Name="TxtTrailerFigure" Grid.Column="1" FontFamily="Consolas, Courier New" FontSize="13" FontWeight="Bold"
+                                       VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="8,0,0,0"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Popup>
         </Grid>
     </ScrollViewer>
 </UserControl>

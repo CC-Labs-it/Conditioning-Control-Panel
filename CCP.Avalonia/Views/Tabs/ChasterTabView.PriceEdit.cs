@@ -2,7 +2,6 @@
 // A row's stamp turns into a small box while no lock runs; Enter or clicking away keeps the new time, Esc
 // drops it, empty text puts the default back. Sign and clamp come from Core TabPriceEdit, so a cost stays
 // a cost and the day and backlog limits still decide what books. Rows without one fixed figure never edit.
-// ponytail: WPF re-opens the row trailer after an edit (OpenTrailer); the trailer is not ported.
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
@@ -153,6 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             PaintStamp(id);
             PaintMenuHelp();
+            if (_trailerShown && TrailerId == id) OpenTrailer();
         }
     }
 }

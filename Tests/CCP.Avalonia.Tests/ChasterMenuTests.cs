@@ -28,7 +28,7 @@ namespace CCP.Avalonia.Tests;
 /// :1176-1290, ChasterTabView.Help.cs, ChasterTabView.PriceEdit.cs; WPF ChasterTabRenderTests
 /// The_menu_is_one_row_per_price..., Clicking_the_figure_opens_a_box..., Escape_in_the_open_price_box...),
 /// against a fake Chaster and a memory-only SecretStore.</summary>
-public sealed class ChasterMenuTests
+public sealed partial class ChasterMenuTests
 {
     private const string NoLock = "[]";
     private static readonly string Locked =
@@ -52,7 +52,7 @@ public sealed class ChasterMenuTests
     private static async Task Run(Func<ChasterService, FakeChaster, ChasterTabView, Window, Task> body)
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
