@@ -149,6 +149,45 @@ public sealed class AwarenessPrivacyCardTests
     });
 
     [Fact]
+    public void PanicStopsHostedClocksAndDisarmsWipe() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("awareness");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.AwarenessTabView>("AwarenessTab")!;
+            var card = Assert.IsType<AwarenessPrivacyView>(tab.FindControl<ContentControl>("CompanionPrivacyHost")!.Content);
+            var blink = typeof(AwarenessPrivacyView).GetField("_blink",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            // No invented observer frames: explicitly exercise the public clock start seam.
+            card.StartCursorBlink();
+            card.WipeConfirm.ArmCommand.Execute(null);
+            Assert.True(card.IsRefreshing);
+            Assert.NotNull(blink.GetValue(card));
+            Assert.True(card.WipeConfirm.IsArmed);
+
+            var stop = PanicSurfaces.All.Single(s => s.Id == "awareness-companion").Stop;
+            stop(shell);
+            Assert.False(card.IsRefreshing);
+            Assert.Null(blink.GetValue(card));
+            Assert.False(card.WipeConfirm.IsArmed);
+            stop(shell); // safe when already stopped
+            stop(null); // safe off the desktop path
+        }
+        finally
+        {
+            shell.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
+    [Fact]
     public Task RefreshTicksOnlyWhileTheCardIsShown() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
