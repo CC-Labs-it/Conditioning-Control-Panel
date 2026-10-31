@@ -48,6 +48,14 @@ for (const r of runs) {
   if (r.audio) lines.push('- audio ' + JSON.stringify(r.audio));
   if (r.memory) lines.push('- memory ' + JSON.stringify(r.memory));
   if (r.scrolllerCheck) lines.push('- Scrolller block check: scrolller.com ' + r.scrolllerCheck.scrolller + ', control site ' + r.scrolllerCheck.control + (i && i.scrolllerFilter ? ' (filter: ' + i.scrolllerFilter + ')' : ''));
+  if (r.media) {
+    const bad = (r.media.decode || []).filter((d) => !/^ok/.test(d.result));
+    lines.push('- My files (real media): ' + JSON.stringify(r.media.byType) + ' of ' + r.media.poolSize + ' in the folder, fetched in ' + r.media.fetchMs + ' ms, handed in at '
+      + r.media.atS + ' s (phase ' + r.media.phaseAt + ') via ' + r.media.seam + '; blob urls the game made: ' + r.media.blobUrlsMadeByGame
+      + '; decode errors: ' + (bad.length ? bad.map((d) => d.name + ' ' + d.result).join('; ') : 'none') + (r.media.error ? '; ERROR ' + r.media.error : ''));
+    lines.push('- files: ' + (r.media.files || []).map((f) => f.name + ' (' + f.mb + ' MB)').join(', '));
+  }
+  if (r.cardMedia) lines.push('- world screens with the files while racing: ' + JSON.stringify(r.cardMedia));
   if (r.gamepads && r.gamepads.length) lines.push('- gamepads ' + JSON.stringify(r.gamepads));
   if (i) lines.push('- engine ' + JSON.stringify(i).slice(0, 700));
   if (r.errors && r.errors.length) lines.push('- errors: ' + r.errors.slice(0, 8).map((e) => '`' + e.replace(/`/g, "'") + '`').join('; '));

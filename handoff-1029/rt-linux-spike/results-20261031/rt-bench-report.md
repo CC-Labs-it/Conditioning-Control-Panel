@@ -65,6 +65,22 @@ Bar: fps mean >= 57, worst 1 s >= 50, no frame over 100 ms, course hash = Node. 
 | Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5) | wk-amd-high-rs1-art0 | WebKitGTK 2.54.1 | webgl2 | 1920x1022 dpr 1 | 14 | 9 | 131 | 60 | yes | BELOW BAR: mean 14, worst 1 s 9, 60 frames > 100 ms |
 | Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5) | wk-amd-high-rs1 | WebKitGTK 2.54.1 | webgl2 | 1920x1022 dpr 1 | 15 | 10 | 133 | 67 | yes | BELOW BAR: mean 15, worst 1 s 10, 67 frames > 100 ms |
 | Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5) | wk-amd-low-rs1 | WebKitGTK 2.54.1 | webgl2 | 1920x1022 dpr 1 | 17 | 11 | 131 | 55 | yes | BELOW BAR: mean 17, worst 1 s 11, 55 frames > 100 ms, tier mid |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | chrome-media-threshold | Chrome/155.0.0.0 Safari/537.36 | webgpu | 1920x1080 dpr 1 | 192 | 156 | 93 | 0 | yes | MEETS BAR |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | chrome-threshold | Chrome/155.0.0.0 Safari/537.36 | webgpu | 1920x1080 dpr 1 | 259 | 178 | 33.2 | 0 | yes | MEETS BAR |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | electron-gl-media-threshold | Electron 45.2.1 ozone=auto | webgl2 | 1920x994 dpr 1 | 218 | 174 | 122.1 | 1 | yes | BELOW BAR: 1 frames > 100 ms |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | electron-gl-threshold | Electron 45.2.1 ozone=auto | webgl2 | 1920x994 dpr 1 | 312 | 230 | 22.8 | 0 | yes | MEETS BAR |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | electron-gpu-threshold | Electron 45.2.1 ozone=auto | webgpu | 1920x994 dpr 1 | 264 | 187 | 21.9 | 0 | yes | MEETS BAR |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | firefox-media-threshold | Gecko/20100101 Firefox/158.0 | webgl2 | 1920x964 dpr 1 | 196 | 152 | 44 | 0 | yes | MEETS BAR |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | firefox-threshold | Gecko/20100101 Firefox/158.0 | webgl2 | 1920x964 dpr 1 | 221 | 36 | 59 | 0 | yes | BELOW BAR: worst 1 s 36 |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | wk-x11-nodmabuf-media-threshold | WebKitGTK 2.54.1 GDK=x11 no-dmabuf | - | - | - | - | - | - | - | FAIL (no result (engine died or timed out)) |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | wk-x11-nodmabuf-threshold-auto | WebKitGTK 2.54.1 GDK=x11 no-dmabuf | webgl2 | 1920x1022 dpr 1.3 | 21 | 11 | 102 | 2 | yes | BELOW BAR: mean 21, worst 1 s 11, 2 frames > 100 ms, tier mid |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | wk-x11-nodmabuf-threshold | WebKitGTK 2.54.1 GDK=x11 no-dmabuf | webgl2 | 1920x1022 dpr 1.3 | 20 | 8 | 220 | 16 | yes | BELOW BAR: mean 20, worst 1 s 8, 16 frames > 100 ms |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | em1-same-pick | Electron 45.2.1 ozone=auto | webgl2 | 1920x994 dpr 1 | 218 | 175 | 131.5 | 1 | yes | BELOW BAR: 1 frames > 100 ms |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | em2-stills-le1MB | Electron 45.2.1 ozone=auto | webgl2 | 1920x994 dpr 1 | 276 | 208 | 22.3 | 0 | yes | MEETS BAR |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | em3-gifs-ge20MB | Electron 45.2.1 ozone=auto | webgl2 | 1920x994 dpr 1 | 266 | 211 | 50.7 | 0 | yes | MEETS BAR |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | em4-clips-le50MB | Electron 45.2.1 ozone=auto | webgl2 | 1920x994 dpr 1 | 187 | 177 | 18.6 | 0 | yes | MEETS BAR |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | flatpak-same-pick | WebKitGTK 2.54.1 flatpak GDK=x11 no-dmabuf | webgl2 | 1920x1022 dpr 1.3 | 21 | 9 | 119 | 16 | yes | BELOW BAR: mean 21, worst 1 s 9, 16 frames > 100 ms |
+| RTX 4080 (01:00.0, NVIDIA 615.78.08) | wk-pictures-only | WebKitGTK 2.54.1 GDK=x11 no-dmabuf | webgl2 | 1920x1022 dpr 1.3 | 22 | 9 | 112 | 12 | yes | BELOW BAR: mean 22, worst 1 s 9, 12 frames > 100 ms |
 
 ## Notes (Mich's box, 2026-10-31, run by the port's worker)
 
@@ -291,3 +307,95 @@ What this means:
 - The early 57-58 fps smoke means on the 4080 came from a 1108x830 window (CSS px) and were also cap-bound.
 - The full-size WebKitGTK rows (11-25 fps) are far below the cap. Their verdicts and the pixels-versus-assets answer
   do not depend on it.
+
+### Real media ("My files") on the RTX 4080, Threshold
+Source folder: `/home/mich/ccp media`, served read-only by `bench-server.mjs --media` (148 files: 85 gif, 32 mp4, 14 jpg,
+9 png, 8 webp). Nothing was written to the folder.
+
+How the files go in:
+- Before boot, spike.js stores the files choice (`glassroad.mediaSource.v1 = files`).
+- It then hands the files in through the narrowest seam that reaches the game's own pick path. That seam is the
+  document event `glassroad-course-media` with `{kind:'files', files}`. It is what `hud/courseMedia.js` emits after its
+  "Choose files" picker. boot.js then runs `pickFiles` → `library.setFiles` → `setSource('files')`.
+- The picker itself (`openFilePicker`) needs a real user click, so it cannot be reached directly.
+- boot.js only listens from the 'garage' milestone while the state is boot/menu. spike.js therefore dispatches at that
+  milestone; every media run reports `phase boot` at the dispatch.
+
+Which files:
+- The pick uses a seeded shuffle of the same pool the game samples (12 = MAX_FEED_ROWS), so every engine gets the same
+  files. The game then made 12 blob URLs in every engine.
+- The same pick everywhere was 10 GIF (1.8-59.6 MB), 1 MP4 ("demon girl.mp4", 277 MB) and 1 JPG: 419 MB in total.
+- The files are fetched into memory as Blobs. A real picker hands lazily-read Files, so memory use is not comparable.
+
+Decode results (each file loaded once more after the race):
+- Electron, Chrome, Firefox: all 12 files OK.
+- System WebKitGTK: the WebKitWebProcess crashed (SIGABRT) about 10 s into the media row. Its log shows "GStreamer
+  element autoaudiosink not found" and then GLib-CRITICAL NULL instances. This box has no gst-plugins-good, which is
+  where autoaudiosink lives. With pictures only (12 GIF/JPG/PNG/WebP files, no clip) the system WebKitGTK races
+  normally. So the crash comes from the clip's GStreamer pipeline.
+- Flatpak GNOME 50 WebKitGTK: it does not crash with the same pick. The MP4 fails with MediaError 4 (source not
+  supported) even though `canPlayType('video/mp4; avc1')` answers "probably". Clips never play there (0 clips held).
+
+| Engine (same run, side by side) | default rows: fps mean / worst 1 s / longest frame ms | real media | what changed |
+| --- | --- | --- | --- |
+| Electron 45.2.1 WebGL2 (Wayland) | 312 / 230 / 22.8 | 218 / 174 / 122.1 (1 frame > 100 ms) | -30 % mean; one 122 ms stall puts it BELOW BAR. Reproduced on a re-run: 218 / 175 / 131.5, again 1 frame > 100 ms |
+| Chromium 155 | 259 / 178 / 33.2 | 192 / 156 / 93 | -26 % mean; still meets the bar |
+| Firefox 158 | 221 / 36 / 59 (one dip) | 196 / 152 / 44 | -11 % mean; meets the bar |
+| WebKitGTK system, XWayland, no-DMABuf | 20 / 8 / 220 | crash (WebKitWebProcess SIGABRT, GStreamer autoaudiosink missing) | pictures only: 22 / 9 / 112 |
+| WebKitGTK Flatpak, XWayland, no-DMABuf | 22 / 11 / 99 (earlier run) | 21 / 9 / 119, MP4 error 4 | no change in fps; the clip never shows |
+
+The iGPU media row was not run: the user was seeing lag.
+
+### My files: empty screens (measured; the game was not changed)
+Setup: Electron WebGL2 on the 4080, Threshold, one run per row, nothing else running.
+Per second, spike.js reads `cardMedia.webPictures` (faces shown, clips held, clips playing). It also reads the
+`.gr-web-media` DOM, which has one face per slot and 129 slots in total:
+- `pending` = a face `<img>` that has a src but has not finished loading.
+
+| row | files | fps / worst 1 s / longest frame ms | faces max / median | pending (max) | clips playing / held (max) |
+| --- | --- | --- | --- | --- | --- |
+| 1 same pick | 10 GIF + 1 MP4 (277 MB) + 1 JPG, 419 MB | 218 / 175 / 131.5 | 39 / 31 | 0 | 4 / 6 |
+| 2 stills <= 1 MB | 8 JPG + 4 PNG, 2 MB | 276 / 208 / 22.3 | 39 / 31 | 0 | 0 / 0 |
+| 3 GIFs >= 20 MB | 6 GIF (20.7-70.4 MB, the whole pool), 233 MB | 266 / 211 / 50.7 | 39 / 31 | 0 | 0 / 0 |
+| 4 (extra) clips only, MP4 <= 50 MB | 12 MP4, 363 MB | 187 / 177 / 18.6 | 4 / 4 | 0 | 4 / 8 |
+| WebKitGTK, pictures only | 6 GIF + 2 JPG + 1 PNG + 3 WebP | 22 / 9 / 112 | 40 / 30 | 0 | 0 / 0 |
+
+Findings:
+- (a) Confirmed. The face count is the same in rows 1-3: a median of 31 faces in view filled, whatever the pictures
+  are. With clips only (row 4) the faces drop to exactly 4, which is the maxPlaying cap.
+  - Every clip face beyond the 4 nearest falls back to `src.poster`. A local file has no poster, so `setStill('')`
+    runs and the face is hidden. That leaves about 27 of the about 31 screens in view empty.
+  - In the same pick (1 clip of 12 files), 6 faces held the clip and 4 played; the faces mapped to that clip beyond
+    the cap stayed dark.
+  - The more clips a player picks, the more screens stay empty.
+- (b) Not confirmed in Electron. 20-70 MB GIFs filled as many faces as 1 MB stills (median 31 in both). No face was
+  ever caught with an unloaded `<img>` (pending 0) at 1 s sampling.
+  - Each face is still a separate `<img>` decode of the blob URL, re-done when the 7 s turn moves it to the next file.
+  - On this machine those reloads finish within the 1 s sampling interval. A slower machine, or WebKitGTK at
+    20 fps, may show the gap. Sampling faster than 1 s would be needed to prove or rule it out.
+- (c) Confirmed, and it matters for the WebKitGTK fallback ("Play in the app (slower)"):
+  - System WebKitGTK on a box without gst-plugins-good crashes as soon as a picked clip loads.
+  - Flatpak WebKitGTK does not crash, but cannot decode the MP4, so clip faces stay empty there too.
+- Hitches: only the mixed pick made a > 100 ms frame. Stills, big GIFs and small clips alone did not. The likely
+  culprit is the 277 MB MP4 or the 59.6 MB GIF being set up mid-race; this was not isolated.
+
+Suggested fixes for CB (in `render/webMediaScreens.js` / `host/localLibrary.js`):
+1. Give over-cap clips a still from `feed.stillFor(i + turn)` instead of hiding them. Alternatively, keep the clip's
+   first frame: a local clip has no poster.
+2. On a turn, keep showing the previous picture until the new copy has loaded: `img.decode()` on the new src before
+   swapping. A face then never blinks empty, even where decoding is slow.
+3. Optionally, make `pickFiles` down-select very large GIFs/clips, or prefer smaller ones when sampling 12 of many.
+4. For the WebKitGTK fallback, choose one:
+   - require gst-plugins-good (autoaudiosink) and an H.264 decoder, or detect them;
+   - or refuse clips in "My files" on WebKitGTK, which avoids the WebKitWebProcess abort.
+
+### Kit fix 7 (real media)
+- `bench-server.mjs --media <dir>` serves the folder read-only at `/spike-media/` with `index.json`.
+- `spike.js ?spikeMedia=files`:
+  - stores the files choice before boot;
+  - fetches a seeded pick of 12 into Files and hands it in through `glassroad-course-media` at the garage milestone;
+  - records the files used, blob URLs, a decode check per file, and world-screen faces per second.
+  - Optional narrowing: `spikeMediaExt`, `spikeMediaMinMB`, `spikeMediaMaxMB`, `spikeMediaSeed`.
+- `run.sh MEDIA_DIR=<folder>` adds one "My files" row per engine on the first course: `wk*-media-`, `electron*-gl-media-`,
+  `chrome-media-`, `firefox-media-`. Default rows are unchanged.
+- The reports show a "My files" column and detail lines.

@@ -8,6 +8,8 @@
 # Knobs (env): RACE_SECONDS=45 SIZE=1920x1080 REF=feat/glassroad-a GLASSROAD_DIR=<existing glassroad tree>
 #              NO_FLATPAK=1 NO_ELECTRON=1 NO_BROWSERS=1 COURSES="threshold goonworks" OUT=<dir>
 #              WK_GDK="native x11 x11nodmabuf" FLATPAK_ENV="K=V ..."
+#              MEDIA_DIR=<folder of pictures/clips>: one extra "My files" row per engine on the first course, the
+#              folder served read-only by the bench server (spike.js ?spikeMedia=files)
 set -u
 KIT="$(cd "$(dirname "$0")" && pwd)"
 STAMP="$(date +%Y%m%d-%H%M)"
@@ -91,7 +93,9 @@ echo "glassroad: $SHA ($REF)" >> "$OUT/system.txt"
 say "game tree $SHA"
 
 # 4. the bench server
-"$NODE" "$KIT/bench-server.mjs" --root "$GR" --out "$OUT" --port $PORT >>"$LOG" 2>&1 &
+MEDIA_ARGS=(); [ -n "${MEDIA_DIR:-}" ] && MEDIA_ARGS=(--media "$MEDIA_DIR")
+MC="$(echo $COURSES | cut -d' ' -f1)"; MC="${MC:-threshold}"   # the course of the "My files" rows
+"$NODE" "$KIT/bench-server.mjs" --root "$GR" --out "$OUT" --port $PORT ${MEDIA_ARGS[@]+"${MEDIA_ARGS[@]}"} >>"$LOG" 2>&1 &
 SERVER=$!
 trap 'kill $SERVER 2>/dev/null' EXIT
 for i in $(seq 1 50); do curl -fs "http://127.0.0.1:$PORT/__spike/hashes" >/dev/null 2>&1 && break; sleep 0.2; done
@@ -144,6 +148,7 @@ if [ -n "$PY" ]; then
       [ $first = 1 ] && { extra=(--scrolller-block); sc="&spikeScrolller=check"; first=0; }
       case_run "wk$t-$c" "quality=high&track=$c$sc" env $(gdk_env $g) "$PY" "$KIT/wk-bench.py" --size "$SIZE" --info "$OUT/engine/wk$t-$c.info.json" ${extra[@]+"${extra[@]}"} @URL@
     done
+    [ -n "${MEDIA_DIR:-}" ] && case_run "wk$t-media-$MC" "quality=high&track=$MC&spikeMedia=files" env $(gdk_env $g) "$PY" "$KIT/wk-bench.py" --size "$SIZE" --info "$OUT/engine/wk$t-media-$MC.info.json" @URL@
     # the auto ladder on this box (what a player gets with Quality on Auto)
     case_run "wk$t-threshold-auto" "track=threshold" env $(gdk_env $g) "$PY" "$KIT/wk-bench.py" --size "$SIZE" --info "$OUT/engine/wk$t-threshold-auto.info.json" @URL@
   done
@@ -208,6 +213,7 @@ if [ -z "${NO_ELECTRON:-}" ]; then
       t=""; [ "$oz" = auto ] || t="-$oz"
       for c in $COURSES; do
         case_run "electron$t-gl-$c" "quality=high&track=$c&renderer=webgl2" env SPIKE_OZONE="${oz#auto}" SPIKE_SIZE="$SIZE" SPIKE_INFO="$OUT/engine/electron$t-gl-$c.info.json" "$EDIR/electron" --no-sandbox "$KIT/electron-main.js" @URL@
+        [ -n "${MEDIA_DIR:-}" ] && [ "$c" = "$MC" ] && case_run "electron$t-gl-media-$c" "quality=high&track=$c&renderer=webgl2&spikeMedia=files" env SPIKE_OZONE="${oz#auto}" SPIKE_SIZE="$SIZE" SPIKE_INFO="$OUT/engine/electron$t-gl-media-$c.info.json" "$EDIR/electron" --no-sandbox "$KIT/electron-main.js" @URL@
         case_run "electron$t-gpu-$c" "quality=high&track=$c" env SPIKE_OZONE="${oz#auto}" SPIKE_WEBGPU=1 SPIKE_SIZE="$SIZE" SPIKE_INFO="$OUT/engine/electron$t-gpu-$c.info.json" "$EDIR/electron" --no-sandbox "$KIT/electron-main.js" @URL@
       done
     done
@@ -224,6 +230,8 @@ if [ -z "${NO_BROWSERS:-}" ]; then
         case_run "chrome-$c" "quality=high&track=$c" $b --user-data-dir="$OUT/profiles/chrome-$c" --mute-audio --no-first-run --no-default-browser-check \
           --autoplay-policy=no-user-gesture-required --window-size="$W,$H" --window-position=0,0 "--app=@URL@"
       done
+      [ -n "${MEDIA_DIR:-}" ] && case_run "chrome-media-$MC" "quality=high&track=$MC&spikeMedia=files" $b --user-data-dir="$OUT/profiles/chrome-media" --mute-audio --no-first-run --no-default-browser-check \
+          --autoplay-policy=no-user-gesture-required --window-size="$W,$H" --window-position=0,0 "--app=@URL@"
       break
     fi
   done
@@ -234,6 +242,10 @@ if [ -z "${NO_BROWSERS:-}" ]; then
         'user_pref("datareporting.policy.dataSubmissionEnabled", false);' 'user_pref("media.autoplay.default", 0);' > "$P/user.js"
       case_run "firefox-$c" "quality=high&track=$c" firefox --no-remote --profile "$P" -width "$W" -height "$H" @URL@
     done
+    if [ -n "${MEDIA_DIR:-}" ]; then
+      P="$OUT/profiles/firefox-media"; mkdir -p "$P"; cp "$OUT/profiles/firefox-$MC/user.js" "$P/" 2>/dev/null
+      case_run "firefox-media-$MC" "quality=high&track=$MC&spikeMedia=files" firefox --no-remote --profile "$P" -width "$W" -height "$H" @URL@
+    fi
   fi
 fi
 

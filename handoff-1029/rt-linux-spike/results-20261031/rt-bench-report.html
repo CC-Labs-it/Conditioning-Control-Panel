@@ -16,12 +16,12 @@ svg .w1{fill:var(--w1)}svg .ms{fill:var(--ms)}svg .ref{stroke:var(--fg);stroke-d
 <h1>Racing Thoughts 3D on Linux - bench report</h1>
 <p class="mut">Bar (B2, owner): fps mean &ge; 57, worst 1 s &ge; 50, no frame over 100 ms, course hash = Node. Full look pinned (quality high, render scale 1) unless the run ends in -auto. vsync on.</p>
 <h2>Chart</h2>
-<svg viewBox="0 0 960 2118" width="100%" role="img" aria-label="fps mean, worst second and worst frame per run" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 960 2662" width="100%" role="img" aria-label="fps mean, worst second and worst frame per run" xmlns="http://www.w3.org/2000/svg">
 <text x="330" y="14" class="ax">fps: mean (bar) / worst 1 s (thin); bar 57 / 50</text>
 <text x="655" y="14" class="ax">worst frame ms; bar 100</text>
-<line x1="379.1666666666667" x2="379.1666666666667" y1="20" y2="2112" class="ref"/>
-<line x1="373.12865497076024" x2="373.12865497076024" y1="20" y2="2112" class="ref2"/>
-<line x1="701.8563639461578" x2="701.8563639461578" y1="20" y2="2112" class="ref"/>
+<line x1="379.1666666666667" x2="379.1666666666667" y1="20" y2="2656" class="ref"/>
+<line x1="373.12865497076024" x2="373.12865497076024" y1="20" y2="2656" class="ref2"/>
+<line x1="701.8563639461578" x2="701.8563639461578" y1="20" y2="2656" class="ref"/>
 <text x="322" y="49" class="lb" text-anchor="end">RTX 4080 · chrome-goonworks</text>
 <rect x="330" y="36" width="252.73391812865498" height="14" class="bad"/>
 <text x="586.733918128655" y="47" class="v">293</text>
@@ -339,70 +339,193 @@ svg .w1{fill:var(--w1)}svg .ms{fill:var(--ms)}svg .ref{stroke:var(--fg);stroke-d
 <text x="343.48830409356725" y="2101" class="v">11</text>
 <rect x="655" y="2076" width="61.381836769466645" height="14" class="bad"/>
 <text x="720.3818367694666" y="2087" class="v">131</text>
+<text x="322" y="2123" class="lb" text-anchor="end">RTX 4080 · chrome-media-threshold</text>
+<rect x="330" y="2110" width="165.6140350877193" height="14" class="ok"/>
+<text x="499.6140350877193" y="2121" class="v">192</text>
+<rect x="330" y="2127" width="134.56140350877195" height="7" class="w1"/>
+<text x="468.56140350877195" y="2135" class="v">156</text>
+<rect x="655" y="2110" width="43.57641846992669" height="14" class="ms"/>
+<text x="702.5764184699267" y="2121" class="v">93</text>
+<text x="322" y="2157" class="lb" text-anchor="end">RTX 4080 · chrome-threshold</text>
+<rect x="330" y="2144" width="223.406432748538" height="14" class="ok"/>
+<text x="557.406432748538" y="2155" class="v">259</text>
+<rect x="330" y="2161" width="153.53801169590645" height="7" class="w1"/>
+<text x="487.53801169590645" y="2169" class="v">178</text>
+<rect x="655" y="2144" width="15.556312830124398" height="14" class="ms"/>
+<text x="674.5563128301244" y="2155" class="v">33.2</text>
+<text x="322" y="2191" class="lb" text-anchor="end">RTX 4080 · electron-gl-media-threshold</text>
+<rect x="330" y="2178" width="188.0409356725146" height="14" class="bad"/>
+<text x="522.0409356725146" y="2189" class="v">218</text>
+<rect x="330" y="2195" width="150.0877192982456" height="7" class="w1"/>
+<text x="484.0877192982456" y="2203" class="v">174</text>
+<rect x="655" y="2178" width="57.21162037825866" height="14" class="bad"/>
+<text x="716.2116203782587" y="2189" class="v">122.1</text>
+<text x="322" y="2225" class="lb" text-anchor="end">RTX 4080 · electron-gl-threshold</text>
+<rect x="330" y="2212" width="269.1228070175439" height="14" class="ok"/>
+<text x="603.1228070175439" y="2223" class="v">312</text>
+<rect x="330" y="2229" width="198.39181286549706" height="7" class="w1"/>
+<text x="532.3918128654971" y="2237" class="v">230</text>
+<rect x="655" y="2212" width="10.683250979723994" height="14" class="ms"/>
+<text x="669.683250979724" y="2223" class="v">22.8</text>
+<text x="322" y="2259" class="lb" text-anchor="end">RTX 4080 · electron-gpu-threshold</text>
+<rect x="330" y="2246" width="227.71929824561403" height="14" class="ok"/>
+<text x="561.719298245614" y="2257" class="v">264</text>
+<rect x="330" y="2263" width="161.30116959064327" height="7" class="w1"/>
+<text x="495.30116959064327" y="2271" class="v">187</text>
+<rect x="655" y="2246" width="10.26154370420852" height="14" class="ms"/>
+<text x="669.2615437042085" y="2257" class="v">21.9</text>
+<text x="322" y="2293" class="lb" text-anchor="end">RTX 4080 · firefox-media-threshold</text>
+<rect x="330" y="2280" width="169.0643274853801" height="14" class="ok"/>
+<text x="503.0643274853801" y="2291" class="v">196</text>
+<rect x="330" y="2297" width="131.1111111111111" height="7" class="w1"/>
+<text x="465.1111111111111" y="2305" class="v">152</text>
+<rect x="655" y="2280" width="20.616800136309394" height="14" class="ms"/>
+<text x="679.6168001363094" y="2291" class="v">44</text>
+<text x="322" y="2327" class="lb" text-anchor="end">RTX 4080 · firefox-threshold</text>
+<rect x="330" y="2314" width="190.62865497076018" height="14" class="bad"/>
+<text x="524.6286549707602" y="2325" class="v">221</text>
+<rect x="330" y="2331" width="31.05263157894734" height="7" class="w1"/>
+<text x="365.05263157894734" y="2339" class="v">36</text>
+<rect x="655" y="2314" width="27.645254728233112" height="14" class="ms"/>
+<text x="686.6452547282331" y="2325" class="v">59</text>
+<text x="322" y="2361" class="lb" text-anchor="end">RTX 4080 · wk-x11-nodmabuf-media-threshold</text>
+<text x="334" y="2361" class="fail">no result (engine died or timed out)</text>
+<text x="322" y="2395" class="lb" text-anchor="end">RTX 4080 · wk-x11-nodmabuf-threshold-auto</text>
+<rect x="330" y="2382" width="18.114035087719287" height="14" class="bad"/>
+<text x="352.1140350877193" y="2393" class="v">21</text>
+<rect x="330" y="2399" width="9.488304093567251" height="7" class="w1"/>
+<text x="343.48830409356725" y="2407" class="v">11</text>
+<rect x="655" y="2382" width="47.79349122508097" height="14" class="bad"/>
+<text x="706.793491225081" y="2393" class="v">102</text>
+<text x="322" y="2429" class="lb" text-anchor="end">RTX 4080 · wk-x11-nodmabuf-threshold</text>
+<rect x="330" y="2416" width="17.251461988304072" height="14" class="bad"/>
+<text x="351.2514619883041" y="2427" class="v">20</text>
+<rect x="330" y="2433" width="6.900584795321663" height="7" class="w1"/>
+<text x="340.90058479532166" y="2441" class="v">8</text>
+<rect x="655" y="2416" width="103.08400068154708" height="14" class="bad"/>
+<text x="762.0840006815471" y="2427" class="v">220</text>
+<text x="322" y="2463" class="lb" text-anchor="end">RTX 4080 · em1-same-pick</text>
+<rect x="330" y="2450" width="188.0409356725146" height="14" class="bad"/>
+<text x="522.0409356725146" y="2461" class="v">218</text>
+<rect x="330" y="2467" width="150.95029239766086" height="7" class="w1"/>
+<text x="484.95029239766086" y="2475" class="v">175</text>
+<rect x="655" y="2450" width="61.61611858919753" height="14" class="bad"/>
+<text x="720.6161185891975" y="2461" class="v">131.5</text>
+<text x="322" y="2497" class="lb" text-anchor="end">RTX 4080 · em2-stills-le1MB</text>
+<rect x="330" y="2484" width="238.0701754385965" height="14" class="ok"/>
+<text x="572.0701754385965" y="2495" class="v">276</text>
+<rect x="330" y="2501" width="179.41520467836256" height="7" class="w1"/>
+<text x="513.4152046783626" y="2509" class="v">208</text>
+<rect x="655" y="2484" width="10.448969159993226" height="14" class="ms"/>
+<text x="669.4489691599932" y="2495" class="v">22.3</text>
+<text x="322" y="2531" class="lb" text-anchor="end">RTX 4080 · em3-gifs-ge20MB</text>
+<rect x="330" y="2518" width="229.44444444444446" height="14" class="ok"/>
+<text x="563.4444444444445" y="2529" class="v">266</text>
+<rect x="330" y="2535" width="182.00292397660814" height="7" class="w1"/>
+<text x="516.0029239766081" y="2543" class="v">211</text>
+<rect x="655" y="2518" width="23.756176520701956" height="14" class="ms"/>
+<text x="682.756176520702" y="2529" class="v">50.7</text>
+<text x="322" y="2565" class="lb" text-anchor="end">RTX 4080 · em4-clips-le50MB</text>
+<rect x="330" y="2552" width="161.30116959064327" height="14" class="ok"/>
+<text x="495.30116959064327" y="2563" class="v">187</text>
+<rect x="330" y="2569" width="152.67543859649123" height="7" class="w1"/>
+<text x="486.67543859649123" y="2577" class="v">177</text>
+<rect x="655" y="2552" width="8.715283693985384" height="14" class="ms"/>
+<text x="667.7152836939854" y="2563" class="v">18.6</text>
+<text x="322" y="2599" class="lb" text-anchor="end">RTX 4080 · flatpak-same-pick</text>
+<rect x="330" y="2586" width="18.114035087719287" height="14" class="bad"/>
+<text x="352.1140350877193" y="2597" class="v">21</text>
+<rect x="330" y="2603" width="7.763157894736821" height="7" class="w1"/>
+<text x="341.7631578947368" y="2611" class="v">9</text>
+<rect x="655" y="2586" width="55.75907309592776" height="14" class="bad"/>
+<text x="714.7590730959278" y="2597" class="v">119</text>
+<text x="322" y="2633" class="lb" text-anchor="end">RTX 4080 · wk-pictures-only</text>
+<rect x="330" y="2620" width="18.976608187134502" height="14" class="bad"/>
+<text x="352.9766081871345" y="2631" class="v">22</text>
+<rect x="330" y="2637" width="7.763157894736821" height="7" class="w1"/>
+<text x="341.7631578947368" y="2645" class="v">9</text>
+<rect x="655" y="2620" width="52.47912761969667" height="14" class="bad"/>
+<text x="711.4791276196967" y="2631" class="v">112</text>
 </svg>
 <h2>Runs</h2>
-<table><thead><tr><th>GPU</th><th>run</th><th>engine</th><th>backend</th><th>window (css px)</th><th>fps mean</th><th>1% low</th><th>worst 1 s</th><th>worst frame ms</th><th>>50 ms</th><th>>100 ms</th><th>garage s</th><th>warm s</th><th>hash</th><th>verdict</th></tr></thead><tbody>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>chrome-goonworks</td><td>Chrome/155.0.0.0 Safari/537.36</td><td>webgpu</td><td>1920x1080 dpr 1</td><td>293</td><td>104</td><td>39</td><td>172.9</td><td>3</td><td>1</td><td>2.95</td><td>6.83</td><td>yes</td><td>BELOW BAR: worst 1 s 39, 1 frames &gt; 100 ms</td></tr>
-<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>chrome-threshold</td><td>Chrome/155.0.0.0 Safari/537.36</td><td>webgpu</td><td>1920x1080 dpr 1</td><td>266</td><td>109</td><td>176</td><td>35.1</td><td>0</td><td>0</td><td>1.79</td><td>6.66</td><td>yes</td><td>MEETS BAR</td></tr>
-<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-gl-goonworks</td><td>Electron 45.2.1 ozone=auto</td><td>webgl2</td><td>1920x994 dpr 1</td><td>342</td><td>238</td><td>270</td><td>17.2</td><td>0</td><td>0</td><td>2.52</td><td>6.41</td><td>yes</td><td>MEETS BAR</td></tr>
-<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-gl-threshold</td><td>Electron 45.2.1 ozone=auto</td><td>webgl2</td><td>1920x994 dpr 1</td><td>310</td><td>200</td><td>232</td><td>20.1</td><td>0</td><td>0</td><td>1.74</td><td>6.25</td><td>yes</td><td>MEETS BAR</td></tr>
-<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-gpu-goonworks</td><td>Electron 45.2.1 ozone=auto</td><td>webgpu</td><td>1920x994 dpr 1</td><td>302</td><td>122</td><td>202</td><td>18</td><td>0</td><td>0</td><td>2.38</td><td>6.13</td><td>yes</td><td>MEETS BAR</td></tr>
-<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-gpu-threshold</td><td>Electron 45.2.1 ozone=auto</td><td>webgpu</td><td>1920x994 dpr 1</td><td>256</td><td>109</td><td>175</td><td>31</td><td>0</td><td>0</td><td>1.46</td><td>6.28</td><td>yes</td><td>MEETS BAR</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-x11-gl-goonworks</td><td>Electron 45.2.1 ozone=x11</td><td>-</td><td>1108x1080 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-x11-gl-threshold</td><td>Electron 45.2.1 ozone=x11</td><td>-</td><td>1108x1052 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-x11-gpu-goonworks</td><td>Electron 45.2.1 ozone=x11</td><td>webgpu</td><td>1108x1052 dpr 1</td><td>318</td><td>179</td><td>217</td><td>21.4</td><td>0</td><td>0</td><td>2.57</td><td>5.87</td><td>yes</td><td>MEETS BAR</td></tr>
-<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-x11-gpu-threshold</td><td>Electron 45.2.1 ozone=x11</td><td>webgl2</td><td>1108x1052 dpr 1</td><td>166</td><td>100</td><td>106</td><td>68.2</td><td>1</td><td>0</td><td>1.78</td><td>8.92</td><td>yes</td><td>MEETS BAR</td></tr>
-<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>firefox-goonworks</td><td>Gecko/20100101 Firefox/158.0</td><td>webgl2</td><td>1920x964 dpr 1</td><td>250</td><td>125</td><td>174</td><td>33</td><td>0</td><td>0</td><td>3.18</td><td>8.13</td><td>yes</td><td>MEETS BAR</td></tr>
-<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>firefox-threshold</td><td>Gecko/20100101 Firefox/158.0</td><td>webgl2</td><td>1920x964 dpr 1</td><td>226</td><td>125</td><td>171</td><td>46</td><td>0</td><td>0</td><td>2.34</td><td>7.45</td><td>yes</td><td>MEETS BAR</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-goonworks</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-threshold</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-x11-goonworks</td><td>WebKitGTK 2.54.1 flatpak GDK=x11</td><td>-</td><td>1920x1022 dpr 1.3</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-x11-nodmabuf-goonworks</td><td>WebKitGTK 2.54.1 flatpak GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>22</td><td>12</td><td>11</td><td>98</td><td>138</td><td>0</td><td>6.01</td><td>21.11</td><td>yes</td><td>BELOW BAR: mean 22, worst 1 s 11</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-x11-nodmabuf-threshold</td><td>WebKitGTK 2.54.1 flatpak GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>22</td><td>11</td><td>11</td><td>99</td><td>145</td><td>0</td><td>3.45</td><td>21.06</td><td>yes</td><td>BELOW BAR: mean 22, worst 1 s 11</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-x11-threshold</td><td>WebKitGTK 2.54.1 flatpak GDK=x11</td><td>-</td><td>1920x1022 dpr 1.3</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-goonworks</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-threshold-auto</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-threshold</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-goonworks</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>-</td><td>1920x1022 dpr 1.3</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-nodmabuf-goonworks</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>24</td><td>12</td><td>11</td><td>94</td><td>83</td><td>0</td><td>6.86</td><td>19.59</td><td>yes</td><td>BELOW BAR: mean 24, worst 1 s 11</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-nodmabuf-threshold-auto</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>21</td><td>8</td><td>7</td><td>188</td><td>206</td><td>37</td><td>3.18</td><td>15.72</td><td>yes</td><td>BELOW BAR: mean 21, worst 1 s 7, 37 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-nodmabuf-threshold</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>21</td><td>11</td><td>11</td><td>119</td><td>198</td><td>3</td><td>3.11</td><td>14.78</td><td>yes</td><td>BELOW BAR: mean 21, worst 1 s 11, 3 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-threshold-auto</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>-</td><td>1920x1022 dpr 1.3</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-threshold</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>-</td><td>1920x1022 dpr 1.3</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-threshold-auto</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-nodmabuf-threshold-auto</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>22</td><td>10</td><td>10</td><td>112</td><td>142</td><td>8</td><td>3.43</td><td>16</td><td>yes</td><td>BELOW BAR: mean 22, worst 1 s 10, 8 frames &gt; 100 ms, tier mid</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-threshold-auto</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>-</td><td>1920x1022 dpr 1.3</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>chrome-goonworks</td><td>Chrome/155.0.0.0 Safari/537.36</td><td>-</td><td>1920x1080 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>chrome-threshold</td><td>Chrome/155.0.0.0 Safari/537.36</td><td>-</td><td>1920x1080 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-gl-goonworks</td><td>Electron 45.2.1 ozone=auto</td><td>-</td><td>1108x1052 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-gl-threshold</td><td>Electron 45.2.1 ozone=auto</td><td>-</td><td>1920x994 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-gpu-goonworks</td><td>Electron 45.2.1 ozone=auto</td><td>-</td><td>1108x1052 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-gpu-threshold</td><td>Electron 45.2.1 ozone=auto</td><td>-</td><td>1108x1052 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-x11-gl-goonworks</td><td>Electron 45.2.1 ozone=x11</td><td>-</td><td>1108x1052 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-x11-gl-threshold</td><td>Electron 45.2.1 ozone=x11</td><td>-</td><td>1108x1052 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-x11-gpu-goonworks</td><td>Electron 45.2.1 ozone=x11</td><td>webgpu</td><td>1108x1052 dpr 1</td><td>41</td><td>20</td><td>21</td><td>92.5</td><td>18</td><td>0</td><td>2.27</td><td>5.32</td><td>yes</td><td>BELOW BAR: mean 41, worst 1 s 21</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-x11-gpu-threshold</td><td>Electron 45.2.1 ozone=x11</td><td>webgpu</td><td>1108x1052 dpr 1</td><td>27</td><td>14</td><td>11</td><td>586.9</td><td>149</td><td>3</td><td>1.39</td><td>5.3</td><td>yes</td><td>BELOW BAR: mean 27, worst 1 s 11, 3 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>firefox-goonworks</td><td>Gecko/20100101 Firefox/158.0</td><td>webgl2</td><td>1920x964 dpr 1</td><td>26</td><td>8</td><td>13</td><td>191</td><td>250</td><td>31</td><td>2.84</td><td>7.43</td><td>yes</td><td>BELOW BAR: mean 26, worst 1 s 13, 31 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>firefox-threshold</td><td>Gecko/20100101 Firefox/158.0</td><td>webgl2</td><td>1920x964 dpr 1</td><td>16</td><td>5</td><td>9</td><td>263</td><td>516</td><td>136</td><td>2.04</td><td>8.85</td><td>yes</td><td>BELOW BAR: mean 16, worst 1 s 9, 136 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>flatpak-goonworks</td><td>WebKitGTK 2.54.1 flatpak</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>21</td><td>10</td><td>11</td><td>156</td><td>312</td><td>9</td><td>5.61</td><td>16.85</td><td>yes</td><td>BELOW BAR: mean 21, worst 1 s 11, 9 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>flatpak-threshold</td><td>WebKitGTK 2.54.1 flatpak</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>15</td><td>9</td><td>10</td><td>134</td><td>567</td><td>70</td><td>4.4</td><td>20.91</td><td>yes</td><td>BELOW BAR: mean 15, worst 1 s 10, 70 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>flatpak-x11-goonworks</td><td>WebKitGTK 2.54.1 flatpak GDK=x11</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>17</td><td>8</td><td>8</td><td>197</td><td>536</td><td>66</td><td>5.67</td><td>17.57</td><td>yes</td><td>BELOW BAR: mean 17, worst 1 s 8, 66 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>flatpak-x11-threshold</td><td>WebKitGTK 2.54.1 flatpak GDK=x11</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>11</td><td>6</td><td>7</td><td>175</td><td>448</td><td>135</td><td>4.44</td><td>21.01</td><td>yes</td><td>BELOW BAR: mean 11, worst 1 s 7, 135 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-goonworks</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>25</td><td>11</td><td>13</td><td>127</td><td>274</td><td>10</td><td>5.55</td><td>16.63</td><td>yes</td><td>BELOW BAR: mean 25, worst 1 s 13, 10 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-threshold-auto</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>37</td><td>16</td><td>24</td><td>79</td><td>115</td><td>0</td><td>2.93</td><td>17.58</td><td>yes</td><td>BELOW BAR: mean 37, worst 1 s 24, tier mid</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-threshold</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>15</td><td>8</td><td>10</td><td>132</td><td>572</td><td>84</td><td>2.88</td><td>18.26</td><td>yes</td><td>BELOW BAR: mean 15, worst 1 s 10, 84 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-x11-goonworks</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>18</td><td>7</td><td>8</td><td>190</td><td>519</td><td>43</td><td>5.6</td><td>17.11</td><td>yes</td><td>BELOW BAR: mean 18, worst 1 s 8, 43 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-x11-threshold-auto</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>26</td><td>14</td><td>16</td><td>82</td><td>360</td><td>0</td><td>2.99</td><td>17.76</td><td>yes</td><td>BELOW BAR: mean 26, worst 1 s 16, tier mid</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-x11-threshold</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>11</td><td>6</td><td>7</td><td>173</td><td>440</td><td>150</td><td>2.94</td><td>18.79</td><td>yes</td><td>BELOW BAR: mean 11, worst 1 s 7, 150 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-nvidia-high-rs0.5</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>25</td><td>11</td><td>11</td><td>93</td><td>111</td><td>0</td><td>2.71</td><td>12.75</td><td>yes</td><td>BELOW BAR: mean 25, worst 1 s 11</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-nvidia-high-rs1-art0</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>26</td><td>11</td><td>12</td><td>89</td><td>107</td><td>0</td><td>1.89</td><td>9.78</td><td>yes</td><td>BELOW BAR: mean 26, worst 1 s 12</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-nvidia-high-rs1-win960x540</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>738x415 dpr 1.3</td><td>57</td><td>38</td><td>40</td><td>38</td><td>0</td><td>0</td><td>2.58</td><td>10.56</td><td>yes</td><td>BELOW BAR: worst 1 s 40</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-nvidia-high-rs1</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>24</td><td>11</td><td>11</td><td>104</td><td>131</td><td>2</td><td>2.68</td><td>12.7</td><td>yes</td><td>BELOW BAR: mean 24, worst 1 s 11, 2 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-nvidia-low-rs1</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>24</td><td>12</td><td>12</td><td>92</td><td>129</td><td>0</td><td>3.14</td><td>14.2</td><td>yes</td><td>BELOW BAR: mean 24, worst 1 s 12, tier mid</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-amd-high-rs0.5</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>29</td><td>13</td><td>22</td><td>85</td><td>313</td><td>0</td><td>2.9</td><td>17.92</td><td>yes</td><td>BELOW BAR: mean 29, worst 1 s 22</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-amd-high-rs1-art0</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>14</td><td>8</td><td>9</td><td>131</td><td>576</td><td>60</td><td>1.3</td><td>9.14</td><td>yes</td><td>BELOW BAR: mean 14, worst 1 s 9, 60 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-amd-high-rs1</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>15</td><td>8</td><td>10</td><td>133</td><td>562</td><td>67</td><td>2.88</td><td>17.89</td><td>yes</td><td>BELOW BAR: mean 15, worst 1 s 10, 67 frames &gt; 100 ms</td></tr>
-<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-amd-low-rs1</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>17</td><td>9</td><td>11</td><td>131</td><td>553</td><td>55</td><td>2.9</td><td>17.7</td><td>yes</td><td>BELOW BAR: mean 17, worst 1 s 11, 55 frames &gt; 100 ms, tier mid</td></tr>
+<table><thead><tr><th>GPU</th><th>run</th><th>engine</th><th>backend</th><th>window (css px)</th><th>fps mean</th><th>1% low</th><th>worst 1 s</th><th>worst frame ms</th><th>>50 ms</th><th>>100 ms</th><th>garage s</th><th>warm s</th><th>My files (real media)</th><th>hash</th><th>verdict</th></tr></thead><tbody>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>chrome-goonworks</td><td>Chrome/155.0.0.0 Safari/537.36</td><td>webgpu</td><td>1920x1080 dpr 1</td><td>293</td><td>104</td><td>39</td><td>172.9</td><td>3</td><td>1</td><td>2.95</td><td>6.83</td><td>-</td><td>yes</td><td>BELOW BAR: worst 1 s 39, 1 frames &gt; 100 ms</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>chrome-threshold</td><td>Chrome/155.0.0.0 Safari/537.36</td><td>webgpu</td><td>1920x1080 dpr 1</td><td>266</td><td>109</td><td>176</td><td>35.1</td><td>0</td><td>0</td><td>1.79</td><td>6.66</td><td>-</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-gl-goonworks</td><td>Electron 45.2.1 ozone=auto</td><td>webgl2</td><td>1920x994 dpr 1</td><td>342</td><td>238</td><td>270</td><td>17.2</td><td>0</td><td>0</td><td>2.52</td><td>6.41</td><td>-</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-gl-threshold</td><td>Electron 45.2.1 ozone=auto</td><td>webgl2</td><td>1920x994 dpr 1</td><td>310</td><td>200</td><td>232</td><td>20.1</td><td>0</td><td>0</td><td>1.74</td><td>6.25</td><td>-</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-gpu-goonworks</td><td>Electron 45.2.1 ozone=auto</td><td>webgpu</td><td>1920x994 dpr 1</td><td>302</td><td>122</td><td>202</td><td>18</td><td>0</td><td>0</td><td>2.38</td><td>6.13</td><td>-</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-gpu-threshold</td><td>Electron 45.2.1 ozone=auto</td><td>webgpu</td><td>1920x994 dpr 1</td><td>256</td><td>109</td><td>175</td><td>31</td><td>0</td><td>0</td><td>1.46</td><td>6.28</td><td>-</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-x11-gl-goonworks</td><td>Electron 45.2.1 ozone=x11</td><td>-</td><td>1108x1080 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-x11-gl-threshold</td><td>Electron 45.2.1 ozone=x11</td><td>-</td><td>1108x1052 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-x11-gpu-goonworks</td><td>Electron 45.2.1 ozone=x11</td><td>webgpu</td><td>1108x1052 dpr 1</td><td>318</td><td>179</td><td>217</td><td>21.4</td><td>0</td><td>0</td><td>2.57</td><td>5.87</td><td>-</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-x11-gpu-threshold</td><td>Electron 45.2.1 ozone=x11</td><td>webgl2</td><td>1108x1052 dpr 1</td><td>166</td><td>100</td><td>106</td><td>68.2</td><td>1</td><td>0</td><td>1.78</td><td>8.92</td><td>-</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>firefox-goonworks</td><td>Gecko/20100101 Firefox/158.0</td><td>webgl2</td><td>1920x964 dpr 1</td><td>250</td><td>125</td><td>174</td><td>33</td><td>0</td><td>0</td><td>3.18</td><td>8.13</td><td>-</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>firefox-threshold</td><td>Gecko/20100101 Firefox/158.0</td><td>webgl2</td><td>1920x964 dpr 1</td><td>226</td><td>125</td><td>171</td><td>46</td><td>0</td><td>0</td><td>2.34</td><td>7.45</td><td>-</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-goonworks</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-threshold</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-x11-goonworks</td><td>WebKitGTK 2.54.1 flatpak GDK=x11</td><td>-</td><td>1920x1022 dpr 1.3</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-x11-nodmabuf-goonworks</td><td>WebKitGTK 2.54.1 flatpak GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>22</td><td>12</td><td>11</td><td>98</td><td>138</td><td>0</td><td>6.01</td><td>21.11</td><td>-</td><td>yes</td><td>BELOW BAR: mean 22, worst 1 s 11</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-x11-nodmabuf-threshold</td><td>WebKitGTK 2.54.1 flatpak GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>22</td><td>11</td><td>11</td><td>99</td><td>145</td><td>0</td><td>3.45</td><td>21.06</td><td>-</td><td>yes</td><td>BELOW BAR: mean 22, worst 1 s 11</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-x11-threshold</td><td>WebKitGTK 2.54.1 flatpak GDK=x11</td><td>-</td><td>1920x1022 dpr 1.3</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-goonworks</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-threshold-auto</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-threshold</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-goonworks</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>-</td><td>1920x1022 dpr 1.3</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-nodmabuf-goonworks</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>24</td><td>12</td><td>11</td><td>94</td><td>83</td><td>0</td><td>6.86</td><td>19.59</td><td>-</td><td>yes</td><td>BELOW BAR: mean 24, worst 1 s 11</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-nodmabuf-threshold-auto</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>21</td><td>8</td><td>7</td><td>188</td><td>206</td><td>37</td><td>3.18</td><td>15.72</td><td>-</td><td>yes</td><td>BELOW BAR: mean 21, worst 1 s 7, 37 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-nodmabuf-threshold</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>21</td><td>11</td><td>11</td><td>119</td><td>198</td><td>3</td><td>3.11</td><td>14.78</td><td>-</td><td>yes</td><td>BELOW BAR: mean 21, worst 1 s 11, 3 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-threshold-auto</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>-</td><td>1920x1022 dpr 1.3</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-threshold</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>-</td><td>1920x1022 dpr 1.3</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-threshold-auto</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-nodmabuf-threshold-auto</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>22</td><td>10</td><td>10</td><td>112</td><td>142</td><td>8</td><td>3.43</td><td>16</td><td>-</td><td>yes</td><td>BELOW BAR: mean 22, worst 1 s 10, 8 frames &gt; 100 ms, tier mid</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-threshold-auto</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>-</td><td>1920x1022 dpr 1.3</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>chrome-goonworks</td><td>Chrome/155.0.0.0 Safari/537.36</td><td>-</td><td>1920x1080 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>chrome-threshold</td><td>Chrome/155.0.0.0 Safari/537.36</td><td>-</td><td>1920x1080 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-gl-goonworks</td><td>Electron 45.2.1 ozone=auto</td><td>-</td><td>1108x1052 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-gl-threshold</td><td>Electron 45.2.1 ozone=auto</td><td>-</td><td>1920x994 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-gpu-goonworks</td><td>Electron 45.2.1 ozone=auto</td><td>-</td><td>1108x1052 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-gpu-threshold</td><td>Electron 45.2.1 ozone=auto</td><td>-</td><td>1108x1052 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-x11-gl-goonworks</td><td>Electron 45.2.1 ozone=x11</td><td>-</td><td>1108x1052 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-x11-gl-threshold</td><td>Electron 45.2.1 ozone=x11</td><td>-</td><td>1108x1052 dpr 1</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>FAIL (never reached the garage (failed))</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-x11-gpu-goonworks</td><td>Electron 45.2.1 ozone=x11</td><td>webgpu</td><td>1108x1052 dpr 1</td><td>41</td><td>20</td><td>21</td><td>92.5</td><td>18</td><td>0</td><td>2.27</td><td>5.32</td><td>-</td><td>yes</td><td>BELOW BAR: mean 41, worst 1 s 21</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>electron-x11-gpu-threshold</td><td>Electron 45.2.1 ozone=x11</td><td>webgpu</td><td>1108x1052 dpr 1</td><td>27</td><td>14</td><td>11</td><td>586.9</td><td>149</td><td>3</td><td>1.39</td><td>5.3</td><td>-</td><td>yes</td><td>BELOW BAR: mean 27, worst 1 s 11, 3 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>firefox-goonworks</td><td>Gecko/20100101 Firefox/158.0</td><td>webgl2</td><td>1920x964 dpr 1</td><td>26</td><td>8</td><td>13</td><td>191</td><td>250</td><td>31</td><td>2.84</td><td>7.43</td><td>-</td><td>yes</td><td>BELOW BAR: mean 26, worst 1 s 13, 31 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>firefox-threshold</td><td>Gecko/20100101 Firefox/158.0</td><td>webgl2</td><td>1920x964 dpr 1</td><td>16</td><td>5</td><td>9</td><td>263</td><td>516</td><td>136</td><td>2.04</td><td>8.85</td><td>-</td><td>yes</td><td>BELOW BAR: mean 16, worst 1 s 9, 136 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>flatpak-goonworks</td><td>WebKitGTK 2.54.1 flatpak</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>21</td><td>10</td><td>11</td><td>156</td><td>312</td><td>9</td><td>5.61</td><td>16.85</td><td>-</td><td>yes</td><td>BELOW BAR: mean 21, worst 1 s 11, 9 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>flatpak-threshold</td><td>WebKitGTK 2.54.1 flatpak</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>15</td><td>9</td><td>10</td><td>134</td><td>567</td><td>70</td><td>4.4</td><td>20.91</td><td>-</td><td>yes</td><td>BELOW BAR: mean 15, worst 1 s 10, 70 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>flatpak-x11-goonworks</td><td>WebKitGTK 2.54.1 flatpak GDK=x11</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>17</td><td>8</td><td>8</td><td>197</td><td>536</td><td>66</td><td>5.67</td><td>17.57</td><td>-</td><td>yes</td><td>BELOW BAR: mean 17, worst 1 s 8, 66 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>flatpak-x11-threshold</td><td>WebKitGTK 2.54.1 flatpak GDK=x11</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>11</td><td>6</td><td>7</td><td>175</td><td>448</td><td>135</td><td>4.44</td><td>21.01</td><td>-</td><td>yes</td><td>BELOW BAR: mean 11, worst 1 s 7, 135 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-goonworks</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>25</td><td>11</td><td>13</td><td>127</td><td>274</td><td>10</td><td>5.55</td><td>16.63</td><td>-</td><td>yes</td><td>BELOW BAR: mean 25, worst 1 s 13, 10 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-threshold-auto</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>37</td><td>16</td><td>24</td><td>79</td><td>115</td><td>0</td><td>2.93</td><td>17.58</td><td>-</td><td>yes</td><td>BELOW BAR: mean 37, worst 1 s 24, tier mid</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-threshold</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>15</td><td>8</td><td>10</td><td>132</td><td>572</td><td>84</td><td>2.88</td><td>18.26</td><td>-</td><td>yes</td><td>BELOW BAR: mean 15, worst 1 s 10, 84 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-x11-goonworks</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>18</td><td>7</td><td>8</td><td>190</td><td>519</td><td>43</td><td>5.6</td><td>17.11</td><td>-</td><td>yes</td><td>BELOW BAR: mean 18, worst 1 s 8, 43 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-x11-threshold-auto</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>26</td><td>14</td><td>16</td><td>82</td><td>360</td><td>0</td><td>2.99</td><td>17.76</td><td>-</td><td>yes</td><td>BELOW BAR: mean 26, worst 1 s 16, tier mid</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-x11-threshold</td><td>WebKitGTK 2.54.1 GDK=x11</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>11</td><td>6</td><td>7</td><td>173</td><td>440</td><td>150</td><td>2.94</td><td>18.79</td><td>-</td><td>yes</td><td>BELOW BAR: mean 11, worst 1 s 7, 150 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-nvidia-high-rs0.5</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>25</td><td>11</td><td>11</td><td>93</td><td>111</td><td>0</td><td>2.71</td><td>12.75</td><td>-</td><td>yes</td><td>BELOW BAR: mean 25, worst 1 s 11</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-nvidia-high-rs1-art0</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>26</td><td>11</td><td>12</td><td>89</td><td>107</td><td>0</td><td>1.89</td><td>9.78</td><td>-</td><td>yes</td><td>BELOW BAR: mean 26, worst 1 s 12</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-nvidia-high-rs1-win960x540</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>738x415 dpr 1.3</td><td>57</td><td>38</td><td>40</td><td>38</td><td>0</td><td>0</td><td>2.58</td><td>10.56</td><td>-</td><td>yes</td><td>BELOW BAR: worst 1 s 40</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-nvidia-high-rs1</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>24</td><td>11</td><td>11</td><td>104</td><td>131</td><td>2</td><td>2.68</td><td>12.7</td><td>-</td><td>yes</td><td>BELOW BAR: mean 24, worst 1 s 11, 2 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-nvidia-low-rs1</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>24</td><td>12</td><td>12</td><td>92</td><td>129</td><td>0</td><td>3.14</td><td>14.2</td><td>-</td><td>yes</td><td>BELOW BAR: mean 24, worst 1 s 12, tier mid</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-amd-high-rs0.5</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>29</td><td>13</td><td>22</td><td>85</td><td>313</td><td>0</td><td>2.9</td><td>17.92</td><td>-</td><td>yes</td><td>BELOW BAR: mean 29, worst 1 s 22</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-amd-high-rs1-art0</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>14</td><td>8</td><td>9</td><td>131</td><td>576</td><td>60</td><td>1.3</td><td>9.14</td><td>-</td><td>yes</td><td>BELOW BAR: mean 14, worst 1 s 9, 60 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-amd-high-rs1</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>15</td><td>8</td><td>10</td><td>133</td><td>562</td><td>67</td><td>2.88</td><td>17.89</td><td>-</td><td>yes</td><td>BELOW BAR: mean 15, worst 1 s 10, 67 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5)</td><td>wk-amd-low-rs1</td><td>WebKitGTK 2.54.1</td><td>webgl2</td><td>1920x1022 dpr 1</td><td>17</td><td>9</td><td>11</td><td>131</td><td>553</td><td>55</td><td>2.9</td><td>17.7</td><td>-</td><td>yes</td><td>BELOW BAR: mean 17, worst 1 s 11, 55 frames &gt; 100 ms, tier mid</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>chrome-media-threshold</td><td>Chrome/155.0.0.0 Safari/537.36</td><td>webgpu</td><td>1920x1080 dpr 1</td><td>192</td><td>82</td><td>156</td><td>93</td><td>2</td><td>0</td><td>1.85</td><td>6.69</td><td>10 gif 1 mp4 1 jpg, decode errors 0, faces 39 clips playing 4</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>chrome-threshold</td><td>Chrome/155.0.0.0 Safari/537.36</td><td>webgpu</td><td>1920x1080 dpr 1</td><td>259</td><td>103</td><td>178</td><td>33.2</td><td>0</td><td>0</td><td>1.84</td><td>6.72</td><td>-</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-gl-media-threshold</td><td>Electron 45.2.1 ozone=auto</td><td>webgl2</td><td>1920x994 dpr 1</td><td>218</td><td>133</td><td>174</td><td>122.1</td><td>2</td><td>1</td><td>1.97</td><td>6.35</td><td>10 gif 1 mp4 1 jpg, decode errors 0, faces 39 clips playing 4</td><td>yes</td><td>BELOW BAR: 1 frames &gt; 100 ms</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-gl-threshold</td><td>Electron 45.2.1 ozone=auto</td><td>webgl2</td><td>1920x994 dpr 1</td><td>312</td><td>204</td><td>230</td><td>22.8</td><td>0</td><td>0</td><td>1.66</td><td>6.49</td><td>-</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>electron-gpu-threshold</td><td>Electron 45.2.1 ozone=auto</td><td>webgpu</td><td>1920x994 dpr 1</td><td>264</td><td>118</td><td>187</td><td>21.9</td><td>0</td><td>0</td><td>1.4</td><td>6.12</td><td>-</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>firefox-media-threshold</td><td>Gecko/20100101 Firefox/158.0</td><td>webgl2</td><td>1920x964 dpr 1</td><td>196</td><td>100</td><td>152</td><td>44</td><td>0</td><td>0</td><td>2.39</td><td>7.43</td><td>10 gif 1 mp4 1 jpg, decode errors 0, faces 39 clips playing 4</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>firefox-threshold</td><td>Gecko/20100101 Firefox/158.0</td><td>webgl2</td><td>1920x964 dpr 1</td><td>221</td><td>111</td><td>36</td><td>59</td><td>4</td><td>0</td><td>1.84</td><td>6.27</td><td>-</td><td>yes</td><td>BELOW BAR: worst 1 s 36</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-nodmabuf-media-threshold</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>FAIL (no result (engine died or timed out))</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-nodmabuf-threshold-auto</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>21</td><td>11</td><td>11</td><td>102</td><td>131</td><td>2</td><td>3.51</td><td>15.49</td><td>-</td><td>yes</td><td>BELOW BAR: mean 21, worst 1 s 11, 2 frames &gt; 100 ms, tier mid</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-x11-nodmabuf-threshold</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>20</td><td>9</td><td>8</td><td>220</td><td>239</td><td>16</td><td>3.32</td><td>15.64</td><td>-</td><td>yes</td><td>BELOW BAR: mean 20, worst 1 s 8, 16 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>em1-same-pick</td><td>Electron 45.2.1 ozone=auto</td><td>webgl2</td><td>1920x994 dpr 1</td><td>218</td><td>127</td><td>175</td><td>131.5</td><td>2</td><td>1</td><td>1.68</td><td>5.86</td><td>10 gif 1 mp4 1 jpg, decode errors 0, faces 39 clips playing 4</td><td>yes</td><td>BELOW BAR: 1 frames &gt; 100 ms</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>em2-stills-le1MB</td><td>Electron 45.2.1 ozone=auto</td><td>webgl2</td><td>1920x994 dpr 1</td><td>276</td><td>179</td><td>208</td><td>22.3</td><td>0</td><td>0</td><td>1.37</td><td>4.86</td><td>8 jpg 4 png, decode errors 0, faces 39 clips playing 0</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>em3-gifs-ge20MB</td><td>Electron 45.2.1 ozone=auto</td><td>webgl2</td><td>1920x994 dpr 1</td><td>266</td><td>133</td><td>211</td><td>50.7</td><td>2</td><td>0</td><td>1.46</td><td>4.43</td><td>6 gif, decode errors 0, faces 39 clips playing 0</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="pass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>em4-clips-le50MB</td><td>Electron 45.2.1 ozone=auto</td><td>webgl2</td><td>1920x994 dpr 1</td><td>187</td><td>159</td><td>177</td><td>18.6</td><td>0</td><td>0</td><td>1.56</td><td>4.48</td><td>12 mp4, decode errors 0, faces 4 clips playing 4</td><td>yes</td><td>MEETS BAR</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>flatpak-same-pick</td><td>WebKitGTK 2.54.1 flatpak GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>21</td><td>10</td><td>9</td><td>119</td><td>206</td><td>16</td><td>3.95</td><td>22.14</td><td>10 gif 1 mp4 1 jpg, decode errors 1, faces 40 clips playing 0</td><td>yes</td><td>BELOW BAR: mean 21, worst 1 s 9, 16 frames &gt; 100 ms</td></tr>
+<tr class="nopass"><td>RTX 4080 (01:00.0, NVIDIA 615.78.08)</td><td>wk-pictures-only</td><td>WebKitGTK 2.54.1 GDK=x11 no-dmabuf</td><td>webgl2</td><td>1920x1022 dpr 1.3</td><td>22</td><td>10</td><td>9</td><td>112</td><td>196</td><td>12</td><td>2.79</td><td>12.99</td><td>6 gif 1 png 3 webp 2 jpg, decode errors 0, faces 40 clips playing 0</td><td>yes</td><td>BELOW BAR: mean 22, worst 1 s 9, 12 frames &gt; 100 ms</td></tr>
 </tbody></table>
 <h2>Notes</h2>
 <pre>## Notes (Mich's box, 2026-10-31, run by the port's worker)
@@ -630,6 +753,98 @@ What this means:
 - The early 57-58 fps smoke means on the 4080 came from a 1108x830 window (CSS px) and were also cap-bound.
 - The full-size WebKitGTK rows (11-25 fps) are far below the cap. Their verdicts and the pixels-versus-assets answer
   do not depend on it.
+
+### Real media (&quot;My files&quot;) on the RTX 4080, Threshold
+Source folder: `/home/mich/ccp media`, served read-only by `bench-server.mjs --media` (148 files: 85 gif, 32 mp4, 14 jpg,
+9 png, 8 webp). Nothing was written to the folder.
+
+How the files go in:
+- Before boot, spike.js stores the files choice (`glassroad.mediaSource.v1 = files`).
+- It then hands the files in through the narrowest seam that reaches the game's own pick path. That seam is the
+  document event `glassroad-course-media` with `{kind:'files', files}`. It is what `hud/courseMedia.js` emits after its
+  &quot;Choose files&quot; picker. boot.js then runs `pickFiles` → `library.setFiles` → `setSource('files')`.
+- The picker itself (`openFilePicker`) needs a real user click, so it cannot be reached directly.
+- boot.js only listens from the 'garage' milestone while the state is boot/menu. spike.js therefore dispatches at that
+  milestone; every media run reports `phase boot` at the dispatch.
+
+Which files:
+- The pick uses a seeded shuffle of the same pool the game samples (12 = MAX_FEED_ROWS), so every engine gets the same
+  files. The game then made 12 blob URLs in every engine.
+- The same pick everywhere was 10 GIF (1.8-59.6 MB), 1 MP4 (&quot;demon girl.mp4&quot;, 277 MB) and 1 JPG: 419 MB in total.
+- The files are fetched into memory as Blobs. A real picker hands lazily-read Files, so memory use is not comparable.
+
+Decode results (each file loaded once more after the race):
+- Electron, Chrome, Firefox: all 12 files OK.
+- System WebKitGTK: the WebKitWebProcess crashed (SIGABRT) about 10 s into the media row. Its log shows &quot;GStreamer
+  element autoaudiosink not found&quot; and then GLib-CRITICAL NULL instances. This box has no gst-plugins-good, which is
+  where autoaudiosink lives. With pictures only (12 GIF/JPG/PNG/WebP files, no clip) the system WebKitGTK races
+  normally. So the crash comes from the clip's GStreamer pipeline.
+- Flatpak GNOME 50 WebKitGTK: it does not crash with the same pick. The MP4 fails with MediaError 4 (source not
+  supported) even though `canPlayType('video/mp4; avc1')` answers &quot;probably&quot;. Clips never play there (0 clips held).
+
+| Engine (same run, side by side) | default rows: fps mean / worst 1 s / longest frame ms | real media | what changed |
+| --- | --- | --- | --- |
+| Electron 45.2.1 WebGL2 (Wayland) | 312 / 230 / 22.8 | 218 / 174 / 122.1 (1 frame &gt; 100 ms) | -30 % mean; one 122 ms stall puts it BELOW BAR. Reproduced on a re-run: 218 / 175 / 131.5, again 1 frame &gt; 100 ms |
+| Chromium 155 | 259 / 178 / 33.2 | 192 / 156 / 93 | -26 % mean; still meets the bar |
+| Firefox 158 | 221 / 36 / 59 (one dip) | 196 / 152 / 44 | -11 % mean; meets the bar |
+| WebKitGTK system, XWayland, no-DMABuf | 20 / 8 / 220 | crash (WebKitWebProcess SIGABRT, GStreamer autoaudiosink missing) | pictures only: 22 / 9 / 112 |
+| WebKitGTK Flatpak, XWayland, no-DMABuf | 22 / 11 / 99 (earlier run) | 21 / 9 / 119, MP4 error 4 | no change in fps; the clip never shows |
+
+The iGPU media row was not run: the user was seeing lag.
+
+### My files: empty screens (measured; the game was not changed)
+Setup: Electron WebGL2 on the 4080, Threshold, one run per row, nothing else running.
+Per second, spike.js reads `cardMedia.webPictures` (faces shown, clips held, clips playing). It also reads the
+`.gr-web-media` DOM, which has one face per slot and 129 slots in total:
+- `pending` = a face `&lt;img&gt;` that has a src but has not finished loading.
+
+| row | files | fps / worst 1 s / longest frame ms | faces max / median | pending (max) | clips playing / held (max) |
+| --- | --- | --- | --- | --- | --- |
+| 1 same pick | 10 GIF + 1 MP4 (277 MB) + 1 JPG, 419 MB | 218 / 175 / 131.5 | 39 / 31 | 0 | 4 / 6 |
+| 2 stills &lt;= 1 MB | 8 JPG + 4 PNG, 2 MB | 276 / 208 / 22.3 | 39 / 31 | 0 | 0 / 0 |
+| 3 GIFs &gt;= 20 MB | 6 GIF (20.7-70.4 MB, the whole pool), 233 MB | 266 / 211 / 50.7 | 39 / 31 | 0 | 0 / 0 |
+| 4 (extra) clips only, MP4 &lt;= 50 MB | 12 MP4, 363 MB | 187 / 177 / 18.6 | 4 / 4 | 0 | 4 / 8 |
+| WebKitGTK, pictures only | 6 GIF + 2 JPG + 1 PNG + 3 WebP | 22 / 9 / 112 | 40 / 30 | 0 | 0 / 0 |
+
+Findings:
+- (a) Confirmed. The face count is the same in rows 1-3: a median of 31 faces in view filled, whatever the pictures
+  are. With clips only (row 4) the faces drop to exactly 4, which is the maxPlaying cap.
+  - Every clip face beyond the 4 nearest falls back to `src.poster`. A local file has no poster, so `setStill('')`
+    runs and the face is hidden. That leaves about 27 of the about 31 screens in view empty.
+  - In the same pick (1 clip of 12 files), 6 faces held the clip and 4 played; the faces mapped to that clip beyond
+    the cap stayed dark.
+  - The more clips a player picks, the more screens stay empty.
+- (b) Not confirmed in Electron. 20-70 MB GIFs filled as many faces as 1 MB stills (median 31 in both). No face was
+  ever caught with an unloaded `&lt;img&gt;` (pending 0) at 1 s sampling.
+  - Each face is still a separate `&lt;img&gt;` decode of the blob URL, re-done when the 7 s turn moves it to the next file.
+  - On this machine those reloads finish within the 1 s sampling interval. A slower machine, or WebKitGTK at
+    20 fps, may show the gap. Sampling faster than 1 s would be needed to prove or rule it out.
+- (c) Confirmed, and it matters for the WebKitGTK fallback (&quot;Play in the app (slower)&quot;):
+  - System WebKitGTK on a box without gst-plugins-good crashes as soon as a picked clip loads.
+  - Flatpak WebKitGTK does not crash, but cannot decode the MP4, so clip faces stay empty there too.
+- Hitches: only the mixed pick made a &gt; 100 ms frame. Stills, big GIFs and small clips alone did not. The likely
+  culprit is the 277 MB MP4 or the 59.6 MB GIF being set up mid-race; this was not isolated.
+
+Suggested fixes for CB (in `render/webMediaScreens.js` / `host/localLibrary.js`):
+1. Give over-cap clips a still from `feed.stillFor(i + turn)` instead of hiding them. Alternatively, keep the clip's
+   first frame: a local clip has no poster.
+2. On a turn, keep showing the previous picture until the new copy has loaded: `img.decode()` on the new src before
+   swapping. A face then never blinks empty, even where decoding is slow.
+3. Optionally, make `pickFiles` down-select very large GIFs/clips, or prefer smaller ones when sampling 12 of many.
+4. For the WebKitGTK fallback, choose one:
+   - require gst-plugins-good (autoaudiosink) and an H.264 decoder, or detect them;
+   - or refuse clips in &quot;My files&quot; on WebKitGTK, which avoids the WebKitWebProcess abort.
+
+### Kit fix 7 (real media)
+- `bench-server.mjs --media &lt;dir&gt;` serves the folder read-only at `/spike-media/` with `index.json`.
+- `spike.js ?spikeMedia=files`:
+  - stores the files choice before boot;
+  - fetches a seeded pick of 12 into Files and hands it in through `glassroad-course-media` at the garage milestone;
+  - records the files used, blob URLs, a decode check per file, and world-screen faces per second.
+  - Optional narrowing: `spikeMediaExt`, `spikeMediaMinMB`, `spikeMediaMaxMB`, `spikeMediaSeed`.
+- `run.sh MEDIA_DIR=&lt;folder&gt;` adds one &quot;My files&quot; row per engine on the first course: `wk*-media-`, `electron*-gl-media-`,
+  `chrome-media-`, `firefox-media-`. Default rows are unchanged.
+- The reports show a &quot;My files&quot; column and detail lines.
 </pre>
 <h2>Box (RTX 4080 (01:00.0, NVIDIA 615.78.08), rt-linux-spike-cachyos-20261031-1405)</h2>
 <pre>date: 2026-10-31T14:05:43+01:00
@@ -764,8 +979,54 @@ wk python: /usr/bin/python3</pre>
 <pre></pre>
 <h2>Box (Radeon 610M iGPU (0c:00.0, radeonsi Mesa 26.2.5), exp-amd)</h2>
 <pre></pre>
+<h2>Box (RTX 4080 (01:00.0, NVIDIA 615.78.08), rt-linux-spike-cachyos-20261031-1531-nvidia-media)</h2>
+<pre>date: 2026-10-31T15:31:24+01:00
+kernel: Linux 7.3.0-4-cachyos x86_64
+PRETTY_NAME=&quot;CachyOS&quot;
+ID=cachyos
+session: wayland desktop: KDE wayland_display: wayland-1 display: :0
+cpu: AMD Ryzen 7 9800X3D 8-Core Processor x16
+ram: 60.5 GB
+01:00.0 VGA compatible controller [0300]: NVIDIA Corporation AD103 [GeForce RTX 4080] [10de:2704] (rev a1)
+0c:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Granite Ridge [Radeon 610M] [1002:13c0] (rev cb)
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 4080/PCIe/SSE2
+OpenGL core profile version string: 4.6.0 NVIDIA 615.78.08
+	apiVersion         = 1.4.351
+	deviceName         = NVIDIA GeForce RTX 4080
+	driverName         = NVIDIA
+	driverInfo         = 615.78.08
+	apiVersion         = 1.4.354
+	deviceName         = AMD Ryzen 7 9800X3D 8-Core Processor (RADV RAPHAEL_MENDOCINO)
+	driverName         = radv
+	driverInfo         = Mesa 26.2.5-arch3.1
+NVIDIA GeForce RTX 4080, 615.78.08
+webkit2gtk-4.1 (dev): 2.54.1
+gstreamer-1.0 (dev): 1.28.8
+webkit2gtk-4.1 2.54.1-1
+gst-libav 1.28.8-1
+flatpak: Flatpak 1.18.4
+org.freedesktop.Platform.GL.default/x86_64/25.08
+org.freedesktop.Platform.GL.default/x86_64/25.08
+org.freedesktop.Platform.GL.default/x86_64/25.08-extra
+org.freedesktop.Platform.GL.default/x86_64/25.08-extra
+org.freedesktop.Platform.GL.default/x86_64/26.08
+org.freedesktop.Platform.GL.default/x86_64/26.08
+org.freedesktop.Platform.GL.default/x86_64/26.08-extra
+org.freedesktop.Platform.GL.default/x86_64/26.08-extra
+org.freedesktop.Platform.GL.nvidia-615-78-08/x86_64/1.4
+org.freedesktop.Platform.GL.nvidia-615-78-08/x86_64/1.4
+org.gnome.Platform/x86_64/50
+chromium: Chromium 155.0.8059.84 Arch Linux
+firefox: Mozilla Firefox 158.0.1
+   2560x1440    143.91*+
+   2496x1404    359.83*+
+glassroad: 5e42e0c7d1 (5e42e0c7d1e42093c451e08790d5f9fee5b0dd15)
+wk python: /usr/bin/python3</pre>
+<h2>Box (RTX 4080 (01:00.0, NVIDIA 615.78.08), exp-media)</h2>
+<pre></pre>
 <script type="application/json" id="rt-bench">{
- "generated": "2026-10-31T14:27:27.714Z",
+ "generated": "2026-10-31T14:54:40.626Z",
  "bar": {
   "mean": 57,
   "worst1s": 50,
@@ -799,6 +1060,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 1,
      "garageS": 2.95,
      "warmS": 6.83,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: worst 1 s 39, 1 frames > 100 ms",
@@ -826,6 +1088,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 1.79,
      "warmS": 6.66,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "MEETS BAR",
@@ -853,6 +1116,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 2.52,
      "warmS": 6.41,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "MEETS BAR",
@@ -880,6 +1144,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 1.74,
      "warmS": 6.25,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "MEETS BAR",
@@ -907,6 +1172,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 2.38,
      "warmS": 6.13,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "MEETS BAR",
@@ -934,6 +1200,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 1.46,
      "warmS": 6.28,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "MEETS BAR",
@@ -956,6 +1223,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -978,6 +1246,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1005,6 +1274,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 2.57,
      "warmS": 5.87,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "MEETS BAR",
@@ -1032,6 +1302,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 1.78,
      "warmS": 8.92,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "MEETS BAR",
@@ -1054,6 +1325,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 3.18,
      "warmS": 8.13,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "MEETS BAR",
@@ -1076,6 +1348,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 2.34,
      "warmS": 7.45,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "MEETS BAR",
@@ -1098,6 +1371,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": null,
      "failed": "no result (engine died or timed out)",
      "verdict": "FAIL (no result (engine died or timed out))",
@@ -1120,6 +1394,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": null,
      "failed": "no result (engine died or timed out)",
      "verdict": "FAIL (no result (engine died or timed out))",
@@ -1142,6 +1417,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1164,6 +1440,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 6.01,
      "warmS": 21.11,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 22, worst 1 s 11",
@@ -1186,6 +1463,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 3.45,
      "warmS": 21.06,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 22, worst 1 s 11",
@@ -1208,6 +1486,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1230,6 +1509,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": null,
      "failed": "no result (engine died or timed out)",
      "verdict": "FAIL (no result (engine died or timed out))",
@@ -1252,6 +1532,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": null,
      "failed": "no result (engine died or timed out)",
      "verdict": "FAIL (no result (engine died or timed out))",
@@ -1274,6 +1555,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": null,
      "failed": "no result (engine died or timed out)",
      "verdict": "FAIL (no result (engine died or timed out))",
@@ -1296,6 +1578,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1318,6 +1601,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 6.86,
      "warmS": 19.59,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 24, worst 1 s 11",
@@ -1340,6 +1624,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 37,
      "garageS": 3.18,
      "warmS": 15.72,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 21, worst 1 s 7, 37 frames > 100 ms",
@@ -1362,6 +1647,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 3,
      "garageS": 3.11,
      "warmS": 14.78,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 21, worst 1 s 11, 3 frames > 100 ms",
@@ -1384,6 +1670,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1406,6 +1693,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1435,6 +1723,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": null,
      "failed": "no result (engine died or timed out)",
      "verdict": "FAIL (no result (engine died or timed out))",
@@ -1457,6 +1746,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 8,
      "garageS": 3.43,
      "warmS": 16,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 22, worst 1 s 10, 8 frames > 100 ms, tier mid",
@@ -1479,6 +1769,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1508,6 +1799,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1530,6 +1822,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1552,6 +1845,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1574,6 +1868,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1596,6 +1891,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1618,6 +1914,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1640,6 +1937,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1662,6 +1960,7 @@ wk python: /usr/bin/python3</pre>
      "over100": null,
      "garageS": null,
      "warmS": null,
+     "media": null,
      "hashOk": true,
      "failed": "never reached the garage (failed)",
      "verdict": "FAIL (never reached the garage (failed))",
@@ -1689,6 +1988,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 2.27,
      "warmS": 5.32,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 41, worst 1 s 21",
@@ -1716,6 +2016,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 3,
      "garageS": 1.39,
      "warmS": 5.3,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 27, worst 1 s 11, 3 frames > 100 ms",
@@ -1738,6 +2039,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 31,
      "garageS": 2.84,
      "warmS": 7.43,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 26, worst 1 s 13, 31 frames > 100 ms",
@@ -1760,6 +2062,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 136,
      "garageS": 2.04,
      "warmS": 8.85,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 16, worst 1 s 9, 136 frames > 100 ms",
@@ -1782,6 +2085,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 9,
      "garageS": 5.61,
      "warmS": 16.85,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 21, worst 1 s 11, 9 frames > 100 ms",
@@ -1804,6 +2108,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 70,
      "garageS": 4.4,
      "warmS": 20.91,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 15, worst 1 s 10, 70 frames > 100 ms",
@@ -1826,6 +2131,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 66,
      "garageS": 5.67,
      "warmS": 17.57,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 17, worst 1 s 8, 66 frames > 100 ms",
@@ -1848,6 +2154,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 135,
      "garageS": 4.44,
      "warmS": 21.01,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 11, worst 1 s 7, 135 frames > 100 ms",
@@ -1870,6 +2177,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 10,
      "garageS": 5.55,
      "warmS": 16.63,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 25, worst 1 s 13, 10 frames > 100 ms",
@@ -1892,6 +2200,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 2.93,
      "warmS": 17.58,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 37, worst 1 s 24, tier mid",
@@ -1914,6 +2223,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 84,
      "garageS": 2.88,
      "warmS": 18.26,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 15, worst 1 s 10, 84 frames > 100 ms",
@@ -1936,6 +2246,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 43,
      "garageS": 5.6,
      "warmS": 17.11,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 18, worst 1 s 8, 43 frames > 100 ms",
@@ -1958,6 +2269,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 2.99,
      "warmS": 17.76,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 26, worst 1 s 16, tier mid",
@@ -1980,6 +2292,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 150,
      "garageS": 2.94,
      "warmS": 18.79,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 11, worst 1 s 7, 150 frames > 100 ms",
@@ -2009,6 +2322,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 2.71,
      "warmS": 12.75,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 25, worst 1 s 11",
@@ -2031,6 +2345,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 1.89,
      "warmS": 9.78,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 26, worst 1 s 12",
@@ -2053,6 +2368,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 2.58,
      "warmS": 10.56,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: worst 1 s 40",
@@ -2075,6 +2391,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 2,
      "garageS": 2.68,
      "warmS": 12.7,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 24, worst 1 s 11, 2 frames > 100 ms",
@@ -2097,6 +2414,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 3.14,
      "warmS": 14.2,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 24, worst 1 s 12, tier mid",
@@ -2126,6 +2444,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 0,
      "garageS": 2.9,
      "warmS": 17.92,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 29, worst 1 s 22",
@@ -2148,6 +2467,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 60,
      "garageS": 1.3,
      "warmS": 9.14,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 14, worst 1 s 9, 60 frames > 100 ms",
@@ -2170,6 +2490,7 @@ wk python: /usr/bin/python3</pre>
      "over100": 67,
      "garageS": 2.88,
      "warmS": 17.89,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 15, worst 1 s 10, 67 frames > 100 ms",
@@ -2192,9 +2513,437 @@ wk python: /usr/bin/python3</pre>
      "over100": 55,
      "garageS": 2.9,
      "warmS": 17.7,
+     "media": null,
      "hashOk": true,
      "failed": null,
      "verdict": "BELOW BAR: mean 17, worst 1 s 11, 55 frames > 100 ms, tier mid",
+     "pass": false
+    }
+   ]
+  },
+  {
+   "dir": "rt-linux-spike-cachyos-20261031-1531-nvidia-media",
+   "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+   "system": "date: 2026-10-31T15:31:24+01:00\nkernel: Linux 7.3.0-4-cachyos x86_64\nPRETTY_NAME=\"CachyOS\"\nID=cachyos\nsession: wayland desktop: KDE wayland_display: wayland-1 display: :0\ncpu: AMD Ryzen 7 9800X3D 8-Core Processor x16\nram: 60.5 GB\n01:00.0 VGA compatible controller [0300]: NVIDIA Corporation AD103 [GeForce RTX 4080] [10de:2704] (rev a1)\n0c:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Granite Ridge [Radeon 610M] [1002:13c0] (rev cb)\nOpenGL vendor string: NVIDIA Corporation\nOpenGL renderer string: NVIDIA GeForce RTX 4080/PCIe/SSE2\nOpenGL core profile version string: 4.6.0 NVIDIA 615.78.08\n\tapiVersion         = 1.4.351\n\tdeviceName         = NVIDIA GeForce RTX 4080\n\tdriverName         = NVIDIA\n\tdriverInfo         = 615.78.08\n\tapiVersion         = 1.4.354\n\tdeviceName         = AMD Ryzen 7 9800X3D 8-Core Processor (RADV RAPHAEL_MENDOCINO)\n\tdriverName         = radv\n\tdriverInfo         = Mesa 26.2.5-arch3.1\nNVIDIA GeForce RTX 4080, 615.78.08\nwebkit2gtk-4.1 (dev): 2.54.1\ngstreamer-1.0 (dev): 1.28.8\nwebkit2gtk-4.1 2.54.1-1\ngst-libav 1.28.8-1\nflatpak: Flatpak 1.18.4\norg.freedesktop.Platform.GL.default/x86_64/25.08\norg.freedesktop.Platform.GL.default/x86_64/25.08\norg.freedesktop.Platform.GL.default/x86_64/25.08-extra\norg.freedesktop.Platform.GL.default/x86_64/25.08-extra\norg.freedesktop.Platform.GL.default/x86_64/26.08\norg.freedesktop.Platform.GL.default/x86_64/26.08\norg.freedesktop.Platform.GL.default/x86_64/26.08-extra\norg.freedesktop.Platform.GL.default/x86_64/26.08-extra\norg.freedesktop.Platform.GL.nvidia-615-78-08/x86_64/1.4\norg.freedesktop.Platform.GL.nvidia-615-78-08/x86_64/1.4\norg.gnome.Platform/x86_64/50\nchromium: Chromium 155.0.8059.84 Arch Linux\nfirefox: Mozilla Firefox 158.0.1\n   2560x1440    143.91*+\n   2496x1404    359.83*+\nglassroad: 5e42e0c7d1 (5e42e0c7d1e42093c451e08790d5f9fee5b0dd15)\nwk python: /usr/bin/python3",
+   "runs": [
+    {
+     "run": "chrome-media-threshold",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "Chrome/155.0.0.0 Safari/537.36",
+     "backend": "webgpu",
+     "tier": "high",
+     "window": "1920x1080 dpr 1",
+     "webgl2": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4080/PCIe/SSE2, OpenGL ES 3.2)",
+     "webgpuAdapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": ""
+     },
+     "mean": 192,
+     "low1pct": 82,
+     "worst1s": 156,
+     "maxFrameMs": 93,
+     "over50": 2,
+     "over100": 0,
+     "garageS": 1.85,
+     "warmS": 6.69,
+     "media": "10 gif 1 mp4 1 jpg, decode errors 0, faces 39 clips playing 4",
+     "hashOk": true,
+     "failed": null,
+     "verdict": "MEETS BAR",
+     "pass": true
+    },
+    {
+     "run": "chrome-threshold",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "Chrome/155.0.0.0 Safari/537.36",
+     "backend": "webgpu",
+     "tier": "high",
+     "window": "1920x1080 dpr 1",
+     "webgl2": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4080/PCIe/SSE2, OpenGL ES 3.2)",
+     "webgpuAdapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": ""
+     },
+     "mean": 259,
+     "low1pct": 103,
+     "worst1s": 178,
+     "maxFrameMs": 33.2,
+     "over50": 0,
+     "over100": 0,
+     "garageS": 1.84,
+     "warmS": 6.72,
+     "media": null,
+     "hashOk": true,
+     "failed": null,
+     "verdict": "MEETS BAR",
+     "pass": true
+    },
+    {
+     "run": "electron-gl-media-threshold",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "Electron 45.2.1 ozone=auto",
+     "backend": "webgl2",
+     "tier": "high",
+     "window": "1920x994 dpr 1",
+     "webgl2": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4080/PCIe/SSE2, OpenGL ES 3.2)",
+     "webgpuAdapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": ""
+     },
+     "mean": 218,
+     "low1pct": 133,
+     "worst1s": 174,
+     "maxFrameMs": 122.1,
+     "over50": 2,
+     "over100": 1,
+     "garageS": 1.97,
+     "warmS": 6.35,
+     "media": "10 gif 1 mp4 1 jpg, decode errors 0, faces 39 clips playing 4",
+     "hashOk": true,
+     "failed": null,
+     "verdict": "BELOW BAR: 1 frames > 100 ms",
+     "pass": false
+    },
+    {
+     "run": "electron-gl-threshold",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "Electron 45.2.1 ozone=auto",
+     "backend": "webgl2",
+     "tier": "high",
+     "window": "1920x994 dpr 1",
+     "webgl2": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4080/PCIe/SSE2, OpenGL ES 3.2)",
+     "webgpuAdapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": ""
+     },
+     "mean": 312,
+     "low1pct": 204,
+     "worst1s": 230,
+     "maxFrameMs": 22.8,
+     "over50": 0,
+     "over100": 0,
+     "garageS": 1.66,
+     "warmS": 6.49,
+     "media": null,
+     "hashOk": true,
+     "failed": null,
+     "verdict": "MEETS BAR",
+     "pass": true
+    },
+    {
+     "run": "electron-gpu-threshold",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "Electron 45.2.1 ozone=auto",
+     "backend": "webgpu",
+     "tier": "high",
+     "window": "1920x994 dpr 1",
+     "webgl2": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4080/PCIe/SSE2, OpenGL ES 3.2)",
+     "webgpuAdapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": ""
+     },
+     "mean": 264,
+     "low1pct": 118,
+     "worst1s": 187,
+     "maxFrameMs": 21.9,
+     "over50": 0,
+     "over100": 0,
+     "garageS": 1.4,
+     "warmS": 6.12,
+     "media": null,
+     "hashOk": true,
+     "failed": null,
+     "verdict": "MEETS BAR",
+     "pass": true
+    },
+    {
+     "run": "firefox-media-threshold",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "Gecko/20100101 Firefox/158.0",
+     "backend": "webgl2",
+     "tier": "high",
+     "window": "1920x964 dpr 1",
+     "webgl2": "NVIDIA GeForce GTX 980, or similar",
+     "webgpuAdapter": null,
+     "mean": 196,
+     "low1pct": 100,
+     "worst1s": 152,
+     "maxFrameMs": 44,
+     "over50": 0,
+     "over100": 0,
+     "garageS": 2.39,
+     "warmS": 7.43,
+     "media": "10 gif 1 mp4 1 jpg, decode errors 0, faces 39 clips playing 4",
+     "hashOk": true,
+     "failed": null,
+     "verdict": "MEETS BAR",
+     "pass": true
+    },
+    {
+     "run": "firefox-threshold",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "Gecko/20100101 Firefox/158.0",
+     "backend": "webgl2",
+     "tier": "high",
+     "window": "1920x964 dpr 1",
+     "webgl2": "NVIDIA GeForce GTX 980, or similar",
+     "webgpuAdapter": null,
+     "mean": 221,
+     "low1pct": 111,
+     "worst1s": 36,
+     "maxFrameMs": 59,
+     "over50": 4,
+     "over100": 0,
+     "garageS": 1.84,
+     "warmS": 6.27,
+     "media": null,
+     "hashOk": true,
+     "failed": null,
+     "verdict": "BELOW BAR: worst 1 s 36",
+     "pass": false
+    },
+    {
+     "run": "wk-x11-nodmabuf-media-threshold",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "WebKitGTK 2.54.1 GDK=x11 no-dmabuf",
+     "backend": null,
+     "tier": null,
+     "window": null,
+     "webgl2": null,
+     "webgpuAdapter": null,
+     "mean": null,
+     "low1pct": null,
+     "worst1s": null,
+     "maxFrameMs": null,
+     "over50": null,
+     "over100": null,
+     "garageS": null,
+     "warmS": null,
+     "media": null,
+     "hashOk": null,
+     "failed": "no result (engine died or timed out)",
+     "verdict": "FAIL (no result (engine died or timed out))",
+     "pass": false
+    },
+    {
+     "run": "wk-x11-nodmabuf-threshold-auto",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "WebKitGTK 2.54.1 GDK=x11 no-dmabuf",
+     "backend": "webgl2",
+     "tier": "mid",
+     "window": "1920x1022 dpr 1.3",
+     "webgl2": "Apple GPU",
+     "webgpuAdapter": null,
+     "mean": 21,
+     "low1pct": 11,
+     "worst1s": 11,
+     "maxFrameMs": 102,
+     "over50": 131,
+     "over100": 2,
+     "garageS": 3.51,
+     "warmS": 15.49,
+     "media": null,
+     "hashOk": true,
+     "failed": null,
+     "verdict": "BELOW BAR: mean 21, worst 1 s 11, 2 frames > 100 ms, tier mid",
+     "pass": false
+    },
+    {
+     "run": "wk-x11-nodmabuf-threshold",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "WebKitGTK 2.54.1 GDK=x11 no-dmabuf",
+     "backend": "webgl2",
+     "tier": "high",
+     "window": "1920x1022 dpr 1.3",
+     "webgl2": "Apple GPU",
+     "webgpuAdapter": null,
+     "mean": 20,
+     "low1pct": 9,
+     "worst1s": 8,
+     "maxFrameMs": 220,
+     "over50": 239,
+     "over100": 16,
+     "garageS": 3.32,
+     "warmS": 15.64,
+     "media": null,
+     "hashOk": true,
+     "failed": null,
+     "verdict": "BELOW BAR: mean 20, worst 1 s 8, 16 frames > 100 ms",
+     "pass": false
+    }
+   ]
+  },
+  {
+   "dir": "exp-media",
+   "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+   "system": "",
+   "runs": [
+    {
+     "run": "em1-same-pick",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "Electron 45.2.1 ozone=auto",
+     "backend": "webgl2",
+     "tier": "high",
+     "window": "1920x994 dpr 1",
+     "webgl2": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4080/PCIe/SSE2, OpenGL ES 3.2)",
+     "webgpuAdapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": ""
+     },
+     "mean": 218,
+     "low1pct": 127,
+     "worst1s": 175,
+     "maxFrameMs": 131.5,
+     "over50": 2,
+     "over100": 1,
+     "garageS": 1.68,
+     "warmS": 5.86,
+     "media": "10 gif 1 mp4 1 jpg, decode errors 0, faces 39 clips playing 4",
+     "hashOk": true,
+     "failed": null,
+     "verdict": "BELOW BAR: 1 frames > 100 ms",
+     "pass": false
+    },
+    {
+     "run": "em2-stills-le1MB",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "Electron 45.2.1 ozone=auto",
+     "backend": "webgl2",
+     "tier": "high",
+     "window": "1920x994 dpr 1",
+     "webgl2": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4080/PCIe/SSE2, OpenGL ES 3.2)",
+     "webgpuAdapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": ""
+     },
+     "mean": 276,
+     "low1pct": 179,
+     "worst1s": 208,
+     "maxFrameMs": 22.3,
+     "over50": 0,
+     "over100": 0,
+     "garageS": 1.37,
+     "warmS": 4.86,
+     "media": "8 jpg 4 png, decode errors 0, faces 39 clips playing 0",
+     "hashOk": true,
+     "failed": null,
+     "verdict": "MEETS BAR",
+     "pass": true
+    },
+    {
+     "run": "em3-gifs-ge20MB",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "Electron 45.2.1 ozone=auto",
+     "backend": "webgl2",
+     "tier": "high",
+     "window": "1920x994 dpr 1",
+     "webgl2": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4080/PCIe/SSE2, OpenGL ES 3.2)",
+     "webgpuAdapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": ""
+     },
+     "mean": 266,
+     "low1pct": 133,
+     "worst1s": 211,
+     "maxFrameMs": 50.7,
+     "over50": 2,
+     "over100": 0,
+     "garageS": 1.46,
+     "warmS": 4.43,
+     "media": "6 gif, decode errors 0, faces 39 clips playing 0",
+     "hashOk": true,
+     "failed": null,
+     "verdict": "MEETS BAR",
+     "pass": true
+    },
+    {
+     "run": "em4-clips-le50MB",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "Electron 45.2.1 ozone=auto",
+     "backend": "webgl2",
+     "tier": "high",
+     "window": "1920x994 dpr 1",
+     "webgl2": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4080/PCIe/SSE2, OpenGL ES 3.2)",
+     "webgpuAdapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": ""
+     },
+     "mean": 187,
+     "low1pct": 159,
+     "worst1s": 177,
+     "maxFrameMs": 18.6,
+     "over50": 0,
+     "over100": 0,
+     "garageS": 1.56,
+     "warmS": 4.48,
+     "media": "12 mp4, decode errors 0, faces 4 clips playing 4",
+     "hashOk": true,
+     "failed": null,
+     "verdict": "MEETS BAR",
+     "pass": true
+    },
+    {
+     "run": "flatpak-same-pick",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "WebKitGTK 2.54.1 flatpak GDK=x11 no-dmabuf",
+     "backend": "webgl2",
+     "tier": "high",
+     "window": "1920x1022 dpr 1.3",
+     "webgl2": "Apple GPU",
+     "webgpuAdapter": null,
+     "mean": 21,
+     "low1pct": 10,
+     "worst1s": 9,
+     "maxFrameMs": 119,
+     "over50": 206,
+     "over100": 16,
+     "garageS": 3.95,
+     "warmS": 22.14,
+     "media": "10 gif 1 mp4 1 jpg, decode errors 1, faces 40 clips playing 0",
+     "hashOk": true,
+     "failed": null,
+     "verdict": "BELOW BAR: mean 21, worst 1 s 9, 16 frames > 100 ms",
+     "pass": false
+    },
+    {
+     "run": "wk-pictures-only",
+     "gpu": "RTX 4080 (01:00.0, NVIDIA 615.78.08)",
+     "engine": "WebKitGTK 2.54.1 GDK=x11 no-dmabuf",
+     "backend": "webgl2",
+     "tier": "high",
+     "window": "1920x1022 dpr 1.3",
+     "webgl2": "Apple GPU",
+     "webgpuAdapter": null,
+     "mean": 22,
+     "low1pct": 10,
+     "worst1s": 9,
+     "maxFrameMs": 112,
+     "over50": 196,
+     "over100": 12,
+     "garageS": 2.79,
+     "warmS": 12.99,
+     "media": "6 gif 1 png 3 webp 2 jpg, decode errors 0, faces 40 clips playing 0",
+     "hashOk": true,
+     "failed": null,
+     "verdict": "BELOW BAR: mean 22, worst 1 s 9, 12 frames > 100 ms",
      "pass": false
     }
    ]

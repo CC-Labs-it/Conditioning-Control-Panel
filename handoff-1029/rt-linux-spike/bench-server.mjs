@@ -4,9 +4,11 @@
 // index.html, and takes the probe's records: POST /__spike/result writes <out>/runs/<run>.json with the engine's
 // memory (PSS of every process under the pid in <out>/current.pid, sampled at each /__spike/mark; Linux /proc only).
 // GET /__spike/hashes = the onlineCourseHash Node builds for the five courses (what the room's cards carry).
+// --media <dir>: serves that folder READ-ONLY at /spike-media/ (index.json lists its pictures and clips) for the
+// "My files" rows (spike.js ?spikeMedia=files). Files are only read, never written.
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync, createReadStream } from 'node:fs';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -16,6 +18,17 @@ const OUT = resolve(arg('out', './spike-out'));
 const PORT = Number(arg('port', 8791));
 const KIT = fileURLToPath(new URL('.', import.meta.url));
 const ARCADEMY = resolve(ROOT, '..', 'arcademy');
+const MEDIA = arg('media', '') ? resolve(arg('media', '')) : null;
+const MEDIA_EXT = /\.(gif|png|jpe?g|webp|mp4|webm)$/i;
+function mediaIndex(dir = MEDIA, rel = '') {
+  const out = [];
+  for (const e of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const r = rel ? rel + '/' + e.name : e.name;
+    if (e.isDirectory()) out.push(...mediaIndex(join(dir, e.name), r));
+    else if (e.isFile() && MEDIA_EXT.test(e.name)) out.push({ path: r, name: e.name, size: statSync(join(dir, e.name)).size, type: TYPES[extname(e.name).toLowerCase()] });
+  }
+  return out;
+}
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.bin': 'application/octet-stream',
@@ -94,6 +107,13 @@ createServer(async (req, res) => {
       await writeFile(join(OUT, 'runs', run + '.json'), JSON.stringify(rep, null, 1));
       console.log('[spike] result ' + run + (rep.failed ? ' FAILED ' + rep.failed : ' fps ' + (rep.race && rep.race.fpsMean)));
       return send(204, 'text/plain', '');
+    }
+    if (MEDIA && url.pathname === '/spike-media/index.json') return send(200, TYPES['.json'], JSON.stringify(mediaIndex()));
+    if (MEDIA && url.pathname.startsWith('/spike-media/')) {
+      const file = normalize(join(MEDIA, decodeURIComponent(url.pathname.slice('/spike-media/'.length))));
+      if (!file.startsWith(MEDIA + sep) || !MEDIA_EXT.test(file) || !existsSync(file)) return send(404, 'text/plain', 'not found');
+      res.writeHead(200, { 'content-type': TYPES[extname(file).toLowerCase()] || 'application/octet-stream', 'content-length': statSync(file).size, 'cache-control': 'no-store' });
+      return void createReadStream(file).pipe(res);   // read-only: the folder is never written
     }
     // static
     let base = ROOT, path = decodeURIComponent(url.pathname);

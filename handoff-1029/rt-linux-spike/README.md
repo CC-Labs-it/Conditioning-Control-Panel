@@ -36,7 +36,8 @@ and blocks.
 
 Knobs: `RACE_SECONDS=45 SIZE=1920x1080 COURSES="threshold goonworks" NO_ELECTRON=1 NO_BROWSERS=1 GLASSROAD_DIR=...`,
 `WK_GDK="native x11 x11nodmabuf"` (WebKitGTK through Wayland / XWayland / XWayland without the DMABuf renderer),
-`ELECTRON_OZONE="auto x11"`, `FLATPAK_ENV="K=V ..."` (extra variables inside the Flatpak sandbox).
+`ELECTRON_OZONE="auto x11"`, `FLATPAK_ENV="K=V ..."` (extra variables inside the Flatpak sandbox),
+`MEDIA_DIR=<folder>` (one extra "My files" row per engine with real pictures/clips, served read-only).
 
 Files: `run.sh` (driver), `bench-server.mjs` (serves the game from the public repo, collects results),
 `spike.js` (in-page probe), `wk-bench.py` (WebKitGTK window), `electron-main.js` (Electron window),

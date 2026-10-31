@@ -1,7 +1,8 @@
 /* rt-linux-spike/spike.js - injected FIRST into Racing Thoughts' index.html by bench-server.mjs (classic script, runs
  * before any module). Measures one run in whatever engine opened the page and POSTs the record to the bench server.
  * URL params it reads: spikeRun (id), spikeSec (race seconds, default 45), spikeOpts (options record JSON written to
- * localStorage before boot), spikeScrolller=check (fetch test of the Scrolller block). The page's own params
+ * localStorage before boot), spikeScrolller=check (fetch test of the Scrolller block), spikeMedia=files ("My files" with
+ * real media from the bench server's --media folder: see media() below; spikeMediaSeed picks which files). The page's own params
  * (bot, seed, quality, track, renderer) pass through untouched.
  * Same frame probe as dev/perf-check.mjs (every rAF callback timed, summed per animation frame), so Windows and Linux
  * numbers compare. The engine runs with vsync ON: fps is what a player sees, capped at the display rate. */
@@ -17,6 +18,17 @@
   // no spikeOpts (the -auto runs) = no record at all: engines keep localStorage between runs, so an earlier pinned
   // run's record would otherwise pin quality high again
   try { const o = qs.get('spikeOpts'); if (o) localStorage.setItem('glassroad.options.v1', o); else localStorage.removeItem('glassroad.options.v1'); } catch (e) { pushErr('options: ' + e); }
+
+  // "My files" rows: the files choice is stored before boot (host/localLibrary.js MEDIA_SOURCE_KEY), the files are
+  // fetched now and handed in at the garage (media() below)
+  const MEDIA = qs.get('spikeMedia') === 'files';
+  if (MEDIA) { try { localStorage.setItem('glassroad.mediaSource.v1', 'files'); } catch (e) { pushErr('media choice: ' + e); } }
+  const blobUrls = [];
+  if (MEDIA) {
+    const cu = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (o) => { if (o instanceof File) blobUrls.push({ name: o.name, type: o.type, size: o.size }); return cu(o); };
+  }
+  const mediaPick = MEDIA ? pickMedia() : null;
 
   addEventListener('error', (e) => pushErr('error: ' + (e.message || e.type) + (e.filename ? ' @' + e.filename.split('/').pop() + ':' + e.lineno : '')), true);
   addEventListener('unhandledrejection', (e) => pushErr('rejection: ' + ((e.reason && (e.reason.stack || e.reason.message)) || e.reason)));
@@ -142,6 +154,72 @@
     return a;
   }
 
+  // The same pool the game samples (pictures and clips, at most MAX_FEED_ROWS = 12), but picked with a seeded shuffle
+  // so every engine gets the same files; the game's own pickFiles then keeps all of them.
+  async function pickMedia() {
+    const idx = await (await fetch('/spike-media/index.json', { cache: 'no-store' })).json();
+    // optional narrowing for controlled checks: spikeMediaExt (e.g. "gif", "jpe?g|png"), spikeMediaMinMB, spikeMediaMaxMB
+    const ext = qs.get('spikeMediaExt') ? new RegExp('\\.(' + qs.get('spikeMediaExt') + ')$', 'i') : null;
+    const minB = Number(qs.get('spikeMediaMinMB') || 0) * 1e6, maxB = Number(qs.get('spikeMediaMaxMB') || Infinity) * 1e6;
+    const pool = idx.filter((f) => /^(image|video)\//.test(f.type || '') && f.size > 0 && (!ext || ext.test(f.name)) && f.size >= minB && f.size <= maxB);
+    let a = Number(qs.get('spikeMediaSeed') || 7) >>> 0;
+    const rnd = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    const chosen = pool.slice(0, 12), t = performance.now();
+    const files = await Promise.all(chosen.map(async (f) => new File([await (await fetch('/spike-media/' + f.path.split('/').map(encodeURIComponent).join('/'))).blob()], f.name, { type: f.type, lastModified: 0 })));
+    return { files, chosen, poolSize: pool.length, fetchMs: Math.round(performance.now() - t) };
+  }
+  // Hand the files in the way the Options "Choose files" button does after its picker (hud/courseMedia.js emits
+  // 'glassroad-course-media' {kind:'files'}; boot.js then runs pickFiles + library.setFiles + setSource('files')).
+  // boot.js listens from the 'garage' milestone and only while the state is boot/menu, so dispatch right then.
+  async function media() {
+    const out = { seam: "document 'glassroad-course-media' {kind:'files'} (what hud/courseMedia.js emits after its file picker)" };
+    try {
+      const m = await mediaPick;
+      Object.assign(out, { poolSize: m.poolSize, fetchMs: m.fetchMs, files: m.chosen.map((f) => ({ name: f.path, type: f.type, mb: Math.round(f.size / 1e5) / 10 })) });
+      for (const end = performance.now() + 120000; performance.now() < end; await sleep(50)) {
+        const g = G(); if (g && g.loading && (g.loading.milestones || []).some((x) => x.stage === 'garage')) break;
+      }
+      out.atS = r1((performance.now() - t0) / 1000); out.phaseAt = G() && G().phase;
+      document.dispatchEvent(new CustomEvent('glassroad-course-media', { bubbles: true, detail: { trackId: qs.get('track') || 'threshold', kind: 'files', files: m.files } }));
+      out.byType = m.chosen.reduce((c, f) => { const k = f.name.split('.').pop().toLowerCase(); c[k] = (c[k] || 0) + 1; return c; }, {});
+      out._files = m.files;
+    } catch (e) { out.error = String(e && e.message || e); }
+    return out;
+  }
+  // after the race: can this engine decode each file it was given (GIF / MP4 especially)?
+  async function decodeCheck(files) {
+    const res = [];
+    for (const f of files || []) {
+      const u = URL.createObjectURL(new Blob([f], { type: f.type }));
+      let r;
+      if (f.type.startsWith('image/')) {
+        r = await new Promise((ok) => { const im = new Image(); const to = setTimeout(() => ok('timeout'), 10000); im.onload = () => { clearTimeout(to); ok('ok ' + im.naturalWidth + 'x' + im.naturalHeight); }; im.onerror = () => { clearTimeout(to); ok('error'); }; im.src = u; });
+      } else {
+        r = await new Promise((ok) => { const v = document.createElement('video'); v.muted = true; v.preload = 'auto'; const to = setTimeout(() => ok('timeout (readyState ' + v.readyState + ')'), 10000);
+          v.onloadeddata = () => { clearTimeout(to); ok('ok ' + v.videoWidth + 'x' + v.videoHeight); }; v.onerror = () => { clearTimeout(to); ok('error ' + (v.error && v.error.code) + ' ' + ((v.error && v.error.message) || '')); }; v.src = u; });
+      }
+      URL.revokeObjectURL(u);
+      res.push({ name: f.name, type: f.type, result: r });
+    }
+    return res;
+  }
+
+  // Read-only look at the world-screen faces (render/webMediaScreens.js puts one <div><img><video> per slot in .gr-web-media):
+  // shown = visible faces; pending = a face whose <img> has a src that has not decoded yet (it stays hidden meanwhile);
+  // clipsHeld = faces holding a clip src. Nothing is changed.
+  function faceDom() {
+    const root = document.querySelector('.gr-web-media'); if (!root) return { domSlots: 0 };
+    let shown = 0, pending = 0, stills = 0, clipsHeld = 0;
+    for (const el of root.children) {
+      const img = el.querySelector('img'), v = el.querySelector('video');
+      if (el.style.display === 'block') shown++;
+      if (img && img.getAttribute('src')) { stills++; if (!(img.complete && img.naturalWidth)) pending++; }
+      if (v && v.getAttribute('src')) clipsHeld++;
+    }
+    return { domSlots: root.children.length, shown, pending, stillSrcs: stills, clipsHeld };
+  }
+
   async function drive() {
     const rep = { run: RUN, url: location.search, seconds: SECONDS, errors };
     // GARAGE FIRST: the menu opens while the course's lights still warm, and the frame loop (which writes
@@ -181,10 +259,11 @@
     const live = ctxs.find((x) => x.state !== 'closed');
     const c0 = live ? { ctx: live, t: live.currentTime, perf: performance.now() } : null;
     start();
-    const samples = [];
+    const samples = [], cmStats = [];
     for (let i = 0; i < SECONDS; i++) {
       await sleep(1000);
       const s = snap(); if (s) samples.push(s);
+      if (MEDIA) { try { const cm = G() && G().cardMedia; if (cm) cmStats.push(Object.assign({}, cm.webPictures || {}, faceDom())); } catch (e) { /* none */ } }
       if (i % 3 === 0) mark('race');
       if (s && s.phase === 'failed') break;
     }
@@ -204,16 +283,31 @@
       drawCalls: last.drawCalls, triangles: last.triangles,
     };
     rep.audio = audio(c0);
+    // the world screens showing the files (render/media.js stats().webPictures: faces shown, clips held, clips playing)
+    if (MEDIA) rep.cardMedia = { maxFaces: Math.max(0, ...cmStats.map((x) => x.faces || 0)), maxClips: Math.max(0, ...cmStats.map((x) => x.clips || 0)),
+      maxPlaying: Math.max(0, ...cmStats.map((x) => x.playing || 0)), samples: cmStats.length,
+      medianFaces: pct(cmStats.map((x) => x.faces || 0), 0.5), medianPending: pct(cmStats.map((x) => x.pending || 0), 0.5),
+      maxPending: Math.max(0, ...cmStats.map((x) => x.pending || 0)), medianStillSrcs: pct(cmStats.map((x) => x.stillSrcs || 0), 0.5),
+      domSlots: Math.max(0, ...cmStats.map((x) => x.domSlots || 0)), perSecond: cmStats.map((x) => [x.faces, x.pending, x.playing, x.clips]) };
     mark('done');
     return rep;
   }
 
   async function main() {
     let rep;
+    const mediaTask = MEDIA ? media() : null;
     try { rep = await drive(); } catch (e) { rep = { run: RUN, failed: 'driver: ' + e.message, errors }; }
     try { rep.caps = await caps(); } catch (e) { pushErr('caps: ' + e.message); }
     try { rep.hashes = await hashes(); } catch (e) { pushErr('hashes: ' + e.message); }
     if (qs.get('spikeScrolller') === 'check') { try { rep.scrolllerCheck = await scrolller(); } catch (e) { pushErr('scrolller: ' + e.message); } }
+    if (MEDIA) {
+      try {
+        const m = await mediaTask; const files = m._files; delete m._files;
+        m.blobUrlsMadeByGame = blobUrls.length; m.gameBlobTypes = blobUrls.reduce((c, f) => { c[f.type] = (c[f.type] || 0) + 1; return c; }, {});
+        m.decode = await decodeCheck(files);
+        rep.media = m;
+      } catch (e) { pushErr('media: ' + e.message); }
+    }
     rep.gamepads = pads;
     rep.endS = r1((performance.now() - t0) / 1000);
     await post('result', rep);

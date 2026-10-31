@@ -44,6 +44,8 @@ export function loadDir(dir) {
       webgl2: r.caps && r.caps.webgl2 ? r.caps.webgl2.renderer : null, webgpuAdapter: r.caps ? r.caps.webgpuAdapter || null : null,
       mean: x.fpsMean ?? null, low1pct: x.low1pctFps ?? null, worst1s: x.worst1sFps ?? null, maxFrameMs: x.worstGapMs ?? null,
       over50: x.hitches50 ?? null, over100: x.hitches100 ?? null, garageS: r.garageS ?? null, warmS: r.warmS ?? null,
+      media: r.media ? Object.entries(r.media.byType || {}).map(([k, v]) => v + ' ' + k).join(' ') + ', decode errors ' + (r.media.decode || []).filter((d) => !/^ok/.test(d.result)).length
+        + (r.cardMedia ? ', faces ' + r.cardMedia.maxFaces + ' clips playing ' + r.cardMedia.maxPlaying : '') : null,
       hashOk: r.hashes ? r.hashes.match : null, failed: r.failed || null, verdict: verdict(r), pass: verdict(r) === 'MEETS BAR' };
   });
   return { dir: basename(dir), gpu, system: existsSync(join(dir, 'system.txt')) ? readFileSync(join(dir, 'system.txt'), 'utf8').trim() : '', runs };
@@ -78,8 +80,8 @@ function chart(rows) {
 
 export function renderHtml(sets, { title = 'Racing Thoughts 3D on Linux - bench report', notes = '' } = {}) {
   const rows = sets.flatMap((s) => s.runs);
-  const cols = ['gpu', 'run', 'engine', 'backend', 'window', 'mean', 'low1pct', 'worst1s', 'maxFrameMs', 'over50', 'over100', 'garageS', 'warmS', 'hashOk', 'verdict'];
-  const head = ['GPU', 'run', 'engine', 'backend', 'window (css px)', 'fps mean', '1% low', 'worst 1 s', 'worst frame ms', '>50 ms', '>100 ms', 'garage s', 'warm s', 'hash', 'verdict'];
+  const cols = ['gpu', 'run', 'engine', 'backend', 'window', 'mean', 'low1pct', 'worst1s', 'maxFrameMs', 'over50', 'over100', 'garageS', 'warmS', 'media', 'hashOk', 'verdict'];
+  const head = ['GPU', 'run', 'engine', 'backend', 'window (css px)', 'fps mean', '1% low', 'worst 1 s', 'worst frame ms', '>50 ms', '>100 ms', 'garage s', 'warm s', 'My files (real media)', 'hash', 'verdict'];
   const table = ['<table><thead><tr>' + head.map((h) => `<th>${h}</th>`).join('') + '</tr></thead><tbody>',
     ...rows.map((r) => '<tr class="' + (r.pass ? 'pass' : 'nopass') + '">' + cols.map((c) => `<td>${esc(r[c] === true ? 'yes' : r[c] === false ? 'NO' : r[c])}</td>`).join('') + '</tr>'),
     '</tbody></table>'].join('\n');
