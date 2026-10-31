@@ -33,9 +33,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF HandlePanicKeyPress / TriggerPanicFromRemote (main 7e14c2870): Circe's Tab opens its ten-minute
             // safety hold on EVERY panic (key, tray, voice, leash gate); the way out is never priced.
             new("chaster-hold", _ => ConditioningControlPanel.Services.Safety.PanicChasterHold.Open("panic")),
-            // WPF HandlePanicKeyPress :1662 / TriggerPanicFromRemote: the five-minute post-panic quiet (AI effects refused,
-            // follow-ups overtaken). The key arms it earlier too (lock-card and grace-pause rungs); arming twice is harmless.
-            new("panic-quiet", _ => ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet()),
             // WPF LeashOnPanicPress, the first thing a panic press does: the leash task parks (kept pending), its
             // video window closes, the gate stands back ten minutes.
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
@@ -119,8 +116,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>Stops every surface in order. One failing stop never skips the rest. Never throws.</summary>
-        internal static void StopAll(string reason, MainShellWindow? shell = null)
+        internal static void StopAll(string reason, MainShellWindow? shell = null, bool aftermathArmed = false)
         {
+            // WPF MainWindow.xaml.cs:1670: quiet precedes teardown. The key already armed it.
+            if (!aftermathArmed) ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
             Serilog.Log.Information("Panic: stopping every surface ({Reason})", reason);
             shell ??= MainShellWindow.Current;
             foreach (var s in All)
