@@ -18,6 +18,7 @@ using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using LibVLCSharp.Shared;
+using ConditioningControlPanel.Services.Video;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -78,6 +79,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private DateTime Now => Time.GetUtcNow().UtcDateTime;
         private DispatcherTimer? _graceTimer, _guard;
         private readonly Stopwatch _sinceShow = new();
+        private readonly Stopwatch _floatingPlaying = new();
+        private bool _floatingRevealed;
+        private int _paintedFrames;
+        private long _firstPaintMedia, _firstPlayedMs;
 
         private MandatoryVideoOverlay() => Scheduler = new MandatoryVideoScheduler(this)
         {
@@ -140,6 +145,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             // WPF DecidePresentation: full screen or ONE floating window, on a random targeted screen.
             Floating = Floats(strict);
+            _floatingRevealed = !Floating;
+            _floatingPlaying.Reset();
+            _paintedFrames = 0;
+            _firstPaintMedia = _firstPlayedMs = -1;
             var screens = Targets(host, s.FillAllMonitorsWithVideo || Floating);
             if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
             foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
@@ -201,10 +210,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     x.Video.InvalidateVisual();
                     if (fill) x.Fill.InvalidateVisual();
                 }
+                if (Floating && !_floatingRevealed && _surfaces.Count > 0)
+                {
+                    var mediaMs = Interlocked.Read(ref _watchedMs);
+                    if (_firstPaintMedia < 0) _firstPaintMedia = mediaMs;
+                    var painted = FloatingFirstFrame.Painted(++_paintedFrames, _firstPaintMedia, mediaMs, _surfaces[0].Window.IsVisible);
+                    var player = _player;
+                    // Let the compositor present the submitted bitmap before opening the veil.
+                    _surfaces[0].Window.RequestAnimationFrame(_ =>
+                    {
+                        if (_player == player) CheckFloatingReveal(painted);
+                    });
+                }
             });
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
-            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
+            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() =>
+            {
+                if (_player != live) return;
+                LibVlcAudio.ApplyPreferredDevice(live);
+                if (_firstPlayedMs < 0) _firstPlayedMs = Interlocked.Read(ref _watchedMs);
+                if (!_floatingPlaying.IsRunning && !_gracePaused) _floatingPlaying.Start();
+            });
             _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
             _player.EndReached += (_, _) =>
             {
@@ -291,6 +318,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // it through the global hooks), and it moves with the mouse.
                 // ponytail: WPF's first-cut drag; the frame's fling and bounce (row 18) replace it.
                 w.ShowActivated = false;
+                // Keep a nonzero rendered surface while loading, without exposing the empty square.
+                w.TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+                w.Opacity = 0.001;
+                w.IsHitTestVisible = false;
                 PlaceFloating(w, screen, _random);
                 w.PointerPressed += (_, e) => { if (e.GetCurrentPoint(w).Properties.IsLeftButtonPressed) w.BeginMoveDrag(e); };
             }
@@ -437,6 +468,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _gracePaused = true;
             _lastGraceUtc = _gracePausedAt = now;
             _player?.SetPause(true);
+            _floatingPlaying.Stop();
             _sinceShow.Stop();
             _sinceFrame.Stop();   // freezes the attention clock and the clip guards (WPF re-phases both)
             foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; }
@@ -470,6 +502,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _graceTimer?.Stop();
             _graceTimer = null;
             foreach (var x in _surfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; }
+            if (_firstPlayedMs >= 0) _floatingPlaying.Start();
             _sinceShow.Start();
             if (FirstFrameMs >= 0) _sinceFrame.Start();
             FrameTs = Stopwatch.GetTimestamp();
@@ -482,6 +515,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void GuardTick()
         {
             if (_gracePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
+            if (!CheckFloatingReveal(false)) return;
             var framed = FirstFrameMs >= 0;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
@@ -501,6 +535,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - ending the clip", why, Elapsed);
             Scheduler.End();
+        }
+
+        private bool CheckFloatingReveal(bool painted)
+        {
+            if (!Floating || _floatingRevealed) return true;
+            if (_closing || _gracePaused || _surfaces.Count == 0) return false;
+            var at = Interlocked.Read(ref _watchedMs);
+            if (_floatingPlaying.IsRunning && _firstPlayedMs < 0) _firstPlayedMs = at;
+            var verdict = FloatingFirstFrame.Decide(painted,
+                _floatingPlaying.IsRunning ? _floatingPlaying.ElapsedMilliseconds : null,
+                _firstPlayedMs < 0 || FirstFrameMs < 0 ? 0 : at - _firstPlayedMs, _sinceShow.ElapsedMilliseconds);
+            if (verdict == FloatingFirstFrame.Verdict.Skip) { Scheduler.End(); return false; }
+            if (verdict != FloatingFirstFrame.Verdict.Reveal) return true;
+            _floatingRevealed = true;
+            foreach (var x in _surfaces) { x.Window.Opacity = 1; x.Window.IsHitTestVisible = true; }
+            UpdateVolume();
+            return true;
         }
 
         private static void Place(Window w, global::Avalonia.Platform.Screen? screen)
