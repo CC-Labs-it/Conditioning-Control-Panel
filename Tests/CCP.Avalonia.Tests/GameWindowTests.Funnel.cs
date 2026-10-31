@@ -8,7 +8,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services.Vault;
-using ConditioningControlPanel.Services.Funnel;
+using ConditioningControlPanel.Services.Funnel.Portable;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Avalonia.Views.Games;

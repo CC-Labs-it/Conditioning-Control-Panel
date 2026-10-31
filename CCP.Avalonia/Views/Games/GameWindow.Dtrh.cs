@@ -71,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             switch ((string?)o["type"])
             {
                 case "funnel":
-                    ConditioningControlPanel.Services.Funnel.FunnelPageMessage.Handle(o, DtrhOpenCheckout, !_dtrhRunActive && !_dtrhExiting && !_closing);
+                    ConditioningControlPanel.Services.Funnel.Portable.FunnelPageMessage.Handle(o, DtrhOpenCheckout, !_dtrhRunActive && !_dtrhExiting && !_closing);
                     return true;
                 case "ready":
                     IsReady = true;

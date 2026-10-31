@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-namespace ConditioningControlPanel.Services.Funnel;
+namespace ConditioningControlPanel.Services.Funnel.Portable;
 
 /// <summary>
 /// Aggregate funnel counters (contract C5 / C8): <c>POST /v2/public/funnel</c> with a

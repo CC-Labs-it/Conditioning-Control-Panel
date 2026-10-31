@@ -1,5 +1,5 @@
 using System;
-using ConditioningControlPanel.Services.Funnel;
+using ConditioningControlPanel.Services.Funnel.Portable;
 using ConditioningControlPanel.Services.Vault;
 using Newtonsoft.Json.Linq;
 using Xunit;

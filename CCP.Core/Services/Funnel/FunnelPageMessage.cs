@@ -3,7 +3,7 @@ using Serilog;
 using ConditioningControlPanel.Services.Vault;
 using Newtonsoft.Json.Linq;
 
-namespace ConditioningControlPanel.Services.Funnel;
+namespace ConditioningControlPanel.Services.Funnel.Portable;
 
 /// <summary>What a game page asked for in one <c>funnel</c> message.</summary>
 /// <param name="Url">The checkout to open, or null when the message only counts.</param>
