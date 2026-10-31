@@ -761,35 +761,23 @@ public sealed class ChaosRunHostTests
             var snapshot = ProcessStateSnapshot.Take();
             try
             {
-                Setup();
-                ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage(language);
-                FreshMeta();
-                var meta = ChaosMeta.State;
-                meta.ToyPockets = 1;
+                Setup(); ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage(language);
+                FreshMeta(); var meta = ChaosMeta.State; meta.ToyPockets = 1;
                 meta.ActiveLifetimeBoons.Add("porn_dvd");
-                meta.LifetimeBoonLevels["porn_dvd"] = level;
-                CoreSettings.Current.ChaosAccessoryKey1 = "Q";
+                meta.LifetimeBoonLevels["porn_dvd"] = level; CoreSettings.Current.ChaosAccessoryKey1 = "Q";
                 CoreSettings.Current.PanicKey = "F8";
-                ChaosDvdOverlay.CanOverlay = () => true;
-                ChaosDvdOverlay.PrepareWindow = (_, _) => true;
-                ChaosDvdOverlay.PlaySfx = (_, _) => { };
-                ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
+                ChaosDvdOverlay.CanOverlay = () => true; ChaosDvdOverlay.PrepareWindow = (_, _) => true;
+                ChaosDvdOverlay.PlaySfx = (_, _) => { }; ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
                 try
                 {
-                    ChaosRunHost.StartRun(Cfg());
-                    ChaosRunHost.Overlay!.FinishCountdown();
-                    ChaosRunHost.StopTimerForTests();
-                    var toy = Assert.Single(ChaosRunHost.ToyButtons).Toy;
-                    ChaosRunHost.ToggleManualPause();
-                    ChaosRunHost.OnToyKey("Q");
-                    Assert.False(ChaosDvdOverlay.AnyActive);
-                    ChaosRunHost.ToggleManualPause();
-                    ChaosRunHost.OnToyKey("Q");
-                    Assert.Equal(count, ChaosDvdOverlay.Flock.Active.Count);
+                    ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown();
+                    ChaosRunHost.StopTimerForTests(); var toy = Assert.Single(ChaosRunHost.ToyButtons).Toy;
+                    ChaosRunHost.ToggleManualPause(); ChaosRunHost.OnToyKey("Q");
+                    Assert.False(ChaosDvdOverlay.AnyActive); ChaosRunHost.ToggleManualPause();
+                    ChaosRunHost.OnToyKey("Q"); Assert.Equal(count, ChaosDvdOverlay.Flock.Active.Count);
                     foreach (var logo in ChaosDvdOverlay.Flock.Active)
                     {
-                        Assert.Equal(scale, logo.FontScale);
-                        Assert.Equal(230 * speed, Math.Sqrt(logo.Vx * logo.Vx + logo.Vy * logo.Vy), 6);
+                        Assert.Equal(scale, logo.FontScale); Assert.Equal(230 * speed, Math.Sqrt(logo.Vx * logo.Vx + logo.Vy * logo.Vy), 6);
                         Assert.Equal(ChaosRunHost.State!.ToyPower["porn_dvd"], logo.RemainingSec);
                     }
                     Assert.True(ChaosEffectBannerOverlay.Active!.Strip.IsLive("dvd"));
@@ -798,16 +786,10 @@ public sealed class ChaosRunHostTests
                     Assert.Equal(60, toy.CooldownRemainingSec);
                     ChaosRunHost.OnToyKey("Q"); // cooldown must not spawn more
                     Assert.Equal(count, ChaosDvdOverlay.Flock.Active.Count);
-                    ChaosRunHost.Tick();
-                    Assert.True(toy.IsEffectActive);
-                    ChaosDvdOverlay.Advance(30);
-                    ChaosDvdOverlay.Advance(0.3);
-                    ChaosRunHost.Tick();
-                    Assert.False(toy.IsEffectActive);
-                    Assert.False(ChaosEffectBannerOverlay.Active!.Strip.IsLive("dvd"));
-                    Assert.NotNull(ChaosDvdOverlay.Window);
-                    ChaosRunHost.ForceShutdown();
-                    Assert.Null(ChaosDvdOverlay.Window);
+                    ChaosRunHost.Tick(); Assert.True(toy.IsEffectActive); ChaosDvdOverlay.Advance(30);
+                    ChaosDvdOverlay.Advance(0.3); ChaosRunHost.Tick();
+                    Assert.False(toy.IsEffectActive); Assert.False(ChaosEffectBannerOverlay.Active!.Strip.IsLive("dvd"));
+                    Assert.NotNull(ChaosDvdOverlay.Window); ChaosRunHost.ForceShutdown(); Assert.Null(ChaosDvdOverlay.Window);
                 }
                 finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
             }
@@ -822,7 +804,6 @@ public sealed class ChaosRunHostTests
             return Task.CompletedTask;
         });
     }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -830,47 +811,33 @@ public sealed class ChaosRunHostTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            Setup();
-            var snapshot = ProcessStateSnapshot.Take();
+            Setup(); var snapshot = ProcessStateSnapshot.Take();
             var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx);
             var language = ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage;
             try
             {
-                FreshMeta();
-                ChaosMeta.State.ActiveLifetimeBoons.Add("intrusive_thoughts");
+                FreshMeta(); ChaosMeta.State.ActiveLifetimeBoons.Add("intrusive_thoughts");
                 ChaosMeta.State.LifetimeBoonLevels["intrusive_thoughts"] = custom ? 3 : 2;
                 ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage("fr");
                 CoreSettings.Current.BouncingTextPool = new Dictionary<string, bool> { ["disabled"] = false, ["chosen"] = custom };
                 ChaosDvdOverlay.CanOverlay = () => true;
                 ChaosDvdOverlay.PrepareWindow = (_, _) => true;
-                ChaosDvdOverlay.PlaySfx = (_, _) => { };
-                ChaosRunHost.StartRun(Cfg());
-                Ticks(40);
+                ChaosDvdOverlay.PlaySfx = (_, _) => { }; ChaosRunHost.StartRun(Cfg()); Ticks(40);
                 Assert.False(ChaosDvdOverlay.AnyActive);
-                ChaosRunHost.Overlay!.FinishCountdown();
-                ChaosRunHost.StopTimerForTests();
-                Ticks(19);
-                Assert.False(ChaosDvdOverlay.AnyActive);
-                ChaosRunHost.ToggleManualPause(); Ticks(40); ChaosRunHost.ToggleManualPause();
-                ChaosRunHost.Overlay.Hide(); Ticks(40); ChaosRunHost.Overlay.Show();
-                Assert.False(ChaosDvdOverlay.AnyActive);
-                Ticks(1);
+                ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests(); Ticks(19);
+                Assert.False(ChaosDvdOverlay.AnyActive); ChaosRunHost.ToggleManualPause(); Ticks(40); ChaosRunHost.ToggleManualPause();
+                ChaosRunHost.Overlay.Hide(); Ticks(40); ChaosRunHost.Overlay.Show(); Assert.False(ChaosDvdOverlay.AnyActive); Ticks(1);
                 var logo = Assert.Single(ChaosDvdOverlay.Flock.Active);
-                Assert.Equal(custom ? "chosen" : "CÈDE", logo.Text);
-                Assert.Equal(custom ? 5 : 4, logo.RemainingSec);
+                Assert.Equal(custom ? "chosen" : "CÈDE", logo.Text); Assert.Equal(custom ? 5 : 4, logo.RemainingSec);
                 Assert.Equal(0.8, logo.FontScale);
-                Assert.Equal(230 * 1.3, Math.Sqrt(logo.Vx * logo.Vx + logo.Vy * logo.Vy), 6);
-                Assert.Equal(custom, logo.SplitOnRabbit);
+                Assert.Equal(230 * 1.3, Math.Sqrt(logo.Vx * logo.Vx + logo.Vy * logo.Vy), 6); Assert.Equal(custom, logo.SplitOnRabbit);
                 Assert.False(ChaosDvdOverlay.AnyToyActive);
                 Ticks(21); // leave a partial interval before shutdown
                 Assert.Equal(2, ChaosDvdOverlay.Flock.Active.Count);
-                ChaosRunHost.ForceShutdown();
-                ChaosMeta.State.LifetimeBoonLevels["intrusive_thoughts"] = 1;
-                ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
-                Ticks(19);
+                ChaosRunHost.ForceShutdown(); ChaosMeta.State.LifetimeBoonLevels["intrusive_thoughts"] = 1;
+                ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests(); Ticks(19);
                 Assert.False(ChaosDvdOverlay.AnyActive); // accumulator resets between runs
-                Ticks(1);
-                Assert.False(Assert.Single(ChaosDvdOverlay.Flock.Active).SplitOnRabbit);
+                Ticks(1); Assert.False(Assert.Single(ChaosDvdOverlay.Flock.Active).SplitOnRabbit);
             }
             finally
             {

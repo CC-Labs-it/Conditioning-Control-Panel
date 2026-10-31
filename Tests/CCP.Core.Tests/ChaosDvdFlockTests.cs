@@ -137,45 +137,28 @@ public class ChaosDvdFlockTests
     [Fact]
     public void RabbitContactSplitsOnceWithTwoSecondsAndDivergedVelocity()
     {
-        var (f, _) = NewFlock();
-        var parent = f.Launch(3, 1.3, 0.8, text: "thought", splitOnRabbit: true).Single();
-        (parent.X, parent.Y, parent.Vx, parent.Vy) = (300, 200, 100, 100);
-        int contacts = 0;
-        f.Contact = _ => contacts++;
-        f.RabbitContact = l => ReferenceEquals(l, parent);
-        var frame = f.Step(0.1);
-        var clone = Assert.Single(frame.Spawned);
-        Assert.Equal(1, frame.RabbitCues);
-        Assert.True(parent.SplitSpent);
-        Assert.Equal(4.9, parent.RemainingSec, 6);
-        Assert.Equal(parent.RemainingSec, clone.RemainingSec);
+        var (f, _) = NewFlock(); var parent = f.Launch(3, 1.3, 0.8, text: "thought", splitOnRabbit: true).Single();
+        (parent.X, parent.Y, parent.Vx, parent.Vy) = (300, 200, 100, 100); int contacts = 0;
+        f.Contact = _ => contacts++; f.RabbitContact = l => ReferenceEquals(l, parent);
+        var frame = f.Step(0.1); var clone = Assert.Single(frame.Spawned); Assert.Equal(1, frame.RabbitCues); Assert.True(parent.SplitSpent);
+        Assert.Equal(4.9, parent.RemainingSec, 6); Assert.Equal(parent.RemainingSec, clone.RemainingSec);
         Assert.Equal((parent.X, parent.Y, parent.Text, parent.FontScale), (clone.X, clone.Y, clone.Text, clone.FontScale));
         Assert.True(clone.SplitOnRabbit);
-        Assert.False(clone.SplitSpent);
-        Assert.Equal(0, clone.Age);
+        Assert.False(clone.SplitSpent); Assert.Equal(0, clone.Age);
         Assert.Equal(0.61, Math.Abs(Math.Atan2(clone.Vy, clone.Vx) - Math.PI / 4), 6);
-        Assert.Equal(20000, clone.Vx * clone.Vx + clone.Vy * clone.Vy, 5);
-        Assert.Empty(f.Step(0.1).Spawned);
+        Assert.Equal(20000, clone.Vx * clone.Vx + clone.Vy * clone.Vy, 5); Assert.Empty(f.Step(0.1).Spawned);
         Assert.Equal(3, contacts); // first parent, then clone and parent
-        parent.RemainingSec = 0;
-        f.Step(0.1);
-        var before = contacts;
-        f.Step(0.1);
+        parent.RemainingSec = 0; f.Step(0.1); var before = contacts; f.Step(0.1);
         Assert.Equal(before + 1, contacts); // retiring parent cannot collide
     }
-
     [Fact]
     public void RabbitCapStillExtendsParentAndSpendsItsSplit()
     {
         var (f, _) = NewFlock();
         for (int i = 0; i < ChaosDvdFlock.MaxThoughts; i++)
             f.Launch(3, 1, 1, text: "thought", splitOnRabbit: true);
-        f.RabbitContact = _ => true;
-        var frame = f.Step(0.1);
-        Assert.Empty(frame.Spawned);
-        Assert.Equal(0, frame.RabbitCues);
-        Assert.All(f.Active, l => { Assert.True(l.SplitSpent); Assert.Equal(4.9, l.RemainingSec, 6); });
-        f.Step(0.1);
+        f.RabbitContact = _ => true; var frame = f.Step(0.1); Assert.Empty(frame.Spawned); Assert.Equal(0, frame.RabbitCues);
+        Assert.All(f.Active, l => { Assert.True(l.SplitSpent); Assert.Equal(4.9, l.RemainingSec, 6); }); f.Step(0.1);
         Assert.All(f.Active, l => Assert.Equal(4.8, l.RemainingSec, 6));
     }
 }
