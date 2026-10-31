@@ -146,12 +146,45 @@ namespace ConditioningControlPanel.Avalonia.Platform
             LayeredAudio.Instance = new LayeredAudio(path => new LayeredAudio.VlcLayerPlayer(_vlc, path));
             CoreAudio.PlayOneShotProvider = (path, volume, tag, started, finished) => PlayOneShot(path, volume, tag, started, finished);
             CoreAudio.PlayStoppableProvider = PlayOneShot;
+            CoreAudio.PlaySoundProvider = (path, volume, started, finished) => PlaySound(path, volume, started, finished);
             // Windows ducking is seeded by StartDuckJournal (App start-up only): a probe or test must never
             // lower the desk's real apps.
             if (!OperatingSystem.IsLinux()) return;
             CoreAudio.DuckProvider = Duck;
             CoreAudio.UnduckProvider = Unduck;
             CoreAudio.DuckGenerationProvider = () => { lock (_duckLock) return _duckGeneration; };
+        }
+
+        private Action? _stopSound;
+        internal void PlaySound(string path, int volume, Action<TimeSpan>? started, Action? finished)
+        {
+            Interlocked.Exchange(ref _stopSound, null)?.Invoke();
+            _stopSound = StartSound(ended => NewVoice(path, ended), volume, started, finished);
+        }
+
+        internal interface ISoundVoice : MindWipePlayer.IVoice
+        {
+            Action<long>? Started { set; }
+            bool Play();
+        }
+
+        // Device-free lifecycle seam: the same binding drives the native voice and regression tests.
+        internal static Action StartSound(Func<Action, ISoundVoice> create, int volume,
+            Action<TimeSpan>? started, Action? finished)
+        {
+            ConditioningControlPanel.Services.Audio.MasterVolumeBinding? master = null;
+            ISoundVoice? voice = null;
+            void Apply(int level)
+            {
+                if (voice != null) voice.Volume = ConditioningControlPanel.Services.Audio.MasterVolumeBinding.SoundGain(volume, level);
+            }
+            voice = create(() => { master?.Dispose(); Fire(finished); });
+            master = new(Apply);
+            voice.Started = ms => { Apply(master.Level); started?.Invoke(TimeSpan.FromMilliseconds(ms)); };
+            Apply(master.Level);
+            void Stop() { master.Dispose(); voice.Dispose(); }
+            if (!voice.Play()) Stop();
+            return Stop;
         }
 
         /// <summary>Same contract as WPF's AudioService.PlayOneShot: onStarted gets the clip length
@@ -219,11 +252,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return new Voice(new MediaPlayer(media), media, onEnded);
         }
 
-        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : MindWipePlayer.IVoice
+        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : ISoundVoice
         {
             private int _vol, _done;
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
-            internal Action<long>? Started;
+            public Action<long>? Started { get; set; }
             internal volatile bool Failed;
             public double Volume
             {

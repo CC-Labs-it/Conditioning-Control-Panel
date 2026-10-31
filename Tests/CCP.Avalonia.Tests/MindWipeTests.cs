@@ -69,6 +69,8 @@ public sealed class MindWipeTests
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var s = CoreSettings.Current;
+            var master = s.MasterVolume;
+            s.MasterVolume = 100;
             var saved = (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency);
             var engine = CoreSession.IsEngineRunningProvider;
             var dir = Directory.CreateTempSubdirectory();
@@ -88,17 +90,33 @@ public sealed class MindWipeTests
             try { body(player, voices, clock); }
             finally
             {
-                CoreMindWipe.Stop();
+                player.Dispose();
                 CoreMindWipe.StartProvider = null; CoreMindWipe.StopProvider = null; CoreMindWipe.IsRunningProvider = null;
                 CoreMindWipe.TriggerOnceProvider = null; CoreMindWipe.StartLoopProvider = null; CoreMindWipe.StopLoopProvider = null;
                 CoreMindWipe.IsLoopingProvider = null; CoreMindWipe.UpdateSettingsProvider = null;
                 CoreMindWipe.ReloadClipsProvider = null; CoreMindWipe.ClipCountProvider = null;
                 CoreSession.IsEngineRunningProvider = engine;
                 (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency) = saved;
+                s.MasterVolume = master;
                 dir.Delete(true);
             }
             return Task.CompletedTask;
         }).GetAwaiter().GetResult();
+
+    [Fact]
+    public void Master_updates_one_shot_and_loop_without_losing_their_own_level() => Run((player, voices, clock) =>
+    {
+        CoreSettings.Current.MasterVolume = 0;
+        player.TriggerOnce();
+        player.StartLoop(0.5);
+        Assert.All(voices, v => Assert.Equal(0, v.Vol));
+        CoreSettings.Current.MasterVolume = 40;
+        Assert.All(voices, v => Assert.Equal(0.2, v.Vol, 5));
+        player.UpdateSettings(6, 0.25);
+        Assert.All(voices, v => Assert.Equal(0.1, v.Vol, 5));
+        CoreSettings.Current.MasterVolume = 0;
+        Assert.All(voices, v => Assert.Equal(0, v.Vol));
+    });
 
     [Fact]
     public void Card_drives_the_service_ticks_loop_clean_slate_and_stop() => Run((player, voices, clock) =>
