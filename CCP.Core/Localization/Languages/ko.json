@@ -7959,5 +7959,11 @@
   "online_official_plan_prime": "Prime은 하루 할당량이 가장 큽니다. 이미 본 것은 무료로 다시 재생됩니다.",
   "online_official_nice": "좋아요",
   "online_official_stamped_line": "온라인 미디어는 Scrolller에서 가져옵니다. 모든 이미지와 클립에 작은 \"via Scrolller\" 표시가 있습니다.",
-  "online_cache_day_line": "온라인 미디어는 이 컴퓨터의 작은 캐시에 하루 동안만 보관되며 업로드되지 않습니다."
+  "online_cache_day_line": "온라인 미디어는 이 컴퓨터의 작은 캐시에 하루 동안만 보관되며 업로드되지 않습니다.",
+  "remote_directory_private": "Remote: 비공개",
+  "remote_directory_private_tip": "Remote 세션이 비공개 상태라 사용 가능한 대상 목록에 표시되지 않습니다. Goon 테이블의 공개 범위는 별도로 설정합니다.",
+  "remote_directory_listed": "Remote: 목록에 표시됨",
+  "remote_directory_listed_tip": "Remote 세션이 사용 가능한 대상 목록에 표시되어 상대가 맡기를 기다리고 있습니다.",
+  "remote_directory_claimed": "Remote: 담당자 확정",
+  "remote_directory_claimed_tip": "컨트롤러가 Remote 목록의 내 항목을 맡았습니다."
 }
