@@ -41,7 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
-    /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
+    /// pop text uses the pooled overlay through <see cref="PopText"/>. Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off);
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
     /// wired to CoreBark (chaos-payout-barks). NO FOCUS TO DEFUSE, last breath and UNLEASHED
@@ -67,9 +67,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
         internal static Random Rng = new();
 
-        /// <summary>WPF ChaosPopText.Show(xDip, yDip, text, color); seeded by the pop-text lane,
-        /// a no-op until then.</summary>
-        internal static Action<double, double, string, Color>? PopText;
+        /// <summary>WPF BubbleService.cs:4918 and ChaosModeService.cs:1688/:1716/:1856:
+        /// bubble labels and payouts show pooled combat text. Tests may intercept the sink.</summary>
+        internal static Action<double, double, string, Color>? PopText = ChaosPopText.Show;
         /// <summary>WPF <c>_fx.Pulse(color, strength)</c> (ChaosFxWindow); unseeded until it lands.</summary>
         internal static Action<Color, double>? PulseFx;
         /// <summary>WPF <c>App.ScreenShake.Shake(intensity, ms)</c>; unseeded until it lands.</summary>
