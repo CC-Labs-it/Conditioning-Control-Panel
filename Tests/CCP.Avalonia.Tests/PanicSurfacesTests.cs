@@ -113,6 +113,7 @@ public sealed class PanicSurfacesTests
         "lock-cards",
         "mantra",
         "panic-quiet",
+        "personality-studio",
         "pink-rush",
         "possession",
         "program-session",
