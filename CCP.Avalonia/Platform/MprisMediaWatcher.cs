@@ -26,6 +26,10 @@ internal sealed class MprisMediaWatcher : IMediaWatcher
 
     public MediaSample? Current => _watcher.Current;
     public bool IsAvailable => _watcher.IsAvailable;
+    // Observer tick/candidate/wipe hooks, WPF AwarenessObserver.cs:743-747,835-838,944-970.
+    internal MediaInfo? TrackMedia() => _watcher.TrackMedia();
+    internal bool TakeMediaChange() => _watcher.TakeMediaChange();
+    internal void ResetMediaState() => _watcher.ResetMediaState();
     public void Start() => _watcher.Start();
     public void Stop() => _watcher.Stop();
     internal Task StartCompletion => _watcher.StartCompletion;
