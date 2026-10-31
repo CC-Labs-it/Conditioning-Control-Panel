@@ -25,6 +25,14 @@ public interface IEmiVox : IDisposable
     void Stop();
 }
 
+/// <summary>The head supplies availability, master gain and a native one-shot stop handle.</summary>
+public interface IEmiVoxOutput
+{
+    bool IsOutputSuppressed { get; }
+    int MasterVolume { get; }
+    Action? PlayOneShot(string path, float volume, string tag);
+}
+
 /// <summary>
 /// THE SOUND SHE MAKES WHILE A LINE IS ON SCREEN, ported from the Arcademy's
 /// <c>Resources/web/arcademy/emi/vox.js</c> plus the two recipes its cues resolve to in
@@ -52,7 +60,7 @@ public interface IEmiVox : IDisposable
 /// Blips are a texture rather than a second voice, and there is no desk-sound setting to hang
 /// them off, so there is no new setting: they are on.</para>
 /// </summary>
-public sealed class EmiVox : IEmiVox
+public sealed class EmiVox(IEmiVoxOutput output) : IEmiVox
 {
     // ---------------------------------------------------------------- the dials
 
@@ -483,7 +491,7 @@ public sealed class EmiVox : IEmiVox
     private const int CacheCap = 96;
 
     private readonly object _gate = new();
-    private AudioPlaybackHandle? _live;
+    private Action? _live;
     private bool _dead;
     private string? _tickPath;
 
@@ -497,15 +505,15 @@ public sealed class EmiVox : IEmiVox
     /// True when a sound may leave this object at all: the app is not muted, the audio breaker is
     /// shut, and nothing safety-shaped is holding her quiet.
     /// </summary>
-    private static bool Audible(out float volume)
+    private bool Audible(out float volume)
     {
         volume = 0f;
         try
         {
-            var audio = App.Audio;
+            var audio = output;
             if (audio == null || audio.IsOutputSuppressed) return false;
 
-            int master = App.Settings?.Current?.MasterVolume ?? 0;
+            int master = audio.MasterVolume;
             if (master <= 0) return false;
 
             // SAFETY IS SILENCE. A hold or the panic tail means she is deliberately quiet, and a
@@ -539,7 +547,7 @@ public sealed class EmiVox : IEmiVox
             if (path == null) return false;
 
             Stop();                                   // ONE VOICE: never two at once
-            var handle = App.Audio?.PlayOneShot(path, volume, "emi-vox");
+            var handle = output.PlayOneShot(path, volume, "emi-vox");
             lock (_gate) _live = handle;
             Spoke++;
             return handle != null;
@@ -563,7 +571,7 @@ public sealed class EmiVox : IEmiVox
 
             // A tick is 30 ms and lands between bursts, so it does NOT take the live slot: cutting
             // a burst on a dot frame would be the typewriter this voice is deliberately not.
-            App.Audio?.PlayOneShot(_tickPath, volume, "emi-vox-tick");
+            output.PlayOneShot(_tickPath, volume, "emi-vox-tick");
             Ticks++;
             return true;
         }
@@ -577,10 +585,10 @@ public sealed class EmiVox : IEmiVox
     /// <inheritdoc/>
     public void Stop()
     {
-        AudioPlaybackHandle? live;
+        Action? live;
         lock (_gate) { live = _live; _live = null; }
         if (live == null) return;
-        try { live.Stop(); }
+        try { live(); }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] vox stop failed"); }
     }
 
