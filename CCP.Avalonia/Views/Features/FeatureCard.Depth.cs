@@ -19,6 +19,7 @@ public partial class FeatureCard
     private readonly TranslateTransform _travel = new();
     private readonly RotateTransform _tilt = new();
     private bool _pressed;
+    private double _travelTarget = double.NaN;
 
     // WPF FeatureCard.xaml.cs:313-315 and Services/UI/DashboardCardDepth.cs:40-62.
     private void InitializeDepth()
@@ -61,8 +62,13 @@ public partial class FeatureCard
         _txtTitle.Opacity = muted ? 0.72 : 1;
         var grey = this.FindControl<Border>("ImgIconMute")!;
         int ms = CardMuteRule.TransitionMs(Env.AllowTransitions, IsLoaded);
-        grey.Transitions = ms == 0 ? null : new Transitions
-        { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(ms), Easing = new QuadraticEaseOut() } };
+        // WPF ApplyMute (:598-602) retargets from the current opacity. Replacing this
+        // collection would first cancel the fade and expose its old destination.
+        if (ms == 0) grey.Transitions = null;
+        else if (grey.Transitions is not [DoubleTransition fade] || fade.Property != OpacityProperty
+            || fade.Duration != TimeSpan.FromMilliseconds(ms) || fade.Easing is not QuadraticEaseOut)
+            grey.Transitions = new Transitions
+            { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(ms), Easing = new QuadraticEaseOut() } };
         grey.Opacity = muted ? 1 : 0;
         RefreshDepth();
     }
@@ -77,11 +83,15 @@ public partial class FeatureCard
         if (this.TryFindResource(DashboardDepthLaw.BevelKeyFor(_pressed, active), out var lamp) && lamp is IBrush brush)
             bevel.BorderBrush = brush;
         double target = DashboardDepthLaw.TravelFor(DashboardDepth, _pressed, active, _hovered);
-        double from = _travel.Y;
-        if (target != from || !Env.AllowTransitions)
+        // WPF DashboardCardDepth.cs:122-124 preserves an unchanged tween on refresh.
+        if (target != _travelTarget || !Env.AllowTransitions)
+        {
+            _travelTarget = target;
+            double from = _travel.Y;
             SetDepthValue(_travel, TranslateTransform.YProperty, target,
                 DepthLaw.Ms(_pressed ? DepthLaw.PressMs : DepthLaw.ReleaseMs, Env.Level),
                 !_pressed && target < from ? new DepthSpring(from, target) : new QuadraticEaseOut());
+        }
         if (!_hovered || _pressed || !DashboardDepth || Env.Level == MotionLevel.Off || Env.CurrentTier == PerformanceTier.Performance)
             SetDepthValue(_tilt, RotateTransform.AngleProperty, 0, DepthLaw.Ms(DepthLaw.HoverMs, Env.Level), new QuadraticEaseOut());
     }

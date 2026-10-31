@@ -358,6 +358,77 @@ public sealed class FeatureCardFxTests
         finally { host.Children.Remove(wall); ConditioningControlPanel.Services.Prizes.PrizeGrants.Attach(saved); }
     });
 
+    [Fact]
+    public void MuteReversalsContinueFromCurrentOpacityOnTheAnimationClock() => WithCard((window, host, card) =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        card.DimWhenInactive = true;
+        var grey = card.FindControl<Border>("ImgIconMute")!;
+        var clock = new AnimationClock(grey);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        Hover(card, window, true);
+        clock.At(0); clock.At(50);
+        Assert.Equal(0.5625, grey.Opacity, 5); // 50 ms into the WPF 200 ms quadratic fade
+        double before = grey.Opacity;
+        Hover(card, window, false);
+        Assert.Equal(before, grey.Opacity, 5);
+        clock.At(50); clock.At(100);
+        Assert.InRange(grey.Opacity, before + 0.01, 0.99);
+        before = grey.Opacity;
+        card.IsActive = true;
+        Assert.Equal(before, grey.Opacity, 5);
+        clock.At(100); clock.At(150);
+        Assert.InRange(grey.Opacity, 0.01, before - 0.01);
+        before = grey.Opacity;
+        card.RefreshFx();
+        Assert.Equal(before, grey.Opacity, 5);
+        clock.At(350);
+        Assert.Equal(0, grey.Opacity, 5);
+    });
+
+    [Fact]
+    public void FocusRefreshMidReleasePreservesTheSpringAndItsOriginalDeadline() => WithCard((window, host, card) =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        card.DashboardDepth = card.DimWhenInactive = true;
+        var travel = ((TransformGroup)card.FindControl<Panel>("PressFace")!.RenderTransform!).Children.OfType<TranslateTransform>().Single();
+        var clock = new AnimationClock(travel);
+        var point = card.TranslatePoint(new Point(60, 60), window)!.Value;
+        window.MouseMove(point);
+        window.MouseDown(point, MouseButton.Left);
+        Assert.Equal(2, travel.Y);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        window.MouseUp(point, MouseButton.Left);
+        clock.At(0); clock.At(35);
+        Assert.InRange(travel.Y, -1.9, 1.9);
+        double before = travel.Y;
+        var transition = travel.Transitions;
+        typeof(WindowBase).GetMethod("HandleDeactivated", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
+        typeof(WindowBase).GetMethod("HandleActivated", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(before, travel.Y, 5);
+        Assert.Same(transition, travel.Transitions);
+        clock.At(91); // 65% of 140 ms: one pixel past the hovered -2 rest
+        Assert.Equal(-3, travel.Y, 5);
+        clock.At(140);
+        Assert.Equal(-2, travel.Y, 5);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        Env.RaiseMotionGateChanged();
+        Assert.Equal(-2, travel.Y);
+    });
+
+    // Avalonia's animation clock is internal. Drive its real ClockBase with exact timestamps
+    // so these are timed transition tests without sleeps or dependence on renderer scheduling.
+    private sealed class AnimationClock
+    {
+        private readonly object _clock = Activator.CreateInstance(
+            typeof(global::Avalonia.Animation.Animatable).Assembly.GetType("Avalonia.Animation.ClockBase")!, nonPublic: true)!;
+        internal AnimationClock(global::Avalonia.Animation.Animatable target) =>
+            typeof(global::Avalonia.Animation.Animatable).GetProperty("Clock", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(target, _clock);
+        internal void At(int milliseconds) => _clock.GetType().GetMethod("Pulse", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(_clock, new object[] { TimeSpan.FromMilliseconds(milliseconds) });
+    }
+
     private static void Hover(FeatureCard card, Window window, bool on) => card.RaiseEvent(new PointerEventArgs(
         on ? InputElement.PointerEnteredEvent : InputElement.PointerExitedEvent, card,
         new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), window, default, 0, PointerPointProperties.None, KeyModifiers.None));
