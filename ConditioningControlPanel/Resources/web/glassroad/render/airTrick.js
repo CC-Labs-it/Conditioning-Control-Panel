@@ -2,7 +2,7 @@ import { Vector3, Quaternion, PropertyBinding } from 'three/webgpu';
 
 /**
  * EMI's air trick on the R4 rig (render/airTrickMath.js has the timeline): an additive lift (world up) and a
- * turn about the kart's up axis on rider_mount, a settle wobble, and one shoulder eased toward the cheer clip's
+ * turn about the kart's up axis on rider_mount, squash and stretch along that axis, a settle wobble, and one shoulder eased toward the cheer clip's
  * highest ("arms high") frame. Applied after the mixer, restored before its next pose (like phrasePieces.js).
  */
 /** The cheer clip's highest frame for one shoulder: the key farthest from its rest turn ("arms high", about 0.6 s). */
@@ -34,11 +34,16 @@ export function createAirTrickPieces(model, clips = []) {
   }
   const pos = new Vector3(), quat = new Quaternion(), world = new Quaternion(), parentInv = new Quaternion();
   const up = new Vector3(), lift = new Vector3(), fwd = new Vector3(), right = new Vector3(), q = new Quaternion();
+  const scale = new Vector3();
+  // the kart's up in rider_mount's own axes (the kart root is Z-up inside): squash and stretch scale that axis
+  model.updateMatrixWorld(true);
+  const upLocal = new Vector3(0, 1, 0).applyQuaternion(model.getWorldQuaternion(q)).applyQuaternion(rider.getWorldQuaternion(world).invert());
+  const upAxis = ['x', 'y', 'z'].reduce((a, k) => (Math.abs(upLocal[k]) > Math.abs(upLocal[a]) ? k : a), 'y');
   let applied = false, appliedArm = null;
 
   function beforePose() {
     if (!applied) return;
-    rider.position.copy(pos); rider.quaternion.copy(quat);
+    rider.position.copy(pos); rider.quaternion.copy(quat); rider.scale.copy(scale);
     if (appliedArm) appliedArm.bone.quaternion.copy(appliedArm.quat);
     applied = false; appliedArm = null;
   }
@@ -46,7 +51,7 @@ export function createAirTrickPieces(model, clips = []) {
   function update(o, enabled = true) {
     beforePose();
     if (!enabled || !o || !o.active) return;
-    pos.copy(rider.position); quat.copy(rider.quaternion);
+    pos.copy(rider.position); quat.copy(rider.quaternion); scale.copy(rider.scale);
     model.updateMatrixWorld(true); model.getWorldQuaternion(world);
     rider.parent.getWorldQuaternion(parentInv).invert();
     // EMI pops straight up in the world (a kart diving off a kicker is pitched nose down, its own up points
@@ -59,6 +64,7 @@ export function createAirTrickPieces(model, clips = []) {
     if (o.spin) rider.quaternion.premultiply(q.setFromAxisAngle(up, o.spin));
     if (o.wobRoll) rider.quaternion.premultiply(q.setFromAxisAngle(fwd, o.wobRoll));
     if (o.wobPitch) rider.quaternion.premultiply(q.setFromAxisAngle(right, o.wobPitch));
+    if (o.squash) { rider.scale.multiplyScalar(1 + 0.5 * o.squash); rider.scale[upAxis] = scale[upAxis] * (1 - o.squash); }
     const arm = o.armK > 0 ? arms[o.arm] || arms[-o.arm] : null;
     if (arm) { arm.quat.copy(arm.bone.quaternion); arm.bone.quaternion.slerp(arm.high, o.armK); }
     applied = true; appliedArm = arm;

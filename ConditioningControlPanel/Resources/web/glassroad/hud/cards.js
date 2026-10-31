@@ -65,7 +65,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
 
   let kind = 'start', data = {}, ready = false, waitNote = note?.textContent || '';
   const sound = (name) => { if (name) emit('sound', { name }); };
-  let opts = loadOptions(), host = { gentle: false, scrolller: null, device: 'desktop', autoTier: null };   // scrolller: { on } where the host offers its feed
+  let opts = loadOptions(), host = { gentle: false, scrolller: null, device: 'desktop', autoTier: null, toys: false };   // scrolller: { on } where the host offers its feed
   const load = { p: 0 };
   // garage first: the course's lights warm behind the menu; until they are ready the Race door says so (a press
   // still works: boot covers the garage and starts the race the moment the lights are ready)
@@ -241,6 +241,8 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
         btn('cycle', choiceLabel('laps', opts.laps), 'c-tog', ' data-key="laps" aria-label="Laps"') + '</div>' +
       '<div class="c-opt"><span>Motion<small>Shake, pulses and hit pauses</small></span>' +
         btn('cycle', choiceLabel('motion', opts.motion), 'c-tog', ' data-key="motion" aria-label="Motion"') + '</div>' +
+      (host.toys ? '<div class="c-opt"><span>Toys<small>Your connected toy, race by race</small></span>' +
+        btn('cycle', choiceLabel('toys', opts.toys), 'c-tog', ' data-key="toys" aria-label="Toys"') + '</div>' : '') +
       tog('assist', 'Soft rails', opts.assist, 'Open edges hold you in', false) +
       '<label class="c-opt"><span>Steering<small>How hard the wheel turns</small></span><input type="range" min="' + STEER_SENS.min + '" max="' +
         STEER_SENS.max + '" step="' + STEER_SENS.step + '" data-key="steerSens" value="' + opts.steerSens + '" aria-label="Steering"></label>' +
@@ -501,6 +503,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       paintLoad();
     },
     setHostGentle(on) { host.gentle = !!on; },
+    setToys(on) { host.toys = !!on; },
     /** The device behind the tier and the auto pick ({ device, autoTier }, renderer.device / autoTier): the Quality hint. */
     setDevice(v) { host.device = v && v.device === 'phone' ? 'phone' : 'desktop'; host.autoTier = (v && v.autoTier) || null; },
     /** The host's Scrolller state ({ on, track, niches, custom, catalog }), or null where the host has no feed (nothing
