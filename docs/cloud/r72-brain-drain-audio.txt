@@ -1,0 +1,96 @@
+Brain Drain audio re-cut onto 7.2
+
+Base: 74ac6ce3d5e0ae082c2871c00e864943e15aa2ad, clean work branch.
+Initial snapshot aa9918833722f057079e455167cb3d1b14462340 was corrected by the requested fetch/checkout.
+Repository confirmed by fetch: CC-Labs-it/Conditioning-Control-Panel.
+
+Historical comparisons fetched and inspected:
+brain-drain-blur-overlay-a: 61a934110bdb..359e27feaf5d (961 changed lines).
+feat-first-show: 61a934110bdb..539ee67d89c9 (1805 changed lines).
+fin4-views-studio-brain-drain-feature: a65dbbe2f493..f59e169d08bd (754 changed lines).
+Audio policy and player reused from fin4. WPF files are unchanged. No new localization keys.
+Safety and Scrolller implementation on the base is retained; new audio teardown is additive.
+PR listing via gh was forbidden, but refs/pull/3397/head and refs/pull/3277/head fetched successfully.
+
+Ported behavior (paths relative to repository root):
+- Primary .mp3/.wav/.ogg clips win case-insensitive filenames over read-only legacy clips.
+  WPF ConditioningControlPanel/Services/LockCard/BrainDrainService.cs:59,101,158.
+  Core CCP.Core/Services/Notifications/BrainDrainAudioPolicy.cs:11,13,19.
+- 500 ms / 5 s cadence and intensity probability; a clip finishes before another starts.
+  WPF ConditioningControlPanel/Services/LockCard/BrainDrainService.cs:138,280,295.
+  Core BrainDrainAudioPolicy.cs:26; Avalonia CCP.Avalonia/Platform/BrainDrainPlayer.cs:38,60.
+- Live master times own gain, including a replaced settings object.
+  WPF ConditioningControlPanel/Services/LockCard/BrainDrainService.cs:417,431,435.
+  Avalonia CCP.Avalonia/Platform/BrainDrainPlayer.cs:45,51,59.
+  Restore subscription follows existing Avalonia settings replacement convention.
+- Saved engine enable, audio-only exclusion, live wall toggle, reconcile and unconditional stop.
+  WPF ConditioningControlPanel/MainWindow/MainWindow.StartStop.cs:411,531;
+  ConditioningControlPanel/MainWindow/MainWindow.Presets.cs:1364.
+  Reconcile additionally stops a disabled audio service, following the existing Core stop-only rule.
+  Core CCP.Core/CoreEngine.cs:26,72,96,120,140; Avalonia App.axaml.cs:784.
+- Thread-safe stop invalidates late decoder output; panic and exit dispose the voice.
+  WPF ConditioningControlPanel/Services/LockCard/BrainDrainService.cs:249,354,385.
+  Avalonia CCP.Avalonia/Platform/BrainDrainPlayer.cs:83,85;
+  CCP.Avalonia/Views/Windows/PanicSurfaces.cs:88, Platform/PanicWatchdog.cs:118, App.axaml.cs:1272.
+- Running/idle Discord presence follows audio start/stop, as existing MindWipe does.
+  WPF ConditioningControlPanel/Services/LockCard/BrainDrainService.cs:240,270.
+  Avalonia CCP.Avalonia/Platform/BrainDrainPlayer.cs:41,98.
+
+Already on base:
+- KeepClear preference loads, persists and rebinds: WPF
+  ConditioningControlPanel/Views/Controls/Studio/BrainDrainFeatureControl.xaml:227;
+  Avalonia CCP.Avalonia/Views/Controls/Studio/BrainDrainFeatureControl.axaml.cs:52,80.
+  Its native z-order effect is covered by PR #3397 BrainDrainOverlay.cs:104-114.
+- Book replay: WPF ConditioningControlPanel/Windows/EmiDesk/EmiBookWindow.xaml.cs:234;
+  Avalonia CCP.Avalonia/Views/Windows/EmiDesk/EmiBookWindow.axaml.cs:331-336.
+- First-run launch: WPF ConditioningControlPanel/MainWindow/MainWindow.xaml.cs:552;
+  Avalonia CCP.Avalonia/Views/Windows/MainShellWindow.FirstRun.cs:95-105.
+
+Covered by PR, not duplicated:
+- Native compositor blur, screen hosts, capture affinity and KeepClear: #3397
+  CCP.Avalonia/Views/Overlays/BrainDrainOverlay.cs:17-20,65-114;
+  WPF ConditioningControlPanel/Services/Notifications/OverlayService.cs:2231,3213.
+- First-show bubble input and suppression/mod-resolved cue audio: #3277
+  CCP.Avalonia/Views/Windows/WelcomeShow/FirstShowStageWindow.cs:434;
+  FirstShowAudio.cs:23-27. WPF Services/FirstShow/FirstShowAudio.cs:18,37,
+  Services/FirstShow/FirstShowDesktopWindow.cs:110 (bubble input).
+
+Part B, missing on base and not claimed complete here:
+- Captured desktop and melt, both capture lanes: WPF
+  ConditioningControlPanel/Services/Compositor/BrainDrainLayer.cs:71;
+  BrainDrainCapturePump.cs:443. No Avalonia capture pump exists on base;
+  first-show still paints a veil (CCP.Avalonia/Views/Windows/WelcomeShow/FirstShowEffects.cs).
+  Reuse 359e27feaf5d BrainDrainCapturePump.cs:62-111 and native capture files with native tests.
+- Help replay door: WPF ConditioningControlPanel/MainWindow/MainWindow.xaml.cs:1488;
+  Avalonia CCP.Avalonia/Views/Windows/MainShellWindow.HelpButtons.cs:57 has no replay handler.
+  Book replay is already present as recorded above.
+- Synthesized EMI voice: WPF Services/FirstShow/FirstShowAudio.cs:19-27;
+  Avalonia CCP.Avalonia/Views/Windows/WelcomeShow/FirstShowAudio.cs:9-12 explicitly defers it.
+  Reuse 539ee67d89c9 CCP.Core/Services/EmiDesk/EmiVoxSynthesis.cs and FirstShowAudio.cs:21.
+- Studio art, audio folder/count UI, settings controls and MoreFold volume:
+  WPF ConditioningControlPanel/Views/Controls/Studio/BrainDrainFeatureControl.xaml:67,281;
+  its .xaml.cs:98,121,161,269. Avalonia corresponding .axaml.cs:14-27,39-45,90
+  remains stubbed; the existing wall toggle can now start audio through CoreEngine.ApplyLive.
+  Reuse fin4 BrainDrainFeatureControl.axaml.cs:20-123, keeping visual controls honest.
+- Ancillary fin4 bubble disc input refinement: WPF Services/BubbleService.cs:581,661;
+  Avalonia CCP.Avalonia/Views/Overlays/BubbleOverlay.cs:450 still builds square regions.
+  This is outside the triage-named audio gap.
+
+Tests and command results are reported in the delivery message; runtime desktop capture was not verified.
+
+Validation:
+.NET SDK 10.0.403 installed with dotnet-install --channel 10.0 using the builds.dotnet.microsoft.com feed.
+Build CCP.Core: 0 errors. Build CCP.Avalonia: 0 errors. Build Tests/CCP.Avalonia.Tests: 0 errors.
+Focused Core policy/engine tests: BrainDrainAudioPolicyTests.cs:8,31,39; BrainDrainEngineTests.cs:7.
+Focused head tests: BrainDrainAudioTests.cs:30,64; BrainDrainAudioTestsPresence.cs:7.
+TestIsolationTests.cs assembly hook retained; no existing tests were removed or weakened.
+Fail-proof 1: replaced discovery with an empty result, reversed cadence, forced gain to 1,
+  and removed engine arming. Core focused result: Failed 6, Passed 3, Total 9.
+Fail-proof 2, isolated player with working discovery: forced gain to 1 and removed late disposal.
+  Head result: Failed 2, Passed 0; failures were gain 1 vs 0.2 and undisposed late voice.
+All temporary production mutations were restored with finally; final validation uses restored sources.
+Final dotnet test Tests/CCP.Core.Tests --no-restore: Failed 0, Passed 4644, Skipped 6, Total 4650 (49 s).
+The 6 skips are existing Vosk/device and frame-budget skips; no new skips were added.
+Final dotnet test Tests/CCP.Avalonia.Tests --no-restore --filter 'FullyQualifiedName~BrainDrainAudioTests|FullyQualifiedName~PanicSurfacesTests': Failed 0, Passed 9, Skipped 0 (15 s).
+Final bash .github/scripts/core-guards.sh: All Core guards passed.
+Final python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
