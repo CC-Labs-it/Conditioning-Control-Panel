@@ -49,12 +49,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             [JustDropId] = new(JustDropId, "jd_door_title", "", JustDropDoorOpen),
             // WPF PieceByPieceHostService.cs:221 StartUrl; free for everyone since 2026-09-27 (:188), no gate.
             [PbpId] = new(PbpId, "launcher_game_piecebypiece_title", "piecebypiece/index.html"),
-            // WPF CaucusHostService.Launch: dtrh/race.html behind the racing-purchase door (GameWindow.Race.cs).
+            // WPF #3126: the 2D bridge remains, but no production door opens it.
             ["loom"] = new("loom", "billboard_loom_title", "dtrh/loom.html"), // WPF LoomHostService: free
-            ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
+            ["race"] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
             // WPF DtrhHostService.cs:196 StartUrl behind the Lab door (GameWindow.Dtrh.cs).
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
-            // WPF GlassroadHostService (feat/glassroad-a): the 3D race behind CCP_GLASSROAD=1 (GameWindow.Glassroad.cs).
+            // WPF #3132: Racing Thoughts is Prime only, including solo.
             [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
         };
 
@@ -73,13 +73,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
         internal static GameWindow? Launch(string id)
         {
-            id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
+            id = ResolveDoor(id);   // one routing seam for the Racing Thoughts host
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
+            return spec.Id == GlassroadId ? LaunchRacingThoughts() : LaunchWindow(spec);
+        }
+
+        /// <summary>The race launch seam. The Linux host lane replaces this call with its owned host.</summary>
+        private static GameWindow? LaunchRacingThoughts() => LaunchWindow(Games[GlassroadId]);
+
+        private static GameWindow? LaunchWindow(Game spec)
+        {
+            // Gate before refocusing too: a tier loss cannot reopen a live race through another door.
+            try { if (spec.Gate != null && !spec.Gate()) return null; }
+            catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", spec.Id); return null; }
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
             if (live != null) { live.Activate(); return live; }
-            try { if (spec.Gate != null && !spec.Gate()) return null; }
-            catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();
