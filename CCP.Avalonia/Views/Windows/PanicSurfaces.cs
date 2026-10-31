@@ -104,6 +104,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
             new("quick-recal", _ => WebcamQuickRecalWindow.CloseAllForPanic()),
             new("asset-preview", _ => MiniPlayerWindow.CloseAllForPanic()),  // Library local and encrypted-pack previews (P06; WPF left the preview open)
+            new("launcher-notes", _ => LauncherWindow.CloseNotesForPanic()),
+            new("launcher-friends", _ => LauncherWindow.CloseFriendsForPanic()),
             new("camera", _ => MainShellWindow.StopCameraForPanic(), After: ["gaze-minigame"]),   // decision C: last, fire-and-forget; gaze reads it
         };
 

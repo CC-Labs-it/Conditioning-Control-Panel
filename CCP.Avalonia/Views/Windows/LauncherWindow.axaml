@@ -1,6 +1,6 @@
 <!-- PORTED (slice 1, shell only) from ConditioningControlPanel/Windows/Launcher/LauncherWindow.xaml; sizes,
      order and loc keys are the original's. What is not here yet: docs/avalonia-parity.html win-launcher. -->
-<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns:friends="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls" xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
@@ -373,12 +373,21 @@
         </Grid>
 
         <!-- ================= bottom row ================= -->
-        <!-- ponytail: the friends chip and the What's New link (WPF left side) are not here yet. -->
+        <!-- ponytail: the Sky/open-tables chip needs the Lobby service. -->
         <Border Grid.Row="2" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="0,1,0,0" Margin="28,0,28,0">
-            <CheckBox x:Name="SkipToPanel" HorizontalAlignment="Right" VerticalAlignment="Center"
+            <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <friends:FriendsRailChip x:Name="FriendsChip" Margin="-8,0,10,0"/>
+            <Button x:Name="WhatsNewLink" Theme="{StaticResource LauncherLink}" HorizontalAlignment="Left"
+                    VerticalAlignment="Center" Click="WhatsNew_Click">
+                <TextBlock Text="{loc:Str launcher_link_whats_new}"/>
+            </Button>
+            </StackPanel>
+            <CheckBox x:Name="SkipToPanel" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
                       Click="SkipToPanel_Click">
                 <TextBlock Text="{loc:Str launcher_skip_to_panel}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
             </CheckBox>
+            </Grid>
         </Border>
 
         <!-- Lockdown veil (WPF LauncherWindow.xaml:597): the launcher waits, it never argues. Over every

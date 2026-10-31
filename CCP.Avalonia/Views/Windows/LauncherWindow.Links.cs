@@ -34,6 +34,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ResetShortcutLink();
         }
 
+        // WPF LauncherWindow.xaml.cs:659-675: notes stay over the launcher.
+        private Dialogs.WhatsNewDialog? _whatsNew;
+
+        private async void WhatsNew_Click(object? sender, RoutedEventArgs e)
+        {
+            if (MainShellWindow.LockdownActive || _whatsNew != null) return;
+            try
+            {
+                _whatsNew = new Dialogs.WhatsNewDialog("What's New in v" + CoreReleaseContent.AppVersion,
+                    CoreReleaseContent.PatchNotes);
+                await _whatsNew.ShowDialogSafe(this);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "[Launcher] What's New dialog failed; falling back to the settings tab");
+                OpenPanel(p => p.ShowTab("settings"));
+            }
+            finally { _whatsNew = null; }
+        }
+
+        internal static void CloseNotesForPanic() => Instance?._whatsNew?.Close();
+        internal static void CloseFriendsForPanic() => Instance?.FriendsChip.CloseDrawer();
+
         internal void ResetShortcutLink()
         {
             _shortcutTextTimer.Stop();
