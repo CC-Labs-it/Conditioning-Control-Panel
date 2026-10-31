@@ -1,4 +1,13 @@
 {
+  "mod_barks_text_help": "ルールID、トリガー、テキストを編集します。読み込んだ設定と音声は保持されます。",
+  "mod_barks_add": "ルールを追加",
+  "mod_barks_override": "基本ルールを上書き",
+  "mod_barks_id": "ルールID",
+  "mod_barks_trigger": "トリガー",
+  "mod_barks_variant": "候補を追加",
+  "mod_barks_line": "テキスト",
+  "mod_barks_remove": "削除",
+  "mod_barks_load_error": "bark_rules.jsonを読み込めませんでした。",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

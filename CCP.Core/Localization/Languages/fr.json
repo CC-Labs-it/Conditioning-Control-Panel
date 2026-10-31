@@ -1,4 +1,13 @@
 {
+  "mod_barks_text_help": "Modifiez les identifiants, déclencheurs et textes. Les réglages et sons chargés sont conservés.",
+  "mod_barks_add": "Ajouter une règle",
+  "mod_barks_override": "Remplacer une règle de base",
+  "mod_barks_id": "Identifiant",
+  "mod_barks_trigger": "Déclencheur",
+  "mod_barks_variant": "Ajouter une variante",
+  "mod_barks_line": "Texte",
+  "mod_barks_remove": "Supprimer",
+  "mod_barks_load_error": "Impossible de lire bark_rules.json.",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",

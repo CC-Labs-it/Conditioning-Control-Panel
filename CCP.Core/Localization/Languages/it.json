@@ -1,4 +1,13 @@
 {
+  "mod_barks_text_help": "Modifica ID, eventi e testi. Le impostazioni e gli audio caricati vengono conservati.",
+  "mod_barks_add": "Aggiungi regola",
+  "mod_barks_override": "Sostituisci regola base",
+  "mod_barks_id": "ID regola",
+  "mod_barks_trigger": "Evento",
+  "mod_barks_variant": "Aggiungi variante",
+  "mod_barks_line": "Testo",
+  "mod_barks_remove": "Rimuovi",
+  "mod_barks_load_error": "Impossibile leggere bark_rules.json.",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",
