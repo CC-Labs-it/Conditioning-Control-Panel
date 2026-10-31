@@ -80,6 +80,9 @@ public sealed class ModChoiceTests
         {
             var pending = shell.ImportDroppedFilesAsync(new[] { path });
             var dialog = await Owned<Window>(shell);
+            Assert.Equal(WindowDecorations.None, dialog.WindowDecorations);
+            Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(dialog.Background).Color);
+            Assert.Contains(WindowTransparencyLevel.Transparent, dialog.TransparencyLevelHint);
             foreach (var action in new[] { "play", "edit", "library", "cancel" })
             {
                 var button = dialog.FindControl<Button>("MediaDrop_" + action)!;
@@ -716,6 +719,7 @@ public sealed class ModChoiceTests
             s.ActiveModId = BuiltInMods.CCPDefaultId;
             s.Welcomed = true;
             s.HasAcceptedAgeVerification = true;
+            s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys); // Match the shared profile seed for this private SettingsService.
             AvApp.StartMods();
             AvApp.StartReleaseContent(svc);
             shell = new MainShellWindow();

@@ -192,7 +192,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Title = Loc.Get("dlg_media_drop_title"), Width = 460, CanResize = false, MinHeight = 240, MaxHeight = 600,
                 SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = Res<IBrush>("DarkerBgBrush")
+                WindowDecorations = WindowDecorations.None, // WPF MainWindow.Presets.cs:834-836
+                TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
+                Background = Brushes.Transparent
             };
             var scope = new NameScope();
             NameScope.SetNameScope(dialog, scope);
