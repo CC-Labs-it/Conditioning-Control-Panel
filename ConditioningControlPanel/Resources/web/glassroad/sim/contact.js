@@ -26,6 +26,7 @@ const beforeQuery = () => ({ normal: [0, 0, 0], p: [0, 0, 0], x: 0, y: 0, z: 0 }
 const BEFORE_A = beforeQuery(), BEFORE_B = beforeQuery();
 const U = [0, 0, 0];
 const COURT_LEAD_M = 25;   // the slipstream kick holds from here before a court to the end of its last hole
+const bumpOf = (r) => r.feel?.kart?.bumpMul ?? 1;
 
 export function createContact(track, feel, events) {
   const L = track.lengthM;
@@ -181,7 +182,8 @@ export function createContact(track, feel, events) {
             continue;
           }
           const p = Math.min(feel.get('contact.maxPushMps'), feel.get('contact.pushMps') + feel.get('contact.pushPerDv') * c);
-          const ka = (c + p) * sa, kb = (c + p) * sb;   // take the closing speed out, then push apart
+          // take the closing speed out, then push apart; a body's bumpMul is how much of its own share it takes
+          const ka = (c + p) * sa * bumpOf(ra), kb = (c + p) * sb * bumpOf(rb);
           // wave 2 STONES: on the stones the sideways part of the shove is mostly lost (a full push threw a kart
           // 3.5 m across a 5 m stone into the slit between lanes); the along-road part stays
           let lx = 0, ly = 0, lz = 0;

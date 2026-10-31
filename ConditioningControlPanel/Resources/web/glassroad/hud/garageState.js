@@ -1,7 +1,8 @@
 /* The garage stores appearance only. Every kart body but FREE_KART is sold in the Prize Counter (owner 2026-10-29,
  * B3 section 9): the garage offers the free kart, the bodies the account owns (`cos.kart.body.<id>` grants,
  * meta/owned.js) and the two the logbook still earns (meta/unlocks.js); the rest stay visible and dark.
- * Looks only: the sim, the course hash and the room never read a vehicle. */
+ * A body is more than a look since 2026-10-31: the sim drives its row (sim/kartStats.js, boot.js passes the pick in);
+ * outfits, paints and the rest stay looks only. */
 import {UNLOCKS} from '../meta/unlocks.js';
 import {ACHIEVEMENTS} from '../meta/achievements.js';
 export const KARTS = [['pendulum','Pendulum'],['reverie','Reverie'],['house-edge','House Edge'],['checkmate','Checkmate'],['lovebomb','Lovebomb'],['feedback','Feedback'],['velvet-lock','Velvet Lock'],['undertow','Undertow'],['petal','Petal'],['trinket','Trinket']];

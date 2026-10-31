@@ -124,13 +124,13 @@ test('the Prize Counter row: only a host with caps.prizeCounter, contract messag
 });
 
 test('looks never reach the online course hash: all five courses still match the room cards', async () => {
-  // CCP-Server rooms/src/tracks.js courseHash after the 15% larger karts; a change here means a room regenerate + redeploy
+  // CCP-Server rooms/src/tracks.js courseHash after the kart stats table; a change here means a room regenerate + redeploy
   const ROOM = {
-    threshold: '3e234696549f22d5c249fa1048a1f002e3c0ecf558ca7e0bad3ad8ed6c3172a9',
-    mainframe: 'd3bf3330a0787b0f575deb702fe4ebba97abc9b468af5e606f82381cc359e575',
-    keep: '41b90e0ebb20c173fefcdef1f0aa8e32e87478fbdade22de4a150d0467b95475',
-    boudoir: '7a47c6ba08bdbe534a72cd578b9bac794da610da865fe1f29afdb6274f820651',
-    goonworks: '7355475b106dfa2f2293d88384da274225655ebb57e051624e465d9200d7a1f4',
+    threshold: '894e0085d0b36af20187c20f98fb05ef25fb6a94f6c642a41c58b208873e1d9b',
+    mainframe: '109aa2c6f452b1d78e2e3b4a558352c6eb9d9bf704d22cc36518d010edce204a',
+    keep: '32b4530731a1f7e6a94d2ca608b8c4fd3982a458cffde3c1c7e38b7021824de3',
+    boudoir: '0fcaed781726a90a8e744c23a70b01e15dee519b290b8e32940e677bc7666027',
+    goonworks: '1f5193b1db396cec11e41d61febd93dbdf8c17dbda46d822f9c1c4dce3699a71',
   };
   const feel = read('../feel.json');
   for (const [id, hash] of Object.entries(ROOM)) {
