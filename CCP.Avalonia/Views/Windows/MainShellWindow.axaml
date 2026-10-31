@@ -961,12 +961,18 @@
                          retired with the row - see MainWindow.Marquee.cs, where the rotation is
                          now a two-beat crossfade. -->
                     <Border Grid.Column="3" x:Name="HeaderBannerHost"
-                            Background="{DynamicResource SurfaceBgBrush}"
+                            Background="{DynamicResource DepthWellFloorBrush}"
                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
-                            CornerRadius="13" Padding="12,0" Height="26" MaxWidth="620"
+                            CornerRadius="16" Padding="0" Height="31" MaxWidth="744"
                             Margin="12,0,12,0"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid>
+                            <Border x:Name="BannerDrumShade" CornerRadius="15" IsHitTestVisible="False"/>
+                            <Border x:Name="BannerDrumLip" CornerRadius="15" IsHitTestVisible="False"/>
+                            <Border x:Name="BannerDrumFoot" CornerRadius="15" BorderThickness="0,0,0,1"
+                                    BorderBrush="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
+                            <Grid x:Name="BannerDrum" ClipToBounds="True" Margin="2,0">
+                            <Grid Margin="12,0">
                             <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="12" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -1031,13 +1037,15 @@
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="0" IsHitTestVisible="False"/>
+                            </Grid>
+                            </Grid>
                             <!-- Chrome FX (PR-1): one-shot sheen pass over the banner when the
                                  message changes. Its own ClipToBounds host so the band can't
                                  escape the card - deliberately NOT ClipToBounds on the shared
                                  Grid, which would start clipping the banner text itself.
                                  Hit-test invisible so the hyperlinks underneath keep working.
                                  Driven from MainWindow.ChromeFx.cs. -->
-                            <Grid x:Name="BannerSheenHost" ClipToBounds="True" IsHitTestVisible="False">
+                            <Grid x:Name="BannerSheenHost" Margin="14,0" ClipToBounds="True" IsHitTestVisible="False">
                                 <Border x:Name="BannerSheen" Width="110" HorizontalAlignment="Left" Opacity="0"
                                         RenderTransformOrigin="0.5,0.5">
                                     <Border.Background>
@@ -1055,6 +1063,15 @@
                                     </Border.RenderTransform>
                                 </Border>
                             </Grid>
+                            <Border x:Name="BannerGlass" CornerRadius="12,12,5,5" Height="11" Margin="7,2,7,0"
+                                    VerticalAlignment="Top" IsHitTestVisible="False">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                        <GradientStop Offset="0" Color="#24FFFFFF"/>
+                                        <GradientStop Offset="1" Color="#00FFFFFF"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
                         </Grid>
                     </Border>
                 </Grid>

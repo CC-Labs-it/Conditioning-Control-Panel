@@ -120,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializeBannerRotation()
         {
             _bannerBeats = BuildBannerBeats();
-            foreach (var beat in _bannerBeats) EnsureFadeTransition(beat);
+            InitializeBannerDrum();
 
             UpdateBannerWelcomeMessage();
 
@@ -218,10 +218,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// the opacity, for the reason WPF spells out: a link parked at Opacity 0 still eats
         /// clicks.
         /// </summary>
-        private static void Crossfade(TextBlock outgoing, TextBlock incoming)
+        internal void Crossfade(TextBlock outgoing, TextBlock incoming)
         {
-            EnsureFadeTransition(outgoing);
-            EnsureFadeTransition(incoming);
+            ConfigureBannerFade(outgoing);
+            ConfigureBannerFade(incoming);
+            RollBannerDrum(outgoing, incoming);
 
             outgoing.Opacity = 0;
             incoming.Opacity = 1;
