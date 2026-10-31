@@ -81,6 +81,7 @@ namespace ConditioningControlPanel.Services.Packs
         private readonly Func<AppSettings> _settings;
         private readonly Action _save;
         private readonly Func<string?> _patreonToken;
+        private readonly Func<string?> _discordToken;
         private readonly Func<(string UnifiedId, string Token)?> _identity;
         private readonly Func<TimeSpan, Task> _delay;
         private readonly Func<string> _previewCacheRoot;
@@ -105,7 +106,8 @@ namespace ConditioningControlPanel.Services.Packs
             Func<string?>? patreonToken = null,
             Func<(string UnifiedId, string Token)?>? identity = null,
             Func<TimeSpan, Task>? delay = null,
-            Func<string>? previewCacheRoot = null)
+            Func<string>? previewCacheRoot = null,
+            Func<string?>? discordToken = null)
         {
             _store = store;
             _http = http ?? SharedHttp;
@@ -113,6 +115,7 @@ namespace ConditioningControlPanel.Services.Packs
             _settings = settings ?? (() => CoreSettings.Current);
             _save = save ?? (() => CoreSettings.Save());
             _patreonToken = patreonToken ?? (() => CoreAccount.PatreonAccessToken);
+            _discordToken = discordToken ?? (() => null);
             _identity = identity ?? DefaultIdentity;
             _delay = delay ?? (t => Task.Delay(t));
             // WPF MainWindow.Assets.cs:216-218: <user data>/pack-previews/<id>.
@@ -492,23 +495,27 @@ namespace ConditioningControlPanel.Services.Packs
             return ok.DownloadUrl;
         }
 
-        /// <summary>WPF GetFullPackStatusAsync: <c>GET /pack/status</c> with the Patreon token. The
-        /// Discord fallback (<c>/discord/pack/status</c>) waits for a Discord token seam on this head.
-        /// Null when signed out or unreachable. Never throws.</summary>
+        /// <summary>WPF ContentPackService.cs:828-884: Patreon first, then Discord when absent,
+        /// refused or unreadable. A successful response (even null) ends the lookup.</summary>
         public async Task<PackStatusResponse?> GetFullPackStatusAsync(CancellationToken ct = default)
         {
             var url = BaseUrl;
-            var token = _patreonToken();
-            if (url == null || string.IsNullOrEmpty(token)) return null;
-            try
+            if (url == null) return null;
+            foreach (var (path, getToken) in new[] { ("/pack/status", _patreonToken), ("/discord/pack/status", _discordToken) })
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, $"{url}/pack/status");
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode) return null;
-                return TryRead<PackStatusResponse>(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+                try
+                {
+                    var token = getToken();
+                    if (string.IsNullOrEmpty(token)) continue;
+                    using var request = new HttpRequestMessage(HttpMethod.Get, url + path);
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                    using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+                    if (!response.IsSuccessStatusCode) continue;
+                    return JsonConvert.DeserializeObject<PackStatusResponse>(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+                }
+                catch (Exception ex) { Log.Debug("Failed to get pack status: {Error}", ex.Message); }
             }
-            catch (Exception ex) { Log.Debug("Failed to get pack status: {Error}", ex.Message); return null; }
+            return null;
         }
 
         public async Task<Dictionary<string, PackDownloadStatus>?> GetPackDownloadStatusAsync(CancellationToken ct = default) =>
