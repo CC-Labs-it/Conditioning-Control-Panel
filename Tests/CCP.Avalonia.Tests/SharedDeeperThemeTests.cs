@@ -22,6 +22,36 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class SharedDeeperThemeTests
 {
+    [Fact]
+    public Task TimelineRowsKeepTheirLocalReplacementChrome() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        // WPF Views/Deeper/DeeperEditorWindow.xaml:1112-1146 replaces Inputs.xaml rows.
+        Setup();
+        var editor = new DeeperEditorWindow();
+        try
+        {
+            editor.Show();
+            var list = editor.ItemsListBox;
+            list.SelectedIndex = 0;
+            list.ScrollIntoView(0);
+            Dispatcher.UIThread.RunJobs();
+            var row = Assert.IsType<ListBoxItem>(list.ContainerFromIndex(0));
+            Assert.NotSame(Theme("InputListBoxItemTheme"), row.Theme);
+            Assert.Same(Application.Current!.FindResource(typeof(ListBoxItem)), row.Theme);
+            Assert.Equal(new CornerRadius(3), row.CornerRadius);
+            Assert.Equal(new Thickness(6, 3), row.Padding);
+            var plate = row.GetVisualDescendants().OfType<global::Avalonia.Controls.Presenters.ContentPresenter>()
+                .Single(p => p.Name == "PART_ContentPresenter");
+            Assert.Equal(new CornerRadius(3), plate.CornerRadius);
+            Assert.Same(editor.FindResource("DeeperAccentTransparent40Brush"), plate.Background);
+            row.IsEnabled = false;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, row.Opacity); // no Inputs.xaml 0.45 fade in the replacement template
+        }
+        finally { editor.Close(); }
+        return Task.CompletedTask;
+    });
+
     private static void Setup()
     {
         if (Application.Current is null)
