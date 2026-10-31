@@ -70,6 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("haptics", _ => CoreHaptics.Service?.PanicStop()),
             new("remote-haptics", _ => RemoteCommands.StopHaptics()),   // decisions 2026-10-08
             new("takeover", sh => sh?.StopAutonomyForPanic()),           // WPF KillAllAudio -> Autonomy.Stop
+            new("wallpaper", sh => { _ = Platform.WallpaperHead.Service?.DeactivateAsync(); }, After: ["takeover"]),
             // WPF RunPanicStopTail StopEngine/StopAdHocEffects: pauses a running session; OnEngineStopped
             // then ends Takeover pulses, desktop overlays (subliminal/whisper, mind wipe, spiral, video,
             // bubbles, pink filter), pop quizzes and open lock cards.
