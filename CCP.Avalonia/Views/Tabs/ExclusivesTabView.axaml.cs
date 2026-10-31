@@ -78,8 +78,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             (CardWidth, CardHeight, GroupHeadWidth) = (w, h, Math.Max(0, width - 1));
         }
 
+        private void RefreshJustSubscribed() => this.FindControl<StackPanel>("JustSubscribedRow")!.IsVisible = Platform.EntitlementRefresh.EffectiveTier < 2;
+
+        private async void JustSubscribed_Click(object? sender, RoutedEventArgs e)
+        {
+            var button = this.FindControl<Button>("BtnJustSubscribed")!;
+            var status = this.FindControl<TextBlock>("TxtJustSubscribed")!;
+            button.IsEnabled = false;
+            status.Text = Loc.Get("plans_just_subscribed_checking");
+            try { status.Text = Loc.Get(Services.JustSubscribedRule.LocKey(await Platform.EntitlementRefresh.CheckAsync())); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Subscription check failed"); status.Text = Loc.Get("plans_just_subscribed_unreachable"); }
+            finally { button.IsEnabled = true; }
+        }
+
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
+            Platform.EntitlementRefresh.Changed += RefreshJustSubscribed;
+            RefreshJustSubscribed();
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged += UpdateMotion;
@@ -110,6 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnUnloaded(object? sender, RoutedEventArgs e)
         {
+            Platform.EntitlementRefresh.Changed -= RefreshJustSubscribed;
             CoreMods.ModChanged -= OnModChanged;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged -= UpdateMotion;
@@ -128,6 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void RefreshVault()
         {
+            RefreshJustSubscribed();
             RetintVaultChrome();
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just

@@ -269,8 +269,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// celebration half; the veils already repaint from App.axaml.cs. Unsubscribed when the shell closes (P41).</summary>
         private void InitializePremiumCelebration()
         {
-            Opened += (_, _) => MaybeShowPremiumCelebration();
-            System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(MaybeShowPremiumCelebration);
+            Opened += (_, _) => { MaybeShowPremiumCelebration(); TierOnNoticePass(); };
+            Platform.EntitlementRefresh.Changed += PremiumRefresh;
+            Activated += (_, _) => TierOnNoticePass();
+            Closed += (_, _) => Platform.EntitlementRefresh.Changed -= PremiumRefresh;
+            System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(PremiumRefresh);
             var patreon = Platform.AccountSeed.Patreon;
             var substar = Platform.AccountSeed.SubscribeStar;
             if (patreon != null) patreon.TierChanged += tier;
@@ -284,9 +287,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MaybeShowPremiumCelebration (MainWindow.Patreon.cs:1118): the one-time card per tier, re-read from
         /// the combined entitlement, never for an invite week, through the presenter (an Inbox row when quiet). The seen-flag
-        /// is spent at open time. ponytail: no live-rise path (EntitlementTierSync.TierRaised, the immediate card and the
-        /// profile-bubble fanfare) on this head yet, so every grant takes the presenter route.</summary>
-        internal void MaybeShowPremiumCelebration()
+        /// is spent at open time. Live rises ignore the legacy seen flag; every grant takes the presenter route.</summary>
+        internal void MaybeShowPremiumCelebration(bool onRise = false)
         {
             try
             {
@@ -294,7 +296,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var s = CoreSettings.Current;
                 if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
                 var tier = CoreAccount.HasLabAccess ? 2 : 1;
-                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise: false)) return;
+                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise)) return;
                 var key = TierCelebration.KeyFor(tier)!;
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
@@ -306,6 +308,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 });
             }
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "Premium celebration hook failed"); }
+        }
+
+        private void PremiumRefresh()
+        {
+            var last = CoreSettings.Current.LastKnownEffectiveTier;
+            MaybeShowPremiumCelebration(last is int known && Platform.EntitlementRefresh.EffectiveTier > known);
+            TierOnNoticePass();
+        }
+
+        internal void TierOnNoticePass()
+        {
+            var s = CoreSettings.Current;
+            var current = Platform.EntitlementRefresh.EffectiveTier;
+            var verdict = Services.TierOnNotice.Decide(s.LastKnownEffectiveTier, current,
+                Platform.EntitlementRefresh.ServerAnsweredThisRun);
+            if (verdict.Record != s.LastKnownEffectiveTier) { s.LastKnownEffectiveTier = verdict.Record; CoreSettings.Save(); }
+            if (!verdict.Owed || TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
+            var title = Loc.Get(Services.TierOnNotice.TitleKey(current));
+            var body = Loc.Get("tier_on_body");
+            Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+            {
+                Key = "tier-on:" + current, Glyph = "💖", Title = title, Summary = body,
+                Open = () => Dialogs.InboxNoticeCard.Present(this, title, body, null, null),
+            });
         }
 
         private static void MarkIntroSeen(string key)
