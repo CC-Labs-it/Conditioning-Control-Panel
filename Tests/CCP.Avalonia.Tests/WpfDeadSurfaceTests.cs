@@ -15,9 +15,11 @@ public sealed class WpfDeadSurfaceTests
     // row, pattern, every WPF file (relative to ConditioningControlPanel/) allowed to match, and how often.
     private static readonly (string Row, string Pattern, (string File, int Count)[] Allowed)[] Dead =
     {
-        // Only caller chain: BtnQuick*Login_Click (subscribed by nothing) -> AccountService.HandlePostAuthV2Async -> dialog.
+        // Pin each step from the unsubscribed quick-login handlers through the account helpers to the dialog.
         ("dialogs-username-picker", @"\bBtnQuickPatreonLogin_Click\b", new[] { ("MainWindow/MainWindow.AccountShell.cs", 1) }),
         ("dialogs-username-picker", @"\bBtnQuickDiscordLogin_Click\b", new[] { ("MainWindow/MainWindow.AccountShell.cs", 1) }),
+        ("dialogs-username-picker", @"\bHandleQuickPatreonLoginAsync\b", new[] { ("MainWindow/MainWindow.AccountShell.cs", 2) }),
+        ("dialogs-username-picker", @"\bHandleDiscordLoginAsync\b", new[] { ("MainWindow/MainWindow.AccountShell.cs", 2) }),
         ("dialogs-username-picker", @"\bHandlePostAuthV2Async\b",
             new[] { ("MainWindow/MainWindow.AccountShell.cs", 2), ("Services/Account/AccountService.cs", 2) }),
         ("dialogs-username-picker", @"\bUsernamePickerDialog\b",
