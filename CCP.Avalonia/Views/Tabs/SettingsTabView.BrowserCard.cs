@@ -32,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void HookBrowserCard()
         {
+            BrowserWebHost.RouteBrowserPopups = true; // WPF BrowserService.cs:538-562
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
             BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };
             AttachedToVisualTree += (_, _) =>
