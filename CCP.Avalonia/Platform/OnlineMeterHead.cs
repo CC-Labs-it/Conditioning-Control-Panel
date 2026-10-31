@@ -38,6 +38,7 @@ internal static class OnlineMeterHead
         _clock = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _clock.Tick += (_, _) => Raise();
         _clock.Start();
+        LocalizationManager.Instance.LanguageChanged += (_, _) => Poke();
         ScrolllerAllowance.Changed += (_, _) => Dispatcher.UIThread.Post(() => { if (_throttle is { IsEnabled: false } t) t.Start(); });
     }
 
