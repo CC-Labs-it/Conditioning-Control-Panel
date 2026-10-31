@@ -58,3 +58,18 @@ Review validation uses SDK 10.0.403 at `/tmp/dotnet/dotnet`:
 - Focused Avalonia filter covering the 3 port cases, quiet-before-every-stop, registry ids/order and failing-stop continuation: exit 0, 7 passed, 0 failed, 0 skipped. These tests ran without constructing a font-dependent shell.
 - Core guards: exit 0, `All Core guards passed.` Documentation self-check: exit 0, `avalonia_docs self-check OK`. `git diff --check`: exit 0. Ledger rows remain stub, with no live verification claimed.
 - Full `dotnet test Tests/CCP.Core.Tests -c Release`: exit 0, 4636 passed, 5 existing Vosk skips, 0 failed, 42 seconds.
+
+
+## Local review P2: projection test cleanup
+
+Accepted the request for explicit cleanup in `SessionRunWireTests.Bottom_bar_projection_uses_the_runner_clock_without_a_shell`: save the previous `App.Sessions` reference and `CoreSettings.Current.ShowSessionCountdown`, then restore both in `finally`, like the sibling shell test. This changes tests only; no WPF/Core behavior or localization keys change. The assembly hook in `TestIsolation.cs:49-87` already restores process state after each test, but the test now also fulfills its own cleanup contract without depending on that hook.
+
+A two-case regression installs a sentinel runner and each countdown value, calls the projection test directly, then checks both values before any outer isolation hook can restore them. It restores its own incoming state in `finally`. This checks cleanup deterministically instead of relying on xUnit test order. Existing ledger notes are retained and the projection evidence is appended; the rows remain stub.
+
+Local review validation (SDK `/tmp/dotnet/dotnet`, Release):
+
+- Fail-proof before adding the two restores: `dotnet test Tests/CCP.Avalonia.Tests -c Release --filter 'FullyQualifiedName~Bottom_bar_projection_restores_caller_state'` exited 1, 2 failed. The true case failed `Assert.Equal` (true versus false); the false case failed `Assert.Same` (wrong runner reference). No isolation hook ran between the test-under-test and either assertion.
+- Final `dotnet build CCP.Core`, `dotnet build CCP.Avalonia`, and `dotnet build Tests/CCP.Avalonia.Tests`: exit 0 each, 0 errors. Warnings: 0, 0 and 144 respectively.
+- `dotnet test Tests/CCP.Avalonia.Tests -c Release --no-build --filter 'FullyQualifiedName~Bottom_bar_projection|FullyQualifiedName~PanicAftermathPortTests|FullyQualifiedName~TheStopPass_ArmsTheQuiet|FullyQualifiedName~EveryIdIsUniqueAndEverySafetyCriticalIdIsRegistered|FullyQualifiedName~TheWpfOrderingRulesStayDeclared|FullyQualifiedName~OneFailingStopNeverSkipsTheRest'`: exit 0, 10 passed, 0 failed, 0 skipped.
+- `bash .github/scripts/core-guards.sh`: exit 0, `All Core guards passed.` `python3 .github/scripts/avalonia_docs.py`: exit 0, `avalonia_docs self-check OK`. `git diff --check`: exit 0.
+- Full `dotnet test Tests/CCP.Core.Tests -c Release`: exit 0, 4636 passed, 5 existing Vosk skips, 0 failed, 43 seconds.

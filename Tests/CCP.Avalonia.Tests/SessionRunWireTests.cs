@@ -22,6 +22,30 @@ namespace CCP.Avalonia.Tests;
 /// and opens the Ended Early recap by itself.</summary>
 public sealed class SessionRunWireTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task Bottom_bar_projection_restores_caller_state(bool countdown) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var previousSessions = AvApp.Sessions;
+        var previousCountdown = CoreSettings.Current.ShowSessionCountdown;
+        var sentinel = new SessionRunner(new SessionLogService());
+        try
+        {
+            AvApp.Sessions = sentinel;
+            CoreSettings.Current.ShowSessionCountdown = countdown;
+            // No isolation hook runs between this call and the assertions.
+            await Bottom_bar_projection_uses_the_runner_clock_without_a_shell();
+            Assert.Equal(countdown, CoreSettings.Current.ShowSessionCountdown);
+            Assert.Same(sentinel, AvApp.Sessions);
+        }
+        finally
+        {
+            AvApp.Sessions = previousSessions;
+            CoreSettings.Current.ShowSessionCountdown = previousCountdown;
+        }
+    });
+
     [Fact]
     public Task Bottom_bar_projection_uses_the_runner_clock_without_a_shell() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -29,6 +53,8 @@ public sealed class SessionRunWireTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        var previousSessions = AvApp.Sessions;
+        var previousCountdown = CoreSettings.Current.ShowSessionCountdown;
         var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
         var status = new TextBlock { IsVisible = false };
         try
@@ -57,7 +83,13 @@ public sealed class SessionRunWireTests
             MainShellWindow.RefreshBarStatus(status);
             Assert.Equal("", status.Text);
         }
-        finally { runner.Stop(); CoreEngine.Stop(); }
+        finally
+        {
+            runner.Stop();
+            CoreEngine.Stop();
+            AvApp.Sessions = previousSessions;
+            CoreSettings.Current.ShowSessionCountdown = previousCountdown;
+        }
         return Task.CompletedTask;
     });
 
