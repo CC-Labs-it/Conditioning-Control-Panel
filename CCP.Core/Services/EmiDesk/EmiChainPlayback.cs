@@ -1,8 +1,16 @@
 using System;
-using System.Windows.Threading;
 using Serilog;
 
 namespace ConditioningControlPanel.Services.EmiDesk;
+
+/// <summary>Surface clock: Start is one-shot; Stop cancels it without invoking the callback.</summary>
+public interface IEmiChainClock
+{
+    bool CheckAccess();
+    void Post(Action action);
+    void Start(int ms, Action tick);
+    void Stop();
+}
 
 /// <summary>
 /// Plays one chain on the dispatcher, the WPF twin of chains.js <c>playChain</c>: fx fires
@@ -12,10 +20,9 @@ namespace ConditioningControlPanel.Services.EmiDesk;
 ///
 /// One player owns one surface: <see cref="Play"/> cancels whatever was running first.
 /// </summary>
-public sealed class EmiChainPlayer : IDisposable
+public sealed class EmiChainPlayback : IDisposable
 {
-    private readonly Dispatcher _dispatcher;
-    private DispatcherTimer? _timer;
+    private readonly IEmiChainClock _clock;
     private EmiChain? _chain;
     private EmiChainHooks? _hooks;
     private int _index;
@@ -27,10 +34,10 @@ public sealed class EmiChainPlayer : IDisposable
     /// <summary>True while a chain is on screen.</summary>
     public bool IsLive => _chain != null;
 
-    /// <param name="dispatcher">The surface's dispatcher. Every hook is raised on it.</param>
-    public EmiChainPlayer(Dispatcher dispatcher)
+    /// <param name="clock">The surface clock. Every hook is raised on its dispatcher.</param>
+    public EmiChainPlayback(IEmiChainClock clock)
     {
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
 
     /// <summary>
@@ -40,9 +47,9 @@ public sealed class EmiChainPlayer : IDisposable
     public void Play(EmiChain? chain, EmiChainHooks hooks, string? bodyFrameOverride = null)
     {
         if (_disposed) return;
-        if (!_dispatcher.CheckAccess())
+        if (!_clock.CheckAccess())
         {
-            try { _dispatcher.BeginInvoke(new Action(() => Play(chain, hooks, bodyFrameOverride))); }
+            try { _clock.Post(() => Play(chain, hooks, bodyFrameOverride)); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] chain marshal failed"); }
             return;
         }
@@ -93,25 +100,14 @@ public sealed class EmiChainPlayer : IDisposable
 
         _index++;
 
-        _timer = new DispatcherTimer(DispatcherPriority.Normal, _dispatcher)
-        {
-            Interval = TimeSpan.FromMilliseconds(Math.Max(1, frame.Ms))
-        };
-        _timer.Tick += OnTick;
-        _timer.Start();
+        _clock.Start(Math.Max(1, frame.Ms), OnTick);
     }
 
-    private void OnTick(object? sender, EventArgs e)
+    private void OnTick()
     {
         try
         {
-            if (sender is DispatcherTimer t)
-            {
-                t.Stop();
-                t.Tick -= OnTick;
-            }
             if (_disposed || _chain == null) return;
-            _timer = null;
 
             if (_index < _chain.Seq.Count)
             {
@@ -136,12 +132,7 @@ public sealed class EmiChainPlayer : IDisposable
     {
         try
         {
-            if (_timer != null)
-            {
-                _timer.Stop();
-                _timer.Tick -= OnTick;
-                _timer = null;
-            }
+            _clock.Stop();
         }
         catch (Exception ex)
         {
