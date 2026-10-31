@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
 using Serilog;
@@ -66,6 +67,20 @@ internal sealed class AchievementEngine
     {
         Progress = new AchievementProgress();
         Save();
+    }
+
+    /// <summary>WPF ProfileSyncService.cs:2099-2118: union cloud ids directly, including
+    /// ids from newer catalogs, save once, and never announce a historical unlock.</summary>
+    public void RestoreCloudAchievements(IEnumerable<string> ids)
+    {
+        var changed = false;
+        foreach (var id in ids)
+        {
+            if (Progress.IsUnlocked(id)) continue;
+            Progress.Unlock(id);
+            changed = true;
+        }
+        if (changed) Save();
     }
 
     private static readonly ConcurrentDictionary<string, byte> _alreadyUnlockedNoted = new();
