@@ -64,7 +64,9 @@ internal static class Win32Overlay
         var band = topmost(sibling);
         if (above == hwnd && topmost(hwnd) == band) return true;
         // WPF attached tubes must also shed stray TOPMOST (AvatarTubeWindow.Windowing.cs:277-284).
-        if (above == IntPtr.Zero || topmost(above) != band) above = new IntPtr(band ? -1 : -2);
+        if (above == IntPtr.Zero || topmost(above) != band)
+            // NOTOPMOST is a no-op for an already non-topmost window. TOP raises it in that band.
+            above = new IntPtr(band ? -1 : topmost(hwnd) ? -2 : 0);
         return position(hwnd, above, SwpNoMove | SwpNoSize | SwpNoActivate | 0x200 /* SWP_NOOWNERZORDER */);
     }
 

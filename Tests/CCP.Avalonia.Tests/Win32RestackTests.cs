@@ -61,6 +61,42 @@ public sealed class Win32RestackTests
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void FirstNormalSiblingEndsDirectlyBelowTube(bool tubeTopmost, bool otherTopmost)
+    {
+        var main = new IntPtr(1);
+        var tube = new IntPtr(2);
+        var other = new IntPtr(3);
+        var order = new List<IntPtr>();
+        var topmost = new HashSet<IntPtr>();
+        if (otherTopmost) { order.Add(other); topmost.Add(other); }
+        if (tubeTopmost) { order.Add(tube); topmost.Add(tube); }
+        order.Add(main);
+        if (!tubeTopmost) order.Add(tube);
+        var calls = 0;
+        Assert.True(Win32Overlay.RestackAbove(tube, main,
+            h => order.IndexOf(h) is var i && i > 0 ? order[i - 1] : IntPtr.Zero,
+            topmost.Contains, (h, after, flags) =>
+            {
+                calls++;
+                Assert.Equal(0x213u, flags);
+                // user32 explicitly leaves an already non-topmost window in place for NOTOPMOST.
+                if (after == new IntPtr(-2) && !topmost.Contains(h)) return true;
+                Assert.True(after == IntPtr.Zero || after == new IntPtr(-2));
+                topmost.Remove(h);
+                order.Remove(h);
+                order.Insert(order.FindIndex(w => !topmost.Contains(w)), h);
+                return true;
+            }));
+        Assert.Equal(1, calls);
+        Assert.False(topmost.Contains(tube));
+        Assert.Equal(otherTopmost ? new[] { other, tube, main } : new[] { tube, main }, order);
+    }
+
+    [Theory]
     [InlineData(0, 1)]
     [InlineData(1, 0)]
     [InlineData(1, 1)]
