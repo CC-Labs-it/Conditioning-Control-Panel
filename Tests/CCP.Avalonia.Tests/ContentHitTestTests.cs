@@ -31,10 +31,11 @@ public sealed class ContentHitTestTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            // Keep entrance time fixed: a slow renderer must not decide when geometry settles.
+            var w = new MainShellWindow { TabClock = new EntranceClock() };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -49,7 +50,11 @@ public sealed class ContentHitTestTests
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
                 if (tab == "awareness") w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")!.IsVisible = false;
+                // A rendered batch does not end the entrance: FrameClock can move the tab/cards
+                // again while RenderLiveTree pumps jobs. Land it before sampling pointer geometry.
+                w.CompleteTabTransition();
                 RenderLiveTree(w);
+                Assert.Null(w.EnteringTab);
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
@@ -98,6 +103,11 @@ public sealed class ContentHitTestTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
+    }
+
+    private sealed class EntranceClock : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
     }
 
     private static bool Inside(Visual v, Point p, Visual root)
