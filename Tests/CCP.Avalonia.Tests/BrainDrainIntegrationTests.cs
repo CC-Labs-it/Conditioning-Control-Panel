@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Platform;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -18,8 +17,7 @@ public sealed class BrainDrainIntegrationTests
 {
     private static Task Run(Func<Window, Task> test, bool supported = true) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var owner = Setup(supported);
-        try { await test(owner); }
+        var owner = Setup(supported); try { await test(owner); }
         finally { BrainDrainOverlay.CloseAll(); owner.Close(); }
     });
     private static Window Setup(bool supported = true)
@@ -28,25 +26,18 @@ public sealed class BrainDrainIntegrationTests
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        BrainDrainOverlay.CloseAll();
-        var owner = new Window(); owner.Show();
-        CoreSession.IsEngineRunningProvider = () => true;
-        var settings = CoreSettings.Current;
-        settings.BrainDrainEnabled = true; settings.BrainDrainBlurStrength = 100; settings.DualMonitorEnabled = true; settings.BrainDrainKeepPicturesClear = false;
-        BrainDrainOverlay.Prepare = _ => supported;
-        BrainDrainOverlay.Capture = (_, _) => { };
+        BrainDrainOverlay.CloseAll(); var owner = new Window(); owner.Show();
+        CoreSession.IsEngineRunningProvider = () => true; var settings = CoreSettings.Current; settings.BrainDrainEnabled = true; settings.BrainDrainBlurStrength = 100; settings.DualMonitorEnabled = true; settings.BrainDrainKeepPicturesClear = false;
+        BrainDrainOverlay.Prepare = _ => supported; BrainDrainOverlay.Capture = (_, _) => { };
         BrainDrainOverlay.Alpha = (w, a) => w.Opacity = a;
         BrainDrainOverlay.Screens = _ => new[] {
             (new PixelRect(0, 0, 800, 600), 1.0, true),
             (new PixelRect(800, 0, 800, 600), 2.0, false) };
         var handles = new Dictionary<Window, IntPtr>();
         BrainDrainOverlay.Handle = w => { if (!handles.ContainsKey(w)) handles[w] = new(handles.Count + 1); return handles[w]; };
-        BrainDrainOverlay.OwnWindows = () => new[] { owner };
-        owner.Topmost = true;
+        BrainDrainOverlay.OwnWindows = () => new[] { owner }; owner.Topmost = true;
         BrainDrainOverlay.ReadBand = ws => ws.Reverse().Select(w => new E(BrainDrainOverlay.Handle(w), true, false)).ToArray();
-        BrainDrainOverlay.Raise = _ => { };
-        BrainDrainOverlay.Below = (_, _) => { };
-        return owner;
+        BrainDrainOverlay.Raise = _ => { }; BrainDrainOverlay.Below = (_, _) => { }; return owner;
     }
     [Fact]
     public Task LiveToggleAnd500msTickSinkEveryMonitorAndOffRaisesAgain() => Run(async owner =>
@@ -86,8 +77,7 @@ public sealed class BrainDrainIntegrationTests
         owner.Close();
         Assert.Empty(BrainDrainOverlay.Active); Assert.False(BrainDrainOverlay.Polling);
         service.Current.BrainDrainBlurStrength = 90;
-        Assert.Empty(BrainDrainOverlay.Active);
-        return Task.CompletedTask;
+        Assert.Empty(BrainDrainOverlay.Active); return Task.CompletedTask;
     });
     [Theory]
     [InlineData(false)]
@@ -102,8 +92,7 @@ public sealed class BrainDrainIntegrationTests
         BrainDrainOverlay.Reconcile();
         Assert.Empty(BrainDrainOverlay.Active);
         CoreSession.IsEngineRunningProvider = () => false;
-        BrainDrainOverlay.Start(owner); Assert.False(BrainDrainOverlay.Polling);
-        return Task.CompletedTask;
+        BrainDrainOverlay.Start(owner); Assert.False(BrainDrainOverlay.Polling); return Task.CompletedTask;
     });
     [Fact]
     public Task RefusedCompositorLeavesNoHostAndDoesNotRetryEveryTick() => Run(owner =>
@@ -111,8 +100,7 @@ public sealed class BrainDrainIntegrationTests
         int tries = 0;
         BrainDrainOverlay.Prepare = _ => { tries++; return false; };
         BrainDrainOverlay.Start(owner); BrainDrainOverlay.Reconcile();
-        Assert.Empty(BrainDrainOverlay.Active); Assert.Equal(1, tries);
-        return Task.CompletedTask;
+        Assert.Empty(BrainDrainOverlay.Active); Assert.Equal(1, tries); return Task.CompletedTask;
     }, supported: false);
     [Theory]
     [InlineData(false)]
@@ -128,8 +116,7 @@ public sealed class BrainDrainIntegrationTests
         calls.Clear(); service.Current.AllowOverlayCapture = !allow;
         Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0x11u : 0u, x.Flag));
         calls.Clear(); service.RestoreFrom(new() { BrainDrainEnabled = true, BrainDrainBlurStrength = 50, AllowOverlayCapture = allow });
-        Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0u : 0x11u, x.Flag));
-        return Task.CompletedTask;
+        Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0u : 0x11u, x.Flag)); return Task.CompletedTask;
     });
     [Fact]
     public Task SameOriginResolutionAndDpiChangesRecreateFullMonitorHosts() => Run(owner =>
@@ -142,7 +129,6 @@ public sealed class BrainDrainIntegrationTests
             var old = Assert.Single(BrainDrainOverlay.Active); (bounds, scale) = next; BrainDrainOverlay.Reconcile();
             var host = Assert.Single(BrainDrainOverlay.Active); Assert.NotSame(old, host); Assert.False(old.IsVisible);
             Assert.Equal(bounds.Position, host.Position); Assert.Equal(bounds.Width / scale, host.Width); Assert.Equal(bounds.Height / scale, host.Height);
-        }
-        return Task.CompletedTask;
+        } return Task.CompletedTask;
     });
 }
