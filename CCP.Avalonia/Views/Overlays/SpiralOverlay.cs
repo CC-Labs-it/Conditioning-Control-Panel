@@ -205,8 +205,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             App.Sessions?.RefreshCornerGifPolicy();
         }
 
-        /// <summary>WPF AchievementService:276 - quest minutes while the spiral is on screen.</summary>
-        internal static readonly OverlayQuestMinutes QuestMinutes = new(m => App.Quests?.TrackSpiralMinutes(m));
+        /// <summary>WPF AchievementService:249-275 - achievement and quest minutes while the spiral is on
+        /// screen; going off screen restarts the continuous run (spiral_eyes).</summary>
+        internal static readonly OverlayQuestMinutes QuestMinutes = new(
+            m => { App.Achievements?.TrackSpiralMinutes(m); App.Quests?.TrackSpiralMinutes(m); },
+            () => App.Achievements?.ResetContinuousSpiral());
 
         /// <summary>Same gate as the pink tint (WPF RefreshOverlays returns early unless the engine runs):
         /// a running engine or session, not paused. Unseeded (renders, tests) means the card owns it.</summary>

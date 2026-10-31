@@ -582,14 +582,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var xpAmount = (50 * _requiredRepeats) + 200;
                 if (_strictMode) xpAmount = (int)(xpAmount * 1.5);
                 CoreProgression.AddXP(xpAmount, "LockCard");
-                // WPF AchievementService.TrackLockCardCompletion:544, the quest half (programs-3a decision).
+                // WPF LockCardWindow.xaml.cs:910 -> AchievementService.TrackLockCardCompletion:508: the
+                // count + unlocks (Core), the quest credit, then Circe's tab (typos cost, the card pays back).
+                App.Achievements?.TrackLockCardCompletion(completionTime, _totalErrors, _requiredRepeats);
                 App.Quests?.TrackLockCardCompleted();
+                try { Platform.ChasterHead.Service?.Note("typo", _totalErrors); Platform.ChasterHead.Service?.Note("lockcard"); }
+                catch (Exception ex) { Log.Debug("chaster lock card hook: {E}", ex.Message); }
                 try { Completed?.Invoke(); } catch (Exception ex) { Log.Debug("lock card completed handler: {E}", ex.Message); }
             }
 
             // ponytail: the rest stays stubbed and has no Core seam to reach through.
-            // App.Achievements.TrackLockCardCompletion's achievement half (TotalLockCardsCompleted,
-            //   Chaster notes) - ConditioningControlPanel/Services/Progression/AchievementService.cs
             // App.LockCard.NotifyCompleted(_phrase, _totalErrors, _requiredRepeats) (!_isTest only)
             //   - ConditioningControlPanel/Services/LockCard/LockCardService.cs
             Log.Information("Lock Card completed - {Repeats} repeats in {Time:F1}s with {Errors} errors{Test}",
