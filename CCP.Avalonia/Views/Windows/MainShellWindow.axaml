@@ -56,6 +56,7 @@
         xmlns:cmp="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls"
         xmlns:cmpPages="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages"
         xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+        xmlns:companion="clr-namespace:ConditioningControlPanel.Services.Companion;assembly=CCP.Core"
         xmlns:plat="clr-namespace:ConditioningControlPanel.Avalonia.Platform"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow"
         x:CompileBindings="False"
@@ -2450,6 +2451,20 @@
                                                        Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
                                         <Button x:Name="BtnHelpWhatMovedRow" Grid.Column="2" Content="{loc:Str whatmoved_show}" Click="BtnWhatMovedReplay_Click"
+                                                Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+
+                                <!-- WPF MainWindow.xaml:2946. Rain V2 stays out of 7.2.0. -->
+                                <Border x:Name="HelpRainRow" IsVisible="{x:Static companion:RainV2Gate.On}"
+                                        Background="{DynamicResource SurfaceBgBrush}" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <TextBlock Text="☂" FontSize="22" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{loc:Str help_rain_title}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{loc:Str help_rain_sub}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <Button x:Name="BtnHelpRain" Grid.Column="2" Content="{loc:Str help_read_btn}"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
