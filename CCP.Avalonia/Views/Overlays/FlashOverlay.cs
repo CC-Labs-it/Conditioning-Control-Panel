@@ -84,6 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
                 var targets = PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
                 var occupied = Active.Select(a => a.Rect).ToList();
+                RemoteFlashSource.EnsurePrefetch();
                 var flashes = await Task.Run(() => LoadPictures(BurstCount(amount, s, Rng), screens, targets, s, occupied, size));
                 if (flashes.Count == 0)
                 {
@@ -325,6 +326,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void CloseAll(bool final = true)
         {
             _generation++;
+            if (final) RemoteFlashSource.CleanupCache();
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
@@ -424,6 +426,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var s = CoreSettings.Current;
                 var occupied = Active.Select(a => a.Rect).ToList();
+                RemoteFlashSource.EnsurePrefetch();
                 var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null));
                 if (generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
                 Schedule(flashes, 0, 100, generation, Cap(s, parent.Ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
@@ -474,7 +477,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             for (var tries = Math.Max(count * 5, 20); result.Count < count && tries > 0; tries--)
             {
-                if (NextFlashPath(files) is not { } path) break;
+                var remote = FlashSourceRules.ShouldDrawRemote(s, files.Count > 0, Rng)
+                    ? RemoteFlashSource.TryTake(Rng) : null;
+                var path = remote?.PosterPath ?? NextFlashPath(files);
+                if (path == null) break;
                 try
                 {
                     SkiaSharp.SKImageInfo info;
@@ -486,7 +492,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var screen = screens[targets[Rng.Next(targets.Length)]];
                     var rect = Place(screen.Bounds, screen.Scaling, info.Width, info.Height, s, Rng, occupied, size);
                     using var stream = File.OpenRead(path);
-                    result.Add((Bitmap.DecodeToWidth(stream, rect.Width), rect, path, screen));
+                    result.Add((Bitmap.DecodeToWidth(stream, rect.Width), rect, remote?.Url ?? path, screen));
                     occupied.Add(rect);
                 }
                 catch (Exception ex) { Log.Debug("Flash: could not decode {Path}: {E}", path, ex.Message); }
