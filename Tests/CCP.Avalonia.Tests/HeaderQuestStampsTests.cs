@@ -29,7 +29,8 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public sealed class HeaderQuestStampsTests
 {
-    private static Task Shell(Action<MainShellWindow, QuestService> check) => AvaloniaTestDispatcher.RunAsync(() =>
+    private static Task Shell(Action<MainShellWindow, QuestService> check,
+        MotionLevel motion = MotionLevel.Off, Action<QuestService>? beforeShow = null) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current == null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -42,9 +43,10 @@ public sealed class HeaderQuestStampsTests
         CoreSettings.ServiceProvider = () => service;
         CoreSettings.Current.PerformanceMode = true;
         CoreSettings.Current.SuppressPerkNotifications = true;
-        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        CoreSettings.Current.MotionLevel = motion;
         quests.Progress.DailyQuests = new List<ActiveQuest> { new("pop_parade_d"), new("flash_rush_d"), new("spiral_sink_d") };
         quests.Progress.WeeklyQuest = new ActiveQuest("flash_monsoon_w");
+        beforeShow?.Invoke(quests);
         AvApp.Quests = quests;
         MainShellWindow? shell = null;
         try
@@ -117,6 +119,15 @@ public sealed class HeaderQuestStampsTests
         Dispatcher.UIThread.RunJobs();
         Assert.Contains(Cell(shell, "d0").Children, c => c is IconGlyph { Kind: FluentIcons.Common.Symbol.Checkmark });
         Assert.Contains(popup.Child.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "done");
+        var tickShadow = popup.Child.GetVisualDescendants().OfType<IconGlyph>().Single(g => Equals(g.Tag, "stamp-tick-shadow")); // WPF :674
+        Assert.True(tickShadow.IsEffectivelyVisible);
+        Assert.Equal(FluentIcons.Common.Symbol.Checkmark, tickShadow.Kind);
+        Assert.Equal(Colors.Black, Assert.IsAssignableFrom<ISolidColorBrush>(tickShadow.Foreground).Color);
+        var tickOffset = Assert.IsType<TranslateTransform>(tickShadow.RenderTransform);
+        Assert.Equal(Math.Sqrt(2), tickOffset.X, 6);
+        Assert.Equal(Math.Sqrt(2), tickOffset.Y, 6);
+        Assert.Same(tickShadow.Parent, popup.Child.GetVisualDescendants().OfType<IconGlyph>()
+            .Single(g => g.Kind == FluentIcons.Common.Symbol.Checkmark && !Equals(g.Tag, "stamp-tick-shadow")).Parent);
         AssertReward();
         Assert.DoesNotContain(shell.Named<Grid>("QuestStampHost")!.GetVisualDescendants(), v => v.Effect != null);
         shell.MouseMove(new Point(500, 250));
@@ -187,6 +198,228 @@ public sealed class HeaderQuestStampsTests
         AvApp.Quests = null;
         shell.InitializeQuestStamps();
         Assert.False(shell.Named<Grid>("QuestStampHost")!.IsVisible);
+    });
+
+    private sealed class StampClock : TimeProvider
+    {
+        private long _now;
+        public override long GetTimestamp() => _now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public void Advance(MainShellWindow shell, double ms)
+        {
+            _now += TimeSpan.FromMilliseconds(ms).Ticks;
+            shell.StepStampAnimations();
+        }
+    }
+
+    private static Task AnimatedShell(Action<MainShellWindow, QuestService, StampClock> check) => Shell((shell, quests) =>
+    {
+        var previous = MainShellWindow.StampTime;
+        var clock = new StampClock();
+        MainShellWindow.StampTime = clock;
+        try { check(shell, quests, clock); }
+        finally
+        {
+            shell.StopQuestStampsForPanic();
+            MainShellWindow.StampTime = previous;
+        }
+    }, MotionLevel.Reduced); // interaction motion still runs when ambient loops are disabled
+
+    private static ScaleTransform Scale(Panel cell) =>
+        (ScaleTransform)((TransformGroup)cell.RenderTransform!).Children[0];
+
+    [Theory]
+    [InlineData("d0")]
+    [InlineData("w")]
+    public Task CompletionPopsOnceAndDetachesTheGoldFlashAt650Ms(string key) => AnimatedShell((shell, quests, clock) =>
+    {
+        Assert.False(shell.StampAnimationsRunning);
+        if (key == "d0")
+            quests.TrackBubblesPopped(QuestDefinition.DailyQuests.Find(d => d.Id == "pop_parade_d")!.TargetValue);
+        else
+        {
+            quests.Progress.WeeklyQuest!.CurrentProgress = quests.GetCurrentWeeklyDefinition()!.TargetValue - 1;
+            quests.TrackFlashImage(); // daily progress + weekly completion arrive in the same turn
+        }
+        Dispatcher.UIThread.RunJobs();
+        var cell = Cell(shell, key);
+        var flash = cell.Children.OfType<Border>().Single(b => Equals(b.Tag, "stamp-flash"));
+        Assert.Equal(0.7, Scale(cell).ScaleX, 6);
+        Assert.Equal(0.9, flash.Opacity, 6);
+        Assert.Equal(16, flash.BoxShadow[0].Blur);
+        Assert.True(shell.StampAnimationsRunning);
+        clock.Advance(shell, 94.5);
+        Assert.True(Scale(cell).ScaleX > 1.35); // BackEase amplitude 0.6 on the first segment
+        clock.Advance(shell, 94.5);
+        Assert.Equal(1.35, Scale(cell).ScaleX, 6); // 45% of 420 ms
+        clock.Advance(shell, 231);
+        Assert.Equal(1, Scale(cell).ScaleX, 6);
+        Assert.Equal(0.9 * (1 - 420d / 650), flash.Opacity, 6);
+        clock.Advance(shell, 230);
+        Assert.DoesNotContain(flash, cell.Children);
+        Assert.False(shell.StampAnimationsRunning);
+        shell.RefreshQuestStamps();
+        Assert.DoesNotContain(Cell(shell, key).Children, c => Equals(c.Tag, "stamp-flash"));
+        Assert.False(shell.StampAnimationsRunning); // finished state on a later paint never celebrates again
+    });
+
+    [Fact]
+    public Task AlreadyCompletedFirstPaintAndMotionOffNeverCelebrate() => Shell((shell, quests) =>
+    {
+        Assert.Equal(1, Scale(Cell(shell, "d0")).ScaleX);
+        Assert.DoesNotContain(Cell(shell, "d0").Children, c => Equals(c.Tag, "stamp-flash"));
+        Dispatcher.UIThread.RunJobs();
+        var popup = Hover(shell, "d1");
+        Assert.Equal(1, popup.Child!.Opacity);
+        Assert.Equal(0, Assert.IsType<TranslateTransform>(popup.Child.RenderTransform).Y);
+        Assert.Equal(1.5, Scale(Cell(shell, "d1")).ScaleX);
+        Assert.False(shell.StampAnimationsRunning);
+        for (int i = 0; i < 40; i++) quests.TrackFlashImage();
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(Cell(shell, "d1").Children, c => Equals(c.Tag, "stamp-flash"));
+        Assert.False(shell.StampAnimationsRunning);
+    }, beforeShow: quests => quests.Progress.DailyQuests[0].IsCompleted = true);
+
+    [Fact]
+    public Task HoverHostAndPopupFollowWpfTimingsAndSwitchingDoesNotReplayEntrance() => AnimatedShell((shell, _, clock) =>
+    {
+        var popup = Hover(shell, "d0");
+        var visual = Assert.IsType<Panel>(popup.Child);
+        var slide = Assert.IsType<TranslateTransform>(visual.RenderTransform);
+        var cell = Cell(shell, "d0");
+        var hostScale = Assert.IsType<ScaleTransform>(shell.Named<Grid>("QuestStampHost")!.RenderTransform);
+        Assert.Equal(0, visual.Opacity);
+        Assert.Equal(-7, slide.Y);
+        Assert.Equal(1, Scale(cell).ScaleX);
+        clock.Advance(shell, 75);
+        Assert.Equal(0.5, visual.Opacity, 6);
+        Assert.Equal(1.015, hostScale.ScaleX, 6); // quadratic ease-out, 150 ms
+        Assert.Equal(1 + 0.5 * (1 - Math.Pow(1 - 75d / 170, 3)), Scale(cell).ScaleX, 6);
+        clock.Advance(shell, 75);
+        Assert.Equal(1, visual.Opacity);
+        Assert.Equal(1.02, hostScale.ScaleX, 6);
+        clock.Advance(shell, 20);
+        Assert.Equal(1.5, Scale(cell).ScaleX, 6);
+        Assert.Equal(-1, ((RotateTransform)((TransformGroup)cell.RenderTransform!).Children[1]).Angle, 6);
+        clock.Advance(shell, 10);
+        Assert.Equal(0, slide.Y, 6);
+        Assert.False(shell.StampAnimationsRunning);
+        var shadow = visual.Children.OfType<Border>().Single(b => Equals(b.Tag, "stamp-card-shadow"));
+        Assert.Equal(20, shadow.BoxShadow[0].Blur);
+        Assert.Equal(5 / Math.Sqrt(2), shadow.BoxShadow[0].OffsetX, 6);
+        Assert.Equal(5 / Math.Sqrt(2), shadow.BoxShadow[0].OffsetY, 6); // WPF default direction 315 degrees
+        Assert.Equal(140, shadow.BoxShadow[0].Color.A);
+        Assert.All(visual.GetVisualDescendants(), v => Assert.Null(v.Effect));
+
+        // Exit d0 and enter d1 in one input turn: the same popup stays open and settled.
+        cell.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, cell,
+            new Pointer(2, PointerType.Mouse, true), shell, default, 0, new PointerPointProperties(), KeyModifiers.None));
+        var next = Cell(shell, "d1");
+        next.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, next,
+            new Pointer(2, PointerType.Mouse, true), shell, default, 0, new PointerPointProperties(), KeyModifiers.None));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(popup.IsOpen);
+        Assert.Equal(1, visual.Opacity);
+        Assert.Equal(0, slide.Y);
+        clock.Advance(shell, 100);
+        Assert.Equal(1.0625, Scale(cell).ScaleX, 6); // cubic ease-out to 1 over 200 ms
+        clock.Advance(shell, 100);
+        Assert.Equal(1, Scale(cell).ScaleX);
+        Assert.False(shell.StampAnimationsRunning);
+    });
+
+    [Fact]
+    public Task SwitchingStampsMidEntranceContinuesTheOriginalFadeAndSlide() => AnimatedShell((shell, _, clock) =>
+    {
+        var popup = Hover(shell, "d0");
+        var visual = Assert.IsType<Panel>(popup.Child);
+        var slide = Assert.IsType<TranslateTransform>(visual.RenderTransform);
+        clock.Advance(shell, 75);
+        double y = slide.Y;
+        var next = Cell(shell, "d1");
+        next.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, next,
+            new Pointer(2, PointerType.Mouse, true), shell, default, 0, new PointerPointProperties(), KeyModifiers.None));
+        Assert.True(popup.IsOpen);
+        Assert.Equal(0.5, visual.Opacity, 6);
+        Assert.Equal(y, slide.Y);
+        clock.Advance(shell, 105);
+        Assert.Equal(1, visual.Opacity);
+        Assert.Equal(0, slide.Y, 6);
+        clock.Advance(shell, 95);
+        Assert.False(shell.StampAnimationsRunning);
+    });
+
+    [Fact]
+    public Task RefreshCloseAndPanicCancelFiniteWorkAndDismissTheCard() => AnimatedShell((shell, quests, clock) =>
+    {
+        var def = QuestDefinition.DailyQuests.Find(d => d.Id == "pop_parade_d")!;
+        quests.TrackBubblesPopped(def.TargetValue);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shell.StampAnimationsRunning);
+        shell.RefreshQuestStamps();
+        Assert.False(shell.StampAnimationsRunning); // the discarded cell has no remaining clock
+        var popup = Hover(shell, "d0");
+        Assert.True(shell.StampAnimationsRunning);
+        clock.Advance(shell, 100); // mid-zoom and mid-lift, so the resets below are not vacuous
+        var hostScale = Assert.IsType<ScaleTransform>(shell.Named<Grid>("QuestStampHost")!.RenderTransform);
+        Assert.True(Scale(Cell(shell, "d0")).ScaleX > 1);
+        Assert.True(hostScale.ScaleX > 1);
+        Assert.Equal(20, Cell(shell, "d0").ZIndex);
+        var surface = PanicSurfaces.All.Single(s => s.Id == "quest-stamps");
+        Assert.Null(surface.OwnsTheScreen);
+        surface.Stop(shell);
+        Assert.False(popup.IsOpen);
+        Assert.False(shell.StampAnimationsRunning);
+        Assert.Equal(1, Scale(Cell(shell, "d0")).ScaleX);
+        Assert.Equal(1, hostScale.ScaleX);
+        Assert.Equal(0, Cell(shell, "d0").ZIndex);
+        popup = Hover(shell, "d1");
+        shell.Close();
+        Assert.False(popup.IsOpen);
+        Assert.False(shell.StampAnimationsRunning);
+        clock.Advance(shell, 1000);
+        Assert.False(popup.IsOpen);
+    });
+
+    [Fact]
+    public Task PanicRepaintsQueuedCompletionWithoutPostponingItsPop() => AnimatedShell((shell, quests, _) =>
+    {
+        quests.TrackBubblesPopped(QuestDefinition.DailyQuests.Find(d => d.Id == "pop_parade_d")!.TargetValue);
+        shell.StopQuestStampsForPanic();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(Cell(shell, "d0").Children, c => c is IconGlyph { Kind: FluentIcons.Common.Symbol.Checkmark });
+        Assert.False(shell.StampAnimationsRunning);
+        Assert.DoesNotContain(Cell(shell, "d0").Children, c => Equals(c.Tag, "stamp-flash"));
+        shell.RefreshQuestStamps(); // unrelated later repaint must not rediscover the pre-panic completion
+        Assert.False(shell.StampAnimationsRunning);
+        Assert.DoesNotContain(Cell(shell, "d0").Children, c => Equals(c.Tag, "stamp-flash"));
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task HostAndStampEachEaseAtTheirOwnDuration(bool host) => AnimatedShell((shell, _, clock) =>
+    {
+        Hover(shell, "d0");
+        clock.Advance(shell, 75);
+        var scale = host ? Assert.IsType<ScaleTransform>(shell.Named<Grid>("QuestStampHost")!.RenderTransform)
+            : Scale(Cell(shell, "d0"));
+        Assert.Equal(host ? 1.015 : 1 + 0.5 * (1 - Math.Pow(1 - 75d / 170, 3)), scale.ScaleX, 6);
+    });
+
+    [Fact]
+    public Task PopupShadowMatchesWpfWithoutMotion() => Shell((shell, _) =>
+    {
+        var popup = Hover(shell, "d0");
+        var visual = Assert.IsType<Panel>(popup.Child);
+        var shadow = visual.Children.OfType<Border>().Single(b => Equals(b.Tag, "stamp-card-shadow"));
+        Assert.Equal(20, shadow.BoxShadow[0].Blur);
+        Assert.Equal(5 / Math.Sqrt(2), shadow.BoxShadow[0].OffsetX, 6);
+        Assert.Equal(5 / Math.Sqrt(2), shadow.BoxShadow[0].OffsetY, 6);
+        Assert.Equal(140, shadow.BoxShadow[0].Color.A);
+        Assert.Equal(24, visual.Margin.Left);
+        Assert.Equal(10 - 24, popup.VerticalOffset);
+        Assert.Equal(-6 - 24, popup.HorizontalOffset);
     });
 
     [Fact]

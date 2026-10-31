@@ -1,8 +1,9 @@
 // Adapted from parity/trunk 7b6f94800e90a90fa443fb47efcfaeedc17eff0e and WPF MainWindow.QuestStamps.cs.
-// ponytail: finite stamp animations and popup shadow remain in wire-shell-quest-stamps-b.
+// Finite motion follows WPF; the frame clock sleeps when the last transition finishes.
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
@@ -12,6 +13,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -61,9 +63,77 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public Panel? Cell;
             public ScaleTransform? Scale;
             public RotateTransform? Rotate;
+            public Border? Flash;
         }
         private readonly Dictionary<string, QuestStampInfo> _stampInfos = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, bool> _stampCompletedSeen = new(StringComparer.Ordinal);
         private string? _hoveredStampKey;
+        private Panel? _stampPopVisual;
+        private readonly TranslateTransform _stampPopSlide = new(0, -6);
+        private FrameClock? _stampClock;
+        private readonly Dictionary<object, (long Start, int Ms, Action<double> Apply)> _stampAnimations = new();
+        internal static TimeProvider StampTime = TimeProvider.System;
+
+        // Adapted from parity/trunk c18c2d8bb TransformTween: write transforms rather than
+        // Animation.RunAsync(Transform). Reuse this head's shared frame source, with finite callbacks
+        // for WPF's per-keyframe easing and the flash's removal. No composition requests at rest.
+        private void AnimateStamp(object key, int ms, Action<double> apply)
+        {
+            CancelStampAnimation(key);
+            if (_questStampsClosed || !AmbientFxCanvas.Env.AllowTransitions) { apply(1); return; }
+            _stampAnimations[key] = (StampTime.GetTimestamp(), ms, apply);
+            apply(0);
+            if (_stampClock == null)
+            {
+                _stampClock = new FrameClock(this) { Interval = TimeSpan.FromMilliseconds(16) };
+                _stampClock.Tick += (_, _) => StepStampAnimations();
+            }
+            _stampClock.Start();
+        }
+
+        internal bool StampAnimationsRunning => _stampClock?.IsEnabled == true;
+
+        internal void StepStampAnimations()
+        {
+            foreach (var (key, animation) in _stampAnimations.ToArray())
+            {
+                double p = Math.Clamp(StampTime.GetElapsedTime(animation.Start).TotalMilliseconds / animation.Ms, 0, 1);
+                animation.Apply(AmbientFxCanvas.Env.AllowTransitions ? p : 1);
+                if (p >= 1 || !AmbientFxCanvas.Env.AllowTransitions) _stampAnimations.Remove(key);
+            }
+            if (_stampAnimations.Count == 0) _stampClock?.Stop();
+        }
+
+        private void CancelStampAnimation(object? key)
+        {
+            if (key != null) _stampAnimations.Remove(key);
+            if (_stampAnimations.Count == 0) _stampClock?.Stop();
+        }
+
+        private static double StampCubicOut(double p) => 1 - Math.Pow(1 - p, 3);
+
+        private int _stampPanicGeneration;
+        private bool _stampPopSuppressed;
+
+        internal void StopQuestStampsForPanic()
+        {
+            _stampPanicGeneration++;
+            HideStampPopup();
+            _hoveredStampKey = null;
+            foreach (var info in _stampInfos.Values)
+            {
+                if (info.Scale != null) info.Scale.ScaleX = info.Scale.ScaleY = 1;
+                if (info.Rotate != null) info.Rotate.Angle = QuestStampRestAngle(info.Key);
+                if (info.Cell != null)
+                {
+                    info.Cell.ZIndex = 0;
+                    if (info.Flash != null) info.Cell.Children.Remove(info.Flash);
+                }
+            }
+            _stampHostScale.ScaleX = _stampHostScale.ScaleY = 1;
+            _stampAnimations.Clear();
+            _stampClock?.Stop();
+        }
         private bool _questStampsWired, _questStampsClosed;
         private QuestService? _questStampsService;
         private readonly ScaleTransform _stampHostScale = new(1, 1);
@@ -113,7 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         {
                             UnhookQuestStampService();
                             LocalizationManager.Instance.LanguageChanged -= OnQuestStampsLanguageChanged;
-                            HideStampPopup();
+                            StopQuestStampsForPanic();
                         }
                         catch { /* teardown */ }
                     };
@@ -151,10 +221,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnQuestStampsLanguageChanged(object? sender, EventArgs e) => QueueQuestStampRepaint();
 
+        private int _stampRepaintQueued;
         private void QueueQuestStampRepaint()
         {
-            try { Dispatcher.UIThread.Post(() => { if (!_questStampsClosed) RefreshQuestStamps(); }); }
-            catch { /* fire-and-forget */ }
+            // One signal can advance a daily AND the weekly. Paint their final snapshot once so
+            // a second queued repaint cannot discard the completion pop before its first frame.
+            if (Interlocked.Exchange(ref _stampRepaintQueued, 1) != 0) return;
+            int generation = _stampPanicGeneration;
+            try
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    Interlocked.Exchange(ref _stampRepaintQueued, 0);
+                    if (_questStampsClosed) return;
+                    // WPF always repaints (MainWindow.QuestStamps.cs:284). After panic,
+                    // consume the completion transition silently rather than postpone its pop.
+                    bool wasSuppressed = _stampPopSuppressed;
+                    _stampPopSuppressed |= generation != _stampPanicGeneration;
+                    try { RefreshQuestStamps(); }
+                    finally { _stampPopSuppressed = wasSuppressed; }
+                });
+            }
+            catch { Interlocked.Exchange(ref _stampRepaintQueued, 0); }
         }
 
         internal void RefreshQuestStamps()
@@ -163,6 +251,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var hovered = _hoveredStampKey;
+                foreach (var info in _stampInfos.Values)
+                {
+                    CancelStampAnimation(info.Scale);
+                    CancelStampAnimation(info.Flash);
+                }
                 _stampInfos.Clear();
                 foreach (var old in host.Children.Where(c => c is not Popup).ToArray()) host.Children.Remove(old);
                 _hoveredStampKey = hovered;
@@ -213,6 +306,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             info.Cell = cell;
             _stampInfos[info.Key] = info;
             host.Children.Add(cell);
+            bool known = _stampCompletedSeen.TryGetValue(info.Key, out bool wasDone);
+            _stampCompletedSeen[info.Key] = info.Completed;
+            if (info.Completed && known && !wasDone && !_stampPopSuppressed) PlayStampStampedPop(info);
+        }
+
+        private void PlayStampStampedPop(QuestStampInfo info)
+        {
+            if (!AmbientFxCanvas.Env.AllowTransitions || info.Cell == null || info.Scale == null) return;
+            AnimateStamp(info.Scale, 420, p =>
+            {
+                double scale;
+                if (p <= 0.45)
+                {
+                    double x = 1 - p / 0.45;
+                    double back = 1 - (x * x * x - x * 0.6 * Math.Sin(Math.PI * x));
+                    scale = 0.7 + (1.35 - 0.7) * back;
+                }
+                else scale = 1.35 + (1 - 1.35) * StampCubicOut((p - 0.45) / 0.55);
+                info.Scale.ScaleX = info.Scale.ScaleY = scale;
+            });
+            // ponytail: sibling BoxShadow replaces WPF's temporary DropShadowEffect; no tile Effect.
+            var flash = new Border
+            {
+                CornerRadius = new CornerRadius(3), Background = Brushes.Transparent,
+                BoxShadow = new BoxShadows(new BoxShadow { Color = Colors.Gold, Blur = 16 }),
+                IsHitTestVisible = false, Tag = "stamp-flash",
+            };
+            info.Flash = flash;
+            info.Cell.Children.Insert(0, flash);
+            AnimateStamp(flash, 650, p =>
+            {
+                flash.Opacity = Math.Clamp(0.9 * (1 - p), 0, 1);
+                if (p >= 1) info.Cell.Children.Remove(flash);
+            });
         }
 
         internal static double QuestStampFraction(int current, int target) =>
@@ -292,8 +419,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (info?.Cell == null || info.Scale == null || info.Rotate == null) return;
             info.Cell.ZIndex = on ? 20 : 0;
-            info.Scale.ScaleX = info.Scale.ScaleY = on ? QuestStampHoverScale : 1;
-            info.Rotate.Angle = QuestStampRestAngle(info.Key) * (on ? 0.25 : 1);
+            double from = info.Scale.ScaleX, angle = info.Rotate.Angle;
+            double to = on ? QuestStampHoverScale : 1, toAngle = QuestStampRestAngle(info.Key) * (on ? 0.25 : 1);
+            AnimateStamp(info.Scale, on ? 170 : 200, p =>
+            {
+                double eased = StampCubicOut(p);
+                info.Scale.ScaleX = info.Scale.ScaleY = from + (to - from) * eased;
+                info.Rotate.Angle = angle + (toAngle - angle) * eased;
+            });
         }
 
         private static double QuestStampRestAngle(string key) => key switch
@@ -301,7 +434,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "d0" => -4, "d1" => 3, "d2" => -2, _ => 5,
         };
 
-        private void LiftStampHost(bool on) => _stampHostScale.ScaleX = _stampHostScale.ScaleY = on ? 1.02 : 1;
+        private void LiftStampHost(bool on)
+        {
+            double from = _stampHostScale.ScaleX, to = on ? 1.02 : 1;
+            AnimateStamp(_stampHostScale, 150, p =>
+                _stampHostScale.ScaleX = _stampHostScale.ScaleY = from + (to - from) * (1 - (1 - p) * (1 - p)));
+        }
 
         private void EnsureStampPopup()
         {
@@ -324,10 +462,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Background = StampInk(0x992D4A2D),
                 IsVisible = false,
-                Child = new IconGlyph
+                Child = new Panel
                 {
-                    Kind = IconKind.Checkmark, Foreground = QuestStampDoneInk, Size = 60,
-                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                    Children =
+                    {
+                        // ponytail: WPF :674 DropShadowEffect (blur 8, depth 2, 315 deg) as an unblurred sibling glyph;
+                        // the card fades, so no Effect under it (P82).
+                        new IconGlyph
+                        {
+                            Kind = IconKind.Checkmark, Foreground = Brushes.Black, Size = 60, Opacity = 0.6, Tag = "stamp-tick-shadow",
+                            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                            RenderTransform = new TranslateTransform(Math.Sqrt(2), Math.Sqrt(2)),
+                        },
+                        new IconGlyph
+                        {
+                            Kind = IconKind.Checkmark, Foreground = QuestStampDoneInk, Size = 60,
+                            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                        },
+                    },
                 },
             };
             static Border Chip(Control content, HorizontalAlignment side) => new()
@@ -393,15 +545,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 IsHitTestVisible = false,
                 Child = new StackPanel { Children = { artFrame, body } },
             };
+            _stampPopVisual = new Panel
+            {
+                Margin = new Thickness(24), RenderTransform = _stampPopSlide, IsHitTestVisible = false,
+                Children =
+                {
+                    new Border
+                    {
+                        CornerRadius = new CornerRadius(12), Background = Brushes.Transparent,
+                        BoxShadow = new BoxShadows(new BoxShadow { Color = Color.FromArgb(140, 0, 0, 0), Blur = 20, OffsetX = 5 / Math.Sqrt(2), OffsetY = 5 / Math.Sqrt(2) }),
+                        IsHitTestVisible = false, Tag = "stamp-card-shadow",
+                    },
+                    _stampPopCard,
+                },
+            };
             _stampPopup = new Popup
             {
                 PlacementTarget = host,
                 Placement = PlacementMode.Bottom,
-                VerticalOffset = 10,
-                HorizontalOffset = -6,
+                // Reserve shadow padding without shifting WPF's card anchor (10 down, 6 left).
+                VerticalOffset = 10 - 24,
+                HorizontalOffset = -6 - 24,
                 IsLightDismissEnabled = false,
                 IsHitTestVisible = false,
-                Child = _stampPopCard,
+                Child = _stampPopVisual,
             };
             host.Children.Add(_stampPopup);   // a Popup needs a place in the tree; it takes no room
         }
@@ -462,15 +629,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _stampPopRemaining!.Text = info.Completed ? "done" : left > 0 ? $"{left} to go" : "";
         }
 
-        private void ShowStampPopup(QuestStampInfo info)
+        private void ShowStampPopup(QuestStampInfo info, bool animate)
         {
+            if (_questStampsClosed) return;
             try
             {
                 EnsureStampPopup();
                 if (_stampPopup == null || _stampPopCard == null) return;
                 PaintStampPopup(info);
                 _stampPopup.IsOpen = true;
-                _stampPopCard.Opacity = 1;
+                if (!animate)
+                {
+                    // WPF's existing entrance clock keeps running when another stamp repaints
+                    // the open card. Do not restart it or jump a half-faded card to full opacity.
+                    if (_stampAnimations.ContainsKey(_stampPopVisual!)) return;
+                    _stampPopVisual!.Opacity = 1;
+                    _stampPopSlide.Y = 0;
+                    return;
+                }
+                AnimateStamp(_stampPopVisual!, 180, p =>
+                {
+                    _stampPopVisual!.Opacity = Math.Clamp(p * 180 / 150, 0, 1);
+                    _stampPopSlide.Y = -7 * (1 - StampCubicOut(p));
+                });
             }
             catch (Exception ex) { Log.Debug("[QuestStamps] card open failed: {E}", ex.Message); }
         }
@@ -479,6 +660,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                CancelStampAnimation(_stampPopVisual);
                 if (_stampPopup != null) _stampPopup.IsOpen = false;
             }
             catch { /* teardown */ }
@@ -493,7 +675,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     ZoomStamp(previous, false);
                 _hoveredStampKey = key;
                 ZoomStamp(info, true);
-                ShowStampPopup(info);
+                ShowStampPopup(info, animate: _stampPopup?.IsOpen != true);
             }
             catch (Exception ex) { Log.Debug("[QuestStamps] hover in: {E}", ex.Message); }
         }
@@ -519,7 +701,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 ZoomStamp(info, true);
                 if (_stampPopup?.IsOpen == true) PaintStampPopup(info);
-                else ShowStampPopup(info);
+                else ShowStampPopup(info, animate: true);
                 return;
             }
             _hoveredStampKey = null;
