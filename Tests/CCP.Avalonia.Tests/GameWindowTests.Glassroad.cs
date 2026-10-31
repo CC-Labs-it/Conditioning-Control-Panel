@@ -40,10 +40,12 @@ public sealed partial class GameWindowTests
     {
         var (oldDoor, oldOwns, oldHttp, oldBase) = (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var (oldUid, oldSecret, oldGate) = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider);
+        var oldLinuxCard = GameWindow.UseLinuxRaceCard;
         var fake = new GrHttp();
         using var http = new System.Net.Http.HttpClient(fake);
         try
         {
+            GameWindow.UseLinuxRaceCard = () => false; // exercise the existing WebKit host explicitly
             GameWindow.GlassroadDoorEnv = () => door;
             RacingAccess.IsGrantedProvider = _ => false;
             GameWindow.PbpHttpClient = () => http;
@@ -57,6 +59,7 @@ public sealed partial class GameWindowTests
         }
         finally
         {
+            GameWindow.UseLinuxRaceCard = oldLinuxCard;
             (GameWindow.GlassroadDoorEnv, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
