@@ -17,21 +17,7 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 public sealed class EmiDeskSettingsSpeechTests
 {
-    private const string Lines = """
-        {"version":1,"moments":{
-          "firstContact":{"priority":3,"pools":["greeting"],"limit":{"per":"ever","max":1}},
-          "desktopFirstBoot":{"priority":3,"pools":["boot"]},
-          "resized":{"priority":3,"pools":["spicy"]},
-          "panicPressed":{"hold":true,"holdMs":6000,"pools":["quiet"]},
-          "dismissed":{"hold":true,"holdMs":6000,"pools":["sulk"]},
-          "wordless":{"priority":3,"pools":["face"]}},
-         "pools":{"greeting":[{"id":"hello","t":"hello","spice":0}],
-                  "boot":[{"id":"boot","t":"desktop hello","spice":0}],
-                  "spicy":[{"id":"spicy","t":"high spice","spice":2,"face":"^_~"}],
-                  "quiet":[{"id":"quiet","t":"","spice":0}],
-                  "sulk":[{"id":"sulk","t":"","spice":0,"face":"T_T"}],
-                  "face":[{"id":"face","t":"","spice":0,"face":"o_o"}]}}
-        """;
+    private const string Lines = """{"version":1,"moments":{"firstContact":{"priority":3,"pools":["greeting"],"limit":{"per":"ever","max":1}},"desktopFirstBoot":{"priority":3,"pools":["boot"]},"resized":{"priority":3,"pools":["spicy"]},"panicPressed":{"hold":true,"holdMs":6000,"pools":["quiet"]},"dismissed":{"hold":true,"holdMs":6000,"pools":["sulk"]},"wordless":{"priority":3,"pools":["face"]}},"pools":{"greeting":[{"id":"hello","t":"hello","spice":0}],"boot":[{"id":"boot","t":"desktop hello","spice":0}],"spicy":[{"id":"spicy","t":"high spice","spice":2,"face":"^_~"}],"quiet":[{"id":"quiet","t":"","spice":0}],"sulk":[{"id":"sulk","t":"","spice":0,"face":"T_T"}],"face":[{"id":"face","t":"","spice":0,"face":"o_o"}]}}""";
     private static Task InDesk(Func<EmiDeskService, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
@@ -237,6 +223,27 @@ public sealed class EmiDeskSettingsSpeechTests
             desk.GreetingDue(); Assert.Null(desk.Window.BubbleText);
         }
         finally { LockCardWindow.ForceCloseAll(); shell.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(true), InlineData(false)]
+    public Task TubeOrIntakeOwnsSpeechAndGreeting(bool avatar) => InDesk(desk =>
+    {
+        var previous = desk.TubeBubbleLive;
+        Window? host = null;
+        try
+        {
+            host = avatar ? new global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow() : new IntakeHostWindow();
+            CoreSettings.Current.EmiDeskSpice = 2;
+            host.Show();
+            if (host is global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow tube) { desk.TubeBubbleLive = () => tube.IsVisible && tube.HasBubbleUp; tube.GigglePriority("test", playSound: false, aiGenerated: false); }
+            Assert.True(avatar ? desk.TubeBubbleLive() : IntakeHostWindow.IsAnyOpen());
+            desk.GreetingDue(); desk.Fire("resized");
+            Assert.Null(desk.Window!.BubbleText); Assert.False(desk.LineEngine.EverSpent("firstContact"));
+            host.Close(); desk.Fire("resized"); Assert.Equal(".", desk.Window.BubbleText);
+        }
+        finally { host?.Close(); desk.TubeBubbleLive = previous; }
         return Task.CompletedTask;
     });
 

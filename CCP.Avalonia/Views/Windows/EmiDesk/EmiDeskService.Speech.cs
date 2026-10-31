@@ -7,6 +7,7 @@ internal sealed partial class EmiDeskService
 {
     private DispatcherTimer? _greetingTimer;
     internal EmiLineEngine LineEngine { get; set; } = EmiLineEngine.Instance;
+    internal Func<bool> TubeBubbleLive = () => global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.Live?.HasBubbleUp == true;
     // WPF Fire/Speak: the Core engine owns spice, cadence, limits and holds. The window owns pixels.
     public void Fire(string moment, object? context = null)
     {
@@ -26,6 +27,7 @@ internal sealed partial class EmiDeskService
             }
             // WPF :677-689: safety holds arm even while the widget is away.
             if (_window?.PresentationActive == true && !engine.IsHoldMoment(moment)) return;
+            if (!engine.IsHoldMoment(moment) && (IntakeHostWindow.IsAnyOpen() || TubeBubbleLive())) return;
             var ctx = EmiLineEngine.ToCtx(context);
             var line = engine.Draw(moment, ctx);
             // WPF EmiDeskService.cs:649 NeverSpeaks; a hold is a face, so it plays even there (:765).
@@ -38,18 +40,12 @@ internal sealed partial class EmiDeskService
     private void ScheduleGreeting()
     {
         CancelGreeting();
-        _greetingTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(2600)
-        };
+        _greetingTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2600) };
         _greetingTimer.Tick += (_, _) => GreetingDue();
         _greetingTimer.Start();
     }
     // The timer and the headless tests drive the same step: nothing greets unless Summon scheduled it.
-    internal void GreetingDue()
-    {
-        if (_greetingTimer != null) GreetNow();
-    }
+    internal void GreetingDue() { if (_greetingTimer != null) GreetNow(); }
     internal void GreetNow()
     {
         CancelGreeting();

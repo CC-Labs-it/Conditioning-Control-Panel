@@ -49,11 +49,7 @@ public partial class EmiDeskWindow
         CancelChain();
         CancelHold();
         engine.Ack(line.Id, spoke: !line.Hold);
-        if (line.Hold)
-        {
-            HoldFace(line);
-            return;
-        }
+        if (line.Hold) { HoldFace(line); return; }
         // WPF EmiDeskWindow.Bubble.cs:524-530: a wordless row is a chain, or just a face.
         if (string.IsNullOrWhiteSpace(line.Text))
         {
@@ -72,10 +68,7 @@ public partial class EmiDeskWindow
         CancelHold();
         StopIdleBeats();
         DrawFace(string.IsNullOrEmpty(line.Face) ? "-_-" : line.Face);
-        _holdTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(line.HoldMs > 0 ? line.HoldMs : IgnoreFaceMs)
-        };
+        _holdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(line.HoldMs > 0 ? line.HoldMs : IgnoreFaceMs) };
         _holdTimer.Tick += (_, _) => ExpireHold();
         _holdTimer.Start();
     }
