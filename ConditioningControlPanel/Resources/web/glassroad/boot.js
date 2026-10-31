@@ -110,7 +110,7 @@ import { dismantleScene } from './render/sceneResources.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
 import { bodyOfVehicle, isKartBody } from './sim/kartStats.js';
-import { ownedChoices } from './hud/lobbyMath.js';
+import { ownedChoices, stampLook } from './hud/lobbyMath.js';
 import { unlockedSet } from './meta/unlocks.js';
 import { hostCounter, counterMessage } from './host/prizeCounter.js';
 import { COURSES, selectedCourse, courseUrl, courseRaceIntent } from './track/catalog.js';
@@ -143,6 +143,11 @@ const DEV = devAllowed(location.search);
 const HT = qs.get('hitch') === '1' ? (window.__hitch = { sim: 0, fx: 0, audio: 0, cam: 0, world: 0, render: 0, hud: 0, steps: 0 }) : null;
 let hT = 0;
 let profilePulled = false;   // the account record is pulled once per page, not once per course
+// The look on the logbook (72 contract C1). The garage outlives a course, the profile sync does not, so the garage holds
+// these. No sync, or an account with no access: nothing is stamped and the look stays local only.
+const garageLink = { sync: null, pulled: false, closed: false };
+const garageSync = { live: () => !!garageLink.sync && !garageLink.sync.off && !garageLink.closed, ready: () => garageLink.pulled,
+  push: record => garageLink.sync?.push(record) };
 const hLap = (k) => { const t = performance.now(); HT[k] = t - hT; hT = t; };
 // the race song (handoff-1022/MUSIC-ROAD-BRIEF.md): ?chart=<url> plays that chart, ?chart=0 none; the dev
 // loopback server tries the private song folder it mounts at /private-audio/; a host names its own charts in
@@ -636,7 +641,7 @@ async function boot(course, options, lifetime, isCurrent) {
   await paintGap();
   if (!lifetime.alive) return;
   const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas, feel,
-    track: trackName, laps, trackId: track.id, online: course.online, owned: () => shared.owned.grants, counter: hostCounter(shared.bridge, init),
+    track: trackName, laps, trackId: track.id, online: course.online, owned: () => shared.owned.grants, counter: hostCounter(shared.bridge, init), sync: garageSync,
     onProgress: (d, n) => showLoading('Getting the garage ready', 0.56 + 0.36 * d / Math.max(1, n)) });
   if (!lifetime.alive) { garage?.dispose(); return; }
   loaded('garage');
@@ -1168,9 +1173,14 @@ async function boot(course, options, lifetime, isCurrent) {
   const lobbyApi = link ? createLobbyApi(link.transport, { platform: init.caps.platform }) : null;
   // the account record (CONTRACT-LOGBOOK.md section 8): pull once per page, push after each saved run; silent offline
   const profileSync = link ? createProfileSync({ request: link.transport, onGrants: adoptOwned }) : null;
+  garageLink.sync = profileSync;
   if (profileSync && !profilePulled) {
     profilePulled = true;
-    void profileSync.pull().then(record => { if (lifetime.alive) bus.emit('logbook-pulled', { record }); });
+    void profileSync.pull().then(record => {
+      garageLink.pulled = !profileSync.off; garageLink.closed = profileSync.off;
+      if (lifetime.alive) bus.emit('logbook-pulled', { record });
+      shared.garage?.applySynced?.();   // goes on now only if the garage is open and at rest, else at its next open
+    });
   }
   bus.on('logbook-saved', ({ record } = {}) => profileSync?.push(record));
   // race songs from our own storage (NET.md section 14): nothing named a chart and the lobby is there, so ask it once
@@ -1254,6 +1264,7 @@ async function boot(course, options, lifetime, isCurrent) {
   ...(hostInvite ? { friends: hostInvite.friends } : {}),
   garageLook:()=>garage?raceLook(garage.state):null,
   lookOwned:()=>ownedChoices(shared.owned.grants,unlockedSet(loadRecord())),
+  lookChanged:(look,store)=>{if(garageSync.live()){const record=stampLook(store,look);if(record)garageSync.push(record);}},
   // a race link (?r=<token>, NET.md section 13): the address drops its r after the first claim answer
   linkClaimed: () => { const to = dropLinkParam(location.href); if (to) history.replaceState(history.state, '', to); } });
   hud.on('online', (e) => { lobbyUi = (e && e.lobby) || lobbyUi; });

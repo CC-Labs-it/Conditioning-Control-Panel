@@ -133,6 +133,14 @@ CCP-Server `GET /v2/race/profile` -> `{ ok, record }`, `PUT /v2/race/profile` bo
 boot and PUTs after each saved run, through the same transport as the lobby (desktop host relay or
 direct fetch on the web). Signed out: local only.
 
+The record's optional `garage` block (7.2, shared shop contract C1) makes the kart look travel:
+`{ state: <glassroad.garage.v1>, look: <glassroad.look.v1>, updatedAt: <ISO> }`. The newer `updatedAt` wins
+the whole block, a side without one never erases it, a block over 4 KB is dropped alone. The page stamps it on a
+real player change only (`hud/garageState.js garageTracker`, `hud/lobbyMath.js stampLook`), never on load, and
+applies a newer one through `cleanGarage` while the garage is open and at rest, else at its next open. A pick
+that does not fit falls back quietly and stays in the block for when the grant lands. `glassroad.garage.seen.v1`
+remembers what this device last took. It never reaches feel.json or the tracks: no course hash move.
+
 ## 9. Copy
 
 Dry, short, a little playful, plain. No em-dashes or en-dashes, no exclamation marks, gender neutral
