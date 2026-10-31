@@ -9,7 +9,7 @@
 // Awarded and LevelUp. The bar tweens to its new width (0.6s QuadraticEaseOut, MotionFx.BarFill)
 // and a level-up flashes XPBarFlashOverlay (250ms up, auto-reversed), both off at MotionLevel Off.
 // The profile menu's Level/XP rail is painted from the same numbers.
-// XP readout, meniscus and chip pop now follow WPF on the existing shared beat (see below).
+// XP readout and chip pop follow WPF on the existing shared beat (see below).
 //
 // STILL MISSING vs WPF, so the row stays a stub:
 //   the level-up burst (FireBurstAt) and THE BANK hold
@@ -102,15 +102,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 : null;
             double targetWidth = _xpFraction * available;
             bar.Width = targetWidth;
-            AnimateXpMeniscus(targetWidth, animate);
         }
 
-        private BeatLoop? _xpMeniscusPulse, _xpOdometer, _levelChipPop;
-        private double _xpMeniscusFillWidth, _lastXpShown = double.NaN;
+        private BeatLoop? _xpOdometer, _levelChipPop;
+        private double _lastXpShown = double.NaN;
         private int _lastXpLevelShown;
         private string? _xpReadoutTarget;
         private bool _heroClosed;
-        internal bool XpMeniscusPulsing => _xpMeniscusPulse?.IsRunning == true;
         internal bool XpReadoutCounting => _xpOdometer?.IsRunning == true;
         internal bool LevelChipPopping => _levelChipPop?.IsRunning == true;
 
@@ -123,8 +121,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 AmbientFxCanvas.Env.MotionGateChanged += RefreshHeroXpFx;
                 RefreshHeroXpFx();
             };
-            Activated += (_, _) => ApplyXpMeniscusPulse();
-            Deactivated += (_, _) => ApplyXpMeniscusPulse();
             PropertyChanged += (_, e) =>
             {
                 if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) RefreshHeroXpFx();
@@ -133,7 +129,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 _heroClosed = true;
                 AmbientFxCanvas.Env.MotionGateChanged -= RefreshHeroXpFx;
-                _xpMeniscusPulse?.Stop();
                 _xpOdometer?.Stop();
                 _levelChipPop?.Stop();
             };
@@ -141,7 +136,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void RefreshHeroXpFx()
         {
-            ApplyXpMeniscusPulse();
             if (AmbientFxCanvas.Env.AllowTransitions && IsVisible && WindowState != WindowState.Minimized) return;
             _xpOdometer?.Stop();
             if (_xpReadoutTarget != null && Named<TextBlock>("TxtXP") is { } txt) txt.Text = _xpReadoutTarget;
@@ -178,37 +172,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (p >= 1) _xpOdometer?.Stop();
             });
             _xpOdometer.Start();
-        }
-
-        // WPF AnimateXpMeniscus: exactly the fill's 600ms quadratic-out target and easing.
-        private void AnimateXpMeniscus(double toWidth, bool animate)
-        {
-            _xpMeniscusFillWidth = toWidth;
-            if (Named<Border>("XPMeniscus") is not { RenderTransform: TranslateTransform slide } dot) return;
-            slide.Transitions = animate && AmbientFxCanvas.Env.AllowTransitions
-                ? new Transitions
-                {
-                    new DoubleTransition { Property = TranslateTransform.XProperty,
-                        Duration = TimeSpan.FromSeconds(0.6), Easing = new QuadraticEaseOut() },
-                } : null;
-            slide.X = Math.Max(0, toWidth - (double.IsNaN(dot.Width) ? 12 : dot.Width) / 2);
-            ApplyXpMeniscusPulse();
-        }
-
-        private void ApplyXpMeniscusPulse()
-        {
-            if (Named<Border>("XPMeniscus") is not { } dot) return;
-            bool ambient = !_heroClosed && AmbientFxCanvas.Env.AllowAmbientLoops && IsActive
-                && IsVisible && WindowState != WindowState.Minimized;
-            if (_xpMeniscusFillWidth < 5 || !ambient)
-            {
-                _xpMeniscusPulse?.Stop();
-                dot.Opacity = _xpMeniscusFillWidth < 5 ? 0 : 0.55;
-                return;
-            }
-            _xpMeniscusPulse?.Stop();
-            _xpMeniscusPulse ??= new BeatLoop(dot, seconds => dot.Opacity = 0.35 + 0.60 * BeatLoop.Breath(seconds, 2));
-            _xpMeniscusPulse.Start();
         }
 
         // WPF PopLevelChip: scale/tilt peak at 180ms, settle at 600ms. Plain transform writes on

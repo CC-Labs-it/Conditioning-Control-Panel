@@ -1688,26 +1688,6 @@
                                     <DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="20" OffsetX="0" OffsetY="0" Opacity="0.95"/>
                                 </Border.Effect>
                             </Border>
-                            <!-- Velvet Kit 2 (FX lane B): the meniscus - a small radial glow dot that
-                                 rides the tip of the fill, so the bar reads as liquid with a surface
-                                 rather than a rectangle. Pre-built and parked at Opacity 0; its X is
-                                 tweened on the fill's own clock from AnimateXpDisplay, and the pulse
-                                 is an ambient loop owned by MainWindow.HeroFx.cs. No Effect: the
-                                 halo IS the gradient, so nothing here needs an intermediate surface. -->
-                            <Border x:Name="XPMeniscus" Width="12" Height="12" CornerRadius="6"
-                                    HorizontalAlignment="Left" VerticalAlignment="Center"
-                                    Opacity="0" IsHitTestVisible="False">
-                                <Border.Background>
-                                    <RadialGradientBrush>
-                                        <GradientStop Offset="0" Color="#FFFFFFFF"/>
-                                        <GradientStop Offset="0.35" Color="#CCFFFFFF"/>
-                                        <GradientStop Offset="1" Color="#00FFFFFF"/>
-                                    </RadialGradientBrush>
-                                </Border.Background>
-                                <Border.RenderTransform>
-                                    <TranslateTransform/>
-                                </Border.RenderTransform>
-                            </Border>
                         </Grid>
                     </Border>
                     <TextBlock x:Name="TxtXP" Grid.Column="3" Foreground="{StaticResource TextMutedBrush}"

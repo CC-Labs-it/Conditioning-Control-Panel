@@ -20,7 +20,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class HeroXpFxTests
 {
     [Fact]
-    public Task MeniscusRidesFillAndParksAtRestInReducedMotion() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task FillChangesWithoutTipLightInEveryMotionMode() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -36,23 +36,27 @@ public sealed class HeroXpFxTests
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             var bar = shell.FindControl<Border>("XPBar")!;
-            var dot = shell.FindControl<Border>("XPMeniscus")!;
-            Assert.True(bar.Width >= 5);
-            Assert.Equal(0.55, dot.Opacity, 3);
-            Assert.Equal(Math.Max(0, bar.Width - 6), ((TranslateTransform)dot.RenderTransform!).X, 3);
-
-            SaveFrame(shell, "HeroXpMeniscus");
+            var track = (Control)bar.Parent!;
+            Assert.True(track.Bounds.Width > 0);
+            Assert.Equal(Math.Min(1, 100 / XpCurve.GetXPForLevel(10, XpCurve.EpochOf(s))) * track.Bounds.Width, bar.Width, 3);
+            Assert.Null(shell.FindControl<Border>("XPMeniscus"));
+            Assert.NotNull(shell.FindControl<Border>("XPBarSheen"));
+            Assert.NotNull(shell.FindControl<Border>("XPBarFlashOverlay"));
+            SaveFrame(shell, "HeroXpNoTipLight");
 
             s.PlayerXP = 0;
             shell.UpdateLevelDisplay();
-            Assert.Equal(0, dot.Opacity);
-            Assert.Equal(0, ((TranslateTransform)dot.RenderTransform!).X);
+            Assert.Equal(0, bar.Width);
+            Assert.Null(bar.Transitions);
 
             s.PlayerXP = 100;
             s.MotionLevel = MotionLevel.Reduced;
             shell.UpdateLevelDisplay();
-            Assert.Equal(0.55, dot.Opacity, 3);
-            Assert.NotNull(((TranslateTransform)dot.RenderTransform!).Transitions);
+            Assert.NotNull(bar.Transitions);
+            Assert.Null(shell.FindControl<Border>("XPMeniscus"));
+            s.MotionLevel = MotionLevel.Full;
+            shell.UpdateLevelDisplay();
+            Assert.Null(shell.FindControl<Border>("XPMeniscus"));
         }
         finally
         {
@@ -63,7 +67,7 @@ public sealed class HeroXpFxTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task OdometerPopAndPulseUseSharedBeatAndStopAtMotionGateOrClose() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task OdometerAndPopUseSharedBeatAndStopAtMotionGateOrClose() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -100,12 +104,7 @@ public sealed class HeroXpFxTests
                 .Invoke(shell, new object[] { EventArgs.Empty });
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(hooks, Hooks());
-            var dot = shell.FindControl<Border>("XPMeniscus")!;
-            Assert.True(shell.XpMeniscusPulsing);
-            Assert.Contains(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, dot) && loop.OnFrameBeat);
-            time.Advance(TimeSpan.FromSeconds(2));
-            BeatLoop.StepAll();
-            Assert.Equal(0.95, dot.Opacity, 3);
+            Assert.Null(shell.FindControl<Border>("XPMeniscus"));
 
             s.PlayerXP = 200;
             shell.UpdateLevelDisplay();
@@ -145,22 +144,21 @@ public sealed class HeroXpFxTests
             shell.UpdateLevelDisplay();
             s.MotionLevel = MotionLevel.Reduced;
             AmbientFxCanvas.Env.RaiseMotionGateChanged();
-            Assert.False(shell.XpMeniscusPulsing);
-            Assert.Equal(0.55, dot.Opacity, 3);
             s.MotionLevel = MotionLevel.Full;
             AmbientFxCanvas.Env.RaiseMotionGateChanged();
-            Assert.True(shell.XpMeniscusPulsing);
             s.PerformanceMode = true;
             AmbientFxCanvas.Env.RaiseMotionGateChanged();
-            Assert.False(shell.XpMeniscusPulsing);
             s.PerformanceMode = false;
             AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            shell.PopLevelChip();
+            Assert.True(shell.XpReadoutCounting);
+            Assert.True(shell.LevelChipPopping);
             shell.WindowState = WindowState.Minimized;
-            Assert.False(shell.XpMeniscusPulsing);
+            Assert.False(shell.XpReadoutCounting);
+            Assert.False(shell.LevelChipPopping);
             shell.WindowState = WindowState.Normal;
             shell.Activate();
             Dispatcher.UIThread.RunJobs();
-            Assert.True(shell.XpMeniscusPulsing);
 
             shell.PopLevelChip();
             s.PlayerXP = 40;
@@ -180,11 +178,10 @@ public sealed class HeroXpFxTests
             shell.UpdateLevelDisplay();
             shell.Close();
             Dispatcher.UIThread.RunJobs();
-            Assert.False(shell.XpMeniscusPulsing);
             Assert.False(shell.XpReadoutCounting);
             Assert.False(shell.LevelChipPopping);
-            Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, dot)
-                || ReferenceEquals(loop.Owner, chip) || ReferenceEquals(loop.Owner, readout));
+            Assert.DoesNotContain(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, chip)
+                || ReferenceEquals(loop.Owner, readout));
         }
         finally
         {
