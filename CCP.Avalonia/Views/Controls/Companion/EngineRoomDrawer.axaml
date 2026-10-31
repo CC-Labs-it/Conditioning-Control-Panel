@@ -19,7 +19,7 @@
        CmpHasContentToVis           ->  ObjectConverters.IsNotNull
        Style.Triggers / DataTrigger ->  Classes.healthy="{Binding IsHealthy}" + a class selector
        Image + CmpEmojiToImage      ->  fx:IconGlyph (Fluent icons, decision 2026-10-10)
-       PasswordBox + PasswordChanged->  TextBox with PasswordChar, bound OneWayToSource. Avalonia
+       PasswordBox + PasswordChanged->  TextBox with PasswordChar and a one-way edit handler. Avalonia
                                         has no PasswordBox; see the comment at the field.
        Content="{...}" on a button  ->  a <TextBlock> child (Avalonia reads "_" in Content as an
                                         access key, and every loc key here is snake_case)
@@ -239,13 +239,13 @@
                              through a binding, a screenshot or a UI-automation dump.
                              AVALONIA HAS NO PasswordBox. This is a TextBox with PasswordChar, so
                              the masking survives but the "cannot be read back" guarantee does not.
-                             The binding is OneWayToSource, which keeps the one behaviour markup
-                             still can keep: the key travels from the box to the viewmodel and is
+                             The edit handler keeps the same direction:
+                             the key travels from the box to the viewmodel and is
                              never read back out of it — the same direction the WPF code-behind's
                              PasswordChanged handler pushed it. -->
                         <TextBox x:Name="CustomKeyBox" Theme="{StaticResource CmpFieldPasswordStyle}"
-                                 Text="{ReflectionBinding CustomApiKey, Mode=OneWayToSource}"/>
-                        <TextBlock Text="{ReflectionBinding #Root.Strings.LocApiKeyNote}"
+                                 TextChanged="CustomKeyChanged"/>
+                        <TextBlock Text="{ReflectionBinding ApiKeyNote}"
                                    Theme="{StaticResource CmpFaintTextStyle}" Margin="2,4,0,0"/>
                     </StackPanel>
                 </Grid>
