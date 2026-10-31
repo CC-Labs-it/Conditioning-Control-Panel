@@ -34,6 +34,24 @@ public class TestIsolationTests
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
     [Fact]
+    public void EveryTestStartsWithPortableFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.IsType<AvApp>(global::Avalonia.Application.Current);
+        foreach (var (family, expected) in new[]
+        {
+            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter, "Inter"),
+            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Fredoka, "Fredoka Light"),
+            (ConditioningControlPanel.Avalonia.Platform.AppFonts.Mono, "Noto Sans Mono"),
+        })
+        {
+            var face = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(family),
+                global::Avalonia.Media.FontStyle.Normal, global::Avalonia.Media.FontWeight.Bold);
+            Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out var glyphs), family);
+            Assert.Equal(expected, glyphs!.FamilyName);
+        }
+    });
+
+    [Fact]
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]
