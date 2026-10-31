@@ -1,4 +1,7 @@
 {
+  "deeper_editor_haptic_test_no_device": "Тактильное устройство не подключено. Подключите его в настройках для проверки.",
+  "deeper_editor_haptic_test_row_off": "Строка Deeper отключена на вкладке тактильной отдачи. Включите её для проверки шаблонов.",
+  "deeper_editor_haptic_test_premium": "Для проверки устройства нужен доступ Premium.",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",

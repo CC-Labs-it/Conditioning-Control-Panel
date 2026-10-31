@@ -39,13 +39,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             foreach (var overlay in Live.ToArray()) overlay.Close();
         }
-
         private bool _fadingOut;
-
-        /// <summary>WPF TutorialOverlay.xaml.cs:107 (fade in) and :1308 (fade out before Close).</summary>
         internal static readonly TimeSpan FadeInDuration = TimeSpan.FromMilliseconds(300);
         internal static readonly TimeSpan FadeOutDuration = TimeSpan.FromMilliseconds(200);
-
         private static Transitions OpacityFade(TimeSpan d) =>
             new() { new DoubleTransition { Property = OpacityProperty, Duration = d } };
 
@@ -158,9 +154,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public void OnError(Exception error) { }
             public void OnNext(Rect value) => _o.OnLayerBounds(value);
         }
-
-        /// <summary>WPF OnTutorialCompleted: drop every subscription, fade 200 ms, then close. The
-        /// dim keeps blocking the host during the fade, as WPF's window did.</summary>
         private void FadeOutAndTeardown()
         {
             if (_tornDown || _fadingOut) return;
@@ -175,7 +168,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreTutorial.Finished -= OnSeamFinished;
             _stage.Transitions = OpacityFade(FadeOutDuration);
             _stage.Opacity = 0;
-            // A posted job, not DispatcherTimer: headless RunJobs never promotes due timers.
             _ = System.Threading.Tasks.Task.Delay(FadeOutDuration)
                 .ContinueWith(_ => Dispatcher.UIThread.Post(Teardown), System.Threading.Tasks.TaskScheduler.Default);
         }

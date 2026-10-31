@@ -1,4 +1,7 @@
 {
+  "deeper_editor_haptic_test_no_device": "Nenhum dispositivo háptico conectado. Conecte um nas Configurações para testar.",
+  "deeper_editor_haptic_test_row_off": "A linha Deeper está desativada na aba Háptica. Ative-a para testar os padrões.",
+  "deeper_editor_haptic_test_premium": "O teste do dispositivo requer acesso Premium.",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Este aprimoramento está publicado no catálogo da comunidade.",
   "deeper_submission_badge_pending": "Pendente",

@@ -1,4 +1,7 @@
 {
+  "deeper_editor_haptic_test_no_device": "연결된 햅틱 기기가 없습니다. 설정에서 기기를 연결한 후 테스트하세요.",
+  "deeper_editor_haptic_test_row_off": "햅틱 탭의 Deeper 행이 꺼져 있습니다. 패턴을 테스트하려면 켜세요.",
+  "deeper_editor_haptic_test_premium": "기기 테스트에는 Premium 이용 권한이 필요합니다.",
   "deeper_submission_badge_published": "게시됨",
   "deeper_submission_badge_published_tip": "이 인핸스먼트는 커뮤니티 카탈로그에 게시되어 있습니다.",
   "deeper_submission_badge_pending": "대기 중",

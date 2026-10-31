@@ -14,13 +14,9 @@ using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Deeper;
-using ConditioningControlPanel.Services.Race;
+using ConditioningControlPanel.Avalonia.Views.Games;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
-/// <summary>Row views-deeper-editor-window (wire-views-deeper-editor-window-b): the haptic Test
-/// button, manual help, and the audio waveform peaks.</summary>
 [Collection(RunsAloneCollection.Name)]
 public sealed class DeeperEditorTestFireTests
 {
@@ -30,27 +26,50 @@ public sealed class DeeperEditorTestFireTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
-
     private static void Click(Button b) { b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
-
     [Fact]
-    public void HeadDecoderFeedsCorePeakBuckets()
+    public void HapticFeedbackExistsInAllTenLanguages()
     {
-        var old = TrackDecoder.DecodeProvider;
+        var root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(SourceFile())!, "../../CCP.Core/Localization/Languages"));
+        var files = Directory.GetFiles(root, "*.json");
+        Assert.Equal(10, files.Length);
+        foreach (var file in files)
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file));
+            foreach (var suffix in new[] { "no_device", "row_off", "premium" })
+                Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("deeper_editor_haptic_test_" + suffix).GetString()), file);
+        }
+    }
+    private static string SourceFile([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+    private static void WriteStereo(string path)
+    {
+        using var writer = new BinaryWriter(File.Create(path));
+        const int rate = 48000, frames = rate * 12, bytes = frames * 4;
+        writer.Write(0x46464952); writer.Write(36 + bytes); writer.Write(0x45564157);
+        writer.Write(0x20746D66); writer.Write(16); writer.Write((short)1); writer.Write((short)2);
+        writer.Write(rate); writer.Write(rate * 4); writer.Write((short)4); writer.Write((short)16);
+        writer.Write(0x61746164); writer.Write(bytes);
+        for (int i = 0; i < frames; i++) { writer.Write((short)(i < frames / 2 ? 24576 : 0)); writer.Write((short)(i < frames / 2 ? -24576 : 0)); }
+    }
+    [Fact]
+    public void HeadDecoderPreservesOppositePhaseStereo()
+    {
+        var old = DeeperWaveform.Transcode;
         try
         {
-            var samples = new float[TrackPcm.SampleRate * 12];
-            samples[0] = -0.8f;
-            TrackDecoder.DecodeProvider = (path, _, _) => path == "fixture" ? samples : throw new InvalidOperationException();
+            DeeperWaveform.Transcode = (_, dest) => WriteStereo(dest);
+            var sout = RaceTrackPlayer.SoutFor("fixture.wav", preserveFormat: true);
+            Assert.DoesNotContain("channels=", sout);
+            Assert.DoesNotContain("samplerate=", sout);
             var result = DeeperWaveform.Decode("fixture");
             Assert.Equal(12, result.DurationSeconds);
             Assert.Equal(72, result.Peaks.Length);
-            Assert.Equal(0.8f, result.Peaks[0]);
-            Assert.Equal(0, result.Peaks[71]);
+            Assert.Equal(0.75f, result.Peaks[0]);
+            Assert.All(result.Peaks.Take(36), peak => Assert.Equal(0.75f, peak));
+            Assert.All(result.Peaks.Skip(36), peak => Assert.Equal(0, peak));
         }
-        finally { TrackDecoder.DecodeProvider = old; }
+        finally { DeeperWaveform.Transcode = old; }
     }
-
     [Fact]
     public Task HelpOpensOneTourAndEditorCloseAbandonsIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -73,8 +92,6 @@ public sealed class DeeperEditorTestFireTests
         finally { editor.ForceClose(); ConditioningControlPanel.Avalonia.Tours.TutorialHead.ResetForTests(); }
         return Task.CompletedTask;
     });
-
-    /// <summary>WPF DeeperEditorWindow.xaml.cs:2755: no device -> the strip says so.</summary>
     [Fact]
     public Task HapticTestWithoutADeviceSaysSoInTheStrip() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -86,7 +103,6 @@ public sealed class DeeperEditorTestFireTests
             CoreHaptics.Service = null;
             editor.Show();
             Dispatcher.UIThread.RunJobs();
-            // The sample project is clean or not: either way the strip shows the message.
             var track = editor.GetType().GetField("_enhancement", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
                 .GetValue(editor) is Enhancement e ? e.HapticTracks[0] : throw new InvalidOperationException();
             editor.SelectHaptic(track, track.Events[0]);
@@ -102,7 +118,6 @@ public sealed class DeeperEditorTestFireTests
         }
         return Task.CompletedTask;
     });
-
     [Theory]
     [InlineData(false, true, "deeper_editor_haptic_test_row_off")]
     [InlineData(true, false, "deeper_editor_haptic_test_premium")]
@@ -147,8 +162,6 @@ public sealed class DeeperEditorTestFireTests
             ConditioningControlPanel.Services.Haptics.Core.MockProviderV2.Toast = oldToast;
         }
     });
-
-    /// <summary>WPF DeeperEditorWindow.xaml.cs:1197: a local audio clip draws its peaks.</summary>
     [Fact]
     public Task LocalAudioDrawsItsWaveform() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -157,13 +170,11 @@ public sealed class DeeperEditorTestFireTests
         var path = Path.Combine(dir, "clip.mp3");
         File.WriteAllBytes(path, new byte[16]);
         var oldOpen = DeeperLocalAudio.Open;
-        var oldDecode = TrackDecoder.DecodeProvider;
+        var oldDecode = DeeperWaveform.Transcode;
         var oldWaveform = ConditioningControlPanel.Services.Deeper.AudioWaveformCache.Decoder;
         ConditioningControlPanel.Services.Deeper.AudioWaveformCache.Decoder = DeeperWaveform.Decode;
         DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(null);
-        var samples = new float[TrackPcm.SampleRate * 20];
-        samples[TrackPcm.SampleRate * 10] = 0.9f;
-        TrackDecoder.DecodeProvider = (p, _, _) => p == path ? samples : throw new InvalidOperationException(p);
+        DeeperWaveform.Transcode = (_, dest) => WriteStereo(dest);
         var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = path }, null);
         try
         {
@@ -177,7 +188,7 @@ public sealed class DeeperEditorTestFireTests
         {
             editor.Close();
             DeeperLocalAudio.Open = oldOpen;
-            TrackDecoder.DecodeProvider = oldDecode;
+            DeeperWaveform.Transcode = oldDecode;
             ConditioningControlPanel.Services.Deeper.AudioWaveformCache.Decoder = oldWaveform;
             Directory.Delete(dir, true);
         }

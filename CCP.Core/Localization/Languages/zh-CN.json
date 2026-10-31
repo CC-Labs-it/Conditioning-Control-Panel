@@ -966,6 +966,8 @@
   "deeper_editor_haptic_curve": "曲线（拖动圆点）",
   "deeper_editor_haptic_curve_reset": "重置曲线",
   "deeper_editor_haptic_test": "在设备上测试",
+  "deeper_editor_haptic_test_row_off": "触觉选项卡中的 Deeper 行已关闭。请开启后再测试模式。",
+  "deeper_editor_haptic_test_premium": "设备测试需要 Premium 权限。",
   "deeper_editor_haptic_test_no_device": "未连接触觉设备：在设置中连接一个进行测试",
   "deeper_editor_haptic_delete": "删除事件",
   "deeper_editor_section_rules": "规则",

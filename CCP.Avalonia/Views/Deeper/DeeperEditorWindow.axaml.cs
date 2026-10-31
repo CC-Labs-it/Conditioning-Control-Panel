@@ -82,9 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         <c>VisualTreeHelper.GetDpi</c> is NOT one of these any more: TopLevel.RenderScaling
     ///         is its twin and the gaze picker uses it - see BeginGazePick in the RuleEditor
     ///         partial.</item>
-    ///   <item><b>App services.</b> App.DeeperPlayer / App.DeeperHost.
     ///         GazePickerWindow is NOT one - it is ported, beside this file, and now wired.
-    ///         App.Tutorial is the CoreTutorial seam; the seeded manual tour is wired through
     ///         <see cref="StartEditorTutorial"/>. App.EnhancementLibrary is
     ///         head-only too, but the five members the editor needs from it are inlined in the
     ///         file-ops region, so Save / Save As / Export / Swap / Change media / drag-drop are
@@ -108,7 +106,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool _isDirty;
         private bool _suppressDirty;
 
-        // Core caches waveform peaks decoded by the head. Local playback uses _localAudio.
         private double[]? _waveformPeaks;
         internal Task WaveformLoad { get; private set; } = Task.CompletedTask;
         private IDeeperLocalAudio? _localAudio;
@@ -553,9 +550,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
             _ = InitializePreviewAsync();
 
-            // Part B: WPF :326-364 dispatches pending Part 2 or first-run coachmarks here.
-            // Manual help below uses the seeded head; automatic launch is still absent.
-
         }
 
         private void BtnEditorHelp_Click(object? sender, RoutedEventArgs e)
@@ -564,8 +558,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         }
 
         private ConditioningControlPanel.Avalonia.Views.Windows.TutorialOverlay? _editorTutorialOverlay;
-
-        // WPF DeeperEditorWindow.xaml.cs:378: the manual help button restarts the editor tour.
         private void StartEditorTutorial()
         {
             if (_editorTutorialOverlay != null) return;
@@ -921,7 +913,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         }
 
         /// <summary>WPF DeeperEditorWindow.xaml.cs:1189. Playback, duration, seek and end-of-clip
-        /// are real through <see cref="DeeperLocalAudio"/>; Core caches the decoded waveform peaks.</summary>
         private async Task InitializeAudioAsync(string path)
         {
             BrowserPreview.IsVisible = false;
@@ -1021,8 +1012,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (!IOPath.IsPathRooted(source)) return false;
             return File.Exists(source);
         }
-
-        // WPF DeeperEditorWindow.xaml.cs:1197: decode off-thread, retain UI-thread drawing.
         private async Task LoadWaveformAsync(string path)
         {
             try
@@ -2310,12 +2299,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 if (ValidationDetailsPopup?.IsOpen == true) PopulateValidationPopup();
             }
         }
-
         private DispatcherTimer? _stripMessageTimer;
         private bool _stripFading;
-
-        /// <summary>WPF DeeperEditorWindow.xaml.cs:4373: a transient line in the validation strip,
-        /// faded out over its last 400 ms, after which the strip shows validation again (:173).</summary>
         private void ShowStripMessage(string text, string brushKey, int ms)
         {
             if (_stripMessageTimer == null)

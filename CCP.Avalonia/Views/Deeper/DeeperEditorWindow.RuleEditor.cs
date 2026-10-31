@@ -296,19 +296,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             RebuildCurveEditor();
         }
 
-        /// <summary>WPF DeeperEditorWindow.xaml.cs:2739: play the selected event's envelope once on
-        /// the connected toy, or say in the strip why nothing played.</summary>
         private async void BtnTestHaptic_Click(object? sender, RoutedEventArgs e)
         {
             if (_selectedHaptic == null) return;
-
             IList<double[]>? kf = null;
             if (_selectedHaptic.CustomPattern != null && _selectedHaptic.CustomPattern.Count > 0)
                 kf = _selectedHaptic.CustomPattern;
             else if (!string.IsNullOrEmpty(_selectedHaptic.PatternName)
                      && StockHapticPatterns.TryGet(_selectedHaptic.PatternName, out var named) && named != null)
                 kf = named;
-
             if (kf == null) return;
             var durationMs = (int)Math.Max(50, _selectedHaptic.Duration * 1000);
             var samples = StockHapticPatterns.Sample(kf, _selectedHaptic.Intensity, durationMs);
@@ -320,8 +316,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     ShowStripMessage(Loc.Get("deeper_editor_haptic_test_no_device"), "PinkSoftBrush", 4000);
                     return;
                 }
-                // The preview waives the master toggle, but the Pattern routing row is the user's
-                // own dial - a disabled row silently swallows the envelope, so say so instead.
                 if (!haptics.Settings.V2.Rule(ConditioningControlPanel.Services.Haptics.Core.HapticLayer.Pattern).Enabled)
                 {
                     ShowStripMessage(Loc.Get("deeper_editor_haptic_test_row_off"), "PinkSoftBrush", 4000);

@@ -167,21 +167,17 @@ public sealed class TutorialStageTests
         Assert.True(overlay.IsOnStage);
         Assert.Equal(index, CoreTutorial.CurrentStepIndex);
     });
-
     private static void PumpUntil(Func<bool> done)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();   // P73: bounded by time, not turns
         while (!done() && sw.Elapsed < TimeSpan.FromSeconds(10)) Dispatcher.UIThread.RunJobs();
         Assert.True(done(), "timed out");
     }
-
     private static global::Avalonia.Animation.DoubleTransition OpacityFade(Control stage) =>
         Assert.Single(stage.Transitions!.OfType<global::Avalonia.Animation.DoubleTransition>(), t => t.Property == Visual.OpacityProperty);
-
     [Fact]
     public Task CardFadesIn300AndOut200BeforeLeavingTheHost() => WithHost((host, overlay, _, _, _) =>
     {
-        // WPF TutorialOverlay.xaml.cs:107 / :1308.
         var stage = overlay.StageRoot!;
         Assert.Equal(TimeSpan.FromMilliseconds(300), OpacityFade(stage).Duration);
         CoreTutorial.Skip();
@@ -194,7 +190,6 @@ public sealed class TutorialStageTests
         Assert.Equal(1, closed);
         Assert.DoesNotContain(host.GetVisualDescendants().OfType<Border>(), b => b.Name == "TextPanel");
     });
-
     [Fact]
     public Task PanicTearsDownWithoutTheFade() => WithHost((_, overlay, _, _, _) =>
     {
@@ -204,7 +199,6 @@ public sealed class TutorialStageTests
         Assert.False(CoreTutorial.IsActive);
         Assert.False(overlay.IsOnStage);
     });
-
     [Fact]
     public Task StepBehindASectionLightsItsRailRowWithoutNavigating() => AvaloniaTestDispatcher.RunAsync(() =>
     {
