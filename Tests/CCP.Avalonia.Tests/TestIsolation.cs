@@ -54,6 +54,9 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
     public override void Before(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
+            // The first AppBuilder owns fonts for the entire testhost. Use the production
+            // setup before a test's bare Configure<App>() can omit bundled fonts and mappings.
+            LabWebcamStatusTests.Setup();
             Current = ProcessStateSnapshot.Take();
             OpenWindows.Mark();
             // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.
