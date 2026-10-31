@@ -97,27 +97,40 @@ public sealed class VoiceCommandsTests
 
     /// <summary>"what can I say" and the tab's list name only what this head can run.</summary>
     [Fact]
-    public Task HelpAndTheTabNameOnlyRunnableCommands() => Run(async (shell, mic, engine) =>
+    public Task HelpAndTheTabNameOnlyRunnableCommands() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var help = shell.VoiceCmds.HelpLine();
-        Assert.Contains("take over", help);
-        Assert.DoesNotContain("spiral", help);
-        Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name == "quiz_once"), help.Contains("quiz"));
-        shell.ShowTab("shelistening");
-        Dispatcher.UIThread.RunJobs();
-        var rows = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(shell.SheListeningPage!)
-            .OfType<ConditioningControlPanel.Avalonia.Controls.IconLabel>().Where(t => t.Tag is string g && g.StartsWith("voice:")).ToList();
-        Assert.False(rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
-        Assert.True(rows.Single(t => t.Text!.Contains("Takeover")).IsVisible);
-        var toys = rows.Single(t => t.Text!.Contains("Quick toys"));
-        Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name is "freeze_once" or "count_once" or "shake_once"), toys.IsVisible);
-        // fluent-icons design ref: hearts Filled + pink, pause Filled.
-        var heart = (ConditioningControlPanel.Avalonia.Controls.IconGlyph)rows.Single(t => t.Text!.Contains("Pink filter")).Children[0];
-        Assert.Equal(FluentIcons.Common.IconVariant.Filled, heart.Variant);
-        Assert.Same(shell.SheListeningPage!.FindResource(ConditioningControlPanel.Avalonia.Controls.IconBrushes.Heart), heart.Foreground);
-        var pause = (ConditioningControlPanel.Avalonia.Controls.IconGlyph)rows.Single(t => t.Text!.Contains("Session")).Children[0];
-        Assert.Equal(FluentIcons.Common.IconVariant.Filled, pause.Variant);
-        await Task.CompletedTask;
+        // Help and row visibility need no recognizer or downloaded speech model.
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var help = shell.VoiceCmds.HelpLine();
+            Assert.Contains("take over", help);
+            // WPF VoiceCommandHost.cs:84-86 and SheListeningTabView.xaml:489-492.
+            Assert.Contains("spiral", help);
+            Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name == "quiz_once"), help.Contains("quiz"));
+            shell.ShowTab("shelistening");
+            Dispatcher.UIThread.RunJobs();
+            var rows = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(shell.SheListeningPage!)
+                .OfType<ConditioningControlPanel.Avalonia.Controls.IconLabel>().Where(t => t.Tag is string g && g.StartsWith("voice:")).ToList();
+            Assert.True(rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
+            Assert.True(rows.Single(t => t.Text!.Contains("Takeover")).IsVisible);
+            var toys = rows.Single(t => t.Text!.Contains("Quick toys"));
+            Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name is "freeze_once" or "count_once" or "shake_once"), toys.IsVisible);
+            // fluent-icons design ref: hearts Filled + pink, pause Filled.
+            var heart = (ConditioningControlPanel.Avalonia.Controls.IconGlyph)rows.Single(t => t.Text!.Contains("Pink filter")).Children[0];
+            Assert.Equal(FluentIcons.Common.IconVariant.Filled, heart.Variant);
+            Assert.Same(shell.SheListeningPage!.FindResource(ConditioningControlPanel.Avalonia.Controls.IconBrushes.Heart), heart.Foreground);
+            var pause = (ConditioningControlPanel.Avalonia.Controls.IconGlyph)rows.Single(t => t.Text!.Contains("Session")).Children[0];
+            Assert.Equal(FluentIcons.Common.IconVariant.Filled, pause.Variant);
+            await Task.CompletedTask;
+        }
+        finally { shell.RequestExit(); }
     });
 
     [Fact]

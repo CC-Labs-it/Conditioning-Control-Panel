@@ -268,6 +268,109 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
             Assert.Equal(SpiralFrames.Paint(0.40), SpiralOverlay.PaintedOpacity, 3);
         });
 
+    // WPF VoiceCommandHost.cs:84-86; OverlayService.cs:1109-1193, 2151.
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Voice_hold_uses_saved_spiral_survives_refresh_and_releases_only_its_ownership(bool enabled, bool running)
+        => await WithShell(async (shell, s, gif) =>
+        {
+            s.SpiralEnabled = enabled;
+            if (running) shell.StartEngine();
+            await Settle();
+            SpeakSpiral(shell, "spiral on");
+            await Settle();
+            Assert.True(SpiralOverlay.IsShowing, Why());
+            Assert.Equal(gif, SpiralOverlay.SourcePath());
+            Assert.Equal(SpiralFrames.Paint(0.4), SpiralOverlay.Shown[0].Spiral.Opacity, 10);
+            Assert.Equal(enabled, s.SpiralEnabled);
+            Assert.Equal(running, CoreEngine.IsRunning);
+
+            s.SpiralOpacity = 80;
+            SpiralOverlay.Refresh(shell);
+            Assert.True(SpiralOverlay.IsShowing, Why());
+            Assert.Equal(SpiralFrames.Paint(0.4), SpiralOverlay.Shown[0].Spiral.Opacity, 10);
+            SpeakSpiral(shell, "spiral on"); // idempotent hold, updates to the user's current opacity
+            Assert.Equal(SpiralFrames.Paint(0.8), SpiralOverlay.Shown[0].Spiral.Opacity, 10);
+            SpeakSpiral(shell, "spiral off");
+            Assert.Equal(running && enabled, SpiralOverlay.IsShowing);
+            SpeakSpiral(shell, "spiral off"); // a second release has no extra ownership to consume
+            Assert.Equal(running && enabled, SpiralOverlay.IsShowing);
+        });
+
+    [Fact]
+    public async Task Stop_clears_voice_hold_and_a_late_decode_cannot_resurrect_it()
+        => await WithShell(async (shell, s, gif) =>
+        {
+            s.SpiralEnabled = false;
+            SpeakSpiral(shell, "spiral on");
+            MainShellWindow.StopEngine(); // same stop hook used by panic, including standalone overlays
+            await Settle();
+            SpiralOverlay.Refresh(shell);
+            Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.IsAnimating);
+            Assert.False(s.SpiralEnabled);
+        });
+
+    // WPF Services/Session/SessionEngine.cs:530 stops overlays and clears sustained holds.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Pause_clears_voice_hold_including_pending_decode_and_resume_does_not_restore_it(bool pendingDecode)
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+            var decoded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            try
+            {
+                s.SkipPauseXpWarning = true;
+                var session = new Session { Id = "voice_spiral_pause", Name = "Voice Spiral Pause", DurationMinutes = 1 };
+                session.Settings.SpiralEnabled = false;
+                shell.StartSession(session);
+                SpeakSpiral(shell, "spiral on");
+                await Settle();
+                Assert.True(SpiralOverlay.IsShowing, Why());
+                if (pendingDecode)
+                {
+                    var other = Path.Combine(Path.GetDirectoryName(gif)!, "pending.gif");
+                    File.WriteAllBytes(other, Convert.FromBase64String(TinyGif));
+                    SpiralOverlay.BeforeDecodeForTests = () => decoded.Task;
+                    s.SpiralPath = other;
+                    SpiralOverlay.Refresh(shell);
+                    Assert.NotNull(SpiralOverlay.Decoding);
+                    Assert.False(SpiralOverlay.Decoding!.IsCompleted);
+                }
+
+                var pause = shell.Named<Button>("BtnPauseSession")!;
+                pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.True(runner.IsPaused);
+                Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.IsAnimating);
+                decoded.TrySetResult();
+                await Settle();
+                Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.IsAnimating);
+                pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.False(runner.IsPaused);
+                await Settle();
+                Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.IsAnimating);
+                Assert.False(s.SpiralEnabled);
+            }
+            finally
+            {
+                decoded.TrySetResult();
+                await Settle();
+                SpiralOverlay.BeforeDecodeForTests = null;
+                runner.Stop();
+                CoreSession.IsSessionRunningProvider = null;
+                global::ConditioningControlPanel.Avalonia.App.Sessions = null;
+            }
+        });
+
+    private static void SpeakSpiral(MainShellWindow shell, string phrase)
+    {
+        Assert.True(shell.VoiceCmds.TryHandleInlineCommand("hey bambi " + phrase, new[] { "hey bambi" }));
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+    }
+
     /// <summary>Waits out every in-flight decode, including one a landing decode starts for a newer path.</summary>
     private static async Task Settle()
     {

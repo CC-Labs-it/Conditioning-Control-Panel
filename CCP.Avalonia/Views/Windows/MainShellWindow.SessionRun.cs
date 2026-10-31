@@ -127,7 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!confirmed || !runner.IsRunning) return;
             runner.Pause();
             PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
-            SpiralOverlay.Refresh(this);
+            SpiralOverlay.CloseAll(); // WPF Services/Session/SessionEngine.cs:530: pause drops sustained holds too.
             SetPauseButton(true);
         }
 
