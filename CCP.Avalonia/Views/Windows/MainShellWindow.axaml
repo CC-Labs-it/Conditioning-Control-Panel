@@ -2020,12 +2020,7 @@
                 <Border x:Name="StartGlowLayer" Grid.Column="1" Height="42" Margin="4,0"
                         VerticalAlignment="Center" CornerRadius="8"
                         Background="{DynamicResource FxGlowBrush}" IsHitTestVisible="False"
-                        Opacity="0" IsVisible="False">
-                    <Border.Effect>
-                        <DropShadowEffect Color="{DynamicResource FxGlowColor}"
-                                          BlurRadius="20" OffsetX="0" OffsetY="0" Opacity="1"/>
-                    </Border.Effect>
-                </Border>
+                        Opacity="0" IsVisible="False"/>
 
                 <!-- START ring layer (Velvet Kit 2, FX lane B). Three pre-built 2px rings sharing the
                      button's cell, CornerRadius and height, BEHIND the button so only the part that
