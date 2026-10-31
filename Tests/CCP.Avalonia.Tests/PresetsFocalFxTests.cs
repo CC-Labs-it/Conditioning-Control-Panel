@@ -66,8 +66,15 @@ public sealed class PresetsFocalFxTests
     [Fact]
     public Task PointerLiftAndPrimaryButtonSquishMatchWpfSnapAtOff() => WithPresets((host, view) =>
     {
+        // Turn motion off with a fresh entrance still in flight, before testing the snap.
+        view.IsVisible = false; view.IsVisible = true;
+        var entrance = (System.Threading.CancellationTokenSource)typeof(PresetsTabView)
+            .GetField("_entranceCancellation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(view)!;
+        var token = entrance.Token;
+        Assert.False(token.IsCancellationRequested);
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(token.IsCancellationRequested); // cancellation cannot depend on how fast a frame renders
         var chip = view.FindControl<WrapPanel>("PresetCardsPanel")!.Children.OfType<Border>().First(b => b.Tag is string);
         host.MouseMove(Center(host, chip)); Settle();
         var scale = Assert.IsType<TransformGroup>(chip.RenderTransform).Children.OfType<ScaleTransform>().Single();

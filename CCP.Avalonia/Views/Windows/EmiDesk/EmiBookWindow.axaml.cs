@@ -362,9 +362,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// bare <see cref="Kill"/> here would fold the window and leave the desk holding a closed
         /// one, and the next <c>?</c> click would then re-open a dead panel.
         ///
-        /// <para>ponytail: the WPF button calls <c>EmiBook.Close()</c>; the bookmark half is
-        /// <c>EmiState.NoteBookCard</c> (Core, written on every card). Still missing:
-        /// <c>EmiBook.SideChanged</c> (her bubble dodging away from the panel, EmiBook.cs).</para>
+        /// <para>The WPF button calls <c>EmiBook.Close()</c>; the widget also restores the bubble's
+        /// side preference. <c>EmiState.NoteBookCard</c> persists the bookmark on every card.</para>
         /// </summary>
         private void CloseBook()
         {
@@ -1180,12 +1179,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 _sweepHost.RenderTransformOrigin = new RelativePoint(_onHerLeft ? 1 : 0, 0.5, RelativeUnit.Relative);
 
-                // ponytail: needs EmiBook.NoteSideChanged (her bubble dodges to the side the panel
-                // is NOT on). The event itself is trivial, but its one subscriber is the bubble's
-                // LayoutBubble dodge in EmiDeskWindow.Bubble.cs, which is not ported on this head -
-                // so an event raised here today would have nobody listening.
-                if (wasOnHerLeft != _onHerLeft)
-                    Log.Debug("[EmiDesk] book changed side, now {Side}", SideOfHer);
+                // WPF EmiBook.NoteSideChanged: re-read after placement has chosen a new side.
+                if (wasOnHerLeft != _onHerLeft) _owner?.PlaceSpeechBubble();
             }
             catch (Exception ex)
             {

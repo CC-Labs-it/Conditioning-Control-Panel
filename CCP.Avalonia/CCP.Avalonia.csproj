@@ -231,6 +231,8 @@
     <AvaloniaResource Include="..\Assets\emi\wallet_croupier_*.png" Link="Resources\emi\%(Filename)%(Extension)" />
     <!-- WPF EmiFace.PixelFont's shipped Press Start 2P (Resources/emi/fonts), for the ring cards. -->
     <AvaloniaResource Include="..\Assets\emi\fonts\*.ttf" Link="Resources\emi\fonts\%(Filename)%(Extension)" />
+    <Content Include="..\Assets\emi\desk-lines.json" Link="Resources\emi\desk-lines.json"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- App fonts (Platform/AppFonts.cs, distro-check F1/F4): WPF's display face Fredoka (OFL) and a
          monochrome Noto Emoji (OFL) for content emoji when the system has no emoji font; Noto Sans Mono
          (AppFonts.Mono) is the app-wide monospace. Licenses ship
