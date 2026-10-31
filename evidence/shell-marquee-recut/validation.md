@@ -110,3 +110,29 @@ bash .github/scripts/core-guards.sh: All Core guards passed.
 python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
 Ledger structural check: one stub row; a4ad95f7a and 74ac6ce3d notes preserved in full.
 ```
+
+## Support-link render gate
+
+Accepted P2. MainShellWindow.axaml:961 now uses Stretch and a single measured DockPanel, with the lead docked left and ellipsis on both lead and link text. This reuses the sibling web beat's Avalonia workaround for WPF MainWindow.xaml:1137-1146, whose whole-line CharacterEllipsis includes the hyperlink. URI, copy, fonts and launch behavior are unchanged; Core and WPF files remain untouched.
+
+SupportLinkFitsAndEllipsizesInTheRenderedShell checks attachment, visible link width, text advance staying inside the beat and narrow ellipsis. Its full case is 1661x1002 with the normal 744px cap; its narrow case is 1131x700 with a 440 design-pixel cap on the banner. That additional constraint is deliberate: the shell normally scales a fixed 1585px canvas rather than reflowing it. The tests stop rotation and show the actual support beat. The normal header may also legitimately ellipsize because neighboring chrome takes space.
+
+Fail-proof: temporarily restored the reviewed 1c947d1e5 support block and ran dotnet test Tests/CCP.Avalonia.Tests --no-restore --filter FullyQualifiedName~BannerMotionTests.SupportLinkFitsAndEllipsizesInTheRenderedShell. Both finalized cases failed their link-attachment assertion (exit 1, 2 failed). The fix was restored in finally, without changing the assertions. With the fixed layout, both cases pass.
+
+- [Full shell, 1661x1002](support-full.png): produced through the shipped --render-view MainShellWindow path in an isolated CCP_USERDATA_DIR.
+- [Narrow shell, 1131x700](support-narrow.png): captured from the real shell by the focused test with CCP_SUPPORT_PROOF_DIR set to this directory.
+
+Both PNGs were opened and read. The lead and underlined link are rendered, the URL truncates with an explicit ellipsis and stays inside the pill, and no raw localization keys appear in the header. This is Linux drawing/layout proof, not a side-by-side WPF render. The app-wide icon census is outside this header fix. The ledger remains stub and all earlier notes are retained.
+
+Final support-layout commands and tails (dotnet is /tmp/ccp-dotnet/dotnet):
+
+```text
+dotnet build CCP.Core --no-restore; dotnet build CCP.Avalonia --no-restore; dotnet build Tests/CCP.Avalonia.Tests --no-restore: each exit 0, 0 errors.
+dotnet test Tests/CCP.Core.Tests --no-build --no-restore: Failed 0, Passed 4635, Skipped 6, Total 4641.
+dotnet test Tests/CCP.Avalonia.Tests --no-build --no-restore --filter 'FullyQualifiedName~BannerMotionTests|FullyQualifiedName~TestIsolationTests|FullyQualifiedName~FavoritesRailShellTests|FullyQualifiedName~ShellResizeMaximizeTests': Total tests 45; Passed 45.
+After baseline comparison, restored BannerMotionTests + TestIsolationTests: Total tests 28; Passed 28. Final focused render cases (with PNG encoder API and equivalent collection assertion): Total tests 2; Passed 2.
+CCP_USERDATA_DIR=/tmp/ccp-support-render dotnet CCP.Avalonia/bin/Debug/net10.0/CCP.Avalonia.dll --render-view MainShellWindow evidence/shell-marquee-recut/support-full.png: exit 0; rendered 1661x1002; no binding errors. Narrow frame: 1131x700.
+bash .github/scripts/core-guards.sh: All Core guards passed. python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK.
+```
+
+Navigation limitation: --nav-check exits 1 with "OpenDeviceSettings reveals Devices (saw data)" and "an unknown section still opens the door and changes nothing". Rebuilding the exact reviewed 1c947d1e5 production XAML in an isolated profile reproduces the same two failures. The fixed XAML was restored and rebuilt, and the 28 focused/isolation cases were then rerun green. No unrelated Devices/data routing changes were made.

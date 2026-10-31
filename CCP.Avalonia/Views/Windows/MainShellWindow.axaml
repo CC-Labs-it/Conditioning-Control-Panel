@@ -956,22 +956,29 @@
                             Margin="12,0,12,0"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid>
+                            <!-- WPF MainWindow.xaml:1137-1146 trims the hyperlink with the lead.
+                                 Match the web beat's measured DockPanel workaround for Avalonia inlines. -->
                             <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="14" FontStyle="Italic"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="1">
-                                <Run Text="{loc:Str label_if_you_love_the_project_please}"/>
-                                <Run Text="{loc:Str label_consider_supporting_it}" FontWeight="Bold"/>
-                                <Run Text=" "/>
                                 <InlineUIContainer BaselineAlignment="Center">
-                                    <fx:SafeHyperlinkButton x:Name="BannerSupportLink" NavigateUri="https://linktr.ee/CodeBambi"
-                                                           Padding="0" Margin="0" BorderThickness="0">
-                                        <TextBlock Text="https://linktr.ee/CodeBambi" FontSize="14" FontStyle="Italic"
-                                                   Foreground="{DynamicResource PinkBrush}" TextDecorations="Underline"/>
-                                    </fx:SafeHyperlinkButton>
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Left" FontSize="14" FontStyle="Italic"
+                                                   Foreground="{DynamicResource PinkBrush}" TextTrimming="CharacterEllipsis">
+                                            <Run Text="{loc:Str label_if_you_love_the_project_please}"/>
+                                            <Run Text="{loc:Str label_consider_supporting_it}" FontWeight="Bold"/>
+                                            <Run Text=" "/>
+                                        </TextBlock>
+                                        <fx:SafeHyperlinkButton x:Name="BannerSupportLink" NavigateUri="https://linktr.ee/CodeBambi"
+                                                               HorizontalAlignment="Left" Padding="0" Margin="0" BorderThickness="0">
+                                            <TextBlock Text="https://linktr.ee/CodeBambi" FontSize="14" FontStyle="Italic"
+                                                       Foreground="{DynamicResource PinkBrush}" TextDecorations="Underline"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </fx:SafeHyperlinkButton>
+                                    </DockPanel>
                                 </InlineUIContainer>
-                                
                             </TextBlock>
                             <TextBlock x:Name="TxtBannerSecondary" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="14" FontStyle="Italic"

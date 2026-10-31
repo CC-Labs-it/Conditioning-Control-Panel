@@ -76,6 +76,39 @@ public sealed class BannerMotionTests
     });
 
     [Theory]
+    [InlineData(1661, 1002, 744, false)]
+    [InlineData(1131, 700, 440, true)]
+    public Task SupportLinkFitsAndEllipsizesInTheRenderedShell(int width, int height, int cap, bool narrow) => InShell(w =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        ((DispatcherTimer)typeof(MainShellWindow).GetField("_bannerRotationTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!).Stop();
+        w.Width = width; w.Height = height;
+        var host = w.Named<Border>("HeaderBannerHost")!;
+        host.MaxWidth = cap;
+        var primary = w.Named<TextBlock>("TxtBannerPrimary")!;
+        primary.Transitions = null; primary.Opacity = 1;
+        foreach (var name in new[] { "TxtBannerSecondary", "TxtBannerWeb", "TxtBannerPool" })
+        { var beat = w.Named<TextBlock>(name)!; beat.Transitions = null; beat.Opacity = 0; }
+        Dispatcher.UIThread.RunJobs();
+        var link = w.Named<SafeLink>("BannerSupportLink")!;
+        var text = Assert.IsType<TextBlock>(link.Content);
+        var end = text.TranslatePoint(new Point(text.TextLayout.WidthIncludingTrailingWhitespace, 0), primary);
+        Assert.True(end.HasValue, "Support link must stay attached to the displayed beat.");
+        Assert.InRange(end.GetValueOrDefault().X, 1, primary.Bounds.Width + .5);
+        Assert.True(text.Bounds.Width > 0);
+        if (narrow) Assert.Contains(text.TextLayout.TextLines, line => line.HasCollapsed);
+        Assert.Equal(global::Avalonia.Layout.HorizontalAlignment.Stretch, primary.HorizontalAlignment);
+        var dir = Environment.GetEnvironmentVariable("CCP_SUPPORT_PROOF_DIR");
+        if (!string.IsNullOrEmpty(dir))
+        {
+            System.IO.Directory.CreateDirectory(dir);
+            using var frame = w.CaptureRenderedFrame();
+            Assert.NotNull(frame);
+            frame.Save(System.IO.Path.Combine(dir, narrow ? "support-narrow.png" : "support-full.png"), global::Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+        }
+    });
+
+    [Theory]
     [InlineData("unified")]
     [InlineData("provider")]
     [InlineData("signed-in")]
