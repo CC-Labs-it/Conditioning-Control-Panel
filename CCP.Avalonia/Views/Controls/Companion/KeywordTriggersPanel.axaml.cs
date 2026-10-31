@@ -188,8 +188,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                     var ocr = (int)e.NewValue * 1000;
                     if (s.ScreenOcrIntervalMs == ocr) return;
                     s.ScreenOcrIntervalMs = ocr;
-                    // WPF MainWindow/MainWindow.KeywordTriggers.cs:119.
-                    ConditioningControlPanel.Services.CoreScreenOcr.Service?.UpdateInterval(ocr);
+                    // WPF MainWindow/MainWindow.KeywordTriggers.cs:119 also retimes its scanner.
+                    // Defer that call until this head has an OCR backend and lifecycle.
                     break;
                 case "SliderKeywordHighlightDuration":
                     var ms = (int)(e.NewValue * 1000);
