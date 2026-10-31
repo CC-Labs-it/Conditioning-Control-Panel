@@ -332,23 +332,37 @@ namespace ConditioningControlPanel.Services
                 pending = _time.CreateTimer(_ => CoreDispatch.Post(() =>
                 {
                     if (!ReferenceEquals(pending, _cascadeDefer)) return;
-                    if (_time.GetUtcNow() >= deadline ||
-                        (!userEarned && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)))
+                    var replay = _deferIsReplay;
+                    try
                     {
-                        if (DropDefer()) AfterEnd();
-                        else if (_running) ScheduleNext();
-                        return;
+                        if (_time.GetUtcNow() >= deadline ||
+                            (!userEarned && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)))
+                        {
+                            if (DropDefer()) AfterEnd();
+                            else if (_running) ScheduleNext();
+                            return;
+                        }
+                        if (CascadeIsRaining?.Invoke() == true)
+                        {
+                            pending!.Change(TimeSpan.FromMilliseconds(250), Timeout.InfiniteTimeSpan);
+                            return;
+                        }
+                        replay = DropDefer();
+                        if (!Trigger(strictOverride, path, userEarned) && !_playing)
+                        {
+                            if (replay) AfterEnd();
+                            else if (_running) ScheduleNext(); // preserve the base empty-library re-arm
+                        }
                     }
-                    if (CascadeIsRaining?.Invoke() == true)
+                    catch (Exception ex)
                     {
-                        pending!.Change(TimeSpan.FromMilliseconds(250), Timeout.InfiniteTimeSpan);
-                        return;
-                    }
-                    var replay = DropDefer();
-                    if (!Trigger(strictOverride, path, userEarned) && !_playing)
-                    {
+                        // WPF ChaosGifCascadeOverlay.cs:170-189: failed held actions give up safely.
+                        Log.Error(ex, "VideoService: cascade replay failed");
+                        replay |= DropDefer(); // also cancel a probe failure before the hold was cleared
+                        _playing = false;
+                        IsStrict = false;
                         if (replay) AfterEnd();
-                        else if (_running) ScheduleNext(); // preserve the base empty-library re-arm
+                        else if (_running) ScheduleNext();
                     }
                 }), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
                 _cascadeDefer = pending;

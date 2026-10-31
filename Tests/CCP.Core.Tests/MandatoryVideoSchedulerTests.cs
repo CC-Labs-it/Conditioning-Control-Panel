@@ -112,6 +112,64 @@ public sealed class MandatoryVideoSchedulerTests
         v.Stop();
     });
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void ThrowingCascadeReplayRecoversScheduleAndReleasesVerdictHold(bool verdictReplay, bool throwInProbe) => With(6, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var rain = !verdictReplay; var fail = false; var probes = 0; var resumed = 0;
+        void MaybeThrow(bool probe)
+        {
+            if (!fail || probe != throwInProbe) return;
+            fail = false;
+            throw new System.UnauthorizedAccessException("unreadable video folder or failed cascade probe");
+        }
+        var v = new MandatoryVideoScheduler(host, clock, () => { MaybeThrow(false); return new[] { Clips[0] }; })
+        {
+            CascadeIsRaining = () => { probes++; MaybeThrow(true); return rain; }
+        };
+        var attention = CoreSettings.Current.AttentionChecksEnabled;
+        var pause = CoreBubbles.PauseAction; var resume = CoreBubbles.ResumeAction;
+        CoreSettings.Current.AttentionChecksEnabled = true;
+        CoreBubbles.PauseAction = () => { };
+        CoreBubbles.ResumeAction = () => resumed++;
+        try
+        {
+            v.Start();
+            if (verdictReplay)
+            {
+                v.Trigger(); clock.Advance(MandatoryVideoScheduler.PreRoll);
+                v.NoteSpawn(); v.Ended(); // failed attention check, with its bubbles still held
+                rain = true;
+                host.Then!();
+            }
+            else
+            {
+                // Consume the actual scheduled tick so an older timer cannot mask a lost re-arm.
+                for (var second = 0; second < 722 && probes == 0; second++) clock.Advance(TimeSpan.FromSeconds(1));
+                Assert.True(probes > 0);
+            }
+            Assert.Equal(0, resumed);
+            fail = true;
+            rain = false;
+            Assert.Null(Record.Exception(() => clock.Advance(TimeSpan.FromMilliseconds(250))));
+            Assert.False(v.IsPlaying);
+            Assert.False(v.IsStrict);
+            Assert.Equal(verdictReplay ? 1 : 0, resumed);
+            clock.Advance(TimeSpan.FromSeconds(722));
+            Assert.Equal(verdictReplay ? 2 : 1, host.Shown.Count);
+        }
+        finally
+        {
+            v.Stop();
+            CoreSettings.Current.AttentionChecksEnabled = attention;
+            CoreBubbles.PauseAction = pause; CoreBubbles.ResumeAction = resume;
+        }
+    });
+
     [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
     {
