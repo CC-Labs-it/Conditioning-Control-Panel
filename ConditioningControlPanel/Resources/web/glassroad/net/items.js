@@ -17,11 +17,14 @@ import { endBoost } from '../sim/boost.js';
 import { ITEMS, bucketOf, BUCKETS, SPIN_KINDS } from '../sim/itemTable.js';
 import { itemUseMode } from '../sim/itemUse.js';
 import { liftedNear } from '../sim/ramps.js';
+import { boostArchPlan } from '../track/boostArches.js';
+import { createBoostArchRun } from '../sim/boostArches.js';
 
 const GROW_S = 0.4, WAVE_S = 1.2, THROW_LEAD_M = 2.5, ARC_S = 0.5, PENDING_S = 2, ORPHAN_S = 3;   // as sim/items.js
 
 export function createNetItems(track, feel, events, { send = () => {}, tick = () => 0 } = {}) {
   const L = track.lengthM;
+  const archRun = createBoostArchRun(track, feel, events), replaced = new Set(boostArchPlan(track).replaced);
   const g = (k) => feel.get('items.' + k);
   const sd = (a, b) => { const d = wrap(a - b, L); return d > L / 2 ? d - L : d; };
   let list = [], now = 0, shotId = 1, ver = 0, flying = [], traps = [], waves = [], pops = [], R = [], links = [];
@@ -188,6 +191,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     const x = rs(r.i);
     for (let i = 0; i < pick.length; i++) {
       const b = pick[i];
+      if (replaced.has(i)) continue;
       if (b.downT > 0 || (!b.liftM && !grounded)) continue;
       if (b.kind === 'box') {
         if (r.item.id || r.item.rolling || x.pendT > 0 || !(b.liftM ? liftedNear(r.st, b.v, g('boxRadiusM')) : near(r, b.s, b.x, g('boxRadiusM')))) continue;
@@ -313,6 +317,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
   function update(dt, racers, standings, race) {
     if (!race || (race.phase !== 'racing' && race.phase !== 'finished')) return;
     list = racers; now += dt; ver++;
+    archRun.update(dt, racers.filter(local));
     for (const b of pick) { if (b.downT > 0) b.downT = Math.max(0, b.downT - dt); else b.upT += dt; }
     for (const r of racers) if (local(r)) tickLocal(r, dt);
     for (const r of racers) {
@@ -329,8 +334,8 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
   }
 
   // ---- view (the sim/items.js shape; rows pooled per tick) ---------------------------------------
-  const V = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
-  for (const b of pick) (b.kind === 'box' ? V.boxes : V.bubbles).push(b.v);
+  const V = { boxes: [], bubbles: [], arches: archRun.rows, held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [], tethers: [], guards: [] };
+  for (const b of pick) if (!replaced.has(b.v.i)) (b.kind === 'box' ? V.boxes : V.bubbles).push(b.v);
   const projectileRows = [];
   let builtVer = -1;
   function view() {
@@ -382,6 +387,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
   const trapRows = () => traps;
 
   function reset() {
+    archRun.reset();
     now = 0; shotId = 1; ver++; flying = []; traps = []; waves = []; pops = []; R = []; links = [];
     for (const b of pick) { b.downT = 0; b.upT = 1e9; }
   }
