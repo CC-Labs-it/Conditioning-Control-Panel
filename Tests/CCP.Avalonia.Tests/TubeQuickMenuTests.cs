@@ -29,6 +29,27 @@ public sealed class TubeQuickMenuTests
     private static string? HeaderKey(AvatarTubeWindow tube, string name) =>
         (tube.FindControl<MenuItem>(name)!.Header as IconLabel)?.Key;
 
+    [Fact]
+    public Task SharedMenuPaletteCanBeReadAcrossThreads() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        // The window type also exposes pure static helpers called by worker threads. Its fixed
+        // palette must be safe whichever thread first initializes the type, then renders its icons.
+        foreach (var (name, hex) in new[] { ("MenuRed", "#FF6347"), ("MenuGreen", "#90EE90"),
+                     ("MenuPatreon", "#9B59B6"), ("MenuLocked", "#606070") })
+        {
+            var field = typeof(AvatarTubeWindow).GetField(name,
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            var brush = Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(field.GetValue(null));
+            var color = global::Avalonia.Media.Color.Parse(hex);
+            Assert.Equal(color, brush.Color);
+            await Task.Run(() =>
+            {
+                Assert.Equal(color, brush.Color);
+                Assert.Equal(1.0, brush.Opacity);
+            });
+        }
+    });
+
     private static Task WithShell(Action<MainShellWindow, AvatarTubeWindow> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
