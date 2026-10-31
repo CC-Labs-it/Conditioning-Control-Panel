@@ -2042,20 +2042,14 @@ namespace ConditioningControlPanel.Services
                         }
                         else if (v2Result?.SkillPoints.HasValue == true)
                         {
-                            // Take max of server/local — skill points only increase (level-ups, bubble
-                            // pops) and are NEVER reset by seasons (policy: the balance is permanent,
-                            // and since the Descent so is the tree it buys), so the higher value is
-                            // always correct.
-                            // This also shields the balance from an older server that still zeroes
-                            // skill_points at rollover.
-                            var maxPoints = SparklePoints.MergeMax(v2Result.SkillPoints.Value, settings.SkillPoints);
-                            if (maxPoints != settings.SkillPoints)
-                            {
-                                App.Logger?.Information("V2 Sync: Skill points server={Server}, local={Local} — taking max ({Max})",
-                                    v2Result.SkillPoints.Value, settings.SkillPoints, maxPoints);
-                                settings.SkillPoints = maxPoints;
+                            // Raise-only, unless wallet_net says something was spent elsewhere: then the
+                            // reply's balance is adopted, down included (V2WalletNet). Seasons NEVER reset
+                            // the balance (policy: it is permanent, and since the Descent so is the tree it
+                            // buys); the raise-only side also shields it from an older server that still
+                            // zeroes skill_points at rollover.
+                            if (ApplySyncWallet(App.Settings?.Current, unifiedId!, v2Result.SkillPoints.Value,
+                                    V2WalletNet.ParseNet(v2Result.WalletNet)))
                                 App.Settings?.Save();
-                            }
                         }
 
                         // Merge unlocked skills from server (union — never lose skills).
@@ -3382,7 +3376,8 @@ namespace ConditioningControlPanel.Services
                 }
             }
 
-            // Merge skill tree data - take max of server/local (skill points only increase)
+            // Merge skill tree data - raise-only: this V1 profile shape carries no wallet_net, so it
+            // cannot tell a spend from a stale read (the V2 sync reply can: ApplySyncWallet).
             if (cloudProfile.SkillPoints.HasValue)
             {
                 var maxPoints = SparklePoints.MergeMax(cloudProfile.SkillPoints.Value, settings.SkillPoints);
@@ -3992,6 +3987,34 @@ namespace ConditioningControlPanel.Services
             }
 
             App.Settings?.Save();
+        }
+
+        /// <summary>
+        /// A <c>/v2/user/sync</c> reply's balance and net, applied to the LIVE settings: the object
+        /// the header wallet listens to, which a restore or account swap may have replaced since the
+        /// request left. The setter's PropertyChanged is what repaints the wallet. Returns true when
+        /// anything changed and needs saving.
+        /// </summary>
+        internal static bool ApplySyncWallet(AppSettings? live, string syncAccount, int serverSp, int? replyNet)
+        {
+            if (live == null) return false;
+            var same = string.Equals(live.UnifiedId, syncAccount, StringComparison.Ordinal);
+            int? seen = live.WalletNetSeen.TryGetValue(syncAccount, out var stored) ? stored : null;
+            var step = V2WalletNet.Decide(same, replyNet, seen, serverSp, live.SkillPoints);
+            var changed = false;
+            if (step.NextSp != live.SkillPoints)
+            {
+                App.Logger?.Information("V2 Sync: Skill points server={Server}, local={Local}, net={Net}, stored net={Seen} -> {Next}",
+                    serverSp, live.SkillPoints, replyNet, seen, step.NextSp);
+                live.SkillPoints = step.NextSp;
+                changed = true;
+            }
+            if (same && step.StoreNet is { } net && seen != net)
+            {
+                live.WalletNetSeen = new Dictionary<string, int>(live.WalletNetSeen) { [syncAccount] = net };
+                changed = true;
+            }
+            return changed;
         }
 
         /// <summary>
@@ -4757,6 +4780,8 @@ namespace ConditioningControlPanel.Services
             // Rain look sync state: what THIS PC owes the server and last agreed with it.
             nameof(AppSettings.RainLookPushOwed),
             nameof(AppSettings.RainLookAgreedUtc),
+            // What THIS PC last saw of each account's wallet net: on another PC it would invent or hide a spend.
+            nameof(AppSettings.WalletNetSeen),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
         };
@@ -4818,6 +4843,7 @@ namespace ConditioningControlPanel.Services
             restored.RainPackHash = current.RainPackHash;
             restored.RainLookPushOwed = current.RainLookPushOwed;
             restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
+            restored.WalletNetSeen = current.WalletNetSeen;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.
             if (restored.DisabledAssetPaths.Count == 0 && current.DisabledAssetPaths.Count > 0)
@@ -5565,6 +5591,11 @@ namespace ConditioningControlPanel.Services
 
             [JsonProperty("skill_points")]
             public int? SkillPoints { get; set; }
+
+            /// <summary>Raw on purpose: read through V2WalletNet.ParseNet, so an odd value cannot
+            /// throw away the rest of this reply.</summary>
+            [JsonProperty("wallet_net")]
+            public JToken? WalletNet { get; set; }
 
             [JsonProperty("unlocked_skills")]
             public List<string>? UnlockedSkills { get; set; }

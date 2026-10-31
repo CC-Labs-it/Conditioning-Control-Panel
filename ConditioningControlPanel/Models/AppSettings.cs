@@ -4809,6 +4809,19 @@ namespace ConditioningControlPanel.Models
             set { _rainLookAgreedUtc = value; OnPropertyChanged(); }
         }
 
+        private Dictionary<string, int> _walletNetSeen = new();
+        /// <summary>The last <c>wallet_net</c> a <c>/v2/user/sync</c> reply carried, per unified id
+        /// (<see cref="Services.Prizes.V2WalletNet"/>). Machine-local: it records what THIS PC has seen, so a
+        /// backup carrying it to another PC would invent or hide a spend. Survives signing out, since it
+        /// belongs to the account. Replaced whole on every change, because a save can serialize it on
+        /// another thread.</summary>
+        [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public Dictionary<string, int> WalletNetSeen
+        {
+            get => _walletNetSeen;
+            set { _walletNetSeen = value ?? new Dictionary<string, int>(); OnPropertyChanged(); }
+        }
+
         /// <summary>True when the user has agreed to see remote content anywhere. Read THIS,
         /// not the raw flag: users who already accepted the FYP feed's consent card agreed to
         /// exactly this, and asking them a second time in different words would read as the
