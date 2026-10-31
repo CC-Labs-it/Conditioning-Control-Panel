@@ -13,7 +13,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 internal sealed class FloatingVideoFrame
 {
     private readonly Window _window;
-    private readonly FloatingVideoMotionModel _motion;
+    private readonly FloatingVideoMotion _motion;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly BeatLoop _beat;
     private readonly Func<double> _nowMs;
@@ -37,11 +37,11 @@ internal sealed class FloatingVideoFrame
         window.PointerPressed += Press;
         window.PointerMoved += Move;
         window.PointerReleased += Release;
-        window.PointerCaptureLost += (_, _) => { if (_motion.Held) _motion.Drop(); };
+        window.PointerCaptureLost += (_, _) => { if (_motion.Held) { _motion.Drop(); _beat.Stop(); } };
         window.Screens.Changed += DisplaysChanged;
+        window.SizeChanged += (_, _) => SyncSize();
         window.Closed += (_, _) => { _beat.Stop(); _motion.Drop(); window.Screens.Changed -= DisplaysChanged; };
         RefreshDesktop();
-        _beat.Start();
     }
 
     private static double Distance(PixelRect r, double x, double y)
@@ -61,9 +61,17 @@ internal sealed class FloatingVideoFrame
 
     private void DisplaysChanged(object? sender, EventArgs e)
     {
+        _beat.Stop();
         RefreshDesktop();
         _motion.Drop();
-        _motion.Rehome();
+        SyncSize();
+    }
+
+    private void SyncSize()
+    {
+        _motion.Resize(_window.Bounds.Width * _window.RenderScaling, _window.Bounds.Height * _window.RenderScaling);
+        if (!_motion.Active)
+            _motion.Resync(_window.Position.X, _window.Position.Y, _motion.W, _motion.H, rehome: true);
         Place();
     }
 
@@ -76,6 +84,8 @@ internal sealed class FloatingVideoFrame
         var p = Pointer(e);
         _motion.Press(p.X, p.Y, _nowMs());
         e.Pointer.Capture(_window);
+        _last = _nowMs() / 1000.0;
+        _beat.Start();
     }
 
     private void Move(object? sender, PointerEventArgs e)
@@ -96,19 +106,24 @@ internal sealed class FloatingVideoFrame
         _motion.Release(now, CoreSettings.Current.MotionLevel);
         e.Pointer.Capture(null);
         Place();
+        if (!_motion.Active) _beat.Stop();
     }
 
     internal void Tick()
     {
-        var now = _nowMs() / 1000.0;
         MotionSpeed = CoreSettings.Current.MandatoryVideoFloatingSpeedPercent / 100.0;
+        if (!_motion.Active) { _beat.Stop(); return; }
+        var now = _nowMs() / 1000.0;
         _motion.Resize(_window.Bounds.Width * _window.RenderScaling, _window.Bounds.Height * _window.RenderScaling);
-        if (!_motion.Active)
-            _motion.Resync(_window.Position.X, _window.Position.Y, _motion.W, _motion.H, rehome: true);
         _motion.Step(Math.Clamp(now - _last, 0, 0.05));
         _last = now;
         Place();
+        if (!_motion.Active) _beat.Stop();
     }
 
-    private void Place() => _window.Position = new PixelPoint((int)Math.Round(_motion.X), (int)Math.Round(_motion.Y));
+    private void Place()
+    {
+        var position = new PixelPoint((int)Math.Round(_motion.X), (int)Math.Round(_motion.Y));
+        if (_window.Position != position) _window.Position = position;
+    }
 }

@@ -8,8 +8,8 @@ namespace CCP.Core.Tests;
 
 public sealed class FloatingVideoMotionTests
 {
-    private static FloatingVideoMotionModel New() => new(100, 100, 200, 100, 0, 0, 1000, 800);
-    private static void Throw(FloatingVideoMotionModel m, MotionLevel level = MotionLevel.Full)
+    private static FloatingVideoMotion New() => new(100, 100, 200, 100, 0, 0, 1000, 800);
+    private static void Throw(FloatingVideoMotion m, MotionLevel level = MotionLevel.Full)
     {
         m.Press(110, 110, 0);
         m.Move(210, 110, 20);

@@ -96,13 +96,25 @@ public sealed class FloatingVideoFrameTests
             s.MandatoryVideoFloatingSpeedPercent = 100;
             w.Position = new PixelPoint(100, 100);
             double now = 0;
-            _ = new FloatingVideoFrame(w, () => now);
+            int clockReads = 0;
+            var frame = new FloatingVideoFrame(w, () => { clockReads++; return now; });
             w.Show();
-            var loop = Assert.Single(BeatLoop.Running.Where(l => l.Owner == w));
             var source = TopLevelFrameSource.For(w);
+            Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == w);
+            Assert.Equal(0, source.SubscriberCount);
+            var area = w.Screens.Primary!.WorkingArea;
+            w.Position = new PixelPoint(area.Right - 10, area.Y + 100);
+            w.Width = 400; Dispatcher.UIThread.RunJobs();
+            Assert.True(w.Position.X + w.Bounds.Width * w.RenderScaling <= area.Right);
+            Assert.Equal(0, source.SubscriberCount);
+            w.Width = 300; w.Position = new PixelPoint(100, 100);
+            Dispatcher.UIThread.RunJobs();
+            clockReads = 0; frame.Tick(); BeatLoop.StepAll();
+            Assert.Equal(0, clockReads);
+            w.MouseDown(new Point(20, 20), MouseButton.Left);
+            var loop = Assert.Single(BeatLoop.Running.Where(l => l.Owner == w));
             Assert.True(loop.OnFrameBeat);
             Assert.Equal(1, source.SubscriberCount);
-            w.MouseDown(new Point(20, 20), MouseButton.Left);
             now = 20; w.MouseMove(new Point(100, 20));
             now = 40; w.MouseUp(new Point(120, 20), MouseButton.Left);
             var before = w.Position;
@@ -117,6 +129,14 @@ public sealed class FloatingVideoFrameTests
             Assert.False(loop.IsTicking);
             Assert.Equal(0, source.SubscriberCount);
             w.WindowState = WindowState.Normal;
+            Assert.True(loop.OnFrameBeat);
+            for (var i = 0; i < 1000 && loop.IsRunning; i++)
+            { now += 50; BeatLoop.StepAll(); }
+            Assert.False(loop.IsRunning);
+            Assert.Equal(0, source.SubscriberCount);
+            clockReads = 0; frame.Tick(); BeatLoop.StepAll();
+            Assert.Equal(0, clockReads);
+            w.MouseDown(new Point(20, 20), MouseButton.Left);
             Assert.True(loop.OnFrameBeat);
             w.Close();
             Assert.False(loop.IsRunning);
