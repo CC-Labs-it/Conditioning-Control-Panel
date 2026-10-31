@@ -524,6 +524,7 @@ html.pad-nav #card button:focus, html.pad-nav #card input:focus, html.pad-nav #c
 @media (max-height: 480px) and (min-width: 521px) {
   /* a phone on its side: shorter prints, no small print, so Go stays on screen */
   .hw-shot { aspect-ratio: 3 / 1; object-position: 50% 75%; }
+  .hw-panel:nth-child(3) .hw-shot { object-position: 50% 35%; }
   .hw-title { margin-top: -7px; }
   .hw-gist, .hw-items, .hw-camera { display: none; }
 }
