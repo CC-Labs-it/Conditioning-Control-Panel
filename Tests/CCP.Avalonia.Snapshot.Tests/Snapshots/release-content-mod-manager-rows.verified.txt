@@ -461,563 +461,6 @@
                       Name: PackPanel
                     },
                     {
-                      Type: CompanionPickerCard,
-                      Content: {
-                        Type: Border,
-                        Background: {
-                          Type: SolidColorBrush,
-                          Color: {
-                            A: 255,
-                            R: 40,
-                            G: 40,
-                            B: 76
-                          }
-                        },
-                        BorderBrush: {
-                          Type: SolidColorBrush,
-                          Color: {
-                            A: 64,
-                            R: 183,
-                            G: 156,
-                            B: 255
-                          }
-                        },
-                        BorderThickness: 1,
-                        CornerRadius: 12,12,12,12,
-                        Child: {
-                          Type: Grid,
-                          Children: [
-                            {
-                              Type: Border,
-                              Background: {
-                                Type: SolidColorBrush,
-                                Color: {
-                                  A: 255,
-                                  R: 18,
-                                  G: 18,
-                                  B: 32
-                                }
-                              },
-                              BorderBrush: {
-                                Type: SolidColorBrush,
-                                Color: {
-                                  A: 255,
-                                  R: 46,
-                                  G: 46,
-                                  B: 74
-                                }
-                              },
-                              BorderThickness: 1,
-                              CornerRadius: 10,10,10,10,
-                              Child: {
-                                Type: Grid,
-                                Children: [
-                                  {
-                                    Type: IconGlyph,
-                                    HorizontalAlignment: Center,
-                                    VerticalAlignment: Center,
-                                    IsVisible: false,
-                                    Name: TxtPreviewGlyph
-                                  },
-                                  {
-                                    Type: Image,
-                                    Source: {
-                                      Dpi: {
-                                        X: 96.0,
-                                        Y: 96.0,
-                                        Length: 135.7645019878171,
-                                        SquaredLength: 18432.0
-                                      },
-                                      Size: {
-                                        AspectRatio: 0.5633802816901409,
-                                        Width: 240.0,
-                                        Height: 426.0
-                                      },
-                                      PixelSize: {
-                                        AspectRatio: 0.5633802816901409,
-                                        Width: 240,
-                                        Height: 426
-                                      },
-                                      Format: {
-                                        BitsPerPixel: 32
-                                      },
-                                      AlphaFormat: Premul
-                                    },
-                                    Stretch: Uniform,
-                                    Margin: 4,
-                                    Opacity: 1.0,
-                                    Name: ImgPreview
-                                  }
-                                ]
-                              },
-                              Width: 120.0,
-                              Height: 150.0,
-                              Margin: 0,0,18,0,
-                              VerticalAlignment: Top,
-                              ClipToBounds: true
-                            },
-                            {
-                              Type: StackPanel,
-                              Children: [
-                                {
-                                  Type: StackPanel,
-                                  IsVisible: true,
-                                  Name: LivePanel,
-                                  Children: [
-                                    {
-                                      Type: TextBlock,
-                                      Text: Companion,
-                                      Margin: 0,0,0,8,
-                                      Name: TxtLiveName,
-                                      Theme: {
-                                        Type: ControlTheme
-                                      }
-                                    },
-                                    {
-                                      Type: Grid,
-                                      Children: [
-                                        {
-                                          Type: StackPanel,
-                                          Children: [
-                                            {
-                                              Type: TextBlock,
-                                              Margin: 0,0,0,3,
-                                              Theme: {
-                                                Type: ControlTheme
-                                              }
-                                            },
-                                            {
-                                              Type: ComboBox,
-                                              SelectedIndex: -1,
-                                              Selection: {
-                                                SingleSelect: true,
-                                                SelectedIndex: -1,
-                                                AnchorIndex: -1
-                                              },
-                                              SelectionMode: Single,
-                                              Foreground: {
-                                                Type: SolidColorBrush,
-                                                Color: {
-                                                  A: 255,
-                                                  R: 240,
-                                                  G: 240,
-                                                  B: 245
-                                                }
-                                              },
-                                              IsEnabled: false,
-                                              MinHeight: 30.0,
-                                              HorizontalAlignment: Stretch,
-                                              Name: CmbAvatar,
-                                              Theme: {
-                                                Type: ControlTheme
-                                              }
-                                            }
-                                          ]
-                                        },
-                                        {
-                                          Type: StackPanel,
-                                          Children: [
-                                            {
-                                              Type: TextBlock,
-                                              Margin: 0,0,0,3,
-                                              Theme: {
-                                                Type: ControlTheme
-                                              }
-                                            },
-                                            {
-                                              Type: ComboBox,
-                                              SelectedIndex: 0,
-                                              SelectedItem: {
-                                                Type: ComboBoxItem,
-                                                Content: Lily,
-                                                Tag: ccp-default
-                                              },
-                                              SelectedItems: [
-                                                {
-                                                  Type: ComboBoxItem,
-                                                  Content: Lily,
-                                                  Tag: ccp-default
-                                                }
-                                              ],
-                                              Selection: {
-                                                WritableSelectedItems: [
-                                                  {
-                                                    Type: ComboBoxItem,
-                                                    Content: Lily,
-                                                    Tag: ccp-default
-                                                  }
-                                                ],
-                                                Source: [
-                                                  {
-                                                    Type: ComboBoxItem,
-                                                    Content: Lily,
-                                                    Tag: ccp-default
-                                                  },
-                                                  {
-                                                    Type: ComboBoxItem,
-                                                    Content: Gentle Trainer,
-                                                    Tag: gentle-trainer
-                                                  },
-                                                  {
-                                                    Type: ComboBoxItem,
-                                                    Content: Strict Domme,
-                                                    Tag: strict-domme
-                                                  },
-                                                  {
-                                                    Type: ComboBoxItem,
-                                                    Content: Hypno Guide,
-                                                    Tag: hypno-guide
-                                                  }
-                                                ],
-                                                SingleSelect: true,
-                                                SelectedIndexes: [
-                                                  0
-                                                ],
-                                                SelectedItem: {
-                                                  Type: ComboBoxItem,
-                                                  Content: Lily,
-                                                  Tag: ccp-default
-                                                },
-                                                SelectedItems: [
-                                                  {
-                                                    Type: ComboBoxItem,
-                                                    Content: Lily,
-                                                    Tag: ccp-default
-                                                  }
-                                                ],
-                                                Count: 1
-                                              },
-                                              SelectionMode: Single,
-                                              Foreground: {
-                                                Type: SolidColorBrush,
-                                                Color: {
-                                                  A: 255,
-                                                  R: 240,
-                                                  G: 240,
-                                                  B: 245
-                                                }
-                                              },
-                                              IsEnabled: true,
-                                              MinHeight: 30.0,
-                                              HorizontalAlignment: Stretch,
-                                              Name: CmbPersonality,
-                                              Theme: {
-                                                Type: ControlTheme
-                                              }
-                                            },
-                                            {
-                                              Type: Button,
-                                              FontSize: 11.5,
-                                              Foreground: {
-                                                Type: SolidColorBrush,
-                                                Color: {
-                                                  A: 255,
-                                                  R: 203,
-                                                  G: 185,
-                                                  B: 252
-                                                }
-                                              },
-                                              Margin: 0,5,0,0,
-                                              HorizontalAlignment: Left,
-                                              IsVisible: false,
-                                              Name: BtnMorePersonality,
-                                              Theme: {
-                                                Type: ControlTheme
-                                              }
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      Type: TextBlock,
-                                      Text: The companion is switched off. Turn it on to change the look.,
-                                      Margin: 0,6,0,0,
-                                      IsVisible: true,
-                                      Name: TxtAvatarHint,
-                                      Theme: {
-                                        Type: ControlTheme
-                                      }
-                                    },
-                                    {
-                                      Type: Button,
-                                      FontSize: 11.5,
-                                      Foreground: {
-                                        Type: SolidColorBrush,
-                                        Color: {
-                                          A: 255,
-                                          R: 203,
-                                          G: 185,
-                                          B: 252
-                                        }
-                                      },
-                                      Margin: 0,3,0,0,
-                                      HorizontalAlignment: Left,
-                                      IsVisible: true,
-                                      Name: BtnTurnOn,
-                                      Theme: {
-                                        Type: ControlTheme
-                                      }
-                                    },
-                                    {
-                                      Type: Border,
-                                      Background: {
-                                        Type: SolidColorBrush,
-                                        Color: {
-                                          A: 255,
-                                          R: 46,
-                                          G: 46,
-                                          B: 74
-                                        }
-                                      },
-                                      BorderBrush: {
-                                        Type: SolidColorBrush,
-                                        Color: {
-                                          A: 89,
-                                          R: 183,
-                                          G: 156,
-                                          B: 255
-                                        }
-                                      },
-                                      BorderThickness: 2,0,0,0,
-                                      CornerRadius: 10,10,10,10,
-                                      Child: {
-                                        Type: StackPanel,
-                                        Name: SamplePanel,
-                                        Children: [
-                                          {
-                                            Type: TextBlock,
-                                            FontStyle: Italic,
-                                            Text: “Back already? Good. Drop for me.”,
-                                            Margin: 0,0,0,4,
-                                            Theme: {
-                                              Type: ControlTheme
-                                            }
-                                          },
-                                          {
-                                            Type: TextBlock,
-                                            FontStyle: Italic,
-                                            Text: “Thinking again? Stop that. Empty and obedient suits you, pet.”,
-                                            Margin: 0,0,0,4,
-                                            Theme: {
-                                              Type: ControlTheme
-                                            }
-                                          }
-                                        ]
-                                      },
-                                      Padding: 14,10,14,10,
-                                      Margin: 0,10,0,0
-                                    },
-                                    {
-                                      Type: Button,
-                                      FontSize: 11.5,
-                                      Foreground: {
-                                        Type: SolidColorBrush,
-                                        Color: {
-                                          A: 255,
-                                          R: 203,
-                                          G: 185,
-                                          B: 252
-                                        }
-                                      },
-                                      Margin: 0,8,0,0,
-                                      HorizontalAlignment: Left,
-                                      IsVisible: false,
-                                      Name: BtnTubeFit,
-                                      Theme: {
-                                        Type: ControlTheme
-                                      }
-                                    }
-                                  ]
-                                },
-                                {
-                                  Type: StackPanel,
-                                  IsVisible: false,
-                                  Name: PreviewPanel,
-                                  Children: [
-                                    {
-                                      Type: StackPanel,
-                                      Orientation: Horizontal,
-                                      Margin: 0,0,0,6,
-                                      Children: [
-                                        {
-                                          Type: TextBlock,
-                                          VerticalAlignment: Center,
-                                          Name: TxtPreviewName,
-                                          Theme: {
-                                            Type: ControlTheme
-                                          }
-                                        },
-                                        {
-                                          Type: Border,
-                                          Background: {
-                                            Type: SolidColorBrush,
-                                            Color: {
-                                              A: 255,
-                                              R: 46,
-                                              G: 46,
-                                              B: 74
-                                            }
-                                          },
-                                          CornerRadius: 10,10,10,10,
-                                          Child: {
-                                            Type: TextBlock,
-                                            FontSize: 10.0,
-                                            FontWeight: Bold,
-                                            Foreground: {
-                                              Type: SolidColorBrush,
-                                              Color: {
-                                                A: 255,
-                                                R: 167,
-                                                G: 167,
-                                                B: 193
-                                              }
-                                            }
-                                          },
-                                          Padding: 8,3,8,3,
-                                          Margin: 10,0,0,0,
-                                          VerticalAlignment: Center
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      Type: TextBlock,
-                                      Margin: 0,0,0,8,
-                                      Name: TxtPreviewCounts,
-                                      Theme: {
-                                        Type: ControlTheme
-                                      }
-                                    },
-                                    {
-                                      Type: Border,
-                                      Background: {
-                                        Type: SolidColorBrush,
-                                        Color: {
-                                          A: 255,
-                                          R: 46,
-                                          G: 46,
-                                          B: 74
-                                        }
-                                      },
-                                      BorderBrush: {
-                                        Type: SolidColorBrush,
-                                        Color: {
-                                          A: 89,
-                                          R: 183,
-                                          G: 156,
-                                          B: 255
-                                        }
-                                      },
-                                      BorderThickness: 2,0,0,0,
-                                      CornerRadius: 10,10,10,10,
-                                      Child: {
-                                        Type: TextBlock,
-                                        FontStyle: Italic,
-                                        Name: TxtPreviewSample,
-                                        Theme: {
-                                          Type: ControlTheme
-                                        }
-                                      },
-                                      Padding: 14,10,14,10,
-                                      Margin: 0,0,0,8,
-                                      Name: PreviewSampleBorder
-                                    },
-                                    {
-                                      Type: TextBlock,
-                                      Theme: {
-                                        Type: ControlTheme
-                                      }
-                                    }
-                                  ]
-                                },
-                                {
-                                  Type: Grid,
-                                  Margin: 0,10,0,0,
-                                  Name: PerkRow,
-                                  Children: [
-                                    {
-                                      Type: Border,
-                                      Background: {
-                                        Type: SolidColorBrush,
-                                        Color: {
-                                          A: 255,
-                                          R: 46,
-                                          G: 46,
-                                          B: 74
-                                        }
-                                      },
-                                      CornerRadius: 11,11,11,11,
-                                      Child: {
-                                        Type: TextBlock,
-                                        FontSize: 11.0,
-                                        Foreground: {
-                                          Type: SolidColorBrush,
-                                          Color: {
-                                            A: 255,
-                                            R: 203,
-                                            G: 185,
-                                            B: 252
-                                          }
-                                        },
-                                        Text: ❀,
-                                        HorizontalAlignment: Center,
-                                        VerticalAlignment: Center,
-                                        Name: TxtPerkGlyph
-                                      },
-                                      Width: 22.0,
-                                      Height: 22.0,
-                                      VerticalAlignment: Top,
-                                      Name: PerkBadge
-                                    },
-                                    {
-                                      Type: TextBlock,
-                                      Margin: 8,0,6,0,
-                                      VerticalAlignment: Center,
-                                      Theme: {
-                                        Type: ControlTheme
-                                      }
-                                    },
-                                    {
-                                      Type: TextBlock,
-                                      Text: Pink Rush: +1% XP per point of pink filter, up to +50%.,
-                                      VerticalAlignment: Center,
-                                      Name: TxtPerk,
-                                      Theme: {
-                                        Type: ControlTheme
-                                      }
-                                    }
-                                  ]
-                                },
-                                {
-                                  Type: Button,
-                                  FontSize: 11.5,
-                                  Foreground: {
-                                    Type: SolidColorBrush,
-                                    Color: {
-                                      A: 255,
-                                      R: 203,
-                                      G: 185,
-                                      B: 252
-                                    }
-                                  },
-                                  Margin: 30,5,0,0,
-                                  HorizontalAlignment: Left,
-                                  IsVisible: true,
-                                  Name: BtnPerkChange,
-                                  Theme: {
-                                    Type: ControlTheme
-                                  }
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        Padding: 16
-                      },
-                      Margin: 0,0,0,14,
-                      Name: CompanionCard
-                    },
-                    {
                       Type: StackPanel,
                       Orientation: Horizontal,
                       Margin: 0,0,0,8,
@@ -1070,6 +513,44 @@
                           Text: #E84393,
                           VerticalAlignment: Center,
                           Name: TxtThemeColor
+                        }
+                      ]
+                    },
+                    {
+                      Type: StackPanel,
+                      Orientation: Horizontal,
+                      Margin: 0,0,0,8,
+                      Children: [
+                        {
+                          Type: TextBlock,
+                          FontSize: 12.0,
+                          Foreground: {
+                            Type: SolidColorBrush,
+                            Color: {
+                              A: 255,
+                              R: 167,
+                              G: 167,
+                              B: 193
+                            }
+                          },
+                          Margin: 0,0,8,0,
+                          VerticalAlignment: Center
+                        },
+                        {
+                          Type: TextBlock,
+                          FontSize: 12.0,
+                          Foreground: {
+                            Type: SolidColorBrush,
+                            Color: {
+                              A: 255,
+                              R: 167,
+                              G: 167,
+                              B: 193
+                            }
+                          },
+                          Text: Companion,
+                          VerticalAlignment: Center,
+                          Name: TxtCompanion
                         }
                       ]
                     },
@@ -1127,6 +608,28 @@
                           Margin: 0,0,10,0,
                           IsVisible: false,
                           Name: BtnShare,
+                          Theme: {
+                            Type: ControlTheme
+                          }
+                        },
+                        {
+                          Type: Button,
+                          Content: {
+                            Type: TextBlock
+                          },
+                          Background: {
+                            Type: SolidColorBrush,
+                            Color: {
+                              A: 255,
+                              R: 46,
+                              G: 46,
+                              B: 74
+                            }
+                          },
+                          Foreground: #ffb084dc,
+                          Margin: 0,0,10,0,
+                          IsVisible: true,
+                          Name: BtnTubeFit,
                           Theme: {
                             Type: ControlTheme
                           }
