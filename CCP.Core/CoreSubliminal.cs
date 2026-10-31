@@ -42,6 +42,10 @@ namespace ConditioningControlPanel
         /// </summary>
         public static volatile Action<string>? ShowProvider;
 
+        /// <summary>WPF FlashSubliminalCustom: a point-fired silent card, with sanitization and
+        /// haptic anticipation, distinct from a pool phrase's optional whisper. Null = unavailable.</summary>
+        public static volatile Action<string>? CustomShowProvider;
+
         /// <summary>
         /// The scheduler armed (true) or disarmed (false). A head hangs its transition work off
         /// this: the WPF head fires its EMI Desk moment on the way up and, on the way down, blanks
@@ -66,6 +70,25 @@ namespace ConditioningControlPanel
         {
             try { BambiFreezeProvider?.Invoke(); }
             catch (Exception ex) { Log.Debug("BambiFreeze: {E}", ex.Message); }
+        }
+
+        /// <summary>WPF <c>TriggerBambiFreeze(deferReset: true)</c> (VideoService.cs:2485,2590): the Freeze before
+        /// a mandatory video, whose Reset waits for <see cref="TriggerDeferredBambiReset"/>. Null without a surface.</summary>
+        public static volatile Action? DeferredBambiFreezeProvider;
+
+        /// <summary>WPF <c>TriggerDeferredBambiReset</c> (VideoService.cs:7937): the held Reset, once the video ends.</summary>
+        public static volatile Action? DeferredBambiResetProvider;
+
+        public static void TriggerDeferredBambiFreeze()
+        {
+            try { DeferredBambiFreezeProvider?.Invoke(); }
+            catch (Exception ex) { Log.Debug("BambiFreeze (deferred): {E}", ex.Message); }
+        }
+
+        public static void TriggerDeferredBambiReset()
+        {
+            try { DeferredBambiResetProvider?.Invoke(); }
+            catch (Exception ex) { Log.Debug("BambiReset (deferred): {E}", ex.Message); }
         }
 
         private static readonly object Gate = new();

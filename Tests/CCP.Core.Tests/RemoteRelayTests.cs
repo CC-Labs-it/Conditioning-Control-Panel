@@ -590,4 +590,27 @@ public sealed class RemoteRelayTests
         f.Answer = _ => Json((HttpStatusCode)429, "{\"retry_after_seconds\":7}");
         Assert.Equal((false, "rate_limited", (int?)7), await r.SendEmoteAsync("again", "", "custom"));
     }
+    [Fact]
+    public void Custom_subliminal_uses_the_silent_custom_surface_and_blank_input_is_a_noop()
+    {
+        var old = (CoreSubliminal.ShowProvider, CoreSubliminal.CustomShowProvider);
+        var spoken = new List<string>();
+        var custom = new List<string>();
+        CoreSubliminal.ShowProvider = spoken.Add;
+        CoreSubliminal.CustomShowProvider = custom.Add;
+        try
+        {
+            Assert.Null(RemoteCommands.Execute("trigger_custom_subliminal", new JObject { ["text"] = "<b>Relax</b>" }));
+            Assert.Equal(new[] { "<b>Relax</b>" }, custom);   // the head sanitizes before haptic/card
+            Assert.Empty(spoken);                          // never a linked whisper or 20 XP
+            Assert.Null(RemoteCommands.Execute("trigger_custom_subliminal", new JObject { ["text"] = "  " }));
+            Assert.Single(custom);
+            CoreSubliminal.CustomShowProvider = null;
+            Assert.Equal(RemoteCommands.NotOnThisBuild,
+                RemoteCommands.Execute("trigger_custom_subliminal", new JObject { ["text"] = "Relax" }));
+            Assert.Empty(spoken);                          // never fall back to an audible phrase
+        }
+        finally { (CoreSubliminal.ShowProvider, CoreSubliminal.CustomShowProvider) = old; }
+    }
+
 }
