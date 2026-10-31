@@ -417,6 +417,31 @@ public sealed class FeatureCardFxTests
         Assert.Equal(-2, travel.Y);
     });
 
+    [Fact]
+    public void ReleaseHalfwayThroughAnimatedPressStartsAtCurrentPosition() => WithCard((window, host, card) =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        card.DashboardDepth = card.DimWhenInactive = true;
+        var travel = ((TransformGroup)card.FindControl<Panel>("PressFace")!.RenderTransform!).Children.OfType<TranslateTransform>().Single();
+        var clock = new AnimationClock(travel);
+        var point = card.TranslatePoint(new Point(60, 60), window)!.Value;
+        window.MouseMove(point);
+        Assert.Equal(-2, travel.Y);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        window.MouseDown(point, MouseButton.Left);
+        clock.At(0); clock.At(45); // halfway through the 90 ms quadratic press
+        Assert.Equal(1, travel.Y, 5);
+        double before = travel.Y;
+        window.MouseUp(point, MouseButton.Left);
+        Assert.Equal(before, travel.Y, 5); // release starts here, never at the +2 press destination
+        clock.At(45); clock.At(80);
+        Assert.InRange(travel.Y, -2.9, before - 0.01);
+        clock.At(136); // 45 + 65% of the 140 ms release: one pixel past the -2 rest
+        Assert.Equal(-3, travel.Y, 5);
+        clock.At(185);
+        Assert.Equal(-2, travel.Y, 5);
+    });
+
     // Avalonia's animation clock is internal. Drive its real ClockBase with exact timestamps
     // so these are timed transition tests without sleeps or dependence on renderer scheduling.
     private sealed class AnimationClock

@@ -113,10 +113,17 @@ public partial class FeatureCard
         // Reuse the transform's one transition when nothing about it changed; a new set cancels the tween.
         if (transform.Transitions is not [DoubleTransition t] || t.Property != property || t.Duration != duration
             || t.Easing.GetType() != easing.GetType() || easing is DepthSpring)
+        {
+            // WPF DashboardCardDepth.cs:124-141 starts at the animated position captured
+            // before cancellation. Seed that base value before installing the new transition.
+            double from = transform.GetValue(property);
+            transform.Transitions = null;
+            transform.SetValue(property, from);
             transform.Transitions = new Transitions
             {
                 new DoubleTransition { Property = property, Duration = duration, Easing = easing }
             };
+        }
         transform.SetValue(property, value);
     }
 
