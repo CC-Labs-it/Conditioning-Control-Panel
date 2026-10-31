@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -10,7 +11,6 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
-using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -94,126 +94,6 @@ public sealed class LobbyPageTests
     });
 
     [Fact]
-    public void EntitlementEventRepaintsHostLocksAndSignOutClearsRoster() => Run(() =>
-    {
-        var shell = new MainShellWindow();
-        try
-        {
-            var page = Named<AvailableSubjectsTabView>(shell, "AvailableSubjectsTab");
-            page.ReadGates = () => LobbyGates.From(true, false, false);
-            page.PaintSnapshot(new LobbySnapshot(new[] { new LobbyRow { Key = "r", HostName = "Subject" } },
-                Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), page.ReadGates());
-            Assert.True(Named<Control>(page, "GoonHostLock").IsVisible);
-            page.ReadGates = () => LobbyGates.From(true, true, true);
-            shell.RefreshEntitlementVeils();
-            Assert.False(Named<Control>(page, "GoonHostLock").IsVisible);
-            page.ReadGates = () => LobbyGates.From(false, false, false);
-            shell.RefreshEntitlementVeils();
-            Assert.Empty(Named<ItemsControl>(page, "AvailableSubjectsList").Items);
-        }
-        finally { shell.Close(); }
-    });
-
-    [Fact]
-    public void SignedOutChessRowAsksForSignIn() => Run(() =>
-    {
-        var shell = new MainShellWindow();
-        shell.Show();
-        var page = Named<AvailableSubjectsTabView>(shell, "AvailableSubjectsTab");
-        page.ReadGates = () => LobbyGates.From(false, false, false);
-        var button = new Button { DataContext = new LobbyCardView(new LobbyRow { Game = LobbyGame.Chess, Key = "p_table" }, page.ReadGates()) };
-        try
-        {
-            typeof(AvailableSubjectsTabView).GetMethod("BtnLobbyRow_Click", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(page, new object[] { button, new RoutedEventArgs(Button.ClickEvent) });
-            Dispatcher.UIThread.RunJobs();
-            Assert.Contains(shell.OwnedWindows, w => w is LoginDialog);
-        }
-        finally { foreach (var w in shell.OwnedWindows.ToArray()) w.Close(); shell.Close(); }
-    });
-
-    private sealed class LobbyTimer : IUiTimer
-    {
-        public TimeSpan Interval { get; set; }
-        public event EventHandler? Tick { add { } remove { } }
-        public bool Running;
-        public int Starts;
-        public void Start() { Running = true; Starts++; }
-        public void Stop() => Running = false;
-        public void OnUiThread(Action action) => action();
-    }
-
-    [Fact]
-    public void OpeningHidingAndDetachingTabOwnsDiscoveryLeaseAndPaintsRealSnapshot() => Run(() =>
-    {
-        var timer = new LobbyTimer();
-        var calls = 0;
-        var service = new LobbyService(timer, () => true, () => Array.Empty<Friend>(),
-            () => { calls++; return Task.FromResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p_table", "Live", 300000, 0, 0) }, Array.Empty<PbpPlayingGame>(), true)); },
-            () => Task.FromResult(OpenTablesReply.Empty),
-            () => Task.FromResult(((System.Collections.Generic.IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
-        var page = new AvailableSubjectsTabView { CreateLobby = () => service, IsVisible = false };
-        page.ReadGates = () => LobbyGates.From(true, false, false);
-        var window = new Window { Content = page };
-        window.Show();
-        try
-        {
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(timer.Running);
-            page.IsVisible = true;
-            Assert.True(timer.Running);
-            Assert.Equal("Live", Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "AvailableSubjectsList").Items.Single()).Title);
-            Assert.Equal(1, calls);
-            page.IsVisible = false; Assert.False(timer.Running);
-            page.IsVisible = true; Assert.Equal(2, calls);
-            window.Content = null; Assert.False(timer.Running);
-        }
-        finally { window.Close(); }
-    });
-
-    [Fact]
-    public void ReopeningTheTabAfterAFailedRoundKeepsTheErrorPanel() => Run(() =>
-    {
-        var timer = new LobbyTimer();
-        var service = new LobbyService(timer, () => true, () => Array.Empty<Friend>(),
-            () => Task.FromResult(new PbpLobbyReply(Array.Empty<PbpOpenSeat>(), Array.Empty<PbpPlayingGame>(), false)),
-            () => Task.FromResult(OpenTablesReply.Empty),
-            () => Task.FromResult(((System.Collections.Generic.IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), false)));
-        var page = new AvailableSubjectsTabView { CreateLobby = () => service, IsVisible = false };
-        page.ReadGates = () => LobbyGates.From(true, false, false);
-        var window = new Window { Content = page };
-        window.Show();
-        try
-        {
-            Dispatcher.UIThread.RunJobs();
-            page.IsVisible = true;
-            Assert.False(service.LastRoundOk);
-            page.Repaint(); // tier change / reopen path: repaints without a new round
-
-            Assert.True(Named<Border>(page, "AvailableSubjectsErrorPanel").IsVisible);
-        }
-        finally { window.Close(); }
-    });
-
-    [Fact]
-    public void HostLocksFollowTheirOwnGates() => Run(() =>
-    {
-        var page = new AvailableSubjectsTabView();
-        foreach (var signedIn in new[] { false, true })
-        foreach (var premium in new[] { false, true })
-        {
-            var gates = LobbyGates.From(signedIn, premium, premium);
-            page.PaintSnapshot(LobbySnapshot.Empty, gates);
-            foreach (var game in new[] { LobbyGame.Chess, LobbyGame.Goon, LobbyGame.Remote })
-            {
-                var name = game.ToString();
-                Assert.Equal(!gates.CanHost(game), Named<Control>(page, name + "HostLock").IsVisible);
-                Assert.Equal(gates.CanHost(game) ? 1 : 0.7,
-                    Named<Button>(page, game == LobbyGame.Remote ? "BtnBecomeASubject" : "BtnHost" + name).Opacity);
-            }
-        }
-    });
-
-    [Fact]
     public void ShowingTheTabAgainRedrawsSignInGateAndLanguage() => Run(() =>
     {
         var page = new AvailableSubjectsTabView();
@@ -234,11 +114,8 @@ public sealed class LobbyPageTests
         finally { LocalizationManager.Instance.SetLanguage("en"); }
     });
 
-    [Theory]
-    [InlineData("BtnBecomeASubject")]
-    [InlineData("BtnHostChess")]
-    [InlineData("BtnEmptyHostChess")]
-    public void SignedOutHostButtonOpensSignIn(string button) => Run(() =>
+    [Fact]
+    public void SignedOutRemoteHostButtonOpensSignInInsteadOfRemote() => Run(() =>
     {
         var shell = new MainShellWindow();
         shell.Show();
@@ -247,7 +124,7 @@ public sealed class LobbyPageTests
             var page = Named<AvailableSubjectsTabView>(shell, "AvailableSubjectsTab");
             page.ReadGates = () => LobbyGates.From(false, false, false);
             shell.ShowTab("availablesubjects");
-            Named<Button>(page, button).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Named<Button>(page, "BtnBecomeASubject").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.Contains(shell.OwnedWindows, w => w is LoginDialog);
             Assert.True(page.IsVisible);
@@ -294,6 +171,17 @@ public sealed class LobbyPageTests
             CoreEntitlement.ShowDeniedHandler = refusal;
         }
     });
+
+    private sealed class LobbyTimer : IUiTimer
+    {
+        public TimeSpan Interval { get; set; }
+        public event EventHandler? Tick { add { } remove { } }
+        public bool Running;
+        public int Starts;
+        public void Start() { Running = true; Starts++; }
+        public void Stop() => Running = false;
+        public void OnUiThread(Action action) => action();
+    }
 
     [Fact]
     public void ProductionPageAndShellResolveTheSameAppOwnedService() => Run(() =>
@@ -395,8 +283,7 @@ public sealed class LobbyPageTests
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         body();

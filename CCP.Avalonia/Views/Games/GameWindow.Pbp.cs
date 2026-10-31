@@ -69,7 +69,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private static readonly Random PbpRng = new();
 
         private bool _pbpOpen;
-        private bool _pbpSettingsPosted, _pbpIdentityPosted;
         private Task? _pbpBootFrames;   // single-flight: settings always precedes identity, even during an OS query
         private bool _pbpPinged;
         private DateTime _pbpLastBeatUtc = DateTime.UtcNow;
@@ -198,14 +197,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             frame["watchEffects"] = PbpWatchRules.WatchEffects(s);
             frame["watchAmount"] = PbpWatchRules.WatchAmount(s);
             frame["gentleIntroSpeed"] = PbpWatchRules.GentleIntroSpeed(s.GentleVisuals, withoutGentle, s.GentleSpeed);
-            if (_spectateInit != null) frame["spectateMatchId"] = _spectateInit;
-            _spectateInit = null;
-            _pbpSettingsPosted = true;
             Post(frame);
             Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                 s.UserDisplayName, CoreReleaseContent.AppVersion));
-            _pbpIdentityPosted = true;
-            PostLobbyIntent();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>
