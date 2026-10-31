@@ -1288,9 +1288,7 @@ namespace ConditioningControlPanel.Views.Tabs
             };
             name.SetResourceReference(TextBlock.ForegroundProperty, "TextLightBrush");
             words.Children.Add(name);
-            var whereRow = new Grid { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 1, 0, 0) };
-            whereRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            whereRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var whereRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 0) };
             var where = new TextBlock { FontSize = 10.5, Opacity = 0.85, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             where.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
             where.SetBinding(TextBlock.TextProperty, Bound(TabMenuCopy.WhereKey(price.Id)));
@@ -1299,13 +1297,15 @@ namespace ConditioningControlPanel.Views.Tabs
             if (tier > 0)
             {
                 var badge = new TierBadge { Tier = tier, MaxWidthOverride = 46, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-                Grid.SetColumn(badge, 1);
                 whereRow.Children.Add(badge);
             }
             words.Children.Add(whereRow);
-            // Constrain the line during measure, reserving the sign's actual width. A horizontal
-            // StackPanel measures it at infinity; a SizeChanged cap can leave one layout pass
-            // overflowing (TAB-13), especially when the column shrinks.
+            // The horizontal row measures its line at unlimited width, so the trimming never engaged
+            // and a long line ran past the column and was cut hard (German "Mantras, pro
+            // Wiederholung", bug hunt 2026-09-29, TAB-13). Capped at the column less the tier sign,
+            // it ends in "..." instead, and the whole line shows on hover.
+            var signRoom = tier > 0 ? 52.0 : 0.0;
+            words.SizeChanged += (_, e) => where.MaxWidth = Math.Max(0, e.NewSize.Width - signRoom);
             where.SetBinding(FrameworkElement.ToolTipProperty, Bound(TabMenuCopy.WhereKey(price.Id)));
             Grid.SetColumn(words, 1);
             grid.Children.Add(words);
