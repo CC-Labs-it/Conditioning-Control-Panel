@@ -202,12 +202,15 @@ public sealed class ChaosUnlockCardOverlayTests
         ChaosAnnouncerOverlay.CloseActive(); // final-loop delivery below is a distinct announcement
         Complete("intrusive_thoughts"); // a second completion during ReadyGo
         Assert.False(ChaosUnlockCardOverlay.IsShowing);
+        Assert.DoesNotContain("ui_unlock", cues);
         overlay.FinishCountdown();
+        Assert.Single(cues, c => c == "ui_unlock"); // WPF :1609, once at GO for the deferred cards
         Assert.Equal(1, ChaosUnlockCardOverlay.QueuedCount);
         Assert.False(ChaosUnlockCardOverlay.Active!.AutoDismiss);
         Step(clock, 240); Click();
         ChaosRunHost.Tick();
         Assert.Equal(elapsed, state.ElapsedSec);
+        cues.Clear();
         Step(clock, 240); Click(); Step(clock, 150);
         ChaosRunHost.StopTimerForTests();
         ChaosRunHost.Tick();
@@ -221,6 +224,7 @@ public sealed class ChaosUnlockCardOverlayTests
         BubbleOverlay.Field.Step();
         Assert.True(BubbleOverlay.Field.Bubbles[0].Y > y);
         Assert.Equal("final_loop", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
+        Assert.Single(cues, c => c.StartsWith("chime", StringComparison.Ordinal)); // WPF :1658
     });
 
     [Theory]

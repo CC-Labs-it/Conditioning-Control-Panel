@@ -512,6 +512,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _lessonCardPaused = true;
                 _lessonCardsAfterDraft = true;
                 BubbleOverlay.HoldChaos(true);
+                ChaosOverlayWindow.ChaosSfx.Play("ui_unlock", 0.55f); // WPF :1609
                 foreach (var card in PendingLessonCards)
                     ChaosUnlockCardOverlay.Show(card, ResumeAfterLessonCard, autoDismiss: false);
                 PendingLessonCards.Clear();
@@ -525,10 +526,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void AfterDraft()
         {
             if (_state?.WelcomeShowerEnabled == true)
+            {
                 for (int i = 0; i < 6; i++)
                     BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(ChaosBubbleVariants.All[Rng.Next(2)],
                         _state.RunIntensity, _state.FuseTimeMult, ChaosMotion.RainDown,
                         _state.Config.EffectIntensity, _state.BubbleScale));
+                BubbleOverlay.PlayChime(0.25f); // WPF :1658
+            }
             AnnounceFinalLoopIfEntering();
         }
 
