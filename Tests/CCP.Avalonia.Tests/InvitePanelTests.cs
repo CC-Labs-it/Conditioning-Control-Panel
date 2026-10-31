@@ -165,7 +165,9 @@ public sealed class InvitePanelTests
             Assert.False(vault.IsVisible);
             ld.Deactivate();
             shell.BtnInviteTicket_Click(ticket, new RoutedEventArgs(Button.ClickEvent));
-            Assert.True(vault.IsVisible);
+            Assert.False(vault.IsVisible);
+            Assert.Equal("appsettings", shell.CurrentTab);
+            Assert.Equal("account", shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.AppSettingsTabView>("AppSettingsTab")!.CheckedSectionKey);
         }
         finally
         {
@@ -185,7 +187,7 @@ public sealed class InvitePanelTests
             InviteApi.DefaultIdentity = () => ("u_me", "tok");
             shell.Show();
             var ticket = shell.Named<Button>("BtnInviteTicket")!;
-            var card = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView>("ExclusivesTab")!.FindControl<InvitePanel>("InvitesHost")!;
+            var card = shell.PlansVaultView!.FindControl<InvitePanel>("InvitesHost")!;
             string reply = Mine;
             card.Api = () => new InviteApi(new HttpClient(new Wire(reply, "{}")), () => ("u_me", "tok"), "http://127.0.0.1:9");
             await card.RefreshAsync(force: true); // the card's read repaints the ticket

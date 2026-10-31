@@ -65,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void RefreshExclusivesTab()
         {
             Named<Tabs.ExclusivesTabView>("ExclusivesTab")?.RefreshVault();
+            PlansVaultView?.RefreshVault();
             RefreshInvites();
         }
 
@@ -82,7 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF _invitePanel.RefreshAsync(): throttled inside, so a repaint storm costs one read.</summary>
-        internal void RefreshInvites() => _ = Named<Tabs.ExclusivesTabView>("ExclusivesTab")
+        internal void RefreshInvites() => _ = PlansVaultView
             ?.FindControl<Controls.Invites.InvitePanel>("InvitesHost")?.RefreshAsync();
     }
 }

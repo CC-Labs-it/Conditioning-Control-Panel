@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 WireSectionStrip();
+                SyncPlansVisibility(tab);
                 var section = NavSections.SectionForTab(tab);
                 var pageLabel = section == NavSections.Settings ? CurrentSettingsSectionLabel() : null;
                 PageStrip?.Show(section, tab, pageLabel);
@@ -194,6 +195,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        internal Tabs.ExclusivesTabView? PlansVaultView => AppSettingsPage?
+            .FindControl<Controls.AppSettings.AccountSettingsSection>("SectionAccount")?
+            .FindControl<Tabs.ExclusivesTabView>("PlansView");
+
+        private void SyncPlansVisibility(string tab) => PlansVaultView?.SetPlansActive(
+            tab == "appsettings" && AppSettingsPage?.CheckedSectionKey == "account");
+
         private void WireSectionStrip()
         {
             if (_sectionStripWired || PageStrip is not { } strip) return;
@@ -216,6 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // so the crumb stayed "General" after the System bubble lit Monitors.
             if (AppSettingsPage is { } page) page.SectionChecked += () =>
             {
+                SyncPlansVisibility(CurrentTab);
                 if (CurrentTab != "appsettings") return;
                 var label = CurrentSettingsSectionLabel();
                 strip.Show(NavSections.Settings, "appsettings", label);
