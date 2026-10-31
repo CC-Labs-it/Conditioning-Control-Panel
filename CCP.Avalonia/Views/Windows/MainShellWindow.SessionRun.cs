@@ -6,7 +6,7 @@
 // subliminal, bouncing text, lock cards and mandatory videos (docs/avalonia-decisions.html).
 // BtnPauseSession_Click (:2021) too.
 // ponytail: remaining gaps include remote gates and punch-card/Bark/profile-sync hooks.
-// Video teardown is synchronous on this head (MandatoryVideoOverlay.CloseAll); a new clip keeps the recap passive.
+// Video teardown is synchronous (MandatoryVideoOverlay.CloseAll); playback gets WPF's 3s recap wait.
 // ponytail: both confirms use MessageDialog, so the buttons read OK/Cancel rather than WPF's
 // "▶ Start Session"/"Not yet" and "Yes, stop"/"Keep going"; the text above them is WPF's.
 
@@ -183,12 +183,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Set by <see cref="EndProgramSessionQuietly"/>; the next recap is skipped once.</summary>
         private bool _suppressNextSessionSummary;
 
+        internal Func<TimeSpan, Task> SessionSummaryDelay = delay => Task.Delay(delay);
+
         internal void OnSessionLogReady(object? sender, SessionLogReadyEventArgs e)
         {
             if (_windowClosed || _exitRequested) return;
             if (_suppressNextSessionSummary) { _suppressNextSessionSummary = false; return; }
             var log = e.Log;
-            Dispatcher.UIThread.Post(() =>
+            Dispatcher.UIThread.Post(async () =>
             {
                 if (_windowClosed || _exitRequested) return;
                 // WPF MainWindow.Presets.cs:1709: the run that just ended is a receipt now; after the
@@ -196,10 +198,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshTakeawayShelf();
                 try
                 {
+                    await SessionSummaryPresentation.WaitForVideoAsync(
+                        () => CoreEngine.Video?.IsPlaying == true, SessionSummaryDelay,
+                        () => _windowClosed || _exitRequested);
+                    if (_windowClosed || _exitRequested) return;
                     var dialog = new SessionCompleteWindow(log);
                     // WPF MainWindow.Presets.cs:1790 (#1303): under a lock card, pop quiz or Bubble
                     // Count cover the recap opens passive - non-modal, not activated - and only one.
-                    // WPF MainWindow.Presets.cs ShowSessionSummaryWhenClear: a playing video keeps the recap passive.
+                    // WPF MainWindow.Presets.cs:1784: recheck playback after waiting; timeout stays passive.
                     var passive = SessionSummaryPresentation.Decide(CoreEngine.Video?.IsPlaying == true, LockCardWindow.IsAnyOpen(),
                         PopQuizWindow.IsAnyOpen(), BubbleCountWindow.IsAnyOpen()) == SessionSummaryPresentation.Mode.Passive;
                     dialog.Topmost = !passive;   // WPF MainWindow.Presets.cs:1799

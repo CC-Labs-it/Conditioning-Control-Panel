@@ -105,9 +105,12 @@ public sealed class SessionRunWireTests
         public void ShowMessage(AttentionVerdict verdict, int ms, System.Action then) { }
     }
 
-    /// <summary>WPF MainWindow.Presets.cs ShowSessionSummaryWhenClear: video keeps the recap passive.</summary>
-    [Fact]
-    public async Task RecapGoesPassiveOverAPlayingVideo()
+    /// <summary>WPF MainWindow.Presets.cs:1756-1793: short video finishes before a modal recap;
+    /// playback surviving the 3s wait gets a passive recap.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RecapWaitsForVideoThenRechecksPlayback(bool survivesTimeout)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -130,10 +133,21 @@ public sealed class SessionRunWireTests
                 CoreEngine.Video = video;
                 runner.Stop(completed: true);
                 Assert.True(video.Trigger(path: "a.mp4"));   // a new clip, before the recap posts
+                int retries = 0;
+                shell.SessionSummaryDelay = interval =>
+                {
+                    Assert.Equal(System.TimeSpan.FromMilliseconds(200), interval);
+                    Assert.Empty(shell.OwnedWindows.OfType<SessionCompleteWindow>());
+                    retries++;
+                    if (!survivesTimeout) video.ForceCleanup();
+                    return Task.CompletedTask;
+                };
                 Dispatcher.UIThread.RunJobs();
+                Assert.Equal(survivesTimeout ? 15 : 1, retries);
                 var recap = Assert.Single(shell.OwnedWindows.OfType<SessionCompleteWindow>());
-                Assert.False(recap.Topmost);
-                Assert.False(recap.ShowActivated);
+                Assert.Equal(!survivesTimeout, recap.Topmost);
+                Assert.Equal(!survivesTimeout, recap.ShowActivated);
+                Assert.Equal(survivesTimeout, shell.IsEnabled);
                 recap.Close();
             }
             finally
