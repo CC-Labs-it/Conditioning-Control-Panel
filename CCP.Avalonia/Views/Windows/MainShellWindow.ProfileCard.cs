@@ -30,7 +30,7 @@
 //                                 DescentCycleXp.XpBonusFor), called from SetProfileViewingSelf as WPF.
 //   FindNextAchievementName     - Models.Achievement.All
 //                                 (ConditioningControlPanel/Models/Achievement.cs).
-//   RefreshProfileSpiralPlate   - MainShellWindow.ProfileSpiral.cs, still a stub.
+//   RefreshProfileSpiralPlate   - MainShellWindow.ProfileSpiral.cs.
 //
 // Callers: DiscordTabView (own card, search, lookup) calls SetProfileViewingSelf and
 // UpdateProfileShowcase; BtnProfilePrivacy_Click opens the Privacy dialog.
@@ -74,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 _profileViewingSelf = isSelf;
+                RefreshProfileSpiralPlate();
 
                 var page = ProfilePage;
                 if (page is null) return;
