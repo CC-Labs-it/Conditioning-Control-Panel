@@ -43,6 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         internal static readonly List<(FlashOverlayWindow Window, PixelRect Rect)> Active = new();
         private static readonly Random Rng = new();
+        internal static Random LuckyRng = Rng;
         // #627: one shuffled walk of the folder (WPF FlashService DiskBag), so every image comes up
         // before any repeats. Not thread-safe: LoadPictures draws under the bag's own lock.
         internal static readonly ShuffleBag<string> DiskBag = new(p => p, Rng);
@@ -139,7 +140,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null)
         {
             var s = CoreSettings.Current;
-            var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
+            var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, LuckyRng);
+            // WPF SkillTreeService.RollLuckyFlash raises OnLuckyProc before the flash is presented.
+            if (multiplier > 1) Windows.LuckyToast.Proc(App.Mods?.GetLuckyFlashLabel() ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_flash"), multiplier);
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
                 multiplier > 1, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
             var w = new FlashOverlayWindow(bmp)
