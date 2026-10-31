@@ -58,6 +58,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, e) => { if (e.WidthChanged) FitShelf(); };
         }
 
+        // WPF PlansMode: Account owns a compact copy; Premium keeps the full shelf.
+        public bool PlansMode
+        {
+            get => _plansMode;
+            set
+            {
+                _plansMode = value;
+                this.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible = !value;
+                this.FindControl<Border>("SpotlightCard")!.IsVisible = !value;
+                this.FindControl<Button>("BtnSeePremium")!.IsVisible = value;
+                this.FindControl<Controls.Invites.InvitePanel>("InvitesHost")!.IsVisible = value;
+                BindHeader("TxtVaultTitle", value ? "plans_header_title" : "premium_page_title");
+                BindHeader("TxtVaultSub", value ? "plans_header_sub" : "premium_page_sub");
+                var scroll = this.FindControl<ScrollViewer>("ContentScroll")!;
+                if (value && scroll.Content is Control content && scroll.Parent is Panel host)
+                {
+                    int index = host.Children.IndexOf(scroll);
+                    scroll.Content = null;
+                    host.Children.RemoveAt(index);
+                    host.Children.Insert(index, content);
+                }
+                UpdateMotion();
+            }
+        }
+        private bool _plansMode, _plansActive;
+
+        private void BindHeader(string name, string key) => this.FindControl<TextBlock>(name)!.Bind(
+            TextBlock.TextProperty, new global::Avalonia.Data.Binding($"[{key}]")
+            { Source = LocalizationManager.Instance });
+
+        private void SeePremium_Click(object? sender, RoutedEventArgs e) =>
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.ShowTab("premium");
+
+        internal void SetPlansActive(bool active)
+        {
+            _plansActive = active;
+            if (active) RefreshVault();
+            UpdateMotion();
+        }
+
         public static readonly StyledProperty<double> CardWidthProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(CardWidth), Services.UI.ExclusiveShelfFit.BaseWidth);
         public static readonly StyledProperty<double> CardHeightProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(CardHeight), Services.UI.ExclusiveShelfFit.BaseHeight);
         public static readonly StyledProperty<double> GroupHeadWidthProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(GroupHeadWidth), double.NaN);
@@ -78,12 +118,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             (CardWidth, CardHeight, GroupHeadWidth) = (w, h, Math.Max(0, width - 1));
         }
 
+        private TopLevel? _motionHost;
+
+        private void OnHostVisibilityChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+        {
+            if (e.Property == IsVisibleProperty)
+            {
+                UpdateMotion();
+                // Ancestor effective visibility settles after its own property notification.
+                Dispatcher.UIThread.Post(UpdateMotion);
+            }
+        }
+
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
+            _motionHost = TopLevel.GetTopLevel(this);
+            if (_motionHost != null) _motionHost.PropertyChanged += OnHostVisibilityChanged;
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged += UpdateMotion;
-            StartAmbient();
             UpdateMotion();
         }
 
@@ -110,6 +163,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnUnloaded(object? sender, RoutedEventArgs e)
         {
+            if (_motionHost != null) _motionHost.PropertyChanged -= OnHostVisibilityChanged;
+            _motionHost = null;
             CoreMods.ModChanged -= OnModChanged;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged -= UpdateMotion;
@@ -237,11 +292,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The only start/stop: visible, attached and MotionFx.AllowAmbientLoops (PLAYBOOK P01).</summary>
         private void UpdateMotion()
         {
-            bool want = IsVisible && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
+            bool want = (_motionHost?.IsVisible ?? true) && IsEffectivelyVisible && (!PlansMode || _plansActive) && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
             // Re-dressed either way: a glow-gate change (performance tier) alone must re-apply the glows.
             if (want == (_motion != null)) { }
             else if (want)
             {
+                StartAmbient();
                 _motionStart = FxAdorner.Time.GetTimestamp();
                 // WPF caps every ambient loop on this tab at AmbientFrameRate 30 (MainWindow.Exclusives.cs:1274); here they ride the window's
                 // shared 30 fps beat, which parks while the window is minimised (P82 rule 2).
@@ -250,6 +306,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             else
             {
+                _ambientFx.Stop();
                 _motion!.Stop();
                 _motion = null;
                 foreach (var sheen in _sheens.Values) CardSheenAdorner.Detach(sheen);

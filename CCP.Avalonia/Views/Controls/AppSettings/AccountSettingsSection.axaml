@@ -14,11 +14,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:tabs="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AccountSettingsSection">
 
     <StackPanel>
 
-        <TextBlock Text="{loc:Str set2_section_account}" Theme="{StaticResource SectionHeader}"/>
+        <TextBlock Text="{loc:Str settings_section_plans}" Theme="{StaticResource SectionHeader}"/>
 
         <!-- Net-new: who you are, and which bar you clear. Painted by RefreshTierBadge(). -->
         <Border x:Name="AccountTierCard" CornerRadius="12" Padding="0" Margin="0,0,0,12"
@@ -90,6 +91,8 @@
                 </Grid>
             </Grid>
         </Border>
+
+        <tabs:ExclusivesTabView x:Name="PlansView" PlansMode="True" Margin="0,0,0,16"/>
 
         <Border x:Name="SubscribeStarLoginCard" CornerRadius="12" Padding="0" Margin="0,0,0,12"
                 Background="{DynamicResource ElevatedSurfaceBrush}"

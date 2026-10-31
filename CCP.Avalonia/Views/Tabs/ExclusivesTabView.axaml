@@ -104,7 +104,7 @@
             <fx:AmbientFxCanvas x:Name="ExclusivesAmbientFx"/>
 
             <!-- 2 + 3. Content -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
+            <ScrollViewer x:Name="ContentScroll" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="26,20,26,22">
 
@@ -130,8 +130,8 @@
                                            Margin="0,0,18,0"/>
                             </Border>
                             <StackPanel VerticalAlignment="Center" Margin="18,0,0,0">
-                                <TextBlock Theme="{StaticResource Type.CardTitle}" Text="{loc:Str premium_page_title}"/>
-                                <TextBlock Text="{loc:Str premium_page_sub}"
+                                <TextBlock x:Name="TxtVaultTitle" Theme="{StaticResource Type.CardTitle}" Text="{loc:Str premium_page_title}"/>
+                                <TextBlock x:Name="TxtVaultSub" Text="{loc:Str premium_page_sub}"
                                            FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"
                                            Margin="0,1,0,0" MaxWidth="620" HorizontalAlignment="Left"
                                            TextTrimming="CharacterEllipsis"/>
@@ -316,6 +316,9 @@
                          and the card lives in the template. Geometry is BuildExclusiveCard's:
                          336x200, 12px radius, bottom scrim plate, chip top-right, badge top-left,
                          veil over the lot, tier sign pinned over the corner. -->
+                    <Button x:Name="BtnSeePremium" IsVisible="False" Margin="0,0,0,16" Click="SeePremium_Click">
+                        <TextBlock Text="{loc:Str plans_see_premium}"/>
+                    </Button>
                     <ItemsControl x:Name="ExclusivesShelf">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -489,7 +492,7 @@
 
                     <!-- Invites (WPF Controls/Invites/InvitePanel, InvitesHost). Hidden until the
                          server answers /v2/invites/mine; read on every show of the tab. -->
-                    <inv:InvitePanel x:Name="InvitesHost" Margin="0,18,0,0"/>
+                    <inv:InvitePanel x:Name="InvitesHost" IsVisible="False" Margin="0,18,0,0"/>
                 </StackPanel>
             </ScrollViewer>
         </Grid>
