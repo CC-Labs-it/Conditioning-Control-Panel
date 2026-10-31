@@ -290,7 +290,7 @@ Pause, a hidden page and leaving send `toy-stop`. The host clamps everything and
 The numbers stay out of feel.json, which would move the course hash.
 
 Web Scrolller pictures (2026-10-26, `host/scrolllerFeed.js`): a host that can feed them sets `caps.scrolller:
-{ consent: boolean }` (the web shim; the desktop never does). Host -> page `scrolller-feed { v: 1, rows: [{ url, kind:
+{ consent: boolean }` (the web shim). Host -> page `scrolller-feed { v: 1, rows: [{ url, kind:
 'image' }] }` (https on a scrolller.com host, at most 12 used; an empty list when consent is off) and the `setting
 { key: 'media.remoteConsent', value }` echo (what is STORED). Page -> host `set-setting { key: 'media.remoteConsent',
 value }` from the Options "Online pictures" switch, drawn only when `caps.scrolller` is set and moved only by the
@@ -312,7 +312,7 @@ Page -> host `set-setting { key: 'media.remoteConsent', value: true, ask: true }
 player's own press of Scrolller (the host may show its sheet); nothing else ever sends `ask`, and the page never raises
 this consent by itself. An echo of false to a pending ask turns the course's pick off. Rows ending in `.svg` are refused.
 My files and Off still win: the provider then holds nothing and My files keeps the display-only route. A host without
-`origin` (the web) and the desktop (no `caps.scrolller`) behave as before.
+`origin` (the web) behaves as before. The desktop (2026-10-31) is a device-origin host with `mediaOrigin: 'https://ccp.assets'`: its rows sit on that host, not the page's, and each one is a cached temp file.
 Per-course niches (2026-10-26, `host/scrolllerNiches.js`): the web switch is the race's OWN (stored under
 `glassroad-web:scrolller`, ON unless the player turned it off; it never writes the campus-wide consent). Each course
 has a default pick (`TRACK_NICHES`, one to four catalog ids); the player's own pick per course is kept in
