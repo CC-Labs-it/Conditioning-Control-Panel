@@ -26,7 +26,7 @@ internal static class X11PanicKey
     private const string LibX11 = "libX11.so.6";
     private const string LibXi = "libXi.so.6";
     // Values and offsets from the compiler against X11/extensions/XInput2.h on x86_64.
-    private const int MappingNotify = 34, GenericEvent = 35, XI_RawKeyPress = 13, XI_RawKeyRelease = 14, XIAllMasterDevices = 1;
+    private const int MappingNotify = 34, GenericEvent = 35, XI_RawKeyPress = 13, XI_RawKeyRelease = 14, XI_RawButtonPress = 15, XIAllMasterDevices = 1;
     private const int XEventSize = 192, CookieExtension = 32, CookieEvType = 36, CookieData = 48, RawDetail = 56;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -45,6 +45,15 @@ internal static class X11PanicKey
     [DllImport(LibX11)] private static extern byte XKeysymToKeycode(IntPtr display, ulong keysym);
     [DllImport(LibXi)] private static extern int XIQueryVersion(IntPtr display, ref int major, ref int minor);
     [DllImport(LibXi)] private static extern int XISelectEvents(IntPtr display, IntPtr window, ref XIEventMask mask, int count);
+
+    // WPF ChaosOverlayWindow.xaml.cs:121-168: observe, never consume desktop input.
+    internal static event Action? CountdownPress;
+
+    internal static void RouteCountdownPress(int eventType, int detail)
+    {
+        if (eventType == XI_RawKeyPress || (eventType == XI_RawButtonPress && detail is 1 or 3))
+            CountdownPress?.Invoke();
+    }
 
     private static int _started;
 
@@ -128,7 +137,7 @@ internal static class X11PanicKey
             if (XIQueryVersion(display, ref major, ref minor) != 0) return Fail("XInput 2.2 unavailable");
 
             var bits = Marshal.AllocHGlobal(4);   // bit 13 (XI_RawKeyPress) lives in the first 4 mask bytes
-            Marshal.WriteInt32(bits, (1 << XI_RawKeyPress) | (1 << XI_RawKeyRelease));
+            Marshal.WriteInt32(bits, (1 << XI_RawKeyPress) | (1 << XI_RawKeyRelease) | (1 << XI_RawButtonPress));
             var mask = new XIEventMask { DeviceId = XIAllMasterDevices, MaskLen = 4, Mask = bits };
             XISelectEvents(display, XDefaultRootWindow(display), ref mask, 1);
             XFlush(display);
@@ -183,14 +192,16 @@ internal static class X11PanicKey
                 if (!XGetEventData(display, ev)) continue;
                 int keycode = -1;
                 var evType = Marshal.ReadInt32(ev, CookieEvType);
-                if (evType is XI_RawKeyPress or XI_RawKeyRelease)
+                if (evType is XI_RawKeyPress or XI_RawKeyRelease or XI_RawButtonPress)
                     keycode = Marshal.ReadInt32(Marshal.ReadIntPtr(ev, CookieData), RawDetail);
                 XFreeEventData(display, ev);
                 if (keycode < 0) continue;
 
+                if (evType == XI_RawButtonPress) { RouteCountdownPress(evType, keycode); continue; }
                 Resolve();
                 if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
                 Route(true, keycode, onPress);
+                RouteCountdownPress(evType, keycode);
                 // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).
                 if (PushToTalk is { } ptt && KeysymOf(PushToTalkKey?.Invoke()) is var ps and not 0
                     && keycode == XKeysymToKeycode(display, ps)) ptt();

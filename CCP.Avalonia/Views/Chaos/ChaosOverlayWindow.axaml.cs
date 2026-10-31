@@ -49,7 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///   <item><c>SetForegroundWindow</c>-style raising -> <c>Topmost</c> toggle + <c>Activate()</c>,
     ///         unchanged from the original's own fallback path.</item>
     ///   <item><c>SetWindowsHookEx(WH_MOUSE_LL)</c> + <c>Services.GlobalKeyboardHook</c> ->
-    ///         <b>stubbed, and the behaviour is lost.</b> See
+    ///         shell raw-input listener (X11 keys and left/right presses, Windows keys). See
     ///         <see cref="InstallCountdownSkipHooks"/>.</item>
     ///   <item><c>GetModuleHandle</c> / <c>Process.MainModule</c> -> dropped; they only existed
     ///         to feed the hook install.</item>
@@ -291,32 +291,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             cb?.Invoke();
         }
 
-        /// <summary>
-        /// <b>Stubbed, and this is a real loss, not a formality.</b> WPF installed a low-level
-        /// <c>WH_MOUSE_LL</c> hook plus <c>Services.GlobalKeyboardHook</c> for the length of the
-        /// countdown, because the countdown window is deliberately click-through and therefore
-        /// cannot receive input itself. That made ANY click or keypress anywhere on the desktop
-        /// skip straight to "SINK".
-        ///
-        /// <para>ponytail: this is the ONE thing in this window that needs a capability
-        /// <see cref="X11Overlay"/> does not have - it exposes <c>SetClickThrough</c> and
-        /// <c>RestackAbove</c> and nothing else. Naming the missing member so a later layer does
-        /// not have to rediscover it: <c>X11Overlay.WatchRawInput(Action onAnyPress) : IDisposable</c>,
-        /// an <c>XISelectEvents</c> for <c>XI_RawButtonPress | XI_RawKeyPress</c> on the root
-        /// window of its OWN display connection, posting to the UI thread. That is its own layer -
-        /// a raw-input listener cannot be proved by a render, and it must be exercised inside a
-        /// nested compositor, never against the live session. It is also X11-only by construction:
-        /// Wayland has no equivalent at all, so on that session the countdown stays unskippable
-        /// whatever gets built.</para>
-        ///
-        /// <para><b>Until then the countdown cannot be skipped and always runs its full
-        /// 3·2·1·SINK duration.</b> Nothing else about it changes: the timer, the steps, the
-        /// completion callback and now the per-step pop and fade are all live.</para>
-        /// </summary>
-        private void InstallCountdownSkipHooks() { }
+        private Action? _countdownPress;
 
-        /// <summary>Paired with <see cref="InstallCountdownSkipHooks"/>; nothing to unhook.</summary>
-        private void RemoveCountdownSkipHooks() { }
+        // WPF ChaosOverlayWindow.xaml.cs:121-168. Reuse the shell's non-consuming
+        // listener; native Wayland input remains outside XInput2's reach.
+        private void InstallCountdownSkipHooks()
+        {
+            RemoveCountdownSkipHooks();
+            Action? press = null;
+            press = () => Dispatcher.UIThread.Post(() =>
+            {
+                // A queued press from a closed or replaced countdown must not start a run.
+                if (!_closed && ReferenceEquals(_countdownPress, press)) FinishCountdown();
+            });
+            _countdownPress = press;
+            X11PanicKey.CountdownPress += press;
+            Win32PanicKey.KeyDown += OnCountdownKey;
+        }
+
+        private void OnCountdownKey(int key, string? name) => _countdownPress?.Invoke();
+
+        private void RemoveCountdownSkipHooks()
+        {
+            if (_countdownPress != null) X11PanicKey.CountdownPress -= _countdownPress;
+            Win32PanicKey.KeyDown -= OnCountdownKey;
+            _countdownPress = null;
+        }
 
         private void ShowCountdownStep(string text)
         {
