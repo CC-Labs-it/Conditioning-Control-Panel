@@ -35,7 +35,7 @@ public sealed class LockdownVeilTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -483,6 +483,13 @@ public sealed class LockdownVeilTests
         finally { CoreSettings.Current.HideLockdownTimer = false; }
     });
 
+    private sealed class FlashClock : TimeProvider
+    {
+        public long Milliseconds = 1234; // exercise elapsed time from a nonzero origin
+        public override long TimestampFrequency => 1000;
+        public override long GetTimestamp() => Milliseconds;
+    }
+
     private static string? Hex(object? brush) => (brush as global::Avalonia.Media.ISolidColorBrush)?.Color.ToUInt32().ToString("x8");
 
     /// <summary>WPF ApplyLockdownTheme / RestoreLockdownTheme / PlayLockdownActivationAnimation
@@ -491,6 +498,10 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        // Frame() can drain more than 600 ms of real rendering work on a loaded CI runner.
+        // Keep the animation clock still until the test advances the actual timer tick path.
+        var clock = new FlashClock();
+        shell.LockdownFlashClock = clock;
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -510,13 +521,23 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        Assert.Equal(1, flash.Opacity);
+        clock.Milliseconds += 300;
+        shell.TickLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Milliseconds += 299;
+        shell.TickLockdownFlash();
+        Assert.Same(flash, shell.LockdownFlash);
+        Assert.Same(root, flash.Parent);
+        Assert.InRange(flash.Opacity, double.Epsilon, 1);
+        clock.Milliseconds++;
+        shell.TickLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
+        Assert.Null(shell.LockdownFlash);
+        shell.TickLockdownFlash(); // an already queued timer tick cannot recreate the flash
         Assert.Null(shell.LockdownFlash);
 
         ld.Deactivate();
