@@ -263,9 +263,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private double _resizeStartWidth;
 
         /// <summary>True while a chain is on screen.</summary>
-        // ponytail: the pat faces are the only chain this head plays; the full chain player (EmiChainPlayer, WPF head only;
+        // Pat faces and speech are live; the full chain player (EmiChainPlayer, WPF head only;
         // the chain data is in Core as EmiChains) is wire-win-emi-desk-b.
-        public bool ChainLive => _patFeedback is not null;
+        public bool ChainLive => _patFeedback is not null || _speechTimer != null;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -895,17 +895,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         /// <summary>Say a line on the locked . / .. / ... cadence.</summary>
-        // ponytail: EmiChains.MakeSay / SayHoldMs / FrameForFace are in Core now; still needs
-        // EmiChainPlayer (WPF head) to play the result.
+        // WPF Bubble.cs:503-540; timing comes from the existing shared Core chain.
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
         {
-            done?.Invoke();
+            BeginSpeech(line, reactionFace, done);
         }
 
         /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
         {
             StopPatFeedback();
+            CancelSpeech();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -2256,6 +2256,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopIdleBeats();
                 DisarmPet();
                 CancelChain();
+                CancelHold();
                 TearDownReactions();
 
                 try { OnTearDownCore(); }
@@ -2619,8 +2620,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>ponytail: needs App.EmiDesk.ResetOnboarding() - the QA gesture replay.</summary>
         private void ResetOnboarding() { }
 
-        /// <summary>ponytail: needs App.EmiDesk.Fire(...) - her own event bus.</summary>
-        private void FireDeskEvent(string name) { }
+        /// <summary>WPF EmiDeskService.cs:661: widget moments feed the shared line engine.</summary>
+        private void FireDeskEvent(string name) => EmiDeskService.Instance.Fire(name);
 
         // ---------------------------------------------------------------- teardown
 
@@ -2645,6 +2646,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 TearDownReactions();
                 TearDownVox();
                 CancelChain();
+                CancelHold();
                 SweepFx(all: true);
                 Close();
             }
@@ -2667,6 +2669,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopChromeGrace();
                 TearDownReactions();
                 TearDownVox();
+                CancelChain(); CancelHold();
             }
             catch (Exception ex)
             {
