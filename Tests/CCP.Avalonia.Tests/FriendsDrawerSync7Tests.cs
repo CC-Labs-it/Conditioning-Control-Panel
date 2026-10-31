@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
@@ -109,6 +110,11 @@ public sealed partial class FriendsDrawerTests
             await svc.RefreshAsync();
             var d = new FriendsDrawer(svc) { CopyText = _ => Task.FromResult(true) };
             var window = new Window { Width = 400, Height = 600, Content = d };
+            var time = new SteppedTime();
+            var savedTime = BeatLoop.Time;
+            BeatLoop.Time = time;
+            double elapsed = 0;
+            void StepTo(double ms) { time.Advance(TimeSpan.FromMilliseconds(ms - elapsed)); elapsed = ms; BeatLoop.StepAll(); }
             try
             {
                 window.Show();
@@ -117,13 +123,15 @@ public sealed partial class FriendsDrawerTests
                 var pill = Tagged<Border>(d, "friends-link-pop")!;
                 var fx = Tagged<Canvas>(d, "friends-link-fx")!;
                 Assert.Equal(sparks, fx.Children.Count);
-                d.AdvanceLinkFeedback(110);
+                var loop = BeatLoop.Running.SingleOrDefault(l => ReferenceEquals(l.Owner, d));
+                if (sparks == 0) Assert.Null(loop); else Assert.True(Assert.IsType<BeatLoop>(loop).OnFrameBeat);
+                StepTo(110);
                 if (sparks == 0) Assert.Null(pill.RenderTransform);
                 else
                 {
                     var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(pill.RenderTransform);
                     Assert.Equal(peak, scale.ScaleX, 6); Assert.Equal(peak, scale.ScaleY, 6);
-                    d.AdvanceLinkFeedback(245);
+                    StepTo(245);
                     Assert.InRange(scale.ScaleX, 0.97, 0.999); // elastic return crosses below rest
                     foreach (var dot in fx.Children.Cast<global::Avalonia.Controls.Shapes.Ellipse>())
                     {
@@ -132,14 +140,19 @@ public sealed partial class FriendsDrawerTests
                         double x = move.X / eased, y = move.Y / eased - 6, k = sparks / 12.0;
                         Assert.InRange(Math.Sqrt(x * x + y * y), 24 * k, 54 * k);
                     }
-                    d.AdvanceLinkFeedback(380);
+                    StepTo(380);
                     Assert.Equal(1, scale.ScaleX, 6); Assert.Equal(1, scale.ScaleY, 6);
                     Assert.NotEmpty(fx.Children);
                 }
-                d.AdvanceLinkFeedback(680);
+                StepTo(680);
+                Assert.Empty(fx.Children);
+                Assert.DoesNotContain(BeatLoop.Running, l => ReferenceEquals(l.Owner, d));
+                d.StartLinkFeedback(pill);
+                window.Hide();
+                Assert.DoesNotContain(BeatLoop.Running, l => ReferenceEquals(l.Owner, d));
                 Assert.Empty(fx.Children);
             }
-            finally { window.Close(); }
+            finally { window.Close(); BeatLoop.Time = savedTime; }
         }
     });
 

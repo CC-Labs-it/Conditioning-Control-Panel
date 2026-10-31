@@ -159,9 +159,9 @@ public sealed partial class FriendsDrawer
         {
             var mark = new IconGlyph { Kind = platform switch
             {
-                FriendPlatform.Phone => FluentIcons.Common.Symbol.Phone,
-                FriendPlatform.Web => FluentIcons.Common.Symbol.Globe,
-                _ => FluentIcons.Common.Symbol.Desktop,
+                FriendPlatform.Phone => IconKind.Phone,
+                FriendPlatform.Web => IconKind.Globe,
+                _ => IconKind.Desktop,
             }, Size = 11, Foreground = Dim, Margin = new Thickness(4, 0, 0, 0), Tag = "friends-platform:" + platform };
             ToolTip.SetTip(mark, Loc.Get(tip));
             line.Children.Add(mark);

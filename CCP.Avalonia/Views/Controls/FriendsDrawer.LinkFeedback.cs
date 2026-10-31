@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
 
@@ -15,7 +14,7 @@ public sealed partial class FriendsDrawer
 {
     private readonly Canvas _linkFx = new() { IsHitTestVisible = false, Tag = "friends-link-fx" };
     private readonly List<(Ellipse Dot, double X, double Y, double Ms)> _linkSparks = new();
-    private DispatcherTimer? _linkPulseTimer;
+    private BeatLoop? _linkPulse;
     private ScaleTransform? _linkScale;
     private double _linkAmount;
 
@@ -39,9 +38,9 @@ public sealed partial class FriendsDrawer
                 _linkFx.Children.Add(dot);
                 _linkSparks.Add((dot, Math.Cos(angle) * distance, Math.Sin(angle) * distance + 6, 420 + Random.Shared.Next(260)));
             }
-        var clock = Stopwatch.StartNew();
-        _linkPulseTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render,
-            (_, _) => AdvanceLinkFeedback(clock.Elapsed.TotalMilliseconds));
+        _linkPulse = new BeatLoop(this, seconds => AdvanceLinkFeedback(seconds * 1000))
+            { OnParked = () => AdvanceLinkFeedback(680) };
+        _linkPulse.Start();
     }
 
     // The same clock path is driven explicitly by headless tests, without wall-clock sleeps.
@@ -67,7 +66,7 @@ public sealed partial class FriendsDrawer
             if (t == 1) _linkFx.Children.Remove(dot);
         }
         if (ms < 680) return;
-        _linkPulseTimer?.Stop(); _linkPulseTimer = null;
+        _linkPulse?.Stop(); _linkPulse = null;
         _linkScale = null; _linkSparks.Clear(); _linkFx.Children.Clear();
     }
 }
