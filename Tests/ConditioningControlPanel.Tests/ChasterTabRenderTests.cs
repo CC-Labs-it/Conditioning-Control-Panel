@@ -200,6 +200,48 @@ public class ChasterTabRenderTests
     }
 
     [Fact]
+    public void Where_lines_stay_inside_their_columns_when_the_menu_resizes()
+    {
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            var loc = Localization.LocalizationManager.Instance;
+            var previous = loc.CurrentLanguage;
+            try
+            {
+                loc.SetLanguage("de");
+                var tab = new ChasterTabView();
+                tab.LinkedPanel.Visibility = Visibility.Visible;
+                tab.BuildMenu();
+                var host = new Grid { Height = 2400 };
+                host.Children.Add(tab);
+                foreach (var width in new[] { 1400, 1000, 800, 1200 })
+                {
+                    host.Width = width;
+                    host.Measure(new Size(width, 2400));
+                    host.Arrange(new Rect(0, 0, width, 2400));
+                    host.UpdateLayout();
+                    foreach (var row in Rows(tab))
+                    {
+                        var id = (string)row.Tag;
+                        var text = Localization.Loc.Get(TabMenuCopy.WhereKey(id));
+                        var where = Descendants(row).OfType<TextBlock>().First(t => t.Text == text);
+                        var line = (FrameworkElement)VisualTreeHelper.GetParent(where);
+                        var words = (FrameworkElement)VisualTreeHelper.GetParent(line);
+                        Assert.True(where.ActualWidth <= words.ActualWidth + 0.5,
+                            $"{id} at {width}: {where.ActualWidth:0} wide in a {words.ActualWidth:0} column");
+                        foreach (var badge in Descendants(line).OfType<TierBadge>())
+                            Assert.True(where.TranslatePoint(new Point(where.ActualWidth, 0), line).X
+                                <= badge.TranslatePoint(new Point(0, 0), line).X + 0.5,
+                                $"{id} at {width}: the where line overlaps its tier sign");
+                        Assert.Equal(text, where.ToolTip as string);
+                    }
+                }
+            }
+            finally { loc.SetLanguage(previous); }
+        });
+    }
+
+    [Fact]
     public void Every_row_with_a_picture_points_at_a_png_that_ships()
     {
         var resources = System.IO.Path.Combine(RepoRoot(), "Assets");
