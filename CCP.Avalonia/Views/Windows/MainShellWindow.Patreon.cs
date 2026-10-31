@@ -219,7 +219,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Loc.Get("tiergate_see_tiers"), () => ShowVaultGate(null, verdict.Required >= Models.PatreonTier.Level2 ? 2 : 1));
         }
 
-        /// <summary>WPF ShowVaultGate. Null feature = the tier as a whole (the TierGate toast's "See tiers").</summary>
+        /// <summary>Spent-action cards share the padlock reconnect route.</summary>
+        internal void OpenPricedCard(string featureKey, int tier)
+        {
+            if (LockdownActive) return;
+            if (TierGate.ReconnectIsTheAnswer()) { _ = ReconnectFromGate(); return; }
+            ShowVaultGate(featureKey, tier);
+        }
+
+        /// <summary>WPF ShowVaultGate. Null feature opens the tier as a whole.</summary>
         internal void ShowVaultGate(string? featureKey, int tier)
         {
             if (LockdownActive) return;   // P05: the toast's "See tiers" is a door too
