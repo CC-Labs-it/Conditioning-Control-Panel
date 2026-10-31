@@ -38,6 +38,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private const double ActiveBreathSeconds = 3.5;
         private const double RimLightOpacity = 0.85;
         private const double HoverLiftScale = 1.02;
+
+        /// <summary>The art caches' render scale (the axaml repeats it): at least the hover lift (1.02) times
+        /// HoverPop's 1.06, so a hovered plate is never an upscaled cache bitmap.</summary>
+        internal const double ArtCacheScale = 1.1;
         private const int HoverMs = 150;
         private const double TeaseBlurRadius = 26;
         private const double TeaseBorderThickness = 2;
@@ -180,6 +184,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _imgIconHost.Background = src is null
                 ? null
                 : new ImageBrush(src) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
+            // ponytail: Avalonia 12.1 retains a BitmapCache across hidden-tab artwork changes. Replace
+            // the cache with the picture so a mod switch cannot resurrect the previous plate.
+            _imgIconHost.CacheMode = new BitmapCache { RenderAtScale = ArtCacheScale };
             _imgIconHost.IsVisible = src is not null;
             _glyphHost.IsVisible = src is null && !string.IsNullOrEmpty(Glyph);
         }
