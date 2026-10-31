@@ -115,3 +115,26 @@ Final CI-fix validation uses `/tmp/ccp-dotnet/dotnet` (10.0.403):
 | `git diff --check` | exit 0, no output |
 
 Core's five skips are the existing Vosk model dependencies. No test was skipped in the 43-case UI selection. Windows execution is left to GitHub CI; the same Release test assembly and real headless mouse pipeline ran locally on Linux.
+
+## 2026-10-31 cancellation follow-up
+
+Verified a clean checkout and remote head at `f57351995a4e1fd777d2a59afa28a584d00a4ab4`. [Run 41101766148](https://github.com/CC-Labs-it/Conditioning-Control-Panel/actions/runs/41101766148) is cancelled. Its 14 build/test jobs all report `runner_id: 0`, an empty runner name and zero executed steps. No checkout, compiler or test ran. The log-download API returns `BlobNotFound`, consistent with no runner logs being created. The job records do not establish who or what cancelled the run.
+
+Requested a retry of the previously failing Windows shard 0 through GitHub Actions; the API accepted it and created job `124417620201`, initially queued. No new source defect is evidenced by the cancelled run. This follow-up changes only this evidence note and retriggers normal PR validation with one fast-forward commit. Tests, production code and workflow gates remain unchanged.
+
+The fresh cloud environment did not have .NET. Installed SDK 10.0.403 using `dotnet-install --channel 10.0 --azure-feed https://builds.dotnet.microsoft.com/dotnet --install-dir /tmp/ccp-dotnet` before revalidation.
+
+Revalidation commands use `/tmp/ccp-dotnet/dotnet`:
+
+| Command | Result tail |
+| --- | --- |
+| `dotnet build CCP.Core -c Release` | 50 warnings, 0 errors |
+| `dotnet build CCP.Avalonia -c Release` | 201 warnings, 0 errors |
+| `dotnet build Tests/CCP.Avalonia.Tests -c Release` | 145 warnings, 0 errors |
+| `dotnet test Tests/CCP.Core.Tests -c Release` | Passed!  - Failed:     0, Passed:  4642, Skipped:     5, Total:  4647, Duration: 55 s - CCP.Core.Tests.dll (net10.0) |
+| `dotnet test Tests/CCP.Avalonia.Tests -c Release --no-build --filter "FullyQualifiedName~TrainerCard\|FullyQualifiedName~LeaderboardRowDoubleClick\|FullyQualifiedName~LeaderboardFxTests\|FullyQualifiedName~TabTransitionsTests\|FullyQualifiedName~TestIsolationTests\|FullyQualifiedName~GameWindowTests.Race_"` | Passed!  - Failed:     0, Passed:    43, Skipped:     0, Total:    43, Duration: 3 m 13 s - CCP.Avalonia.Tests.dll (net10.0) |
+| `bash .github/scripts/core-guards.sh` | All Core guards passed |
+| `python3 .github/scripts/avalonia_docs.py` | avalonia_docs self-check OK |
+| `git diff --check` | exit 0, no output |
+
+The five Core skips are the existing Vosk model dependencies; the affected UI selection has no skips. The targeted Windows retry was still queued at completion. Local results do not establish a green Windows CI run or explain the external cancellation.
