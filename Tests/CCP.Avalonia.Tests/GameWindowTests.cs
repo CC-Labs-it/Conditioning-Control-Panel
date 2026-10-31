@@ -733,6 +733,20 @@ public sealed partial class GameWindowTests
             c => Equals(c.Tag, "race"));
     });
 
+    [Fact]
+    public void Race_revocation_then_regrant_without_dispatching_closes_the_host() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var granted = true;
+        RacingAccess.IsGrantedProvider = id => granted && id == "rt.original.03";
+        var w = GameWindow.Launch("race")!;
+        granted = false;
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        granted = true;
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(w.RaceWatchRunning);
+    });
     /// <summary>WPF StartHeartbeatWatch :595: idle until ready; silent past 20 s on the menu (10 s mid-run)
     /// gets one ping, a pong resets it, still silent on the next tick closes the window.</summary>
     [Fact]

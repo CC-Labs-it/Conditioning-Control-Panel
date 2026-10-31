@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using ConditioningControlPanel.Models;
-using Serilog;
 namespace ConditioningControlPanel.Services.Prizes;
 public sealed class PrizesFeed
 {
@@ -18,45 +17,31 @@ public sealed class PrizesFeed
     }
     public void NoteAccount(string? accountId)
     {
-        if (string.IsNullOrEmpty(accountId)) return;
-        _post(() => NoteAccountNow(accountId));
+        if (!string.IsNullOrEmpty(accountId)) _post(() => NoteAccountNow(accountId));
     }
     private bool NoteAccountNow(string accountId)
     {
-        if (!string.Equals(_currentAccount(), accountId, StringComparison.Ordinal))
-        {
-            return false;
-        }
+        if (!string.Equals(_currentAccount(), accountId, StringComparison.Ordinal)) return false;
         bool switched;
         lock (_gate)
         {
             switched = _accountId != null && !string.Equals(_accountId, accountId, StringComparison.Ordinal);
             _accountId = accountId;
         }
-        if (switched)
-        {
-            _ownership()?.Clear();
-        }
+        if (switched) _ownership()?.Clear();
         return true;
     }
     public bool Apply(string? requestedFor, string? answeredFor, PrizesBlock? prizes, string source)
     {
         if (string.IsNullOrEmpty(requestedFor)) return false;
         string[]? grants = null;
-        if (prizes?.Grants != null)
-        {
-            if (string.Equals(requestedFor, answeredFor, StringComparison.Ordinal))
-                grants = prizes.Grants.ToArray();
-            else
-                Log.Debug("[Prizes] {Source} answered for another account, block ignored", source);
-        }
+        if (prizes?.Grants != null && string.Equals(requestedFor, answeredFor, StringComparison.Ordinal))
+            grants = prizes.Grants.ToArray();
         var revision = prizes?.Revision ?? 0;
         _post(() =>
         {
             if (!NoteAccountNow(requestedFor) || grants == null) return;
-            var ownership = _ownership();
-            if (ownership == null) return;
-            ownership.ApplySnapshot(requestedFor, revision, grants);
+            _ownership()?.ApplySnapshot(requestedFor, revision, grants);
         });
         return grants != null;
     }

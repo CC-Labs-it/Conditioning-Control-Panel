@@ -65,17 +65,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Log.Information("CaucusHostService: launched");
         }
 
-        // WPF CaucusHostService.OnRaceGrantsChanged: additions update the menu; any loss closes
+        // WPF Services/Chaos/CaucusHostService.cs:1108: additions update the menu; any loss closes
         // the host, even when another owned track would still allow launch.
-        private void OnRaceGrantsChanged() => Dispatcher.UIThread.Post(() =>
+        private void OnRaceGrantsChanged()
         {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(OnRaceGrantsChanged); return; }
             if (_raceDisposed || _closing) return;
             var owned = RacingAccess.OwnedTracks;
             if (!RacingAccess.CanLaunch || _raceOwnedTracks.Except(owned).Any()) { Close(); return; }
             if (_raceOwnedTracks.SequenceEqual(owned)) return;
             _raceOwnedTracks = owned;
             Post(new { type = "race-ownership", tracks = owned });
-        });
+        }
 
         /// <summary>WPF OnPageMessage (:317). True = claimed; false falls through to the shell frames.</summary>
         private bool HandleRace(JObject o)
