@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -62,7 +64,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 LocalizationManager.Instance.SetLanguage("en");
@@ -150,7 +152,7 @@ public sealed partial class AccountSeedTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
-                    global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
@@ -158,17 +160,49 @@ public sealed partial class AccountSeedTests
                 w.ShowTab("leaderboard");
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
+                w.CompleteTabTransition();
+                Dispatcher.UIThread.RunJobs();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 Dispatcher.UIThread.RunJobs();
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
+                // MouseDown/Up drains renders between events; wall time can turn a double-click
+                // into two single clicks on a busy runner. Control input time, keeping hit-testing
+                // and Avalonia's real mouse device and tap recognizer in the path.
+                var presses = new List<int>();
+                w.AddHandler(InputElement.PointerPressedEvent, (_, e) => presses.Add(e.ClickCount), handledEventsToo: true);
+                var impl = w.PlatformImpl!;
+                // Avalonia 12 hides the raw-input setter from its reference API.
+                var inputProperty = impl.GetType().GetProperty("Input")!;
+                var input = (Action<RawInputEventArgs>)inputProperty.GetValue(impl)!;
+                var timeProperty = typeof(RawInputEventArgs).GetProperty("Timestamp")!;
+                ulong timestamp = 1000;
+                inputProperty.SetValue(impl, new Action<RawInputEventArgs>(e =>
                 {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                    timeProperty.SetValue(e, timestamp);
+                    input(e);
+                }));
+                try
+                {
+                    void Click(ulong atMs)
+                    {
+                        timestamp = atMs;
+                        w.MouseDown(at, MouseButton.Left);
+                        timestamp += 10;
+                        w.MouseUp(at, MouseButton.Left);
+                    }
+                    Click(1000);
+                    Click(61000); // two single clicks must not open the card
+                    Assert.Equal(new[] { 1, 1 }, presses);
+                    Assert.False(w.ProfilePage!.IsEffectivelyVisible);
+                    Click(121000);
+                    Click(121020); // a genuine double-click, independent of renderer speed
+                    Assert.Equal(new[] { 1, 1, 1, 2 }, presses);
                 }
+                finally { inputProperty.SetValue(impl, input); }
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
