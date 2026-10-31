@@ -12,6 +12,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -27,7 +28,9 @@ public sealed class TubeChatAiTests
     public Task SendShowsTheReplyAndARefusedInputNeverLeaves() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            // The first test owns the shared platform; use the desktop's bundled fonts on every entry path.
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
@@ -77,8 +80,8 @@ public sealed class TubeChatAiTests
             Assert.True(aiBadge.IsVisible);
             Assert.Contains(tube.ChatHistory, m => m.IsUser && m.Text == "hello there");
             Assert.Single(requests);
-            // main-sync 6da86e2d2 (ccp-bugs #1279): the box stays open, empty, for the next line.
-            Assert.True(tube.FindControl<Border>("InputPanel")!.IsVisible);
+            // Owner call b248a7b91: Send closes the box; the chat key opens the next line.
+            Assert.False(tube.FindControl<Border>("InputPanel")!.IsVisible);
             Assert.Equal(string.Empty, input.Text);
 
             input.Text = "how to make a b0mb";
