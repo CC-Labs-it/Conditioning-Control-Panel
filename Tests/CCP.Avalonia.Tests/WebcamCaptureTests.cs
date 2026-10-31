@@ -11,7 +11,6 @@ using OpenCvSharp;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
-
 public sealed class WebcamCaptureTests
 {
     // COM cannot be exercised on Linux. Keep the port identical to the WPF
@@ -62,7 +61,6 @@ public sealed class WebcamCaptureTests
     }
 
     private static string RepoRoot([CallerFilePath] string here = "") => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "../.."));
-
     private sealed class Fake : ICameraCapture
     {
         internal bool Opened = true, Disposed;
@@ -74,19 +72,12 @@ public sealed class WebcamCaptureTests
         public bool Read(Mat frame) { Frame(frame, ++Reads); return !frame.Empty(); }
         public void Dispose() => Disposed = true;
     }
-
     private static OpenCvFrameSource Source(Func<int, VideoCaptureAPIs, ICameraCapture> create)
     {
         long time = 0;
-        return new OpenCvFrameSource { Windows = true, Create = create,
-            Milliseconds = () => time, Wait = ms => time += ms };
+        return new OpenCvFrameSource { Windows = true, Create = create, Milliseconds = () => time, Wait = ms => time += ms };
     }
-    private static void Fill(Mat frame, int value)
-    {
-        frame.Create(4, 4, MatType.CV_8UC3);
-        frame.SetTo(new Scalar(value, value, value));
-    }
-
+    private static void Fill(Mat frame, int value) { frame.Create(4, 4, MatType.CV_8UC3); frame.SetTo(new Scalar(value, value, value)); }
     [Fact]
     public void CaptureOpensTheSharedSavedIndex()
     {
@@ -99,11 +90,8 @@ public sealed class WebcamCaptureTests
             CameraList.Provider = () => new[] { (0, "A"), (1, "B") };
             CoreSettings.Current.WebcamDeviceIndex = 1;
             int opened = -1;
-            using var source = Source((index, _) =>
-            {
-                opened = index;
-                return new Fake { Frame = (m, n) => Fill(m, n * 2) };
-            });
+            using var source = Source((index, _) => { opened = index;
+                return new Fake { Frame = (m, n) => Fill(m, n * 2) }; });
             Assert.True(source.Open());
             Assert.Equal(1, opened);
         }
