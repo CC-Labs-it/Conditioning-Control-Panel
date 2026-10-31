@@ -5,14 +5,7 @@ using System.Threading.Tasks;
 using Serilog;
 namespace ConditioningControlPanel.Services.Billboard.Board
 {
-    /// <summary>
-    /// Head-neutral cache ported from BoardService. Fetch and dispatch are supplied by the head.
-    /// Keeps the one live board post (Tonight Board, 2026-10-07). The marquee poll hands it every
-    /// response (<see cref="OnMarquee"/>); a new version is fetched ONCE from
-    /// <c>/config/board/{v}.png</c> (immutable on the server) and kept on disk under the user data
-    /// folder, so a restart or a second poll costs no download. A cleared post drops the picture
-    /// and its file; an expiring post raises <see cref="Changed"/> at its time so the deck lets go.
-    /// </summary>
+    /// <summary>Head-neutral BoardService cache. Fetch and UI dispatch come from the head.</summary>
     public sealed class BoardCacheService
     {
         public const int MaxPngBytes = 256 * 1024;
@@ -118,7 +111,6 @@ namespace ConditioningControlPanel.Services.Billboard.Board
             }
             Prune(keepVersion: post.Version);
         }
-        // ---- the NEW badge ------------------------------------------------------------------
         /// <summary>True until a post of this version has been on screen once.</summary>
         public bool IsNew(int version) => version > SeenVersion;
         /// <summary>The newest version that has been on screen (persisted beside the cache).</summary>
@@ -159,7 +151,6 @@ namespace ConditioningControlPanel.Services.Billboard.Board
             catch (Exception) { }
             return 0;
         }
-        // ---- disk ---------------------------------------------------------------------------
         public string PathFor(int version) => Path.Combine(_dir, $"board-{version}.png");
         private void Save(string path, byte[] bytes)
         {
@@ -188,7 +179,6 @@ namespace ConditioningControlPanel.Services.Billboard.Board
         {
             try { File.Delete(path); } catch (Exception) { }
         }
-        // ---- expiry -------------------------------------------------------------------------
         private void ArmExpiry(BoardPost post)
         {
             CancelExpiry();

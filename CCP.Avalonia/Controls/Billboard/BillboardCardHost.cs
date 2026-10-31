@@ -31,6 +31,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Billboard;
 using Serilog;
+using ConditioningControlPanel.Services.UI;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
 
 namespace ConditioningControlPanel.Avalonia.Controls.Billboard
@@ -53,6 +54,9 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         private readonly TextBlock _title = new() { FontWeight = FontWeight.Bold, FontSize = 30, Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis, IsHitTestVisible = false };
         private readonly TextBlock _line = new() { FontSize = 14, Margin = new Thickness(0, 4, 0, 0), Foreground = new SolidColorBrush(Color.FromRgb(0xc9, 0xc7, 0xee)), TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis, IsHitTestVisible = false };
         private readonly Button _cta;
+        private readonly TranslateTransform _ctaTravel = new();
+        private Helpers.BeatLoop? _ctaMotion;
+        private bool _ctaPressed;
         private readonly Border _ctaFace = new() { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1) };
         private readonly TextBlock _ctaText = new() { FontWeight = FontWeight.Bold, FontSize = 14, Margin = new Thickness(18, 7, 18, 8), HorizontalAlignment = HorizontalAlignment.Center };
         private readonly Border _badge = new() { Padding = new Thickness(9, 3, 9, 4), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, IsVisible = false };
@@ -135,6 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            _ctaMotion?.Stop();
             _visibilityWatch?.Dispose();
             _visibilityWatch = null;
             (_current?.Tag as IBillboardArtView)?.Hold();
@@ -391,6 +396,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         {
             _ctaText.Foreground = new SolidColorBrush(Ink);
             _ctaFace.Child = _ctaText;
+            _ctaFace.RenderTransform = _ctaTravel;
             _ctaFace.BorderBrush = new SolidColorBrush(Colors.White, 0.35);
             var button = new Button
             {
@@ -404,9 +410,36 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             return button;
         }
 
-        // WPF PressDown: sink the face by 2 px. Motion Off keeps it still.
-        private void UpdateCtaPress() => _ctaFace.RenderTransform =
-            new TranslateTransform(0, Env.AllowTransitions && _cta.IsPressed ? 2 : 0);
+        // WPF BillboardCardHost.Fx PressDown/PressUp, using the same shared depth law.
+        private void UpdateCtaPress()
+        {
+            bool pressed = _cta.IsPressed, changed = pressed != _ctaPressed;
+            _ctaPressed = pressed;
+            int ms = DepthLaw.Ms(pressed ? DepthLaw.PressMs : DepthLaw.ReleaseMs, Env.Level);
+            if (!changed && ms > 0) return;
+            _ctaMotion?.Stop();
+            double from = _ctaTravel.Y, to = pressed ? DepthLaw.PressTravelPx : 0;
+            void Settle() { _ctaMotion?.Stop(); _ctaTravel.Y = to; }
+            if (ms == 0 || !IsEffectivelyVisible || TopLevel.GetTopLevel(this) == null) { Settle(); return; }
+            _ctaMotion = new Helpers.BeatLoop(_ctaFace, elapsed =>
+            {
+                double p = Math.Clamp(elapsed * 1000 / ms, 0, 1);
+                if (pressed) _ctaTravel.Y = from + (to - from) * p;
+                else if (p < 0.6)
+                {
+                    double u = p / 0.6;
+                    _ctaTravel.Y = from + (-DepthLaw.ReleaseOvershootPx - from) * (1 - (1 - u) * (1 - u));
+                }
+                else
+                {
+                    double u = (p - 0.6) / 0.4;
+                    double eased = u < 0.5 ? 2 * u * u : 1 - Math.Pow(-2 * u + 2, 2) / 2;
+                    _ctaTravel.Y = -DepthLaw.ReleaseOvershootPx * (1 - eased);
+                }
+                if (p >= 1) Settle();
+            }) { OnParked = Settle };
+            _ctaMotion.Start();
+        }
 
         private Button BuildSnooze()
         {
