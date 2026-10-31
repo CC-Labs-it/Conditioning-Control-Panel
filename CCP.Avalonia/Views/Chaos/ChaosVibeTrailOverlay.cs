@@ -120,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             SystemDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = CoreSettings.Current.ChaosPinOnTop;   // WPF ChaosWindowZ.BornTopmost
+            Topmost = ChaosRunHost.RunPinOnTop;   // WPF ChaosWindowZ.BornTopmost
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;

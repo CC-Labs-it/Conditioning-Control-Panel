@@ -50,8 +50,10 @@ public sealed class ChaosVibeTrailOverlayTests
     }
 
     // WPF ChaosModeService.cs:455,2696-2709,2925-2946,3017-3028.
-    [Fact]
-    public async Task Toy_path_starts_buzz_lingers_once_and_stops_then_teardown_closes()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Toy_path_starts_buzz_lingers_once_and_stops_then_teardown_closes(bool pinAtStart)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -73,13 +75,17 @@ public sealed class ChaosVibeTrailOverlayTests
                 meta.ActiveLifetimeBoons.Add("vibe_popping");
                 meta.LifetimeBoonLevels["vibe_popping"] = 1;
                 Assert.True(ChaosMeta.IsBoonActive("vibe_popping"));
+                CoreSettings.Current.ChaosPinOnTop = pinAtStart;
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                CoreSettings.Current.ChaosPinOnTop = !pinAtStart;   // change during countdown, WPF keeps the snapshot
                 ChaosRunHost.Overlay!.FinishCountdown();
+                CoreSettings.Current.ChaosPinOnTop = pinAtStart;
                 ChaosRunHost.StopTimerForTests();
                 Dispatcher.UIThread.RunJobs();
                 var trail = ChaosVibeTrailOverlay.Active;
                 Assert.NotNull(trail);
-                Assert.False(trail!.IsVisible);
+                Assert.Equal(pinAtStart, trail!.Topmost);
+                Assert.False(trail.IsVisible);
                 var state = ChaosRunHost.State!;
                 state.ActiveToys.Clear();
                 var toy = new ChaosToyState { Id = "vibe_popping", KeyLabel = "Q", CooldownSec = 20 };
@@ -90,19 +96,19 @@ public sealed class ChaosVibeTrailOverlayTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.Same(trail, ChaosVibeTrailOverlay.Active);
                 Assert.True(trail.IsFollowing);
-                CoreSettings.Current.ChaosPinOnTop = true;
+                CoreSettings.Current.ChaosPinOnTop = !pinAtStart;   // change again during the active run
                 var video = new Window { Width = 200, Height = 200 };
                 try
                 {
                     MandatoryVideoOverlay.WireVibeTrailRestacking(video);
                     video.Show();
                     Dispatcher.UIThread.RunJobs();
-                    Assert.Equal(1, raised);
+                    Assert.Equal(pinAtStart ? 1 : 0, raised);
                     Assert.Equal(System.TimeSpan.FromMilliseconds(60), Assert.Single(kicks).Delay);
                     kicks[0].Run();
                     kicks.Clear();
                     Dispatcher.UIThread.RunJobs();
-                    Assert.Equal(2, raised);
+                    Assert.Equal(pinAtStart ? 2 : 0, raised);
                     video.RaiseEvent(new PointerPressedEventArgs(video,
                         new Pointer(1, PointerType.Mouse, true), video, new Point(50, 50), 0,
                         new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 1));
@@ -110,10 +116,10 @@ public sealed class ChaosVibeTrailOverlayTests
                     Assert.Equal(System.TimeSpan.FromMilliseconds(50), Assert.Single(kicks).Delay);
                     kicks[0].Run();
                     Dispatcher.UIThread.RunJobs();
-                    Assert.Equal(3, raised);
-                    CoreSettings.Current.ChaosPinOnTop = false;
+                    Assert.Equal(pinAtStart ? 3 : 0, raised);
+                    CoreSettings.Current.ChaosPinOnTop = pinAtStart;
                     ChaosRunHost.RaiseVibeTrailAboveVideo();
-                    Assert.Equal(3, raised);
+                    Assert.Equal(pinAtStart ? 4 : 0, raised);
                 }
                 finally { video.Close(); }
                 Assert.True(BubbleOverlay.VibePopOn);

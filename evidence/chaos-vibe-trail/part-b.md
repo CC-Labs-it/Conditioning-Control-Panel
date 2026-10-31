@@ -69,48 +69,26 @@ with `-m:1 -p:UseSharedCompilation=false`; no test or assertion was weakened.
 
 Both P2 findings accepted and fixed; no findings rejected.
 
-- Enlarged hit disc: WPF BubbleService.cs:1616-1617,3277-3286,4338 and
-  ChaosModeService.cs:371,378. Core AmbientBubbles.cs:61,164-173,244 now carries
-  the spawn-sampled radius, including the 1.4 live magnet, 2.0 cap and precision
-  pickup exclusions. Avalonia ChaosRunHost.cs:156-157 supplies the run settings;
-  BubbleOverlay.cs:241-249,292-306 passes them to Core. The native input region
-  encloses the same disc, including fractional edges (BubbleOverlay.cs:494-498).
-- Sweep burst: WPF BubbleService.cs:4593,4669-4711. Core AmbientBubbles.cs:109-114
-  now marks a sweep as popping without deflation. Held completion still sets
-  Deflating, and its existing assertion is retained at ChaosLiveBubbleTests.cs:101.
-- Focused tests: ChaosLiveBubbleTests.cs:30-56 covers radius bounds, clamping,
-  precision exclusion and burst growth. ChaosVibeTrailOverlayTests.cs:164-168,187-226
-  checks the corrected sweep animation and real field sweeps beyond the sprite,
-  plus the enclosing input rectangle and spawn-time modifier sampling.
-- Fail-proof 1 executed: temporarily set HitRadius to Size / 2. Core radius filter
-  failed 3 cases, passed 2. Fail-proof 2 executed: temporarily restore
-  Popping = Deflating = true in Snap. Burst filter failed 1, passed 0. Both mutants
-  compiled and returned test exit 1; sources restored in finally. Restored Core
-  ChaosLiveBubbleTests: 18 passed, 0 failed.
-- Required builds: Core 50 warnings / 0 errors; Avalonia 201 / 0; Avalonia tests
-  144 / 0. Full Core suite: 4641 passed, 6 skipped, 0 failed. Executable affected
-  Avalonia subset: 16 passed, 0 failed. SDK: /tmp/ccp-dotnet/dotnet (10.0.403).
-- No new UI copy. Both existing keys remain in all ten language files. No WPF
-  changes. The prior font-blocked lifecycle/restacking and live platform gaps
-  remain open; ledger stays wired on X11, never verified.
+- Enlarged hit disc: WPF BubbleService.cs:1616-1617,3277-3286,4338 and ChaosModeService.cs:371,378. Core AmbientBubbles.cs:61,164-173,244 now carries the spawn-sampled radius, including the 1.4 live magnet, 2.0 cap and precision pickup exclusions. Avalonia ChaosRunHost.cs:156-157 supplies the run settings; BubbleOverlay.cs:241-249,292-306 passes them to Core. The native input region encloses the same disc, including fractional edges (BubbleOverlay.cs:494-498).
+- Sweep burst: WPF BubbleService.cs:4593,4669-4711. Core AmbientBubbles.cs:109-114 now marks a sweep as popping without deflation. Held completion still sets Deflating, and its existing assertion is retained at ChaosLiveBubbleTests.cs:101.
+- Focused tests: ChaosLiveBubbleTests.cs:30-56 covers radius bounds, clamping, precision exclusion and burst growth. ChaosVibeTrailOverlayTests.cs:164-168,187-226 checks the corrected sweep animation and real field sweeps beyond the sprite, plus the enclosing input rectangle and spawn-time modifier sampling.
+- Fail-proof 1 executed: temporarily set HitRadius to Size / 2. Core radius filter failed 3 cases, passed 2. Fail-proof 2 executed: temporarily restore Popping = Deflating = true in Snap. Burst filter failed 1, passed 0. Both mutants compiled and returned test exit 1; sources restored in finally. Restored Core ChaosLiveBubbleTests: 18 passed, 0 failed.
+- Required builds: Core 50 warnings / 0 errors; Avalonia 201 / 0; Avalonia tests 144 / 0. Full Core suite: 4641 passed, 6 skipped, 0 failed. Executable affected Avalonia subset: 16 passed, 0 failed. SDK: /tmp/ccp-dotnet/dotnet (10.0.403).
+- No new UI copy. Both existing keys remain in all ten language files. No WPF changes. The prior font-blocked lifecycle/restacking and live platform gaps remain open; ledger stays wired on X11, never verified.
 
 ## PR 3506 CI repair
 
-- Lifecycle failure: the fixture activated VibePopping but never unlocked it;
-  ChaosUpgrades.cs:403-408 requires level >= 1. It now sets/restores level 1 and
-  asserts IsBoonActive before starting the run. All lifecycle assertions remain.
-- The bare test bootstrap also omitted bundled fonts. Using Program.BuildAvaloniaApp
-  fixes standalone setup and supersedes the earlier font-blocked lifecycle result.
-- Restacking used DispatcherTimer.RunOnce at 50 ms, triggering the unchanged frame
-  timer ratchet. MandatoryVideoOverlay.Chaos.cs:12-29 now uses Task.Delay followed
-  by UI-thread dispatch, matching WPF VideoService.cs:5812 and ChaosModeService.cs:823.
-  The 60/50 ms kick timing and handled-click routing assertions remain intact.
-- Executed fail-proofs: level 0 makes the lifecycle precondition fail; restoring
-  DispatcherTimer.RunOnce makes NoNewFrameTimerLoop fail against the new partial.
-  Both returned exit 1 and were restored. No test skips or ratchet exemptions added.
-- Final build: 345 warnings, 0 errors. Filter: ChaosVibeTrailOverlayTests,
-  AmbientBeatLoopsTests, ChaosRunHostTests, TestIsolationTests: 45 passed, 0 skipped.
-  Core suite: 4641 passed, 6 existing skips, 0 failed. Guards and docs check passed.
+- Lifecycle failure: the fixture activated VibePopping but never unlocked it; ChaosUpgrades.cs:403-408 requires level >= 1. It now sets/restores level 1 and asserts IsBoonActive before starting the run. All lifecycle assertions remain.
+- The bare test bootstrap also omitted bundled fonts. Using Program.BuildAvaloniaApp fixes standalone setup and supersedes the earlier font-blocked lifecycle result.
+- Restacking used DispatcherTimer.RunOnce at 50 ms, triggering the unchanged frame timer ratchet. MandatoryVideoOverlay.Chaos.cs:12-29 now uses Task.Delay followed by UI-thread dispatch, matching WPF VideoService.cs:5812 and ChaosModeService.cs:823. The 60/50 ms kick timing and handled-click routing assertions remain intact.
+- Executed fail-proofs: level 0 makes the lifecycle precondition fail; restoring DispatcherTimer.RunOnce makes NoNewFrameTimerLoop fail against the new partial. Both returned exit 1 and were restored. No test skips or ratchet exemptions added.
+- Final build: 345 warnings, 0 errors. Filter: ChaosVibeTrailOverlayTests, AmbientBeatLoopsTests, ChaosRunHostTests, TestIsolationTests: 45 passed, 0 skipped. Core suite: 4641 passed, 6 existing skips, 0 failed. Guards and docs check passed.
 - Local gate P2: Start is synchronous on UI and stale starts require VibePopOn (ChaosVibeTrailOverlay.cs:47-56); WPF ChaosVibeTrailOverlay.cs:58-64 has the inherited queued shape. WPF unchanged. Ledger status is stub with all earlier notes retained and new evidence appended.
 - Panic fail-proof executed: restore HEAD's queued Start, run the lifecycle test, observe exit 1 with Assert.Null failure at ChaosVibeTrailOverlayTests.cs:142 after ForceShutdown and RunJobs. Fixed source restored in finally; all earlier assertions retained.
 - Local gate validation: Core build 50 warnings/0 errors; Avalonia 201/0; final tests build 345/0; affected Avalonia tests 45 passed/0 skipped/0 failed; Core 4641 passed/6 existing skips/0 failed; Core guards and docs self-check passed. No WPF or localization changes.
+
+## Run-start pin review follow-up
+
+- P2 accepted: ChaosRunHost.cs:108 captures ChaosPinOnTop before windows/countdown; :491 uses that snapshot for restacking, and ChaosVibeTrailOverlay.cs:123 uses it at birth. WPF spec: ChaosModeService.cs:323,750 and ChaosVibeTrailOverlay.cs:132. The lifecycle theory covers both initial pin values, flips settings during countdown and the active run, and retains all prior lifecycle, timing, sweep and panic assertions.
+- Fail-proof executed: restore the live setting read only in RaiseVibeTrailAboveVideo. Both theory cases fail at the raise-count assertion (exit 1, 2 failed/0 passed); fixed source restored in finally. Earlier evidence text preserved by consolidating wrapped continuation lines; ledger stays stub with appended notes and remaining gaps.
+- Pin review validation: Core build 50 warnings/0 errors; Avalonia 201/0; final test build 345/0; affected Avalonia tests 46 passed/0 skipped/0 failed; Core 4641 passed/6 existing skips/0 failed; Core guards and docs self-check passed. No WPF or localization changes.

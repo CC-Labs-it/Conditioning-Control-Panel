@@ -65,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static DispatcherTimer? _runTimer, _spawnTimer;
         private static double _vibeRemainingSec;
         private static bool _afterglowApplied;
+        private static bool _runPinOnTop;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
@@ -91,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static ChaosBoonBarOverlay? BoonBar => _boonBar;
         internal static ChaosFxWindow? Fx => _fx;
         internal static bool IsActive => _active;
+        internal static bool RunPinOnTop => _active ? _runPinOnTop : CoreSettings.Current.ChaosPinOnTop;
         /// <summary>WPF IsDescending: the clock is running (countdown over, recap not up).</summary>
         internal static bool IsDescending => _spawning;
         internal static bool IsManuallyPaused => _manualPaused;
@@ -103,6 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var cfg = config ?? ChaosRunConfig.FromSettings();
             try
             {
+                _runPinOnTop = CoreSettings.Current.ChaosPinOnTop;   // WPF ChaosModeService.cs:323
                 _state = new ChaosRunState(cfg);
                 _active = true;
                 _lastHeatTint = -1;
@@ -485,7 +488,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF ChaosModeService.cs:747-762: only a pinned, descending run re-raises the trail.</summary>
         internal static void RaiseVibeTrailAboveVideo()
         {
-            if (_spawning && CoreSettings.Current.ChaosPinOnTop) ChaosVibeTrailOverlay.RaiseActive();
+            if (_spawning && _runPinOnTop) ChaosVibeTrailOverlay.RaiseActive();
         }
 
         public static void RequestStop()
