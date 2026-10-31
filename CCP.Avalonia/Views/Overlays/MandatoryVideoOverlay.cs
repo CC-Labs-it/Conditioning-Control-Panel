@@ -218,7 +218,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
-            _media = new Media(vlc, path, FromType.FromPath);
+            _media = new Media(vlc, path, VideoSelectionRules.IsRemoteMediaPath(path) ? FromType.FromLocation : FromType.FromPath);
+            foreach (var option in ConditioningControlPanel.Services.Video.RemoteVideoOptions.For(path)) _media.AddOption(option);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };

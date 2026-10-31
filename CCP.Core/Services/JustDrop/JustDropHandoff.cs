@@ -53,7 +53,7 @@ namespace ConditioningControlPanel.Services.JustDrop
         {
             if (string.IsNullOrEmpty(authToken) || !IsSite(request)) return null;
             if (!string.IsNullOrEmpty(request!.UserInfo)) return null;
-            return string.Equals(request.AbsolutePath, HandoffPath, StringComparison.Ordinal) ? authToken : null;
+            return string.Equals(request.AbsolutePath.TrimEnd('/'), HandoffPath, StringComparison.Ordinal) ? authToken : null;
         }
 
         /// <summary>WPF PrimaryHost: the window stays on the site's own https origin.</summary>
