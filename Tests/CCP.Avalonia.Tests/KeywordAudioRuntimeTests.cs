@@ -119,11 +119,14 @@ public sealed class KeywordAudioRuntimeTests
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]
-    public Task RepeatGapPrecedesLaterActionsAndStopOrPanicCancelsThem(int stop) => RunAsync(async (engine, s, played) =>
+    public Task OverlappingFiresWaitForRepeatsAndStopOrPanicCancelsBoth(int stop) => RunAsync(async (engine, s, played) =>
     {
         var calls = new List<string>();
         engine.Haptic = (_, _) => calls.Add("haptic"); engine.AddXp = _ => calls.Add("xp");
         engine.ChasterBook = _ => { calls.Add("chaster"); return 0; };
+        var finished = new List<Action?>(); var play = CoreAudio.PlayStoppableProvider!;
+        CoreAudio.PlayStoppableProvider = (path, volume, tag, started, done) =>
+        { finished.Add(done); return play(path, volume, tag, started, done); };
         var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
         audio.PlayCount = 2; audio.DelayBetweenMs = 50;
         s.KeywordTriggers[0].Actions.AddRange(new KeywordAction[] { new HapticAction(),
@@ -132,15 +135,22 @@ public sealed class KeywordAudioRuntimeTests
         try
         {
             Type(engine, "sit"); Assert.Single(played); Assert.Empty(calls);
+            var first = engine.LastDispatch;
+            s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "lie", Actions = new List<KeywordAction> {
+                new PlayAudioAction { FilePath = audio.FilePath, DuckSystemAudio = false }, new HapticAction(),
+                new AddXpAction { Amount = 5 }, new ChasterAddTimeAction { Minutes = 1 } } });
+            var later = engine.Now().AddSeconds(2); engine.Now = () => later;
+            Type(engine, "lie"); Assert.NotSame(first, engine.LastDispatch); await engine.LastDispatch.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(new[] { "haptic", "xp", "chaster" }, calls); calls.Clear();
             if (stop == 1) engine.Stop();
             if (stop == 2) { engine.StopAudio(); ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet(); }
-            gap.SetResult(); await engine.LastDispatch;
+            gap.SetResult(); await first.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(stop == 0 ? new[] { "haptic", "xp", "chaster" } : Array.Empty<string>(), calls);
-            Assert.Equal(stop == 0 ? 2 : 1, played.Count(x => x.Path != "stopped"));
+            Assert.Equal(stop == 0 ? 3 : 2, played.Count(x => x.Path != "stopped"));
+            if (stop == 0) { finished[1]!(); Dispatcher.UIThread.RunJobs(); Assert.NotEqual("stopped", played.Last().Path); }
         }
         finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
     });
-
     [Fact]
     public void GlobalCooldownAndHardMuteApplyAcrossRepeatedMatches() => Run((engine, s, played) =>
     {
@@ -221,7 +231,6 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Equal(new[] { "PlayAudio", "Haptic", "Highlight" }, feed[1].ActionKeys);   // AddXp never shows
         Assert.All(feed, f => Assert.Equal("Keyboard", f.Source));
     });
-
     [Fact]   // WPF DispatchLegacyFlatFieldsAsync :1692: flat haptic/XP still fire; HighlightOnly runs nothing else
     public void LegacyFlatTriggerFiresHapticAndXp() => Run((engine, s, played) =>
     {
@@ -237,7 +246,6 @@ public sealed class KeywordAudioRuntimeTests
         Type(engine, "sit");
         Assert.Equal(2, calls.Count);
     });
-
     [Fact]   // WPF DispatchChasterAddTime :1485: per-trigger day allowance (3 bookings / 15 min), persisted
     public void ChasterActionBooksWithinTheTriggersDayAllowance() => Run((engine, s, played) =>
     {
@@ -260,7 +268,6 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally { dir.Delete(true); }
     });
-
     [Fact]   // WPF RefreshAwarenessPulseFeed :144: a fire shows as a row with icon chips; none shows the empty state
     public void AwarenessPulseFeedShowsTheFireAsARow() => Run((engine, _, _) =>
     {
@@ -277,7 +284,6 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Null(AwarenessTabView.ActionChip("AddXp"));
         Assert.Equal("2m ago", AwarenessTabView.FormatTimeAgo(new DateTime(2026, 1, 1, 12, 0, 0), new DateTime(2026, 1, 1, 12, 2, 5)));
     });
-
     [Fact]
     public void SessionXpUsesTheConfiguredMultiplierAndDisabledActionsDoNothing() => Run((engine, s, _) =>
     {
@@ -297,7 +303,6 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Same(saved.Item1, CoreSession.IsSessionRunningProvider);
         Assert.Equal(saved.Item2, s.KeywordSessionMultiplier);
     });
-
     [Fact]
     public void PanicQuietBlocksResponseActionsAndQuestCredit() => Run((engine, s, played) =>
     {
@@ -318,7 +323,6 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
     });
-
     [Fact]
     public void HistoryIsBoundedAndKeepsTheActionSnapshotAfterEditing() => Run((engine, s, _) =>
     {
@@ -341,7 +345,6 @@ public sealed class KeywordAudioRuntimeTests
         view.RefreshAwarenessPulseFeed();
         Assert.Equal(5, view.FindControl<StackPanel>("AwarenessPulseFeed")!.Children.Count);
     });
-
     [Fact]
     public void PulseFeedUpdatesOnFireAndDetachesWithTheView() => Run((engine, _, _) =>
     {
@@ -360,7 +363,6 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally { window.Close(); }
     });
-
     [Fact]
     public void PulseFeedUsesTheSelectedLanguage() => Run((engine, _, _) =>
     {
@@ -380,7 +382,21 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally { window.Close(); loc.SetLanguage(language); }
     });
-
+    [Fact]
+    public void EveryPulseKeyExistsInEveryLanguage() => AuditPulseKeys();
+    private static void AuditPulseKeys([System.Runtime.CompilerServices.CallerFilePath] string here = "")
+    {
+        var root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "../.."));
+        var source = File.ReadAllText(Path.Combine(root, "CCP.Avalonia/Views/Tabs/AwarenessTabView.Pulse.cs"));
+        var keys = System.Text.RegularExpressions.Regex.Matches(source, "Loc.GetF?\\(\"([^\"]+)\"")
+            .Select(m => m.Groups[1].Value).Distinct().ToArray();
+        Assert.NotEmpty(keys);
+        foreach (var file in Directory.GetFiles(Path.Combine(root, "CCP.Core/Localization/Languages"), "*.json"))
+        {
+            var dictionary = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(file));
+            foreach (var key in keys) Assert.False(string.IsNullOrWhiteSpace((string?)dictionary[key]), $"{file}: {key}");
+        }
+    }
     [Fact]
     public void PulseTimesAndActionChipsFollowWpf() => Run((_, _, _) =>
     {
@@ -396,7 +412,6 @@ public sealed class KeywordAudioRuntimeTests
             Assert.NotNull(AwarenessTabView.ActionChip(key));
         Assert.Null(AwarenessTabView.ActionChip("unknown"));
     });
-
     [Fact]
     public void SavedOnSwitchArmsTheRuntimeWhenTheShellStarts() => Run((_, s, _) =>
     {
