@@ -131,6 +131,7 @@ public sealed class PanicSurfacesTests
         "possession",
         "attention-test",
         "descent-fuse",
+        "deeper-player-fullscreen",
         "deeper-editor-audio",
         "knock-cards",
         "quick-recal",
