@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static Func<V2AuthService>? AnnouncementClient;
 
         private bool _announcementArmed;
+        private IDisposable? _announcementDelay;
 
         private void InitializeServerAnnouncement()
         {
@@ -25,13 +26,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (_announcementArmed || AnnouncementClient == null) return;
                 _announcementArmed = true;
-                DispatcherTimer.RunOnce(() => _ = CheckServerAnnouncementAsync(), TimeSpan.FromSeconds(7));
+                _announcementDelay = ScheduleOnce(() => _ = CheckServerAnnouncementAsync(), TimeSpan.FromSeconds(7));
             };
+            Closed += (_, _) => _announcementDelay?.Dispose();
         }
 
         /// <summary>One check: fetch, skip the dismissed id, route through the startup ladder.</summary>
         internal async Task CheckServerAnnouncementAsync()
         {
+            _announcementDelay?.Dispose();
+            _announcementDelay = null;
             try
             {
                 var make = AnnouncementClient;
