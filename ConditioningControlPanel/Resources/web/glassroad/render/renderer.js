@@ -88,7 +88,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   } else if (webgl2) {
     context = glContext(canvas);
     // a null here is the browser's refusal, never another context: this canvas has held nothing yet
-    if (!context) throw new Error('the browser refused a WebGL2 context on this device');
+    if (!context) throw new Error((force === 'webgl2' || firefox ? 'the browser refused a WebGL2 context on this device' : 'the browser refused both WebGPU and WebGL2 on this device') + '. After a graphics crash Chrome does this for about 2 minutes: close the tab and try again in 3 minutes.');
   }
   const limits = compat && !webgl2 ? { requiredLimits: compatLimits(adapter) } : {};
   setTier(pinOf() || capTier(pickTier({ override, coarse, webgl2: webgl2 && !firefox })));
