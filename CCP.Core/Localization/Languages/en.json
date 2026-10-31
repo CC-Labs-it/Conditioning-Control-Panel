@@ -6561,6 +6561,8 @@
   "rf_skill_night_shift_req": "Use the app after midnight 10 times",
   "rf_skill_early_bird_bimbo_req": "Use the app before 7am 10 times",
   "rf_skill_eternal_doll_req": "Reach level 50",
+  "webcam_debug_mouth_fmt": "Mouth-open #{0}",
+  "webcam_debug_tongue_fmt": "Tongue-out #{0}",
   "rf_webcam_stopped": "Stopped",
   "rf_webcam_starting": "Starting…",
   "rf_webcam_tracking": "Tracking",
