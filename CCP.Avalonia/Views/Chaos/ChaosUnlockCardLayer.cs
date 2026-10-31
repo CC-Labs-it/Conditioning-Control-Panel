@@ -19,6 +19,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// shopping continues underneath. What each card says comes from Core
     /// <see cref="ChaosUnlockCardRules"/>.
     /// One timeline per card, sampled on the window's 30 fps beat, replaces WPF's BeginAnimation set.
+    /// ponytail: real item art - this head's ChaosArt has no sprites yet, so the tinted glyph
+    /// tile WPF falls back to is always what shows.
     /// </summary>
     internal sealed class ChaosUnlockCardLayer
     {
@@ -147,7 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("76,*") };
             var iconScale = new ScaleTransform(0.4, 0.4);
-            var tile = new Border
+            row.Children.Add(new Border
             {
                 Width = 64, Height = 64, CornerRadius = new CornerRadius(10),
                 VerticalAlignment = VerticalAlignment.Top,
@@ -159,16 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     Text = d.Glyph, FontSize = 30, Foreground = accentBrush,
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 },
-            };
-            // WPF ChaosUnlockCardOverlay.cs:89-108: optional art shares the icon animation.
-            var art = d.IconPath != null ? ChaosArt.TryLoad(d.IconPath)
-                : d.IconFolder != null ? ChaosArt.Resolve(d.IconFolder, d.IconId!) : null;
-            if (art != null)
-            {
-                tile.Background = null;
-                tile.Child = new Image { Source = art, Stretch = Stretch.Uniform };
-            }
-            row.Children.Add(tile);
+            });
 
             var text = new StackPanel();
             text.Children.Add(new TextBlock

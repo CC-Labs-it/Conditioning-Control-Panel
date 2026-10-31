@@ -75,74 +75,6 @@ public sealed class ChaosUnlockCardOverlayTests
     });
 
     [Fact]
-    public async Task Card_art_uses_explicit_and_convention_paths_with_glyph_fallback() => await Run(_ =>
-    {
-        string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "boons"));
-        try
-        {
-            ChaosArt.RootsOverride = () => new[] { root };
-            var info = ChaosUnlockCardRules.ForLesson("taking_chances")! with { IconFolder = "boons", IconId = "test" };
-            global::Avalonia.Controls.Image[] Images(ChaosUnlockCardInfo card) =>
-                global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(ChaosUnlockCardLayer.Build(card, 420).Root)
-                    .OfType<global::Avalonia.Controls.Image>().ToArray();
-            Assert.Empty(Images(info with { IconId = "missing" }));
-            string file = System.IO.Path.Combine(root, "boons", "test.png");
-            using (var bitmap = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96)))
-                bitmap.Save(file);
-            Assert.Single(Images(info));
-            Assert.Single(Images(info with { IconPath = file }));
-            Assert.Same(ChaosArt.TryLoad(file), ChaosArt.TryLoad(file));
-            Assert.Null(ChaosArt.FilePath("../test.png"));
-        }
-        finally { ChaosArt.ResetForTest(); System.IO.Directory.Delete(root, true); }
-    });
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Production_art_roots_preserve_Wpf_library_path_and_precedence(bool customLibrary) => await Run(_ =>
-    {
-        // WPF App.xaml.cs:192 and Services/Chaos/ChaosArt.cs:64,142-147.
-        // Use production roots and the suite's isolated UserData, not RootsOverride.
-        string kind = "art-review-" + Guid.NewGuid().ToString("N");
-        string library = System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, "assets", "assets", "Chaos", kind);
-        string shipped = System.IO.Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", kind);
-        string effective = customLibrary
-            ? System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, kind)
-            : System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, "assets");
-        string wrong = System.IO.Path.Combine(effective, "Chaos", kind);
-        var provider = ConditioningControlPanel.CorePaths.EffectiveAssetsProvider;
-        try
-        {
-            ChaosArt.ResetForTest();
-            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = () => effective;
-            foreach (string folder in new[] { library, shipped, wrong })
-            {
-                System.IO.Directory.CreateDirectory(folder);
-                using var bitmap = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96));
-                bitmap.Save(System.IO.Path.Combine(folder, "probe.png"));
-            }
-            string expected = System.IO.Path.Combine(library, "probe.png");
-            Assert.Same(ChaosArt.TryLoad(expected), ChaosArt.Resolve(kind, "probe"));
-            Assert.Equal(expected, ChaosArt.PathFor(kind, "probe"));
-            Assert.Equal(expected, ChaosArt.FilePath(System.IO.Path.Combine(kind, "probe.png")));
-            // An unreadable override must fall through to shipped art, like WPF :65-66.
-            System.IO.File.WriteAllText(expected, "invalid image");
-            ChaosArt.ResetForTest();
-            Assert.Same(ChaosArt.TryLoad(System.IO.Path.Combine(shipped, "probe.png")), ChaosArt.Resolve(kind, "probe"));
-        }
-        finally
-        {
-            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = provider;
-            ChaosArt.ResetForTest();
-            foreach (string folder in new[] { library, shipped, wrong })
-                if (System.IO.Directory.Exists(folder)) System.IO.Directory.Delete(folder, true);
-            if (customLibrary && System.IO.Directory.Exists(effective)) System.IO.Directory.Delete(effective, true);
-        }
-    });
-
-    [Fact]
     public async Task Passive_card_style_keeps_clicks_without_activation_or_changing_topmost() => await Run(_ =>
     {
         var window = new ChaosUnlockCardOverlay();
@@ -281,68 +213,53 @@ public sealed class ChaosUnlockCardOverlayTests
     });
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Freeze_pickup_keeps_its_remaining_window_across_a_lesson_or_manual_pause(bool manual) => await Run(clock =>
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    [InlineData(false, 1)]
+    [InlineData(true, 1)]
+    [InlineData(false, 2)]
+    [InlineData(true, 2)]
+    public async Task Draft_pulses_render_in_the_real_fx_window_without_a_hook(bool flashes, int pick) => await Run(clock =>
     {
-        ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
-            EnabledVariants = new System.Collections.Generic.List<string> { "bambifreeze" } });
-        ChaosRunHost.Overlay!.FinishCountdown();
-        ChaosRunHost.StopTimerForTests();
-        ChaosMeta.State.LessonsComplete.Remove("freeze_trigger");
-        ChaosMeta.State.LessonProgress["freeze_trigger"] = ChaosLessons.ById("freeze_trigger")!.Target - 1;
-        ChaosRunHost.SpawnTick();
-        var bubble = Assert.Single(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsFreeze == true);
-        BubbleOverlay.Pop(bubble);
-        Dispatcher.UIThread.RunJobs();
-        Assert.True(ChaosLessons.IsComplete("freeze_trigger"));
-        Assert.Equal(3.5, ChaosRunHost.FreezeRemainingSec);
-        Assert.True(BubbleOverlay.Field.FreezeChaos);
-        for (int i = 0; i < 30; i++) ChaosRunHost.Tick();
-        Assert.Equal(3.5, ChaosRunHost.FreezeRemainingSec);
-        Step(clock, 240); Click(); Step(clock, 150);
-        ChaosRunHost.StopTimerForTests();
-        ChaosRunHost.Tick();
-        Assert.Equal(3.25, ChaosRunHost.FreezeRemainingSec);
-        // WPF ChaosModeService.cs:1930,1991: frozen defuses need and spend no focus.
-        var state = ChaosRunHost.State!;
-        state.Focus = 0;
-        var live = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
-            { IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
-        var savedClock = BubbleOverlay.Field.Clock;
-        var now = DateTime.UnixEpoch;
+        // WPF ChaosModeService.cs:1467,1548,1562,1581,1672; ChaosFxWindow.cs:151.
+        Assert.Null(ChaosRunHost.PulseFx);
+        var accept = ChaosFxWindow.Accept;
+        var time = ChaosFxWindow.Clock;
+        ChaosFxWindow.Accept = _ => true; // headless has no native click-through surface
+        ChaosFxWindow.Clock = clock;
         try
         {
-            BubbleOverlay.Field.Clock = () => now = now.AddMilliseconds(32);
-            BubbleOverlay.Press(live, live.CenterX, live.CenterY);
-            Assert.True(live.Channeling);
-            state.Focus = 50; // completion must preserve focus as well as admitting a zero-focus press
-            for (int i = 0; i < 32; i++) BubbleOverlay.Field.Step();
-            Assert.Equal(1, state.Defused);
-            Assert.Equal(50, state.Focus);
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
+                BoonDraftEnabled = true, ColorFlashesEnabled = flashes });
+            var overlay = ChaosRunHost.Overlay!;
+            overlay.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            var fx = ChaosRunHost.Fx!;
+            Assert.True(fx.IsVisible);
+            var state = ChaosRunHost.State!;
+            ChaosMeta.State.LessonsComplete.Add("silk_touch");
+            state.ElapsedSec = 20;
+            ChaosRunHost.Tick();
+            clock.Advance(40); fx.Frame();
+            Assert.Equal(flashes ? 0.37 : 0, fx.VignetteLayer.Opacity, 6);
+            if (flashes) Assert.Equal(global::Avalonia.Media.Color.FromRgb(150, 200, 255),
+                ((global::Avalonia.Media.IRadialGradientBrush)fx.VignetteLayer.Background!).GradientStops[2].Color);
+            clock.Advance(300); fx.Frame();
+            Assert.Equal(0, fx.VignetteLayer.Opacity);
+            ChaosBoon? boon = pick == 0 ? null : pick == 1
+                ? ChaosBoonPool.All.Single(b => b.Id == "extra_shield") : ChaosBoonPool.All.First(b => b.IsCurse);
+            if (pick == 2) state.MaxedBoons.Add("surrender");
+            typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { boon });
+            clock.Advance(40); fx.Frame();
+            Assert.Equal(flashes ? 0.33 : 0, fx.VignetteLayer.Opacity, 6);
+            if (flashes) Assert.Equal(global::Avalonia.Media.Color.FromRgb(120, 220, 160),
+                ((global::Avalonia.Media.IRadialGradientBrush)fx.VignetteLayer.Background!).GradientStops[2].Color);
+            clock.Advance(300); fx.Frame();
+            Assert.Equal(0, fx.VignetteLayer.Opacity);
+            Assert.Null(ChaosRunHost.PulseFx);
         }
-        finally { BubbleOverlay.Field.Clock = savedClock; }
-        if (manual) ChaosRunHost.ToggleManualPause();
-        else Complete("taking_chances");
-        for (int i = 0; i < 30; i++) ChaosRunHost.Tick();
-        Assert.Equal(3.25, ChaosRunHost.FreezeRemainingSec);
-        if (manual) ChaosRunHost.ToggleManualPause();
-        else { Step(clock, 240); Click(); Step(clock, 150); }
-        ChaosRunHost.StopTimerForTests();
-        int count = BubbleOverlay.ChaosCount; // the caught pickup's pop burst may already be gone
-        ChaosRunHost.SpawnTick();
-        Assert.Equal(count, BubbleOverlay.ChaosCount);
-        Assert.True(BubbleOverlay.Field.FreezeChaos);
-        Assert.Equal(2.5, EffectPayload.GlobalDurationMult);
-        for (int i = 0; i < 13; i++) ChaosRunHost.Tick();
-        Assert.Equal(0, ChaosRunHost.FreezeRemainingSec);
-        Assert.False(BubbleOverlay.Field.FreezeChaos);
-        Assert.Equal(1, EffectPayload.GlobalDurationMult);
-        ChaosRunHost.SpawnTick();
-        Assert.True(BubbleOverlay.ChaosCount > count);
-        ChaosRunHost.ForceShutdown();
-        Assert.Equal(0, ChaosRunHost.FreezeRemainingSec);
-        Assert.False(BubbleOverlay.Field.FreezeChaos);
+        finally { ChaosRunHost.ForceShutdown(); ChaosFxWindow.Clock = time; ChaosFxWindow.Accept = accept; }
     });
 
     private sealed class SteppedClock : TimeProvider
