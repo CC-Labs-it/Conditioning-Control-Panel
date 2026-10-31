@@ -92,14 +92,39 @@ public sealed class PanicReachHeadTests
     });
 
     [Fact]
-    public void ARefusedSafeWord_SaysNothing() => WithShell((shell, _) =>
+    public void ARefusedSafeWord_SaysNothing() => WithShell((shell, stops) =>
     {
         var s = CoreSettings.Current;
         (s.PanicKeyEnabled, s.PanicKey) = (false, "F8");
-        Assert.Contains("safe word", shell.VoiceCmds.Grammar());   // the panic is still heard (RunFor)
-        var source = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Windows", "MainShellWindow.VoiceCommands.cs"));
-        Assert.Contains("RunFor = n => n == \"panic\" ? RunVoicePanic : null,", source);
-        Assert.DoesNotContain("\"panic\" => VoicePanic", source);
+        var commands = shell.VoiceCmds;
+        Assert.Contains("safe word", commands.Grammar());
+        Assert.Equal((Func<bool>)shell.RunVoicePanic, commands.Host.RunFor("panic"));
+        Assert.Null(commands.Host.ActionFor("panic"));
+        var said = new List<string>();
+        var originalSay = commands.Host.Say;
+        commands.Host.Say = (text, _) => said.Add(text);
+        try
+        {
+            void SpeakSafeWord()
+            {
+                Assert.True(commands.TryHandleInlineCommand("hey bambi safe word", new[] { "hey bambi" }));
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            SpeakSafeWord(); // panic off: heard, refused, and silent
+            Assert.Empty(said);
+            Assert.Empty(stops);
+            s.PanicKeyEnabled = true;
+            var ld = StartLockdown();
+            SpeakSafeWord(); // Lockdown: the same refusal must stay silent
+            Assert.Empty(said);
+            Assert.Empty(stops);
+            ld.Deactivate();
+            SpeakSafeWord(); // positive control: the real route runs and confirms
+            Assert.Single(stops);
+            Assert.Single(said);
+        }
+        finally { commands.Host.Say = originalSay; }
     });
 
     /// <summary>WPF LeashOnPanicPress(panicRuns: false): the runner parks AND stops its own session; with the
