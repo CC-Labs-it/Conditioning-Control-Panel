@@ -256,14 +256,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal event Action<string>? Posted;
 
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post) through the page's string carrier.</summary>
-        internal void Post(object message)
+        internal void Post(object message) => Post(message, waitForReady: true);
+
+        private void Post(object message, bool waitForReady)
         {
             if (_closing) return;
             // Scrolller media: raw urls for a Windows view WPF's gate answers, the loopback relay otherwise (WebHost.ScrolllerFrame).
             var json = Web.ScrolllerFrame(JsonConvert.SerializeObject(message), PageUrl);
             Posted?.Invoke(json);
-            // WPF ChaosWebViewHost.cs:788-800: serialize now, deliver only after the handshake.
-            if (IsReady) _ = Web.PostJsonAsync(json);
+            // WPF ChaosWebViewHost.cs:788-800: serialize now; ordinary frames wait for the handshake.
+            if (IsReady || !waitForReady) _ = Web.PostJsonAsync(json);
             else _pending.Add(json);
         }
 

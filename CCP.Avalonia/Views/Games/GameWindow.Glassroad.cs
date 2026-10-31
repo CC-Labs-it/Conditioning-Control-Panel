@@ -80,7 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Log.Information("GlassroadHost: closed");
         }
 
-        /// <summary>The init frame, straight out (this head has no ready queue).</summary>
+        /// <summary>WPF GlassroadHostService.cs:169-182: init bypasses the ready queue because boot awaits it.</summary>
         internal void PostGlassroadInit()
         {
             try
@@ -89,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var uid = CoreAccount.UnifiedUserId;
                 bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(PbpAuthToken());
                 Post(GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed));
+                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed), waitForReady: false);
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
         }

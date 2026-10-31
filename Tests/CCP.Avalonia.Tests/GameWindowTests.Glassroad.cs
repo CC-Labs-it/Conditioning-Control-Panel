@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
@@ -166,6 +167,42 @@ public sealed partial class GameWindowTests
             Assert.False(GameWindow.IsAnyOpen());
         });
     }
+
+    /// <summary>WPF GlassroadHostService.cs:167-184,197-213: boot awaits init before ready.
+    /// Check the script boundary, since Posted observes requests even while they are queued.</summary>
+    [Fact]
+    public void Glassroad_InitBypassesReadyQueue_AtLoadAndFirstMessage_ButNeverAfterClose()
+        => RunGlassroad("1", (_, _, _) =>
+    {
+        var w = GameWindow.Launch(GameWindow.GlassroadId)!;
+        var scripts = new List<string>();
+        w.Web.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        w.Post(new { type = "queued-before-ready" });
+        Assert.Empty(scripts);
+
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        Assert.False(w.IsReady);
+        Assert.Contains("\"type\":\"init\"", Assert.Single(scripts));
+        Assert.Contains("\"unifiedId\":\"discord:12\"", scripts[0]);
+        Assert.Contains("\"net\":true", scripts[0]);
+        w.Web.OnWebMessage("{\"type\":\"heartbeat\"}");
+        Assert.False(w.IsReady);
+        Assert.Equal(2, scripts.Count);
+        Assert.Contains("\"type\":\"init\"", scripts[1]);
+        w.Web.OnWebMessage("{\"type\":\"heartbeat\"}");
+        Assert.Equal(2, scripts.Count); // first-message backstop only once
+
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.True(w.IsReady);
+        Assert.Equal(4, scripts.Count);
+        Assert.Contains("\"type\":\"queued-before-ready\"", scripts[2]);
+        Assert.Contains("\"type\":\"init\"", scripts[3]);
+        w.Close();
+        scripts.Clear();
+        w.PostGlassroadInit();
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        Assert.Empty(scripts);
+    });
 
     /// <summary>Init goes out at load, on the first message and at ready; the relay signs as the host's player, sends
     /// only /v2/race/ (judged signed), never the room-signed result; exit and menu-back close; a silent page is pinged
