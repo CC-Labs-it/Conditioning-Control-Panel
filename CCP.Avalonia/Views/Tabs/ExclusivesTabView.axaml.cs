@@ -142,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged += UpdateMotion;
+            StartAmbient();
             UpdateMotion();
         }
 
@@ -298,11 +299,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void UpdateMotion()
         {
             bool want = (_motionHost?.IsVisible ?? true) && IsEffectivelyVisible && (!PlansMode || _plansActive) && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
+            // The shell owns the full room's pause. Recomposition would clear that pause.
+            // Only the compact copy follows the selected Settings section here.
+            if (PlansMode)
+            {
+                if (want) _ambientFx.Resume();
+                else _ambientFx.Pause();
+            }
             // Re-dressed either way: a glow-gate change (performance tier) alone must re-apply the glows.
             if (want == (_motion != null)) { }
             else if (want)
             {
-                StartAmbient();
                 _motionStart = FxAdorner.Time.GetTimestamp();
                 // WPF caps every ambient loop on this tab at AmbientFrameRate 30 (MainWindow.Exclusives.cs:1274); here they ride the window's
                 // shared 30 fps beat, which parks while the window is minimised (P82 rule 2).
@@ -311,7 +318,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             else
             {
-                _ambientFx.Stop();
                 _motion!.Stop();
                 _motion = null;
                 foreach (var sheen in _sheens.Values) CardSheenAdorner.Detach(sheen);
