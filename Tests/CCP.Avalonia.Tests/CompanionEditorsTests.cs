@@ -1,12 +1,16 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Rendering.Composition;
+using Avalonia.VisualTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -46,6 +50,21 @@ public sealed class CompanionEditorsTests
         var deadline = DateTime.UtcNow.AddSeconds(10);
         while (!done() && DateTime.UtcNow < deadline) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
         Assert.True(done());
+    }
+
+    private static void RenderLiveTree(Window window)
+    {
+        // Pointer hit testing uses the compositor's last frame, not the newly scrolled layout.
+        // Same barrier as ContentHitTestTests; RunJobs alone does not render a frame.
+        Dispatcher.UIThread.RunJobs();
+        var batch = ElementComposition.GetElementVisual(window)!.Compositor.RequestCompositionBatchCommitAsync();
+        var deadline = Stopwatch.StartNew();
+        while (!batch.Rendered.IsCompleted)
+        {
+            Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never rendered the live tree");
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+        }
     }
 
     private static void Answer(Window owner, string label)
@@ -205,8 +224,11 @@ public sealed class CompanionEditorsTests
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
-                Dispatcher.UIThread.RunJobs();
+                RenderLiveTree(shell);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                var hit = shell.InputHitTest(at) as Visual;
+                Assert.True(hit == button || (hit != null && button.IsVisualAncestorOf(hit)),
+                    $"prompt link was not the rendered hit target: {hit?.GetType().Name}");
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();

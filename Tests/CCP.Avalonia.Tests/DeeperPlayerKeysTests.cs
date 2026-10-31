@@ -21,7 +21,7 @@ public sealed class DeeperPlayerKeysTests
     private static EnhancementPlayerWindow Create()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         return new EnhancementPlayerWindow(null, null);
     }
@@ -210,8 +210,10 @@ public sealed class DeeperPlayerKeysTests
         w.FindControl<Button>("BtnPlayPause")!.Focus();
         Press(w, Key.Space);
         Assert.Single(scripts);
-        w.GetType().GetMethod("OnDeactivated", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(w, new object[] { EventArgs.Empty });
+        // Avalonia 12 raises Deactivated through this parameterless platform callback.
+        // Use the same path as PanicKeyTests, not WPF's OnDeactivated(EventArgs).
+        typeof(WindowBase).GetMethod("HandleDeactivated", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(w, null);
         Press(w, Key.Space); // focus loss clears the repeat latch
         Assert.Equal(2, scripts.Count);
         Assert.Contains("l.pause();", scripts[^1]);
