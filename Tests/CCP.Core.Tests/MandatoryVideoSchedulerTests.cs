@@ -82,6 +82,44 @@ public sealed class MandatoryVideoSchedulerTests
         v.ForceCleanup();
     });
 
+    [Fact]   // WPF TriggerVideo :2526 / Cleanup :7939: a Freeze 800 ms before the pre-roll, its Reset at the end
+    public void Freeze_leads_the_video_and_its_reset_waits_for_the_end() => With(20, false, () =>
+    {
+        var s = CoreSettings.Current;
+        var (att, fp, rp) = (s.AttentionChecksEnabled, CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider);
+        var log = new List<string>();
+        CoreSubliminal.DeferredBambiFreezeProvider = () => log.Add("freeze");
+        CoreSubliminal.DeferredBambiResetProvider = () => log.Add("reset");
+        s.AttentionChecksEnabled = false;
+        try
+        {
+            var clock = new FakeClock(); var host = new Host();
+            var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+            Assert.True(v.Trigger());
+            Assert.Equal(new[] { "freeze" }, log);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Empty(host.Shown);                        // the Freeze's 800 ms come first
+            clock.Advance(MandatoryVideoScheduler.FreezeLead);
+            Assert.Single(host.Shown);
+            v.End();
+            Assert.Equal(new[] { "freeze", "reset" }, log);  // natural end / Esc: the held Reset
+            Assert.True(v.Trigger());
+            v.ForceCleanup();                                // panic: no Reset (WPF ForceCleanup)
+            Assert.Equal(new[] { "freeze", "reset", "freeze" }, log);
+            s.AttentionChecksEnabled = true;                 // targets to click: no Freeze, plain pre-roll
+            Assert.True(v.Trigger());
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(2, host.Shown.Count);
+            Assert.Equal(3, log.Count);
+            v.ForceCleanup();
+        }
+        finally
+        {
+            s.AttentionChecksEnabled = att;
+            (CoreSubliminal.DeferredBambiFreezeProvider, CoreSubliminal.DeferredBambiResetProvider) = (fp, rp);
+        }
+    });
+
     [Fact]
     public void ForceCleanup_does_not_rearm_and_cancels_a_pending_pre_roll() => With(20, true, () =>
     {
