@@ -314,10 +314,8 @@ public sealed class WebAssetServer : IDisposable
         res.Headers.Add("Accept-Ranges", "bytes");
         if (RainAssetsRoot != null && path == Path.Combine(_root, "rain-wardrobe", "host-bridge.js"))
         {
-            var bytes = Encoding.UTF8.GetBytes(File.ReadAllText(path).Replace("https://ccp.rain-assets/", "/ccp.rain-assets/", StringComparison.Ordinal));
-            res.ContentLength64 = bytes.Length;
-            if (req.HttpMethod == "GET") res.OutputStream.Write(bytes);
-            return;
+            var bytes = Encoding.UTF8.GetBytes(RainWardrobeHost.CarrierPrelude + File.ReadAllText(path).Replace("https://ccp.rain-assets/", "/ccp.rain-assets/", StringComparison.Ordinal));
+            res.ContentLength64 = bytes.Length; if (req.HttpMethod == "GET") res.OutputStream.Write(bytes); return;
         }
         using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         long from = 0, to = file.Length - 1;

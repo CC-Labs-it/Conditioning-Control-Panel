@@ -11,26 +11,27 @@ public sealed class RainWardrobeHostTests
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
     [Fact]
-    public Task PageUsesLiveSourcesAndCloseUnsubscribes() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task DraftStaysOnPageUntilApplyAndOwnershipKeepsIt() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        Setup(); CoreSettings.Current.PlayerLevel = 1; CoreSettings.Current.HighestLevelEver = 12;
+        Setup(); CoreSettings.Current.PlayerLevel = 1; CoreSettings.Current.HighestLevelEver = 12; CoreSettings.Current.RainLook = "";
         CoreSettings.Current.OfflineMode = false; CoreSettings.Current.UnifiedId = "rain-test"; CoreSecrets.RetrieveProvider = _ => "test";
-        var engine = new ConditioningControlPanel.Services.AchievementEngine(new ConditioningControlPanel.Services.AchievementStore(Path.Combine(TestUserDataProfile.Root, "rain-achievements.json")));
-        typeof(ConditioningControlPanel.Avalonia.App).GetProperty("Achievements", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.SetValue(null, engine);
-        using var host = new RainWardrobeHost(Path.Combine(AppContext.BaseDirectory, "Resources", "web"), Path.GetTempPath());
+        var web = Path.Combine(AppContext.BaseDirectory, "Resources", "web"); using var host = new RainWardrobeHost(web, Path.GetTempPath());
         var posts = new List<string>(); host.Web.ScriptInvoker = script => { posts.Add(script); return Task.FromResult<string?>(null); };
-        host.Web.OnWebMessage("{\"type\":\"ready\"}"); Assert.Contains(posts, p => p.Contains("\"level\":12"));
-        posts.Clear(); engine.TryUnlock("dumb_bimbo"); Assert.Contains(posts, p => p.Contains("dumb_bimbo"));
-        const string frame = "{\"type\":\"rain-look\",\"look\":{\"rev\":1,\"items\":{\"dress\":\"midnight-cocktail\",\"accessories\":[\"velvet-choker\"]}}}";
-        host.Web.OnWebMessage(frame); Assert.DoesNotContain("midnight-cocktail", CoreSettings.Current.RainLook);
-        Assert.Contains("velvet-choker", CoreSettings.Current.RainLook);
+        host.Web.OnWebMessage("{\"type\":\"rain-ready\"}"); Assert.Contains(posts, p => p.Contains("\"level\":12") && p.Contains("\"applyMode\":true"));
+        const string look = "{\"rev\":1,\"items\":{\"dress\":\"midnight-cocktail\",\"accessories\":[\"velvet-choker\"]}}";
+        host.Web.OnWebMessage("{\"type\":\"rain-look\",\"look\":" + look + "}"); Assert.Equal("", CoreSettings.Current.RainLook);   // try-on is a draft
+        posts.Clear(); host.Web.OnWebMessage("{\"type\":\"rain-apply\",\"look\":" + look + "}");
+        Assert.Equal("", CoreSettings.Current.RainLook); Assert.Contains(posts, p => p.Contains("\"reason\":\"clamped\"") && p.Contains("velvet-choker"));
         posts.Clear(); PrizeOwnership.ApplySnapshot("rain-test", 1, ["cos.rain.dress.midnight-cocktail"]);
-        Assert.Contains(posts, p => p.Contains("cos.rain.dress.midnight-cocktail"));
-        host.Web.OnWebMessage(frame); Assert.Contains("midnight-cocktail", CoreSettings.Current.RainLook);
-        host.Window.Show(); host.Window.Close(); posts.Clear();
-        PrizeOwnership.ApplySnapshot("rain-test", 2, []); CoreSettings.Current.HighestLevelEver = 50;
-        host.Web.OnWebMessage(frame); Assert.Empty(posts); Assert.Null(host.Window.Content);
-        return Task.CompletedTask;
+        Assert.Contains(posts, p => p.Contains("rain-owned") && p.Contains("cos.rain.dress.midnight-cocktail")); Assert.DoesNotContain(posts, p => p.Contains("\"init\""));
+        host.Web.OnWebMessage("{\"type\":\"rain-apply\",\"look\":" + look + "}"); Assert.Contains("midnight-cocktail", CoreSettings.Current.RainLook); Assert.Contains(posts, p => p.Contains("rain-applied") && !p.Contains("failed"));
+        using (var server = new WebAssetServer(web) { RainAssetsRoot = Path.GetTempPath() }) using (var http = new System.Net.Http.HttpClient())
+        {   // the carrier is in place before the page's modules register their chrome.webview listeners
+            var bridge = await http.GetStringAsync(server.Url("rain-wardrobe/host-bridge.js"));
+            Assert.StartsWith(RainWardrobeHost.CarrierPrelude, bridge); Assert.Contains("'/ccp.rain-assets/'", bridge);
+        }
+        host.Window.Show(); host.Window.Close(); posts.Clear(); CoreSettings.Current.RainLook = ""; PrizeOwnership.ApplySnapshot("rain-test", 2, []);
+        host.Web.OnWebMessage("{\"type\":\"rain-apply\",\"look\":" + look + "}"); Assert.Empty(posts); Assert.Null(host.Window.Content); Assert.Equal("", CoreSettings.Current.RainLook);
     });
     [Fact]
     public Task TubeDoorOpensOneWindowAndPanicDisposesIt() => AvaloniaTestDispatcher.RunAsync(() =>

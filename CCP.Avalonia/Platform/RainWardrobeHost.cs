@@ -2,7 +2,7 @@ using System; using System.Collections.Generic; using System.IO; using System.Li
 using Avalonia.Controls; using Avalonia.Threading; using ConditioningControlPanel.Avalonia.Views.Controls; using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Companion.Rain; using Newtonsoft.Json; using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Avalonia.Platform;
-// Row 599's window protocol, with row 604's live access/clamp; bake-on-Apply is a separate lane.
+// WPF RainWardrobeHostService: draft on the page, rain-apply commits, ownership re-badges in place.
 internal sealed class RainWardrobeHost : IRainGrantSource, IRainProgressSource, IDisposable
 {
     internal static RainWardrobeHost? Active;
@@ -10,8 +10,6 @@ internal sealed class RainWardrobeHost : IRainGrantSource, IRainProgressSource, 
     internal readonly Window Window;
     readonly WebAssetServer _server;
     bool _closed;
-    readonly Models.AppSettings _settings = CoreSettings.Current;
-    readonly Services.AchievementEngine? _achievements = App.Achievements;
     public int Level => Math.Max(CoreSettings.Current.PlayerLevel, CoreSettings.Current.HighestLevelEver);
     public IReadOnlyCollection<string> UnlockedAchievements => App.Achievements?.Progress?.UnlockedAchievements?.ToArray() ?? Array.Empty<string>();
     public bool IsGranted(string grant) => PrizeOwnership.IsGranted(grant);
@@ -37,51 +35,54 @@ internal sealed class RainWardrobeHost : IRainGrantSource, IRainProgressSource, 
         Web.WebMessage += Message;
         Window.Closed += (_, _) => Dispose();
         PrizeOwnership.Changed += OwnershipChanged;
-        _settings.PropertyChanged += ProgressChanged;
-        if (_achievements != null) _achievements.Unlocked += AchievementChanged;
-        Store(CoreSettings.Current.RainLook);
-        var locked = Access.Manifest.Items.Where(i => !Access.StateOf(i).Wearable).Select(i => i.Id);
+        Commit(RainLookClamp.Clamp(CoreSettings.Current.RainLook, Access));   // WPF Open:88-92, the stored look clamped on open
         Web.Source = new Uri(_server.Url("rain-wardrobe/index.html", "host=ccp&look=" + Uri.EscapeDataString(CoreSettings.Current.RainLook)
-            + "&locked=" + Uri.EscapeDataString(string.Join(',', locked)) + "&lockNote=" + Uri.EscapeDataString(Loc.Get("rain_wardrobe_locked"))));
+            + "&locked=" + Uri.EscapeDataString(string.Join(',', Locked())) + "&lockNote=" + Uri.EscapeDataString(Loc.Get("rain_wardrobe_locked"))));
     }
+    // WebHost.CarrierShim served ahead of the page's modules, which bind chrome.webview at load (WebKitGTK has no document-created seam).
+    internal const string CarrierPrelude = "(()=>{const w=window;if(w.chrome&&w.chrome.webview&&w.chrome.webview.postMessage)return;const t=new EventTarget();"
+        + "t.postMessage=m=>{const s=typeof m==='string'?m:JSON.stringify(m);let n=0;const go=()=>{if(typeof w.invokeCSharpAction==='function')w.invokeCSharpAction(s);else if(++n<50)setTimeout(go,100);};go();};"
+        + "w.chrome=w.chrome||{};w.chrome.webview=t;w.__ccpRnPush=j=>{let m;try{m=JSON.parse(j);}catch{return;}t.dispatchEvent(new MessageEvent('message',{data:m}));};})();\n";
+    IEnumerable<string> Locked() => Access.Manifest.Items.Where(i => !Access.StateOf(i).Wearable).Select(i => i.Id);
+    IEnumerable<string> Grants() => Access.Manifest.Items.Where(i => i.Grant != null && IsGranted(i.Grant)).Select(i => i.Grant!).Distinct().Order(StringComparer.Ordinal);
+    void Post(object frame) => _ = Web.PostJsonAsync(JsonConvert.SerializeObject(frame));
+    // WPF RainWardrobeHostService.Route:184; rain-look is the pre-Apply autosave and is ignored (WPF:200).
     internal void Message(string json)
     {
         if (_closed || json.Length > RainLookCodec.MaxChars + 256) return;
-        try
+        JObject o; try { o = JObject.Parse(json); } catch (JsonException) { return; }
+        switch ((string?)o["type"])
         {
-            var o = JObject.Parse(json);
-            if ((string?)o["type"] == "rain-look" && o["look"] is JObject look) Store(look.ToString(Formatting.None));
-            if ((string?)o["type"] is "ready" or "rain-ready") Refresh();
+            case "rain-ready": Post(Init()); break;
+            case "rain-apply": Apply(o["look"]); break;
+            case "open-counter": App.Notifications?.Show(Loc.Get("rain_wardrobe_counter_soon")); break;   // WPF ShowCounterSoon, no counter host yet
         }
-        catch (JsonException) { }
     }
-    void Store(string? look)
+    // WPF RainApplyController.OnApply:80. shortcut: commits without baking a pack (pack store row 603, tube playback row 606), bake when those land.
+    void Apply(JToken? token)
     {
-        var clamped = RainLookClamp.Clamp(look, Access);
-        if (clamped == CoreSettings.Current.RainLook) return;
-        CoreSettings.Current.RainLook = clamped; CoreSettings.Save();
+        var raw = token is JObject look ? look.ToString(Formatting.None) : "";
+        var clamped = RainLookClamp.Clamp(raw, Access);
+        if (clamped != RainLookCodec.Normalize(raw))
+        { Post(new { type = "rain-applied", failed = true, reason = "clamped", look = clamped.Length > 0 ? JToken.Parse(clamped) : JObject.Parse("{\"rev\":1,\"items\":{},\"colors\":{}}") }); return; }
+        Commit(clamped);
+        Post(new { type = "rain-applied", lookHash = "" });
     }
-    internal JObject Init() => JObject.FromObject(new { type = "init", applyMode = false,
-        look = string.IsNullOrEmpty(CoreSettings.Current.RainLook) ? null : JObject.Parse(CoreSettings.Current.RainLook),
-        grants = Access.Manifest.Items.Where(i => i.Grant != null && IsGranted(i.Grant)).Select(i => i.Grant),
-        level = Level, achievements = UnlockedAchievements });
-    void Refresh()
-    {
-        if (_closed) return;
-        Store(CoreSettings.Current.RainLook);
-        _ = Web.PostJsonAsync(Init().ToString(Formatting.None));
-        _ = Web.PostJsonAsync(JsonConvert.SerializeObject(new { type = "rain-locked", locked = Access.Manifest.Items.Where(i => !Access.StateOf(i).Wearable).Select(i => i.Id) }));
-    }
-    void OwnershipChanged() { if (Dispatcher.UIThread.CheckAccess()) Refresh(); else Dispatcher.UIThread.Post(Refresh); }
-    void AchievementChanged(object? sender, Models.Achievement e) => OwnershipChanged();
-    void ProgressChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    { if (e.PropertyName is "PlayerLevel" or "HighestLevelEver") OwnershipChanged(); }
+    static void Commit(string look)   // RainPackHash cleared: no pack was baked for this look
+    { if (look != RainLookCodec.Normalize(CoreSettings.Current.RainLook)) { CoreSettings.Current.RainLook = look; CoreSettings.Current.RainPackHash = ""; CoreSettings.Save(); } }
+    // WPF RainApplyController.BuildInit:214.
+    internal JObject Init() => JObject.FromObject(new { type = "init", applyMode = true,
+        look = RainLookClamp.Clamp(CoreSettings.Current.RainLook, Access) is { Length: > 0 } look ? JObject.Parse(look) : null,
+        grants = Grants(), level = Level, achievements = UnlockedAchievements, locale = LocalizationManager.Instance.CurrentLanguage,
+        motion = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level.ToString().ToLowerInvariant(), gentle = CoreSettings.Current.GentleVisuals });
+    // WPF OnOwnershipChanged:157: rain-owned re-badges without touching the draft; rain-locked keeps ?locked= in step.
+    void OwnershipChanged() { if (Dispatcher.UIThread.CheckAccess()) PostOwnership(); else Dispatcher.UIThread.Post(PostOwnership); }
+    void PostOwnership() { if (!_closed) { Post(new { type = "rain-owned", grants = Grants() }); Post(new { type = "rain-locked", locked = Locked() }); } }
     public void Dispose()
     {
         if (_closed) return;
         _closed = true;
-        PrizeOwnership.Changed -= OwnershipChanged; _settings.PropertyChanged -= ProgressChanged;
-        if (_achievements != null) _achievements.Unlocked -= AchievementChanged;
+        PrizeOwnership.Changed -= OwnershipChanged;
         Web.WebMessage -= Message; Web.Source = null; Window.Content = null; _server.Dispose();
         if (ReferenceEquals(Active, this)) Active = null;
         Window.Close();
