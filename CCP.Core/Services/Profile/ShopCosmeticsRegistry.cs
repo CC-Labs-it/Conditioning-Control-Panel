@@ -57,7 +57,11 @@ namespace ConditioningControlPanel.Services
         public static IEnumerable<ShopProfileItem> Frames => Items.Where(i => i.IsFrame);
         public static IEnumerable<ShopProfileItem> Avatars => Items.Where(i => i.IsAvatar);
         public static ShopProfileItem? Find(string? id) => Items.FirstOrDefault(i => i.Id == id);
-        public static ISet<string> FrameIds() => Frames.Select(i => i.Id).ToHashSet(StringComparer.Ordinal);
+        public static ISet<string>? FrameIds(IEnumerable<ShopProfileItem>? items = null)
+        {
+            var ids = (items ?? Items).Where(i => i.IsFrame).Select(i => i.Id).ToHashSet(StringComparer.Ordinal);
+            return ids.Count == 0 ? null : ids;
+        }
         public static ISet<string> AllAvatarIds() => CosmeticsPool.AvatarIds.Concat(Avatars.Select(i => i.Id)).ToHashSet(StringComparer.Ordinal);
         public static IReadOnlyDictionary<string, string> Grants() => Items.ToDictionary(i => i.Id, i => i.Grant, StringComparer.Ordinal);
         public static bool IsOwned(ShopProfileItem? item, IEnumerable<string>? grants)

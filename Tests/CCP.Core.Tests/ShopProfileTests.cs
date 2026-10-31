@@ -13,6 +13,23 @@ public sealed class ShopProfileTests
     [InlineData("{\"items\":false}")]
     public void BrokenRegistryFailsClosed(string? json) => Assert.Empty(ShopCosmeticsRegistry.Parse(json));
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{\"items\":[]}")]
+    [InlineData("broken")]
+    public void UnavailableFrameRegistryPreservesSavedFrame(string? json)
+    {
+        var ids = ShopCosmeticsRegistry.FrameIds(ShopCosmeticsRegistry.Parse(json));
+        Assert.Null(ids);
+        var raw = new ProfileCosmetics { FrameId = "profile.frame.gilt", Accent = "#FFD700" };
+        var saved = ProfileCosmetics.Sanitize(raw, knownFrameIds: ids);
+        Assert.Equal(raw.FrameId, saved.FrameId);
+        Assert.Equal(raw.Accent, saved.Accent);
+        var available = ShopCosmeticsRegistry.FrameIds(new[] { new ShopProfileItem("known", "frame", "f.png", "cos.known", false) });
+        Assert.Contains("known", available!);
+        Assert.Null(ProfileCosmetics.Sanitize(raw, knownFrameIds: available).FrameId);
+    }
+
     [Fact]
     public void RegistryRejectsTraversalUnknownTypesAndDuplicates()
     {

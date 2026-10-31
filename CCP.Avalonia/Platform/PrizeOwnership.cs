@@ -2,14 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ConditioningControlPanel.Services.Prizes;
+using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Avalonia.Platform
 {
     /// <summary>
     /// Back Room prize ownership on this head. WPF asks <c>PrizeGrants.IsGranted</c>, backed by
-    /// OwnershipService snapshots from BackRoomApi. Here only the snapshots a counter reply carries
-    /// (<see cref="ApplySnapshot"/>, fed by <see cref="V2PurchaseHead"/>) are held, for this run;
-    /// the profile-sync feed is parity row svc-prize-ownership. The other source is WPF's DEBUG-only
+    /// OwnershipService snapshots from profile sync, provider validation and counter replies.
+    /// Snapshots are held for this run and the signed-in account only.
+    /// The other source is WPF's DEBUG-only
     /// <c>CCP_PRIZE_GRANTS</c> override (Core OwnershipService.ReadDebugOverride): same variable,
     /// same patterns (exact id, <c>prefix.*</c>, <c>*</c>), and a Release build never reads it.
     /// Parsing is Core's, so an empty id never matches and a pattern holding whitespace or a
@@ -36,8 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static long _revision;
         private static HashSet<string> _grants = new(StringComparer.Ordinal);
 
-        /// <summary>WPF OwnershipService.IsGranted over the snapshots counter replies carry (row
-        /// feat-backroom-counter-buy). Per run only: no profile-sync feed yet (svc-prize-ownership).</summary>
+        /// <summary>WPF OwnershipService.IsGranted over the current account's server snapshots.</summary>
         internal static bool Held(string id)
         {
             var current = FriendsHead.Identity()?.UnifiedId;
@@ -58,6 +58,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
+        internal static void ApplySyncSnapshot(string requestedFor, PrizesBlock? prizes)
+        {
+            if (prizes?.Grants != null) ApplySnapshot(requestedFor, prizes.Revision, prizes.Grants);
+        }
+
+        internal static void ApplyValidateSnapshot(string? requestedFor, string? answeredFor, PrizesBlock? prizes, string source)
+        {
+            if (!string.IsNullOrEmpty(requestedFor) && requestedFor == answeredFor)
+                ApplySyncSnapshot(requestedFor, prizes);
+        }
+
         internal static ISet<string>? KnownGrants()
         {
             var current = FriendsHead.Identity()?.UnifiedId;
@@ -65,7 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 ? new HashSet<string>(_grants, StringComparer.Ordinal) : null;
         }
 
-        /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
+        /// <summary>Logout and test cleanup: forget every held snapshot.</summary>
         internal static void ResetHeld() { lock (Gate) (_heldAccount, _revision, _grants) = (null, 0, new(StringComparer.Ordinal)); }
 
         /// <summary>WPF V2Badges.FlashOwned: any flashes v2 prize (both motions or Jackpot Remix).</summary>
