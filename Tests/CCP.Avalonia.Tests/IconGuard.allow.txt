@@ -87,6 +87,7 @@ Views/Tabs/SpiralTabView.axaml :: <Path x:Name="SplashGlyph" :: path: D6 art - s
 Views/Windows/LauncherWindow.axaml :: <Path x:Name="SpiralPath" :: path: D6 art - launcher spiral
 Views/Windows/LauncherWindow.axaml :: <Path x:Name="SpiralSmallPath" :: path: D6 art - launcher spiral
 Views/Windows/MainShellWindow.axaml :: <Path Stretch="Fill" Stroke="#FFE5C76B" StrokeThickness="1.2" :: path: D6 art - fuse ticket frame
+Views/Windows/MainShellWindow.NavRail.Coins.cs :: coin.Specular = new Path :: path: D6 art - decorative coin specular crescent, WPF MainWindow.NavRail.cs:317; surface lighting, not an icon slot
 
 Views/Dialogs/TubeFitDialog.axaml.cs :: "🧍", "🙋", "💃", "🧎" :: pose pictograms drawn in place of a pose image that failed to load (oracle (c) ambiguous 3: default keep, content)
 
