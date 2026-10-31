@@ -50,10 +50,13 @@ public sealed class ShopProfileTests
             dialog = new ProfileCustomizeDialog(raw, null);
             Activate(dialog.FindControl<WrapPanel>("FrameHost")!.Children[1]);
             Activate(dialog.FindControl<WrapPanel>("AvatarHost")!.Children.Last());
-            Assert.NotNull(dialog.Result.FrameId);
+            var equippedFrame = dialog.Result.FrameId;
+            Assert.NotNull(equippedFrame);
             Assert.NotNull(dialog.Result.AvatarId);
+            dialog.Result.Accent = "#FFD700";
             dialog.FindControl<Button>("BtnReset")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-            Assert.Null(dialog.Result.FrameId);
+            Assert.Equal(equippedFrame, dialog.Result.FrameId);
+            Assert.Null(dialog.Result.Accent);
             Assert.Null(raw.FrameId);
             Assert.Null(raw.AvatarId);
         }

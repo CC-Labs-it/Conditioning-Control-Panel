@@ -774,7 +774,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
         private void BtnReset_Click()
         {
-            SelectFrame(NoneKey);
             SelectBanner(NoneKey);
             SelectAccent(NoneKey);
             SelectTitle(NoneKey);
