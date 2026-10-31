@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Headless;
+using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -28,9 +27,10 @@ public sealed class ChaosCardNarratorTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current == null)
-                AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            // The first test owns the process-wide font manager. This setup must also
+            // support the Windows font names used by later shell tests on Linux.
+            Assert.NotNull(new Typeface(new FontFamily("Segoe UI Black, Segoe UI"),
+                weight: FontWeight.Black).GlyphTypeface);
             var saved = (CoreAudio.PlayOneShotProvider, CoreAudio.DuckProvider, CoreAudio.UnduckProvider,
                 CoreAudio.DuckGenerationProvider, ChaosCardNarrator.Roots, ChaosCardNarrator.ClipMilliseconds,
                 ChaosCardNarrator.Clock, CoreSettings.Current.AvatarEnabled, CoreSettings.Current.MasterVolume);
