@@ -12,7 +12,7 @@ public class TutorialFlashDemoTests
     public Task SeedInstallsFlashDemoAndPreservesOverrides() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var saved = TutorialHeadHooks.FlashDemo;
         var shell = TutorialHeadHooks.ShellProvider;

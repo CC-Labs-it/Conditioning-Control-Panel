@@ -245,7 +245,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             ":sout=#transcode{vcodec=none,acodec=s16l,channels=1,samplerate=16000}:std{access=file,mux=wav,dst='"
             + dest.Replace('\\', '/').Replace("'", "\\'") + "'}";
 
-        private static void TranscodeToWav(string source, string dest, IProgress<double>? progress, CancellationToken ct)
+        // WPF MediaDurationProbe.cs:37: omit channel/rate conversion for waveform peaks.
+        internal static string WaveformSoutFor(string dest) => SoutFor(dest).Replace(",channels=1,samplerate=16000", "");
+
+        internal static ConditioningControlPanel.Services.Deeper.AudioWaveformResult DecodeWaveform(string path)
+        {
+            var wav = Path.Combine(Path.GetTempPath(), "ccp-peaks-" + Guid.NewGuid().ToString("N") + ".wav");
+            try
+            {
+                TranscodeToWav(path, wav, null, CancellationToken.None, WaveformSoutFor(wav));
+                using var stream = File.OpenRead(wav);
+                return ConditioningControlPanel.Services.Deeper.AudioWaveformCache.FromPcm16Wave(stream);
+            }
+            finally { try { File.Delete(wav); } catch { } }
+        }
+
+        private static void TranscodeToWav(string source, string dest, IProgress<double>? progress, CancellationToken ct, string? sout = null)
         {
             // A short file transcodes inside the first 100 ms wait, so an already-cancelled pick must stop here.
             ct.ThrowIfCancellationRequested();
@@ -253,7 +268,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             using var done = new ManualResetEventSlim(false);
             bool failed = false;
             using var media = new Media(vlc, source, FromType.FromPath);
-            media.AddOption(SoutFor(dest));
+            media.AddOption(sout ?? SoutFor(dest));
             media.AddOption(":no-sout-video");
             media.AddOption(":sout-keep");
             using var player = new MediaPlayer(media);

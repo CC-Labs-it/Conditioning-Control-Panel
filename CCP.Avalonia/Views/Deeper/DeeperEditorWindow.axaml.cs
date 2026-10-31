@@ -959,6 +959,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             PreviewPlaceholder.IsVisible = false;
             WaveformCanvas.IsVisible = true;
             _waveformLoad = LoadWaveformAsync(path);
+            await _waveformLoad;
+            if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
 
             IDeeperLocalAudio? audio = null;
             try { audio = await DeeperLocalAudio.Open(path); }
@@ -982,7 +984,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 UpdatePlayheadPosition();
                 PlayPauseGlyph.Kind = IconKind.Play;
             });
-            _totalSeconds = audio.DurationSeconds;
+            if (audio.DurationSeconds > 0) _totalSeconds = audio.DurationSeconds;
             TxtTotalTime.Text = FormatTime(_totalSeconds);
             UpdateWaveformPath();
             RebuildTimelineRuler();
@@ -996,8 +998,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         internal Task? _waveformLoad;
 
         /// <summary>WPF DeeperEditorWindow.xaml.cs:1196-1211: peaks from AudioWaveformCache, then the
-        /// waveform path; a decode failure only logs and leaves the flat strip. The transport owns the
-        /// duration here (WPF read it from the peaks first, then the reader).</summary>
+        /// waveform path and timeline duration before playback. Decode failure leaves a flat strip.</summary>
         private async Task LoadWaveformAsync(string path)
         {
             try
@@ -1005,7 +1006,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 var data = await AudioWaveformCache.LoadAsync(path);
                 if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
                 _waveformPeaks = data.Peaks;
+                _totalSeconds = data.DurationSeconds;
+                TxtTotalTime.Text = FormatTime(_totalSeconds);
                 UpdateWaveformPath();
+                RebuildTimelineRuler();
+                RebuildRegionVisuals();
+                RebuildHapticVisuals();
+                RebuildEffectVisuals();
+                RebuildRuleVisuals();
+                UpdatePlayheadPosition();
             }
             catch (Exception ex) { Log.Warning(ex, "DeeperEditor: waveform decode failed"); }
         }

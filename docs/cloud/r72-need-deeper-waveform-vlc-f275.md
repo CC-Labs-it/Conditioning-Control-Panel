@@ -12,8 +12,8 @@ Read each lane's own diff, without cherry-picking its ancestry:
 
 | Behaviour | WPF specification | Disposition on this cut |
 | --- | --- | --- |
-| Cached waveform extraction and fallback | `Views/Deeper/DeeperEditorWindow.xaml.cs:1198`, `:1209`; `Services/Deeper/MediaDurationProbe.cs:32` | Ported: Core mono adapter, Avalonia decoder registration and asynchronous peak assignment. Transport duration stays authoritative. Decode failure leaves a flat strip; late results cannot update a closed editor or different source. |
-| Shared cache and bucket rule | `App.xaml.cs:309`; `Services/Deeper/MediaDurationProbe.cs:37` | Already: `CCP.Core/Services/Deeper/AudioWaveformCache.cs:45`, `:84`. WPF adapter stays unchanged. |
+| Cached waveform extraction and fallback | `Views/Deeper/DeeperEditorWindow.xaml.cs:1198`, `:1209`; `Services/Deeper/MediaDurationProbe.cs:32` | Ported: source-rate PCM16 WAV adapter, Avalonia decoder registration and asynchronous peak assignment. Waveform duration initializes the timeline before playback; zero playback duration retains it. Decode failure leaves a flat strip; late results cannot update a closed editor or different source. |
+| Shared cache and bucket rule | `App.xaml.cs:309`; `Services/Deeper/MediaDurationProbe.cs:37` | Already: `CCP.Core/Services/Deeper/AudioWaveformCache.cs:46`, `:85`. WPF adapter stays unchanged. |
 | Manual editor help | `Views/Deeper/DeeperEditorWindow.xaml.cs:378` | Ported: one staged editor overlay, rerunnable after closing, host-close and panic cleanup. |
 | First-run editor coachmarks | `Views/Deeper/DeeperEditorWindow.xaml.cs:350` | Ported: saved once, deferred until layout, active/pending Part 2 takes priority. Pending launch cancels on close or panic. |
 | Short-walk flash | `Services/TutorialService.cs:927` | Ported: seed FlashDemo with one image for 1600 ms, preserving an injected override. Missing shell/assets remains a no-op. |
@@ -23,53 +23,31 @@ Read each lane's own diff, without cherry-picking its ancestry:
 | Mod Creator section navigation | `Windows/ModCreatorWindow.xaml.cs:249` | Covered by PR #3345: Avalonia Mod Creator `axaml.cs:329`; not copied. |
 | Editor interactions | WPF editor partials | PR #3316 still leaves `StartEditorTutorial` as a log stub at editor `axaml.cs:599`; this cut supplies help and first-run coachmarks. |
 
-Port locations on the Avalonia/Core head:
+Review follow-up: both P2 findings accepted (WPF MediaDurationProbe.cs:37;
+DeeperEditorWindow.xaml.cs:1198). LibVLC no longer mixes channels or resamples
+for peaks. A decoder cache tag bypasses previously cached mono peaks without
+changing WPF's cache keys. Waveform duration and timeline visuals load before
+playback; unavailable playback or zero parsed duration retains that duration.
+No WPF source changes or new translation keys. Native codec execution is unrun.
 
-- Decoder registration: `CCP.Avalonia/App.axaml.cs:898` and `CCP.Core/Services/Deeper/AudioWaveformCache.cs:132`.
-- Peak load/display: `CCP.Avalonia/Views/Deeper/DeeperEditorWindow.axaml.cs:961`, `:1001`.
-- Manual help: the same editor `axaml.cs:589`; first-run: `:555`; panic cancellation: `:579`.
-- Flash demo: `CCP.Avalonia/Tours/TutorialHead.cs:65`.
+Review fix locations:
 
-All WPF paths in the table are relative to `ConditioningControlPanel/`.
-PR heads: #3237 `d82fc38339938eb5a4456844fa5caf580c15f32e`,
-#3345 `cc81cd0997a13b70d420bac881f972b6ff9f0f2e`,
-#3316 `5b428a7c87f9714f93fd01c5671f42da761c3e78`.
-PR references mean the fetched `refs/pull/<number>/head`, not a claim that the PR
-has merged. GitHub metadata queries returned Forbidden; git fetch of all three
-PR heads succeeded. No WPF source changed. No new translation keys.
+- P2 channel/rate preservation: `CCP.Avalonia/Views/Games/RaceTrackPlayer.cs:249`, `:251`; `CCP.Core/Services/Deeper/AudioWaveformCache.cs:133`, `:155`.
+- P2 duration fallback: `CCP.Avalonia/Views/Deeper/DeeperEditorWindow.axaml.cs:962`, `:987`, `:1009`.
+- Tests: Core `AudioWaveformCacheTests.cs:163`, `:176`; Avalonia `RaceTrackPlayerTests.cs:18`, `DeeperRowsTests.cs:131`.
+- Cache-version regression also proves old mono peaks are bypassed. The old mono bucket test retains its count, duration, peak and neighbour assertions through the new WAV adapter.
+- Production font bootstrap in DeeperRowsTests and TutorialFlashDemoTests removes order-dependent Inter failures; every transport assertion remains.
 
-The decoder reuses LibVLC's race mono 16 kHz output. Its bucket count/cache rules
-match Core; stereo cancellation and resampling can differ from WPF's original
-full-rate channel maxima. Native codec playback and desktop flash were not run.
-The base safety, stop/lock, Scrolller and staged-overlay implementations remain
-in place; panic additionally cancels queued editor coachmarks.
-
-## Validation
-
-SDK channel lookup tried a denied ci.dot.net URL; installed SDK 10.0.100 with
-`dotnet-install --channel 10.0 --version 10.0.100` instead.
-
-- `dotnet build CCP.Core`: 50 warnings, 0 errors.
-- `dotnet build CCP.Avalonia`: 201 warnings, 0 errors.
-- `dotnet build Tests/CCP.Avalonia.Tests`: 144 warnings, 0 errors.
-- `dotnet test Tests/CCP.Core.Tests`: 4636 passed, 6 existing skips, 0 failed.
-- Affected Avalonia filter: DeeperRowsTests, DeeperEditorTutorialTests,
-  TutorialFlashDemoTests, TutorialTourTests, TutorialStageTests,
-  PanicSurfacesTests, TestIsolationTests: 43 passed, 0 failed, 0 skipped.
-- `bash .github/scripts/core-guards.sh`: All Core guards passed.
-- `python3 .github/scripts/avalonia_docs.py`: avalonia_docs self-check OK.
-- Fail-proofs: truncating PCM failed the Core adapter test (1/1). Disconnecting
-  peaks, editor help, first-run and FlashDemo failed their five focused cases.
-  Leaving the queued intro armed on panic failed its separate test (1/1). Every mutation was restored before final validation.
-- Final restored builds: Core 50 warnings/0 errors, Avalonia 201/0, tests 144/0.
-  Restored cache filter: 11 passed; affected Avalonia filter: 43 passed again.
-  Core guards and docs self-check passed again; git diff --check clean.
-
-New tests exercise mono bucket peaks/duration, successful and failed waveform
-loading beside playback, one manual overlay and rerun/host-close/panic teardown,
-first-run once/active/pending guards, queued panic cancellation, FlashDemo seed,
-override retention, and actual short-walk step activation.
-No tests were removed or weakened.
+Validation: Core suite 4638 passed, 6 existing skips, 0 failed; initial affected
+Avalonia run after font bootstrap 46 passed. All three projects built with
+0 errors. Stereo/downsample mutation failed both Core regressions (exit 1).
+Mono transcode options plus discarded duration failed the options and both
+playback fallback cases (3 failed, exit 1). All mutations were restored.
+Final restored validation: builds Core/Avalonia/tests each 0 errors;
+waveform cache filter 13 passed; affected Avalonia and race tests 47 passed,
+3 existing LibVLC skips, 0 failed. Core guards and docs self-check passed.
+Removing the cache tag failed the migration test (expected 2 decodes, actual 1);
+restored Core rebuilt with 0 errors and all 13 waveform tests passed again.
 
 ## Part B
 
@@ -81,5 +59,5 @@ Broader existing row gaps remain outside this cut:
 - Sidebar door preparation: WPF `Windows/TutorialOverlay.xaml.cs:698`;
   Avalonia `Views/Windows/TutorialOverlay.axaml.cs:488` remains a stub.
 - Preview fullscreen/zoom: WPF editor `xaml.cs:926`, `:1481`;
-  Avalonia editor `axaml.cs:3247` fullscreen region still requires unsupported NativeWebView hooks.
+  Avalonia editor `axaml.cs:3256` fullscreen region still requires unsupported NativeWebView hooks.
 - Part 2/events and Mod Creator integration are owned by #3237/#3345 above.
