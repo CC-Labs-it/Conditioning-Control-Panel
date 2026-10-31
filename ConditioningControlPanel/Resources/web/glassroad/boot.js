@@ -23,6 +23,7 @@ import { createHostEscape } from './host/hostEscape.js';
 import { showSlip, hideSlip, releaseSlip } from './sparkles-slip.js';
 import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
+import { createDevicePictures } from './host/devicePictures.js';
 import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
 import { nichesFor, isDefault, savePick } from './host/scrolllerNiches.js';
 import { createLocalLibrary, pickFiles, feedSwitch, loadFilesChoice, saveFilesChoice, openFilePicker } from './host/localLibrary.js';
@@ -113,7 +114,7 @@ import { dismantleScene } from './render/sceneResources.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
 import { bodyOfVehicle, isKartBody } from './sim/kartStats.js';
-import { ownedChoices } from './hud/lobbyMath.js';
+import { ownedChoices, stampLook } from './hud/lobbyMath.js';
 import { unlockedSet } from './meta/unlocks.js';
 import { hostCounter, counterMessage } from './host/prizeCounter.js';
 import { COURSES, selectedCourse, courseUrl, courseRaceIntent } from './track/catalog.js';
@@ -146,6 +147,11 @@ const DEV = devAllowed(location.search);
 const HT = qs.get('hitch') === '1' ? (window.__hitch = { sim: 0, fx: 0, audio: 0, cam: 0, world: 0, render: 0, hud: 0, steps: 0 }) : null;
 let hT = 0;
 let profilePulled = false;   // the account record is pulled once per page, not once per course
+// The look on the logbook (72 contract C1). The garage outlives a course, the profile sync does not, so the garage holds
+// these. No sync, or an account with no access: nothing is stamped and the look stays local only.
+const garageLink = { sync: null, pulled: false, closed: false };
+const garageSync = { live: () => !!garageLink.sync && !garageLink.sync.off && !garageLink.closed, ready: () => garageLink.pulled,
+  push: record => garageLink.sync?.push(record) };
 const hLap = (k) => { const t = performance.now(); HT[k] = t - hT; hT = t; };
 // the race song (handoff-1022/MUSIC-ROAD-BRIEF.md): ?chart=<url> plays that chart, ?chart=0 none; the dev
 // loopback server tries the private song folder it mounts at /private-audio/; a host names its own charts in
@@ -457,6 +463,9 @@ async function boot(course, options, lifetime, isCurrent) {
   // Online pictures: a switch in Options only where the host offers the feed (the web), moved only by its echo, and this
   // course's niches (host/scrolllerNiches.js: its default pair, or the player's own pick kept in this browser).
   const scrolller = init.caps.scrolller ? shared.scrolllerFeed : null;
+  // The phone caches pictures on its own loopback server: real textures on the world screens (host/devicePictures.js).
+  const deviceOrigin = init.caps.scrolller?.origin === 'device';
+  if (deviceOrigin) scrolller.useDeviceOrigin(location.origin);
   // "My files" (host/localLibrary.js): the player's own pictures as blob urls, never uploaded; while it is on the
   // Scrolller switch is off, so the host fetches nothing. Kept across courses; only the choice survives a reload.
   const library = shared.library ||= createLocalLibrary();
@@ -476,7 +485,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!shared.filesOn) { library.clear(); delete shared.courseFiles[TRACK_ID]; }
     if (shared.filesOn && !library.count && choose) pick();
     if (scrolller) {
-      scrolller.setConsent(to === 'scrolller');
+      scrolller.setConsent(to === 'scrolller', deviceOrigin);   // every setSource is the player's own press
       if (to === 'scrolller') scrolller.setNiches(track.id, nichesFor(track.id));
     }
     refreshMedia();
@@ -486,10 +495,15 @@ async function boot(course, options, lifetime, isCurrent) {
   if (scrolller) {
     if (coursePick.source === 'scrolller') {
       scrolller.setNiches(track.id, nichesFor(track.id));
-      if (!consentOn()) scrolller.setConsent(true);
+      // The phone's stored consent is the player's own: only a press raises it (setSource, with `ask`).
+      if (!consentOn() && !deviceOrigin) scrolller.setConsent(true);
     }
     else if (consentOn()) scrolller.setConsent(false);
     lifetime.defer(scrolller.subscribe(refreshMedia));
+    // A declined sheet does not stay as a lit Scrolller pick.
+    lifetime.defer(scrolller.onDeclined(() => {
+      if (coursePick.source === 'scrolller') { coursePick.source = 'off'; saveCustomization(shared.coursePicks); refreshMedia(); }
+    }));
   }
   hud.on('scrolller-files', pick);
   hud.on('scrolller', e => setSource(e?.source || (e?.on ? 'scrolller' : 'off')));
@@ -615,9 +629,13 @@ async function boot(course, options, lifetime, isCurrent) {
   });
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge,
-    readyCount: renderer.device === 'phone' ? PHONE_READY_CLIPS : Infinity });   // the DEVICE, whatever Quality is pinned
+    readyCount: renderer.device === 'phone' ? PHONE_READY_CLIPS : Infinity, ...(deviceOrigin ? { local: false } : null) });   // the DEVICE, whatever Quality is pinned
   if (qs.get('media') !== '0') world.media?.setDisplayFeed(pictures, renderer.canvas);
-  world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || null);
+  // My files and Off win: while either is picked this provider holds nothing and the display route above has the faces.
+  const devicePictures = deviceOrigin && qs.get('media') !== '0' && world.media ? createDevicePictures(world.media, { feed: scrolller,
+    active: () => !shared.filesOn && coursePick.source === 'scrolller' }) : null;
+  if (devicePictures) { lifetime.defer(() => devicePictures.dispose()); lifetime.defer(scrolller.subscribe(() => devicePictures.sync())); }
+  world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || devicePictures?.sourceForFlash(seed) || null);
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
   effects.screen.params.mediaFlash = true;
   lifetime.defer(() => subliminalBurst.dispose());
@@ -626,7 +644,7 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
   Object.defineProperty(debug, 'scrolller', { get: () => (scrolller
-    ? { consent: scrolller.consent, files: shared.filesOn, pictures: pictures.count, ready: pictures.ready } : null) });
+    ? { consent: scrolller.consent, files: shared.filesOn, pictures: pictures.count, ready: pictures.ready, device: devicePictures?.stats() || null } : null) });
   Object.defineProperty(debug, 'songGates', { get: () => world.phraseGates.stats });
   Object.defineProperty(debug, 'airWords', { get: () => world.airWords?.stats || null });
   Object.defineProperty(debug, 'songCues', { get: () => ({ total: songCues?.cues.length || 0,
@@ -666,7 +684,7 @@ async function boot(course, options, lifetime, isCurrent) {
   await paintGap();
   if (!lifetime.alive) return;
   const garage = shared.garage ||= await createGarage({ art: shared.garageArt, renderer, canvas, feel,
-    track: trackName, laps, trackId: track.id, online: course.online, owned: () => shared.owned.grants, counter: hostCounter(shared.bridge, init),
+    track: trackName, laps, trackId: track.id, online: course.online, owned: () => shared.owned.grants, counter: hostCounter(shared.bridge, init), sync: garageSync,
     onProgress: (d, n) => showLoading('Getting the garage ready', 0.56 + 0.36 * d / Math.max(1, n)) });
   if (!lifetime.alive) { garage?.dispose(); return; }
   loaded('garage');
@@ -725,9 +743,10 @@ async function boot(course, options, lifetime, isCurrent) {
     rise(s) { return this.on ? Math.max(.6, gentle.rise(s)) : s; },
     fade(s) { return this.on ? Math.max(1, gentle.fade(s)) : s; } };
   // The flash canvas is a plain page canvas (never a texture), so the web's display-only Scrolller stills may fill it (never its clips).
-  const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || pictures?.stillFor(seed) || null,
-    pool: () => cardMedia?.flashCount || pictures?.stillCount || 0,   // never the same picture twice in one burst
+  const cueBurst = createFlashBurst({ source: seed => cardMedia?.sourceForFlash(seed) || devicePictures?.sourceForFlash(seed) || pictures?.stillFor(seed) || null,
+    pool: () => cardMedia?.flashCount || devicePictures?.flashCount || pictures?.stillCount || 0,   // never the same picture twice in one burst
     photosafe, gentle: cueSafety });
+  devicePictures?.holdFlash(() => cueBurst.busy);   // a card keeps its picture until it ends
   let cueRunSeen = null, cueRevision = -1;
   lifetime.defer(() => cueBurst.dispose());
   Object.defineProperty(debug, 'cueBurst', { get: () => cueBurst.stats });
@@ -1199,9 +1218,14 @@ async function boot(course, options, lifetime, isCurrent) {
   const lobbyApi = link ? createLobbyApi(link.transport, { platform: init.caps.platform }) : null;
   // the account record (CONTRACT-LOGBOOK.md section 8): pull once per page, push after each saved run; silent offline
   const profileSync = link ? createProfileSync({ request: link.transport, onGrants: adoptOwned }) : null;
+  garageLink.sync = profileSync;
   if (profileSync && !profilePulled) {
     profilePulled = true;
-    void profileSync.pull().then(record => { if (lifetime.alive) bus.emit('logbook-pulled', { record }); });
+    void profileSync.pull().then(record => {
+      garageLink.pulled = !profileSync.off; garageLink.closed = profileSync.off;
+      if (lifetime.alive) bus.emit('logbook-pulled', { record });
+      shared.garage?.applySynced?.();   // goes on now only if the garage is open and at rest, else at its next open
+    });
   }
   bus.on('logbook-saved', ({ record } = {}) => profileSync?.push(record));
   // race songs from our own storage (NET.md section 14): nothing named a chart and the lobby is there, so ask it once
@@ -1285,6 +1309,7 @@ async function boot(course, options, lifetime, isCurrent) {
   ...(hostInvite ? { friends: hostInvite.friends } : {}),
   garageLook:()=>garage?raceLook(garage.state):null,
   lookOwned:()=>ownedChoices(shared.owned.grants,unlockedSet(loadRecord())),
+  lookChanged:(look,store)=>{if(garageSync.live()){const record=stampLook(store,look);if(record)garageSync.push(record);}},
   // a race link (?r=<token>, NET.md section 13): the address drops its r after the first claim answer
   linkClaimed: () => { const to = dropLinkParam(location.href); if (to) history.replaceState(history.state, '', to); } });
   hud.on('online', (e) => { lobbyUi = (e && e.lobby) || lobbyUi; });
@@ -1820,6 +1845,8 @@ async function boot(course, options, lifetime, isCurrent) {
     for (const cue of cueView?.fired || NO_WORDS) if (cue.kind === 'VEIL' || (cue.kind === 'BURST' && cue.params?.variant === 'cards')) cueBurst.fire(cue);
     cueBurst.update(frameDt, { paused: frozen, aspect: renderer.aspect, screen: effects.screen,
       flashes: [effects.screen, payoff.flash] });
+    // Nothing draws the world in the garage, under the counter or behind the staged warm: sync only, no decode or swap.
+    devicePictures?.update(frameDt, frozen || state === 'menu' || lights.covered || !!(deferred && !deferred.done), cueSafety.on || !!feel.get('gentle.on'));
     const wordLive = words && song ? words.update(songS,
       { s: pv[S.s], lat: pv[S.lateral], speedMps: Math.max(0, pv[S.speedPct]) * feel.get('speed.topMps') }) : NO_WORDS;
     if (words) {

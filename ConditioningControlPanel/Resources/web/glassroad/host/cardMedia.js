@@ -16,6 +16,8 @@ export const PHONE_READY_CLIPS = 2;
 /** readyCount: ready settles once this many complete, consent-valid clips are attached, or when every wanted source
  *  has settled, whichever comes first. Only the wait changes; what may be shown stays exactly as strict. */
 export function createCardMedia(media, { bridge, origin = globalThis.location?.origin || '', readyCount = Infinity,
+  // Only the dev adapter polls; a phone's own loopback server is not one (boot passes false, every other host the default).
+  local = ['127.0.0.1', 'localhost'].includes(globalThis.location?.hostname),
   makeVideo = url => Object.assign(document.createElement('video'), { muted: true, loop: true, playsInline: true, src: url }),
 } = {}) {
   const slots = selectScrolllerSlots(media?.slots || [], { share: media?.scrolllerShare }), entries = new Map();
@@ -157,7 +159,6 @@ export function createCardMedia(media, { bridge, origin = globalThis.location?.o
   const visible = () => { prune(); schedule(); };
   globalThis.document?.addEventListener?.('visibilitychange', visible);
   // Only the dev adapter uses this endpoint; hosted feeds arrive on the host bridge.
-  const local = ['127.0.0.1', 'localhost'].includes(globalThis.location?.hostname);
   const stopActivation = local ? bindCardMediaActivation(async () => {
     const response = await fetch('/__card-media/start', { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw Error('Card media unavailable');
