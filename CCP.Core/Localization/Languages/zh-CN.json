@@ -8468,5 +8468,7 @@
   "online_official_plan_prime": "Prime 每日额度最大。看过的内容重播免费。",
   "online_official_nice": "好的",
   "online_official_stamped_line": "在线媒体来自 Scrolller。每张图片和短片都带有一个小小的“via Scrolller”标记。",
-  "online_cache_day_line": "在线媒体只会在这台电脑的小缓存里保留一天，从不上传。"
+  "online_cache_day_line": "在线媒体只会在这台电脑的小缓存里保留一天，从不上传。",
+  "possession_rules_inbox_title": "看守的规则",
+  "possession_rules_inbox_summary": "在房间开始移动前，了解附身会做什么。"
 }
