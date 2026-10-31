@@ -11,13 +11,9 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
-
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
-
-// WPF OverlayService.cs:456-465,2232-2250,2598-2610,3199-3248,3760-3764.
-// The compositor blurs the scene behind each host. No captured desktop or feedback copy exists.
-// KWin/X11 and Windows native blur only; other compositors fail closed. Native kernels differ
-// from WPF's radius curve; melt and capture-based rendering remain outside this keep-clear port.
+// WPF OverlayService.cs:456-465,2232-2250,2598-2610,3199-3248,3760-3764: native KWin/Windows blur, others fail closed.
+// No capture/feedback copy; the native kernel and melt remain outside this keep-clear port.
 internal static class BrainDrainOverlay
 {
     private static readonly List<Window> Hosts = new();
@@ -41,7 +37,6 @@ internal static class BrainDrainOverlay
     internal static IReadOnlyList<Window> Active => Hosts;
     internal static bool Polling => Timer.IsEnabled;
     static BrainDrainOverlay() => Timer.Tick += (_, _) => Reconcile();
-
     internal static void Start(Window owner)
     {
         if (!CoreSession.IsEngineRunning && App.Sessions?.IsRunning != true || App.Sessions?.IsPaused == true)

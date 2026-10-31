@@ -6,9 +6,7 @@ using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class BrainDrainRestackTests
 {
     [Fact]

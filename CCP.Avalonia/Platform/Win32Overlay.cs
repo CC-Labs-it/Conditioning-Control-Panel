@@ -208,7 +208,6 @@ internal static class Win32Overlay
         }
         return band;
     }
-
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
 

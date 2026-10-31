@@ -142,9 +142,7 @@ internal static class X11Overlay
         if (TryGet(window, OverlayBackend.Win32, out var hwnd)) Win32Overlay.SetPassive(window, hwnd);
     }
 
-    [DllImport(LibX11)] private static extern int XQueryTree(IntPtr d, IntPtr w, out IntPtr root, out IntPtr parent, out IntPtr children, out uint count);
     [DllImport(LibX11)] private static extern int XRestackWindows(IntPtr d, IntPtr[] windows, int count);
-
     private static IntPtr[] Property(IntPtr w, string name)
     {
         var data = IntPtr.Zero;
@@ -177,9 +175,7 @@ internal static class X11Overlay
         }
         return IntPtr.Zero;
     }
-    // WPF OverlayService.cs:3213-3248: visible own topmost windows, in SERVER order.
-    // Foreign entries cannot affect AnchorIfNeeded. Root frames include override-redirect pictures,
-    // unlike _NET_CLIENT_LIST_STACKING, which would omit those sharp foreground overlays.
+    // WPF OverlayService.cs:3213-3248: server-ordered own root frames include override-redirect pictures, unlike _NET_CLIENT_LIST_STACKING.
     internal static IReadOnlyList<BrainDrainKeepClear.BandEntry> VisibleOwnBand(IReadOnlyList<Window> windows)
     {
         if (OperatingSystem.IsWindows()) return Win32Overlay.VisibleOwnBand(windows);
@@ -209,7 +205,6 @@ internal static class X11Overlay
             return !_xErrored;
         }
     }
-
     /// <summary>Makes <paramref name="window"/> transparent to the mouse while it keeps drawing,
     /// or gives it back its input. The X11 equivalent of adding and clearing
     /// <c>WS_EX_TRANSPARENT</c>, and reversible at runtime the same way.
@@ -890,7 +885,7 @@ internal static class X11Overlay
                 Marshal.WriteInt32(e, 48, 32);                                            // format
                 Marshal.WriteIntPtr(e, 56, new IntPtr(SourcePager));                      // data.l[0] source
                 Marshal.WriteIntPtr(e, 64, siblingXid);                                   // data.l[1] sibling
-                Marshal.WriteIntPtr(e, 72, new IntPtr(detail));                            // data.l[2] detail
+                Marshal.WriteIntPtr(e, 72, new IntPtr(Above));                            // data.l[2] detail
 
                 // Addressed to the ROOT window, not to ours: the WM holds SubstructureRedirect
                 // there, and that is how the request reaches it.
