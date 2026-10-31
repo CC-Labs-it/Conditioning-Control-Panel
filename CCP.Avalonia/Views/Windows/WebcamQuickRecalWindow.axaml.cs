@@ -44,6 +44,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly TextBlock _txtStatus, _txtHotkeyHint, _txtErrorDetail;
         private readonly Border _errorPanel;
 
+        /// <summary>Set by the shell while its global Quick Recal and camera chords are armed.</summary>
+        internal static Func<string?> HotkeyHint = () => null;
+
         public WebcamQuickRecalWindow()
         {
             AvaloniaXamlLoader.Load(this);
@@ -54,10 +57,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtErrorDetail = this.FindControl<TextBlock>("TxtErrorDetail")!;
             _errorPanel = this.FindControl<Border>("ErrorPanel")!;
 
-            // ponytail: the full localized hint also teaches the camera start/stop chord, which
-            // is not ported. Keep it hidden until both shortcuts work on this head; Windows Quick
-            // Recal is now armed by MainShellWindow.QuickRecal, but Linux/Wayland still need a lane.
-            _txtHotkeyHint.IsVisible = false;
+            // WPF QuickRecalHotkeyHint quotes both webcam chords; hidden while either is not armed here.
+            var hint = HotkeyHint();
+            _txtHotkeyHint.Text = hint ?? "";
+            _txtHotkeyHint.IsVisible = hint != null;
             // WPF openers call App.ApplyCalibrationScreenPlacement: the dot must sit on the calibrated monitor.
             WebcamCalibrationWindow.PlaceOnCalibratedScreen(this);
 
