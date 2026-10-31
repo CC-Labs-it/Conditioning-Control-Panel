@@ -67,6 +67,65 @@ public sealed class HeroXpFxTests
         return Task.CompletedTask;
     });
 
+    // WPF MainWindow.ChromeFx.cs:677-690 selects formatting independently of visibility.
+    [Theory]
+    [InlineData(false, MotionLevel.Full, .8, "11 / ")]
+    [InlineData(true, MotionLevel.Full, .8, "11 / ")]
+    [InlineData(false, MotionLevel.Reduced, .8, "11 / ")]
+    [InlineData(false, MotionLevel.Off, .8, "10 / ")]
+    [InlineData(false, MotionLevel.Full, .2, "10 / ")]
+    public Task ParkedAwardUsesWpfRounding(bool minimized, MotionLevel motion, double amount, string expected)
+        => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var previousService = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        (s.PlayerLevel, s.PlayerXP, s.MotionLevel, s.PerformanceMode) = (10, 10, motion, false);
+        s.OfflineMode = true;
+        s.OfflineUsername = "parked-xp-test";
+        s.Welcomed = true;
+        s.HasAcceptedAgeVerification = true;
+        s.AutoPerformanceMode = false;
+        s.GentleVisuals = false;
+        var oldTime = BeatLoop.Time;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show(); shell.Activate(); Dispatcher.UIThread.RunJobs();
+            time.Advance(TimeSpan.FromSeconds(1)); BeatLoop.StepAll();
+            bool closed = false;
+            shell.Closed += (_, _) => closed = true;
+            if (minimized) shell.WindowState = WindowState.Minimized;
+            else shell.Hide();
+            if (minimized) Assert.Equal(WindowState.Minimized, shell.WindowState);
+            else Assert.False(shell.IsVisible);
+            Assert.False(closed);
+            ProgressionBank.Add(amount, "Mantra"); Dispatcher.UIThread.RunJobs();
+            Assert.False(closed);
+            Assert.Equal(10 + amount, s.PlayerXP, 6);
+            Assert.False(shell.XpReadoutCounting);
+            var text = shell.FindControl<TextBlock>("TxtXP")!;
+            Assert.StartsWith(expected, text.Text);
+            // A later gate refresh must retain the same settled target.
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.StartsWith(expected, text.Text);
+        }
+        finally
+        {
+            shell.Close(); Dispatcher.UIThread.RunJobs();
+            BeatLoop.Time = oldTime;
+            CoreSettings.ServiceProvider = previousService;
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task MeniscusRidesFillAndParksAtRestInReducedMotion() => AvaloniaTestDispatcher.RunAsync(() =>
     {

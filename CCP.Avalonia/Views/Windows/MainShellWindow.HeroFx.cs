@@ -163,7 +163,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             double from = !double.IsNaN(_lastXpShown) && level == _lastXpLevelShown ? _lastXpShown : 0;
             (_lastXpShown, _lastXpLevelShown) = (xp, level);
             _xpOdometer?.Stop();
-            _xpReadoutTarget = $"{(int)xp} / {(int)needed} XP";
+            // WPF MainWindow.ChromeFx.cs:677 selects the text independently of visibility.
+            bool wpfCounts = AmbientFxCanvas.Env.AllowTransitions && Math.Abs(xp - from) >= 0.5;
+            _xpReadoutTarget = wpfCounts ? target : $"{(int)xp} / {(int)needed} XP";
             if (_heroClosed || !AmbientFxCanvas.Env.AllowTransitions || !IsVisible
                 || WindowState == WindowState.Minimized || Math.Abs(xp - from) < 0.5)
             {
@@ -171,7 +173,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             string tail = $" / {(int)needed} XP";
-            _xpReadoutTarget = target;
             txt.Text = from.ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + tail;
             _xpOdometer = new BeatLoop(txt, seconds =>
             {
