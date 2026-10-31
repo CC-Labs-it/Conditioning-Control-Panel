@@ -27,7 +27,7 @@ public sealed class PerfBenchFrameTests
     public Task NextFrameIncludesLayoutAndPixelsWithoutAnExtraAnimationPulse(bool insideFrameCallback) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var fill = new Border { Background = Brushes.Red, Width = 10, Height = 40,

@@ -1,5 +1,7 @@
 using System;
 using System.Globalization;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -21,14 +23,25 @@ public partial class AvailableSubjectsTabView : UserControl
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
 
+    private readonly ObservableCollection<LobbyCardView> _open = new();
+    private readonly ObservableCollection<LobbyCardView> _playing = new();
+    private readonly ObservableCollection<LobbyCardView> _friends = new();
+    private LobbyGates? _paintedGates;
+    private string? _paintedLanguage;
+    private bool _paintedError;
+
     public AvailableSubjectsTabView()
     {
         InitializeComponent();
+        // Stable sources keep realized containers across hide/show and snapshot updates.
+        AvailableSubjectsList.ItemsSource = _open;
+        LobbyPlayingList.ItemsSource = _playing;
+        LobbyFriendsList.ItemsSource = _friends;
         Repaint();
         InitializeSubjectsMotion();
         SizeChanged += (_, e) => SetNarrow(LobbyPageRules.IsNarrowWidth(e.NewSize.Width));
         // The shell hides tabs with IsVisible, so Loaded fires once; WPF redraws on every open
-        // (MainWindow.Lobby.cs:84), which picks up sign-in, Remote gate and language changes.
+        // (MainWindow.Lobby.cs:84). Recheck sign-in, Remote gate and language without resetting lists.
         PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && IsVisible) Repaint(); };
         Loaded += (_, _) =>
         {
@@ -75,10 +88,16 @@ public partial class AvailableSubjectsTabView : UserControl
 
     internal void PaintSnapshot(LobbySnapshot snapshot, LobbyGates gates, bool error = false)
     {
-        _snapshot = snapshot;
-        AvailableSubjectsList.ItemsSource = snapshot.Open.Select(r => new LobbyCardView(r, gates)).ToList();
-        LobbyPlayingList.ItemsSource = snapshot.Playing.Select(r => new LobbyCardView(r, gates)).ToList();
-        LobbyFriendsList.ItemsSource = snapshot.Friends.Select(r => new LobbyCardView(r, gates)).ToList();
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        if (_paintedGates == gates && _paintedLanguage == language && _paintedError == error
+            && _snapshot.SignedIn == snapshot.SignedIn
+            && _snapshot.Open.SequenceEqual(snapshot.Open)
+            && _snapshot.Playing.SequenceEqual(snapshot.Playing)
+            && _snapshot.Friends.SequenceEqual(snapshot.Friends)) return;
+
+        UpdateCards(_open, snapshot.Open, gates);
+        UpdateCards(_playing, snapshot.Playing, gates);
+        UpdateCards(_friends, snapshot.Friends, gates);
         LobbyOpenCount.Text = snapshot.Open.Count.ToString(CultureInfo.InvariantCulture);
         LobbyPlayingCount.Text = snapshot.Playing.Count.ToString(CultureInfo.InvariantCulture);
         LobbyFriendsCount.Text = snapshot.Friends.Count.ToString(CultureInfo.InvariantCulture);
@@ -94,8 +113,24 @@ public partial class AvailableSubjectsTabView : UserControl
         RemoteHostLock.IsVisible = !gates.CanHost(LobbyGame.Remote);
         BtnBecomeASubject.Opacity = gates.CanHost(LobbyGame.Remote) ? 1 : 0.7;
         TxtBecomeASubjectSubtitle.IsVisible = gates.SignedIn && !gates.CanHost(LobbyGame.Remote);
+        // Keep copies: callers may reuse mutable list instances for the next snapshot.
+        _snapshot = snapshot with { Open = snapshot.Open.ToArray(), Playing = snapshot.Playing.ToArray(), Friends = snapshot.Friends.ToArray() };
+        _paintedGates = gates;
+        _paintedLanguage = language;
+        _paintedError = error;
         // ponytail: Chess/Goon host and all row Join flows wait for the Lobby service/hosts in the b-lane.
         // Keep those destinations disabled instead of constructing a made-up game or remote claim flow.
+    }
+
+    private static void UpdateCards(ObservableCollection<LobbyCardView> cards, IReadOnlyList<LobbyRow> rows, LobbyGates gates)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var card = new LobbyCardView(rows[i], gates);
+            if (i == cards.Count) cards.Add(card);
+            else if (cards[i] != card) cards[i] = card;
+        }
+        while (cards.Count > rows.Count) cards.RemoveAt(cards.Count - 1);
     }
 
     private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e)
@@ -108,7 +143,7 @@ public partial class AvailableSubjectsTabView : UserControl
     }
 }
 
-public sealed class LobbyCardView
+public sealed record LobbyCardView
 {
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {

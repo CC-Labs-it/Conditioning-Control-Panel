@@ -24,7 +24,7 @@ public sealed class TabSwitchCostTests(ITestOutputHelper output)
         // 24 tabs x 21 cycles of real frames (minutes): a benchmark, not a regression check.
         Assert.SkipUnless(Environment.GetEnvironmentVariable("CCP_TRACE_TAB_SWITCH") == "1", "set CCP_TRACE_TAB_SWITCH=1 to run");
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         StartupLadder.ResetForTests();   // P52/P76: no intro may open mid-run
