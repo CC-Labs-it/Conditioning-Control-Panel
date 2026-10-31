@@ -1,3 +1,4 @@
+using ConditioningControlPanel.Avalonia.Platform;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -24,7 +25,7 @@ public sealed class JumpRightInTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .UseSkia().WithInterFont().With(AppFonts.Options()).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
             var prevSettings = CoreSettings.ServiceProvider;

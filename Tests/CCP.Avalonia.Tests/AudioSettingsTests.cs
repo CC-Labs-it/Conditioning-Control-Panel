@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -22,6 +23,50 @@ namespace CCP.Avalonia.Tests;
 /// both surfaces write settings through one binder and repaint each other (WPF HomeAudio mirror).</summary>
 public sealed class AudioSettingsTests
 {
+    [Fact]
+    public void ExternalMasterVolumeWritesRepaintWithoutLayoutOrAudioSideEffects() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current == null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options())
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.MasterVolume = 37;
+        // Empty owner: the binder's dials need no font/layout to prove a model-driven repaint.
+        var owner = new Border();
+        var master = new Slider { Maximum = 100 };
+        var text = new TextBlock();
+        var binder = new AudioSettingsBinder(owner, master, text, new Slider(), new TextBlock(),
+            new CheckBox(), new Slider(), new TextBlock(), new CheckBox(), new ComboBox(), new Button(), new Button());
+        var window = new Window { Content = owner };
+        try
+        {
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(37, master.Value);
+            s.MasterVolume = 23; // same publication as CoreIntensityRamp.Tick
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(23, master.Value);
+            Assert.Equal("23%", text.Text);
+            s.MasterVolume = 37; // Stop restores its snapshot
+            Assert.Equal(37, master.Value);
+            window.Content = null; // detached binders must not keep observing settings
+            s.MasterVolume = 12;
+            Assert.Equal(37, master.Value);
+            window.Content = owner;
+            Assert.Equal(12, master.Value);
+            service.RestoreFrom(new AppSettings { MasterVolume = 55 });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(55, master.Value);
+            s.MasterVolume = 99;
+            Assert.Equal(55, master.Value); // old instance unsubscribed
+            service.Current.MasterVolume = 42;
+            Assert.Equal("42%", text.Text);
+        }
+        finally { window.Close(); CoreSettings.ServiceProvider = oldProvider; }
+    });
+
     private static readonly LibVlcAudio.OutputDevice Default = new("", "System default");
     private static readonly LibVlcAudio.OutputDevice Headset = new("alsa_output.usb-headset", "USB Headset");
 
@@ -32,7 +77,7 @@ public sealed class AudioSettingsTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .UseSkia().WithInterFont().With(AppFonts.Options()).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
@@ -101,6 +146,17 @@ public sealed class AudioSettingsTests
                 Assert.Equal(120, s.Haptics.AudioSync.ManualLatencyOffsetMs);
                 Assert.Equal("+120ms", A<TextBlock>("TxtAudioSyncLatency").Text);
 
+                // WPF ramp writes settings outside either binder. Both attached surfaces must repaint,
+                // including the restore on Stop, without changing any other audio dial.
+                s.MasterVolume = 23;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(23, A<Slider>("SliderMaster").Value);
+                Assert.Equal("23%", H<TextBlock>("HomeTxtMaster").Text);
+                s.MasterVolume = 64;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("64%", A<TextBlock>("TxtMaster").Text);
+                Assert.Equal(80, s.VideoVolume);
+
                 // Test Audio: the WPF diagnostics text in WPF's dialog title, built off the UI thread.
                 Click(H<Button>("HomeBtnTestAudio"));
                 await dialog.Task.WaitAsync(System.TimeSpan.FromSeconds(30));
@@ -134,7 +190,7 @@ public sealed class AudioSettingsTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .UseSkia().WithInterFont().With(AppFonts.Options()).UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;

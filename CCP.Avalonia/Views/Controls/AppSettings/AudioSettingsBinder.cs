@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         private readonly ComboBox _output;
         private SettingsService? _service;
         private bool _syncing;
+        private Models.AppSettings? _observed;
 
         internal AudioSettingsBinder(Control owner, Slider master, TextBlock txtMaster, Slider video, TextBlock txtVideo,
             CheckBox duckOn, Slider duck, TextBlock txtDuck, CheckBox exclude, ComboBox output, Button refresh, Button test)
@@ -74,6 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 Changed += Sync;
                 _service = CoreSettings.Service;
                 if (_service != null) _service.CurrentReplaced += OnReplaced;
+                ObserveCurrent();
                 if (_devices is null) RefreshDevices(); else Sync();
             };
             owner.DetachedFromVisualTree += (_, _) =>
@@ -81,10 +83,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 Changed -= Sync;
                 if (_service != null) _service.CurrentReplaced -= OnReplaced;
                 _service = null;
+                if (_observed != null) _observed.PropertyChanged -= OnSettingChanged;
+                _observed = null;
             };
         }
 
-        private void OnReplaced() => Dispatcher.UIThread.Post(Sync);
+        private void OnReplaced() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_service == null) return;
+            ObserveCurrent();
+            Sync();
+        });
+
+        private void ObserveCurrent()
+        {
+            if (_observed != null) _observed.PropertyChanged -= OnSettingChanged;
+            _observed = CoreSettings.Current;
+            _observed.PropertyChanged += OnSettingChanged;
+        }
+
+        // WPF MainWindow.StartStop.cs:679,755: RampTimer_Tick/StopRampTimer paint the master dial as well as the setting.
+        // Observe the model so Core ramps and their restore reach both attached surfaces.
+        private void OnSettingChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(Models.AppSettings.MasterVolume)) return;
+            void Paint() { if (ReferenceEquals(sender, _observed)) Sync(); }
+            if (Dispatcher.UIThread.CheckAccess()) Paint(); else Dispatcher.UIThread.Post(Paint);
+        }
 
         /// <summary>Paints every control from settings without raising an edit.</summary>
         internal void Sync()

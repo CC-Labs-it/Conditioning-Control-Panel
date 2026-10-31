@@ -955,6 +955,12 @@ namespace ConditioningControlPanel.Avalonia
                 // Dropped: WPF's EmiDesk "premiumTeaseSeen" fire - no EmiDesk service on this head.
                 var shell = (Views.Windows.MainShellWindow)desktop.MainWindow;
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
+                CoreIntensityRamp.JournalDir = CorePaths.UserData; // WPF StartStop.cs:633
+                CoreIntensityRamp.CompletedProvider = () =>
+                {
+                    Platform.OsNotifications.Show(global::ConditioningControlPanel.Localization.Loc.Get("notif_ramp_complete"), global::ConditioningControlPanel.Localization.Loc.Get("notif_ramp_complete_body"));
+                    Views.Windows.MainShellWindow.StopEngine(); // WPF StartStop.cs:785
+                };
                 Sessions.Ticked += shell.OnSessionTick;
                 Sessions.SessionLog.LogReady += shell.OnSessionLogReady;
                 // WPF App.xaml.cs:529 (main fbe161de2): "See tiers" opens the vault gate card at the tier this door needs.
@@ -998,6 +1004,8 @@ namespace ConditioningControlPanel.Avalonia
                     Sessions.SessionLog.LogReady -= shell.OnSessionLogReady;
                     Sessions.Stop();   // restores the pre-session settings before exit
                     CoreEngine.Stop();
+                    CoreIntensityRamp.CompletedProvider = null;
+                    CoreIntensityRamp.JournalDir = null;
                     StopDesktopOverlays();
                     Views.Overlays.CornerGifOverlay.StopAll();   // WPF CornerGifService.OnMainWindowClosing / OnExit
                     Views.Overlays.SpeakCueOverlay.CloseActive();   // a topmost window must not outlive the shell
