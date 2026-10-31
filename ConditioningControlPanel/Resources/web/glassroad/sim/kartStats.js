@@ -40,17 +40,27 @@ export function maxTopMul(feel) {
   return rows ? Math.max(1, ...Object.values(rows).map((r) => Number(r?.topMul) || 1)) : 1;
 }
 
-// On a 1e-6 grid first: 1 - 0.95 is 0.050000000000000044, which would tip a half way mark.
-const bar = (t) => Math.max(1, Math.min(5, 3 + Math.round(Math.round(t * 1e6) / 1e6)));
+/** Seven levels with Lovebomb in the middle: five could not show every trade-off (House Edge read as better than Velvet
+ * Lock on every bar, which is really faster). tests/kart-stats.test.mjs fails if any kart reads as beating another. */
+export const BAR_LEVELS = 7;
+// Where each level starts, as the change from Lovebomb. A table edit that lands a row between marks may need new marks.
+const CUTS = {
+  speed: [-0.018, -0.012, -0.0001, 0.0001, 0.015, 0.022],
+  accel: [-0.18, -0.1, -0.001, 0.001, 0.1, 0.18],
+  handling: [-0.3, -0.15, -0.001, 0.001, 0.08, 0.12],
+  stability: [-0.5, -0.2, -0.001, 0.001, 0.5, 0.6],
+};
+// On a 1e-6 grid first: 1 - 0.95 is 0.050000000000000044.
+const bar = (key, change) => { const t = Math.round(change * 1e6) / 1e6; return 1 + CUTS[key].filter((c) => t >= c).length; };
 
-/** The garage's four bars, integers 1..5, Lovebomb 3 3 3 3, plus the type word's key. */
+/** The garage's four bars, integers 1..BAR_LEVELS, Lovebomb 4 4 4 4, plus the type word's key. */
 export function statBars(feel, bodyId) {
-  const k = kartStats(feel, bodyId), top = k.topMul - 1;
+  const k = kartStats(feel, bodyId);
   return {
-    speed: bar(top * (top >= 0 ? 2 / 0.024 : 2 / 0.02)),   // the table's fastest and slowest rows are the ends of the bar
-    accel: bar((k.accelMul - 1) * 10),
-    handling: bar(((1 - k.gripMul) + (k.driftMul - 1)) * 10),
-    stability: bar(((1 - k.wallMul) + (1 - k.bumpMul)) * (2 / 0.6)),
+    speed: bar('speed', k.topMul - 1),
+    accel: bar('accel', k.accelMul - 1),
+    handling: bar('handling', (1 - k.gripMul) + (k.driftMul - 1)),
+    stability: bar('stability', (1 - k.wallMul) + (1 - k.bumpMul)),
     type: k.type,
   };
 }
