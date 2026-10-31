@@ -166,7 +166,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).
             var clickable = !CoreSession.IsSessionRunning || s.BubblesClickable;
             var mod = (CoreMods.ActiveModTokenProvider?.Invoke() as ModManifest)?.BubbleScale;
-            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable));
+            // WPF AmbientBubbleMotion.RollForSpawn: picker + grants + motion level -> one concrete style.
+            var level = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level; // WPF MotionFx.Level, capped by OS and Gentle Visuals
+            var motion = BubbleMotionRoll.Resolve(s.BubbleMotionStyle,
+                PrizeOwnership.IsGranted(PrizeOwnership.BubbleRain),
+                PrizeOwnership.IsGranted(PrizeOwnership.BubbleSpiralIn),
+                level, Field.Random.NextDouble());
+            Field.Bubbles.Add(AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable, level, motion));
             RequestFrame();
         }
 
@@ -490,7 +496,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
                     using (dc.PushTransform(m))
-                    using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
+                    using (dc.PushOpacity(Math.Clamp(b.Fade * b.MotionFade, 0, 1)))
                     {
                         if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
                         {
