@@ -44,6 +44,7 @@ SPARKLES IN EVERY GAME
 
 OTHER GAMES
 - Piece by Piece: watch public games from the Lobby, react from the stands, and climb a rating and a Ladder.
+- Down the Rabbit Hole moves to Basic. Prime keeps it too.
 - Down the Rabbit Hole is calmer: dock toys wake on their own, and a detonation dips sound and colour instead of flashing.
 - Escape pauses Arcademy, Goon, the Back Room, Intake, chess and Breakout. Goon toys react during matches, never above your own slider.
 

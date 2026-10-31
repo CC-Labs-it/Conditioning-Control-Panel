@@ -3111,7 +3111,7 @@ namespace ConditioningControlPanel
 #endif
             if (e.Args.Contains("--dtrh"))
             {
-                var dtrhGate = Services.TierGate.RequiresLab("Down the Rabbit Hole", "dtrh");
+                var dtrhGate = Services.TierGate.RequiresPremium("Down the Rabbit Hole", "dtrh");
                 if (dtrhGate.Allowed) Services.Chaos.DtrhHostService.Launch();
                 else Logger?.Information("--dtrh ignored: {Reason}", dtrhGate.Reason);
             }
@@ -3119,7 +3119,7 @@ namespace ConditioningControlPanel
             // Racing Thoughts (the kart run on the descent's media), dev shortcut: `--race` opens
             // the race window straight away. NOT the same door as `--dtrh` any more: the race has
             // no tier door since 2026-09-17 (owner's call - open testing on both surfaces) while
-            // the descent above is still tier 2. This arg asks exactly what BtnStartRace_Click
+            // the descent above still asks for Basic. This arg asks exactly what BtnStartRace_Click
             // asks, which is the only thing that keeps a dev shortcut honest about the product.
             //
             // The race-06/race-07 stack arrived a day later with a PURCHASE door (RacingAccess.CanLaunch)
