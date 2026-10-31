@@ -92,6 +92,53 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Opened += (_, _) => { ResumeAutonomyOnStartup(); RefreshVoiceInputModes(); };
         }
 
+        // WPF MainWindow.StartStop.cs:286-310. Only the user arming wallpaper earns a
+        // notice. A scheduled action must stay silent, and online/mixed pools need no local files.
+        internal void WarnIfWallpaperLibraryEmpty()
+        {
+            try
+            {
+                if (!WallpaperLibraryEmpty()) return;
+                App.Notifications.Show(
+                    string.Format(ConditioningControlPanel.Localization.Loc.Get("msg_no_wallpaper_images"),
+                        ConditioningControlPanel.Localization.Loc.Get("nav_door_library"), ConditioningControlPanel.Localization.Loc.Get("tab_assets")),
+                    Helpers.NotificationType.Warning, TimeSpan.FromSeconds(18),
+                    actionLabel: ConditioningControlPanel.Localization.Loc.Get("btn_open_media_manager"),
+                    action: () => ShowTab("assets"),
+                    secondaryActionLabel: ConditioningControlPanel.Localization.Loc.Get("btn_get_packs"),
+                    secondaryAction: async () =>
+                    {
+                        try { await Platform.ExternalOpener.OpenAsync(this, DiscordLinks.PackCatalogue); }
+                        catch (Exception ex) { Log.Debug(ex, "Wallpaper pack catalogue failed"); }
+                    });
+            }
+            catch (Exception ex) { Log.Debug(ex, "Wallpaper library check failed"); }
+        }
+
+        // WPF MainWindow.StartStop.cs:215-245, :294-299. An IO failure means do not nag.
+        internal static bool WallpaperLibraryEmpty()
+        {
+            var s = CoreSettings.Current;
+            if (!string.Equals(s.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return false;
+            try
+            {
+                var dir = !string.IsNullOrWhiteSpace(s.WallpaperSourceFolder)
+                          && System.IO.Directory.Exists(s.WallpaperSourceFolder)
+                    ? s.WallpaperSourceFolder : System.IO.Path.Combine(CorePaths.EffectiveAssets, "wallpapers");
+                if (!System.IO.Directory.Exists(dir)) return true;
+                foreach (var file in System.IO.Directory.EnumerateFiles(dir, "*", System.IO.SearchOption.AllDirectories))
+                {
+                    var ext = System.IO.Path.GetExtension(file);
+                    if (ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+                        || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+                        || ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
+                        || ext.Equals(".bmp", StringComparison.OrdinalIgnoreCase)) return false;
+                }
+                return true;
+            }
+            catch { return false; }
+        }
+
         private bool CanPerformAutonomy(AutonomyActionType a) => a switch
         {
             AutonomyActionType.PinkFilterPulse => PinkFilterOverlay.CanShowTint(this),

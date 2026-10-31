@@ -547,10 +547,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             s.WallpaperEnabled = keep;
             CoreSettings.Save();
             PanelWallpaperDuration.IsVisible = !keep;
-            // ponytail: WPF also puts the original wallpaper straight back when this goes off
-            // (App.Wallpaper.Deactivate) and warns on an empty library when it goes on
-            // (MainWindow.StartStop.cs WarnIfWallpaperLibraryEmpty). Needs
-            // ConditioningControlPanel/Services/WallpaperService.cs, which is Win32.
+            // WPF MainWindow.Autonomy.cs:435: warn only when the user turns keep on.
+            if (keep) Shell?.WarnIfWallpaperLibraryEmpty();
+            // Part B: restore the desktop on off when the wallpaper host is available.
         }
 
         /// <summary>WPF MainWindow.Autonomy.cs:329. The folder is saved for Takeover's wallpaper
