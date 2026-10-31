@@ -558,6 +558,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "[Launcher] sign-in dialog failed"); }
             finally { _signingIn = false; }
             RefreshAccount();
+            FriendsChip.UpdatePill();
             RefreshStats();
             BuildTiles();
         }

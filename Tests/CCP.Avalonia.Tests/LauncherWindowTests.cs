@@ -91,12 +91,39 @@ public sealed class LauncherWindowTests
     });
 
     [Fact]
+    public void FriendsIdentity_RefreshesAfterSignIn_AndAccountSwitchOnActivation() => Run(shell =>
+    {
+        var oldName = CoreAccount.DisplayNameProvider;
+        string name = "";
+        try
+        {
+            CoreAccount.DisplayNameProvider = () => name;
+            CoreAccount.IsLoggedInProvider = () => name.Length > 0;
+            LauncherWindow.BackToLauncher(shell);
+            var w = LauncherWindow.Instance!;
+            var chip = w.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.FriendsRailChip>("FriendsChip")!;
+            w.OpenSignIn();
+            Assert.True(LoginOpen(w));
+            name = "Alice";
+            foreach (var dialog in w.OwnedWindows.ToArray()) dialog.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains("Alice", Texts(chip)); Assert.Contains("A", Texts(chip));
+            name = "Bob";
+            Assert.IsType<Action>(typeof(global::Avalonia.Platform.IWindowBaseImpl).GetProperty("Activated")!.GetValue(w.PlatformImpl))();
+            Assert.Contains("Bob", Texts(chip)); Assert.Contains("B", Texts(chip));
+        }
+        finally { CoreAccount.DisplayNameProvider = oldName; }
+    });
+
+    [Fact]
     public void WhatsNew_OpensCurrentNotesOverLauncher_AndPanicClosesIt() => Run(shell =>
     {
         var oldVersion = CoreReleaseContent.AppVersionProvider;
         var oldNotes = CoreReleaseContent.PatchNotesProvider;
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
         try
         {
+            LocalizationManager.Instance.SetLanguage("de");
             CoreReleaseContent.AppVersionProvider = () => "7.1.5";
             CoreReleaseContent.PatchNotesProvider = () => "Launcher release notes";
             LauncherWindow.BackToLauncher(shell);
@@ -105,14 +132,14 @@ public sealed class LauncherWindowTests
             Raise(w, "WhatsNewLink");
             Dispatcher.UIThread.RunJobs();
             var notes = Assert.Single(w.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.WhatsNewDialog>());
-            Assert.Equal("What's New in v7.1.5", notes.FindControl<TextBlock>("TxtTitle")!.Text);
+            Assert.Equal("Was ist neu in v7.1.5", notes.FindControl<TextBlock>("TxtTitle")!.Text);
             Assert.Equal("Launcher release notes", notes.FindControl<TextBlock>("TxtNotes")!.Text);
             Assert.False(shell.IsVisible);
             PanicSurfaces.All.Single(s => s.Id == "launcher-notes").Stop(shell);
             Dispatcher.UIThread.RunJobs();
             Assert.False(notes.IsVisible);
         }
-        finally { CoreReleaseContent.AppVersionProvider = oldVersion; CoreReleaseContent.PatchNotesProvider = oldNotes; }
+        finally { CoreReleaseContent.AppVersionProvider = oldVersion; CoreReleaseContent.PatchNotesProvider = oldNotes; LocalizationManager.Instance.SetLanguage(oldLanguage); }
     });
 
     [Fact]

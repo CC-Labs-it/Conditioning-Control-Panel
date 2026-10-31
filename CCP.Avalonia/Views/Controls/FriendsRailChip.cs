@@ -24,6 +24,7 @@ public sealed class FriendsRailChip : Grid
     private FriendsFeed? _feed;
     private readonly Popup _popup;
     private IFriendsService? _svc;
+    private Window? _host;
     public FriendsRailChip() : this(null) { }
     internal FriendsRailChip(IFriendsService? service)
     {
@@ -82,8 +83,8 @@ public sealed class FriendsRailChip : Grid
             if (e.Source is Visual s && (ReferenceEquals(s, Drawer) || Drawer.IsVisualAncestorOf(s))) return;
             if (e.InitialPressMouseButton == MouseButton.Left) { Toggle(); e.Handled = true; }
         };
-        AttachedToVisualTree += (_, _) => { Rebind(); LocalizationManager.Instance.LanguageChanged += OnLanguage; };
-        DetachedFromVisualTree += (_, _) => { _popup.IsOpen = false; Unwire(); Drawer.Unsubscribe(); LocalizationManager.Instance.LanguageChanged -= OnLanguage; };
+        AttachedToVisualTree += (_, _) => { Rebind(); _host = TopLevel.GetTopLevel(this) as Window; if (_host != null) _host.Activated += OnHostActivated; LocalizationManager.Instance.LanguageChanged += OnLanguage; };
+        DetachedFromVisualTree += (_, _) => { if (_host != null) _host.Activated -= OnHostActivated; _host = null; _popup.IsOpen = false; Unwire(); Drawer.Unsubscribe(); LocalizationManager.Instance.LanguageChanged -= OnLanguage; };
         Rebind();
     }
     internal FriendsDrawer Drawer { get; }
@@ -145,9 +146,18 @@ public sealed class FriendsRailChip : Grid
         if (_feed != null) _feed.Changed -= OnFeedChanged;
         (_svc, _feed) = (null, null);
     }
+    // WPF FriendsRailChip.cs:224-227/279-286: rebind and repaint on host activation.
+    private void OnHostActivated(object? sender, EventArgs e) => Rebind();
     private void OnSnapshot(FriendsSnapshot _) => UpdatePill();
     internal void UpdatePill()
     {
+        if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { global::Avalonia.Threading.Dispatcher.UIThread.Post(UpdatePill); return; }
+        var name = Drawer.MeName();
+        if (_name.Text != name)
+        {
+            _name.Text = name;
+            ((Grid)_face.Child!).Children[0] = FriendsDrawer.Avatar(name, 40, null);
+        }
         int n = 0;
         try { if (_svc?.Available == true) n = _svc.Snapshot?.OnlineCount ?? 0; } catch { }
         _pillText.Text = n.ToString();

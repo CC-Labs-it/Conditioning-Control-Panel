@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (MainShellWindow.LockdownActive || _whatsNew != null) return;
             try
             {
-                _whatsNew = new Dialogs.WhatsNewDialog("What's New in v" + CoreReleaseContent.AppVersion,
+                _whatsNew = new Dialogs.WhatsNewDialog(Loc.GetF("set2_whats_new_title_0", CoreReleaseContent.AppVersion),
                     CoreReleaseContent.PatchNotes);
                 await _whatsNew.ShowDialogSafe(this);
             }
