@@ -31,6 +31,16 @@ public class TestIsolationTests
         Assert.Empty(bad);
     }
 
+    [Fact]
+    public void EveryTestStartsWithProductionFonts() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.NotNull(global::Avalonia.Application.Current);
+        var typeface = new global::Avalonia.Media.Typeface(
+            new global::Avalonia.Media.FontFamily("Segoe UI Black, Segoe UI"),
+            global::Avalonia.Media.FontStyle.Normal, global::Avalonia.Media.FontWeight.Black);
+        Assert.NotNull(typeface.GlyphTypeface);
+    });
+
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
     [Fact]

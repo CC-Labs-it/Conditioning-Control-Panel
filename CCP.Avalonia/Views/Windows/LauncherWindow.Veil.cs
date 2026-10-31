@@ -11,6 +11,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -20,17 +21,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         private const double VeilBreathSeconds = 3;   // WPF Choreo.cs:54
 
-        /// <summary>WPF's ColorAnimation at AmbientFps; ticks only while the veil is on screen.</summary>
-        private readonly DispatcherTimer _veilBreath = new() { Interval = TimeSpan.FromMilliseconds(1000.0 / 30) };
+        /// <summary>WPF Choreo.cs:557-600: ambient breath on the shared 30 fps frame beat.
+        /// A free-running dispatcher timer can starve input while software rendering is slow.</summary>
+        private BeatLoop _veilBreath = null!;
         private LockdownService? _veilSource;
         private GradientStop? _veilEdge;
-        private double _veilT;
 
-        internal bool VeilBreathing => _veilBreath.IsEnabled;
+        internal bool VeilBreathing => _veilBreath.IsTicking;
 
         private void HookVeil()
         {
-            _veilBreath.Tick += (_, _) => StepVeilBreath(_veilBreath.Interval.TotalSeconds);
+            _veilBreath = new BeatLoop(LockdownVeil, StepVeilBreath);
             AddHandler(KeyDownEvent, SwallowWhenVeiled, RoutingStrategies.Tunnel, handledEventsToo: true);
             AddHandler(KeyUpEvent, SwallowWhenVeiled, RoutingStrategies.Tunnel, handledEventsToo: true);
             AddHandler(TextInputEvent, SwallowWhenVeiled, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -111,11 +112,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>One frame of the breath: edge alpha 0x55..0xB3 and the text 0.7..1.0, sine in-out,
         /// auto-reversing every <see cref="VeilBreathSeconds"/> (WPF ColorAnimation + GlowBreath).</summary>
-        internal void StepVeilBreath(double dt)
+        internal void StepVeilBreath(double elapsed)
         {
             if (_veilEdge == null) return;
-            _veilT = (_veilT + dt) % (2 * VeilBreathSeconds);
-            var u = _veilT / VeilBreathSeconds;
+            var u = elapsed % (2 * VeilBreathSeconds) / VeilBreathSeconds;
             if (u > 1) u = 2 - u;
             var ease = (1 - Math.Cos(Math.PI * u)) / 2;
             _veilEdge.Color = Color.FromArgb((byte)(0x55 + (0xB3 - 0x55) * ease), 0xAA, 0x00, 0x22);

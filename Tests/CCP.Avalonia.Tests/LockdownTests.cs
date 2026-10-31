@@ -32,6 +32,237 @@ public sealed class LockdownTests
                 .SetupWithoutStarting();
     }
 
+    [Fact]
+    public async Task LockdownArtworkUsesTheShippedSideHeroAndEmergencyPlates()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var tab = new LockdownTabView();
+            var win = new Window { Content = tab };
+            win.Show();
+            try
+            {
+                var side = tab.FindControl<Image>("ImgLockdownFeature");
+                Assert.NotNull(side);
+                Assert.NotNull(side.Source);
+                Assert.True(ConditioningControlPanel.Avalonia.Controls.HoverPop.GetIsEnabled(side));
+                Assert.Equal(new Thickness(10), side.Margin);
+                var hero = Assert.IsType<global::Avalonia.Media.ImageBrush>(
+                    tab.FindControl<Border>("LockdownHeroArt")!.Background);
+                Assert.Same(side.Source, hero.Source);
+                Assert.NotNull(Assert.IsType<global::Avalonia.Media.ImageBrush>(
+                    tab.FindControl<Border>("EEFacePlate")!.Background).Source);
+            }
+            finally { win.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task ArtworkWaitsForAttachAndResolvesTheSideOnlyOnceOnFirstShow()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var previous = CoreModArt.OverridePathProvider;
+            var reads = 0;
+            CoreModArt.OverridePathProvider = path => { reads++; return null; };
+            Window? win = null;
+            try
+            {
+                var tab = new LockdownTabView();
+                Assert.Equal(0, reads);
+                Assert.Null(tab.FindControl<Image>("ImgLockdownFeature")!.Source);
+                win = new Window { Content = tab };
+                win.Show();
+                Assert.Equal(1, reads);
+                Assert.NotNull(tab.FindControl<Image>("ImgLockdownFeature")!.Source);
+                Assert.NotNull(Assert.IsType<global::Avalonia.Media.ImageBrush>(
+                    tab.FindControl<Border>("EEFacePlate")!.Background).Source);
+            }
+            finally { win?.Close(); CoreModArt.OverridePathProvider = previous; }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task ArtworkTracksModSwitchesOnlyWhileAttachedAndRefreshesOnReattach()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var previous = CoreModArt.OverridePathProvider;
+            var tab = new LockdownTabView();
+            var win = new Window { Content = tab };
+            var png = Path.GetTempFileName();
+            using (var source = global::Avalonia.Platform.AssetLoader.Open(
+                new Uri("avares://CCP.Avalonia/Resources/lockdown/emergency_exit.png")))
+            using (var target = File.Create(png)) source.CopyTo(target);
+            try
+            {
+                win.Show();
+                var side = tab.FindControl<Image>("ImgLockdownFeature")!;
+                var before = side.Source;
+                var requested = false;
+                CoreModArt.OverridePathProvider = path =>
+                {
+                    if (path == "lockdown_icon.png") { requested = true; return png; }
+                    throw new InvalidOperationException("Emergency Exit must use built-in art");
+                };
+                void Switch() => CoreMods.RaiseModChanged(null,
+                    new ConditioningControlPanel.Models.ModPackage(new ConditioningControlPanel.Models.ModManifest(), null, false));
+                Switch();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(requested);
+                Assert.NotSame(before, side.Source);
+                Assert.Same(side.Source, Assert.IsType<global::Avalonia.Media.ImageBrush>(
+                    tab.FindControl<Border>("LockdownHeroArt")!.Background).Source);
+                using var expected = new global::Avalonia.Media.Imaging.Bitmap(png);
+                Assert.Equal(expected.PixelSize, Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(side.Source).PixelSize);
+                win.Content = null;
+                requested = false;
+                Switch();
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(requested);
+                CoreModArt.OverridePathProvider = null;
+                win.Content = tab;
+                Assert.NotSame(before, side.Source);
+                Assert.NotEqual(expected.PixelSize, Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(side.Source).PixelSize);
+            }
+            finally { win.Close(); CoreModArt.OverridePathProvider = previous; File.Delete(png); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EmergencyExitPressUsesSixtyMsOutAndOneFortyMsHome(bool repressDuringRelease)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            using var ld = LockdownService.Current = new LockdownService();
+            var tab = new LockdownTabView();
+            var win = new Window { Content = tab, Width = 1200, Height = 1000 };
+            win.Show();
+            try
+            {
+                ld.Activate(TimeSpan.FromMinutes(30));
+                Dispatcher.UIThread.RunJobs();
+                tab.BtnEmergencyExit.BringIntoView();
+                Dispatcher.UIThread.RunJobs();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                var root = tab.FindControl<Grid>("EERoot")!;
+                // Same stepped ClockBase pattern as SharedDeeperThemeTests. Avalonia 12 keeps
+                // the clock contract internal; no wall-clock sleeps or timing races here.
+                const System.Reflection.BindingFlags any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+                var clockType = typeof(global::Avalonia.Animation.Animatable).Assembly
+                    .GetType("Avalonia.Animation.ClockBase", throwOnError: true)!;
+                var clock = Activator.CreateInstance(clockType, nonPublic: true)!;
+                var pulse = clockType.GetMethod("Pulse", any | System.Reflection.BindingFlags.Instance)!;
+                var clockProperty = (AvaloniaProperty)typeof(global::Avalonia.Animation.Animatable)
+                    .GetField("ClockProperty", any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+                root.SetValue(clockProperty, clock);
+                void Step(double ms) => pulse.Invoke(clock, new object[] { TimeSpan.FromMilliseconds(ms) });
+                void ScaleIs(double expected)
+                {
+                    Assert.Equal(expected, root.RenderTransform!.Value.M11, 5);
+                    Assert.Equal(expected, root.RenderTransform.Value.M22, 5);
+                }
+                var p = tab.BtnEmergencyExit.TranslatePoint(new Point(40, 40), win)!.Value;
+                win.MouseDown(p, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                var down = Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(root.Transitions!));
+                Assert.Equal(TimeSpan.FromMilliseconds(60), down.Duration);
+                Assert.IsType<global::Avalonia.Animation.Easings.QuadraticEaseOut>(down.Easing);
+                // WPF LockdownTabView.xaml.cs:330-342: EaseOut halfway down, then settled.
+                Step(0); Step(30);
+                ScaleIs(0.97375);
+                Step(60);
+                ScaleIs(0.965);
+                win.MouseUp(p, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                var up = Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(root.Transitions!));
+                Assert.Equal(TimeSpan.FromMilliseconds(140), up.Duration);
+                Assert.IsType<global::Avalonia.Animation.Easings.QuadraticEaseInOut>(up.Easing);
+                Step(1000); Step(1070);
+                ScaleIs(0.9825);
+                Step(1140);
+                ScaleIs(1.0);
+
+                // WPF BeginAnimation (LockdownTabView.xaml.cs:330-342) starts a reversal
+                // from the current animated scale, including release before the press settles.
+                win.MouseDown(p, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Step(2000); Step(2030);
+                ScaleIs(0.97375);
+                var reversalSamples = new System.Collections.Generic.List<double>();
+                root.PropertyChanged += (_, e) =>
+                {
+                    if (e.Property == Visual.RenderTransformProperty && root.RenderTransform is { } transform)
+                        reversalSamples.Add(transform.Value.M11);
+                };
+                win.MouseUp(p, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Assert.All(reversalSamples, scale => Assert.InRange(scale, 0.97375 - 0.000001, 1.0));
+                ScaleIs(0.97375); // no jump to the old press target
+                Step(3000); Step(3070);
+                ScaleIs(0.986875);
+                if (repressDuringRelease)
+                {
+                    reversalSamples.Clear();
+                    win.MouseDown(p, MouseButton.Left);
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.All(reversalSamples, scale => Assert.InRange(scale, 0.965 - 0.000001, 0.986875 + 0.000001));
+                    ScaleIs(0.986875); // no jump to the old release target
+                    Step(4000); Step(4030);
+                    ScaleIs(0.97046875);
+                    Step(4060);
+                    ScaleIs(0.965);
+                    win.MouseUp(p, MouseButton.Left);
+                    Dispatcher.UIThread.RunJobs();
+                    Step(5000); Step(5140);
+                }
+                else Step(3140);
+                ScaleIs(1.0);
+
+                // WPF LockdownTabView.xaml:466: MouseLeave releases even under capture.
+                win.MouseDown(p, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Step(6000); Step(6030);
+                ScaleIs(0.97375);
+                win.MouseMove(new Point(1, 1), RawInputModifiers.LeftMouseButton);
+                Dispatcher.UIThread.RunJobs();
+                Step(7000); Step(7140);
+                ScaleIs(1.0);
+                win.MouseMove(p, RawInputModifiers.LeftMouseButton);
+                Dispatcher.UIThread.RunJobs();
+                Step(8000); Step(8060);
+                ScaleIs(1.0); // MouseEnter does not start another WPF press
+                win.MouseUp(p, MouseButton.Left);
+                win.MouseDown(p, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Step(9000); Step(9030);
+                ScaleIs(0.97375); // a new mouse-down arms the press again
+                Step(9060);
+                ScaleIs(0.965);
+                win.MouseUp(p, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Step(10000); Step(10140);
+                ScaleIs(1.0);
+            }
+            finally
+            {
+                ld.Deactivate();
+                LockdownService.Current = null;
+                win.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Arm(bool forceStrict, bool disablePanic)
     {
         var s = CoreSettings.Current;

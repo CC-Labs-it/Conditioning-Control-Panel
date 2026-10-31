@@ -128,8 +128,8 @@ public sealed class AmbientBeatLoopsTests
         "Views/Controls/SeasonRecapCard.axaml.cs", "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml.cs",
         "Views/Overlays/AttentionTestTarget.cs", "Views/Overlays/FlashOverlay.cs", "Views/Overlays/SpiralOverlay.cs",
         "Views/Tabs/AchievementsTabView.Fx.cs", "Views/Tabs/ChasterTabView.Ladder.cs", "Views/Tabs/LockdownTabView.axaml.cs",
-        "Views/Tabs/StudioTabView.Fx.cs", "Views/Windows/EmiDesk/EmiBookWindow.axaml.cs", "Views/Windows/LauncherWindow.Fx.cs",
-        "Views/Windows/LauncherWindow.Veil.cs", "Views/Windows/MainShellWindow.Lockdown.cs", "Views/Windows/MantraWindow.axaml.cs",
+        "Views/Tabs/StudioTabView.Fx.cs", "Views/Windows/EmiDesk/EmiBookWindow.axaml.cs",
+        "Views/Windows/MainShellWindow.Lockdown.cs", "Views/Windows/MantraWindow.axaml.cs",
         "Views/Windows/QuizWindow.axaml.cs", "Views/Windows/WebcamCalibrationWindow.axaml.cs",
     };
 

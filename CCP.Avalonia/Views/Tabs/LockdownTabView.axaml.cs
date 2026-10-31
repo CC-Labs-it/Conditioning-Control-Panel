@@ -44,6 +44,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // x:Name fields this code-behind reads.
             InitializeComponent();
 
+            // WPF LockdownTabView.xaml:464-466: MouseLeave releases the press until a new down.
+            BtnEmergencyExit.PointerExited += (_, _) => BtnEmergencyExit.Classes.Set("ee-released", true);
+            BtnEmergencyExit.AddHandler(PointerPressedEvent, (_, e) =>
+            {
+                if (e.GetCurrentPoint(BtnEmergencyExit).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed)
+                    BtnEmergencyExit.Classes.Set("ee-released", false);
+            }, RoutingStrategies.Bubble, handledEventsToo: true);
+
             LoadPossessionSettings();
             UpdateQuestHint();
 
@@ -56,6 +64,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AttachedToVisualTree += (_, _) =>
             {
                 LoadPossessionSettings();
+                RefreshArtwork();
+                CoreMods.ModChanged += OnArtworkChanged;
                 // P01: a minimised window draws nothing, so the breath stops with it.
                 _host = TopLevel.GetTopLevel(this) as Window;
                 if (_host != null) _host.PropertyChanged += OnHostChanged;
@@ -66,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (_host != null) _host.PropertyChanged -= OnHostChanged;
                 _host = null;
                 StopEmergencyExitPulse();
+                CoreMods.ModChanged -= OnArtworkChanged;
             };
             PropertyChanged += (_, e) =>
             {
@@ -84,6 +95,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ld.TimerRestarted += _ => Dispatcher.UIThread.Post(() => TxtLockdownTimer.Text = Clock(ld.Remaining));
                 ShowLockdownState();
             }
+        }
+
+        // WPF MainWindow.xaml.cs:2880-2888,3738 and LockdownTabView.xaml:105-114
+        // swap one source for the side plate and hero. Keep the same
+        // assignment on mod changes; the Emergency Exit face is built-in (WPF xaml:515).
+        private void OnArtworkChanged(object? sender, Models.ModPackage? mod) =>
+            Dispatcher.UIThread.Post(RefreshArtwork);
+
+        private void RefreshArtwork()
+        {
+            var art = Helpers.ModArt.TryLoad("lockdown_icon.png");
+            ImgLockdownFeature.Source = art;
+            LockdownHeroArt.Background = new ImageBrush(art)
+                { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right, Opacity = 0.9 };
+            EEFacePlate.Background = new ImageBrush(Helpers.ModArt.TryLoadBuiltIn("lockdown/emergency_exit.png"))
+                { Stretch = Stretch.UniformToFill };
         }
 
         // ==== Duration (WPF LockdownTabView.xaml.cs:36) =====================================
