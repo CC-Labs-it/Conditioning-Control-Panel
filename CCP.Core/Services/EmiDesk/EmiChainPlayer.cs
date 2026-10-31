@@ -1,5 +1,4 @@
 using System;
-using System.Windows.Threading;
 using Serilog;
 
 namespace ConditioningControlPanel.Services.EmiDesk;
@@ -14,8 +13,10 @@ namespace ConditioningControlPanel.Services.EmiDesk;
 /// </summary>
 public sealed class EmiChainPlayer : IDisposable
 {
-    private readonly Dispatcher _dispatcher;
-    private DispatcherTimer? _timer;
+    private readonly Func<bool> _checkAccess;
+    private readonly Action<Action> _post;
+    private readonly Func<TimeSpan, Action, Action> _startTimer;
+    private Action? _stopTimer;
     private EmiChain? _chain;
     private EmiChainHooks? _hooks;
     private int _index;
@@ -27,10 +28,12 @@ public sealed class EmiChainPlayer : IDisposable
     /// <summary>True while a chain is on screen.</summary>
     public bool IsLive => _chain != null;
 
-    /// <param name="dispatcher">The surface's dispatcher. Every hook is raised on it.</param>
-    public EmiChainPlayer(Dispatcher dispatcher)
+    /// <summary>The head supplies dispatcher access, posting and a timer whose returned action stops it.</summary>
+    public EmiChainPlayer(Func<bool> checkAccess, Action<Action> post, Func<TimeSpan, Action, Action> startTimer)
     {
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _checkAccess = checkAccess ?? throw new ArgumentNullException(nameof(checkAccess));
+        _post = post ?? throw new ArgumentNullException(nameof(post));
+        _startTimer = startTimer ?? throw new ArgumentNullException(nameof(startTimer));
     }
 
     /// <summary>
@@ -40,9 +43,9 @@ public sealed class EmiChainPlayer : IDisposable
     public void Play(EmiChain? chain, EmiChainHooks hooks, string? bodyFrameOverride = null)
     {
         if (_disposed) return;
-        if (!_dispatcher.CheckAccess())
+        if (!_checkAccess())
         {
-            try { _dispatcher.BeginInvoke(new Action(() => Play(chain, hooks, bodyFrameOverride))); }
+            try { _post(() => Play(chain, hooks, bodyFrameOverride)); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] chain marshal failed"); }
             return;
         }
@@ -93,25 +96,18 @@ public sealed class EmiChainPlayer : IDisposable
 
         _index++;
 
-        _timer = new DispatcherTimer(DispatcherPriority.Normal, _dispatcher)
-        {
-            Interval = TimeSpan.FromMilliseconds(Math.Max(1, frame.Ms))
-        };
-        _timer.Tick += OnTick;
-        _timer.Start();
+        PendingHold = TimeSpan.FromMilliseconds(Math.Max(1, frame.Ms));
+        _stopTimer = _startTimer(PendingHold.Value, OnTick);
     }
 
-    private void OnTick(object? sender, EventArgs e)
+    private void OnTick()
     {
         try
         {
-            if (sender is DispatcherTimer t)
-            {
-                t.Stop();
-                t.Tick -= OnTick;
-            }
+            _stopTimer?.Invoke();
             if (_disposed || _chain == null) return;
-            _timer = null;
+            _stopTimer = null;
+            PendingHold = null;
 
             if (_index < _chain.Seq.Count)
             {
@@ -131,17 +127,17 @@ public sealed class EmiChainPlayer : IDisposable
         }
     }
 
+    internal TimeSpan? PendingHold { get; private set; }
+    internal void ElapsePendingHold() { if (_stopTimer != null) OnTick(); }
+
     /// <summary>Kill the running chain. Done is NOT called.</summary>
     public void Cancel()
     {
         try
         {
-            if (_timer != null)
-            {
-                _timer.Stop();
-                _timer.Tick -= OnTick;
-                _timer = null;
-            }
+            _stopTimer?.Invoke();
+            _stopTimer = null;
+            PendingHold = null;
         }
         catch (Exception ex)
         {

@@ -275,7 +275,13 @@ public partial class EmiDeskWindow : Window
     public EmiDeskWindow()
     {
         InitializeComponent();
-        _player = new EmiChainPlayer(Dispatcher);
+        _player = new EmiChainPlayer(Dispatcher.CheckAccess, a => Dispatcher.BeginInvoke(a), (hold, tick) =>
+        {
+            var timer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher) { Interval = hold };
+            EventHandler onTick = (_, _) => tick();
+            timer.Tick += onTick; timer.Start();
+            return () => { timer.Stop(); timer.Tick -= onTick; };
+        });
 
         SourceInitialized += OnSourceInitialized;
         Closed += OnClosedCleanup;
