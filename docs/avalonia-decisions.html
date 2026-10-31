@@ -1676,6 +1676,20 @@ padlock never covers a running lockdown, and an unreadable recovery file fails o
 <li>Choice: A. Pages render without JS, one-row-per-line diffs keep merges and row edits line-level, and old <code>+| id |</code> patch rows convert one to one (<code>avdoc-convert.py --row</code>). Main-sync ledgers carry <code>&lt;script type="application/json" id="ledger-meta"&gt;{"total": N}&lt;/script&gt;</code>; status counts are computed from the rows (inline JS), never typed. All readers go through <code>.github/scripts/avalonia_docs.py</code> (stdlib <code>HTMLParser</code>). ledger-check and verified-check also reject a table row that spans lines.</li>
 <li>Advised by: oracle (Opus 5.5 low). Pitfalls it named and how they are handled: meta drifting from rows (only the total is stored, the gate compares it with the parsed rows), converter exactness for lane replay (one converter, deterministic), huge cells breaking regex parsing (HTMLParser per line).</li>
 </ul>
+<h2 id="2026-10-30-sync8-recut-onto-the-reconcile-line">2026-10-30: Re-cutting the sync 8 lanes onto the reconcile line: fold, drop, or port (advisor: none, routine; reviewers per lane)</h2>
+<ul>
+<li>Question: the 14 sync8 lanes were built on the frozen stack; the head dev's port/7.2 work already ported many of the same WPF fixes. Cherry-pick, or re-check each WPF commit?</li>
+<li>Choice: each lane re-checks every WPF commit against the reconcile line. Already present: close the ledger row as <code>ported (reconcile line sha: file:line)</code> and drop the lane. Partly present: port only the gap. On a conflict in safety or Scrolller code the head dev's version wins unless ours is strictly stricter. Five lanes turned out fully covered and were folded into one ledger PR (#3170).</li>
+</ul>
+<h2 id="2026-10-30-windows-shard-0-flakes">2026-10-30: Three Windows-only tests are listed as known flakes (routine; evidence)</h2>
+<ul>
+<li>CompanionEditorsTests.PromptEditor_is_reachable_from_make_her_yours_links, ContentHitTestTests.ContentButtonsReceiveThePointerAtTheirCentre, PresetsFocalFxTests.PointerLiftAndPrimaryButtonSquishMatchWpfSnapAtOff failed only in the full Windows shard 0 on many unrelated lanes, passed 5/5 isolated on Windows (rcheck 40986959844) and on the base PR CI. Listed so a red only on them counts as green with flakes; the root cause stays an open lane. No test was skipped or weakened.</li>
+</ul>
+<h2 id="2026-10-30-rain-registry-and-avatar-generation-rule-in-core">2026-10-30: Rain v2 shared parts live in Core (main sync 9 compat; routine)</h2>
+<ul>
+<li>Main's <code>AppSettings.AvatarGeneration</code> (in Core since the stack moved AppSettings) uses <code>AvatarGenerationRule</code>, so the pure rule moved to <code>CCP.Core/Services/Companion</code> in the same namespace. The Avalonia tube parses the emote registry through it, because main's <code>generation</code> rows have no <code>avatarSet</code>. <code>RainPackHash</code> stays out of the Core settings backup, as on WPF.</li>
+</ul>
+
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
 const m=document.getElementById('ledger-meta');const s=document.querySelector('.counts');if(m&&s){const n=Object.values(all).reduce((a,b)=>a+b,0);s.textContent='Counts: '+Object.entries(all).map(([k,v])=>v+' '+k).join(', ')+' (total '+n+(n===JSON.parse(m.textContent).total?'':' != meta total '+JSON.parse(m.textContent).total)+')';}})();

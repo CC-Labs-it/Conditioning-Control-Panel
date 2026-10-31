@@ -44,8 +44,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             this.FindControl<Image>("SpotArtImage")!.RenderTransform = _kenBurns;
             foreach (var name in new[] { "SpotVeilLock", "SpotFreeToday" }) _fxParts.Add(this.FindControl<Control>(name)!);
 
-            LoadBackdrop();
-            RefreshVault();
+            // WPF EnsureExclusivesBuilt waits for navigation. Hidden tabs must not decode
+            // the catalogue, spotlight or backdrop while Home is being constructed.
+            Loaded += (_, _) => EnsureVisibleContent();
 
             // The shell enrolls the room in RegisterTabFx on first arrival at "premium",
             // matching WPF EnsureExclusivesBuilt. This view composes it and stops it on unload;
@@ -53,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             // PLAYBOOK P01: the shell hides tabs with IsVisible, so the motion clock follows it too.
-            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) UpdateMotion(); };
+            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { EnsureVisibleContent(); UpdateMotion(); } };
             // Main bf57cecdf: columns follow the width, cards stretch to fill the row (Core ExclusiveShelfFit).
             this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, e) => { if (e.WidthChanged) FitShelf(); };
         }
@@ -88,10 +89,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>ModChanged may be raised off the UI thread; marshal before touching the Image.</summary>
-        private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() => { LoadBackdrop(); RefreshVault(); });
+        private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() =>
+        {
+            _backdropLoaded = false;
+            _catalogueDirty = true;
+            EnsureVisibleContent();
+        });
 
         /// <summary>WPF binds the group headers live (BindVaultLoc); here the rows are rebuilt (PLAYBOOK P09).</summary>
         private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RefreshVault);
+
+        private bool _backdropLoaded;
+        private bool _catalogueDirty = true;
+        internal bool CatalogueBuilt { get; private set; }
+
+        private void EnsureVisibleContent()
+        {
+            if (!IsLoaded || !IsEffectivelyVisible || (CatalogueBuilt && _backdropLoaded && !_catalogueDirty)) return;
+            if (!_backdropLoaded) { LoadBackdrop(); _backdropLoaded = true; }
+            RefreshVault();
+        }
 
         /// <summary>WPF LoadBackdrop: null keeps what is already painted rather than blanking the room.</summary>
         private void LoadBackdrop()
@@ -123,11 +140,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>
         /// Repaints the spotlight and the shelf from <see cref="ExclusiveFeature.All"/> and each
-        /// feature's live gate. Called on construction, on every show of the tab
+        /// feature's live gate. Called on every show of the tab
         /// (MainShellWindow.OnTabShown) and on a mod switch, as WPF's refresh is.
         /// </summary>
         internal void RefreshVault()
         {
+            if (!IsEffectivelyVisible) { _catalogueDirty = true; return; } // refresh on the next visit
+            CatalogueBuilt = true;
+            _catalogueDirty = false;
             RetintVaultChrome();
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just

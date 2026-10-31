@@ -41,7 +41,6 @@ namespace ConditioningControlPanel
         [STAThread]
         public static void Main(string[] args)
         {
-            PerfBench.SinceMain.Start(); // first line of Main, shared benchmark definition
             var app = new App();
             app.InitializeComponent();
             app.Run();
@@ -183,6 +182,9 @@ namespace ConditioningControlPanel
         // with the same rooted-path check and the same LocalApplicationData fallback, so every
         // head gets the sandbox hook rather than only this one.
         public static string UserDataPath => CorePaths.UserData;
+
+        /// <summary>The user data root for a given CCP_USERDATA_DIR value (null = not set).</summary>
+        internal static string ResolveUserDataPath(string? overrideDir) => CorePaths.UserDataFor(overrideDir);
 
         /// <summary>
         /// User assets folder path - for user-added content that persists across updates
@@ -1990,18 +1992,6 @@ namespace ConditioningControlPanel
 #endif
         protected override void OnStartup(StartupEventArgs e)
         {
-            var perfIndex = Array.IndexOf(e.Args, "--perf-bench");
-            var perfBench = perfIndex >= 0;
-            if (perfBench)
-            {
-                if (perfIndex + 1 >= e.Args.Length || e.Args[perfIndex + 1].StartsWith("--")
-                    || !Path.IsPathRooted(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
-                {
-                    Console.Error.WriteLine("usage: --perf-bench <out.json> [--perf-bench-tabs A,B] (needs an absolute CCP_USERDATA_DIR sandbox)");
-                    PerfBench.Exit(2);
-                }
-                IsUnattendedRig = true;
-            }
 #if DEBUG
             if (e.Args.Contains("--first-show-preview"))
             {
@@ -2054,7 +2044,7 @@ namespace ConditioningControlPanel
             // one click marked it "Not Responding". On a dedicated thread it stays
             // responsive and animating for the whole load. Null if creation failed;
             // every use below is ?. so startup proceeds splash-less in that case.
-            _splash = perfBench ? null : SplashScreen.ShowOnOwnThread();
+            _splash = SplashScreen.ShowOnOwnThread();
             var splash = _splash;
             splash?.SetProgress(0.0, "Starting...");
 
@@ -2402,7 +2392,6 @@ namespace ConditioningControlPanel
             DispatcherUnhandledException += (s, args) =>
             {
                 LogCrashDetails("DISPATCHER", args.Exception);
-                if (perfBench) PerfBench.Exit(1); // unattended benchmark must never wait on an error dialog
 
                 // GDI / desktop-heap quota exhaustion while WPF shows a layered window
                 // (heavy effect load, esp. many full-screen subliminal/flash surfaces on a
@@ -2532,7 +2521,6 @@ namespace ConditioningControlPanel
 
             // Initialize services
             Settings = new SettingsService();
-            if (perfBench) PerfBench.PrepareSettings(Settings.Current);
 
             // THE STARTUP LADDER. Built here, before a single service that might want to interrupt
             // and long before MainWindow exists, because MainWindow's constructor is the first
@@ -2540,7 +2528,6 @@ namespace ConditioningControlPanel
             // allowed to open - the failed-update report, the wizard, What's New, the season
             // recap, the mod picker, the enhance nudge, the update dialog - now asks this.
             StartupLadder = new Services.Startup.StartupPresenter(Current?.Dispatcher ?? System.Windows.Threading.Dispatcher.CurrentDispatcher);
-            if (perfBench) StartupLadder.Hold(); // no modal startup cards on an unattended runner
 
             // One-shot settings migrations. Must run before anything reads
             // the migrated fields (Flash UI, GazeFocusService, etc.).
@@ -3468,6 +3455,12 @@ namespace ConditioningControlPanel
                     Settings?.Save();
             }
             catch (Exception ex) { Logger?.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
+            // Baked Rain looks: drop half-written bakes and packs whose manifest no longer reads.
+            _ = System.Threading.Tasks.Task.Run(() =>
+            {
+                try { Services.Companion.RainPackStore.CreateDefault().Sweep(); }
+                catch (Exception ex) { Logger?.Warning(ex, "Rain pack sweep failed (non-fatal)"); }
+            });
             Lockdown = new LockdownService();
             LockdownService.Current = Lockdown;
             // Possession: the haunt that rides the lockdown timer. It only arms when a lockdown starts
@@ -3622,16 +3615,6 @@ namespace ConditioningControlPanel
             // Same problem hits anywhere code does `Application.Current.MainWindow as MainWindow`
             // — popups, feature controls, etc. Expose a stable static reference.
             MainWindowRef = mainWindow;
-
-            if (perfBench)
-            {
-                // Real services and shell; bypass only splash/launcher routing and modal onboarding.
-                var tabsIndex = Array.IndexOf(e.Args, "--perf-bench-tabs");
-                var tabs = tabsIndex >= 0 && tabsIndex + 1 < e.Args.Length
-                    ? e.Args[tabsIndex + 1].Split(',') : PerfBench.TabPanels;
-                _ = PerfBench.Run(mainWindow, e.Args[perfIndex + 1], tabs);
-                return;
-            }
 
             // Boot surface. Decided here and not earlier because the first-run wizard rides the
             // panel's constructor: ShouldRunAndClaim latched Welcomed = true a moment ago, so the

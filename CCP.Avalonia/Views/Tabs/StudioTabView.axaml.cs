@@ -229,10 +229,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // Before BuildRack: the per-row closures it registers are appended to these.
             RegisterChromeTints();
             BuildRack();
-            // Seeds the art for whichever mod is ALREADY active at construction, the same way
-            // RetintChrome below seeds the accent; RepaintModAwareChrome handles every switch after.
-            try { RefreshRackArt(); ApplyDoorIcon(); }
-            catch (Exception ex) { Log.Debug(ex, "[Studio] the first art pass failed"); }
+            // Keep module controls and their safety wiring eager; decode art on arrival.
+            PropertyChanged += (_, e) =>
+            {
+                if (e.Property == IsVisibleProperty && IsLoaded && IsEffectivelyVisible) EnsureRackArt();
+            };
             // Land on the default without announcing it: nothing is on screen yet, and the
             // FeatureOpened bark belongs to the moment the user can actually see the panel.
             SelectEntry(DefaultRackKey, announce: false, animate: false);
@@ -325,8 +326,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void RepaintModAwareChrome()
         {
             Try(RefreshRackLabels);
-            Try(RefreshRackArt);
-            Try(ApplyDoorIcon);
+            _artLoaded = false;
+            if (IsLoaded && IsEffectivelyVisible) Try(EnsureRackArt);
             Try(RetintChrome);
             Try(RefreshDots);           // after RetintChrome: it reads the accent-tinted dot halo
             Try(RefreshDetailHeader);
@@ -336,6 +337,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 try { a(); }
                 catch (Exception ex) { Log.Debug(ex, "[Studio] a mod-aware repaint step failed"); }
             }
+        }
+
+        private bool _artLoaded;
+        internal bool ArtLoaded => _artLoaded;
+
+        private void EnsureRackArt()
+        {
+            if (_artLoaded) return;
+            RefreshRackArt();
+            ApplyDoorIcon();
+            _artLoaded = true;
         }
 
         /// <summary>
@@ -1444,7 +1456,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // Per-module wiring from the module partials (StudioTabView.Haptics.cs), as WPF.
             HookHapticsModule();
             RefreshRackLabels();
-            ApplyDoorIcon();
+            if (IsEffectivelyVisible) EnsureRackArt();
             RefreshDots();
             RefreshTileComets();   // only now does an adorner layer exist for the ctor-built rows
         }
