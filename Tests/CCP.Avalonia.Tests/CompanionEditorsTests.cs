@@ -5,6 +5,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -189,7 +191,8 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
-        var shell = new MainShellWindow();
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        var shell = new MainShellWindow { TabClock = new SteppedClock() };
         try
         {
             shell.Show();
@@ -198,6 +201,8 @@ public sealed class CompanionEditorsTests
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
+            shell.CompleteTabTransition();
+            Assert.Null(shell.EnteringTab);
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
@@ -206,7 +211,12 @@ public sealed class CompanionEditorsTests
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
                 Dispatcher.UIThread.RunJobs();
+                // Hit testing reads the rendered frame, not the layout changed by BringIntoView.
+                shell.UpdateLayout();
+                var frame = global::Avalonia.Rendering.Composition.ElementComposition.GetElementVisual(shell)!.Compositor.RequestCompositionBatchCommitAsync();
+                await Until(() => { AvaloniaHeadlessPlatform.ForceRenderTimerTick(); return frame.Rendered.IsCompleted; });
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                Assert.Same(button, (shell.InputHitTest(at) as Visual)?.GetSelfAndVisualAncestors().OfType<Button>().FirstOrDefault());
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
