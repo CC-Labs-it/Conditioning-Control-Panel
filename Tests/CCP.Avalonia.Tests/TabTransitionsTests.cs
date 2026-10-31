@@ -462,6 +462,105 @@ public sealed class TabTransitionsTests
         finally { timer.Dispose(); }
     });
 
+    [Fact]
+    public Task MysteryHoverAcknowledgesOnlyTodayAndRearmsTomorrow() => Run(shell =>
+    {
+        var time = new SteppedTime();
+        var savedTime = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
+        try
+        {
+            var today = new DateTime(2026, 10, 31);
+            shell.MysteryToday = () => today;
+            CoreSettings.Current.DailyGiftLastRevealDate = "2026-10-30";
+            shell.ShowTab("settings");
+            var dash = shell.SettingsPage!;
+            var badge = dash.FindControl<Border>("MysteryBadge")!;
+            var face = dash.FindControl<Border>("MysteryRevealFace")!;
+            var plate = dash.FindControl<Grid>("MysteryPlate")!;
+            var scale = (ScaleTransform)((TransformGroup)plate.RenderTransform!).Children[0];
+            Assert.True(badge.IsVisible);
+            Assert.Equal("2026-10-30", CoreSettings.Current.DailyGiftLastRevealDate);
+            // Real hover event on the stable host, also with the plate edge-on.
+            var host = dash.FindControl<Grid>("MysteryFlipHost")!;
+            host.RaiseEvent(new global::Avalonia.Input.PointerEventArgs(global::Avalonia.Input.InputElement.PointerEnteredEvent, host,
+                new global::Avalonia.Input.Pointer(1, global::Avalonia.Input.PointerType.Mouse, true), host,
+                new Point(), 0, new global::Avalonia.Input.PointerPointProperties(), 0));
+            Assert.Equal("2026-10-31", CoreSettings.Current.DailyGiftLastRevealDate);
+            Assert.False(badge.IsVisible);
+            Assert.False(shell.MysteryBreathing);
+            void At(double ms) { time.Now = TimeSpan.FromMilliseconds(ms).Ticks; ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll(); }
+            At(75);
+            Assert.InRange(scale.ScaleX, .01, .99);
+            shell.RequestMysteryFace(false); // reversal before crossing must retain the front
+            At(400);
+            Assert.False(face.IsVisible);
+            Assert.Equal(1, scale.ScaleX);
+            shell.RequestMysteryFace(true);
+            At(550);
+            Assert.True(face.IsVisible);
+            Assert.Equal(0, scale.ScaleX, 5);
+            At(700);
+            Assert.Equal(1, scale.ScaleX);
+            shell.ShowTab("quests");
+            Assert.False(face.IsVisible);
+            Assert.Equal(1, scale.ScaleX);
+            today = today.AddDays(1);
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            shell.ShowTab("settings");
+            Assert.True(badge.IsVisible);
+            shell.RequestMysteryFace(true);
+            Assert.True(face.IsVisible); // content survives Motion Off without a turn
+            Assert.False(badge.IsVisible);
+            shell.WindowState = WindowState.Minimized;
+            Assert.False(face.IsVisible);
+            Assert.Equal(1, scale.ScaleX);
+        }
+        finally { ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = savedTime; }
+    });
+
+    [Fact]
+    public Task MysteryDoorbellParksResetsAndDoesNotSpendTheGift() => Run(shell =>
+    {
+        var time = new SteppedTime();
+        var savedTime = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
+        try
+        {
+            shell.MysteryToday = () => new DateTime(2026, 10, 31);
+            CoreSettings.Current.DailyGiftLastRevealDate = "2026-10-30";
+            shell.ShowTab("settings");
+            shell.Activate();
+            Dispatcher.UIThread.RunJobs();
+            shell.RefreshMysteryTile();
+            Assert.True(shell.MysteryBreathing);
+            var glow = shell.SettingsPage!.FindControl<Border>("MysteryGlow")!;
+            var badge = shell.SettingsPage.FindControl<Border>("MysteryBadge")!;
+            var scale = (ScaleTransform)((TransformGroup)badge.RenderTransform!).Children[0];
+            time.Now = TimeSpan.FromMilliseconds(900).Ticks;
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.Equal(.95, glow.Opacity, 5);
+            Assert.Equal(1.12, scale.ScaleX, 5);
+            Assert.Equal(scale.ScaleX, scale.ScaleY);
+            shell.ShowTab("quests");
+            Assert.False(shell.MysteryBreathing);
+            Assert.Equal(.55, glow.Opacity);
+            Assert.Equal(1, scale.ScaleX);
+            Assert.Equal("2026-10-30", CoreSettings.Current.DailyGiftLastRevealDate);
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            shell.ShowTab("settings");
+            Assert.True(badge.IsVisible);
+            Assert.False(shell.MysteryBreathing);
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            shell.RefreshMysteryTile();
+            Assert.True(shell.MysteryBreathing);
+            shell.Close();
+            Assert.False(shell.MysteryBreathing);
+            Assert.Equal(.55, glow.Opacity);
+        }
+        finally { ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = savedTime; }
+    });
+
     private sealed class GiftOverrideWire : System.Net.Http.HttpMessageHandler
     {
         internal bool Fail;
