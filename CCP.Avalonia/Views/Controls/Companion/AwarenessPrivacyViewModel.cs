@@ -11,6 +11,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Awareness;
 using Serilog;
+using ConditioningControlPanel.Avalonia.Platform;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
@@ -26,7 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// (<c>IsLegacyPipeline = on &amp;&amp; !AwarenessObserver.IsEnabled</c>) reads as "legacy whenever
     /// on": the warning band shows, the wire says "not reported" and the JSON stays empty. That band
     /// over-warns here (the head's poll does enforce the deny list and incognito drop), which is the
-    /// safe direction (docs/avalonia-decisions.html, 2026-10-08). The shared ledger supplies retained known-apps and erasure; the seen-apps row is the window in front right now (no keyword-trigger ring here).</para>
+    /// safe direction (docs/avalonia-decisions.html, 2026-10-08). The shared ledger supplies retained known-apps and erasure; the seen-apps row merges the foreground and keyword-trigger ring.</para>
     /// </summary>
     public sealed class AwarenessPrivacyViewModel : INotifyPropertyChanged
     {
@@ -304,14 +305,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 next.Add((raw, () => new AwarenessChip(raw, new RelayCommand(() => RemoveFromAllow(raw)))));
             RefillIfChanged(_allow, _allowKeys, next);
 
-            // WPF folds in the keyword-trigger ring too; this head has only the window in front.
+            // WPF Runtime/AwarenessPrivacyRuntimeVm.cs:525-557: foreground then trigger ring.
             next = new();
             var current = AvApp.WindowAwareness.CurrentServiceName;
-            if (!string.IsNullOrWhiteSpace(current) && AwarenessText.SanitizeRuleEntry(current) is { } clean
-                && !deny.Any(d => string.Equals(d, clean, StringComparison.OrdinalIgnoreCase)) && next.Count < MaxAppChips)
+            var seen = KeywordTriggerHead.Engine.GetRecentForegroundApps().ToList();
+            if (!string.IsNullOrWhiteSpace(current)) seen.Insert(0, current);
+            foreach (var app in seen.Distinct(StringComparer.OrdinalIgnoreCase))
             {
+                if (next.Count >= MaxAppChips) break;
+                if (AwarenessText.SanitizeRuleEntry(app) is not { } clean) continue;
+                if (deny.Any(d => string.Equals(d, clean, StringComparison.OrdinalIgnoreCase))) continue;
                 var tip = Loc.Get("companion_awareness_seen_tip");
-                next.Add((current + "\u0001" + clean + "\u0001" + tip, () => new AwarenessChip(current, new RelayCommand(() => AddToDeny(clean)), tip)));
+                next.Add((app + "\u0001" + clean + "\u0001" + tip, () => new AwarenessChip(app, new RelayCommand(() => AddToDeny(clean)), tip)));
             }
             RefillIfChanged(_seen, _seenKeys, next);
 
@@ -388,8 +393,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             Log.Information("Awareness: page titles hidden again for every app");
         }
 
-        // WPF Services/Awareness/AwarenessAppCandidates.cs:38-88. The trigger ring is
-        // not available on this head; the ledger sources do work even with triggers disabled.
+        // WPF Services/Awareness/AwarenessAppCandidates.cs:38-88. The trigger ring
+        // follows the ledger sources and is populated only while triggers run.
         internal static IReadOnlyList<string> Candidates(IEnumerable<string> listed)
         {
             var ordered = new List<string>();
@@ -401,6 +406,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             Add(() => new[] { AvApp.WindowAwareness.CurrentServiceName });
             Add(() => AwarenessLive.Ledger?.RecentTransitions.Select(t => t.AppId) ?? Enumerable.Empty<string>());
             Add(() => AwarenessLive.Ledger?.KnownAppIds ?? Enumerable.Empty<string>());
+            Add(() => KeywordTriggerHead.Engine.GetRecentForegroundApps());
 
             var skip = new HashSet<string>(listed.Select(AwarenessText.SanitizeRuleEntry)
                 .OfType<string>(), StringComparer.OrdinalIgnoreCase);
