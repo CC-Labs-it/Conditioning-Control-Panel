@@ -80,12 +80,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
             RebindToCurrentSettings();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
@@ -147,18 +149,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // ---- Flashes v2 motion picker (WPF FlashFeatureControl.xaml.cs:414-560) ----------------
-        // WPF rebuilds on PrizeGrants.GrantsChanged. On this head ownership changes at runtime only
-        // when a Get it buy lands its grants (PrizeOwnership.ApplySnapshot), and that is exactly when
-        // the row turns Hidden: rebuild then, so the bought Drift & Bounce shows at once.
-        private void OnGetRowChanged()
+        private void OnGetRowChanged() => RefreshV2Box();
+
+        // WPF FlashFeatureControl.xaml.cs:81: rebuild without overwriting the saved style.
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(() =>
         {
-            if (!RowGetFlashesV2.IsRowHidden || RowMotion.IsVisible
-                || !Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce)) { RefreshV2Box(); return; }
             var wasLoading = _isLoading;
             _isLoading = true;
             try { BuildMotionPicker(); }
             finally { _isLoading = wasLoading; }
-        }
+        });
 
         /// <summary>WPF RefreshV2Box: the box holds the offer while nothing is owned and collapses once
         /// no motion, Shatter or Get it row is left.</summary>

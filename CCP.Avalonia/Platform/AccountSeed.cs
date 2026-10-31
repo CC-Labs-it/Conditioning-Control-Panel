@@ -35,6 +35,7 @@ internal static class AccountSeed
     /// <param name="makeDiscord">Tests only: builds the Discord account.</param>
     internal static bool Seed(Func<string, ProviderSubscription>? make = null, Func<ProviderSubscription, DiscordAccount>? makeDiscord = null)
     {
+        PrizeOwnership.Seed();
         make ??= prefix => new ProviderSubscription(prefix);
         makeDiscord ??= peer => new DiscordAccount(() => peer);
         ProviderSubscription patreon, substar;
@@ -161,6 +162,7 @@ internal static class AccountSeed
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
+        PrizeOwnership.Feed.NoteAccount(id);
         var user = await v2.GetUserProfileAsync(id);
         if (user == null)
         {
@@ -221,7 +223,9 @@ internal static class AccountSeed
         if (accountDeleted) App.Quests?.ResetProgress();
         CoreSettings.Save();
         App.Achievements?.Reset();
-        Sync?.Reset();
+        // SyncPush.Reset clears its Prizes feed (seeded with PrizeOwnership.Feed); unseeded, clear it here.
+        if (Sync is { } push) push.Reset();
+        else PrizeOwnership.Feed.Clear();
     }
 
     /// <summary>All three validate at once, as WPF starts them (App.xaml.cs). Never throws.</summary>
