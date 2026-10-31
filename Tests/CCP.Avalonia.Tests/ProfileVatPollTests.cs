@@ -119,6 +119,8 @@ public sealed class ProfileVatPollTests
             s.OfflineMode = true; service.Reset(); Dispatcher.UIThread.RunJobs();
             Assert.False(shell.VatPollRunning);
             s.OfflineMode = false; await service.RefreshAsync("rearm", force: true); Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.VatPollRunning); // Withdrawal disarms the jar, as WPF does.
+            shell.ArmVat(glass, 4000);
             Assert.True(shell.VatPollRunning);
             shell.Close();
             Assert.False(shell.VatPollRunning);
