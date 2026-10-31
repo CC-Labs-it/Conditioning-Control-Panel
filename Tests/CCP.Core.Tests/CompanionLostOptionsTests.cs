@@ -3,8 +3,6 @@ using System.IO;
 using System.Xml.Linq;
 using Xunit;
 namespace CCP.Core.Tests;
-// fd910ec33: follow each lost option from a registered page through its host to its control.
-// These source contracts run without a UI platform; CompanionPagesTests exercises live adoption.
 public sealed class CompanionLostOptionsTests
 {
     private static string Root
@@ -21,10 +19,8 @@ public sealed class CompanionLostOptionsTests
     private static void Named(string file, string name) => Assert.Contains(
         XDocument.Parse(Read(file)).Descendants(), e => (string?)e.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml")) == name);
     [Theory]
-    [InlineData("personality", "Personality", "CompanionPersonalityTab")]
-    [InlineData("permissions", "Permissions", "CompanionPermissionsTab")]
-    [InlineData("companionlinks", "Links", "CompanionLinksTab")]
-    [InlineData("companionai", "Ai", "CompanionAiTab")]
+    [InlineData("personality", "Personality", "CompanionPersonalityTab")][InlineData("permissions", "Permissions", "CompanionPermissionsTab")]
+    [InlineData("companionlinks", "Links", "CompanionLinksTab")][InlineData("companionai", "Ai", "CompanionAiTab")]
     public void PagesAreMountedAndShown(string key, string page, string host)
     {
         Named("Views/Windows/MainShellWindow.axaml", host);
@@ -33,18 +29,12 @@ public sealed class CompanionLostOptionsTests
         Assert.Contains($"{page}Page>(\"{host}\")?.OnShown(RoomView())", nav);
     }
     [Theory]
-    [InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "SliderBubbleDurationCompanion")]
-    [InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "SliderIdleIntervalCompanion")]
-    [InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "ChkVoiceLinesCompanion")]
-    [InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "ChkTubeMidnightGlass")]
-    [InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "ChkMuteWhispersCompanion")]
-    [InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "ChkPauseBrowserCompanion")]
-    [InlineData("Ai", "Triggers", "TriggersHost", "WorkshopTriggersCell", "ChkTriggerModeCompanion")]
-    [InlineData("Ai", "Triggers", "TriggersHost", "WorkshopTriggersCell", "SliderTriggerIntervalCompanion")]
-    [InlineData("Personality", "Community", "CommunityHost", "WorkshopCommunityCell", "BtnBrowsePrompts")]
-    [InlineData("Personality", "Community", "CommunityHost", "WorkshopCommunityCell", "BtnImportPrompt")]
-    [InlineData("Personality", "Community", "CommunityHost", "WorkshopCommunityCell", "BtnExportPrompt")]
-    [InlineData("Personality", "Community", "CommunityHost", "WorkshopCommunityCell", "BtnRefreshPrompts")]
+    [InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "SliderBubbleDurationCompanion")][InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "SliderIdleIntervalCompanion")]
+    [InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "ChkVoiceLinesCompanion")][InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "ChkTubeMidnightGlass")]
+    [InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "ChkMuteWhispersCompanion")][InlineData("Ai", "Behavior", "BehaviorHost", "WorkshopBehaviorCell", "ChkPauseBrowserCompanion")]
+    [InlineData("Ai", "Triggers", "TriggersHost", "WorkshopTriggersCell", "ChkTriggerModeCompanion")][InlineData("Ai", "Triggers", "TriggersHost", "WorkshopTriggersCell", "SliderTriggerIntervalCompanion")]
+    [InlineData("Personality", "Community", "CommunityHost", "WorkshopCommunityCell", "BtnBrowsePrompts")][InlineData("Personality", "Community", "CommunityHost", "WorkshopCommunityCell", "BtnImportPrompt")]
+    [InlineData("Personality", "Community", "CommunityHost", "WorkshopCommunityCell", "BtnExportPrompt")][InlineData("Personality", "Community", "CommunityHost", "WorkshopCommunityCell", "BtnRefreshPrompts")]
     [InlineData("Links", "Library", "VideosHost", "WorkshopLibraryCell", "BtnAddVideoLink")]
     public void PageAdoptsTheCellThatCarriesTheOption(string page, string part, string host, string cell, string control)
     {

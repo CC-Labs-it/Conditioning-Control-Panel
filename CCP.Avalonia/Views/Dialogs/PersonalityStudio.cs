@@ -7,12 +7,10 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Automation;
-using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Companion;
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
-
 /// <summary>WPF PersonalityStudio: edit a detached draft, then activate a copy or update an own preset.</summary>
 internal sealed class PersonalityStudio : Window
 {

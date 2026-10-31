@@ -189,7 +189,9 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
         var shell = new MainShellWindow();
+        shell.TabClock = new ContentHitTestTests.FrozenEntrance();
         try
         {
             shell.Show();
@@ -205,7 +207,8 @@ public sealed class CompanionEditorsTests
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
-                Dispatcher.UIThread.RunJobs();
+                ContentHitTestTests.RenderLiveTree(shell);
+                Assert.Null(shell.EnteringTab);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);

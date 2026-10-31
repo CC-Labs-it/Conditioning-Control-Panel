@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using ConditioningControlPanel.Models;
 namespace ConditioningControlPanel.Services.Companion;
-
 /// <summary>WPF PersonalityStudio.Draft: detached character text, without credentials or permissions.</summary>
 public static class PersonalityStudioDraft
 {
