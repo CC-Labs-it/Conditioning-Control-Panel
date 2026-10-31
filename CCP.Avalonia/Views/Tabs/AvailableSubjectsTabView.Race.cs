@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -59,12 +61,21 @@ public partial class AvailableSubjectsTabView
             if (stop.IsCancellationRequested || !ReferenceEquals(stop, _raceStop)) return;
             var snapshot = LobbyMerge.Build(null, null, null, FriendsHead.Service?.Snapshot.Friends,
                 signedIn, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), reply);
-            PaintSnapshot(snapshot, ReadGates(), signedIn && !reply.Ok);
+            PaintRaceSnapshot(snapshot, signedIn && !reply.Ok);
             if (_racePoll != null) _racePoll.Interval = LobbyPollPlan.Next(_racePoll.Interval, !signedIn || reply.Ok);
         }
         catch (OperationCanceledException) { }
-        catch { if (!stop.IsCancellationRequested) PaintSnapshot(LobbySnapshot.Empty, ReadGates(), true); }
+        catch { if (!stop.IsCancellationRequested) PaintRaceSnapshot(LobbySnapshot.Empty, true); }
         finally { _raceBusy = false; }
+    }
+
+    // This poll owns race rows only. Other Lobby producers keep their rows.
+    private void PaintRaceSnapshot(LobbySnapshot races, bool error)
+    {
+        static LobbyRow[] Merge(IReadOnlyList<LobbyRow> old, IReadOnlyList<LobbyRow> fresh) =>
+            old.Where(r => r.Game != LobbyGame.Race).Concat(fresh.Where(r => r.Game == LobbyGame.Race)).ToArray();
+        PaintSnapshot(races with { Open = Merge(_snapshot.Open, races.Open),
+            Playing = Merge(_snapshot.Playing, races.Playing), Friends = Merge(_snapshot.Friends, races.Friends) }, ReadGates(), error);
     }
 
     private void RaceJoin_Click(object? sender, RoutedEventArgs e)

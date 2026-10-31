@@ -180,8 +180,11 @@ public sealed class LobbyPageTests
             return System.Threading.Tasks.Task.FromResult(new RaceOpenReply(new[] {
                 new RaceOpenRoom("abcdefghijkl", "keep", "Host", 8, 2, 3, false, null, false) }, true));
         };
+        var remote = new LobbyRow { Game = LobbyGame.Remote, Key = "existing", HostName = "Remote" };
+        page.PaintSnapshot(new LobbySnapshot(Array.Empty<LobbyRow>(), new[] { remote }, new[] { remote }, true), page.ReadGates());
         page.StartRaceRows();
         Assert.True(page.RacePolling);
+        Assert.Equal(remote, Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "LobbyPlayingList").Items.Single()).Row);
         Assert.Equal(1, calls);
         var card = Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "AvailableSubjectsList").Items.Single());
         Assert.Contains("The Keep", card.Line);
@@ -198,6 +201,7 @@ public sealed class LobbyPageTests
         page.RefreshRaceRows().GetAwaiter().GetResult();
         Assert.Equal(1, calls);
         Assert.Empty(Named<ItemsControl>(page, "AvailableSubjectsList").Items);
+        Assert.Equal(remote, Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "LobbyFriendsList").Items.Single()).Row);
         page.ReadGates = () => LobbyGates.From(true, false, false);
         var pending = new System.Threading.Tasks.TaskCompletionSource<RaceOpenReply>();
         page.FetchRace = _ => pending.Task;
@@ -253,7 +257,7 @@ public sealed class LobbyPageTests
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         body();

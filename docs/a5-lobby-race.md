@@ -67,3 +67,16 @@ Review follow-up (one commit on bca9dcb33)
 - Both production fixes were restored after the mutation checks.
 - Final restored build: 0 errors. Separate dotnet test --no-build runs: host/launcher filter Failed 0, Passed 3, Total 3 (21 s); page filter Failed 0, Passed 2, Total 2 (1 s).
 - Final bash .github/scripts/core-guards.sh: All Core guards passed. python3 .github/scripts/avalonia_docs.py: avalonia_docs self-check OK. git diff --check: clean.
+
+CI follow-up for run 41204827104
+
+- SubjectsFx failed on both platforms because the race poll replaced the entire Lobby snapshot. It now replaces only race rows in each column. SubjectsFxTests reproduced 3 failures before the fix and passed all 3 afterward; LobbyPageTests also checks that unrelated rows survive polls.
+- Windows shard 1: LocalProvidersTests supplied a caller-owned MemoryStore but disposed only the brain. It now drains/disposes that store before deleting its temporary profile, preventing memory.json.tmp cleanup races.
+- Windows shard 2: PresetsFocalFxTests sampled a short animation using elapsed real time. It now reuses SharedDeeperThemeTests.StepClock and keeps the same opacity assertion at a controlled first frame.
+- Windows shard 0: ContentHitTestTests sampled geometry during a tab slide. It now completes the existing transition before composing and sending the same pointer probes; standalone startup also uses production font registration.
+- No assertions removed, tests skipped, workflow filters changed, or WPF behavior changed. Artifact upload and the Node deprecation warnings were not the failures.
+- Validation on Linux: dotnet build Tests/CCP.Avalonia.Tests -c Release -m:1: 0 errors; dotnet test --no-build filters: PresetsFocalFxTests 5 passed, ContentHitTestTests 1 passed, LobbyPageTests plus SubjectsFxTests 11 passed, TheBrainTalksToTheProviderTheUserConfigured 2 passed.
+- Full Core suite: Failed 0, Passed 4644, Skipped 5, Total 4649. Core guards passed; avalonia_docs self-check OK. Windows runtime validation remains with GitHub CI.
+- Fail-proofs: restoring whole-snapshot replacement fails the unrelated-row assertion; removing the Presets opacity entrance fails the unchanged opacity assertion even with the stepped clock. Each mutation produced Failed 1, Passed 0; production files restored afterward.
+- The restored mixed Lobby/Subjects run exposed missing production font registration when LobbyPageTests initialized the app first. LobbyPageTests now uses the same production startup as SubjectsFxTests, preserving all geometry assertions instead of relying on test order.
+- Final restored validation: Presets plus shared-clock themes 9 passed, Lobby plus Subjects 11 passed, pointer hit-testing 1 passed, full LocalProvidersTests 4 passed. Both provider fixtures now dispose their supplied MemoryStore before deleting the profile. Final test build and explicit Core/Avalonia builds: 0 errors.
