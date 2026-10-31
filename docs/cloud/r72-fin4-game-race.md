@@ -138,3 +138,13 @@ Revalidation commands use `/tmp/ccp-dotnet/dotnet`:
 | `git diff --check` | exit 0, no output |
 
 The five Core skips are the existing Vosk model dependencies; the affected UI selection has no skips. The targeted Windows retry was still queued at completion. Local results do not establish a green Windows CI run or explain the external cancellation.
+
+## Local second-gate review
+
+P2 fixed: the `game-race` row is `stub` under `docs/avalonia-parity.html:29-32`. The base's historical notes from 74ac6ce3d are restored byte-for-byte as the notes prefix, followed by this lane's existing evidence and these review clarifications. The remaining WPF cloud, payload/sfx and fullscreen/report paths (`ConditioningControlPanel/Services/Chaos/CaucusHostService.cs:1117,328-335,395-424,347-352,506-549`) remain missing; a reachable partial port does not qualify as wired.
+
+P3 deviation documented: `CCP.Core/Services/Video/MandatoryVideoScheduler.cs:420-438` sends `VideoEnded` on ForceCleanup/Stop. WPF `ConditioningControlPanel/Services/Video/VideoService.cs:2638-2671` does not; only Cleanup at :7950 notifies. The safe-resume deviation can post `pause:false` during pre-roll without a prior `pause:true`, and `CCP.Avalonia/Views/Games/GameWindow.Race.cs:199-205` can return focus from the main panel to the race. Behavior is unchanged by this documentation fix.
+
+P3 test-claim correction: `GameWindowRaceSafetyTests` silence-after-panic assertions prove the closing/disposed guards, not event unsubscription. They would still pass if the unsubscribe lines were removed. Listener removal is implemented at `CCP.Avalonia/Views/Games/GameWindow.Race.cs:235-240`; there is no independent unsubscribe fail-proof in this lane. Earlier test-result counts remain historical execution results, not proof of handler removal.
+
+Validation: `python3 .github/scripts/avalonia_docs.py` returned `avalonia_docs self-check OK`; the full CI HTML row/meta checks returned `port docs OK`; `python3 .github/scripts/port-dashboard.py . --out /tmp/ccp-local-review-dashboard.html` built 423 rows, 21 days, 7 syncs; `bash .github/scripts/core-guards.sh` returned `All Core guards passed`; `git diff --check` was clean. A preservation check asserted one row, status stub, all 87984 base note characters as the exact prefix, all prior lane notes retained and every other ledger row unchanged. Application builds and tests were not rerun for this documentation-only fix.
