@@ -1325,16 +1325,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private void BuildMantras()
         {
             _mantrasHost.Children.Clear();
-            foreach (var b in Sample.Mantras) _mantrasHost.Children.Add(MantraRow(b));
+            foreach (var b in ChaosBoonPool.All) _mantrasHost.Children.Add(MantraRow(b));
         }
 
         /// <summary>One mantra/sin row: ??? until met in a draft; discovered mantras are clickable
         /// to set/clear the start mantra (gold ring + ★ on the whispered one). Sins are listed but
         /// can only be taken mid-fall, never chosen.</summary>
-        private Border MantraRow(SampleMantra b)
+        private Border MantraRow(ChaosBoon b)
         {
-            bool seen = b.Seen;
-            bool isStart = Sample.StartMantra == b.Id;
+            // WPF ChaosHubWindow.xaml.cs:1261-1276: catalogue, discovery and saved selection.
+            bool seen = ChaosMeta.IsDiscovered("boon:" + b.Id);
+            bool isStart = ChaosMeta.State.EquippedStartBoon == b.Id;
             bool pickable = seen && !b.IsCurse;
             var accent = b.IsCurse ? Color.FromRgb(0xFF, 0x8A, 0x8A) : Color.FromRgb(0x9C, 0xE8, 0xA0);
 
@@ -1409,7 +1410,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 card.PointerPressed += (_, e) =>
                 {
                     if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
-                    Sample.StartMantra = isStart ? null : b.Id;
+                    // WPF ChaosHubWindow.xaml.cs:1339: persist the toggle through Core.
+                    ChaosMeta.EquipStartBoon(isStart ? null : b.Id);
                     BuildMantras();
                 };
             return card;
@@ -2145,8 +2147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         // ============================ sample data ============================
-        // Mantras and the codex still stand in for head-side services (ChaosBoonPool and the
-        // bubble variants); the row records above are shared with the real shelves.
+        // The codex still uses sample bubble entries; mantras read the shared catalogue.
 
         private sealed record SampleHabit(string Id, string Glyph, string Name, string Desc, string Flavor,
                                           string Branch, int Cost, bool Owned, bool On);
@@ -2157,24 +2158,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                                          string RankFloor, string CapstoneDesc, bool IsActiveUse,
                                          double UseCooldownSec);
 
-        private sealed record SampleMantra(string Id, string Name, string Desc, string Flavor, bool Seen, bool IsCurse);
-
         private sealed record SampleCodexEntry(string Name, string Desc, string Glyph, Color Accent, bool Seen);
 
-        /// <summary>Mantras + codex stand-ins. ponytail: needs ChaosBoonPool / ChaosBubbleVariants
-        /// (head-side, run engine), wired when they move to Core.</summary>
+        /// <summary>Codex stand-ins. The live bubble diary is a separate lane.</summary>
         private static class Sample
         {
-            public static string? StartMantra = "soft_focus";
-
-            public static readonly List<SampleMantra> Mantras = new()
-            {
-                new("soft_focus", "Soft Focus", "trances start 20% deeper, and hold.", "you stopped blinking a while ago.", true, false),
-                new("open_hands", "Open Hands", "treats pay double for the first wave.", "", true, false),
-                new("the_slip", "The Slip", "one free snap, no focus spent.", "", false, false),
-                new("greedy_little_thing", "Greedy Little Thing", "gold doubles, focus never refills.", "she wrote this one down.", true, true),
-            };
-
             public static readonly List<SampleCodexEntry> Codex = new()
             {
                 new("Flash", "a treat carrying an image. pops clean, pays focus back.", "●", Color.FromRgb(0xFF, 0x9F, 0xD0), true),
