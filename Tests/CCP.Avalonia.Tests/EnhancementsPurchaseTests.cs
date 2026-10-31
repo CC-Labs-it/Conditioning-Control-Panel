@@ -80,8 +80,8 @@ public sealed class EnhancementsPurchaseTests
         }
         finally { w.Close(); }
     });
-    [Theory] [InlineData(false)] [InlineData(true)]
-    public Task PurchaseArmsPinkRushAndStopOrPanicDisarmsIt(bool panic) => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory] [InlineData(false, false)] [InlineData(true, false)] [InlineData(true, true)]
+    public Task PurchaseArmsPinkRushAndStopOrPanicDisarmsIt(bool panic, bool purchaseAfterPanic) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
@@ -92,13 +92,15 @@ public sealed class EnhancementsPurchaseTests
         var shell = new MainShellWindow(); CoreEngine.StoppedHook = shell.OnEngineStopped; var roll = PinkRushHost.Roll;
         try
         {
-            CoreEngine.Start(); Assert.False(PinkRushHost.IsChecking);
-            Assert.True((await purchase.PurchaseSkillAsync("pink_rush")).Success); Assert.True(PinkRushHost.IsChecking);
+            (ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService())).Start(new Session { Id = "pink-purchase", Name = "Purchase", DurationMinutes = 5 }); Assert.False(PinkRushHost.IsChecking);
+            if (purchaseAfterPanic) PanicSurfaces.StopAll("purchase-test", shell);
+            Assert.True((await purchase.PurchaseSkillAsync("pink_rush")).Success);
+            if (purchaseAfterPanic) { Assert.True(ConditioningControlPanel.Avalonia.App.Sessions.IsRunning); Assert.True(ConditioningControlPanel.Avalonia.App.Sessions.IsPaused); Assert.False(CoreEngine.IsRunning); Assert.False(PinkRushHost.IsChecking); Assert.False(s.PinkRushActive); return; }
+            Assert.True(PinkRushHost.IsChecking);
             PinkRushHost.Roll = () => 0; PinkRushHost.CheckTick(); Assert.True(s.PinkRushActive);
             if (panic) PanicSurfaces.StopAll("purchase-test", shell); else MainShellWindow.StopEngine();
             Assert.False(PinkRushHost.IsChecking); Assert.False(s.PinkRushActive);
         }
-        finally { CoreEngine.Stop(); PinkRushHost.Stop(); PinkRushHost.Roll = roll; shell.Close(); }
+        finally { CoreEngine.Stop(); ConditioningControlPanel.Avalonia.App.Sessions?.Stop(); PinkRushHost.Stop(); PinkRushHost.Roll = roll; shell.Close(); }
     });
-
 }

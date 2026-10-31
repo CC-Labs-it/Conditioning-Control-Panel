@@ -70,17 +70,13 @@ public sealed class SkillPurchase {
             var response = first;
             var json = await response.Content.ReadAsStringAsync().ConfigureAwait(true);
             if (!string.Equals(settings.UnifiedId, unifiedId, StringComparison.Ordinal)) return (false, Loc.Get("skill_err_login_required"));
-            if (!response.IsSuccessStatusCode)
-            {
-                if (V2AuthService.MergedRecovery is { } merged && await merged(response, json).ConfigureAwait(true))
-                    return (false, Loc.Get("account_merged_retry_hint"));
-                if (await Unauthorized(response).ConfigureAwait(true) && !string.IsNullOrEmpty(settings.AuthToken)
-                    && string.Equals(settings.UnifiedId, unifiedId, StringComparison.Ordinal))
-                {
-                    response = await SendOnce().ConfigureAwait(true);
-                    json = await response.Content.ReadAsStringAsync().ConfigureAwait(true);
-                    if (!string.Equals(settings.UnifiedId, unifiedId, StringComparison.Ordinal)) return (false, Loc.Get("skill_err_login_required"));
-                }
+            if (!response.IsSuccessStatusCode && V2AuthService.MergedRecovery is { } merged && await merged(response, json).ConfigureAwait(true)) return (false, Loc.Get("account_merged_retry_hint"));
+            using var retry = !response.IsSuccessStatusCode && await Unauthorized(response).ConfigureAwait(true) && !string.IsNullOrEmpty(settings.AuthToken)
+                && string.Equals(settings.UnifiedId, unifiedId, StringComparison.Ordinal) ? await SendOnce().ConfigureAwait(true) : null;
+            if (retry != null) {
+                response = retry;
+                json = await response.Content.ReadAsStringAsync().ConfigureAwait(true);
+                if (!string.Equals(settings.UnifiedId, unifiedId, StringComparison.Ordinal)) return (false, Loc.Get("skill_err_login_required"));
             }
             if (!response.IsSuccessStatusCode)
             {

@@ -1105,7 +1105,7 @@ namespace ConditioningControlPanel.Avalonia
 
         internal static void WireSkillPurchases(SkillPurchase purchases) => purchases.SkillUnlocked += (_, id) =>
         {
-            if (id == Models.PinkRushRules.SkillId && (CoreEngine.IsRunning || Sessions?.IsRunning == true)) Views.Windows.PinkRushHost.Start();
+            if (id == Models.PinkRushRules.SkillId && CoreEngine.IsRunning) Views.Windows.PinkRushHost.Start();
         };
         /// <summary>WPF App.OnAchievementUnlocked (App.xaml.cs:3815): one popup per unlock, shown at once.
         /// ponytail: no sound, no Discord webhook - neither service exists on this head.</summary>

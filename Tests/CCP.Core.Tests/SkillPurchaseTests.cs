@@ -28,12 +28,13 @@ public class SkillPurchaseTests : IDisposable
     private sealed class Fake : HttpMessageHandler {
         public readonly Queue<Func<HttpResponseMessage>> Answers = new();
         public readonly List<string> Bodies = new();
+        public readonly List<HttpResponseMessage> Responses = new();
         public readonly List<string?> Tokens = new();
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {
             Bodies.Add(await request.Content!.ReadAsStringAsync(ct));
             Tokens.Add(request.Headers.TryGetValues("X-Auth-Token", out var v) ? v.First() : null);
             Assert.EndsWith("/v2/user/purchase-skill", request.RequestUri!.AbsolutePath);
-            return Answers.Dequeue()();
+            var response = Answers.Dequeue()(); Responses.Add(response); return response;
         }
     }
     private static Func<HttpResponseMessage> Json(HttpStatusCode code, string json) =>
@@ -75,6 +76,7 @@ public class SkillPurchaseTests : IDisposable
         http.Answers.Enqueue(Json(HttpStatusCode.OK,
             "{'success':true,'skill_points':0,'unlocked_skills':['" + Skill.Id + "']}"));
         Assert.True((await service.PurchaseSkillAsync(Skill.Id)).Success); Assert.Equal(1, recoveries); Assert.Equal(new[] { "tok", "recovered" }, http.Tokens);
+        foreach (var response in http.Responses) await Assert.ThrowsAsync<ObjectDisposedException>(() => response.Content.ReadAsStringAsync());
     }
     [Theory] [InlineData(null)] [InlineData("")] [InlineData("2020-01")]
     public async Task ADebitedAnswerLowersTheWalletAndUnlocksTheSkill(string? bucket) {
