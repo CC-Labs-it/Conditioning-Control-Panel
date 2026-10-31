@@ -1,6 +1,6 @@
 namespace ConditioningControlPanel
 {
-    /// <summary>Release copy from WPF Services/Update/UpdateService.cs:29-301. Keep in sync at release.</summary>
+    /// <summary>Canonical release notes for every head. Update with Version.props at release.</summary>
     public static class ReleaseNotes
     {
         public const string Current = @"v7.1.15 - Settle Down

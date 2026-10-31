@@ -41,8 +41,13 @@ public sealed class WelcomeBackContentTests
             settings.CurrentSeason = current;
             settings.LastSeasonResetSeen = seen;
             CoreAccount.UnifiedUserId = "returning-account";
-            CoreReleaseContent.PatchNotesProvider = () => ReleaseNotes.Current;
-            CoreReleaseContent.AppVersionProvider = () => "7.1.5";
+            CoreReleaseContent.PatchNotesProvider = null;
+            CoreReleaseContent.AppVersionProvider = null;
+            // Exercise the real lifecycle wiring, including when another test initialized the app first.
+            new global::ConditioningControlPanel.Avalonia.App().Initialize();
+            var version = typeof(global::ConditioningControlPanel.Avalonia.App).Assembly.GetName().Version!;
+            var expectedVersion = $"{version.Major}.{version.Minor}.{version.Build}";
+            Assert.Equal(expectedVersion, CoreReleaseContent.AppVersion);
             WelcomeBackOffer.ResetForTests();
             WelcomeBackOffer.Present = content => { offered = content; return Task.CompletedTask; };
             WelcomeBackOffer.Arm(true, dir);
@@ -50,13 +55,14 @@ public sealed class WelcomeBackContentTests
 
             Assert.NotNull(offered);
             Assert.Equal(ReleaseNotes.Current, offered!.PatchNotes);
-            Assert.StartsWith("v7.1.15", offered.PatchNotes);
+            Assert.StartsWith("v" + CoreReleaseContent.AppVersion + " ", offered.PatchNotes);
+            Assert.Equal(expectedVersion, offered.VersionLabel);
             Assert.Equal(seasonShown, !string.IsNullOrWhiteSpace(offered.SeasonLine));
             if (seasonShown)
                 Assert.Equal("The monthly board rolled over to 2026-09 while you were away. Your level, XP and everything you unlocked stayed.", offered.SeasonLine);
             var sheet = new WelcomeBackSheet(offered);
             Assert.True(sheet.FindControl<StackPanel>("RowWhatsNew")!.IsVisible);
-            Assert.Contains("7.1.5", sheet.FindControl<TextBlock>("TxtWhatsNewToggle")!.Text);
+            Assert.Contains(expectedVersion, sheet.FindControl<TextBlock>("TxtWhatsNewToggle")!.Text);
             Assert.Equal(offered.PatchNotes, sheet.FindControl<TextBlock>("TxtNotes")!.Text);
             Assert.False(sheet.FindControl<Border>("NotesPanel")!.IsVisible);
             sheet.FindControl<TextBlock>("TxtWhatsNewToggle")!.RaiseEvent(new KeyEventArgs
