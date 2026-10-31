@@ -108,7 +108,8 @@ public sealed class MandatoryVideoFloatingTests
                 var w = Assert.Single(o.Windows);
                 Assert.True(o.Floating);
                 Assert.False(o.AttentionArmed, "a floating video has no attention checks");
-                Assert.True(w.Topmost && w.IsVisible);
+                Assert.True(w.Topmost);
+                Assert.False(w.IsVisible, "no black window before the first presented frame");
                 Assert.NotEqual(WindowState.FullScreen, w.WindowState);
                 Assert.False(w.ShowActivated, "a floating window never takes focus");
                 var scr = w.Screens.Primary ?? w.Screens.All[0];
