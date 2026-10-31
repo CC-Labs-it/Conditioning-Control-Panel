@@ -45,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The host's own clock inside a descent (P08); tests step it.</summary>
         internal static Func<DateTime> DtrhUtcNow = () => DateTime.UtcNow;
 
+        internal static Action<string> DtrhOpenCheckout = url => ExternalOpener.Open(url);
+
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
         private bool _dtrhRunActive, _dtrhExiting;
         private JObject? _dtrhLastProgress;
@@ -68,6 +70,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             switch ((string?)o["type"])
             {
+                case "funnel":
+                    ConditioningControlPanel.Services.Funnel.Portable.FunnelPageMessage.Handle(o, DtrhOpenCheckout, !_dtrhRunActive && !_dtrhExiting && !_closing);
+                    return true;
                 case "ready":
                     IsReady = true;
                     OnDtrhPageReady();
@@ -105,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try { Web.Focus(); }   // Escape (pause / hold-to-exit) works from the first frame
             catch (Exception ex) { Log.Debug("DtrhHost: focus: {E}", ex.Message); }
             Post(DtrhInitMessage());
+            _ = ConditioningControlPanel.Services.Vault.PlanCatalog.GetAsync(); // warm the next launch without waiting
             try { PostDtrhManifest(); }
             catch (Exception ex) { Log.Warning("DtrhHostService.OnPageReady: {E}", ex.Message); }
             // WPF :303: online media copied to this machine after this frame reaches the page as a fresh manifest
@@ -148,6 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             modContent = (object?)null,   // WPF DtrhModContent.BuildInitPayload: null = shipped assets
             runSetup = DtrhRunWire.RunSetup(CoreSettings.Current),
             m2Test = false,
+            plans = ConditioningControlPanel.Services.Vault.PlanCatalog.ToWire(ConditioningControlPanel.Services.Vault.PlanCatalog.Current),
         };
 
         /// <summary>WPF OnRequestRun (:523): persist the hub's choices, deal the run, answer run-config.</summary>
@@ -188,10 +195,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 ChaosRank? rankUp = null;
                 var nowRank = ChaosRanks.For(ChaosMeta.State.RunsCompleted);
                 if ((int)nowRank > ChaosMeta.State.LastRankSeen) rankUp = nowRank;
+                bool dailyGift = !CoreEntitlement.HasLab && CoreEntitlement.IsFreeToday("dtrh");
                 Post(new
                 {
                     type = "payout-result", baseXp = booking.BaseXp, skillMult, finalXp, sparksEarned, previousBest,
                     rankUp = rankUp?.ToString(), dryRun = false,
+                    plan = dailyGift ? "prime" : null, daily_gift = dailyGift,
                 });
                 Log.Information("DtrhHost: web run complete: base {Base:0} x skill {Mult:0.0} = {Final:0} XP, {Sparks} sparks{T}",
                     booking.BaseXp, skillMult, finalXp, sparksEarned, fromTeardown ? " (banked on close)" : "");

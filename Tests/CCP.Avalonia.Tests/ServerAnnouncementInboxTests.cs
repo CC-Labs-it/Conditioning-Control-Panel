@@ -44,6 +44,7 @@ public sealed class ServerAnnouncementInboxTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;   // the profile TestUserDataProfile seeded (feature intros spent)
@@ -108,7 +109,7 @@ public sealed class ServerAnnouncementInboxTests
     });
 
     [Fact]
-    public Task OpeningTheRowShowsTheAnnouncementPopup() => Run(async _ =>
+    public Task OpeningTheRowShowsTheAnnouncementPopup() => Run(async fake =>
     {
         StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
         var opened = new List<AnnouncementPopup>();
@@ -117,6 +118,7 @@ public sealed class ServerAnnouncementInboxTests
         try
         {
             shell.Show();
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(7));
             await shell.CheckServerAnnouncementAsync();
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(opened);
@@ -131,8 +133,37 @@ public sealed class ServerAnnouncementInboxTests
             var popup = Assert.Single(opened);
             Assert.Equal("The Spiral is open", popup.FindControl<TextBlock>("TxtTitle")!.Text);
             Assert.Empty(StartupLadder.Inbox.Items);
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(8));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(fake.Calls, c => c.StartsWith("GET /config/announcement"));
+            Assert.Empty(StartupLadder.Inbox.Items);
         }
         finally { shell.Close(); foreach (var p in opened) p.Close(); }
+    });
+
+    [Fact]
+    public Task ScheduledAnnouncementRunsOnceAndClosingCancelsIt() => Run(async fake =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var clock = (StartupLadder.TestClock)StartupLadder.Time;
+        var cancelled = new MainShellWindow();
+        cancelled.Show();
+        clock.Advance(TimeSpan.FromSeconds(7));
+        cancelled.Close();
+        clock.Advance(TimeSpan.FromSeconds(8));
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(fake.Calls, c => c.StartsWith("GET /config/announcement"));
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            clock.Advance(TimeSpan.FromSeconds(7));
+            Dispatcher.UIThread.RunJobs();
+            await Until(() => StartupLadder.Inbox.UnreadCount == 1);
+            Assert.Single(StartupLadder.Inbox.Items);
+            Assert.Single(fake.Calls, c => c.StartsWith("GET /config/announcement"));
+        }
+        finally { shell.Close(); }
     });
 
     [Fact]
