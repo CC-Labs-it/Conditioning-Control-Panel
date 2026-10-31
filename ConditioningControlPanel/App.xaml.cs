@@ -405,6 +405,8 @@ namespace ConditioningControlPanel
             // stamps) that need a version string or the installed build's notes and nothing else.
             CoreReleaseContent.AppVersionProvider = () => Services.UpdateService.AppVersion;
             CoreReleaseContent.PatchNotesProvider = () => Services.UpdateService.CurrentPatchNotes;
+            // Core PlayerLook reads other players' looks against the ids this head can draw.
+            Services.PlayerLook.KnownIdsProvider = () => (Services.CosmeticsCatalog.AllAvatarIds(), Services.ShopCosmetics.FrameIds());
             // EmiLineEngine lives in Core; the two ask probes it used to read off App land here.
             Services.EmiDesk.EmiLineEngine.AskSituationProbe = () => EmiDesk?.AskSituationOk() == true;
             Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = Services.EmiDesk.EmiOffers.EffectFeasible;

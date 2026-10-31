@@ -8,6 +8,7 @@ import { makeT } from './state/strings.js';
 import { createHud } from './hud/index.js';
 import { asHost } from './host.js';
 import { createPressGuard, keyName } from './state/press-guard.js';
+import { guideDue, markGuideSeen } from './state/guide.js';
 
 const mintIdem = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', q: 'tabPrev', e: 'tabNext',
@@ -82,7 +83,12 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
     paint();
   }
   // A key's select from the shelves never reaches an open card: the card takes keys only on its own buttons.
-  function intent(i) { if (i && i.type === 'select' && i.key && shop.card()) return; apply(shop.intent(i)); }
+  function intent(i) {
+    // The how-to card holds the page: select and back close it, nothing reaches a shelf behind it.
+    if (hud.guide.isOpen()) { if (i && (i.type === 'select' || i.type === 'back')) hud.guide.close(); return; }
+    if (i && i.type === 'select' && i.key && shop.card()) return;
+    apply(shop.intent(i));
+  }
   // A tab stamp jumps straight there: walk the model, then draw only where it lands.
   function goTab(id) { let ch = null, n = 8; while (shop.tabId() !== id && n--) ch = shop.intent({ type: 'tabNext' }); apply(ch); }
   const keyOf = (e) => KEYS[e.key] || KEYS[e.key.toLowerCase()];
@@ -103,6 +109,10 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
   window.addEventListener('resize', onResize);
   paint();
   apply(await shop.load());
+  // First open on this account: the how-to card, once (state/guide.js). Its door stays in the HUD.
+  let storage = null;
+  try { storage = window.localStorage; } catch (e) { /* a blocked store reads as seen */ }
+  if (guideDue({ init, status: shop.status(), card: shop.card(), storage })) { markGuideSeen(storage, init); hud.guide.open(); }
 
   return {
     shop, scene, hud, intent,

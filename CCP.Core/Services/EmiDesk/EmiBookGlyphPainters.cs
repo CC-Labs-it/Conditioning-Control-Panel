@@ -249,5 +249,25 @@ public static class EmiBookGlyphPainters
             Disc(p, 8, 8, 1.2, EmiPix.Ink);
             p.Rect(12, 7, 2, 2, EmiPix.Cream);
         }),
+
+        ("prize-counter", p =>
+        {
+            p.Rect(1, 6, 14, 1, EmiPix.Mid);       // a shelf with two prizes and a falling sparkle
+            p.Rect(2, 2, 4, 4, EmiPix.Pink);
+            p.Rect(9, 3, 4, 3, EmiPix.Lav);
+            p.Rect(1, 13, 14, 1, EmiPix.Mid);
+            Disc(p, 8, 10, 2.2, EmiPix.Gold);
+            p.Px(8, 10, EmiPix.Cream);
+        }),
+
+        ("rain", p =>
+        {
+            p.Rect(6, 1, 4, 3, EmiPix.Gold);       // a dress on a figure, head to hem
+            p.Rect(6, 3, 4, 2, EmiPix.Cream);
+            p.Rect(5, 6, 6, 4, EmiPix.Pink);
+            p.Rect(3, 10, 10, 4, EmiPix.Pink);
+            p.Rect(6, 14, 1, 2, EmiPix.Cream);
+            p.Rect(9, 14, 1, 2, EmiPix.Cream);
+        }),
     };
 }

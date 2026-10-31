@@ -272,7 +272,7 @@ public sealed class RainLookSyncTests
             {
                 Post = m => posted.Add(JObject.FromObject(m)),
                 Store = () => new RainPackStore(RainPackStore.RootFor(dir), () => null,
-                    name => File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", "rain_emotes", name))),
+                    name => File.ReadAllText(Path.Combine(RepoRoot(), "Assets", "rain_emotes", name))),
                 Access = () => new RainItemAccess(LoadManifest(), new RainGrantSet(new[] { "cos.rain.dress.rose-flare" }), new Lvl()),
                 Clips = () => new[] { "idle" },
                 Commit = (_, _) => commits++,
@@ -326,5 +326,5 @@ public sealed class RainLookSyncTests
     }
 
     private static RainItemManifest LoadManifest() =>
-        RainItemManifest.Load(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", "web", "rain-wardrobe", RainItemManifest.FileName));
+        RainItemManifest.Load(Path.Combine(RepoRoot(), "Assets", "web", "rain-wardrobe", RainItemManifest.FileName));
 }

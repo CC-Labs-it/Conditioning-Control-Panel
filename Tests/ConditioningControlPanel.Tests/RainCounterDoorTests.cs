@@ -26,7 +26,7 @@ public class RainCounterDoorTests
     }
 
     private static string Web(params string[] parts)
-        => Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", "web", Path.Combine(parts));
+        => Path.Combine(RepoRoot(), "Assets", "web", Path.Combine(parts));
 
     private static RainItemManifest Shipped() => RainItemManifest.Load(Web("rain-wardrobe", RainItemManifest.FileName));
 

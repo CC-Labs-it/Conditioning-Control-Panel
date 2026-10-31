@@ -22,11 +22,11 @@ public class ShopCosmeticsTests
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
             dir = dir.Parent;
         Assert.True(dir != null, "repo root not found");
-        return Path.Combine(dir!.FullName, "ConditioningControlPanel", Path.Combine(parts));
+        return Path.Combine(dir!.FullName, Path.Combine(parts));
     }
 
     private static IReadOnlyList<ShopCosmeticItem> Shipped() =>
-        ShopCosmetics.Parse(File.ReadAllText(RepoFile("Resources", "cosmetics", "shop-registry.json")));
+        ShopCosmetics.Parse(File.ReadAllText(RepoFile("Assets", "cosmetics", "shop-registry.json")));
 
     private static readonly string[] ExpectedIds =
     {
@@ -50,13 +50,13 @@ public class ShopCosmeticsTests
     public void Every_registry_row_has_its_png_on_disk()
     {
         foreach (var item in Shipped())
-            Assert.True(File.Exists(RepoFile("Resources", "cosmetics", item.File)), item.File);
+            Assert.True(File.Exists(RepoFile("Assets", "cosmetics", item.File)), item.File);
     }
 
     [Fact]
     public void Rain_portrait_ships_with_its_cc_by_attribution()
     {
-        var path = RepoFile("Resources", "cosmetics", "shop", "ATTRIBUTION.txt");
+        var path = RepoFile("Assets", "cosmetics", "shop", "ATTRIBUTION.txt");
         Assert.True(File.Exists(path), path);
         Assert.Contains("creativecommons.org/licenses/by/4.0", File.ReadAllText(path));
         Assert.Contains("Resources\\cosmetics\\shop\\ATTRIBUTION.txt",
@@ -66,7 +66,7 @@ public class ShopCosmeticsTests
     [Fact]
     public void Every_item_has_a_shop_name_in_english()
     {
-        var en = JObject.Parse(File.ReadAllText(RepoFile("Localization", "Languages", "en.json")));
+        var en = JObject.Parse(File.ReadAllText(Path.Combine(SourceRoots.LanguagesDirectory, "en.json")));
         foreach (var item in Shipped())
             Assert.False(string.IsNullOrWhiteSpace((string?)en[item.NameKey]), item.NameKey);
     }

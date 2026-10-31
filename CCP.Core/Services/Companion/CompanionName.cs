@@ -27,7 +27,7 @@ namespace ConditioningControlPanel.Services.Companion
         /// <summary>The name for the active mod; Emi when the mod layer is not up yet or throws.</summary>
         public static string ForActiveMod()
         {
-            try { return ForMod(App.Mods?.ActiveModId); }
+            try { return ForMod(CoreMods.ActiveModId); }
             catch { return Fallback; }
         }
     }

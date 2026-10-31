@@ -97,11 +97,7 @@ public class PbpLookRulesTests
 
     private static string PageDir()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources", "web")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        return Path.Combine(dir!.FullName, "ConditioningControlPanel", "Resources", "web", "piecebypiece");
+        return Path.Combine(SourceRoots.RepoRoot, "Assets", "web", "piecebypiece");   // the web trees live in Assets/web
     }
 
     [Fact]

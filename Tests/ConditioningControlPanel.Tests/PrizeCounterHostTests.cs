@@ -54,7 +54,7 @@ public class PrizeCounterHostTests
         Assert.Contains("ExtraBrowserArguments = BrowserArguments,", src);
         Assert.DoesNotContain("EnsureCoreWebView2Async", src);
         // The page plays the kept press (host-escape.js), wired before the page mounts.
-        var page = Read("ConditioningControlPanel", "Resources", "web", "prizecounter", "index.html");
+        var page = Read("Assets", "web", "prizecounter", "index.html");
         Assert.True(page.IndexOf("createHostEscape()", StringComparison.Ordinal) < page.IndexOf("mountPrizeCounter(createHost()", StringComparison.Ordinal));
     }
 
@@ -83,7 +83,7 @@ public class PrizeCounterHostTests
         Assert.Contains("OpenUnifiedLoginDialog(owner)", src);
         Assert.Contains("RequestSignIn(_host.Window)", src);
         // The page's frame is the one CONTRACT.md names.
-        var host = Read("ConditioningControlPanel", "Resources", "web", "prizecounter", "host.js");
+        var host = Read("Assets", "web", "prizecounter", "host.js");
         Assert.Contains("post({ type: 'signin' })", host);
     }
 
