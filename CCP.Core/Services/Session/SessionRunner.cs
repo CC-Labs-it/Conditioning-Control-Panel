@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Services
@@ -109,7 +110,7 @@ namespace ConditioningControlPanel.Services
         {
             if (IsRunning) throw new InvalidOperationException("A session is already running. Stop it first.");
             if ((_snapshot != null || _custody != null) && !RestoreSettings())
-                throw new InvalidOperationException("Session settings recovery failed. Restart the app to recover them.");
+                throw new InvalidOperationException(Loc.Get("session_settings_recovery_failed"));
             _stepFailures.Clear();
             if (!CoreEngine.IsRunning) CoreEngine.Start();
             // SessionEngine.cs:223 (#1304): the session owns Mind Wipe, so the global one the engine

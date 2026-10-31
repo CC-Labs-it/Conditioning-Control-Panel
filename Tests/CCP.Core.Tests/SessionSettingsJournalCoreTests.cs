@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -129,7 +130,21 @@ public sealed class SessionSettingsJournalCoreTests : IDisposable
             Assert.False(service.HasPendingSave);
             Assert.Equal(disk, File.ReadAllText(settingsPath));
             // A repeated failure cannot overwrite the original journal with partial values.
-            Assert.Throws<InvalidOperationException>(() => _runner.Start(session));
+            var loc = LocalizationManager.Instance;
+            var previousLanguage = loc.CurrentLanguage;
+            try
+            {
+                foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
+                {
+                    var strings = JObject.Parse(File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Localization", "Languages", code + ".json")));
+                    var expected = (string?)strings["session_settings_recovery_failed"];
+                    Assert.False(string.IsNullOrWhiteSpace(expected), code);
+                    loc.Initialize(code);
+                    var error = Assert.Throws<InvalidOperationException>(() => _runner.Start(session));
+                    Assert.Equal(expected, error.Message);
+                }
+            }
+            finally { loc.Initialize(previousLanguage); }
             Assert.Equal(journal, File.ReadAllText(journalPath));
 
             var recovered = new AppSettings { ActiveModId = s.ActiveModId, FlashFrequency = 77 };
