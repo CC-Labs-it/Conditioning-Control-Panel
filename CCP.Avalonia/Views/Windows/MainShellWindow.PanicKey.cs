@@ -11,6 +11,8 @@
 // the next effect re-binds; re-bind on PanicKey change if that matters.
 
 using System;
+using System.ComponentModel;
+using ConditioningControlPanel.Models;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -244,10 +246,71 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Serilog.Log.Debug(ex, "AI command cancel on panic failed"); }
         }
 
+        // WPF MainWindow.xaml.cs:2248 / :2317 (SyncNoPanicState), wired to Lockdown in
+        // App.xaml.cs:3447. Observe the setting itself so every writer restores the global route.
+        private void HookPanicEnabled()
+        {
+            AppSettings? hooked = null;
+            var service = CoreSettings.Service;
+            bool closed = false;
+            void Rebind()
+            {
+                if (closed) return;
+                if (hooked != null) hooked.PropertyChanged -= Changed;
+                hooked = CoreSettings.Current;
+                hooked.PropertyChanged += Changed;
+                Sync();
+            }
+            void Changed(object? sender, PropertyChangedEventArgs e)
+            {
+                if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(AppSettings.PanicKeyEnabled))
+                    Sync();
+            }
+            void Sync() => Dispatcher.UIThread.Post(() =>
+            {
+                if (!closed) SyncPanicEnabled();
+            });
+            void Replaced() => Dispatcher.UIThread.Post(Rebind);
+            Rebind();
+            if (service != null) service.CurrentReplaced += Replaced;
+            Closed += (_, _) =>
+            {
+                closed = true;
+                if (hooked != null) hooked.PropertyChanged -= Changed;
+                if (service != null) service.CurrentReplaced -= Replaced;
+            };
+        }
+
+        private static readonly System.Threading.SemaphoreSlim PanicBindingSync = new(1, 1);
+
+        private static async void SyncPanicEnabled()
+        {
+            await PanicBindingSync.WaitAsync();
+            try
+            {
+                // Let an in-flight portal dialog finish before closing/rebinding its session.
+                // Read the latest setting after the await: a quick off/on must not lose its bind.
+                if (_portalBind != null) await _portalBind;
+                // An explicit settings transition gets a fresh attempt after an earlier refusal.
+                if (!PortalPanicShortcut.IsBound) _portalBind = null;
+                _portalFailed = false;
+                if (!CoreSettings.Current.PanicKeyEnabled)
+                {
+                    _portalWatch?.Stop();
+                    _portalWatch = null;
+                    await PortalPanicShortcut.UnbindAsync();
+                    _portalBind = null;
+                }
+                if (CoreSettings.Current.PanicKeyEnabled && AnyEffectRunning)
+                    StartEffect(() => { });
+            }
+            finally { PanicBindingSync.Release(); }
+        }
+
         internal static void StartEffect(Action start)
         {
-            if (!_portalAllowed || PortalPanicShortcut.IsBound || _portalFailed || !CoreSettings.Current.PanicKeyEnabled
-                || !OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
+            if ((!_portalAllowed && PortalPanicShortcut.BindForTests == null) || PortalPanicShortcut.IsBound || _portalFailed || !CoreSettings.Current.PanicKeyEnabled
+                || (PortalPanicShortcut.BindForTests == null && (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))))
             {
                 start();
                 return;
