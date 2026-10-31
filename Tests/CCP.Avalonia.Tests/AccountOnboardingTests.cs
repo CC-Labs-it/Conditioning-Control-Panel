@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Avalonia.VisualTree;
+using Avalonia.LogicalTree;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -103,7 +104,8 @@ public sealed class AccountOnboardingTests
             dialog.Show();
             Dispatcher.UIThread.RunJobs();
             Assert.NotEqual("Sign in via Web", Loc.Get("login_device_title"));
-            var texts = dialog.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
+            // Hidden panels have not applied their button templates, so their content is only in the logical tree.
+            var texts = dialog.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
             foreach (var key in new[] { "login_device_body", "login_device_your_code", "login_device_open_manually",
                 "login_device_copy_code", "login_device_open_again", "login_device_waiting" })
                 Assert.Contains(Loc.Get(key), texts);
