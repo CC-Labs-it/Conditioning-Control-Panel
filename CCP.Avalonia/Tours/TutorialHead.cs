@@ -97,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
                 showDeeper: () => shell.ShowTab("deeper"),
                 showTab: key => shell.ShowTab(key));
 
+            EmiTourNarrator.Attach(Service);
             Service.Start(type);
             if (!Service.IsActive) return;
 
@@ -107,6 +108,13 @@ namespace ConditioningControlPanel.Avalonia.Tours
             overlay.Closed += (_, _) =>
             {
                 if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null;
+                // CoreTutorial forwards Finished before the narrator's service handler runs.
+                // Let that handler speak before detaching, as WPF Settings.cs:570-577 does.
+                var narrator = EmiTourNarrator.Active;
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (ReferenceEquals(EmiTourNarrator.Active, narrator)) EmiTourNarrator.Detach();
+                });
                 if (browser != null) browser.IsVisible = true;
             };
             overlay.Show();
@@ -115,7 +123,10 @@ namespace ConditioningControlPanel.Avalonia.Tours
         /// <summary>Panic: a tour ends at once, by the abandon route (never latched as walked).</summary>
         internal static void OnPanic()
         {
+            // WPF MainWindow.xaml.cs:1617-1620: arm silence before abandoning the tour.
+            try { ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.Draw("panicPressed"); } catch { }
             try { if (Service.IsActive) Service.Skip(); } catch { /* panic never throws */ }
+            Views.Windows.EmiDesk.EmiDeskService.Instance.Window?.StopTourSpeech();
         }
 
         /// <summary>One snapshot per head step, so the overlay's "is this still my step" check holds.</summary>
@@ -159,6 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
         {
             try { if (Service.IsActive) Service.Skip(); } catch { }
             _shellOverlay = null;
+            EmiTourNarrator.Detach();
         }
     }
 }

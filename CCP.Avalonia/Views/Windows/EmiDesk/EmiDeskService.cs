@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// the hover x and the settings switch all route here, so none of them owns her twice.</para>
     ///
     /// <para>ponytail: not here yet, each a named WPF member: the moment bus (<c>Fire</c>, greeting,
-    /// backSoon/weekend/bedtime beats; EmiLineEngine and EmiState are in Core, unwired here), the nudge machine, the
+    /// backSoon/weekend/bedtime beats; only tour speech uses the Core line engine here), the nudge machine, the
     /// knock (<c>TryKnock</c>) and the tube hand-off wiring (the <c>TubeDeskVisibility</c> rule itself is in
     /// CCP.Core; only the head call that hides/restores the desk is missing). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
@@ -97,6 +97,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 Log.Warning(ex, "[EmiDesk] Summon failed");
             }
+        }
+
+        // WPF EmiDeskService.cs:727-770. Tour-only speech; Core keeps all draw gates.
+        internal void SpeakTourMoment(string moment)
+        {
+            try
+            {
+                if (!IsOut || _window is not { IsVisible: true, PresentationActive: false } win) return;
+                var engine = EmiLineEngine.Instance;
+                var line = engine.Draw(moment);
+                if (line == null || line.Hold || string.IsNullOrWhiteSpace(line.Text)) return;
+                win.SayTourLine(line.Text, line.Face);
+                // WPF EmiDeskWindow.Bubble.cs:520: spend only once the first dot is visible.
+                engine.Ack(line.Id);
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] tour speech failed"); }
         }
 
         /// <summary>Send her away. Safe to call when she is not out.</summary>
