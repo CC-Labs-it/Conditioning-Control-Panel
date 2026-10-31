@@ -104,7 +104,7 @@ import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
 import { createLoading, LOAD_STALL_MS } from './hud/loading.js';
 import { createRaceToys } from './host/raceToys.js';
-import { describeFailure, rememberFailure, failureLine, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS } from './core/failure.js';
+import { describeFailure, rememberFailure, failureLine, isStalled, blockedTick, STALL_MS, WATCH_MS, FRAME_THROWS, earlierLine, rebuildAllowed } from './core/failure.js';
 import { ORDER as TIER_ORDER } from './render/quality.js';
 import { dismantleScene } from './render/sceneResources.js';
 import { createGarage } from './render/garage.js';
@@ -221,8 +221,11 @@ function fail(e) {
   const rec = record('boot', e);
   const note = document.getElementById('card-note');
   if (note) note.textContent = 'Could not start: ' + rec.reason;
+  showFailure(rec);
+}
+function showFailure(rec) {
   if (window.__glassroad) window.__glassroad.phase = 'failed';
-  loading.fail(failureLine(rec));
+  loading.fail([failureLine(rec), earlierLine(rec)].filter(Boolean).join(' '));
   loading.onRetry(() => void retry(rec.course));
 }
 /** Drop every GPU-side shared object (renderer, art, garage, kart pool; the audio stays). The next boot builds them
@@ -247,8 +250,10 @@ function retry(id) {
  *  throwing rebuilds the renderer and the course behind the loading cover, back into the race or the garage. */
 async function recover(kind, e, { race = false } = {}) {
   if (shared.closed || shared.recovering) return false;
-  shared.recovering = true;
+  const again = !rebuildAllowed(shared.failures);
   const rec = record(kind, e);
+  if (again) { console.error('[glassroad] ' + failureLine(rec) + '; no second rebuild'); showFailure(rec); return false; }
+  shared.recovering = true;
   console.error('[glassroad] ' + failureLine(rec) + '; rebuilding the graphics');
   try {
     teardownGpu({ lowerTier: kind === 'lost' });
@@ -263,9 +268,7 @@ loading.onStall(({ stage, progress }) => {
   const rec = record('stall', new Error('stuck at ' + (stage || 'the start') + ' (' + Math.round(progress * 100) + '%) for ' + Math.round(LOAD_STALL_MS / 1000) + ' s'));
   console.error('[glassroad] ' + failureLine(rec));
   shared.recovering = false;   // a hung rebuild never finished; the next loss may rebuild again
-  if (window.__glassroad) window.__glassroad.phase = 'failed';
-  loading.fail(failureLine(rec));
-  loading.onRetry(() => void retry(rec.course));
+  showFailure(rec);
 });
 
 /** ?botFall=1: once, steer the player to the outside of the first open stretch (a rescue to look at). */
