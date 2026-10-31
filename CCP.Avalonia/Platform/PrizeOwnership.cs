@@ -1,15 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Avalonia.Threading;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Prizes;
 
 namespace ConditioningControlPanel.Avalonia.Platform
 {
     /// <summary>
     /// Back Room prize ownership on this head. WPF asks <c>PrizeGrants.IsGranted</c>, backed by
-    /// OwnershipService snapshots from BackRoomApi. Here only the snapshots a counter reply carries
-    /// (<see cref="ApplySnapshot"/>, fed by <see cref="V2PurchaseHead"/>) are held, for this run;
-    /// the profile-sync feed is parity row svc-prize-ownership. The other source is WPF's DEBUG-only
-    /// <c>CCP_PRIZE_GRANTS</c> override (Core OwnershipService.ReadDebugOverride): same variable,
+    /// OwnershipService snapshots from BackRoomApi, provider validation and profile sync.
+    /// The other source is WPF's DEBUG-only <c>CCP_PRIZE_GRANTS</c> override:
     /// same patterns (exact id, <c>prefix.*</c>, <c>*</c>), and a Release build never reads it.
     /// Parsing is Core's, so an empty id never matches and a pattern holding whitespace or a
     /// misplaced <c>*</c> is dropped.
@@ -44,8 +47,41 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
             => HeldOwnership.ApplySnapshot(accountId, revision, grants);
 
+        // WPF App.xaml.cs:529 and ProfileSyncService.cs:573-697,1874.
+        // Configure before any restored provider validates or the first profile sync starts.
+        internal static void Seed()
+        {
+            ProviderSubscription.PrizesSink = ApplyFeed;
+            BackRoomApi.DefaultApplyPrizes = ApplySnapshot;
+            CoreAccount.UnifiedIdentityChanged -= OnIdentityChanged;
+            CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
+        }
+
+        private static void OnIdentityChanged(object? sender, EventArgs e) =>
+            Dispatcher.UIThread.Post(() => { _feedAccount = null; HeldOwnership.Clear(); });
+
+        private static string? _feedAccount;
+
+        // Copy before queueing: a provider response can be changed or the player can sign out
+        // before this UI job runs. Missing blocks keep ownership; explicit empty grants revoke.
+        internal static void ApplyFeed(string? requestedFor, string? answeredFor, PrizesBlock? prizes, string source)
+        {
+            if (string.IsNullOrEmpty(requestedFor)) return;
+            var grants = string.Equals(requestedFor, answeredFor, StringComparison.Ordinal)
+                ? prizes?.Grants?.ToArray() : null;
+            var revision = prizes?.Revision ?? 0;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!string.Equals(FriendsHead.Identity()?.UnifiedId, requestedFor, StringComparison.Ordinal)) return;
+                if (_feedAccount != null && !string.Equals(_feedAccount, requestedFor, StringComparison.Ordinal))
+                    HeldOwnership.Clear();
+                _feedAccount = requestedFor;
+                if (grants != null) ApplySnapshot(requestedFor, revision, grants);
+            });
+        }
+
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
-        internal static void ResetHeld() => HeldOwnership.Clear();
+        internal static void ResetHeld() { _feedAccount = null; HeldOwnership.Clear(); }
 
         /// <summary>WPF V2Badges.FlashOwned: any flashes v2 prize (both motions or Jackpot Remix).</summary>
         internal static bool FlashV2Owned() =>
