@@ -122,7 +122,7 @@ namespace ConditioningControlPanel
                 EnsureEventBurstLayer();
 
                 ApplyNavActiveGlow();
-                // Velvet Kit 2 lane B's hero moments (START charge + XP meniscus) ride this same
+                // Velvet Kit 2 lane B's hero moments (START charge) ride this same
                 // lifecycle rather than hooking Activated / Deactivated / StateChanged again.
                 InitializeHeroFx();
                 ApplyChromeFxLoops();
@@ -168,7 +168,7 @@ namespace ConditioningControlPanel
             // PR-2's dashboard loops ride the same funnel rather than hooking Activated /
             // Deactivated / StateChanged a second time. No-op until InitializeDashboardFx runs.
             ApplyDashboardFxLoops();
-            // Velvet Kit 2 (FX lane B): START charge / ring exhale / heartbeat + XP meniscus pulse.
+            // Velvet Kit 2 (FX lane B): START charge / ring exhale / heartbeat.
             ApplyHeroFxLoops();
             // Nav polish wave 6: the header banner's glow breath + 12 s sparkle repeat.
             ApplyBannerFxLoops();
@@ -719,9 +719,6 @@ namespace ConditioningControlPanel
             double fromWidth = double.IsNaN(XPBar.Width) ? 0 : XPBar.Width;
             double toWidth = progress * available;
             MotionFx.BarFill(XPBar, fromWidth, toWidth);
-            // Velvet Kit 2 (FX lane B): the meniscus rides the same target width on the
-            // same clock and curve as the fill, so it sits on the surface throughout.
-            AnimateXpMeniscus(toWidth);
         }
 
         /// <summary>Slow gloss travelling along the XP fill. Three stop offsets on one 6s clock.</summary>
