@@ -1,10 +1,7 @@
-// WPF Services/EmiDesk/EmiChainPlayer.cs:40-160: frame clock, holds, hooks and cancellation.
 using System;
-using Avalonia.Threading;
-using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
 
-namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+namespace ConditioningControlPanel.Services.EmiDesk;
 
 /// <summary>
 /// Plays one chain on the dispatcher, the WPF twin of chains.js <c>playChain</c>: fx fires
@@ -14,10 +11,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 ///
 /// One player owns one surface: <see cref="Play"/> cancels whatever was running first.
 /// </summary>
-internal sealed class EmiChainPlayer : IDisposable
+public sealed class EmiChainPlayer : IDisposable
 {
-    private readonly Dispatcher _dispatcher;
-    private DispatcherTimer? _timer;
+    private readonly Func<bool> _checkAccess;
+    private readonly Action<Action> _post;
+    private readonly Func<TimeSpan, Action, Action> _startTimer;
+    private Action? _stopTimer;
     private EmiChain? _chain;
     private EmiChainHooks? _hooks;
     private int _index;
@@ -29,10 +28,12 @@ internal sealed class EmiChainPlayer : IDisposable
     /// <summary>True while a chain is on screen.</summary>
     public bool IsLive => _chain != null;
 
-    /// <param name="dispatcher">The surface's dispatcher. Every hook is raised on it.</param>
-    public EmiChainPlayer(Dispatcher dispatcher)
+    /// <summary>The head supplies dispatcher access, posting and a timer whose returned action stops it.</summary>
+    public EmiChainPlayer(Func<bool> checkAccess, Action<Action> post, Func<TimeSpan, Action, Action> startTimer)
     {
-        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _checkAccess = checkAccess ?? throw new ArgumentNullException(nameof(checkAccess));
+        _post = post ?? throw new ArgumentNullException(nameof(post));
+        _startTimer = startTimer ?? throw new ArgumentNullException(nameof(startTimer));
     }
 
     /// <summary>
@@ -42,9 +43,9 @@ internal sealed class EmiChainPlayer : IDisposable
     public void Play(EmiChain? chain, EmiChainHooks hooks, string? bodyFrameOverride = null)
     {
         if (_disposed) return;
-        if (!_dispatcher.CheckAccess())
+        if (!_checkAccess())
         {
-            try { _dispatcher.Post(new Action(() => Play(chain, hooks, bodyFrameOverride))); }
+            try { _post(() => Play(chain, hooks, bodyFrameOverride)); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] chain marshal failed"); }
             return;
         }
@@ -95,25 +96,18 @@ internal sealed class EmiChainPlayer : IDisposable
 
         _index++;
 
-        _timer = new DispatcherTimer(DispatcherPriority.Normal)
-        {
-            Interval = TimeSpan.FromMilliseconds(Math.Max(1, frame.Ms))
-        };
-        _timer.Tick += OnTick;
-        _timer.Start();
+        PendingHold = TimeSpan.FromMilliseconds(Math.Max(1, frame.Ms));
+        _stopTimer = _startTimer(PendingHold.Value, OnTick);
     }
 
-    private void OnTick(object? sender, EventArgs e)
+    private void OnTick()
     {
         try
         {
-            if (sender is DispatcherTimer t)
-            {
-                t.Stop();
-                t.Tick -= OnTick;
-            }
+            _stopTimer?.Invoke();
             if (_disposed || _chain == null) return;
-            _timer = null;
+            _stopTimer = null;
+            PendingHold = null;
 
             if (_index < _chain.Seq.Count)
             {
@@ -133,26 +127,17 @@ internal sealed class EmiChainPlayer : IDisposable
         }
     }
 
-    /// <summary>Test seam (P08): the pending frame's hold, or null when no frame is pending.</summary>
-    internal TimeSpan? PendingHold => _timer?.Interval;
-
-    /// <summary>Test seam (P08): end the pending hold now instead of waiting for the timer.</summary>
-    internal void ElapsePendingHold()
-    {
-        if (_timer != null) OnTick(_timer, EventArgs.Empty);
-    }
+    internal TimeSpan? PendingHold { get; private set; }
+    internal void ElapsePendingHold() { if (_stopTimer != null) OnTick(); }
 
     /// <summary>Kill the running chain. Done is NOT called.</summary>
     public void Cancel()
     {
         try
         {
-            if (_timer != null)
-            {
-                _timer.Stop();
-                _timer.Tick -= OnTick;
-                _timer = null;
-            }
+            _stopTimer?.Invoke();
+            _stopTimer = null;
+            PendingHold = null;
         }
         catch (Exception ex)
         {

@@ -253,7 +253,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private double _resizeStartWidth;
 
         /// <summary>True while a chain is on screen.</summary>
-        private readonly EmiChainPlayer _player = new(Dispatcher.UIThread);
+        private readonly EmiChainPlayer _player = new(Dispatcher.UIThread.CheckAccess, a => Dispatcher.UIThread.Post(a), (hold, tick) =>
+        {
+            var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = hold };
+            EventHandler onTick = (_, _) => tick();
+            timer.Tick += onTick; timer.Start();
+            return () => { timer.Stop(); timer.Tick -= onTick; };
+        });
         internal EmiChainPlayer ChainPlayer => _player;
         public bool ChainLive => _player.IsLive || _patFeedback is not null;
 
