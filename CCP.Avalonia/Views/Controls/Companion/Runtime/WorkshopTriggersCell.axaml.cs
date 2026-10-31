@@ -9,13 +9,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 {
     /// <summary>Z8 · TRIGGERS &amp; PHRASES. See the XAML header.
     ///
-    /// WPF forwards the controls to MainWindow. This head keeps the toggle's local visibility
-    /// and interval label here, and hoists phrase-preset selection/save/delete to the Workshop host.
+    /// WPF forwards the controls to MainWindow. This head saves trigger edits here,
+    /// and hoists phrase-preset selection/save/delete to the Workshop host.
     /// Manage Phrases forwards to the owning shell. Edit Phrases and the live avatar trigger timer
     /// still await their runtime.
     /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
+        private bool _isLoading;
+
+        // WPF MainWindow.CompanionTab.cs:44-51 SyncCompanionTabUI.
+        internal void SyncFromSettings()
+        {
+            _isLoading = true;
+            try
+            {
+                var settings = CoreSettings.Current;
+                this.FindControl<CheckBox>("ChkTriggerModeCompanion")!.IsChecked = settings.TriggerModeEnabled;
+                this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!.IsVisible = settings.TriggerModeEnabled;
+                this.FindControl<Slider>("SliderTriggerIntervalCompanion")!.Value = settings.TriggerIntervalSeconds;
+                this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!.Text = $"{settings.TriggerIntervalSeconds}s";
+            }
+            finally { _isLoading = false; }
+        }
+
         public event EventHandler? PhrasePresetSelectionChanged;
         public event EventHandler? SavePhrasePresetRequested;
         public event EventHandler? DeletePhrasePresetRequested;
@@ -37,8 +54,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             var intervalText = this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!;
 
             // WPF wired Checked/Unchecked separately; Avalonia has one event for both.
-            toggle.IsCheckedChanged += (_, _) => panel.IsVisible = toggle.IsChecked == true;
-            slider.ValueChanged += (_, _) => intervalText.Text = $"{(int)slider.Value}s";
+            // WPF MainWindow.Patreon.cs:1489-1501,1515-1525. Timer restart remains unported.
+            toggle.IsCheckedChanged += (_, _) =>
+            {
+                panel.IsVisible = toggle.IsChecked == true;
+                if (_isLoading) return;
+                CoreSettings.Current.TriggerModeEnabled = toggle.IsChecked == true;
+                CoreSettings.Save();
+            };
+            slider.ValueChanged += (_, _) =>
+            {
+                intervalText.Text = $"{(int)slider.Value}s";
+                if (_isLoading) return;
+                CoreSettings.Current.TriggerIntervalSeconds = (int)slider.Value;
+                CoreSettings.Save();
+            };
         }
     }
 
