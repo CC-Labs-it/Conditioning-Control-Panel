@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.ComponentModel;
+using Avalonia.Threading;
+using SettingsModel = ConditioningControlPanel.Models.AppSettings;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -36,9 +39,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             SliderLabel.Wire(this, "SliderIntensity", "TxtIntensity", v => $"{(int)v}%");
             SliderLabel.Wire(this, "SliderBlurStrength", "TxtBlurStrength", v => $"{(int)v}%");
 
+            LoadVolume();
+            this.FindControl<Slider>("SliderVolume")!.ValueChanged += (_, e) =>
+            {
+                if (_loadingVolume) return;
+                // WPF .xaml.cs:269-282. Playback gain belongs to the pending audio service port.
+                CoreSettings.Current.BrainDrainVolume = (int)e.NewValue;
+                this.FindControl<TextBlock>("TxtVolume")!.Text = $"{(int)e.NewValue}%";
+                CoreSettings.Save();
+            };
             RefreshClipCount();
 
-            // Audio and visual controls stay inert until their hosts land.
+            // Playback and visual controls stay inert until their hosts land.
             this.FindControl<Button>("BtnRefreshAudio")!.Click += (_, _) => RefreshClipCount();
 
             // Keep pictures clear is a pure preference (WPF ChkKeepClear_Changed writes and saves;
@@ -57,6 +69,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         }
 
         private readonly CheckBox _keepClear;
+        private bool _loadingVolume;
+        private SettingsModel? _volumeSettings;
+        private SettingsService? _volumeService;
+
+        // WPF .xaml.cs:68-110,207-218: follow both instance replacement and live edits.
+        private void RebindVolume()
+        {
+            if (_volumeSettings != null) _volumeSettings.PropertyChanged -= OnVolumeChanged;
+            _volumeSettings = CoreSettings.Current;
+            _volumeSettings.PropertyChanged += OnVolumeChanged;
+            LoadVolume();
+        }
+
+        private void OnVolumeChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(SettingsModel.BrainDrainVolume))
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_volumeSettings != null && ReferenceEquals(sender, _volumeSettings)) LoadVolume();
+                });
+        }
+
+        private void LoadVolume()
+        {
+            _loadingVolume = true;
+            try
+            {
+                var volume = CoreSettings.Current.BrainDrainVolume;
+                this.FindControl<Slider>("SliderVolume")!.Value = volume;
+                this.FindControl<TextBlock>("TxtVolume")!.Text = $"{volume}%";
+                // WPF .xaml.cs:100: reveal changed values, never force a user's open fold shut.
+                if (volume != 100) this.FindControl<MoreFold>("FoldMore")!.IsOpen = true;
+            }
+            finally { _loadingVolume = false; }
+        }
 
         // WPF re-reads on Loaded and on its settings rebind hook; the Studio tab keeps this control
         // alive, so a Reset or cloud restore (CurrentReplaced) must repaint the toggle.
@@ -64,6 +111,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += LoadKeepClear;
+            _volumeService = CoreSettings.Service;
+            if (_volumeService != null) _volumeService.CurrentReplaced += RebindVolume;
+            RebindVolume();
             LoadKeepClear();
             RefreshClipCount(); // WPF .xaml.cs:40-43: re-scan whenever the rack is shown.
         }
@@ -71,6 +121,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= LoadKeepClear;
+            if (_volumeService != null) _volumeService.CurrentReplaced -= RebindVolume;
+            _volumeService = null;
+            if (_volumeSettings != null) _volumeSettings.PropertyChanged -= OnVolumeChanged;
+            _volumeSettings = null;
             base.OnDetachedFromVisualTree(e);
         }
 

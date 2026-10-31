@@ -17,7 +17,7 @@
      the hosting content, and into a Grid it would overlap the settings instead of stacking. -->
 <UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
+             xmlns:feat="using:ConditioningControlPanel.Avalonia.Views.Features" xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Studio.BrainDrainFeatureControl">
 
@@ -190,6 +190,27 @@
                                 <CheckBox Grid.Column="1" x:Name="ChkAllowCapture"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
+
+                            <feat:MoreFold x:Name="FoldMore">
+                                <!-- Brain Drain's own clip volume (BrainDrainVolume, ccp-bugs #1104),
+                                     multiplied with the master volume. A comfort setting, so NOT
+                                     SessionLock-owned. Explicit 0-100 range (Slider defaults to Maximum=10). -->
+                                <Grid Height="36" ToolTip.Tip="{loc:Str st4_braindrain_volume_hint}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="56"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_volume}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <Slider Grid.Column="1" x:Name="SliderVolume"
+                                            Minimum="0" Maximum="100" Value="100"
+                                            VerticalAlignment="Center" Margin="10,0"/>
+                                    <TextBlock Grid.Column="2" x:Name="TxtVolume" Text="100%"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center"
+                                               FontSize="13" FontWeight="Bold" Foreground="{DynamicResource PinkBrush}"/>
+                                </Grid>
+                            </feat:MoreFold>
 
                         </StackPanel>
                     </Grid>
