@@ -29,31 +29,30 @@ public sealed class EnhancementScreenMirrorTests {
         var screen = (Screen)Activator.CreateInstance(typeof(PlatformScreen),
             new object[] { new PlatformHandle(new IntPtr(x + 1), "headless-test") })!;
         var bounds = new PixelRect(x, 0, 1920, 1080);
-        typeof(Screen).GetProperty(nameof(Screen.Scaling))!.SetValue(screen, 1.0);
-        typeof(Screen).GetProperty(nameof(Screen.Bounds))!.SetValue(screen, bounds);
-        typeof(Screen).GetProperty(nameof(Screen.WorkingArea))!.SetValue(screen, bounds);
-        typeof(Screen).GetProperty(nameof(Screen.IsPrimary))!.SetValue(screen, primary);
+        typeof(Screen).GetProperty(nameof(Screen.Scaling))!.SetValue(screen, 1.0); typeof(Screen).GetProperty(nameof(Screen.Bounds))!.SetValue(screen, bounds);
+        typeof(Screen).GetProperty(nameof(Screen.WorkingArea))!.SetValue(screen, bounds); typeof(Screen).GetProperty(nameof(Screen.IsPrimary))!.SetValue(screen, primary);
         return screen;
     }
-    private static Task Run(bool dualMonitor, Action<EnhancementPlayerWindow, WebHost, FakeTopology, DisplayMirror> check) =>
-        AvaloniaTestDispatcher.RunAsync(() => {
+    private static Task Run(bool dualMonitor, Action<EnhancementPlayerWindow, WebHost, FakeTopology, DisplayMirror> check) => RunAsync(dualMonitor, (p, h, t, m) => { check(p, h, t, m); return Task.CompletedTask; });
+    private static Task RunAsync(bool dualMonitor, Func<EnhancementPlayerWindow, WebHost, FakeTopology, DisplayMirror, Task> check) =>
+        AvaloniaTestDispatcher.RunAsync(async () => {
             if (Application.Current is null)
                 AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                     .With(AppFonts.Options(systemEmoji: false))
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var s = CoreSettings.Current; s.OfflineMode = false; s.DualMonitorEnabled = dualMonitor;
+            var s = CoreSettings.Current; var old = (ScreenList.QueryOverride, s.DualMonitorEnabled, s.OfflineMode, s.StrictLockEnabled, CoreEngine.Video, ScreenMirrorHead.Override); s.OfflineMode = false; s.DualMonitorEnabled = dualMonitor;
             var screens = new[] { MakeScreen(0, true), MakeScreen(1920, false) }; ScreenList.QueryOverride = _ => screens;
             var topo = new FakeTopology(); var mirror = new DisplayMirror(topo);
-            ScreenMirrorHead.Override = mirror; var shell = new EnhancementPlayerWindow(null, null);
+            ScreenMirrorHead.Override = mirror; EnhancementPlayerWindow? shell = null;
             try {
-                shell.Show(); Dispatcher.UIThread.RunJobs();
-                check(shell, shell.FindControl<WebHost>("VideoBrowser")!, topo, mirror);
+                shell = new EnhancementPlayerWindow(null, null); shell.Show(); Dispatcher.UIThread.RunJobs();
+                await check(shell, shell.FindControl<WebHost>("VideoBrowser")!, topo, mirror);
             }
             finally {
-                shell.Close(); ScreenMirrorHead.Override = null; Dispatcher.UIThread.RunJobs();
+                try { shell?.Close(); Dispatcher.UIThread.RunJobs(); }
+                finally { (ScreenList.QueryOverride, s.DualMonitorEnabled, s.OfflineMode, s.StrictLockEnabled, CoreEngine.Video, ScreenMirrorHead.Override) = old; }
             }
-            return Task.CompletedTask;
         });
     private static Window? Fullscreen(EnhancementPlayerWindow player) => player.VideoFullscreenWindow;
     [Theory]
@@ -88,8 +87,7 @@ public sealed class EnhancementScreenMirrorTests {
                 break;
         }
         Assert.Null(Fullscreen(player)); Assert.False(mirror.IsMirroring); Assert.Equal(new[] { true, false }, topo.Calls);
-        Assert.Contains(host, ((Grid)player.FindControl<Border>("VideoPane")!.Child!).Children);
-    });
+        Assert.Contains(host, ((Grid)player.FindControl<Border>("VideoPane")!.Child!).Children); });
     [Fact]
     public Task NavigationKeepsTheHostAndTheClone() => Run(true, (player, host, topo, mirror) => {
         var scripts = new List<string>();
@@ -98,8 +96,7 @@ public sealed class EnhancementScreenMirrorTests {
         var window = Fullscreen(player);
         host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/video"));
         Assert.Contains(scripts, js => js.Contains("fullscreenchange") && js.Contains("dblclick") && js.Contains("F11")); Assert.Contains("window._ccpForcedFs = true;", scripts);
-        Assert.Same(window, Fullscreen(player)); Assert.Same(host, window!.Content); Assert.True(mirror.IsMirroring); Assert.Equal(new[] { true }, topo.Calls);
-    });
+        Assert.Same(window, Fullscreen(player)); Assert.Same(host, window!.Content); Assert.True(mirror.IsMirroring); Assert.Equal(new[] { true }, topo.Calls); });
     [Fact]
     public Task HostDropsTopmostWhileAnotherWindowHasFocus() => Run(true, (player, host, topo, mirror) => {
         host.OnWebMessage(EnhancementPlayerWindow.BrowserFullscreenOnMessage);
@@ -110,29 +107,25 @@ public sealed class EnhancementScreenMirrorTests {
         Raise(window, "HandleDeactivated");
         Assert.False(window.Topmost);
         Raise(window, "HandleActivated");
-        Assert.True(window.Topmost);
-    });
+        Assert.True(window.Topmost); });
     [Fact]
     public Task SingleScreenSelectionStillFullscreensWithoutCloning() => Run(false, (player, host, topo, mirror) => {
         host.OnWebMessage(EnhancementPlayerWindow.BrowserFullscreenOnMessage);
         Assert.NotNull(Fullscreen(player));
         host.OnWebMessage(EnhancementPlayerWindow.BrowserExitFullscreenMessage);
-        Assert.Null(Fullscreen(player)); Assert.Empty(topo.Calls);
-    });
+        Assert.Null(Fullscreen(player)); Assert.Empty(topo.Calls); });
     [Fact]
     public Task CloneFailureStillAllowsFullscreenAndNeverRestoresAnUnchangedTopology() => Run(true, (player, host, topo, mirror) => {
         topo.Result = 50;
         host.OnWebMessage(EnhancementPlayerWindow.BrowserFullscreenOnMessage);
         Assert.NotNull(Fullscreen(player)); Assert.False(mirror.IsMirroring);
         host.OnWebMessage(EnhancementPlayerWindow.BrowserFullscreenOffMessage);
-        Assert.Equal(new[] { true }, topo.Calls);
-    });
+        Assert.Equal(new[] { true }, topo.Calls); });
     [Fact]
     public Task OnePhysicalScreenNeverRequestsClone() => Run(true, (player, host, topo, mirror) => {
         ScreenList.QueryOverride = _ => new[] { MakeScreen(0, true) };
         host.OnWebMessage(EnhancementPlayerWindow.BrowserFullscreenOnMessage);
-        Assert.NotNull(Fullscreen(player)); Assert.Empty(topo.Calls);
-    });
+        Assert.NotNull(Fullscreen(player)); Assert.Empty(topo.Calls); });
     [Fact]
     public Task PanicRetriesAFailedRestore() => Run(true, (player, host, topo, mirror) => {
         host.OnWebMessage(EnhancementPlayerWindow.BrowserFullscreenOnMessage);
@@ -141,8 +134,7 @@ public sealed class EnhancementScreenMirrorTests {
         Assert.True(mirror.IsMirroring);
         topo.Result = 0;
         ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "deeper-player-fullscreen").Stop(null);
-        Assert.False(mirror.IsMirroring);
-    });
+        Assert.False(mirror.IsMirroring); });
     [Theory]
     [InlineData("reparent")]
     [InlineData("close")]
@@ -155,8 +147,7 @@ public sealed class EnhancementScreenMirrorTests {
         host.OnWebMessage(EnhancementPlayerWindow.BrowserExitFullscreenMessage);
         Assert.False(window.IsVisible); Assert.False(window.Topmost); Assert.Same(window, Fullscreen(player)); Assert.False(mirror.IsMirroring);
         player.VideoMoveOverride = null; player.CloseVideoHost = w => w.Close(); window.Closing -= broken; EnhancementPlayerWindow.ForceExitFullscreenAll();
-        Assert.Null(Fullscreen(player)); Assert.Contains(host, ((Grid)player.FindControl<Border>("VideoPane")!.Child!).Children);
-    });
+        Assert.Null(Fullscreen(player)); Assert.Contains(host, ((Grid)player.FindControl<Border>("VideoPane")!.Child!).Children); });
     [Fact]
     public Task KeysRelayTransportRepeatAndEmergencyHold() => Run(true, (player, host, topo, mirror) => {
         var scripts = new List<string>(); host.ScriptInvoker = js => { scripts.Add(js); return Task.FromResult<string?>("\"ok\""); };
@@ -182,8 +173,7 @@ public sealed class EnhancementScreenMirrorTests {
         var volume = player.FindControl<Slider>("SliderVolume")!; volume.Value = 50; player.PlayerKey(Key.Up); Assert.Equal(55, volume.Value); player.PlayerKey(Key.Down); Assert.Equal(50, volume.Value);
         player.PlayerKey(Key.M); Assert.Equal(0, volume.Value); player.PlayerKey(Key.M); Assert.Equal(50, volume.Value);
         player.PlayerKey(Key.M); volume.Value = 60; player.PlayerKey(Key.M); Assert.Equal(0, volume.Value); player.PlayerKey(Key.M); Assert.Equal(60, volume.Value);
-        player.PlayerKey(Key.Right); Assert.Equal(5d, typeof(EnhancementPlayerWindow).GetField("_currentSec", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(player));
-    });
+        player.PlayerKey(Key.Right); Assert.Equal(5d, typeof(EnhancementPlayerWindow).GetField("_currentSec", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(player)); });
     [Fact]
     public Task EffectsAndCursorFollowFullscreenLifecycle() => Run(true, (player, host, topo, mirror) => {
         var tint = new ConditioningControlPanel.Avalonia.Views.Overlays.TintOverlayWindow(); tint.Show();
@@ -200,18 +190,41 @@ public sealed class EnhancementScreenMirrorTests {
             host.OnWebMessage("ccp_pointer"); Assert.Contains(scripts, x => x.Contains("cursor=''")); scripts.Clear();
             now += TimeSpan.FromMilliseconds(1999); player.TickPlayerInput(); Assert.Empty(scripts);
             now += TimeSpan.FromMilliseconds(1); player.TickPlayerInput(); Assert.Contains(scripts, x => x.Contains("cursor='none'")); raised.Clear();
-            var video = CoreEngine.Video; CoreEngine.Video = new MandatoryVideoScheduler(null!);
+            var video = CoreEngine.Video; try { CoreEngine.Video = new MandatoryVideoScheduler(null!);
             typeof(MandatoryVideoScheduler).GetField("_playing", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(CoreEngine.Video, true);
-            player.TickPlayerInput(); Assert.Empty(raised); CoreEngine.Video = video;
+            player.TickPlayerInput(); Assert.Empty(raised); } finally { CoreEngine.Video = video; }
             host.OnWebMessage(EnhancementPlayerWindow.BrowserExitFullscreenMessage); Assert.Equal(new Window[] { tint, spiral }, raised); Assert.Contains(scripts, x => x.Contains("cursor=''"));
             scripts.Clear(); now += TimeSpan.FromSeconds(3); player.TickPlayerInput(); Assert.Empty(scripts);
-        } finally { tint.Close(); spiral.Close(); other.Close(); }
-    });
+        } finally { tint.Close(); spiral.Close(); other.Close(); } });
     [Fact]
     public Task EscapeDownAndUpCloseOnlyTheChangePopup() => Run(false, (player, host, topo, mirror) => {
         CoreSettings.Current.StrictLockEnabled = false; var popup = player.FindControl<global::Avalonia.Controls.Primitives.Popup>("ChangePopup")!; popup.IsOpen = true; Assert.True(popup.IsOpen); Assert.True(player.IsVisible);
         player.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
         player.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.Escape });
-        Assert.False(popup.IsOpen); Assert.True(player.IsVisible);
-    });
+        Assert.False(popup.IsOpen); Assert.True(player.IsVisible); });
+    [Fact]
+    public Task RunRestoresItsStateAfterAFailedCheck() => Run(false, (player, host, topo, mirror) => {
+        var s = CoreSettings.Current; var before = (ScreenList.QueryOverride, s.DualMonitorEnabled, s.OfflineMode, s.StrictLockEnabled, CoreEngine.Video, ScreenMirrorHead.Override);
+        Assert.Throws<InvalidOperationException>(() => Run(true, (_, _, _, _) => { ScreenList.QueryOverride = _ => Array.Empty<Screen>(); s.StrictLockEnabled = !before.Item4; s.OfflineMode = !before.Item3; CoreEngine.Video = new MandatoryVideoScheduler(null!); throw new InvalidOperationException("probe"); }).GetAwaiter().GetResult());
+        Assert.Equal(before, (ScreenList.QueryOverride, s.DualMonitorEnabled, s.OfflineMode, s.StrictLockEnabled, CoreEngine.Video, ScreenMirrorHead.Override)); });
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static WeakReference<Window> CacheClosedHost() { var host = new Window(); ScreenMirrorHead.CachedFor(host); host.Show(); host.Close(); return new(host); }
+    [Fact]
+    public Task CachedMirrorDoesNotRetainAClosedHost() => RunAsync(false, async (player, host, topo, mirror) => {
+        ScreenMirrorHead.Shutdown();
+        try { var dead = CacheClosedHost(); await Task.Yield();
+            for (var pass = 0; pass < 3; pass++) { AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); GC.Collect(); GC.WaitForPendingFinalizers(); } GC.Collect(); Assert.False(dead.TryGetTarget(out _)); Assert.Equal(0, ScreenMirrorHead.ActiveScreenCount());
+            ScreenList.QueryOverride = w => ReferenceEquals(w, player) ? new[] { MakeScreen(0, true), MakeScreen(1920, false) } : Array.Empty<Screen>();
+            ScreenMirrorHead.CachedFor(player); Assert.Equal(2, ScreenMirrorHead.ActiveScreenCount());
+        } finally { ScreenMirrorHead.Shutdown(); } });
+    [Fact]
+    public Task HoldHintShowsProgressAndHidesOnEveryCancellation() => Run(false, (player, host, topo, mirror) => {
+        var now = DateTimeOffset.UtcNow; player.InputNow = () => now; CoreSettings.Current.StrictLockEnabled = false; typeof(EnhancementPlayerWindow).GetField("_videoNavigated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(player, true);
+        var hint = player.FindControl<StackPanel>("HoldEscHint")!; var progress = player.FindControl<ProgressBar>("HoldEscProgress")!; Assert.NotNull(hint); Assert.NotNull(progress); Assert.False(hint.IsVisible);
+        host.OnWebMessage("ccp_key:Escape:0:0"); Assert.True(hint.IsVisible); Assert.Equal(0, progress.Value); Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("deeper_player_hold_esc_hint"), hint.Children.OfType<TextBlock>().Single().Text);
+        now += TimeSpan.FromSeconds(1.5); host.OnWebMessage("ccp_key:Escape:0:1"); player.TickPlayerInput(); Assert.Equal(0.5, progress.Value); host.OnWebMessage("ccp_keyup:Escape"); Assert.False(hint.IsVisible);
+        host.OnWebMessage("ccp_key:Escape:0:0"); now += TimeSpan.FromSeconds(3); player.TickPlayerInput(); Assert.False(hint.IsVisible);
+        host.OnWebMessage("ccp_key:Escape:0:0"); CoreSettings.Current.StrictLockEnabled = true; player.TickPlayerInput(); Assert.False(hint.IsVisible); host.OnWebMessage("ccp_key:Escape:0:0"); Assert.False(hint.IsVisible); CoreSettings.Current.StrictLockEnabled = false;
+        host.OnWebMessage("ccp_key:Escape:0:0"); now += TimeSpan.FromSeconds(1.5); host.OnWebMessage("ccp_key:Escape:0:1"); player.TickPlayerInput(); now += TimeSpan.FromSeconds(1.5); host.OnWebMessage("ccp_key:Escape:0:1"); player.TickPlayerInput(); Assert.False(hint.IsVisible);
+        host.OnWebMessage("ccp_key:Escape:0:0"); Assert.True(hint.IsVisible); player.Close(); Assert.False(hint.IsVisible); });
 }

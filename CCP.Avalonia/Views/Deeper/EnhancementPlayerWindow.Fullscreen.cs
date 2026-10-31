@@ -72,32 +72,21 @@ public partial class EnhancementPlayerWindow {
             var screen = Screens.ScreenFromWindow(this)?.Bounds ?? default;
             var host = new Window {
                 WindowDecorations = WindowDecorations.None, CanResize = false, ShowInTaskbar = false,
-                Topmost = true, Background = Brushes.Black,
-                WindowStartupLocation = WindowStartupLocation.Manual,
-                Position = new global::Avalonia.PixelPoint(screen.X + 100, screen.Y + 100),
-                Width = 400, Height = 300,
+                Topmost = true, Background = Brushes.Black, WindowStartupLocation = WindowStartupLocation.Manual,
+                Position = new global::Avalonia.PixelPoint(screen.X + 100, screen.Y + 100), Width = 400, Height = 300,
             };
             _videoFullscreenWindow = host; _videoHostClosed = false;
             FullscreenPlayers.Add(this);
-            host.Closing += OnVideoHostClosing;
-            host.Closed += (_, _) => { _videoHostClosed = true; if (!_videoTransition) ExitVideoFullscreen(false); };
-            host.Deactivated += OnVideoHostDeactivated;
-            host.Activated += OnVideoHostActivated;
+            host.Closing += OnVideoHostClosing; host.Closed += (_, _) => { _videoHostClosed = true; if (!_videoTransition) ExitVideoFullscreen(false); };
+            host.Deactivated += OnVideoHostDeactivated; host.Activated += OnVideoHostActivated;
             host.AddHandler(KeyUpEvent, OnPlayerKeyUp, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
-            host.PointerMoved += OnVideoPointerMoved;
-            host.AddHandler(KeyDownEvent, OnVideoHostKeyDown, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            host.PointerMoved += OnVideoPointerMoved; host.AddHandler(KeyDownEvent, OnVideoHostKeyDown, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             using var moving = VideoMoveOverride?.Invoke() ?? _videoBrowser.BeginReparenting();
-            ((Grid)_videoPane.Child!).Children.Remove(_videoBrowser);
-            host.Content = _videoBrowser;
-            host.Show();
-            host.WindowState = WindowState.FullScreen;
+            ((Grid)_videoPane.Child!).Children.Remove(_videoBrowser); host.Content = _videoBrowser;
+            host.Show(); host.WindowState = WindowState.FullScreen;
             _ = _videoBrowser.InvokeScriptAsync("window._ccpForcedFs = true;");
             ArmCursor(); ReassertEffects();
-        }
-        catch (Exception ex) {
-            Serilog.Log.Warning(ex, "Deeper fullscreen entry failed");
-            _videoExitPending = true;
-        }
+        } catch (Exception ex) { Serilog.Log.Warning(ex, "Deeper fullscreen entry failed"); _videoExitPending = true; }
         finally {
             _videoTransition = false;
             if (_videoExitPending) { _videoExitPending = false; ExitVideoFullscreen(); }
@@ -117,7 +106,7 @@ public partial class EnhancementPlayerWindow {
     }
     private void OnPlayerKeyUp(object? sender, KeyEventArgs e) { if ((sender as Window)?.FocusManager?.GetFocusedElement() is TextBox) return; _pressed.Remove(e.Key); if (e.Key == Key.Escape) { EscapeUp(); e.Handled = true; } }
     private void EscapeUp() {
-        _escapeStart = null; _pressed.Remove(Key.Escape);
+        CancelEscHold(); _pressed.Remove(Key.Escape);
         if (!_escapeConsumed && !StrictInput && !_videoNavigated && !_isPlaying) Close();
         _escapeConsumed = false;
     }
@@ -127,7 +116,7 @@ public partial class EnhancementPlayerWindow {
                 _lastEscape = InputNow();
                 if (!repeat && _changePopup.IsOpen) { _changePopup.IsOpen = false; _escapeConsumed = true; return true; }
                 if (!repeat) { _escapeConsumed = _videoFullscreenWindow != null; ExitVideoFullscreen();
-                    if (!StrictInput && (_videoNavigated || _isPlaying)) _escapeStart = InputNow(); }
+                    if (!StrictInput && (_videoNavigated || _isPlaying)) { _escapeStart = InputNow(); ShowHoldEscHint(0); } }
                 return true;
             case Key.F11: ExitVideoFullscreen(); return true;
             case Key.F: if (!repeat) { if (_videoFullscreenWindow != null) ExitVideoFullscreen(); else if (_isVideoMode && _videoNavigated) EnterVideoFullscreen(); } return true;
@@ -144,14 +133,18 @@ public partial class EnhancementPlayerWindow {
             default: return false;
         }
     }
-    private void ArmCursor() { _cursorDue = InputNow().AddSeconds(2); if (_videoFullscreenWindow != null) _videoFullscreenWindow.Cursor = null;
-        _ = _videoBrowser.InvokeScriptAsync("document.documentElement.style.cursor='';"); }
+    private void ArmCursor() { _cursorDue = InputNow().AddSeconds(2); if (_videoFullscreenWindow != null) _videoFullscreenWindow.Cursor = null; _ = _videoBrowser.InvokeScriptAsync("document.documentElement.style.cursor='';"); }
     private void OnVideoPointerMoved(object? sender, PointerEventArgs e) => ArmCursor();
+    private void CancelEscHold() { _escapeStart = null; if (this.FindControl<StackPanel>("HoldEscHint") is { } hint) hint.IsVisible = false; }
+    private void ShowHoldEscHint(double fraction) {
+        if (this.FindControl<StackPanel>("HoldEscHint") is { } hint && this.FindControl<ProgressBar>("HoldEscProgress") is { } progress) { progress.Value = Math.Clamp(fraction, 0, 1); hint.IsVisible = true; }
+    }
     internal void TickPlayerInput() {
         var now = InputNow();
-        if (_escapeStart != null && (StrictInput || (now - _lastEscape).TotalSeconds > 1.5)) _escapeStart = null;
+        if (_escapeStart != null && (StrictInput || (now - _lastEscape).TotalSeconds > 1.5)) CancelEscHold();
+        if (_escapeStart is { } held) ShowHoldEscHint((now - held).TotalSeconds / 3);
         if (_escapeStart is { } start && (now - start).TotalSeconds >= 3) {
-            _escapeStart = null; _escapeConsumed = true; ExitVideoFullscreen(); BtnStop_Click();
+            CancelEscHold(); _escapeConsumed = true; ExitVideoFullscreen(); BtnStop_Click();
             _txtStatus.Text = ConditioningControlPanel.Localization.Loc.Get("deeper_player_status_escape_stopped");
         }
         if (_videoFullscreenWindow != null) { ReassertEffects(); if (_cursorDue <= now) {

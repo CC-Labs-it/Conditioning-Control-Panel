@@ -1664,7 +1664,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void Window_Closing()
         {
-            _videoClosing = true;
+            _videoClosing = true; CancelEscHold();
             ExitVideoFullscreen();
             _videoBrowser.NavigationCompleted -= OnVideoNavigationCompleted;
             _videoBrowser.WebMessage -= OnVideoWebMessage;
