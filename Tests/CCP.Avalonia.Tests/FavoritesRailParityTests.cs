@@ -43,18 +43,21 @@ public class FavoritesRailParityTests
     {
         Setup();
         var s = CoreSettings.Current;
+        var (get, put, granted) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted);
+        var (offline, id, token, user) = (s.OfflineMode, s.UnifiedId, s.AuthToken, CoreAccount.UnifiedUserId);
         var secrets = new Dictionary<string, string?>();
-        CoreSecrets.RetrieveProvider = n => secrets.GetValueOrDefault(n);
-        CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
-        s.OfflineMode = false;
-        s.UnifiedId = "rail-test";
-        CoreAccount.UnifiedUserId = "rail-test";
-        s.AuthToken = "test-token";
-        PrizeOwnership.IsGranted = PrizeOwnership.Held;
-        s.RailFavorites.AddRange(new[] { "door.studio", "door.home" });
-        var shell = new MainShellWindow();
+        MainShellWindow? shell = null;
         try
         {
+            CoreSecrets.RetrieveProvider = n => secrets.GetValueOrDefault(n);
+            CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+            s.OfflineMode = false;
+            s.UnifiedId = "rail-test";
+            CoreAccount.UnifiedUserId = "rail-test";
+            s.AuthToken = "test-token";
+            PrizeOwnership.IsGranted = PrizeOwnership.Held;
+            s.RailFavorites.AddRange(new[] { "door.studio", "door.home" });
+            shell = new MainShellWindow();
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             Button Chip(string id) => shell.SettingsPage!.FindControl<StackPanel>("FavoritesList")!.Children
@@ -83,7 +86,19 @@ public class FavoritesRailParityTests
             Dispatcher.UIThread.RunJobs();
             Assert.Null(Pill("door.studio"));
         }
-        finally { shell.Close(); PrizeOwnership.ResetHeld(); }
+        finally
+        {
+            try { shell?.Close(); }
+            finally
+            {
+                PrizeOwnership.ResetHeld();
+                PrizeOwnership.IsGranted = granted;
+                // Restore the token through the temporary store before returning the real providers.
+                (s.OfflineMode, s.UnifiedId, s.AuthToken) = (offline, id, token);
+                (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
+                CoreAccount.UnifiedUserId = user;
+            }
+        }
         return Task.CompletedTask;
     });
 
@@ -92,19 +107,21 @@ public class FavoritesRailParityTests
     public Task ModCoverUsesAuthoredRailCropAndFallbacks() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
+        var (packageProvider, artProvider) = (CoreMods.ActiveModPackageProvider, CoreModArt.OverridePathProvider);
         var path = Path.Combine(TestUserDataProfile.Root, "rail-crop.png");
-        using (var bitmap = ModArt.TryLoadBuiltIn("features/vibe.png")) bitmap!.Save(path);
-        CoreModArt.OverridePathProvider = p => p == "features/vibe.png" ? path : null;
-        var framing = new ModArtFraming { CenterX = .2, CenterY = .7, Zoom = 3 };
-        var manifest = new ModManifest { ArtFraming = new Dictionary<string, Dictionary<string, ModArtFraming>>
-        {
-            ["FEATURES\\VIBE.PNG"] = new() { ["RAILCHIP"] = framing }
-        } };
-        CoreMods.ActiveModPackageProvider = () => new ModPackage(manifest, null, false);
-        CoreSettings.Current.RailFavorites.Add("tab.haptics");
-        var shell = new MainShellWindow();
+        MainShellWindow? shell = null;
         try
         {
+            using (var fixture = ModArt.TryLoadBuiltIn("features/vibe.png")) fixture!.Save(path);
+            CoreModArt.OverridePathProvider = p => p == "features/vibe.png" ? path : null;
+            var framing = new ModArtFraming { CenterX = .2, CenterY = .7, Zoom = 3 };
+            var manifest = new ModManifest { ArtFraming = new Dictionary<string, Dictionary<string, ModArtFraming>>
+            {
+                ["FEATURES\\VIBE.PNG"] = new() { ["RAILCHIP"] = framing }
+            } };
+            CoreMods.ActiveModPackageProvider = () => new ModPackage(manifest, null, false);
+            CoreSettings.Current.RailFavorites.Add("tab.haptics");
+            shell = new MainShellWindow();
             shell.Show();
             ImageBrush Face() => Assert.IsType<ImageBrush>(shell.SettingsPage!.FindControl<StackPanel>("FavoritesList")!
                 .Children.OfType<Button>().Single().Background);
@@ -121,7 +138,48 @@ public class FavoritesRailParityTests
             var shipped = ModArtFramingRegistry.ShippedViewbox("features/vibe.png", ModArtFramingRegistry.SurfaceRailChip)!.Value;
             Assert.Equal(new RelativeRect(shipped.X, shipped.Y, shipped.Width, shipped.Height, RelativeUnit.Relative), Face().SourceRect);
         }
-        finally { shell.Close(); File.Delete(path); }
+        finally
+        {
+            try { shell?.Close(); }
+            finally
+            {
+                (CoreMods.ActiveModPackageProvider, CoreModArt.OverridePathProvider) = (packageProvider, artProvider);
+                File.Delete(path);
+            }
+        }
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task TestsRestoreTheirSeamsBeforeTheIsolationHookRuns() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var snapshot = ProcessStateSnapshot.Take();
+        try
+        {
+            var secrets = new Dictionary<string, string?>();
+            CoreSecrets.RetrieveProvider = n => secrets.GetValueOrDefault(n);
+            CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+            var s = CoreSettings.Current;
+            (s.OfflineMode, s.UnifiedId, s.AuthToken) = (true, "prior-account", "prior-test-token");
+            CoreAccount.UnifiedUserId = "prior-account";
+            var (get, put, granted) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted);
+            var (packageProvider, artProvider) = (CoreMods.ActiveModPackageProvider, CoreModArt.OverridePathProvider);
+
+            // Direct calls finish before xUnit's After hook can hide a missing finally restoration.
+            await OwnedPillRepaintsAndChipStillNavigates();
+            Assert.Same(get, CoreSecrets.RetrieveProvider);
+            Assert.Same(put, CoreSecrets.StoreProvider);
+            Assert.Same(granted, PrizeOwnership.IsGranted);
+            Assert.True(s.OfflineMode);
+            Assert.Equal("prior-account", s.UnifiedId);
+            Assert.Equal("prior-test-token", s.AuthToken);
+            Assert.Equal("prior-account", CoreAccount.UnifiedUserId);
+
+            await ModCoverUsesAuthoredRailCropAndFallbacks();
+            Assert.Same(packageProvider, CoreMods.ActiveModPackageProvider);
+            Assert.Same(artProvider, CoreModArt.OverridePathProvider);
+        }
+        finally { snapshot.Restore(); }
     });
 }
