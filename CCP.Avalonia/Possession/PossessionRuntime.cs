@@ -5,6 +5,8 @@
 // (:144, synchronous, no animation). Off-limits controls (Core OffLimits rule, PossessionTree) are
 // never offered to the deck and are refused if handed in directly.
 //
+// TypoHeadEffect adds WPF TypoEffect.cs:15-134: guarded text, four-second hold, immediate undo.
+//
 // Time comes from the window's frame source (FrameClock's IFrameSource; tests step a fake): the hold
 // is measured on frame timestamps, never summed deltas (P40). Nothing animates (P82).
 //
@@ -20,7 +22,7 @@
 //   possession-head-c: the remaining effects - crack, delete dialog, dissolve, dodge, doki dialog,
 //     drop, fall, ghost cursor, glitch portrait, glyphrot, melt, misroute, relabel, reorder doors,
 //     retitle, rewrite, room warp, scroll hijack, slider creep, steal card, swap, toast, toggle lie,
-//     typo, xp drain (opacity effects clamp to [0,1], P82).
+//     xp drain (opacity effects clamp to [0,1], P82).
 
 using System;
 using System.Collections.Generic;
@@ -78,7 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         /// <summary>The ported effects, one instance each (WPF PossessionEffectCatalog.CreateAll).</summary>
         public static HeadEffect[] CreateAll() =>
-            new HeadEffect[] { new NudgeHeadEffect(), new DriftHeadEffect(), new BreatheHeadEffect(), new WobbleHeadEffect() };
+            new HeadEffect[] { new NudgeHeadEffect(), new DriftHeadEffect(), new BreatheHeadEffect(), new WobbleHeadEffect(), new TypoHeadEffect() };
 
         /// <summary>WPF CanApply + Apply: refuses an off-limits, hidden, zero-size, wrong-role or already
         /// possessed control, and an effect instance that is already live.</summary>
@@ -90,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             if (!Contains(effect.Roles, target.Role)) return false;
             foreach (var g in _ghosts)
                 if (ReferenceEquals(g.Effect, effect) || ReferenceEquals(g.Target.Element, el)) return false;
+            if (!effect.CanApply(el)) return false;
             var lease = PossessionLease.Take(el);
             if (lease == null) return false;
             effect.Begin(lease, _rng, Photosafe);
@@ -131,6 +134,8 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 double ms = (now - g.Start.Value).TotalMilliseconds;
                 double hold = g.Effect.HoldFor.TotalMilliseconds;
                 if (ms < hold) { g.Effect.Frame(ms); continue; }
+                // WPF TypoEffect.UndoCoreAsync ignores duration: text returns at the hold boundary.
+                if (g.Effect.UndoMs <= 0) { Finish(g); continue; }
                 var l = g.Lease;
                 if (!g.Returning)
                 {
@@ -138,7 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
                     g.Tx = l.Translate.X; g.Ty = l.Translate.Y; g.Rot = l.Rotate.Angle;
                     g.Sx = l.Scale.ScaleX; g.Sy = l.Scale.ScaleY;
                 }
-                double f = Math.Min(1, (ms - hold) / ReturnMs);
+                double f = Math.Min(1, (ms - hold) / g.Effect.UndoMs);
                 if (f >= 1) { Finish(g); continue; }
                 double k = 1 - HeadEffect.CubicInOut(f);
                 l.Translate.X = g.Tx * k; l.Translate.Y = g.Ty * k; l.Rotate.Angle = g.Rot * k;
@@ -150,7 +155,11 @@ namespace ConditioningControlPanel.Avalonia.Possession
         private void Finish(Ghost g)
         {
             _ghosts.Remove(g);
-            try { g.Lease.ReleaseImmediate(); }
+            try
+            {
+                try { g.Effect.Release(); }
+                finally { g.Lease.ReleaseImmediate(); }
+            }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Possession {Id} release failed", g.Effect.Id); }
             _cooldownUntil[g.Target.Key] = _time.GetTimestamp() + (long)(PossessionDeck.TargetCooldown.TotalSeconds * _time.TimestampFrequency);
         }
