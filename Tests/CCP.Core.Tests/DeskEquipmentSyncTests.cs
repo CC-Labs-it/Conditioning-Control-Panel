@@ -63,6 +63,11 @@ public sealed class DeskEquipmentSyncTests
         using var sync = Make(wire,s);
         var pending = sync.PullOnceAsync(); sync.Stop(); await pending;
         Assert.True(cancelled); Assert.Null(s.EmiDeskHat);
+        wire.Reply = _ => Task.FromResult(Json());
+        sync.Resume(); await sync.PullOnceAsync();
+        Assert.Equal(2, wire.Methods.Count); Assert.Equal(Hat, s.EmiDeskHat);
+        sync.Stop(); await sync.SaveAsync(new(null,null));
+        Assert.Equal(HttpMethod.Put, wire.Methods[^1]); Assert.False(s.EmiDeskEquipPushOwed);
         var queued = new List<Action>(); wire.Reply = _ => Task.FromResult(Json());
         using var other = Make(wire,s,queued.Add); await other.PullOnceAsync(); other.Stop();
         Assert.Single(queued); queued[0](); Assert.Null(s.EmiDeskHat);

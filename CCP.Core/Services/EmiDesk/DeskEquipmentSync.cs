@@ -8,12 +8,10 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Services.EmiDesk;
-
 public sealed class DeskEquipmentSync : IDisposable
 {
     public const string Family = "desk";
     public const string Path = "/v2/equip";
-
     private readonly HttpClient Http;
     private readonly Func<ConditioningControlPanel.Models.AppSettings> Settings;
     private readonly Action SaveSettings;
@@ -26,21 +24,18 @@ public sealed class DeskEquipmentSync : IDisposable
         Action save, Func<(string UnifiedId, string Token)?> identity,
         Func<System.Collections.Generic.IEnumerable<string>?> grants, Action<Action> post, string baseUrl)
     { Http = http; Settings = settings; SaveSettings = save; Identity = identity; Grants = grants; Post = post; BaseUrl = baseUrl; }
-    public void Stop() { _stop.Cancel(); }
+    public void Stop() { _stop.Cancel(); _pulledFor = null; }
     public void Resume() { if (_stop.IsCancellationRequested) { _stop.Dispose(); _stop = new(); } }
     public void Dispose() { Stop(); _stop.Dispose(); }
     private string? _pulledFor;
     private static readonly JsonSerializerSettings NoDates = new() { DateParseHandling = DateParseHandling.None };
-
     public event Action? Adopted;
-
     public static JObject BuildPut(string unifiedId, DeskEquipmentLook look) => new()
     {
         ["unified_id"] = unifiedId,
         ["family"] = Family,
         ["value"] = new JObject { ["hat"] = OrNull(look.Hat), ["toy"] = OrNull(look.Toy) },
     };
-
     public static (DeskEquipmentLook Look, long UpdatedMs)? ReadDesk(JObject? reply)
     {
         try
@@ -54,11 +49,11 @@ public sealed class DeskEquipmentSync : IDisposable
     }
 
     public static bool ShouldAdopt(long serverMs, long localMs) => serverMs > 0 && serverMs > localMs;
-
     public Task SaveAsync(DeskEquipmentLook pick)
     {
         try
         {
+            Resume(); // A pick after panic is a new interaction.
             var s = Settings();
             if (s == null) return Task.CompletedTask;
             var clean = DeskEquipment.Clamp(pick, Grants());
@@ -120,10 +115,7 @@ public sealed class DeskEquipmentSync : IDisposable
         _pulledFor = id.Value.UnifiedId;
         try
         {
-            // A pick that never reached the server goes up first instead of being judged against a server
-            // stamp: updatedAt is shared by every family, so another family's PUT can make an empty desk
-            // copy look newer than a pick made while the route was missing. UI thread here (the desk's
-            // refresh), so the settings read is safe.
+            // updatedAt spans families. Send an owed pick before considering the server stamp.
             var s = Settings();
             if (s != null && s.EmiDeskEquipPushOwed)
             {

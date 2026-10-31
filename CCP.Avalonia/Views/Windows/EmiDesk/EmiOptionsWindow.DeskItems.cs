@@ -11,6 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 // WPF EmiOptionsWindow.DeskItems.cs. B3: owned picks only; no Avalonia shop door.
 public partial class EmiOptionsWindow
 {
+    private void RefreshDeskPicks() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (!_closingForGood) BuildDeskPicks(); });
     private void BuildDeskPicks()
     {
         var look = EmiDeskWindow.CurrentDeskItems();

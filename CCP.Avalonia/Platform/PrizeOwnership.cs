@@ -5,16 +5,7 @@ using ConditioningControlPanel.Services.Prizes;
 
 namespace ConditioningControlPanel.Avalonia.Platform
 {
-    /// <summary>
-    /// Back Room prize ownership on this head. WPF asks <c>PrizeGrants.IsGranted</c>, backed by
-    /// OwnershipService snapshots from BackRoomApi. Here only the snapshots a counter reply carries
-    /// (<see cref="ApplySnapshot"/>, fed by <see cref="V2PurchaseHead"/>) are held, for this run;
-    /// the profile-sync feed is parity row svc-prize-ownership. The other source is WPF's DEBUG-only
-    /// <c>CCP_PRIZE_GRANTS</c> override (Core OwnershipService.ReadDebugOverride): same variable,
-    /// same patterns (exact id, <c>prefix.*</c>, <c>*</c>), and a Release build never reads it.
-    /// Parsing is Core's, so an empty id never matches and a pattern holding whitespace or a
-    /// misplaced <c>*</c> is dropped.
-    /// </summary>
+    // WPF ProfileSyncService.ApplyValidatePrizes and V2 sync feed, plus counter snapshots.
     internal static class PrizeOwnership
     {
         /// <summary>Core prize ids, shared with the WPF ownership gate.</summary>
@@ -31,6 +22,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Test seam: the owned-check every caller uses.</summary>
         internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
 
+        internal static void ApplyAccountPrizes(string? requested, string? answered,
+            ConditioningControlPanel.Models.PrizesBlock? prizes, string source)
+        {
+            if (!string.IsNullOrEmpty(requested) && requested == answered && prizes?.Grants != null)
+                ApplySnapshot(requested, prizes.Revision, prizes.Grants);
+        }
         internal static event Action? DeskGrantsChanged;
         internal static IEnumerable<string>? KnownDeskGrants()
         {
@@ -43,8 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static long _revision;
         private static HashSet<string> _grants = new(StringComparer.Ordinal);
 
-        /// <summary>WPF OwnershipService.IsGranted over the snapshots counter replies carry (row
-        /// feat-backroom-counter-buy). Per run only: no profile-sync feed yet (svc-prize-ownership).</summary>
+        // WPF OwnershipService.IsGranted: held grants are bound to the signed-in account.
         internal static bool Held(string id)
         {
             var current = FriendsHead.Identity()?.UnifiedId;
@@ -66,8 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             DeskGrantsChanged?.Invoke();
         }
 
-        /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
-        internal static void ResetHeld() { lock (Gate) (_heldAccount, _revision, _grants) = (null, 0, new(StringComparer.Ordinal)); }
+        /// <summary>Forget held grants on logout or test cleanup.</summary>
+        internal static void ResetHeld() { lock (Gate) (_heldAccount, _revision, _grants) = (null, 0, new(StringComparer.Ordinal)); DeskGrantsChanged?.Invoke(); }
 
         /// <summary>WPF V2Badges.FlashOwned: any flashes v2 prize (both motions or Jackpot Remix).</summary>
         internal static bool FlashV2Owned() =>

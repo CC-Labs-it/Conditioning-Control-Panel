@@ -35,6 +35,7 @@ internal static class AccountSeed
     /// <param name="makeDiscord">Tests only: builds the Discord account.</param>
     internal static bool Seed(Func<string, ProviderSubscription>? make = null, Func<ProviderSubscription, DiscordAccount>? makeDiscord = null)
     {
+        ProviderSubscription.PrizesSink = PrizeOwnership.ApplyAccountPrizes;
         make ??= prefix => new ProviderSubscription(prefix);
         makeDiscord ??= peer => new DiscordAccount(() => peer);
         ProviderSubscription patreon, substar;
@@ -214,6 +215,7 @@ internal static class AccountSeed
         var s = CoreSettings.Current;
         s.UnifiedId = null;
         s.AuthToken = null;
+        PrizeOwnership.ResetHeld();
         s.UserDisplayName = null;
         s.HasLinkedDiscord = false;
         s.HasLinkedPatreon = false;

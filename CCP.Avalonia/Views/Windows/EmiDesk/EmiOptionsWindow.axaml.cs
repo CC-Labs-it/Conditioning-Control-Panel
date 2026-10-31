@@ -136,10 +136,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // Filled here rather than only in OpenPanel: a headless render never opens the panel,
             // and an unfilled panel would prove nothing about the switches or the segments.
             LoadValues();
+            PrizeOwnership.DeskGrantsChanged += RefreshDeskPicks;
 
             Closed += (_, _) =>
             {
                 _closingForGood = true;
+                PrizeOwnership.DeskGrantsChanged -= RefreshDeskPicks;
                 ClosePanel();
                 if (_owner is not null)
                 {
@@ -297,6 +299,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 _closingForGood = true;
+                PrizeOwnership.DeskGrantsChanged -= RefreshDeskPicks;
                 ClosePanel();
                 if (_owner is not null)
                 {
