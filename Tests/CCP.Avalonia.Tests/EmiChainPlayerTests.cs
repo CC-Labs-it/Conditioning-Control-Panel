@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
@@ -105,7 +107,6 @@ public sealed class EmiDeskChainWiringTests
     private static void Panic() =>
         global::ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All
             .Single(surface => surface.Id == "emi-desk-feedback").Stop(null);
-
     [Fact]
     public Task DeskUsesTheFramePlayerAndShutdownCancelsIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -180,7 +181,6 @@ public sealed class EmiDeskChainWiringTests
             desk.PetFromClick();
             Assert.Same(line, desk.ChainPlayer.Current);
             desk.CancelChain();
-
             bool arrived = false;
             desk.RunSummon(() => arrived = true);
             RunDeferred(deferred);
@@ -219,4 +219,24 @@ public sealed class EmiDeskChainWiringTests
         finally { desk.AfterScheduler = null; desk.ShutDown(); }
         return Task.CompletedTask;
     });
+    [Theory, InlineData("say"), InlineData("dizzy")]
+    public Task RightClickPreservesChainButCutsWake(string id) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var deferred = new List<Action>(); var desk = OpenDesk(deferred);
+        try {
+            desk.Show(); Dispatcher.UIThread.RunJobs();
+            var body = desk.FindControl<Control>("BodyRoot")!;
+            void Click() {
+                var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), desk)!.Value;
+                desk.MouseDown(point, MouseButton.Right); desk.MouseUp(point, MouseButton.Right);
+            }
+            if (id == "say") desk.Say("hello"); else desk.PlayChain(id);
+            var chain = desk.ChainPlayer.Current; Assert.NotNull(chain);
+            Click(); Assert.Same(chain, desk.ChainPlayer.Current); Assert.True(desk.RingOpen); desk.CloseRing();
+            bool arrived = false; desk.RunSummon(() => arrived = true); RunDeferred(deferred);
+            Assert.Equal("wake", desk.ChainPlayer.Current?.Id); Assert.False(arrived);
+            Click(); Assert.True(arrived); Assert.False(desk.ChainLive); Assert.True(desk.RingOpen);
+        }
+        finally { desk.ShutDown(); }
+        return Task.CompletedTask; });
 }
