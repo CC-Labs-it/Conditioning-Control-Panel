@@ -25,6 +25,53 @@ public sealed class DevicesGazeCursorTests
         (T?)typeof(WebcamTracker).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(WebcamTracker.Instance);
 
     [Fact]
+    public void ReassertsStackingEvery200MsWhileStationaryAndUnsubscribesOnClose() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var frames = new FakeFrames();
+        int raises = 0;
+        Window? cursorWindow = null;
+        var cursor = new GazeDebugCursor(frames, w => { Assert.Same(cursorWindow, w); raises++; });
+        // Keep the callback's expected window independent of native handles in headless tests.
+        cursorWindow = cursor;
+        var calibration = WebcamTracker.Instance.Calibration;
+        try
+        {
+            cursor.Show();
+            Assert.Equal(1, frames.Count);
+            frames.Frame(TimeSpan.Zero);
+            Assert.Equal(1, raises);
+            frames.Frame(TimeSpan.FromMilliseconds(195));
+            Assert.Equal(1, raises);
+            frames.Frame(TimeSpan.FromMilliseconds(200));
+            Assert.Equal(2, raises);
+            var screen = cursor.Screens.Primary!;
+            WebcamTracker.Instance.Calibration = new WebcamCalibrationData
+            {
+                MonitorBounds = new MonitorBoundsRecord { X = screen.Bounds.X, Y = screen.Bounds.Y, DpiScale = screen.Scaling }
+            };
+            cursor.Move(new Point(30, 40));
+            for (int i = 0; i < 6; i++) cursor.Advance(.1);
+            Assert.True(cursor.HasGaze);
+            Assert.False(cursor.ClockRunning); // no more trail frames
+            frames.Frame(TimeSpan.FromMilliseconds(395));
+            Assert.Equal(2, raises);
+            frames.Frame(TimeSpan.FromMilliseconds(400));
+            Assert.Equal(3, raises);
+            frames.Frame(TimeSpan.FromMilliseconds(600));
+            Assert.Equal(4, raises);
+            cursor.Close();
+            Assert.Equal(0, frames.Count);
+            frames.Frame(TimeSpan.FromMilliseconds(800));
+            Assert.Equal(4, raises);
+        }
+        finally { cursor.Close(); WebcamTracker.Instance.Calibration = calibration; }
+    });
+
+    [Fact]
     public void ToggleRoutesGazeAndCleansUpOnFaceLossStopPanicAndShellClose() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)

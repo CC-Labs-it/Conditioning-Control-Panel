@@ -21,9 +21,10 @@ internal sealed class GazeDebugCursor : Window
     private readonly CursorDrawing _drawing = new();
     private long _lastTick;
     private readonly FrameClock _clock;
+    private readonly FrameClock _stackingClock;
     private static WebcamTracker Tracker => WebcamTracker.Instance;
 
-    internal GazeDebugCursor()
+    internal GazeDebugCursor(global::ConditioningControlPanel.Avalonia.Controls.Fx.IFrameSource? stackingFrames = null, Action<Window>? raise = null)
     {
         WindowDecorations = WindowDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
@@ -35,12 +36,22 @@ internal sealed class GazeDebugCursor : Window
         Content = _drawing;
         _clock = new FrameClock(this) { Interval = TimeSpan.FromMilliseconds(33) };
         _clock.Tick += (_, _) => Advance();
+        // WPF GazeDebugCursorService.cs:316-329: reassert even after the trail expires.
+        _stackingClock = stackingFrames == null ? new FrameClock(this) : new FrameClock(stackingFrames);
+        _stackingClock.Interval = TimeSpan.FromMilliseconds(200);
+        _stackingClock.Tick += (_, _) =>
+        {
+            try { if (raise != null) raise(this); else X11Overlay.Raise(this); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Gaze cursor stacking failed"); }
+        };
+        Opened += (_, _) => _stackingClock.Start();
         Closed += (_, _) =>
         {
             Tracker.OnGazeMove -= Move;
             Tracker.OnFaceLost -= FaceLost;
             Tracker.StateChanged -= StateChanged;
             FaceLost();
+            _stackingClock.Stop();
             if (Active == this) Active = null;
         };
     }
