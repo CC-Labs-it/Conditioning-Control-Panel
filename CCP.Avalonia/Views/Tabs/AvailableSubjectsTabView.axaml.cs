@@ -19,13 +19,19 @@ public partial class AvailableSubjectsTabView : UserControl
     internal int SelectedColumn { get; private set; }
     internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
+    internal readonly LobbyService Discovery = new(new Platform.FriendsHead.Timer());
+    private IDisposable? _lobbyLease;
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
 
     public AvailableSubjectsTabView()
     {
         InitializeComponent();
+        Discovery.ReadFriends = () => Platform.FriendsHead.Service?.Snapshot.Friends ?? Array.Empty<ConditioningControlPanel.Services.Friends.Friend>();
+        Discovery.Changed += snapshot => PaintSnapshot(snapshot, ReadGates(), snapshot.SignedIn && !Discovery.LastRoundOk);
         Repaint();
         InitializeSubjectsMotion();
+        // WPF MainWindow.Lobby.cs:82-96: only the open Lobby owns the page lease.
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) SyncDiscovery(); };
         SizeChanged += (_, e) => SetNarrow(LobbyPageRules.IsNarrowWidth(e.NewSize.Width));
         // The shell hides tabs with IsVisible, so Loaded fires once; WPF redraws on every open
         // (MainWindow.Lobby.cs:84), which picks up sign-in, Remote gate and language changes.
@@ -33,10 +39,17 @@ public partial class AvailableSubjectsTabView : UserControl
         Loaded += (_, _) =>
         {
             Repaint();
+            SyncDiscovery();
             SubjectsAmbientFx.StartLayers(new AmbientFxConfig
                 { Layers = AmbientFxLayers.FogDrift, FogPuffs = 2, Intensity = 0.40 });
         };
-        Unloaded += (_, _) => SubjectsAmbientFx.Stop();
+        Unloaded += (_, _) => { _lobbyLease?.Dispose(); _lobbyLease = null; SubjectsAmbientFx.Stop(); };
+    }
+
+    private void SyncDiscovery()
+    {
+        if (IsLoaded && IsEffectivelyVisible) _lobbyLease ??= Discovery.Watch();
+        else { _lobbyLease?.Dispose(); _lobbyLease = null; }
     }
 
     private void Repaint()

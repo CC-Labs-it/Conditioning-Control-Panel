@@ -168,6 +168,34 @@ public sealed class LobbyPageTests
         }
     });
 
+    [Fact]
+    public void VisiblePageDiscoversTablesAndLeavingDropsTheLease() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        page.ReadGates = () => LobbyGates.From(true, false, false);
+        page.Discovery.SignedIn = () => true;
+        page.Discovery.FetchChess = _ => System.Threading.Tasks.Task.FromResult(new PbpLobbyReply(
+            new[] { new PbpOpenSeat("p_live", "Live table", 300000, 0, 0) }, Array.Empty<PbpPlayingGame>(), true));
+        page.Discovery.FetchGoon = _ => System.Threading.Tasks.Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty);
+        page.Discovery.FetchRace = _ => System.Threading.Tasks.Task.FromResult(RaceOpenReply.Empty);
+        Assert.False(page.Discovery.IsWatched);
+        var window = new Window { Content = page };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(page.Discovery.IsWatched);
+            Assert.Equal("Live table", Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "AvailableSubjectsList").Items.Single()).Title);
+            Assert.Equal("1", Named<TextBlock>(page, "LobbyOpenCount").Text);
+            page.IsVisible = false;
+            Assert.False(page.Discovery.IsWatched);
+            page.IsVisible = true;
+            Assert.True(page.Discovery.IsWatched);
+        }
+        finally { window.Close(); }
+        Assert.False(page.Discovery.IsWatched);
+    });
+
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
