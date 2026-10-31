@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -21,6 +22,7 @@ public partial class AvailableSubjectsTabView : UserControl
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
     internal readonly LobbyService Discovery = new(new Platform.FriendsHead.Timer());
     private IDisposable? _lobbyLease;
+    private Visual[] _lobbyAncestors = Array.Empty<Visual>();
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
 
     public AvailableSubjectsTabView()
@@ -31,7 +33,8 @@ public partial class AvailableSubjectsTabView : UserControl
         Repaint();
         InitializeSubjectsMotion();
         // WPF MainWindow.Lobby.cs:82-96: only the open Lobby owns the page lease.
-        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) SyncDiscovery(); };
+        // WPF observes effective visibility (AvailableSubjectsTabView.xaml.cs:66; MainWindow.Lobby.cs:47).
+        PropertyChanged += OnLobbyVisibilityChanged;
         SizeChanged += (_, e) => SetNarrow(LobbyPageRules.IsNarrowWidth(e.NewSize.Width));
         // The shell hides tabs with IsVisible, so Loaded fires once; WPF redraws on every open
         // (MainWindow.Lobby.cs:84), which picks up sign-in, Remote gate and language changes.
@@ -39,16 +42,30 @@ public partial class AvailableSubjectsTabView : UserControl
         Loaded += (_, _) =>
         {
             Repaint();
+            _lobbyAncestors = this.GetVisualAncestors().ToArray();
+            foreach (var ancestor in _lobbyAncestors) ancestor.PropertyChanged += OnLobbyVisibilityChanged;
             SyncDiscovery();
             SubjectsAmbientFx.StartLayers(new AmbientFxConfig
                 { Layers = AmbientFxLayers.FogDrift, FogPuffs = 2, Intensity = 0.40 });
         };
-        Unloaded += (_, _) => { _lobbyLease?.Dispose(); _lobbyLease = null; SubjectsAmbientFx.Stop(); };
+        Unloaded += (_, _) =>
+        {
+            foreach (var ancestor in _lobbyAncestors) ancestor.PropertyChanged -= OnLobbyVisibilityChanged;
+            _lobbyAncestors = Array.Empty<Visual>();
+            _lobbyLease?.Dispose(); _lobbyLease = null;
+            SubjectsAmbientFx.Stop();
+        };
+    }
+
+    private void OnLobbyVisibilityChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == IsVisibleProperty) SyncDiscovery();
     }
 
     private void SyncDiscovery()
     {
-        if (IsLoaded && IsEffectivelyVisible) _lobbyLease ??= Discovery.Watch();
+        // Read local values because an ancestor's notification can precede propagation to children.
+        if (IsLoaded && IsVisible && _lobbyAncestors.All(ancestor => ancestor.IsVisible)) _lobbyLease ??= Discovery.Watch();
         else { _lobbyLease?.Dispose(); _lobbyLease = null; }
     }
 

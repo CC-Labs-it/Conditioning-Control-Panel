@@ -187,6 +187,14 @@ public sealed class LobbyPageTests
             Assert.True(page.Discovery.IsWatched);
             Assert.Equal("Live table", Assert.IsType<LobbyCardView>(Named<ItemsControl>(page, "AvailableSubjectsList").Items.Single()).Title);
             Assert.Equal("1", Named<TextBlock>(page, "LobbyOpenCount").Text);
+            window.Hide(); // tray hide preserves the page's own visibility and loaded state
+            Assert.True(page.IsVisible);
+            Assert.True(page.IsLoaded);
+            Assert.False(page.Discovery.IsWatched);
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(page.IsLoaded);
+            Assert.True(page.Discovery.IsWatched);
             page.IsVisible = false;
             Assert.False(page.Discovery.IsWatched);
             page.IsVisible = true;
@@ -199,7 +207,8 @@ public sealed class LobbyPageTests
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options(systemEmoji: false)).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         body();

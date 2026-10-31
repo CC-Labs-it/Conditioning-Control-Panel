@@ -2,10 +2,12 @@ using System;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Services.GoonGame;
 using Xunit;
 
 namespace CCP.Core.Tests;
 
+[Collection(ConditioningControlPanel.Tests.GoonOpenTablesCollection.Name)]
 public sealed class LobbyDiscoveryTests
 {
     private sealed class Timer : IUiTimer
@@ -18,6 +20,55 @@ public sealed class LobbyDiscoveryTests
         public void Stop() => Running = false;
         public void OnUiThread(Action action) => action();
         public void Fire() => Tick?.Invoke(this, EventArgs.Empty);
+    }
+
+    [Fact]
+    public async Task LobbyAndDrawerShareGoonRequestsAndPublishTheSameCache()
+    {
+        var fetch = GoonOpenTables.Fetch;
+        var clock = GoonOpenTables.UtcNow;
+        GoonOpenTables.ResetForTests();
+        try
+        {
+            var now = new DateTime(2026, 10, 31, 12, 0, 0, DateTimeKind.Utc);
+            GoonOpenTables.UtcNow = () => now;
+            var pending = new TaskCompletionSource<OpenTablesReply>();
+            int requests = 0;
+            GoonOpenTables.Fetch = _ => { requests++; return pending.Task; };
+            OpenTablesReply? published = null;
+            GoonOpenTables.Changed += reply => published = reply;
+            var drawer = GoonOpenTables.RefreshAsync();
+            using var service = new LobbyService(new Timer()) { SignedIn = () => true };
+            service.FetchChess = _ => Task.FromResult(PbpLobbyReply.Empty);
+            var started = new TaskCompletionSource();
+            service.FetchRace = _ => { started.TrySetResult(); return Task.FromResult(RaceOpenReply.Empty); };
+            var lobby = service.RefreshAsync();
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var reply = new OpenTablesReply(true, true,
+                new[] { new OpenTable("ABCD", "Shared table", 0, null, false, null, false, 60, false, 0) }, null);
+            pending.SetResult(reply);
+            await lobby;
+            Assert.Same(reply, await drawer);
+            Assert.Equal("ABCD", Assert.Single(service.Snapshot.Open).Key);
+            Assert.Equal(1, requests);
+            Assert.Same(reply, GoonOpenTables.Latest);
+            Assert.Same(reply, published);
+            await service.RefreshAsync();
+            Assert.Equal(1, requests); // another caller inside MinGap consumes the same cache
+            now += GoonOpenTables.MinGap;
+            GoonOpenTables.Fetch = _ => { requests++; return Task.FromResult(OpenTablesReply.Empty); };
+            await service.RefreshAsync();
+            Assert.Equal(2, requests);
+            Assert.Empty(service.Snapshot.Open);
+            Assert.Same(OpenTablesReply.Empty, GoonOpenTables.Latest);
+            Assert.Same(OpenTablesReply.Empty, published);
+        }
+        finally
+        {
+            GoonOpenTables.Fetch = fetch;
+            GoonOpenTables.UtcNow = clock;
+            GoonOpenTables.ResetForTests();
+        }
     }
 
     [Fact]

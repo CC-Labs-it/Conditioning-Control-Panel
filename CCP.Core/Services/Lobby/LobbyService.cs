@@ -16,7 +16,7 @@ public sealed class LobbyService : IDisposable
     private bool _disposed;
     private Task? _inflight;
     internal Func<CancellationToken, Task<PbpLobbyReply>> FetchChess = ct => new PbpLobbyApi().FetchAsync(ct);
-    internal Func<CancellationToken, Task<OpenTablesReply>> FetchGoon = ct => new GoonOpenTablesApi().FetchAsync(ct);
+    internal Func<CancellationToken, Task<OpenTablesReply>> FetchGoon = ct => GoonOpenTables.RefreshAsync(ct);
     internal Func<CancellationToken, Task<RaceOpenReply>> FetchRace = ct => new RaceOpenApi(identity: LobbyWire.DefaultIdentity, baseUrl: LobbyWire.DefaultBaseUrl() ?? "").FetchAsync(ct);
     internal Func<bool> SignedIn = () => LobbyWire.DefaultIdentity() != null;
     internal Func<IReadOnlyList<Friend>> ReadFriends = () => Array.Empty<Friend>();
