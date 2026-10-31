@@ -215,6 +215,42 @@ public sealed class LobbyPageTests
         Assert.Null(missing.FrameArt);
     });
 
+    [Fact]
+    public void GameArtCacheSharesHitsAndMissesPerGame()
+    {
+        var calls = new System.Collections.Generic.Dictionary<LobbyGame, int>();
+        var image = new DrawingImage();
+        var cache = new LobbyArtCache(game =>
+        {
+            calls[game] = (calls.TryGetValue(game, out var count) ? count : 0) + 1;
+            return game == LobbyGame.Chess ? image : null;
+        });
+        foreach (var game in Enum.GetValues<LobbyGame>())
+        {
+            var first = cache.Get(game);
+            var second = cache.Get(game);
+            if (game == LobbyGame.Chess) Assert.Same(image, first);
+            else Assert.Null(first);
+            Assert.Same(first, second);
+            Assert.Equal(1, calls[game]);
+        }
+    }
+
+    [Fact]
+    public void GameArtIsSharedAcrossRepeatedBindingsAndReplacementRows() => Run(() =>
+    {
+        var gates = LobbyGates.From(true, true, true);
+        foreach (var game in Enum.GetValues<LobbyGame>())
+        {
+            var row = new LobbyRow { Game = game, HostName = "ann" };
+            var first = new LobbyCardView(row, gates);
+            var art = first.Art;
+            Assert.NotNull(art);
+            Assert.Same(art, first.Art);
+            Assert.Same(art, new LobbyCardView(row with { HostName = "bo" }, gates).Art);
+        }
+    });
+
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)

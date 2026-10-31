@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Avalonia;
@@ -133,7 +134,10 @@ public sealed class LobbyCardView
             ? new ImageBrush(image) { Stretch = Stretch.UniformToFill }
             : LeaderboardRow.BuildAvatarBrush(Row.HostName);
     public IImage? FrameArt => HasLook ? ModArt.ShopProfile(Row.Look.FrameId, "frame") : null;
-    public IImage? Art => ModArt.TryLoadBuiltIn(Row.Game switch
+    private static readonly LobbyArtCache GameArt = new(LoadArt);
+    public IImage? Art => GameArt.Get(Row.Game);
+
+    private static IImage? LoadArt(LobbyGame game) => ModArt.TryLoadBuiltIn(game switch
     {
         LobbyGame.Chess => "features/piecebypiece.png",
         LobbyGame.Goon => "features/goon_game_tile.png",
@@ -148,4 +152,22 @@ public sealed class LobbyCardView
     public bool Locked { get; }
     public string ButtonText { get; }
     public double ButtonOpacity { get; }
+}
+
+
+// WPF LobbyRowView.ArtFor: the game thumbnail is shared across rows and polls, including a missing file.
+internal sealed class LobbyArtCache(Func<LobbyGame, IImage?> load)
+{
+    private readonly Dictionary<LobbyGame, IImage?> _art = new();
+
+    internal IImage? Get(LobbyGame game)
+    {
+        lock (_art)
+        {
+            if (_art.TryGetValue(game, out var hit)) return hit;
+            var art = load(game);
+            _art[game] = art;
+            return art;
+        }
+    }
 }
