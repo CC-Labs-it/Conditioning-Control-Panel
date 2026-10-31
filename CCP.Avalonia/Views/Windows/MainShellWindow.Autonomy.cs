@@ -105,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Helpers.NotificationType.Warning, TimeSpan.FromSeconds(18),
                     actionLabel: ConditioningControlPanel.Localization.Loc.Get("btn_open_media_manager"),
                     action: () => ShowTab("assets"),
-                    secondaryActionLabel: ConditioningControlPanel.Localization.Loc.Get("btn_get_packs"),
+                    secondaryActionLabel: global::ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("btn_get_packs"),
                     secondaryAction: async () =>
                     {
                         try { await Platform.ExternalOpener.OpenAsync(this, DiscordLinks.PackCatalogue); }

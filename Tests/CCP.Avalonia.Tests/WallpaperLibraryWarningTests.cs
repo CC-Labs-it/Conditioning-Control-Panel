@@ -88,7 +88,10 @@ public sealed class WallpaperLibraryWarningTests
             Assert.Contains(controls.OfType<TextBlock>(), t => t.Text == string.Format(
                 Loc.Get("msg_no_wallpaper_images"), Loc.Get("nav_door_library"), Loc.Get("tab_assets")));
             var buttons = controls.OfType<Button>().ToArray();
-            Assert.Contains(buttons, b => b.Name == "ToastSecondaryAction");
+            var packs = Assert.IsType<TextBlock>(buttons.Single(b => b.Name == "ToastSecondaryAction").Content);
+            var split = global::ConditioningControlPanel.Avalonia.Controls.IconText.Split(Loc.Get("btn_get_packs"));
+            Assert.Equal(split.Rest, packs.Text);
+            Assert.Empty(global::ConditioningControlPanel.Avalonia.Controls.IconText.Split(packs.Text).Icons);
             buttons.Single(b => b.Name == "ToastAction").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.True(shell.GetLogicalDescendants().OfType<AssetsTabView>().Single().IsVisible);
             keep.IsChecked = false;
