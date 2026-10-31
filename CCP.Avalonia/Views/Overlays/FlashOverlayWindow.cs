@@ -37,6 +37,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private Panel? _shards;
         internal FlashShatterState? Shatter { get; private set; }
         private double _alpha = 1;
+        internal double DisplayedAlpha { get; private set; } = 1;
+        private void SetDisplayedAlpha(double alpha)
+        {
+            DisplayedAlpha = alpha;
+            X11Overlay.SetOpacity(this, alpha);
+        }
         private DispatcherTimer? _lifetimeTimer;
         private TimeSpan _fade;
         private long _expiresAt;
@@ -90,9 +96,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>Play <paramref name="exit"/> (WPF FlashLayer draws FlashExit.Sample the same way)
         /// and close when it is done. The flash no longer takes clicks while it leaves.</summary>
-        internal void BeginExit(FlashExitState exit)
+        internal void BeginExit(FlashExitState exit, bool fromDisplayedAlpha = false)
         {
             if (Exit != null || Shatter != null) return;
+            if (fromDisplayedAlpha) _alpha = DisplayedAlpha;
             Exit = exit;
             _lifetimeTimer?.Stop(); _lifetimeTimer = null;
             IsHitTestVisible = false;
@@ -207,7 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     shift.Y = piece.Dy / scale;
                     image.Opacity = Math.Clamp(piece.Alpha, 0, 1);
                 }
-                X11Overlay.SetOpacity(this, _alpha);
+                SetDisplayedAlpha(_alpha);
                 if (shatter.Done) { _exitTimer?.Stop(); _exitTimer = null; Close(); }
                 return;
             }
@@ -276,7 +283,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Canvas.SetTop(dot, cy + sp.Dy * sp.Distance * half - r);
                 }
             }
-            X11Overlay.SetOpacity(this, _alpha * Math.Clamp(s.Alpha, 0, 1));
+            SetDisplayedAlpha(_alpha * Math.Clamp(s.Alpha, 0, 1));
         }
 
         /// <summary>WPF SpawnFlashWindow glow (FlashService.cs:1881-1967; values from FlashFxRules): a
@@ -356,6 +363,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public void Run(double alpha, TimeSpan fade, TimeSpan lifetime)
         {
             _alpha = alpha;
+            SetDisplayedAlpha(0);
             _fade = fade;
             _expiresAt = FlashOverlay.Clock.GetTimestamp() + (long)(lifetime.TotalSeconds * FlashOverlay.Clock.TimestampFrequency);
             Fade(0, alpha, fade);
@@ -374,7 +382,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var v = from + (to - from) * i / steps;
                 var last = i == steps;
-                DispatcherTimer.RunOnce(() => { if (Exit != null || Shatter != null) return; X11Overlay.SetOpacity(this, v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
+                DispatcherTimer.RunOnce(() => { if (Exit != null || Shatter != null) return; SetDisplayedAlpha(v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
             }
         }
     }

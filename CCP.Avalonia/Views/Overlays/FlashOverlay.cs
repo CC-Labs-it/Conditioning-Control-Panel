@@ -390,7 +390,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 Exiting.Add(w);
                 w.Closed += (_, _) => Exiting.Remove(w);
-                w.BeginExit(FlashExit.Gentle(ConditioningControlPanel.Services.Safety.GentleVisuals.ClampFade(s.GentleFadeSeconds), Rng.Next()));
+                w.BeginExit(FlashExit.Gentle(ConditioningControlPanel.Services.Safety.GentleVisuals.ClampFade(s.GentleFadeSeconds), Rng.Next()), fromDisplayedAlpha: true);
                 return;
             }
             if (FlashShatter.DecidesClick(s.FlashShatterEnabled, PrizeOwnership.OwnsFlashV2())

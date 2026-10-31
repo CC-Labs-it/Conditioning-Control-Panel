@@ -32,9 +32,97 @@ public sealed class Sync7bGentleTests
                 .SetupWithoutStarting();
     }
 
+    private sealed class SettingsScope : IDisposable
+    {
+        private readonly Action _restore;
+        public SettingsScope()
+        {
+            var provider = CoreSettings.ServiceProvider;
+            var s = CoreSettings.Current;
+            var values = (s.GentleVisuals, s.GentleFadeSeconds, s.GentleSpeed, s.MotionLevel,
+                s.SubBackgroundTransparent, s.FlashExitStyle, s.CorruptionMode, s.FlashShatterEnabled);
+            _restore = () =>
+            {
+                try
+                {
+                    (s.GentleVisuals, s.GentleFadeSeconds, s.GentleSpeed, s.MotionLevel,
+                        s.SubBackgroundTransparent, s.FlashExitStyle, s.CorruptionMode, s.FlashShatterEnabled) = values;
+                }
+                finally { CoreSettings.ServiceProvider = provider; }
+            };
+        }
+        public void Dispose() => _restore();
+    }
+
+    [Fact]
+    public void ClockTestRestoresItsProviderAndSettings()
+    {
+        using var saved = new SettingsScope();
+        var provider = CoreSettings.ServiceProvider;
+        var s = CoreSettings.Current;
+        var before = (s.GentleVisuals, s.GentleFadeSeconds, s.GentleSpeed);
+        GentleClocksLengthenSubliminalEnvelopeAndSpiralFrameDelay(true);
+        Assert.Same(provider, CoreSettings.ServiceProvider);
+        Assert.Equal(before, (s.GentleVisuals, s.GentleFadeSeconds, s.GentleSpeed));
+        Assert.Throws<InvalidOperationException>(new Action(() =>
+        {
+            using var inner = new SettingsScope();
+            s.GentleVisuals = !s.GentleVisuals;
+            s.GentleSpeed = 0.25;
+            CoreSettings.ServiceProvider = () => null;
+            throw new InvalidOperationException();
+        }));
+        Assert.Same(provider, CoreSettings.ServiceProvider);
+        Assert.Equal(before, (s.GentleVisuals, s.GentleFadeSeconds, s.GentleSpeed));
+    }
+
+    private sealed class SteppedClock : TimeProvider
+    {
+        public long Now;
+        public override long GetTimestamp() => Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+    }
+
+    [Fact]
+    public Task GentleMidFadePopKeepsCurrentBrightness() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var saved = new SettingsScope();
+        EnsureApp();
+        CoreSettings.Current.GentleVisuals = true;
+        CoreSettings.Current.GentleFadeSeconds = 1.5;
+        CoreSettings.Current.CorruptionMode = false;
+        var oldClock = FlashOverlay.Clock;
+        var clock = new SteppedClock();
+        FlashOverlay.Clock = clock;
+        var w = new FlashOverlayWindow();
+        FlashOverlay.Active.Add((w, new PixelRect(0, 0, 400, 300)));
+        try
+        {
+            w.Show();
+            w.Run(0.8, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(20));
+            var wait = System.Diagnostics.Stopwatch.StartNew();
+            while (w.DisplayedAlpha == 0 && wait.Elapsed < TimeSpan.FromSeconds(2))
+                await Task.Delay(20);
+            var before = w.DisplayedAlpha;
+            Assert.InRange(before, 0.001, 0.799);
+            FlashOverlay.Pop(w);
+            Assert.Equal(before, w.DisplayedAlpha, 10);
+            clock.Now += TimeSpan.TicksPerSecond * 3 / 4;
+            w.ExitFrame();
+            Assert.Equal(before / 2, w.DisplayedAlpha, 10);
+            await Task.Delay(150); // queued fade-in callbacks must not brighten the popped flash
+            Assert.Equal(before / 2, w.DisplayedAlpha, 10);
+            clock.Now += TimeSpan.TicksPerSecond;
+            w.ExitFrame();
+            Assert.False(w.IsVisible);
+        }
+        finally { FlashOverlay.CloseAll(final: false); w.Close(); FlashOverlay.Clock = oldClock; }
+    });
+
     [Fact]
     public Task GentlePopUsesPlainFadeEvenWhenExitIsNone() => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        using var saved = new SettingsScope();
         EnsureApp();
         var s = CoreSettings.Current;
         s.GentleVisuals = true;
@@ -67,6 +155,7 @@ public sealed class Sync7bGentleTests
     [InlineData(true)]
     public void GentleClocksLengthenSubliminalEnvelopeAndSpiralFrameDelay(bool spiral)
     {
+        using var saved = new SettingsScope();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var s = service.Current;
@@ -90,6 +179,7 @@ public sealed class Sync7bGentleTests
     [InlineData(true)]
     public Task GentleCardsDropBackgroundAndCornerRings(bool rings) => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        using var saved = new SettingsScope();
         EnsureApp();
         var s = CoreSettings.Current;
         s.SubBackgroundTransparent = false;
@@ -119,6 +209,7 @@ public sealed class Sync7bGentleTests
     [InlineData(true)]
     public Task IncompleteGentlePromiseStaysOutOfTheSettingsUi(bool enabled) => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        using var saved = new SettingsScope();
         EnsureApp();
         var s = CoreSettings.Current;
         s.GentleVisuals = enabled;
@@ -143,6 +234,7 @@ public sealed class Sync7bGentleTests
     [Fact]
     public Task GentleControlsSeedWithoutRoundingAndRoundTripWithoutChangingMotion() => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        using var saved = new SettingsScope();
         EnsureApp();
         var s = CoreSettings.Current;
         s.GentleVisuals = false;
