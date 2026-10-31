@@ -140,6 +140,7 @@ public class PersonalityStudioPortTests
         settings.Current.UserPersonalityPresets.Add(mine);
         settings.Current.ActivePersonalityPresetId = mine.Id;
         settings.Current.CompanionPrompt.UseCustomPrompt = false;
+        var previousLanguage = LocalizationManager.Instance.CurrentLanguage;
         var window = PersonalityStudio.Create();
         try
         {
@@ -186,7 +187,12 @@ public class PersonalityStudioPortTests
             }
 
         }
-        finally { window.Close(); }
+        finally
+        {
+            window.Close();
+            LocalizationManager.Instance.SetLanguage(previousLanguage);
+        }
+        Assert.Equal(previousLanguage, LocalizationManager.Instance.CurrentLanguage);
         return Task.CompletedTask;
     });
 }
