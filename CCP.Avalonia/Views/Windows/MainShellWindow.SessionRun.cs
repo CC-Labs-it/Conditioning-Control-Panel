@@ -134,6 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF TxtPauseIcon + BtnPauseSession.ToolTip: "\u25B6" + resume while paused, else "\u23F8" + the count.</summary>
         internal void SetPauseButton(bool paused)
         {
+            RefreshBarStatus();
             if (Named<Button>("BtnPauseSession") is not { } b) return;
             b.IsVisible = true;
             if (Named<TextBlock>("TxtPauseIcon") is { } icon) icon.Text = paused ? "\u25B6" : "\u23F8";
@@ -150,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void OnSessionTick()
         {
+            RefreshBarStatus();
             RefreshSessionFeatureLock(force: false);
             Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshLiveSessionProgress();
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
@@ -174,6 +176,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Source = SessionClockLabel.StartButton(name, remaining, showCountdown, "", Loc.Get("label_0_1_2_3"))
             });
+        }
+
+        internal void RefreshBarStatus()
+        {
+            if (Named<TextBlock>("TxtPresetsStatus") is not { } label) return;
+            label.IsVisible = true;
+            label.Text = App.Sessions is { IsRunning: true, CurrentSession: { } session } runner
+                ? SessionClockLabel.BarStatus(session.GetModeAwareName(), runner.Elapsed, runner.Remaining,
+                    session.DurationMinutes <= 0, CoreSettings.Current.ShowSessionCountdown,
+                    runner.IsPaused ? $" [{Loc.Get("label_paused")}]" : "",
+                    Loc.Get("label_session_bar_left"), Loc.Get("label_session_bar_elapsed"))
+                : CoreEngine.IsRunning ? Loc.Get("label_running") : "";
         }
 
         /// <summary>WPF OnSessionLogReady + ShowSessionSummaryWhenClear: the recap opens by itself,

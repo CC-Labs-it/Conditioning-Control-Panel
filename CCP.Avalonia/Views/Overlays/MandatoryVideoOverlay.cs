@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             internal set { if (_scheduler != null) _scheduler.NoVideos -= ShowNoVideos; _scheduler = value; value.NoVideos += ShowNoVideos; }
         }
 
+        private Action? _refreshFloating;
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
         internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons);
 
@@ -204,7 +205,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
-            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
+            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) { LibVlcAudio.ApplyPreferredDevice(live); _refreshFloating?.Invoke(); } });
+            _player.Paused += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) _refreshFloating?.Invoke(); });
             _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
             _player.EndReached += (_, _) =>
             {
@@ -227,6 +229,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_attention) DispatcherTimer.RunOnce(SetupAttention, TimeSpan.FromSeconds(2));   // WPF: Task.Delay(2000)
         }
 
+        internal static Border DecorateFloating(Window w)
+        {
+            var content = (Control)w.Content!;
+            w.Content = null;
+            var frame = new Border
+            {
+                CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(4),
+                Background = Brushes.Black, Child = content,
+            };
+            content.SizeChanged += (_, _) => content.Clip = new RectangleGeometry
+            {
+                Rect = new Rect(content.Bounds.Size), RadiusX = 6, RadiusY = 6,
+            };
+            w.Background = Brushes.Transparent;
+            w.TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+            w.Content = frame;
+            return frame;
+        }
+
         /// <summary>This clip shows as a floating window (AppSettings.MandatoryVideoFloating), decided per clip.</summary>
         internal bool Floating { get; private set; }
 
@@ -241,6 +262,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void UpdateVolume()
         {
             if (_player is { } p) ApplyVolume(p);
+            _refreshFloating?.Invoke();
         }
 
         /// <summary>WPF VideoService.VideoScreens -> App.ResolveScreens (ccp-bugs #1154): the Video
@@ -289,10 +311,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 // WPF: a floating window never takes focus from what is under it (panic and Esc reach
                 // it through the global hooks), and it moves with the mouse.
-                // ponytail: WPF's first-cut drag; the frame's fling and bounce (row 18) replace it.
                 w.ShowActivated = false;
                 PlaceFloating(w, screen, _random);
-                w.PointerPressed += (_, e) => { if (e.GetCurrentPoint(w).Properties.IsLeftButtonPressed) w.BeginMoveDrag(e); };
+                var frame = DecorateFloating(w);
+                w.Opened += (_, _) =>
+                {
+                    var floatingFrame = new FloatingVideoFrame(w, frame: frame, audible: () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0);
+                    _refreshFloating += floatingFrame.Refresh;
+                    w.Closed += (_, _) => _refreshFloating -= floatingFrame.Refresh;
+                };
             }
             else Place(w, screen);
             void OnKey(KeyEventArgs e)

@@ -51,6 +51,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderPerHour.ValueChanged += SliderPerHour_Changed;
             ChkStrict.IsCheckedChanged += ChkStrict_Changed;
             CmbAppearance.SelectionChanged += CmbAppearance_Changed;
+            SliderFloatingSize.ValueChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.MandatoryVideoFloatingSizePercent = (int)Math.Round(SliderFloatingSize.Value);
+                TxtFloatingSize.Text = CoreSettings.Current.MandatoryVideoFloatingSizePercent + "%";
+                CoreSettings.Save();
+            };
             // WPF Lab.cs:640-647 / 726-732: greyed while a Lockdown forces Strict Lock, given back on exit.
             Windows.MainShellWindow.HoldWhileLockdown(ChkStrict, () => ConditioningControlPanel.Services.LockdownStrictHold.HoldsNow);
             SliderVideoMinDur.ValueChanged += SliderVideoMinDur_Changed;
@@ -156,6 +163,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
                 CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
                 TxtAppearanceNote.IsVisible = s.MandatoryVideoFloating;
+                FloatingSizeRow.IsVisible = s.MandatoryVideoFloating;
+                SliderFloatingSize.Value = s.MandatoryVideoFloatingSizePercent;
+                TxtFloatingSize.Text = s.MandatoryVideoFloatingSizePercent + "%";
                 ChkMercy.IsChecked = s.MercySystemEnabled;
                 CmbMercyAfter.IsVisible = s.MercySystemEnabled;
                 foreach (var obj in CmbMercyAfter.Items)
@@ -190,6 +200,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.AttentionLifespan) ||
                 e.PropertyName == nameof(AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(AppSettings.VideoGazeClickEnabled) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoFloatingSizePercent) ||
                 e.PropertyName == nameof(AppSettings.MandatoryVideoFloating) ||
                 e.PropertyName == nameof(AppSettings.VideoTargetMonitor) ||
                 e.PropertyName == nameof(AppSettings.MercySystemEnabled) ||
@@ -206,6 +217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             var s = CoreSettings.Current;
             if (s.MandatoryVideoFloating == floating) return;
             s.MandatoryVideoFloating = floating;
+            FloatingSizeRow.IsVisible = TxtAppearanceNote.IsVisible = floating;
             CoreSettings.Save();
         }
 
