@@ -27,19 +27,19 @@ public sealed class PageFavoritesDrawer : Grid
     internal TextBlock FavoritesEmpty { get; }
     internal TextBlock RecentEmpty { get; }
     internal bool IsOpen { get; private set; }
-    private readonly TextBlock _chevron;
+    private readonly IconGlyph _chevron;
     private readonly Border _face;
     private Color _hue;
 
     public PageFavoritesDrawer()
     {
         ColumnDefinitions = new ColumnDefinitions("22,Auto");
-        _chevron = new TextBlock { Text = "‹", FontSize = 16, HorizontalAlignment = HorizontalAlignment.Center };
+        _chevron = new IconGlyph { Kind = IconKind.ChevronLeft, Size = 16, HorizontalAlignment = HorizontalAlignment.Center };
         var word = Caption("rail_favorites_drawer", 12);
         var rotated = new LayoutTransformControl { LayoutTransform = new RotateTransform(-90), Child = word,
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         var face = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
-        face.Children.Add(new TextBlock { Text = "★", FontSize = 13, HorizontalAlignment = HorizontalAlignment.Center });
+        face.Children.Add(new IconGlyph { Kind = IconKind.Star, Variant = IconVariant.Filled, Size = 13, HorizontalAlignment = HorizontalAlignment.Center });
         SetRow(rotated, 1); SetRow(_chevron, 2);
         face.Children.Add(rotated); face.Children.Add(_chevron);
         _face = new Border { CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1.5), Child = face };
@@ -105,7 +105,7 @@ public sealed class PageFavoritesDrawer : Grid
     internal void SetOpen(bool open, bool animate)
     {
         IsOpen = open;
-        _chevron.Text = open ? "›" : "‹";
+        _chevron.Kind = open ? IconKind.ChevronRight : IconKind.ChevronLeft;
         Body.Transitions = animate && IsVisible && AmbientFxCanvas.Env.AllowTransitions
             ? new Transitions { new DoubleTransition { Property = WidthProperty,
                 Duration = TimeSpan.FromMilliseconds(200), Easing = new CubicEaseOut() } } : null;

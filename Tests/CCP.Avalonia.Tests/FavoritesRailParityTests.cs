@@ -12,6 +12,9 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
+using IconKind = FluentIcons.Common.Symbol;
+using IconVariant = FluentIcons.Common.IconVariant;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -116,14 +119,24 @@ public class FavoritesRailParityTests
         try
         {
             var drawer = new global::ConditioningControlPanel.Avalonia.Views.Controls.PageFavoritesDrawer();
+            var face = Assert.IsType<Grid>(Assert.IsType<Border>(drawer.Handle.Content).Child);
+            var star = Assert.Single(face.Children.OfType<IconGlyph>(), g => Grid.GetRow(g) == 0);
+            var chevron = Assert.Single(face.Children.OfType<IconGlyph>(), g => Grid.GetRow(g) == 2);
+            Assert.Equal(IconKind.Star, star.Kind);
+            Assert.Equal(IconVariant.Filled, star.Variant);
+            Assert.False(star.IsFallback);
+            Assert.Equal(IconKind.ChevronLeft, chevron.Kind);
+            Assert.False(chevron.IsFallback);
             drawer.OnNavigated("play");
             s.MotionLevel = MotionLevel.Full;
             drawer.SetOpen(true, true);
+            Assert.Equal(IconKind.ChevronRight, chevron.Kind);
             var slide = Assert.IsType<global::Avalonia.Animation.DoubleTransition>(Assert.Single(drawer.Body.Transitions!));
             Assert.Equal(System.TimeSpan.FromMilliseconds(200), slide.Duration);
             Assert.IsType<global::Avalonia.Animation.Easings.CubicEaseOut>(slide.Easing);
             s.MotionLevel = MotionLevel.Off;
             drawer.SetOpen(false, true);
+            Assert.Equal(IconKind.ChevronLeft, chevron.Kind);
             Assert.Null(drawer.Body.Transitions);
             Assert.Equal(0, drawer.Body.Width);
             var hue = Color.FromRgb(10, 20, 30);
