@@ -22,7 +22,7 @@ import { createBridge, songCharts, isPreviewSongHost, wantLobbySongs, lobbySongC
 import { createHostEscape } from './host/hostEscape.js';
 import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
-import { createDevicePictures } from './host/devicePictures.js';
+import { createDevicePictures, decodeInto } from './host/devicePictures.js';
 import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
 import { nichesFor, isDefault, savePick } from './host/scrolllerNiches.js';
 import { createLocalLibrary, pickFiles, feedSwitch, loadFilesChoice, saveFilesChoice, openFilePicker } from './host/localLibrary.js';
@@ -442,7 +442,9 @@ async function boot(course, options, lifetime, isCurrent) {
   const scrolller = init.caps.scrolller ? shared.scrolllerFeed : null;
   // The phone caches pictures on its own loopback server: real textures on the world screens (host/devicePictures.js).
   const deviceOrigin = init.caps.scrolller?.origin === 'device';
-  if (deviceOrigin) scrolller.useDeviceOrigin(location.origin);
+  // The desktop caches them too and serves them from its own media host, drawn into canvases (`mediaOrigin`, https only).
+  const mediaOrigin = /^https:\/\/[a-z0-9.-]+$/.test(init.caps.scrolller?.mediaOrigin || '') ? init.caps.scrolller.mediaOrigin : location.origin;
+  if (deviceOrigin) scrolller.useDeviceOrigin(mediaOrigin);
   // "My files" (host/localLibrary.js): the player's own pictures as blob urls, never uploaded; while it is on the
   // Scrolller switch is off, so the host fetches nothing. Kept across courses; only the choice survives a reload.
   const library = shared.library ||= createLocalLibrary();
@@ -607,7 +609,8 @@ async function boot(course, options, lifetime, isCurrent) {
   if (qs.get('media') !== '0') world.media?.setDisplayFeed(pictures, renderer.canvas);
   // My files and Off win: while either is picked this provider holds nothing and the display route above has the faces.
   const devicePictures = deviceOrigin && qs.get('media') !== '0' && world.media ? createDevicePictures(world.media, { feed: scrolller,
-    active: () => !shared.filesOn && coursePick.source === 'scrolller' }) : null;
+    active: () => !shared.filesOn && coursePick.source === 'scrolller',
+    ...(renderer.device === 'phone' ? null : { decode: (url, canvas, o) => decodeInto(url, canvas, { ...o, edge: 1280 }) }) }) : null;
   if (devicePictures) { lifetime.defer(() => devicePictures.dispose()); lifetime.defer(scrolller.subscribe(() => devicePictures.sync())); }
   world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || devicePictures?.sourceForFlash(seed) || null);
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
