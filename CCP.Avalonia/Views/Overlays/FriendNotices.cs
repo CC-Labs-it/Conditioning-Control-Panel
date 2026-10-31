@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -132,16 +133,31 @@ internal sealed class FriendNotices : Window
         {
             var look = _looks[n];
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-            // ponytail: initials reuse the drawer avatar; proxy pictures and arrival/fade motion remain unported.
-            grid.Children.Add(FriendsDrawer.Avatar(n.Name, 34, null));
+            // WPF FriendNotices.cs:278 and LandingChrome.cs:35-77: proxy picture over initials.
+            var avatar = KnockCard.BuildAvatar(n.Name, look.AvatarUrl, 34);
+            avatar.VerticalAlignment = VerticalAlignment.Top;
+            grid.Children.Add(avatar);
             var words = new StackPanel { Margin = new Thickness(10, 0, 4, 0) };
-            var ago = new TextBlock { Text = Ago(n), FontSize = 10.5, Foreground = FriendsDrawer.Muted };
-            words.Children.Add(new TextBlock { Text = n.Name, FontFamily = FriendsDrawer.Display,
-                FontSize = 13.5, Foreground = FriendsDrawer.Text, TextTrimming = TextTrimming.CharacterEllipsis });
-            words.Children.Add(ago);
-            words.Children.Add(new TextBlock { Text = look.Line + (look.Word == null ? "" : " " + look.Word)
-                + FriendNoticeRules.CountSuffix(n.Count), FontSize = 12, TextWrapping = TextWrapping.Wrap,
-                Foreground = look.Word == null ? FriendsDrawer.Muted : look.Pink ? FriendsDrawer.Pink : FriendsDrawer.Mint });
+            // WPF FriendNotices.cs:283-325: time beside the name; only the word and count are accented.
+            var ago = new TextBlock { Text = Ago(n), FontSize = 10.5, Foreground = FriendsDrawer.Muted,
+                Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            var headRow = new DockPanel { LastChildFill = true };
+            DockPanel.SetDock(ago, Dock.Right);
+            headRow.Children.Add(ago);
+            headRow.Children.Add(new TextBlock { Text = n.Name, FontFamily = FriendsDrawer.Display,
+                FontSize = 13.5, FontWeight = FontWeight.SemiBold, Foreground = FriendsDrawer.Text,
+                TextTrimming = TextTrimming.CharacterEllipsis });
+            words.Children.Add(headRow);
+            var line = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 1, 0, 0), Foreground = FriendsDrawer.Muted };
+            line.Inlines!.Add(new Run(look.Line));
+            if (!string.IsNullOrEmpty(look.Word))
+                line.Inlines.Add(new Run(" " + look.Word) { FontWeight = FontWeight.SemiBold,
+                    Foreground = look.Pink ? FriendsDrawer.Pink : FriendsDrawer.Mint });
+            if (n.Count > 1)
+                line.Inlines.Add(new Run(FriendNoticeRules.CountSuffix(n.Count)) {
+                    FontWeight = FontWeight.SemiBold, Foreground = FriendsDrawer.Gold });
+            words.Children.Add(line);
             if (look.ActionLabel != null && look.Act != null)
             {
                 var act = FriendsDrawer.Pill(look.ActionLabel, FriendsDrawer.Mint, Brushes.Black, "friend-notice-action");
