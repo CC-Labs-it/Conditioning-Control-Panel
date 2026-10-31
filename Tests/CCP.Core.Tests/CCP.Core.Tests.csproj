@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <!-- The ledger is now shared Core logic: run its existing WPF-source boundary tests on Linux too. -->
+    <Compile Include="..\ConditioningControlPanel.Tests\SparklesClaimServiceTests.cs" Link="SparklesClaimServiceTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\AwarenessLedgerTests.cs" Link="AwarenessLedgerTests.cs" />
   </ItemGroup>
 

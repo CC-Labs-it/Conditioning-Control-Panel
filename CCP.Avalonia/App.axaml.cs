@@ -15,6 +15,9 @@ namespace ConditioningControlPanel.Avalonia
 {
     public partial class App : Application
     {
+        /// <summary>B1 W1: claim receipt and wallet lifecycle, cancelled by panic.</summary>
+        internal static Platform.SparklesHead Sparkles { get; } = new();
+
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
@@ -1309,6 +1312,7 @@ namespace ConditioningControlPanel.Avalonia
             // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).
             try { ContentPackStore.Current?.CleanupTempFiles(); } catch { }
             try { Platform.WebcamTracker.Instance.Stop(); } catch { /* WPF App.OnExit:6185 Webcam.Dispose */ }
+            Sparkles.Stop();
             try { Platform.Win32PanicKey.Stop(); } catch { /* WPF GlobalKeyboardHook.Dispose; no-op off Windows */ }
 
             // Roadmap is lazy: do not construct it merely to dispose it on a profile that never
