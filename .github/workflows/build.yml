@@ -423,9 +423,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: bash .github/scripts/core-guards.sh
       - name: Check tester steps cover every non-n/a parity row
-        run: |
-          python3 .github/scripts/test_plan_coverage.py
-          bash .github/scripts/test-plan-coverage.sh
+        run: python3 .github/scripts/test_plan_coverage.py
       # The port docs parse: every ledger table row on one line, main-sync meta totals match, the dashboard builds
       # (shallow checkout, so its over-time chart has one point here; that is fine for a build check).
       - run: |
