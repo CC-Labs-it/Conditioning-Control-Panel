@@ -316,7 +316,9 @@
                          and the card lives in the template. Geometry is BuildExclusiveCard's:
                          336x200, 12px radius, bottom scrim plate, chip top-right, badge top-left,
                          veil over the lot, tier sign pinned over the corner. -->
-                    <Button x:Name="BtnSeePremium" IsVisible="False" Margin="0,0,0,16" Click="SeePremium_Click">
+                    <Button x:Name="BtnSeePremium" IsVisible="False" Theme="{StaticResource SecondaryButton}"
+                            HorizontalAlignment="Left" Margin="0,-8,0,18" Padding="18,7"
+                            Click="SeePremium_Click">
                         <TextBlock Text="{loc:Str plans_see_premium}"/>
                     </Button>
                     <ItemsControl x:Name="ExclusivesShelf">

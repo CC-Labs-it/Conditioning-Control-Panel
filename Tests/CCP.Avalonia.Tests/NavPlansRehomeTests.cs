@@ -1,7 +1,12 @@
+using System;
+using System.IO;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media.Imaging;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -17,6 +22,49 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class NavPlansRehomeTests
 {
+    [Fact]
+    public void PlansFollowTheTierCardAndPrecedeProviderCards() => AvaloniaTestDispatcher.Run(() =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var account = new AccountSettingsSection();
+        var tier = account.FindControl<Border>("AccountTierCard")!;
+        var plans = account.FindControl<ExclusivesTabView>("PlansView")!;
+        var patreon = account.FindControl<Border>("PatreonLoginCard")!;
+        var stack = Assert.IsType<StackPanel>(plans.Parent);
+        Assert.Same(plans, stack.Children[stack.Children.IndexOf(tier) + 1]);
+        Assert.Same(patreon, stack.Children[stack.Children.IndexOf(plans) + 1]);
+        Assert.Equal(new Thickness(0, 0, 0, 12), plans.Margin);
+        var host = new Window { Width = 900, Height = 1000, Content = new ScrollViewer { Content = account } };
+        try
+        {
+            host.Show(); Dispatcher.UIThread.RunJobs(); host.UpdateLayout();
+            Assert.True(tier.Bounds.Bottom <= plans.Bounds.Top);
+            Assert.True(plans.Bounds.Bottom <= patreon.Bounds.Top);
+            if (Environment.GetEnvironmentVariable("CCP_LAYOUT_PNG_DIR") is { Length: > 0 } directory)
+            {
+                Directory.CreateDirectory(directory);
+                using var bitmap = new RenderTargetBitmap(new PixelSize(900, 1000));
+                bitmap.Render(host);
+                bitmap.Save(Path.Combine(directory, "account-plans.png"));
+            }
+        }
+        finally { host.Close(); }
+    });
+
+    [Fact]
+    public void PremiumLinkUsesTheSecondaryThemeAndWpfGeometry() => AvaloniaTestDispatcher.Run(() =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var plans = new ExclusivesTabView { PlansMode = true };
+        var button = plans.FindControl<Button>("BtnSeePremium")!;
+        Assert.Same(Application.Current!.FindResource("SecondaryButton"), button.Theme);
+        Assert.IsType<ControlTheme>(button.Theme);
+        Assert.Equal(HorizontalAlignment.Left, button.HorizontalAlignment);
+        Assert.Equal(new Thickness(0, -8, 0, 18), button.Margin);
+        Assert.Equal(new Thickness(18, 7), button.Padding);
+        Assert.Equal(Loc.Get("plans_see_premium"), Assert.IsType<TextBlock>(button.Content).Text);
+    });
+
     [Fact]
     public void AccountHostsCompactPlansWithoutAnInnerScroller() => AvaloniaTestDispatcher.Run(() =>
     {
