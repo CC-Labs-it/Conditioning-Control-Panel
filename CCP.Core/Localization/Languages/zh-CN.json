@@ -4163,6 +4163,8 @@
   "cloud_export_server_error": "服务器错误：{0}",
   "cloud_export_connection_required": "导出数据需要互联网连接",
   "cloud_export_json_files": "JSON 文件",
+  "account_merged_signin_title": "你的账户已合并", "account_merged_signin_summary": "请重新登录以继续。",
+  "account_merged_signin_body": "你的两个账户已合并。请重新登录以继续。\n\n本地进度会保留。", "account_merged_retry_hint": "你的账户已合并。请重新登录后再试一次。",
   "msg_failed_to_export_data": "导出数据失败。",
   "title_export_failed": "导出失败",
   "title_save_data_export": "保存数据导出",

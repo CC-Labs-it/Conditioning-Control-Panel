@@ -3379,6 +3379,8 @@
   "cloud_export_server_error": "Erro do servidor: {0}",
   "cloud_export_connection_required": "A exportação de dados requer conexão com a internet",
   "cloud_export_json_files": "Arquivos JSON",
+  "account_merged_signin_title": "Suas contas foram unidas", "account_merged_signin_summary": "Entre novamente para continuar de onde parou.",
+  "account_merged_signin_body": "Suas duas contas foram unidas. Entre novamente para continuar de onde parou.\n\nSeu progresso local será mantido.", "account_merged_retry_hint": "Suas contas foram unidas. Entre novamente e tente outra vez.",
   "msg_failed_to_export_data": "Falha ao exportar dados.",
   "title_export_failed": "Exportação Falhou",
   "title_save_data_export": "Salvar Exportação de Dados",

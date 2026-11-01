@@ -3379,6 +3379,8 @@
   "cloud_export_server_error": "サーバーエラー: {0}",
   "cloud_export_connection_required": "データのエクスポートにはインターネット接続が必要です",
   "cloud_export_json_files": "JSON ファイル",
+  "account_merged_signin_title": "アカウントが統合されました", "account_merged_signin_summary": "もう一度ログインして続きを始めてください。",
+  "account_merged_signin_body": "2つのアカウントが統合されました。もう一度ログインして続きを始めてください。\n\nこの端末の進行状況は保持されます。", "account_merged_retry_hint": "アカウントが統合されました。もう一度ログインしてから再試行してください。",
   "msg_failed_to_export_data": "データのエクスポートに失敗しました。",
   "title_export_failed": "エクスポート失敗",
   "title_save_data_export": "データエクスポートを保存",

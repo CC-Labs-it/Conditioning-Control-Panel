@@ -103,6 +103,26 @@ public sealed class AccountSettingsSectionTests
         }
     }
 
+    private sealed class MergedExportServer(AppSettings settings) : HttpMessageHandler
+    {
+        public readonly List<string> Paths = new();
+        public bool ClearedAndStopped;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            lock (Paths) Paths.Add(path);
+            if (path == "/v2/user/export-data")
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict) { Content = new StringContent("{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}") });
+            if (path.StartsWith("/v2/auth/"))
+            {
+                ClearedAndStopped = settings.AuthToken == null && AccountSeed.Sync?.Loaded == false && AccountSeed.Sync?.HeartbeatRunning == false;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"success\":true,\"auth_token\":\"fresh\",\"user\":{\"unified_id\":\"u_canon123\",\"display_name\":\"Bambi\"}}") });
+            }
+            var body = path == "/v2/user/profile" ? "{\"user\":{\"unified_id\":\"u_canon123\",\"display_name\":\"Bambi\"}}" : "{\"backup\":null}";
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+        }
+    }
+
     private static string Packed(AppSettings settings)
     {
         using var output = new MemoryStream();
@@ -171,6 +191,64 @@ public sealed class AccountSettingsSectionTests
             AccountSettingsSection.NewBackup = oldBackup;
             AccountSettingsSection.Tell = oldTell;
             AccountSettingsSection.Confirm = oldConfirm;
+        }
+    });
+
+    // AccountSeed.Seed is the production startup path (App.axaml.cs:665); only HTTP is faked.
+    [Theory]
+    [InlineData("patreon")] [InlineData("discord")]
+    [InlineData("substar")] [InlineData("none")] [InlineData("none-early")]
+    public Task MergedExportUsesStartupRecoveryAndPreservesQuests(string provider) => RunAsync(async (_, section, s, secrets) =>
+    {
+        var oldSync = AccountSeed.Sync; var oldV2 = AccountSeed.NewV2;
+        var oldBackup = AccountSettingsSection.NewBackup; var oldTell = AccountSettingsSection.Tell;
+        var oldSession = CoreSession.IsSessionRunningProvider; var oldQuests = global::ConditioningControlPanel.Avalonia.App.Quests; var oldTour = CoreTutorial.IsActiveProvider; var oldModal = MainShellWindow.IsStartupDialogShowing;
+        using var quests = new QuestService(null, CorePaths.UserData);
+        var server = new MergedExportServer(s); var sync = new SyncPush(() => Array.Empty<string>(), () => false, server);
+        var dialogs = new List<string>();
+        MergedAccountRecovery.ResetForTest();
+        StartupLadder.ResetForTests();
+        try
+        {
+            if (!provider.StartsWith("none")) secrets[provider + "_auth"] = JsonConvert.SerializeObject(new PatreonTokenData { AccessToken = "a", RefreshToken = "r", ExpiresAt = DateTime.UtcNow.AddDays(1) });
+            s.UnifiedId = "u_tombstone1"; s.AuthToken = "old"; s.PlayerLevel = 9;
+            CoreAccount.UnifiedUserId = s.UnifiedId;
+            quests.StampOwner(s.UnifiedId);
+            global::ConditioningControlPanel.Avalonia.App.Quests = quests;
+            sync.MarkLoaded(Array.Empty<string>()); sync.StartHeartbeat(); AccountSeed.Sync = sync;
+            AccountSeed.NewV2 = () => new V2AuthService(() => s, server);
+            AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(server);
+            AccountSettingsSection.Tell = (_, _, body) => { dialogs.Add(body); return Task.CompletedTask; };
+            CoreSession.IsSessionRunningProvider = () => provider != "none-early"; CoreTutorial.IsActiveProvider = () => false; MainShellWindow.IsStartupDialogShowing = false;
+            if (provider == "none-early") Assert.False(StartupLadder.IsQuiet);
+            await section.ExportDataAsync();
+            await MergedAccountRecovery.LastSwap.WaitAsync(TimeSpan.FromSeconds(10));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(Loc.Get("account_merged_retry_hint"), dialogs);
+            Assert.Equal("u_canon123", s.UnifiedId); Assert.Equal("u_canon123", CoreAccount.UnifiedUserId);
+            Assert.Equal("u_canon123", quests.Progress.OwnerUnifiedId); Assert.Equal(9, s.PlayerLevel);
+            if (!provider.StartsWith("none"))
+            {
+                Assert.Contains("/v2/auth/" + provider, server.Paths);
+                Assert.True(server.ClearedAndStopped);
+                Assert.Equal("fresh", s.AuthToken);
+                Assert.Contains("/v2/user/profile", server.Paths);
+                Assert.True(sync.Loaded);
+            }
+            else
+            {
+                Assert.Null(s.AuthToken);
+                Assert.False(sync.Loaded); Assert.False(sync.HeartbeatRunning);
+                Assert.Contains(StartupLadder.Inbox.Items, item => item.Key == "merged-account-signin:u_canon123");
+            }
+        }
+        finally
+        {
+            sync.Reset(); AccountSeed.Sync = oldSync; AccountSeed.NewV2 = oldV2;
+            AccountSettingsSection.NewBackup = oldBackup; AccountSettingsSection.Tell = oldTell;
+            CoreSession.IsSessionRunningProvider = oldSession; CoreTutorial.IsActiveProvider = oldTour; MainShellWindow.IsStartupDialogShowing = oldModal;
+            global::ConditioningControlPanel.Avalonia.App.Quests = oldQuests;
+            MergedAccountRecovery.ResetForTest(); StartupLadder.ResetForTests();
         }
     });
 

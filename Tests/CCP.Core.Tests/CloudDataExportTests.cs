@@ -119,7 +119,7 @@ public sealed class CloudDataExportTests : IDisposable
     public void EveryLanguageDefinesAllExportStrings()
     {
         var keys = new[] { "cloud_export_sign_in_required", "cloud_export_server_error",
-            "cloud_export_connection_required", "cloud_export_json_files" };
+            "cloud_export_connection_required", "cloud_export_json_files", "account_merged_signin_title", "account_merged_signin_summary", "account_merged_signin_body", "account_merged_retry_hint" };
         foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
         {
             var path = Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", code + ".json");

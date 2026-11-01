@@ -3379,6 +3379,8 @@
   "cloud_export_server_error": "서버 오류: {0}",
   "cloud_export_connection_required": "데이터를 내보내려면 인터넷 연결이 필요합니다",
   "cloud_export_json_files": "JSON 파일",
+  "account_merged_signin_title": "계정이 통합되었습니다", "account_merged_signin_summary": "다시 로그인하여 이어서 진행하세요.",
+  "account_merged_signin_body": "두 계정이 하나로 통합되었습니다. 다시 로그인하여 이어서 진행하세요.\n\n이 기기의 진행 상황은 유지됩니다.", "account_merged_retry_hint": "계정이 통합되었습니다. 다시 로그인한 후 다시 시도하세요.",
   "msg_failed_to_export_data": "데이터 내보내기에 실패했어요.",
   "title_export_failed": "내보내기 실패",
   "title_save_data_export": "데이터 내보내기 저장",
