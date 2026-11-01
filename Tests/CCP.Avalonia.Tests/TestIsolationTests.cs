@@ -34,6 +34,16 @@ public class TestIsolationTests
     private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => Path.GetDirectoryName(p)!;
 
     [Fact]
+    public System.Threading.Tasks.Task SharedBootstrapProvidesBundledInter() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Assert.NotNull(global::Avalonia.Application.Current);
+        var family = new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+        var face = new global::Avalonia.Media.Typeface(family, global::Avalonia.Media.FontStyle.Normal, global::Avalonia.Media.FontWeight.Bold);
+        Assert.True(global::Avalonia.Media.FontManager.Current.TryGetGlyphTypeface(face, out _));
+        return System.Threading.Tasks.Task.CompletedTask;
+    });
+
+    [Fact]
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]

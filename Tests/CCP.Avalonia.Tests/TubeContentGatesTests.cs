@@ -43,6 +43,26 @@ public sealed class TubeContentGatesTests
         return owner.OwnedWindows.OfType<T>().Single();
     }
 
+    // Pure tube helpers may initialize the window type off the UI thread before a menu is shown.
+    [Fact]
+    public Task MenuRendersAfterTubeTypeInitializesOnAnotherThread() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        await Task.Run(() => System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(AvatarTubeWindow).TypeHandle));
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            var menu = tube.FindControl<ContextMenu>("AvatarContextMenu")!;
+            menu.Open(tube.FindControl<Border>("AvatarBorder") ?? (Control)tube);
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotEmpty(tube.FindControl<MenuItem>("MenuItemPersonality")!.Items);
+        }
+        finally { tube.Close(); }
+    });
+
     [Fact]
     public Task ExplicitPresetFromTheMenuWaitsOnTheAcknowledgement() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

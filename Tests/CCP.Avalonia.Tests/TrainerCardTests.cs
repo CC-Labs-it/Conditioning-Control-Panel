@@ -8,7 +8,9 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -141,29 +143,33 @@ public sealed partial class AccountSeedTests
     public async Task LeaderboardRowDoubleClick_OpensThatTrainersCard()
     {
         var s = CoreSettings.Current;
-        var old = (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
+        var old = (s.OfflineMode, s.MotionLevel, s.GentleVisuals, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId);
         var wire = new CardWire();
         try
         {
             LeaderboardTabView.NewClient = () => new LeaderboardClient(wire);
-            (s.OfflineMode, CoreAccount.UnifiedUserId) = (false, "u9");
+            (s.OfflineMode, s.MotionLevel, s.GentleVisuals, CoreAccount.UnifiedUserId) = (false, ConditioningControlPanel.Models.MotionLevel.Full, false, "u9");
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 if (global::Avalonia.Application.Current is null)
                     global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
-                var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+                var w = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow { TabClock = new ContentHitTestTests.FrozenClock() };
                 w.Show();
                 w.ShowTab("leaderboard");
+                Assert.NotNull(w.EnteringTab); // the frozen clock keeps the real entrance pending
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
-                Dispatcher.UIThread.RunJobs();
+                ContentHitTestTests.RenderLiveTree(w);
+                Assert.Null(w.EnteringTab);
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
+                var hit = w.InputHitTest(at) as Visual;
+                Assert.True(hit == row || (hit != null && row.IsVisualAncestorOf(hit)), $"leaderboard row hit {hit?.GetType().Name}");
                 for (var i = 0; i < 2; i++)
                 {
                     w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
@@ -196,7 +202,7 @@ public sealed partial class AccountSeedTests
         }
         finally
         {
-            (s.OfflineMode, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId) = old;
+            (s.OfflineMode, s.MotionLevel, s.GentleVisuals, LeaderboardTabView.NewClient, CoreAccount.UnifiedUserId) = old;
         }
     }
 
