@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Descent;
 using Newtonsoft.Json.Linq;
@@ -41,6 +42,7 @@ public sealed class ProfileVatPathTests
         var service = new DescentService(_ => Task.FromResult(reply));
         global::ConditioningControlPanel.Avalonia.App.Descent = service;
         MainShellWindow? shell = null;
+        var oldTime = BeatLoop.Time; var time = new SteppedTime(); BeatLoop.Time = time;
         var audio = CoreAudio.PlayOneShotProvider;
         var cues = new List<string>();
         CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(System.IO.Path.GetFileName(path));
@@ -60,10 +62,13 @@ public sealed class ProfileVatPathTests
             Assert.True(tick.IsVisible);
             Assert.Equal(Math.Round(glass.TickCenterY(VatGlassCanvas.VatTickMark.Max)!.Value - tick.Size / 2), tick.Margin.Top);
             void Key(global::Avalonia.Interactivity.RoutedEvent e) => tap.RaiseEvent(new KeyEventArgs { RoutedEvent = e, Key = global::Avalonia.Input.Key.Space });
+            async Task Frame(int ms) { time.Advance(TimeSpan.FromMilliseconds(ms)); await Task.Delay(45); AvaloniaHeadlessPlatform.ForceRenderTimerTick(5); Dispatcher.UIThread.RunJobs(); await Task.Delay(45); }
             Key(InputElement.KeyDownEvent); Assert.True(shell.FaucetCharging);
             Assert.Equal(800d, (double)typeof(MainShellWindow).GetField("_faucetChargeBudgetMs", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(shell)!);
             Assert.True(page.FindControl<Grid>("ProfileVatChargeRing")!.IsVisible);
+            await Frame(400); Assert.Equal(600, s.VatPouredTodayXp);
             Key(InputElement.KeyUpEvent); Assert.False(shell.FaucetCharging);
+            await Frame(500);
             Assert.Equal(600, s.VatPouredTodayXp); Assert.Equal(400, shell.VatHeldXp);
             using (shell.CaptureRenderedFrame()) { }
             var point = tap.TranslatePoint(new Point(tap.Bounds.Width / 2, tap.Bounds.Height / 2), shell)!.Value;
@@ -77,13 +82,15 @@ public sealed class ProfileVatPathTests
             Key(InputElement.KeyUpEvent);
             Key(InputElement.KeyDownEvent); Assert.True(shell.FaucetCharging);
             shell.ShowTab("settings"); Dispatcher.UIThread.RunJobs();
-            shell.AdvanceFaucetCharge(1);
+            await Frame(1000);
             Assert.False(shell.FaucetCharging); Assert.Equal(600, s.VatPouredTodayXp);
             shell.ShowTab("discord"); shell.Activate(); Dispatcher.UIThread.RunJobs();
             Key(InputElement.KeyDownEvent); Assert.True(shell.FaucetCharging);
             cues.Clear();
-            shell.AdvanceFaucetCharge(.5);
-            shell.AdvanceFaucetCharge(1);
+            var charge = Assert.Single(BeatLoop.Running, loop => loop.Owner == page.FindControl<Grid>("ProfileVatChargeRing"));
+            Assert.True(charge.OnFrameBeat);
+            await Frame(400); Assert.Equal(600, s.VatPouredTodayXp); Assert.True(shell.FaucetCharging);
+            await Frame(500);
             Assert.Contains("faucet_charge_6.wav", cues); Assert.Contains("faucet_pour.wav", cues);
             Assert.Equal(1000, s.VatPouredTodayXp); Assert.Equal(0, shell.VatHeldXp);
             Assert.True(glass.IsPouring);
@@ -93,7 +100,7 @@ public sealed class ProfileVatPathTests
             Assert.False(shell.VatPollRunning); Assert.Null(glass.ExternalSpoutXFraction);
             Assert.Equal(104, page.FindControl<global::ConditioningControlPanel.Avalonia.Views.Controls.AdornedAvatar>("ProfileHeroAvatar")!.AvatarSize);
         }
-        finally { try { s.OfflineMode = true; service.Reset(); shell?.Close(); } finally { CoreAudio.PlayOneShotProvider = audio; } }
+        finally { try { s.OfflineMode = true; service.Reset(); shell?.Close(); } finally { BeatLoop.Time = oldTime; CoreAudio.PlayOneShotProvider = audio; } }
     });
 
     [Fact]

@@ -268,7 +268,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Put the hero back exactly as it ships without the Descent: 104px avatar at its original
         /// 6px margin, no jar, no readout, and a bay that measures to the avatar alone.
         /// </summary>
-        private void DisarmVat()
+        internal void DisarmVat()
         {
             var glass = VatGlass;
             if (!_vatArmed)
