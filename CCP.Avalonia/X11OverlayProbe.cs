@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia
         [DllImport(LibX11)] private static extern int XCloseDisplay(IntPtr display);
         [DllImport(LibX11)] private static extern int XSync(IntPtr display, bool discard);
         [DllImport(LibX11)] private static extern int XFree(IntPtr data);
+        [DllImport(LibX11)] private static extern int XLowerWindow(IntPtr display, IntPtr window);
         [DllImport(LibX11)] private static extern int XGetWindowAttributes(IntPtr display, IntPtr window, IntPtr attributes);
         [DllImport(LibX11)] private static extern bool XTranslateCoordinates(IntPtr display, IntPtr src, IntPtr dest,
             int srcX, int srcY, out int destX, out int destY, out IntPtr child);
@@ -141,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia
             var display = XOpenDisplay(IntPtr.Zero);
             if (display == IntPtr.Zero) { Console.Error.WriteLine("FAIL: no X display"); return 1; }
             var settings = CoreSettings.Current;
+            bool oldEnabled = settings.ChaosSkiaFxEnabled, oldPin = settings.ChaosPinOnTop;
             settings.ChaosSkiaFxEnabled = true;
             settings.ChaosPinOnTop = false;
             var other = new Window
@@ -154,7 +156,7 @@ namespace ConditioningControlPanel.Avalonia
             ChaosSkiaFxOverlay.ArmCursorGlow();
             int fails = 0;
             void Check(bool ok, string label) { Console.WriteLine($"{(ok ? "PASS" : "FAIL")} {label}"); if (!ok) fails++; }
-            DispatcherTimer.RunOnce(() =>
+            DispatcherTimer.RunOnce(async () =>
             {
                 try
                 {
@@ -163,7 +165,7 @@ namespace ConditioningControlPanel.Avalonia
                     var otherId = Xid(other);
                     if (xid == IntPtr.Zero || otherId == IntPtr.Zero) { Check(false, "real overlay and target opened"); return; }
                     var root = XDefaultRootWindow(display);
-                    Check(!OverrideRedirect(display, xid), "unpinned overlay is managed");
+                    Check(!OverrideRedirect(display, xid, out var mapped) && mapped, "unpinned overlay is managed and mapped");
                     Check(InputRects(display, xid).Length == 0, "unpinned client input shape is empty");
                     var primary = fx!.Screens.Primary ?? throw new InvalidOperationException("no primary screen");
                     var stage = primary.Bounds;
@@ -212,13 +214,41 @@ namespace ConditioningControlPanel.Avalonia
                     var pinnedId = pinned == null ? IntPtr.Zero : Xid(pinned);
                     if (pinnedId == IntPtr.Zero) { Check(false, "pinned overlay opened"); return; }
                     XSync(display, false);
-                    Check(OverrideRedirect(display, pinnedId), "pinned overlay retains override-redirect");
+                    Check(OverrideRedirect(display, pinnedId, out mapped) && mapped, "pinned overlay retains override-redirect and is mapped");
                     Check(InputRects(display, pinnedId).Length == 0, "pinned client input shape is empty");
+                    XLowerWindow(display, pinnedId);
+                    XWarpPointer(display, IntPtr.Zero, root, 0, 0, 0, 0, x, y);
+                    XTestFakeButtonEvent(display, 1, true, 0);
+                    XTestFakeButtonEvent(display, 1, false, 0);
+                    XSync(display, false);
+                    System.Threading.Thread.Sleep(350);
+                    Check(IndexOf(display, root, otherId) > IndexOf(display, root, pinnedId), "other covers pinned overlay after a click");
+                    await System.Threading.Tasks.Task.Delay(200); // let the real animation frame run
+                    Check(IndexOf(display, root, pinnedId) > IndexOf(display, root, otherId), "active pinned overlay returns above the clicked target");
+                    XLowerWindow(display, pinnedId);
+                    XSync(display, false);
+                    ChaosSkiaFxOverlay.TrailDot(new Point(x, y), 0.4);
+                    System.Threading.Thread.Sleep(200);
+                    Check(IndexOf(display, root, pinnedId) > IndexOf(display, root, otherId), "next effect raises the pinned overlay");
+
+                    ChaosSkiaFxOverlay.DisarmCursorGlow();
+                    for (int i = 0; i < 200; i++) { time += TimeSpan.FromMilliseconds(16); pinned!.OnFrame(time); }
+                    pinned!.HideTick();
+                    Check(!pinned.IsVisible, "pinned overlay hides after idling");
+                    XLowerWindow(display, pinnedId);
+                    XSync(display, false);
+                    ChaosSkiaFxOverlay.ArmCursorGlow();
+                    System.Threading.Thread.Sleep(200);
+                    Check(ReferenceEquals(pinned, ChaosSkiaFxOverlay.Active) && pinned.IsVisible, "pinned activity re-shows the same window");
+                    Check(OverrideRedirect(display, pinnedId, out mapped) && mapped, "re-shown pinned overlay is mapped");
+                    Check(IndexOf(display, root, pinnedId) > IndexOf(display, root, otherId), "re-shown pinned overlay is above the target");
                 }
                 catch (Exception ex) { Console.Error.WriteLine(ex); fails++; }
                 finally
                 {
                     ChaosSkiaFxOverlay.CloseActive();
+                    settings.ChaosSkiaFxEnabled = oldEnabled;
+                    settings.ChaosPinOnTop = oldPin;
                     other.Close();
                     XCloseDisplay(display);
                     lifetime.Shutdown();
@@ -229,12 +259,13 @@ namespace ConditioningControlPanel.Avalonia
             return fails == 0 ? 0 : 1;
         }
 
-        private static bool OverrideRedirect(IntPtr display, IntPtr window)
+        private static bool OverrideRedirect(IntPtr display, IntPtr window, out bool mapped)
         {
             var p = Marshal.AllocHGlobal(136); // XWindowAttributes on LP64
             try
             {
                 if (XGetWindowAttributes(display, window, p) == 0) throw new InvalidOperationException("XGetWindowAttributes failed");
+                mapped = Marshal.ReadInt32(p, 92) == 2;
                 return Marshal.ReadInt32(p, 120) != 0;
             }
             finally { Marshal.FreeHGlobal(p); }

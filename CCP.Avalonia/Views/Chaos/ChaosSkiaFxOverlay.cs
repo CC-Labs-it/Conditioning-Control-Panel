@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Tests step frames (P08); the live source is the window's animation frame.</summary>
         internal static IFrameSource? FramesForTests;
         internal static Func<bool> VideoPlaying = () => MandatoryVideoOverlay.Instance.Scheduler.IsPlaying;
+        internal static Func<Window, bool> X11NeedsRaise = w => X11Overlay.BackendOf(w.TryGetPlatformHandle()) == OverlayBackend.X11;
         internal static Action<Window> Raise = w => X11Overlay.Raise(w);
         internal static Func<Window, bool> ManagedClickThrough = w => SkipPlatformChecksForTests || X11Overlay.SetManagedClickThrough(w);
         internal static ChaosSkiaFxOverlay? Active { get; private set; }
@@ -107,8 +108,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     if (Active == null && Create() is { } w) Active = w;
                     if (Active == null) return;
                     act(Active);
-                    // WPF StartActivity raises only during video, and never pins an opted-out run.
-                    if (Active is { IsVisible: true, Topmost: true } current && VideoPlaying()) Raise(current);
+                    // X11 override-redirect has no topmost band; Windows only re-raises during video as WPF does.
+                    if (Active is { IsVisible: true, Topmost: true } current && (X11NeedsRaise(current) || VideoPlaying())) Raise(current);
                 }
                 catch (Exception ex) { Log.Debug("ChaosSkiaFx: {E}", ex.Message); }
             });
@@ -264,6 +265,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (dt > 0.1f) dt = 0.1f;
 
             Fx.Update(TimeSpan.FromSeconds(dt));
+            // A click can put an override-redirect window below another app while particles are live.
+            if (Fx.IsActive && Topmost && X11NeedsRaise(this)) Raise(this);
             (Content as Control)?.InvalidateVisual();
 
             if (!Fx.IsActive)
