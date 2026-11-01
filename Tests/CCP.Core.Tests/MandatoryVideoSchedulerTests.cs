@@ -163,6 +163,41 @@ public sealed class MandatoryVideoSchedulerTests
     });
 
     [Fact]
+    public void Throwing_feed_replay_is_contained_and_next_scheduled_pick_can_play() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true }; var picks = 0;
+        var pending = new Queue<Action>();
+        var oldPost = CoreDispatch.PostProvider;
+        CoreDispatch.PostProvider = pending.Enqueue;
+        void Drain() { while (pending.TryDequeue(out var action)) action(); }
+        var v = new MandatoryVideoScheduler(host, clock,
+            () => ++picks == 1 ? throw new System.IO.IOException("unreadable video folder") : Clips);
+        try
+        {
+            v.Start();
+            clock.Advance(TimeSpan.FromSeconds(216));
+            Drain();
+            Assert.Equal(0, picks);
+            host.FeedOwnsTheScreen = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            // Run the queued UI action outside CoreDispatch's provider catch, as Avalonia does.
+            Assert.Null(Record.Exception(Drain));
+            Assert.Equal(1, picks);
+            Assert.True(v.IsRunning);
+            Assert.False(v.IsPlaying);
+            Assert.Empty(host.Shown);
+            clock.Advance(TimeSpan.FromSeconds(216));
+            Drain();
+            Assert.True(v.IsPlaying);
+            Assert.Equal(2, picks);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Drain();
+            Assert.Single(host.Shown);
+        }
+        finally { v.Stop(); CoreDispatch.PostProvider = oldPost; }
+    });
+
+    [Fact]
     public void Remote_video_acknowledges_feed_defer_and_refuses_only_an_actually_playing_video() => With(20, false, () =>
     {
         var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };

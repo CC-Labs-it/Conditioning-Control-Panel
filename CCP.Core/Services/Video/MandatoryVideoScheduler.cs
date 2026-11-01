@@ -405,11 +405,21 @@ namespace ConditioningControlPanel.Services
                     return;
                 }
                 _feedDeadline = null;
-                // WPF :2047: a deferred test press also requires a running, enabled scheduler.
-                if (_running && CoreSettings.Current.MandatoryVideosEnabled && !Trigger(strictOverride, path))
+                try
                 {
-                    // Empty replay: the same keep-scheduling decision as an empty scheduled pick.
-                    if (_scheduler == null && !_playing && _feedDefer == null) ScheduleNext();
+                    // WPF :2047: a deferred test press also requires a running, enabled scheduler.
+                    if (_running && CoreSettings.Current.MandatoryVideosEnabled && !Trigger(strictOverride, path))
+                    {
+                        // Empty replay: the same keep-scheduling decision as an empty scheduled pick.
+                        if (_scheduler == null && !_playing && _feedDefer == null) ScheduleNext();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // WPF :2118 contains replay failures; retain Tick's keep-scheduling recovery.
+                    Log.Error(ex, "VideoService: feed replay failed - re-arming scheduler");
+                    _playing = false;
+                    if (_scheduler == null) ScheduleNext();
                 }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _feedDefer = created;
