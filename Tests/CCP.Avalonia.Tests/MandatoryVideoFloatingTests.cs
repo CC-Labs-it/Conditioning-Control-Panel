@@ -141,6 +141,7 @@ public sealed class MandatoryVideoFloatingTests
                 // A panic during the veil must leave a visible, usable Resume card (WPF ShowGraceOverlays).
                 (o.Scheduler, o.Time) = (graceScheduler, clock);
                 (s.PanicOverridesAll, s.MasterVolume, s.VideoVolume) = (false, 80, 50);
+                s.MandatoryVideoFloatingSizePercent = MandatoryVideoPresentation.MaxSizePercent;
                 Assert.True(graceScheduler.Trigger(strictOverride: false, path: clip));
                 o.Show(clip, strict: false);
                 var paused = Assert.Single(o.Surfaces);
@@ -150,12 +151,11 @@ public sealed class MandatoryVideoFloatingTests
                 o.ReadyAgeOverrideMs = 0;
                 Assert.True(o.TryGracePause(fromPanicKey: true));
                 Assert.True(o.GracePaused && paused.Grace.IsVisible);
-                Assert.Equal(1, paused.Window.Opacity);
-                Assert.True(paused.Window.IsHitTestVisible);
+                var card = AssertCentredCard(paused);
                 var resume = Assert.Single(paused.Grace.GetVisualDescendants().OfType<Button>());
-                Assert.True(resume.IsEffectivelyVisible && resume.IsEffectivelyEnabled);
                 resume.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.False(o.GracePaused || paused.Grace.IsVisible);
+                Assert.False(card.IsVisible);
                 Assert.InRange(paused.Window.Opacity, double.Epsilon, 0.001);
                 Assert.False(paused.Window.IsHitTestVisible);
                 o.UpdateVolume();
@@ -171,18 +171,22 @@ public sealed class MandatoryVideoFloatingTests
                 graceScheduler.ForceCleanup();
 
                 // Auto-resume must also preserve a pending veil and the no-play timeout.
+                s.MandatoryVideoFloatingSizePercent = MandatoryVideoPresentation.MinSizePercent;
                 clock.Advance(TimeSpan.FromSeconds(1));
                 Assert.True(graceScheduler.Trigger(strictOverride: false, path: clip));
                 o.Show(clip, strict: false);
                 var stalled = Assert.Single(o.Surfaces);
+                Assert.True(stalled.Window.Height < 200, "the small floating window cannot hold the card");
                 Assert.Null(o.ReadyAgeOverrideMs); // a fresh clip gets a fresh budget
                 o.ReadyAgeOverrideMs = FloatingRevealGate.ReadyBudgetMs;
                 Assert.True(o.TryGracePause(fromPanicKey: true));
+                card = AssertCentredCard(stalled);
                 o.GuardTick();
                 Assert.True(graceScheduler.IsPlaying && stalled.Grace.IsVisible);
                 clock.Advance(TimeSpan.FromSeconds(61));
                 o.GraceTick();
                 Assert.False(o.GracePaused || stalled.Grace.IsVisible);
+                Assert.False(card.IsVisible);
                 Assert.InRange(stalled.Window.Opacity, double.Epsilon, 0.001);
                 Assert.False(stalled.Window.IsHitTestVisible);
                 Assert.Equal(0, o.PlayerVolume);
@@ -190,6 +194,18 @@ public sealed class MandatoryVideoFloatingTests
                 Assert.False(graceScheduler.IsPlaying);
                 Assert.Empty(o.Windows);
                 Assert.False(stalled.Window.IsVisible);
+
+                // Panic during the pause still closes everything, the separate card included.
+                clock.Advance(TimeSpan.FromSeconds(1));
+                Assert.True(graceScheduler.Trigger(strictOverride: false, path: clip));
+                o.Show(clip, strict: false);
+                var panicked = Assert.Single(o.Surfaces);
+                Assert.True(o.TryGracePause(fromPanicKey: true));
+                card = AssertCentredCard(panicked);
+                graceScheduler.ForceCleanup();
+                Assert.Empty(o.Windows);
+                Assert.False(o.GracePaused);
+                Assert.False(card.IsVisible || panicked.Window.IsVisible);
                 (o.Scheduler, o.Time) = previous;
 
                 // Strict always covers the screen, and keeps its attention checks.
@@ -217,6 +233,27 @@ public sealed class MandatoryVideoFloatingTests
             }
             return Task.CompletedTask;
         });
+    }
+
+    // WPF GracePauseOverlayWindow: its own 360x200 window centred on the screen, the video stays veiled.
+    private static Window AssertCentredCard(MandatoryVideoOverlay.Surface x)
+    {
+        Assert.InRange(x.Window.Opacity, double.Epsilon, 0.001);
+        Assert.False(x.Window.IsHitTestVisible);
+        var card = Assert.IsAssignableFrom<Window>(TopLevel.GetTopLevel(x.Grace));
+        Assert.NotSame(x.Window, card);
+        Assert.True(card.IsVisible && card.Topmost && !card.ShowActivated);
+        // No RunJobs: the missing test clip's queued error would end the clip. Show already laid the card out.
+        Assert.Equal(new Size(360, 200), card.ClientSize);
+        var scr = card.Screens.Primary ?? card.Screens.All[0];
+        var b = scr.Bounds;
+        Assert.Equal(new PixelPoint(b.X + (int)((b.Width - 360 * scr.Scaling) / 2), b.Y + (int)((b.Height - 200 * scr.Scaling) / 2)), card.Position);
+        var resume = Assert.Single(x.Grace.GetVisualDescendants().OfType<Button>());
+        Assert.True(resume.IsEffectivelyVisible && resume.IsEffectivelyEnabled);
+        var at = resume.TranslatePoint(default, card)!.Value;
+        Assert.True(resume.Bounds.Width > 0 && at.X >= 0 && at.Y >= 0
+            && at.X + resume.Bounds.Width <= 360 && at.Y + resume.Bounds.Height <= 200, "Resume is wholly on the card");
+        return card;
     }
 
     // Trigger marks the scheduler live, but Show is driven synchronously before any frame can reveal it.
