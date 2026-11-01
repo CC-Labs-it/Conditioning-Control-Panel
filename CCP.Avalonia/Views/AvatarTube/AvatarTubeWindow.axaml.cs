@@ -1193,9 +1193,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         ///   <item>The lead-in timer and <paramref name="mood"/>. Both exist to time the avatar's
         ///         emotive-portrait pose swap against the voice; that system did not port, so a
         ///         lead-in would be a pause with nothing happening in it.</item>
-        ///   <item>EMI Desk's <c>NoteAvatarSpeaking</c>: its only consumer is her line engine,
-        ///         which is not on this head. Her <c>AvatarMuted</c> IS honoured below, as WPF
-        ///         ShowGiggle (Speech.cs:461): the line still reaches the chat log, no bubble, no voice.</item>
         /// </list>
         ///
         /// <para>A new line cuts the previous clip (WPF StopSpokenAudio), so <c>_stopSpoken</c> always
@@ -1259,6 +1256,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     if (!preset) AddToChatHistory(text, isUser: false);   // WPF Giggle logs nothing
 
                     var source = preset ? SpeechSource.Preset : SpeechSource.AI;
+                    // WPF AvatarTubeWindow.Speech.cs:428-430, before the desk mute gate.
+                    Windows.EmiDesk.EmiDeskService.Instance.NoteAvatarSpeaking(this);
                     if (Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
                     {
                         _isGiggling = false;   // WPF Speech.cs:452-460: skipped, but it still spaces the next
@@ -1422,6 +1421,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF IsSpeakingAudio as a task: completes when her LATEST voiced clip ends (cut or
         /// finished). The voice host waits on it so a bark that cut her confirmation still holds the mic.</summary>
         internal Task SpokenAudioDone { get; private set; } = Task.CompletedTask;
+
+        // WPF EmiDeskService.cs:95-116: a hidden tube can still own a bubble or voice.
+        internal bool VoiceHoldLive => !_avatarSetsClosed && (HasBubbleUp || !SpokenAudioDone.IsCompleted);
 
         private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null)
         {

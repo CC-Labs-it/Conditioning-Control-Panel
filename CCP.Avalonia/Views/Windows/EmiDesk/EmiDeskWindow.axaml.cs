@@ -2618,7 +2618,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private void HideProp() { }
 
         /// <summary>Stop speech on teardown. Voice playback remains part B.</summary>
-        private void TearDownVox() => StopSpeech();
+        private void TearDownVox() { CancelHold(); StopSpeech(); }
 
         /// <summary>WPF EmiDeskWindow.xaml.cs:1832 - the pat sound.</summary>
         private void PlayPatSfx() => EmiSfx.Pat();

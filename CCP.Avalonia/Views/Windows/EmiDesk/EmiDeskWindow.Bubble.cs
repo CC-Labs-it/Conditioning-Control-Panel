@@ -11,6 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 public partial class EmiDeskWindow
 {
     private DispatcherTimer? _speechTimer;
+    private DispatcherTimer? _holdTimer;
     private EmiChain? _speech;
     private int _speechIndex;
     private Action? _speechDone;
@@ -26,9 +27,39 @@ public partial class EmiDeskWindow
     internal void SpeakBookMargin(EmiBookCard card)
     {
         if (PresentationActive || string.IsNullOrWhiteSpace(card.MarginEn)) return;
+        CancelHold();
         EmiLineEngine.Instance.Ack("book.margin." + card.Id);
         EmiDeskService.Instance.NoteEmiSpoke();
         Say(card.MarginEn, string.IsNullOrEmpty(card.MarginFace) ? "^_^" : card.MarginFace);
+    }
+
+    // WPF EmiDeskWindow.Bubble.cs:545-565: a hold replaces speech with a quiet face.
+    internal void HoldFace(LineDraw line)
+    {
+        if (PresentationActive) return;
+        CancelHold();
+        CancelChain();
+        StopIdleBeats();
+        EmiLineEngine.Instance.Ack(line.Id, spoke: false);
+        DrawFace(string.IsNullOrEmpty(line.Face) ? "-_-" : line.Face);
+        _holdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(line.HoldMs > 0 ? line.HoldMs : 1400) };
+        _holdTimer.Tick += OnHoldTick;
+        _holdTimer.Start();
+    }
+
+    private void OnHoldTick(object? sender, EventArgs e)
+    {
+        CancelHold();
+        DrawFace(EmiChains.RestFace);
+        RestartIdleBeats();
+    }
+
+    private void CancelHold()
+    {
+        if (_holdTimer == null) return;
+        _holdTimer.Stop();
+        _holdTimer.Tick -= OnHoldTick;
+        _holdTimer = null;
     }
 
     private void OnSpeechTick(object? sender, EventArgs e) => AdvanceSpeech();
