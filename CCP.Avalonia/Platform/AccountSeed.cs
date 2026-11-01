@@ -125,7 +125,9 @@ internal static class AccountSeed
                 if (string.IsNullOrEmpty(token)) return false;
                 var result = await authenticate(token);
                 if (!result.Success || result.User == null || string.IsNullOrEmpty(result.User.UnifiedId) || string.IsNullOrEmpty(result.AuthToken)) return false;
-                V2AuthService.ApplyIdentity(CoreSettings.Current, result.User, result.AuthToken);
+                ProfileAdopt.ApplyUserData(CoreSettings.Current, result.User, result.AuthToken, DateTime.UtcNow);
+                Services.Invites.InviteRules.ApplyGrant(CoreSettings.Current, Services.Invites.InviteRules.ParseUtc(result.User.InviteGrantUntilRaw), DateTime.UtcNow);
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(Views.Controls.Invites.InvitePanel.ArmExpiry);
                 CoreAccount.UnifiedUserId = result.User.UnifiedId;
                 CoreSettings.Save(suppressCloudBackup: true);
                 return true;

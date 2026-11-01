@@ -18,8 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// Passive surfaces open one at a time (WPF 8cbcbea01): while a feature card or an
     /// announcement is up, or one opened under <see cref="StartupQueueCore.PassiveSettle"/> ago,
     /// the next waits and is re-routed once it has gone.
-    /// ponytail: no modal ladder, launcher hold or game-host park on this head, so
-    /// LadderBusy / GameHostUp / LauncherHolding stay false and Route never answers Defer; port the
+    /// ponytail: no modal ladder on this head, so LadderBusy stays false and Route never answers Defer; port the
     /// pump when the startup modals move onto a shared ladder.
     /// </summary>
     internal static class StartupLadder
@@ -56,6 +55,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static QuietInputs World(DateTime nowUtc) => new()
         {
             ModalUp = Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
+            GameHostUp = Views.Windows.PanicSurfaces.AnyOwnsTheScreen(),
+            LauncherHolding = Views.Windows.LauncherWindow.Instance is { IsVisible: true },
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
             FirstLaunchUntilUtc = _firstLaunchUntilUtc,

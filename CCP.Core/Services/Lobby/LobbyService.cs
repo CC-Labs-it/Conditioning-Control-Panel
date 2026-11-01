@@ -12,6 +12,7 @@ namespace ConditioningControlPanel.Services.Lobby;
 public sealed class LobbyService : IDisposable
 {
     private readonly IUiTimer _timer;
+    private readonly object _gate = new();
     private int _watchers;
     private bool _disposed;
     private Task? _inflight;
@@ -48,7 +49,7 @@ public sealed class LobbyService : IDisposable
     private void Unwatch() { if (_watchers > 0 && --_watchers == 0) _timer.Stop(); }
 
     // WPF :86-144: join an in-flight round; signed out asks nobody; partial success is usable.
-    public Task RefreshAsync() => _disposed ? Task.CompletedTask : _inflight ??= RunAsync();
+    public Task RefreshAsync() { lock (_gate) return _disposed ? Task.CompletedTask : _inflight ??= RunAsync(); }
 
     private async Task RunAsync()
     {
@@ -79,7 +80,7 @@ public sealed class LobbyService : IDisposable
             if (IsWatched) _timer.Interval = CurrentInterval;
             Changed?.Invoke(snapshot);
         }
-        finally { _inflight = null; }
+        finally { lock (_gate) _inflight = null; }
     }
 
     // WPF MainWindow.Lobby.cs:268-271 and AvailableSubjectsService.cs:219-245.
