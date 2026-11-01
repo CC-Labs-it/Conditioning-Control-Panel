@@ -17,7 +17,7 @@ internal sealed partial class MandatoryVideoOverlay
     private IDisposable? _gentleBackstop;
     internal Func<Action, TimeSpan, IDisposable> ArmGentleBackstop { get; set; } = (fire, delay) => DispatcherTimer.RunOnce(fire, delay);
 
-    // WPF GentleBeforePlay: black until the first picture, with a three-second backstop.
+    // WPF GentleBeforePlay: black until Playing, with a three-second backstop.
     internal void CoverGentleEntrance(Panel panel)
     {
         if (!GentleVisuals.On) return;
@@ -26,6 +26,13 @@ internal sealed partial class MandatoryVideoOverlay
         panel.Children.Insert(Math.Min(3, panel.Children.Count), cover);
         _entranceCurtains.Add(cover);
         _gentleBackstop ??= ArmGentleBackstop(RevealGentleEntrance, TimeSpan.FromSeconds(3));
+    }
+
+    internal bool OnPlayerPlaying(bool current)
+    {
+        if (!current) return false;
+        RevealGentleEntrance();
+        return true;
     }
 
     internal void RevealGentleEntrance()

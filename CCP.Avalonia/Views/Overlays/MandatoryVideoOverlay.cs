@@ -183,7 +183,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 FrameTs = Stopwatch.GetTimestamp();
                 if (FirstFrameMs < 0)
                 {
-                    RevealGentleEntrance();
                     FirstFrameMs = _sinceShow.ElapsedMilliseconds;
                     if (!_gracePaused) _sinceFrame.Start();   // WPF arms the length/max timers once playing
                     Log.Information("VideoService: first frame after {Ms} ms", FirstFrameMs);
@@ -205,7 +204,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
-            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live)
+            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (OnPlayerPlaying(_player == live))
             {
                 LibVlcAudio.ApplyPreferredDevice(live);
                 live.SetRate(ConditioningControlPanel.Services.Video.MandatoryVideoPlaybackRules.PlaybackRate(

@@ -269,6 +269,46 @@ public sealed class MandatoryVideoGentleTests
     }
 
     [Fact]
+    public async Task Playing_reveals_before_the_first_frame_and_ignores_stale_players()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            settings.Current.GentleVisuals = true;
+            var o = MandatoryVideoOverlay.Instance;
+            var old = (o.ArmGentleBackstop, o.FirstFrameMs);
+            var timers = new List<Backstop>();
+            o.ArmGentleBackstop = (fire, delay) => { var t = new Backstop(fire, delay); timers.Add(t); return t; };
+            try
+            {
+                o.FirstFrameMs = -1;
+                var panel = new Panel();
+                o.CoverGentleEntrance(panel);
+                var cover = Assert.Single(panel.Children);
+                var timer = Assert.Single(timers);
+                Assert.Equal(TimeSpan.FromSeconds(3), timer.Delay);
+                Assert.Equal(1, cover.Opacity);
+                Assert.False(o.OnPlayerPlaying(current: false));
+                Assert.False(timer.Disposed);
+                Assert.Equal(1, cover.Opacity);
+                Assert.True(o.OnPlayerPlaying(current: true));
+                Assert.Equal(-1, o.FirstFrameMs);
+                Assert.True(timer.Disposed);
+                Assert.Equal(0, cover.Opacity);
+                var fallback = new Panel();
+                o.CoverGentleEntrance(fallback);
+                Assert.Equal(2, timers.Count);
+                timers[1].Fire();
+                Assert.Equal(0, Assert.Single(fallback.Children).Opacity);
+            }
+            finally { o.CloseAll(); (o.ArmGentleBackstop, o.FirstFrameMs) = old; }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task Grace_attention_and_controls_stay_above_the_opaque_entrance_cover()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
