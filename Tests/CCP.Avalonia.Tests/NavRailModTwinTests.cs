@@ -1,9 +1,13 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -36,10 +40,10 @@ public sealed class NavRailModTwinTests
         return SHA256.HashData(stream.ToArray());
     }
 
-    private static byte[] Shipped(string path)
+    private static byte[] Shipped(string path, int width = 128)
     {
         using var stream = AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/" + path));
-        using var bitmap = Bitmap.DecodeToWidth(stream, 128);
+        using var bitmap = Bitmap.DecodeToWidth(stream, width);
         return Digest(bitmap);
     }
 
@@ -82,6 +86,79 @@ public sealed class NavRailModTwinTests
             CoreMods.ActiveModIdProvider = oldId;
             CoreModArt.OverridePathProvider = oldOverride;
             dir.Delete(true);
+        }
+    });
+
+    [Fact]
+    public void FavoriteSocialChipFollowsModChangesAtBothDecodeWidths() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        var favoritesBefore = settings.RailFavorites.ToArray();
+        var recentBefore = settings.RailRecent.ToArray();
+        var oldId = CoreMods.ActiveModIdProvider;
+        var oldOverride = CoreModArt.OverridePathProvider;
+        var oldMotion = settings.MotionLevel;
+        MainShellWindow? window = null;
+        try
+        {
+            string id = "drone-mode";
+            CoreMods.ActiveModIdProvider = () => id;
+            CoreModArt.OverridePathProvider = _ => null;
+            settings.MotionLevel = MotionLevel.Off;
+            settings.RailFavorites.Clear();
+            settings.RailRecent.Clear();
+            window = new MainShellWindow();
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            // Pin the real Social rail row, as in WPF MainWindow.FavoritesRail.cs:484.
+            var door = window.Named<Button>("DoorSocial")!;
+            var menu = door.ContextMenu!;
+            door.RaiseEvent(new ContextRequestedEventArgs());
+            Dispatcher.UIThread.RunJobs();
+            Assert.IsType<MenuItem>(Assert.Single(menu.Items)).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            menu.Close();
+            Dispatcher.UIThread.RunJobs();
+            var favorites = window.SettingsPage!.FindControl<StackPanel>("FavoritesList")!;
+
+            void AssertChip(string path)
+            {
+                var chip = favorites.Children.OfType<Button>().Single(b => Equals(b.Tag, "door.social"));
+                var plate = ((Grid)chip.Content!).Children.OfType<Border>()
+                    .Single(b => b.Background is ImageBrush);
+                var icon = (Bitmap)Assert.IsType<ImageBrush>(plate.Background).Source!;
+                var backdrop = (Bitmap)Assert.IsType<ImageBrush>(chip.Background).Source!;
+                Assert.Equal(Shipped(path, 128), Digest(icon));
+                Assert.Equal(Shipped(path, 12), Digest(backdrop));
+            }
+
+            AssertChip("nav/mods/drone-mode/door_social.png");
+            foreach (var (mod, path) in new[]
+            {
+                ("infection-control", "nav/mods/infection-control/door_social.png"),
+                ("no-twin", "nav/door_social.png"),
+                ("drone-mode", "nav/mods/drone-mode/door_social.png"),
+            })
+            {
+                id = mod;
+                CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
+                Dispatcher.UIThread.RunJobs();
+                window.ShowTab("studio");
+                window.ShowTab("settings"); // WPF MainWindow.TabNavigation.cs:389 rebuilds the dashboard rail.
+                Dispatcher.UIThread.RunJobs();
+                AssertChip(path);
+            }
+        }
+        finally
+        {
+            window?.Close();
+            CoreMods.ActiveModIdProvider = oldId;
+            CoreModArt.OverridePathProvider = oldOverride;
+            settings.MotionLevel = oldMotion;
+            settings.RailFavorites.Clear(); settings.RailFavorites.AddRange(favoritesBefore);
+            settings.RailRecent.Clear(); settings.RailRecent.AddRange(recentBefore);
+            Dispatcher.UIThread.RunJobs();
         }
     });
 
