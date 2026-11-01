@@ -44,7 +44,11 @@ jobs:
           path: ~/.cache/ccp-test/vosk
           key: vosk-model-small-en-us-0.15-30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498
       - run: bash .github/scripts/fetch-vosk-model.sh
-      - run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release
+      # Run the timing guard in its own testhost before the suite can leave background work behind.
+      - name: Test board frame budget
+        run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release --filter "FullyQualifiedName=ConditioningControlPanel.Tests.BoardTilesTests.A_frame_fits_the_budget"
+      - name: Test Core suite
+        run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release --no-build --filter "FullyQualifiedName!=ConditioningControlPanel.Tests.BoardTilesTests.A_frame_fits_the_budget"
         env:
           CCP_REQUIRE_VOSK: "1"
       - name: Test Core settings publication (isolated profile)
@@ -241,8 +245,11 @@ jobs:
       # evidence (link the failing runs) rather than pre-emptively.
       - name: Test app suite
         run: dotnet test Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release -p:ValidateExecutableReferencesMatchSelfContained=false
+      # The timing guard runs before the remaining tests in its own testhost, as on Linux.
+      - name: Test board frame budget
+        run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release --filter "FullyQualifiedName=ConditioningControlPanel.Tests.BoardTilesTests.A_frame_fits_the_budget"
       - name: Test Core suite
-        run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release
+        run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release --no-build --filter "FullyQualifiedName!=ConditioningControlPanel.Tests.BoardTilesTests.A_frame_fits_the_budget"
       - name: Test Core settings publication (isolated profile)
         run: dotnet test Tests/CCP.Core.Settings.Tests/CCP.Core.Settings.Tests.csproj -c Release
       - name: Test release-content packs (loopback fake server, isolated profile)
