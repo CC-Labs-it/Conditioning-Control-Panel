@@ -1,5 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Net.Http;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -147,6 +149,15 @@ internal static class AccountSeed
             return false;
         }
     }
+
+    /// <summary>The sync configuration used by desktop startup and account tests.</summary>
+    internal static SyncPush NewSync(Func<IEnumerable<string>?> unlocked, Func<bool> running, HttpMessageHandler? http = null)
+        => new(unlocked, running, http, Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
+        {
+            PrizesReceived = PrizeOwnership.ApplySyncSnapshot,
+            Countdown = App.DescentCountdown,
+            DescentReader = App.Descent,
+        };
 
     /// <summary>The push, seeded by the app at startup only: unseeded (every test that does not set it) nothing is pushed.</summary>
     internal static SyncPush? Sync;
