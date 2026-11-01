@@ -43,7 +43,7 @@ public sealed class LeashSelfCard : Border
         Padding = new Thickness(12);
         Margin = new Thickness(0, 4, 0, 6);
         Child = _body;
-        // ponytail: holder preview, help and LeashFx need the remaining drawer lane.
+        // Holder preview, help and LeashFx need the remaining drawer lane.
         Render();
     }
 
@@ -103,8 +103,11 @@ public sealed class LeashSelfCard : Border
         ToolTip.SetTip(cap, Loc.Get("leash_video_max_hint"));
         cap.Committed += m => _ = SetVideoMaxAsync(m);
         _body.Children.Add(cap);
+        // WPF LeashSelfCard.cs:220-224: the configured panic key also cuts when held.
+        var hold = Caption(Loc.GetF("leash_self_hold_hint", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey)), "leash-self-hold");
+        hold.Margin = new Thickness(2, 10, 0, 0);
+        _body.Children.Add(hold);
         if (_me.Stickers.Count > 0) _body.Children.Add(Shelf());
-        // ponytail: do not advertise WPF's panic-key hold-to-cut until this head owns that route.
     }
 
     // WPF LeashSelfCard.cs:248-264: total count, newest first, at most fourteen.
