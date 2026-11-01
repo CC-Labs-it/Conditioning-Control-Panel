@@ -708,6 +708,7 @@ namespace ConditioningControlPanel
         public static ModService Mods { get; private set; } = null!;
         public static BugReportService BugReport { get; private set; } = null!;
         public static WallpaperService? Wallpaper { get; private set; }
+        public static DynamicWallpaperService? DynamicWallpaper { get; private set; }
         public static WebcamTrackingService Webcam { get; private set; } = null!;
         public static NotificationService Notifications { get; private set; } = null!;
         public static AttentionCheckService AttentionCheck { get; private set; } = null!;
@@ -2797,6 +2798,9 @@ namespace ConditioningControlPanel
 
             // Initialize wallpaper override service
             Wallpaper = new WallpaperService();
+
+            // Dynamic (moving) wallpaper: inert until Settings > Wallpaper > Dynamic has something to run.
+            DynamicWallpaper = new DynamicWallpaperService();
 
             // Initialize Patreon (validate subscription in background)
             // Then load cloud profile if authenticated
@@ -5941,6 +5945,7 @@ Application State:
             DualMonitorVideo?.Dispose();
             ScreenMirror?.Dispose();
             Autonomy?.Dispose();
+            DynamicWallpaper?.Dispose();
             Wallpaper?.Dispose();
             BlinkTrainer?.Dispose();
             GazeFocus?.Dispose();
