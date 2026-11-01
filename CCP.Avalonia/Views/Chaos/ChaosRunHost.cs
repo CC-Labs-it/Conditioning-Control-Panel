@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -697,7 +698,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosOverlayWindow.ChaosSfx.Play("estim_zap", 0.6f);
             Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
             if (left == 0) { ChaosEffectBannerOverlay.End("estim"); ChaosEStimOverlay.Disarm(); }
-            _state.PushEvent(left > 0 ? Loc.GetF("chaos_estim_left", left) : Loc.Get("chaos_estim_spent"));
+            // The feed splits its glyph into an IconGlyph (WPF ChaosModeService.cs:2788-2801).
+            var glyph = ChaosLifetimeBoons.All.First(b => b.Id == "e_stim").Glyph;
+            var text = left > 0 ? IconText.BareLoc("chaos_estim_left", left) : IconText.BareLoc("chaos_estim_spent");
+            _state.PushEvent($"{glyph} {text}");
         }
 
         private static void RunAgain()

@@ -5,8 +5,10 @@ using Avalonia;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
@@ -52,6 +54,8 @@ public class ChaosEStimToyTests
             var oldPointer = ChaosEStimGlow.ReadPointer;
             var oldAudio = CoreAudio.PlayOneShotProvider;
             var oldPulse = ChaosRunHost.PulseFx;
+            var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+            LocalizationManager.Instance.SetLanguage("en");
             var cues = new System.Collections.Generic.List<string>();
             var pulses = new System.Collections.Generic.List<string>();
             ChaosEStimOverlay.CanShow = () => true;
@@ -107,6 +111,7 @@ public class ChaosEStimToyTests
                 BubbleOverlay.Press(source, source.CenterX, source.CenterY);
                 Assert.Equal(5, BubbleOverlay.EStimChargesLeft);
                 Assert.Contains("5", state.RecentEvents.First());
+                Assert.Equal("⚡ current arcs. 5 left", state.RecentEvents.First());
                 if (skia)
                 {
                     Assert.NotNull(ChaosSkiaFxOverlay.Active);
@@ -136,7 +141,12 @@ public class ChaosEStimToyTests
                 Assert.False(pauseSource.Popping);
                 Assert.Equal(2, BubbleOverlay.EStimChargesLeft);
                 ChaosRunHost.ToggleManualPause();
+                LocalizationManager.Instance.SetLanguage("es");
                 BubbleOverlay.Press(pauseSource, pauseSource.CenterX, pauseSource.CenterY);
+                Assert.Equal("⚡ la corriente salta. quedan 1", state.RecentEvents.First());
+                var feed = IconText.Split(state.RecentEvents.First());
+                Assert.Equal(new[] { "⚡" }, feed.Icons);
+                Assert.Equal("la corriente salta. quedan 1", feed.Rest);
                 ChaosRunHost.ToggleManualPause();
                 await Task.Delay(350); // WPF drops a hop that lands while the field is locked
                 Assert.False(pausedTarget.Popping);
@@ -147,6 +157,7 @@ public class ChaosEStimToyTests
                 var next = Bubble(0); var pending = Bubble(100);
                 BubbleOverlay.Press(next, next.CenterX, next.CenterY);
                 Assert.Equal(0, BubbleOverlay.EStimChargesLeft);
+                Assert.Equal("⚡ carga agotada", state.RecentEvents.First());
                 Assert.False(ChaosEStimGlow.Active!.IsVisible);
                 Assert.False(ChaosEffectBannerOverlay.Active!.Strip.IsLive("estim"));
                 ChaosRunHost.Tick();
@@ -159,6 +170,7 @@ public class ChaosEStimToyTests
             finally
             {
                 ChaosRunHost.ForceShutdown();
+                LocalizationManager.Instance.SetLanguage(oldLanguage);
                 ChaosSkiaFxOverlay.CloseActive();
                 settings.ChaosSkiaFxEnabled = oldSkiaEnabled;
                 ChaosSkiaFxOverlay.Composited = oldComposited;
