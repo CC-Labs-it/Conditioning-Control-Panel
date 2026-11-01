@@ -217,7 +217,13 @@ internal static class X11PanicKey
         ["OemPeriod"] = "period", ["OemQuestion"] = "slash", ["Oem2"] = "slash", ["OemSemicolon"] = "semicolon",
         ["Oem1"] = "semicolon", ["OemQuotes"] = "apostrophe", ["Oem7"] = "apostrophe", ["OemOpenBrackets"] = "bracketleft",
         ["Oem4"] = "bracketleft", ["OemCloseBrackets"] = "bracketright", ["Oem6"] = "bracketright",
-        ["OemPipe"] = "backslash", ["Oem5"] = "backslash", ["LeftCtrl"] = "Control_L", ["RightCtrl"] = "Control_R",
+        ["OemPipe"] = "backslash", ["Oem5"] = "backslash", ["OemBackslash"] = "less", ["Oem102"] = "less",
+        ["BrowserBack"] = "XF86Back", ["BrowserForward"] = "XF86Forward", ["BrowserRefresh"] = "XF86Reload",
+        ["BrowserStop"] = "XF86Stop", ["BrowserSearch"] = "XF86Search", ["BrowserFavorites"] = "XF86Favorites", ["BrowserHome"] = "XF86HomePage",
+        ["VolumeMute"] = "XF86AudioMute", ["VolumeDown"] = "XF86AudioLowerVolume", ["VolumeUp"] = "XF86AudioRaiseVolume",
+        ["MediaNextTrack"] = "XF86AudioNext", ["MediaPreviousTrack"] = "XF86AudioPrev", ["MediaStop"] = "XF86AudioStop", ["MediaPlayPause"] = "XF86AudioPlay",
+        ["LaunchMail"] = "XF86Mail", ["SelectMedia"] = "XF86AudioMedia", ["LaunchApplication1"] = "XF86Launch1", ["LaunchApplication2"] = "XF86Launch2",
+        ["Apps"] = "Menu", ["Sleep"] = "XF86Sleep", ["Separator"] = "KP_Separator", ["LeftCtrl"] = "Control_L", ["RightCtrl"] = "Control_R",
         ["LeftShift"] = "Shift_L", ["RightShift"] = "Shift_R", ["LeftAlt"] = "Alt_L", ["RightAlt"] = "Alt_R",
     };
 

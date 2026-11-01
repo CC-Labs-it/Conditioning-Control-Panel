@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Input;
 using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.Webcam;
@@ -22,6 +23,8 @@ public partial class MainShellWindow
     private IDisposable? _cameraHotkey;
     private bool _cameraClosed, _cameraBusy, _cameraKeyHeld;
     private int _cameraGeneration;
+    private DispatcherTimer? _cameraBindingWatch;
+    private (Key, KeyModifiers, bool, bool, string?, string?)? _cameraBinding;
     internal Func<Window, Key, KeyModifiers, Action, IDisposable?> RegisterCameraHotkey = RegisterCamera;
     internal Func<Task>? ToggleCameraForTest;
 
@@ -74,28 +77,42 @@ public partial class MainShellWindow
 
     internal void StartCameraHotkey()
     {
+        if (_cameraClosed || _cameraBindingWatch != null) return;
         ApplyCameraHotkey();
+        _cameraBindingWatch = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => ApplyCameraHotkey());
+        _cameraBindingWatch.Start();
         Closed += (_, _) => StopCameraHotkey();
     }
 
-    internal void ApplyCameraHotkey()
+    internal void ApplyCameraHotkey(bool force = false)
     {
+        var s = CoreSettings.Current;
+        var (key, mods) = CameraShortcut();
+        var binding = (key, mods, s.CompanionPrompt?.CameraShortcutGlobal != false, s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
+        if (!force && _cameraBinding == binding) return;
+        _cameraBinding = binding;
         int generation = ++_cameraGeneration;
         _cameraHotkey?.Dispose();
         _cameraHotkey = null;
-        var (key, mods) = CameraShortcut();
-        if (_cameraClosed || CoreSettings.Current.CompanionPrompt?.CameraShortcutGlobal == false || !CameraKeySafe(key)) return;
-        try { _cameraHotkey = RegisterCameraHotkey(this, key, mods, () => Dispatcher.UIThread.Post(() => { if (generation == _cameraGeneration) _ = ToggleCameraFromHotkeyAsync(); })); }
+        if (_cameraClosed || !binding.Item3 || !CameraKeySafe(key)) return;
+        try { _cameraHotkey = RegisterCameraHotkey(this, key, mods, () => Dispatcher.UIThread.Post(() =>
+        {
+            if (generation == _cameraGeneration && CoreSettings.Current.CompanionPrompt?.CameraShortcutGlobal != false
+                && CameraShortcut() == (key, mods) && CameraKeySafe(key)) _ = ToggleCameraFromHotkeyAsync();
+        })); }
         catch (Exception ex) { Log.Warning(ex, "Camera hotkey registration failed"); }
     }
 
     private static bool CameraKeySafe(Key key) =>
-        PanicPolicy.FindHookClash(key.ToString(), PanicPolicy.HookBoundBaseKeys(CoreSettings.Current)) == null;
+        !PanicPolicy.HookBoundBaseKeys(CoreSettings.Current).Any(b => HotkeyNames.Matches(key, b.Key)
+            || (VirtualKeys.Of(key.ToString()) is var vk && vk != 0 && vk == VirtualKeys.Of(b.Key)));
 
     internal void StopCameraHotkey()
     {
         _cameraClosed = true;
         _cameraGeneration++;
+        _cameraBindingWatch?.Stop();
+        _cameraBindingWatch = null;
         _cameraHotkey?.Dispose();
         _cameraHotkey = null;
     }
@@ -156,7 +173,7 @@ public partial class MainShellWindow
         s.CameraShortcutModifiers = reset ? "Control,Alt" : AvatarTubeWindow.SerializeModifiers(mods);
         s.CameraShortcutGlobal = global;
         CoreSettings.Save();
-        ApplyCameraHotkey();
+        ApplyCameraHotkey(force: true);
         AppSettingsPage?.FindControl<Controls.AppSettings.DevicesSettingsSection>("SectionDevices")?.RefreshCameraShortcutLabel();
         foreach (var cell in this.GetVisualDescendants().OfType<Controls.Companion.Runtime.WorkshopBehaviorCell>())
             cell.RefreshCameraShortcutLabel();
