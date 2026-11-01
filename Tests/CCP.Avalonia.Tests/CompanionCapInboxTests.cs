@@ -36,35 +36,84 @@ public sealed class CompanionCapInboxTests
         if (Application.Current == null)
             ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var service = new SettingsService();
-        service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
-        service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
-        service.Current.AiChatEnabled = true;
-        service.Current.UseCompanionBrain = true;
-        service.Current.CompanionPrompt.AiProvider = AiProviderType.Local;
-        CoreSettings.ServiceProvider = () => service;
-        CoreAccount.HasPremiumAccessProvider = () => false;
-        CoreAccount.HasLabAccessProvider = () => false;
-        StartupLadder.ResetForTests();
-        var clock = (StartupLadder.TestClock)StartupLadder.Time;
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldPremium = CoreAccount.HasPremiumAccessProvider;
+        var oldLab = CoreAccount.HasLabAccessProvider;
         var launch = VaultGateDialog.Launch;
         var oldLifetime = Application.Current!.ApplicationLifetime;
         var field = typeof(Application).GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
             .Single(f => typeof(IApplicationLifetime).IsAssignableFrom(f.FieldType));
-        var lifetime = new ClassicDesktopStyleApplicationLifetime { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        field.SetValue(Application.Current, lifetime);
-        var shell = new MainShellWindow();
-        lifetime.MainWindow = shell;
-        try { shell.Show(); await body(shell, clock); }
+        MainShellWindow? shell = null;
+        try
+        {
+            var service = new SettingsService();
+            service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
+            service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+            service.Current.AiChatEnabled = true;
+            service.Current.UseCompanionBrain = true;
+            service.Current.CompanionPrompt.AiProvider = AiProviderType.Local;
+            CoreSettings.ServiceProvider = () => service;
+            CoreAccount.HasPremiumAccessProvider = () => false;
+            CoreAccount.HasLabAccessProvider = () => false;
+            StartupLadder.ResetForTests();
+            var clock = (StartupLadder.TestClock)StartupLadder.Time;
+            var lifetime = new ClassicDesktopStyleApplicationLifetime { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            field.SetValue(Application.Current, lifetime);
+            shell = new MainShellWindow();
+            lifetime.MainWindow = shell;
+            shell.Show();
+            await body(shell, clock);
+        }
         finally
         {
-            InboxNoticeCard.Open?.Close();
-            VaultGateDialog.Launch = launch;
-            shell.Close();
-            field.SetValue(Application.Current, oldLifetime);
-            StartupLadder.ResetForTests();
+            try
+            {
+                InboxNoticeCard.Open?.Close();
+                VaultGateDialog.Launch = launch;
+                shell?.Close();
+                field.SetValue(Application.Current, oldLifetime);
+                StartupLadder.ResetForTests();
+            }
+            finally
+            {
+                CoreSettings.ServiceProvider = oldSettings;
+                CoreAccount.HasPremiumAccessProvider = oldPremium;
+                CoreAccount.HasLabAccessProvider = oldLab;
+            }
         }
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunRestoresProvidersEvenWhenBodyThrows(bool throwFromBody)
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldPremium = CoreAccount.HasPremiumAccessProvider;
+        var oldLab = CoreAccount.HasLabAccessProvider;
+        var baselineSettings = new SettingsService();
+        Func<SettingsService?> settings = () => baselineSettings;
+        Func<bool> premium = () => true, lab = () => true;
+        try
+        {
+            CoreSettings.ServiceProvider = settings;
+            CoreAccount.HasPremiumAccessProvider = premium;
+            CoreAccount.HasLabAccessProvider = lab;
+            if (throwFromBody)
+                await Assert.ThrowsAsync<InvalidOperationException>(() => Run((_, _) => throw new InvalidOperationException()));
+            else
+                await Run((_, _) => Task.CompletedTask);
+            Assert.Same(settings, CoreSettings.ServiceProvider);
+            Assert.Same(premium, CoreAccount.HasPremiumAccessProvider);
+            Assert.Same(lab, CoreAccount.HasLabAccessProvider);
+        }
+        finally
+        {
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreAccount.HasPremiumAccessProvider = oldPremium;
+            CoreAccount.HasLabAccessProvider = oldLab;
+        }
+    }
 
     [Fact]
     public Task DailyLimitFromConversationWaitsForDepartureThenOpensBasicCheckout() => Run(async (shell, clock) =>
