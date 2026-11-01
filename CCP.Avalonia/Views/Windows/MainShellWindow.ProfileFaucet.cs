@@ -9,9 +9,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Descent;
 using Path = Avalonia.Controls.Shapes.Path;
-
 namespace ConditioningControlPanel.Avalonia.Views.Windows;
-
 public partial class MainShellWindow
 {
     private readonly VatFaucetHold _faucetHold = new(new AppSettingsVatPourLedger());
@@ -22,7 +20,6 @@ public partial class MainShellWindow
     private int _faucetPours, _faucetRungs;
     private DateTime _faucetDay;
     private T? FaucetControl<T>(string name) where T : Control => ProfilePage?.FindControl<T>(name);
-
     // WPF MainWindow.ProfileVat.cs:268-334. Read server truth through the shared hold.
     private void ApplyFaucetReading()
     {
@@ -52,7 +49,6 @@ public partial class MainShellWindow
         }
         UpdateFaucetPresentation();
     }
-
     // WPF MainWindow.ProfileFaucet.cs:141-205, 280-292, 552-603.
     private void ArmFaucet(VatGlassCanvas glass, double w, double h)
     {
@@ -93,7 +89,6 @@ public partial class MainShellWindow
         };
         _faucetChargeBeat = new BeatLoop(tap, seconds => AdvanceFaucetCharge(seconds * 1000)) { OnParked = () => CancelFaucetCharge() };
     }
-
     // WPF MainWindow.ProfileFaucet.cs:296-361. Existing localized copy, still waiting badge.
     private void UpdateFaucetPresentation()
     {
@@ -110,7 +105,6 @@ public partial class MainShellWindow
         if (FaucetControl<TextBlock>("ProfileVatChipText") is { } label) label.Text = Loc.GetF("profile_vat_chip", held);
         if (FaucetControl<Control>("ProfileVatFaucetBadge") is { } badge) badge.IsVisible = held > 0;
     }
-
     // WPF MainWindow.ProfileFaucet.cs:609-683, 1080-1095. Same budget and daily compact cut.
     private void BeginFaucetCharge()
     {
@@ -125,7 +119,6 @@ public partial class MainShellWindow
         _faucetChargeBeat?.Start();
         UpdateFaucetPresentation();
     }
-
     private void AdvanceFaucetCharge(double ms)
     {
         if (!_faucetCharging)
@@ -151,7 +144,6 @@ public partial class MainShellWindow
         if (glass.IsPouring) _faucetChargeBeat?.Start();
         UpdateFaucetPresentation();
     }
-
     // WPF MainWindow.ProfileFaucet.cs:694-717. Cancellation never stamps the ledger.
     private void CancelFaucetCharge(bool feedback = false)
     {
@@ -163,9 +155,7 @@ public partial class MainShellWindow
         if (charging && feedback) { StartFaucetFeedback(false); PlayFaucetSfx("faucet_charge_drop.wav", .15f); }
         UpdateFaucetPresentation();
     }
-
-    // WPF MainWindow.ProfileFaucet.cs:779-860. Reduced motion uses a whole still circle.
-    private void DrawFaucetRing(double t)
+    private void DrawFaucetRing(double t) // WPF MainWindow.ProfileFaucet.cs:779-860. Reduced motion uses a whole still circle.
     {
         if (FaucetControl<Grid>("ProfileVatChargeRing") is { } ring) { ring.IsVisible = true; ring.Opacity = 1; }
         if (FaucetControl<Path>("ProfileVatChargeArc") is not { } arc) return;
@@ -182,9 +172,7 @@ public partial class MainShellWindow
         }
         arc.Data = geometry;
     }
-
-    // WPF MainWindow.ProfileFaucet.cs:1112-1124. The existing audio seam owns device lifetime.
-    private static void PlayFaucetSfx(string file, float scale)
+    private static void PlayFaucetSfx(string file, float scale) // WPF MainWindow.ProfileFaucet.cs:1112-1124. The existing audio seam owns device lifetime.
     {
         float volume = Math.Clamp((float)CoreSettings.Current.MasterVolume / 100 * scale, 0, 1);
         if (volume > 0) CoreAudio.PlayOneShot(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "sounds", file), volume, "vat-faucet");
