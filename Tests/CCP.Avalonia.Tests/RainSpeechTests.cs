@@ -142,10 +142,54 @@ public sealed class RainSpeechTests
         f.Advance(10000); await f.Clip("idle");
         f.Settings.Current.AvatarMuted = false;
         f.Tube.GigglePriority("another spoken line", phraseAudioPath: audio);
-        var clickPending = f.Timers.Last(); Assert.True(f.Tube.RainClickEmote()); clickPending.Fire(); await f.Clip("giggle");
+        var clickPending = f.Timers.Last(); Assert.True(f.Tube.RainClickEmote()); clickPending.Fire(); f.Advance(2000); await f.Clip("giggle");
         f.Tube.GigglePriority("another spoken line", phraseAudioPath: audio);
         var closePending = f.Timers.Last(); f.Tube.Close(); closePending.Fire(); started!(TimeSpan.FromSeconds(8));
         Assert.Null(f.Tube.RainFolder); Assert.Null(f.Tube.RainActivePlayer);
+    });
+
+    [Fact]
+    public Task ClickHoldCoalescesAndPanicAndCloseCancelIt() => Run(async () =>
+    {
+        using var f = new Fixture(); await f.Start();
+        Assert.True(f.Tube.RainClickEmote()); Assert.False(f.Tube.RainClickEmote());
+        await Task.Delay(50); Assert.Equal("idle", f.Tube.RainClip);
+        var first = f.Timers.Last(); f.Advance(1000);
+        f.Tube.QueueRainClick("greeting"); Assert.True(first.Cancelled); first.Fire();
+        f.Advance(999); Assert.Equal("idle", f.Tube.RainClip);
+        f.Advance(1); await f.Clip("greeting");
+        f.Tube.QueueRainClick("giggle"); var panic = f.Timers.Last();
+        f.Tube.PanicSilence(); Assert.True(panic.Cancelled); panic.Fire(); await f.Clip("idle");
+        f.Tube.QueueRainClick("giggle"); var mute = f.Timers.Last(); f.Settings.Current.AvatarMuted = true;
+        Assert.True(mute.Cancelled); mute.Fire(); await f.Clip("idle"); f.Settings.Current.AvatarMuted = false;
+        f.Tube.QueueRainClick("giggle"); var speech = f.Timers.Last();
+        f.Tube.GigglePriority("a spoken line", playSound: false); Assert.True(speech.Cancelled); speech.Fire();
+        f.Advance(1000); await f.Talk();
+        f.Tube.QueueRainClick("giggle"); var close = f.Timers.Last();
+        f.Tube.Close(); Assert.True(close.Cancelled); close.Fire(); Assert.Null(f.Tube.RainFolder);
+    });
+
+    [Fact]
+    public Task RetriesContinuePastThreeAndResetAndCancelOnStop() => Run(async () =>
+    {
+        using var f = new Fixture();
+        var folder = Path.Combine(f.Root, new string('c', 64)); var idle = Path.Combine(folder, "idle.png");
+        File.WriteAllText(idle, "corrupt"); f.Tube.Show(); await f.Tube.RefreshRainPlayback();
+        for (int i = 0; i < 5; i++)
+        {
+            int count = f.Timers.Count; Assert.Contains(f.Timers, t => !t.Cancelled);
+            f.Advance(1200);
+            for (int j = 0; j < 100 && f.Timers.Count == count; j++) await Task.Delay(10);
+            Assert.True(f.Timers.Count > count);
+        }
+        var retry = f.Timers.Last(); f.Settings.Current.AvatarGeneration = "v1";
+        Assert.True(retry.Cancelled); retry.Fire(); Assert.Null(f.Tube.RainFolder);
+        var failures = typeof(AvatarTubeWindow).GetField("_rainFailures", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        Assert.Equal(0, failures.GetValue(f.Tube));
+        File.Copy(Path.Combine(folder, "giggle.png"), idle, true);
+        f.Settings.Current.AvatarGeneration = "v2"; await f.Tube.RefreshRainPlayback(); await f.Clip("idle");
+        File.WriteAllText(idle, "corrupt"); await f.Tube.PlayRainClip("idle");
+        var close = f.Timers.Last(); f.Tube.Close(); Assert.True(close.Cancelled); close.Fire(); Assert.Null(f.Tube.RainFolder);
     });
 
     private static (Func<int> plays, string audio, Border bubble) Voice(Fixture f)

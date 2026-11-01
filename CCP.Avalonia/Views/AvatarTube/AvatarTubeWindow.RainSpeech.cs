@@ -106,7 +106,7 @@ public partial class AvatarTubeWindow
     // Each timer is relative to the voice start. Completion cannot advance during scheduled talk.
     private int StartRainSpeech(string? id, string? mood, string? text, string? audioPath, double seconds)
     {
-        CancelRainSpeech();
+        CancelRainClick(); CancelRainSpeech();
         if (_rainMap == null || _avatarSetsClosed || IsMuted) return 0;
         _rainSpeechOwned = true;
         int version = _rainSpeechVersion;
@@ -197,7 +197,7 @@ public partial class AvatarTubeWindow
     private void StopRainSpeech()
     {
         bool owned = _rainSpeechOwned;
-        CancelRainSpeech();
+        CancelRainClick(); CancelRainSpeech(); _rainFailures = 0;
         if (!owned || _rainMap == null) return;
         ++_rainVersion; _rainFade?.Dispose(); _rainFade = null;
         foreach (var player in _rainPlayers) player?.Stop();

@@ -93,7 +93,7 @@ public class RainPlaybackTests
             for (var i = 0; i < 60 && tube.RainActivePlayer?.IsReady != true; i++) await Task.Delay(50);
             Assert.True(tube.RainActivePlayer!.IsReady);
             Assert.True(tube.RainClickEmote()); Assert.False(tube.RainClickEmote());
-            for (var i = 0; i < 40 && tube.RainClip != "giggle"; i++) await Task.Delay(50);
+            for (var i = 0; i < 80 && tube.RainClip != "giggle"; i++) await Task.Delay(50);
             Assert.Equal("giggle", tube.RainClip);
             File.WriteAllText(Path.Combine(folder, "idle.strip.png"), "corrupt");
             var shown = tube.RainActivePlayer; await tube.PlayRainClip("idle");

@@ -24,7 +24,9 @@ public partial class AvatarTubeWindow
     private string? _rainFolder, _rainClip;
     private int _rainLayer, _rainVersion, _rainFailures;
     private long _rainClickTick = -3000; // not WPF's long.MinValue (CirceEmotes.cs:138): now minus it wraps negative and blocks every click
-    private IDisposable? _rainFade;
+    private IDisposable? _rainFade, _rainClickHold;
+    private string? _rainPendingClick;
+    private int _rainClickVersion;
     internal string RainPackRoot { get; set; } = Path.Combine(CorePaths.UserData, "rain-packs");
     internal string? RainFolder => _rainFolder;
     internal string? RainClip => _rainClip;
@@ -85,7 +87,7 @@ public partial class AvatarTubeWindow
         var outgoing = this.FindControl<Image>(_rainLayer == 0 ? "ImgAvatarAnimated" : "ImgAvatarAnimatedB")!;
         _rainPlayers[next]?.Dispose();
         var player = _rainPlayers[next] = new RainClipPlayer(image);
-        player.Completed += sender => { if (version == _rainVersion && !_rainTalkActive) { if (_rainSpeechTimer == null) _rainSpeechOwned = false; _ = PlayRainClip(PickRainIdle()); } };
+        player.Completed += sender => { if (version == _rainVersion && !_rainTalkActive && _rainPendingClick == null) { if (_rainSpeechTimer == null) _rainSpeechOwned = false; _ = PlayRainClip(PickRainIdle()); } };
         if (_rainPack != null && _rainPack.Clips.TryGetValue(clip, out var entry))
             await player.LoadStrip(Path.Combine(_rainFolder, entry.File), entry.Frames, entry.Fps);
         else
@@ -95,7 +97,8 @@ public partial class AvatarTubeWindow
         if (!player.IsReady)
         {   // WPF watchdog (CirceEmotes.cs:555) re-issues a failed load, then advances; the shown frame stays up.
             _rainFade?.Dispose();
-            if (++_rainFailures <= 3) _rainFade = DispatcherTimer.RunOnce(() => { if (version == _rainVersion) _ = PlayRainClip(PickRainIdle()); }, TimeSpan.FromMilliseconds(1200));
+            if (_rainFailures < int.MaxValue) _rainFailures++;
+            _rainFade = RainSchedule(TimeSpan.FromMilliseconds(1200), () => { if (version == _rainVersion) _ = PlayRainClip(PickRainIdle()); });
             return;
         }
         _rainFailures = 0; _rainClip = clip; _rainClipTick = RainClock(); _rainLayer = next; image.Tag = clip; ApplyTubeLayoutOffsets(); _poseTimer.Stop(); _imgAvatar.IsVisible = false;
@@ -108,18 +111,38 @@ public partial class AvatarTubeWindow
     // WPF CirceClickEmote (CirceEmotes.cs:866): a click plays one click emote per 3 s, then idle resumes.
     internal bool RainClickEmote()
     {
-        long now = Environment.TickCount64;
+        long now = RainClock();
         var pool = (_rainMap?["clickEmotes"] as JArray)?.Select(c => (string?)c).Where(c => c != null && (_rainPack?.Clips.ContainsKey(c) ?? true)).ToList();
         if (pool == null || pool.Count == 0 || now - _rainClickTick < 3000) return false;
         if (pool.Count > 1) pool.Remove(_rainClip);
         _rainClickTick = now;
-        CancelRainSpeech();
-        _ = PlayRainClip(pool[_random.Next(pool.Count)]!);
+        bool owned = _rainSpeechOwned;
+        CancelRainSpeech(); _rainSpeechOwned = owned;
+        QueueRainClick(pool[_random.Next(pool.Count)]!);
         return true;
+    }
+    // WPF CirceCrossfadeTo: hold the current clip for 2 s and keep only the latest request.
+    internal void QueueRainClick(string clip)
+    {
+        if (_rainMap == null || clip == _rainClip) return;
+        CancelRainClick(); _rainPendingClick = clip; _rainSpeechOwned = true;
+        int version = _rainClickVersion;
+        void Apply()
+        {
+            if (version != _rainClickVersion || _avatarSetsClosed) return;
+            long remaining = _rainClip == null ? 0 : Math.Max(0, 2000 - (RainClock() - _rainClipTick));
+            if (remaining > 0) { _rainClickHold = RainSchedule(TimeSpan.FromMilliseconds(remaining), Apply); return; }
+            _rainClickHold = null; _rainPendingClick = null; _ = PlayRainClip(clip);
+        }
+        Apply();
+    }
+    private void CancelRainClick()
+    {
+        ++_rainClickVersion; _rainClickHold?.Dispose(); _rainClickHold = null; _rainPendingClick = null;
     }
     private void StopRainPlayback()
     {
-        CancelRainSpeech(); _rainTiming = null;
+        CancelRainClick(); CancelRainSpeech(); _rainTiming = null; _rainFailures = 0;
         ++_rainVersion; _rainFade?.Dispose(); _rainFade = null;
         foreach (var player in _rainPlayers) player?.Dispose();
         Array.Clear(_rainPlayers);
