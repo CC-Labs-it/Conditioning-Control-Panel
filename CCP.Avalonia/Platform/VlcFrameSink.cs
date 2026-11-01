@@ -42,6 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             player.SetVideoCallbacks(LockPicture, null, Display);
         }
 
+        // Per-instance observer for the thumbnail lifetime test; null for ordinary video owners.
+        internal Action? BeforeFreeForTest { get; set; }
         public WriteableBitmap? Bitmap { get; private set; }
         public int FrameCount => Volatile.Read(ref _frames);
         public bool Freed { get { lock (_lock) return _buffer == IntPtr.Zero; } }
@@ -121,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// decoder thread, so no callback touches the buffer afterwards.</summary>
         public void Free()
         {
+            BeforeFreeForTest?.Invoke();
             lock (_lock)
             {
                 _freed = true;

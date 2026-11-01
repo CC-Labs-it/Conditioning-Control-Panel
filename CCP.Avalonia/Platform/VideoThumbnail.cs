@@ -15,17 +15,20 @@ internal static class VideoThumbnail
 {
     // WPF ShellThumbnailHelper.cs:73-98 asks the platform decoder for a 100px thumbnail.
     // Windows bundles LibVLC; Linux uses the same system library as the video player.
-    internal static async Task<byte[]?> ReadAsync(string path)
+    internal static Task<byte[]?> ReadAsync(string path) => ReadAsync(path, null, null);
+
+    // Per-call observers let the headless test hold a real blit and observe the real sink cleanup.
+    internal static async Task<byte[]?> ReadAsync(string path, Action? afterFrame, Action? beforeFree)
     {
         if (LibVlcAudio.Shared is { } vlc)
         {
-            var bytes = await ReadVlcAsync(path, vlc).ConfigureAwait(false);
+            var bytes = await ReadVlcAsync(path, vlc, afterFrame, beforeFree).ConfigureAwait(false);
             if (bytes != null) return bytes;
         }
         return await ReadAsync(path, "ffmpeg").ConfigureAwait(false);
     }
 
-    private static async Task<byte[]?> ReadVlcAsync(string path, LibVLC vlc)
+    private static async Task<byte[]?> ReadVlcAsync(string path, LibVLC vlc, Action? afterFrame, Action? beforeFree)
     {
         VlcFrameSink? sink = null;
         try
@@ -44,10 +47,10 @@ internal static class VideoThumbnail
                     if (sink?.Bitmap is not { } bitmap) return;
                     using var output = new MemoryStream();
                     bitmap.Save(output);
-                    frame.TrySetResult(output.ToArray());
+                    if (frame.TrySetResult(output.ToArray())) afterFrame?.Invoke();
                 }
                 catch { frame.TrySetResult(null); }
-            }, maxDimension: 100);
+            }, maxDimension: 100) { BeforeFreeForTest = beforeFree };
             try
             {
                 if (!player.Play(media)) return null;
