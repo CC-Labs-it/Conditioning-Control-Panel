@@ -125,16 +125,13 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern int XQueryTree(IntPtr d, IntPtr w, out IntPtr root, out IntPtr parent, out IntPtr children, out uint count);
     [DllImport(LibX11)] private static extern int XFree(IntPtr data);
     [DllImport(LibX11)] private static extern int XRestackWindows(IntPtr d, IntPtr[] windows, int count);
-    private static IntPtr[] Property(IntPtr w, string name)
+    internal static bool HasKwinBlur() // KWin advertises the atom on the root, even with zero data.
     {
-        var data = IntPtr.Zero;
-        try
-        {
-            if (XGetWindowProperty(_display, w, XInternAtom(_display, name, false), 0, 4096, false,
-                IntPtr.Zero, out _, out int format, out var count, out _, out data) != 0 || format != 32) return Array.Empty<IntPtr>();
-            return Enumerable.Range(0, (int)Math.Min(count, (nuint)4096)).Select(i => Marshal.ReadIntPtr(data, i * IntPtr.Size)).ToArray();
+        lock (Gate) {
+            if (!OperatingSystem.IsLinux() || !EnsureDisplay()) return false; var data = IntPtr.Zero;
+            try { return XGetWindowProperty(_display, XDefaultRootWindow(_display), XInternAtom(_display, "_KDE_NET_WM_BLUR_BEHIND_REGION", false), 0, 0, false, IntPtr.Zero, out var type, out _, out _, out _, out data) == 0 && type != IntPtr.Zero; }
+            finally { if (data != IntPtr.Zero) XFree(data); }
         }
-        finally { if (data != IntPtr.Zero) XFree(data); }
     }
     private static IntPtr[] Children(IntPtr w, out IntPtr parent)
     {
@@ -180,7 +177,7 @@ internal static class X11Overlay
         {
             if (!EnsureDisplay() || !IsCompositing) return false;
             var atom = XInternAtom(_display, "_KDE_NET_WM_BLUR_BEHIND_REGION", false);
-            if (!Property(XDefaultRootWindow(_display), "_NET_SUPPORTED").Contains(atom)) return false;
+            if (!HasKwinBlur()) return false;
             _xErrored = false;
             XChangeProperty(_display, id, atom, new IntPtr(6), 32, 0, Array.Empty<IntPtr>(), 0);
             XSync(_display, false);

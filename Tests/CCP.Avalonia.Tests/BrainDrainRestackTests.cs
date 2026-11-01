@@ -9,6 +9,7 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 public sealed class BrainDrainRestackTests
 {
+    [Fact] public void KwinProbeReadsTheRootProperty() { var expected = System.Environment.GetEnvironmentVariable("CCP_TEST_KWIN_BLUR"); if (expected != null || string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("DISPLAY"))) Assert.Equal(expected == "1", X11Overlay.HasKwinBlur()); }
     [Fact]
     public Task UnsupportedBackendDoesNotClaimToHaveSunkTheBlur() => AvaloniaTestDispatcher.RunAsync(() =>
     {

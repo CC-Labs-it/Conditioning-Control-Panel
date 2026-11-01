@@ -76,8 +76,8 @@ public sealed class BrainDrainKeepClearRowTests
             var chk = card.FindControl<CheckBox>("ChkKeepClear")!;
             Assert.False(chk.IsChecked);
 
-            var enable = card.FindControl<CheckBox>("ChkEnable")!; var blur = card.FindControl<Slider>("SliderBlurStrength")!;
-            service.Current.BrainDrainEnabled = true; service.Current.BrainDrainBlurStrength = 37; service.Current.BrainDrainKeepPicturesClear = true;
+            var enable = card.FindControl<CheckBox>("ChkEnable")!; var blur = card.FindControl<Slider>("SliderBlurStrength")!; service.RestoreFrom(new AppSettings { BrainDrainBlurStrength = 0 }); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, blur.Value); blur.Value = 1; blur.Value = 0; Assert.Equal(0, service.Current.BrainDrainBlurStrength); service.Current.BrainDrainEnabled = true; service.Current.BrainDrainBlurStrength = 37; service.Current.BrainDrainKeepPicturesClear = true;
             Dispatcher.UIThread.RunJobs(); Assert.True(enable.IsChecked); Assert.Equal(37, blur.Value); Assert.True(chk.IsChecked);
             var oldModel = service.Current; oldModel.BrainDrainKeepPicturesClear = false; Dispatcher.UIThread.RunJobs(); Assert.False(chk.IsChecked);
             service.RestoreFrom(new AppSettings { BrainDrainKeepPicturesClear = true, BrainDrainBlurStrength = 72 });
