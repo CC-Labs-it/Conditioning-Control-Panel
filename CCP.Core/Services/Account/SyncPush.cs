@@ -126,6 +126,8 @@ namespace ConditioningControlPanel.Services
                 wait.TotalSeconds, _backoffFailures, status?.ToString() ?? "none");
         }
 
+        /// <summary>The head's account-scoped ownership feed, as WPF ProfileSyncService.PrizeFeed.</summary>
+        public Action<string, PrizesBlock?>? PrizesReceived { get; set; }
         public bool Loaded { get; private set; }
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
@@ -291,6 +293,7 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    PrizesReceived?.Invoke(id, reply["prizes"]?.ToObject<PrizesBlock>());
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.

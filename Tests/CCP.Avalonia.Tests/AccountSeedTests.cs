@@ -45,6 +45,7 @@ public sealed partial class AccountSeedTests : IDisposable
         CoreEntitlement.HasPremiumProvider = CoreEntitlement.HasLabProvider = null;
         AuthRecovery.ProviderRevalidate = null;
         AuthRecovery.Recovered = null;
+        ProviderSubscription.PrizesSink = null;
     }
 
     private static ProviderSubscription Make(string prefix) => new(prefix, () => new AppSettings());
