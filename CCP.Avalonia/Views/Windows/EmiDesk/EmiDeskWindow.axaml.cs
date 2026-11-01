@@ -840,7 +840,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     img = new Bitmap(path);
                     _bodyCache[key] = img;
                 }
-                _bodyImage.Source = img;
+                ReplaceArt(_bodyImage, img, _bodyCache);
                 _bodySkin = _outfit;
                 _bodyPlaceholder.IsVisible = false;
                 PaintOutfitOver();
@@ -857,8 +857,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 if (string.Equals(want, _outfit, StringComparison.Ordinal)) return;
                 _outfit = want;
                 _overPose = null;
-                _bodyCache.Clear();
-                _overCache.Clear();
+                RetireArtCache(_bodyImage, _bodyCache);
+                RetireArtCache(_outfitOverImage, _overCache);
                 SetPose(_pose);
                 PaintOutfitOver();
             }
@@ -874,7 +874,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 if (outfit == null || !ArmOutfitOver(outfit))
                 {
                     _outfitOverImage.IsVisible = false;
-                    _outfitOverImage.Source = null;
+                    ReplaceArt(_outfitOverImage, null, _overCache);
                     _overPose = null;
                     return;
                 }
@@ -887,7 +887,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     {
                         _overArmed[outfit] = false;
                         _outfitOverImage.IsVisible = false;
-                        _outfitOverImage.Source = null;
+                        ReplaceArt(_outfitOverImage, null, _overCache);
                         _overPose = null;
                         return;
                     }
@@ -895,15 +895,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     _overCache[key] = img;
                 }
                 _overPose = key;
-                _outfitOverImage.Source = img;
+                ReplaceArt(_outfitOverImage, img, _overCache);
                 _outfitOverImage.IsVisible = true;
             }
             catch (Exception ex)
             {
                 Log.Debug(ex, "[EmiDesk] outfit overlay paint failed");
                 _outfitOverImage.IsVisible = false;
-                _outfitOverImage.Source = null;
+                ReplaceArt(_outfitOverImage, null, _overCache);
             }
+        }
+
+        // Keep a displayed fallback alive after an outfit change until its replacement is set.
+        private static void ReplaceArt(Image image, Bitmap? next, Dictionary<string, Bitmap> cache)
+        {
+            var old = image.Source as Bitmap;
+            image.Source = next;
+            if (old != null && !ReferenceEquals(old, next) && !cache.ContainsValue(old)) old.Dispose();
+        }
+
+        private static void RetireArtCache(Image image, Dictionary<string, Bitmap> cache)
+        {
+            foreach (var bitmap in cache.Values)
+                if (!ReferenceEquals(bitmap, image.Source)) bitmap.Dispose();
+            cache.Clear();
+        }
+
+        private void ReleaseArt()
+        {
+            ReplaceArt(_bodyImage, null, _bodyCache);
+            ReplaceArt(_outfitOverImage, null, _overCache);
+            RetireArtCache(_bodyImage, _bodyCache);
+            RetireArtCache(_outfitOverImage, _overCache);
         }
 
         private bool ArmOutfitOver(string outfit)
@@ -2690,6 +2713,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 Log.Debug(ex, "[EmiDesk] ShutDown failed");
             }
+            finally { ReleaseArt(); }
         }
 
         private void OnClosedCleanup(object? sender, EventArgs e)
@@ -2710,6 +2734,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 Log.Debug(ex, "[EmiDesk] close cleanup failed");
             }
+            finally { ReleaseArt(); }
         }
     }
 }
