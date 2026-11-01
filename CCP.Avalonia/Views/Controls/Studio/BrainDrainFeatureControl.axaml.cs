@@ -84,7 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 
         // WPF BrainDrainFeatureControl.xaml.cs:213-235: external writers repaint the live card.
         private void SettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-        { if (e.PropertyName is nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainEnabled) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainBlurStrength) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainKeepPicturesClear) or nameof(ConditioningControlPanel.Models.AppSettings.AllowOverlayCapture)) QueueLoad(); }
+        { if (e.PropertyName is nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainEnabled) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainBlurStrength) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainKeepPicturesClear) or nameof(ConditioningControlPanel.Models.AppSettings.AllowOverlayCapture) or nameof(ConditioningControlPanel.Models.AppSettings.CustomAssetsPath)) QueueLoad(); }
         private void QueueLoad() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (TopLevel.GetTopLevel(this) != null) LoadKeepClear(); });
         private void LoadKeepClear()
         {
@@ -106,12 +106,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         }
 
         // WPF .xaml.cs:121-151: merged count, primary path, empty hint and legacy note.
-        private void RefreshClipCount()
+        internal void RefreshClipCount()
         {
             var path = BrainDrainClips.AudioFolderPath;
             var legacy = _legacyFolder ?? BrainDrainClips.LegacyFolderPath;
             var (clips, legacyCount) = BrainDrainClips.Scan(path, legacy);
-            this.FindControl<TextBlock>("TxtClipCount")!.Text = Loc.GetF("st4_braindrain_clips_loaded_0", clips.Length);
+            this.FindControl<TextBlock>("TxtClipCount")!.Text = Loc.GetF("st4_braindrain_clips_found_0", clips.Length);
             this.FindControl<Border>("NoAudioHint")!.IsVisible = clips.Length == 0;
             this.FindControl<TextBlock>("TxtAudioFolderPath")!.Text = path;
             var note = this.FindControl<TextBlock>("TxtLegacyFolderNote")!;

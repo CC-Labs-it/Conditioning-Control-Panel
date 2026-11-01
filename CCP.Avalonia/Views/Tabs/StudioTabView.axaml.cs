@@ -15,6 +15,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls.Studio;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -1244,6 +1245,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 e.Host.IsVisible = on;
             }
 
+            // WPF BrainDrainFeatureControl.xaml.cs:37-44: rescan on each opening of the rack panel.
+            if (target.Panel is BrainDrainFeatureControl brain) brain.RefreshClipCount();
             RefreshDetailHeader();
 
             if (animate && target.Host != null) FadeInDetail(target.Host);
