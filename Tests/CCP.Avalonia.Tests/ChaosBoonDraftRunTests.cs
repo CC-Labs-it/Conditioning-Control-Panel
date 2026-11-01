@@ -23,37 +23,30 @@ public sealed class ChaosBoonDraftRunTests
                 .SetupWithoutStarting();
     }
 
-    private static void Ticks(int count)
-    {
+    private static void Ticks(int count) {
         for (int i = 0; i < count; i++) ChaosRunHost.Tick();
     }
 
     // WPF ChaosModeService.cs:1521, 1555-1561, 1580: all feed messages ship in every language.
     [Fact]
-    public void Draft_feed_translations_preserve_the_english_copy_and_format_in_all_languages()
-    {
-        var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance;
-        string language = loc.CurrentLanguage;
+    public void Draft_feed_translations_preserve_the_english_copy_and_format_in_all_languages() {
+        var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance; string language = loc.CurrentLanguage;
         string[] keys = { "chaos_draft_reroll_event", "chaos_draft_sin_bonus_event",
             "chaos_draft_shielded_sin_event", "chaos_draft_surrender_event", "chaos_draft_skip_event" };
-        try
-        {
+        try {
             loc.SetLanguage("en");
             var english = keys.Select(loc.Get).ToArray();
             Assert.Equal(new[] { "🎲 tempted fate again", "🕯 sin embraced (+{0:0.00}x)",
                 "🕯 the candle took the sting (no drawback)", "🕯 you said yes. it gave back (+1 resistance)",
                 "♥ resisted → +1 resistance" }, english);
-            foreach (var (code, _, _) in global::ConditioningControlPanel.Localization.LocalizationManager.AvailableLanguages)
-            {
+            foreach (var (code, _, _) in global::ConditioningControlPanel.Localization.LocalizationManager.AvailableLanguages) {
                 loc.SetLanguage(code);
-                for (int i = 0; i < keys.Length; i++)
-                {
+                for (int i = 0; i < keys.Length; i++) {
                     var text = loc.Get(keys[i]);
                     Assert.NotEqual(keys[i], text);
                     if (code != "en") Assert.NotEqual(english[i], text); // no English fallback
                 }
-                Assert.Contains(0.25.ToString("0.00"), loc.GetF(keys[1], 0.25));
-                Assert.DoesNotContain("{0", loc.GetF(keys[1], 0.25));
+                Assert.Contains(0.25.ToString("0.00"), loc.GetF(keys[1], 0.25)); Assert.DoesNotContain("{0", loc.GetF(keys[1], 0.25));
             }
         }
         finally { loc.SetLanguage(language); }
@@ -61,26 +54,20 @@ public sealed class ChaosBoonDraftRunTests
 
     // WPF ChaosModeService.cs:1441-1483, 1517-1619; ChaosOverlayWindow.xaml.cs:467-555.
     [Fact]
-    public async Task Wave_draft_clears_and_holds_field_rerolls_picks_and_resumes_with_shower()
-    {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
-        {
+    public async Task Wave_draft_clears_and_holds_field_rerolls_picks_and_resumes_with_shower() {
+        await AvaloniaTestDispatcher.RunAsync(async () => {
             Setup();
             ChaosWaveTimerWindow.SkipPlatformChecksForTests = true;
-            var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance;
-            string language = loc.CurrentLanguage;
+            var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance; string language = loc.CurrentLanguage;
             loc.SetLanguage("de");
-            try
-            {
+            try {
                 ChaosMeta.State.FirstTimesAwarded?.Remove(ChaosFirstTimes.Whisper);
-                ChaosMeta.State.LessonsComplete.Remove("draft4");
-                ChaosMeta.State.LessonProgress.Remove("draft4");
+                ChaosMeta.State.LessonsComplete.Remove("draft4"); ChaosMeta.State.LessonProgress.Remove("draft4");
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
                     BoonDraftEnabled = true, AllowCurses = false, DraftAutoResumeSec = 0 });
                 var state = ChaosRunHost.State!;
                 state.ShowWaveTimer = true;
-                ChaosRunHost.Overlay!.FinishCountdown();
-                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
                 state.ApplyBoon(ChaosBoonPool.All.First(b => b.Id == "welcome_shower"));
                 state.RerollsLeft = 1;
                 ChaosRunHost.SpawnTick();
@@ -90,10 +77,8 @@ public sealed class ChaosBoonDraftRunTests
                 var overlay = ChaosRunHost.Overlay!;
                 var panel = overlay.FindControl<Border>("DraftPanel")!;
                 var cards = overlay.FindControl<StackPanel>("BoonCardHost")!;
-                Assert.True(panel.IsVisible);
-                Assert.Equal(1, state.WaveIndex);
-                Assert.Equal(0, BubbleOverlay.ChaosCount);
-                Assert.False(BubbleOverlay.Field.Held);
+                Assert.True(panel.IsVisible); Assert.Equal(1, state.WaveIndex);
+                Assert.Equal(0, BubbleOverlay.ChaosCount); Assert.False(BubbleOverlay.Field.Held);
                 var watch = ChaosWaveTimerWindow.Active!;
                 Assert.False(watch.Pill.IsVisible);
                 watch.UpdateLayout();
@@ -102,41 +87,32 @@ public sealed class ChaosBoonDraftRunTests
                 Ticks(4);
                 ChaosRunHost.SpawnTick();
                 ChaosRunHost.ToggleManualPause();
-                Assert.Equal(held, state.ElapsedSec);
-                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                Assert.Equal(held, state.ElapsedSec); Assert.Equal(0, BubbleOverlay.ChaosCount);
                 Assert.False(ChaosRunHost.IsManuallyPaused);
 
                 var oldCard = cards.Children[0];
                 var reroll = overlay.FindControl<Button>("BtnReroll")!;
                 Assert.True(reroll.IsVisible);
                 reroll.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Assert.Equal(0, state.RerollsLeft);
-                Assert.Contains("das Schicksal erneut herausgefordert", state.RecentEvents);
-                Assert.False(reroll.IsVisible);
-                Assert.NotSame(oldCard, cards.Children[0]);
-                var first = (Border)cards.Children[0];
-                var pick = ((StackPanel)first.Child!).Children.OfType<Button>().Single();
+                Assert.Equal(0, state.RerollsLeft); Assert.Contains("das Schicksal erneut herausgefordert", state.RecentEvents);
+                Assert.False(reroll.IsVisible); Assert.NotSame(oldCard, cards.Children[0]);
+                var first = (Border)cards.Children[0]; var pick = ((StackPanel)first.Child!).Children.OfType<Button>().Single();
                 Assert.True(pick.IsEnabled);
                 pick.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.Single(state.RunPickTiles);
                 var deadline = DateTime.UtcNow.AddSeconds(6);
                 while (panel.IsVisible && DateTime.UtcNow < deadline) await Task.Delay(50);
-                Assert.False(panel.IsVisible);
-                Assert.Equal(2, state.RunPickTiles.Count);
-                Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
-                Assert.Equal(1, ChaosLessons.Progress("draft4"));
+                Assert.False(panel.IsVisible); Assert.Equal(2, state.RunPickTiles.Count);
+                Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper)); Assert.Equal(1, ChaosLessons.Progress("draft4"));
                 Assert.Contains("boon:" + state.RunPickTiles[1].Id, ChaosMeta.State.DiscoveredCodexIds);
-                Assert.Equal(2, ChaosRunHost.BoonBar!.Row.Children.Count);
-                Assert.Equal(2, state.WaveIndex);
-                Assert.Equal(held, state.ElapsedSec);
-                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                Assert.Equal(2, ChaosRunHost.BoonBar!.Row.Children.Count); Assert.Equal(2, state.WaveIndex);
+                Assert.Equal(held, state.ElapsedSec); Assert.Equal(0, BubbleOverlay.ChaosCount);
                 overlay.FinishCountdown();
                 Assert.Equal(6, BubbleOverlay.ChaosCount);
                 Ticks(1);
                 Assert.True(state.ElapsedSec > held);
             }
-            finally
-            {
+            finally {
                 ChaosRunHost.ForceShutdown();
                 ChaosWaveTimerWindow.SkipPlatformChecksForTests = false;
                 loc.SetLanguage(language);
@@ -146,40 +122,30 @@ public sealed class ChaosBoonDraftRunTests
 
     // WPF ChaosModeService.cs:1447-1456, 1577-1593: disabled drafts roll on; skip grants resistance.
     [Fact]
-    public async Task Disabled_drafts_roll_on_and_skip_adds_one_resistance()
-    {
-        await AvaloniaTestDispatcher.RunAsync(() =>
-        {
+    public async Task Disabled_drafts_roll_on_and_skip_adds_one_resistance() {
+        await AvaloniaTestDispatcher.RunAsync(() => {
             Setup();
-            var meta = ChaosMeta.State;
-            int runs = meta.RunsCompleted;
-            var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance;
-            string language = loc.CurrentLanguage;
+            var meta = ChaosMeta.State; int runs = meta.RunsCompleted;
+            var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance; string language = loc.CurrentLanguage;
             loc.SetLanguage("en");
-            try
-            {
+            try {
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
-                ChaosRunHost.Overlay!.FinishCountdown();
-                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
                 Ticks(80);
-                Assert.Equal(2, ChaosRunHost.State!.WaveIndex);
-                Assert.False(ChaosRunHost.Overlay.FindControl<Border>("DraftPanel")!.IsVisible);
+                Assert.Equal(2, ChaosRunHost.State!.WaveIndex); Assert.False(ChaosRunHost.Overlay.FindControl<Border>("DraftPanel")!.IsVisible);
                 ChaosRunHost.ForceShutdown();
 
                 meta.RunsCompleted = 2;
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true });
-                ChaosRunHost.Overlay!.FinishCountdown();
-                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
                 Ticks(80);
                 var state = ChaosRunHost.State!;
                 int shields = state.Shields;
                 var skip = ChaosRunHost.Overlay.FindControl<Button>("BtnSkipBoon")!;
                 Assert.True(skip.IsVisible);
                 skip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Assert.Equal(shields + 1, state.Shields);
-                Assert.Contains("resisted → +1 resistance", state.RecentEvents);
-                Assert.Empty(state.RunPickTiles);
-                Assert.Equal(2, state.WaveIndex);
+                Assert.Equal(shields + 1, state.Shields); Assert.Contains("resisted → +1 resistance", state.RecentEvents);
+                Assert.Empty(state.RunPickTiles); Assert.Equal(2, state.WaveIndex);
                 double held = state.ElapsedSec;
                 Ticks(4);
                 Assert.Equal(held, state.ElapsedSec);
@@ -193,23 +159,16 @@ public sealed class ChaosBoonDraftRunTests
     }
     // WPF ChaosModeService.cs:1586-1619, 190-205: a lesson defers the shower until dismissal.
     [Fact]
-    public async Task Lesson_earned_at_the_table_holds_the_ready_handoff()
-    {
-        await AvaloniaTestDispatcher.RunAsync(() =>
-        {
+    public async Task Lesson_earned_at_the_table_holds_the_ready_handoff() {
+        await AvaloniaTestDispatcher.RunAsync(() => {
             Setup();
-            var meta = ChaosMeta.State;
-            int runs = meta.RunsCompleted;
-            try
-            {
+            var meta = ChaosMeta.State; int runs = meta.RunsCompleted;
+            try {
                 meta.RunsCompleted = 2;
-                meta.LessonsComplete.Remove("draft4");
-                meta.LessonProgress.Remove("draft4");
-                meta.LessonsComplete.Remove("intrusive_thoughts");
-                meta.LessonProgress.Remove("intrusive_thoughts");
+                meta.LessonsComplete.Remove("draft4"); meta.LessonProgress.Remove("draft4");
+                meta.LessonsComplete.Remove("intrusive_thoughts"); meta.LessonProgress.Remove("intrusive_thoughts");
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true });
-                ChaosRunHost.Overlay!.FinishCountdown();
-                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
                 var state = ChaosRunHost.State!;
                 state.WelcomeShowerEnabled = true;
                 Ticks(80);
@@ -218,13 +177,11 @@ public sealed class ChaosBoonDraftRunTests
                 Assert.False(ChaosUnlockCardOverlay.IsShowing);
                 ChaosRunHost.Overlay.FindControl<Button>("BtnSkipBoon")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 ChaosRunHost.Overlay.FinishCountdown();
-                Assert.True(ChaosUnlockCardOverlay.IsShowing);
-                Assert.False(ChaosUnlockCardOverlay.Active!.AutoDismiss);
+                Assert.True(ChaosUnlockCardOverlay.IsShowing); Assert.False(ChaosUnlockCardOverlay.Active!.AutoDismiss);
                 int queued = ChaosUnlockCardOverlay.QueuedCount;
                 ChaosLessons.Tick("intrusive_thoughts", ChaosLessons.ById("intrusive_thoughts")!.Target);
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                Assert.Equal(queued + 1, ChaosUnlockCardOverlay.QueuedCount);
-                Assert.Equal(0, BubbleOverlay.ChaosCount);
+                Assert.Equal(queued + 1, ChaosUnlockCardOverlay.QueuedCount); Assert.Equal(0, BubbleOverlay.ChaosCount);
                 double held = state.ElapsedSec;
                 Ticks(1);
                 Assert.Equal(held, state.ElapsedSec);
@@ -240,27 +197,21 @@ public sealed class ChaosBoonDraftRunTests
 
     // WPF ChaosModeService.cs:146-178: a posted completion after stop shows without claiming a pause.
     [Fact]
-    public async Task Lesson_posted_during_draft_then_stopped_shows_on_the_recap()
-    {
-        await AvaloniaTestDispatcher.RunAsync(() =>
-        {
+    public async Task Lesson_posted_during_draft_then_stopped_shows_on_the_recap() {
+        await AvaloniaTestDispatcher.RunAsync(() => {
             Setup();
-            try
-            {
+            try {
                 ChaosMeta.State.LessonsComplete.Add("silk_touch");
-                ChaosMeta.State.LessonsComplete.Remove("draft4");
-                ChaosMeta.State.LessonProgress.Remove("draft4");
+                ChaosMeta.State.LessonsComplete.Remove("draft4"); ChaosMeta.State.LessonProgress.Remove("draft4");
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true });
-                ChaosRunHost.Overlay!.FinishCountdown();
-                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
                 Ticks(80);
                 Assert.True(ChaosRunHost.Overlay.FindControl<Border>("DraftPanel")!.IsVisible);
                 ChaosLessons.Tick("draft4", ChaosLessons.T_DRAFT4); // posts to the UI thread
                 ChaosRunHost.RequestStop();
                 Assert.False(ChaosUnlockCardOverlay.IsShowing);
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                Assert.True(ChaosRunHost.Overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
-                Assert.True(ChaosUnlockCardOverlay.IsShowing);
+                Assert.True(ChaosRunHost.Overlay.FindControl<Border>("ResultsPanel")!.IsVisible); Assert.True(ChaosUnlockCardOverlay.IsShowing);
                 Assert.True(ChaosUnlockCardOverlay.Active!.AutoDismiss);
                 Assert.Equal(ChaosUnlockCardRules.ForLesson("draft4")!.Title, ChaosUnlockCardOverlay.Active.Current!.Title);
             }
@@ -271,16 +222,12 @@ public sealed class ChaosBoonDraftRunTests
 
     // WPF ChaosModeService.cs:3161-3181: shutdown closes the table and cannot commit a late pick.
     [Fact]
-    public async Task Panic_during_the_pick_beat_discards_the_pending_choice()
-    {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
-        {
+    public async Task Panic_during_the_pick_beat_discards_the_pending_choice() {
+        await AvaloniaTestDispatcher.RunAsync(async () => {
             Setup();
-            try
-            {
+            try {
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true });
-                ChaosRunHost.Overlay!.FinishCountdown();
-                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
                 var state = ChaosRunHost.State!;
                 Ticks(80);
                 var cards = ChaosRunHost.Overlay.FindControl<StackPanel>("BoonCardHost")!;
@@ -293,8 +240,7 @@ public sealed class ChaosBoonDraftRunTests
                 ChaosRunHost.ForceShutdown();
                 Assert.False(confirm.IsEnabled);
                 await Task.Delay(1800);
-                Assert.Empty(state.RunPickTiles);
-                Assert.Null(ChaosRunHost.BoonBar);
+                Assert.Empty(state.RunPickTiles); Assert.Null(ChaosRunHost.BoonBar);
                 Assert.False(ChaosRunHost.IsActive);
             }
             finally { ChaosRunHost.ForceShutdown(); }
@@ -304,26 +250,19 @@ public sealed class ChaosBoonDraftRunTests
     // WPF ChaosModeService.cs:1476-1479, 1534-1566: Surrender guarantees a sin,
     // shields its first drawback, adds its multiplier bonus and returns one resistance.
     [Fact]
-    public async Task Surrender_guarantees_and_shields_the_first_sin()
-    {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
-        {
+    public async Task Surrender_guarantees_and_shields_the_first_sin() {
+        await AvaloniaTestDispatcher.RunAsync(async () => {
             Setup();
-            var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance;
-            string language = loc.CurrentLanguage;
+            var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance; string language = loc.CurrentLanguage;
             loc.SetLanguage("de");
-            try
-            {
+            try {
                 ChaosMeta.State.FirstTimesAwarded?.Remove(ChaosFirstTimes.Yes);
-                ChaosMeta.State.LessonsComplete.Remove("surrender");
-                ChaosMeta.State.LessonProgress.Remove("surrender");
+                ChaosMeta.State.LessonsComplete.Remove("surrender"); ChaosMeta.State.LessonProgress.Remove("surrender");
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
                     BoonDraftEnabled = true, AllowCurses = true, DraftChoices = 2, SinChance = 0 });
-                ChaosRunHost.Overlay!.FinishCountdown();
-                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
                 var state = ChaosRunHost.State!;
-                state.MaxedBoons.Add("surrender");
-                state.SinExtraMult = 0.25;
+                state.MaxedBoons.Add("surrender"); state.SinExtraMult = 0.25;
                 double multiplier = state.BoonMult;
                 int shields = state.Shields;
                 Ticks(80);
@@ -337,10 +276,8 @@ public sealed class ChaosBoonDraftRunTests
                 var deadline = DateTime.UtcNow.AddSeconds(6);
                 while (state.ActiveCurses.Count == 0 && DateTime.UtcNow < deadline) await Task.Delay(50);
                 var boon = Assert.Single(state.ActiveCurses);
-                Assert.True(state.SurrenderShieldUsed);
-                Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes));
-                Assert.Equal(1, ChaosLessons.Progress("surrender"));
-                Assert.Equal(shields + 1, state.Shields);
+                Assert.True(state.SurrenderShieldUsed); Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes));
+                Assert.Equal(1, ChaosLessons.Progress("surrender")); Assert.Equal(shields + 1, state.Shields);
                 Assert.Equal(multiplier + boon.RunMultBonus + 0.25, state.BoonMult, 6);
                 Assert.Contains($"Sünde angenommen (+{state.SinExtraMult:0.00}x)", state.RecentEvents);
                 Assert.Contains("die Kerze nahm den Schmerz (kein Nachteil)", state.RecentEvents);
@@ -356,14 +293,12 @@ public sealed class ChaosBoonDraftRunTests
     [Theory]
     [InlineData("mp3")]
     [InlineData("wav")]
-    public void Wave_clear_cue_prefers_mod_audio_and_falls_back_to_bundled_sound(string extension)
-    {
+    public void Wave_clear_cue_prefers_mod_audio_and_falls_back_to_bundled_sound(string extension) {
         var dir = System.IO.Directory.CreateTempSubdirectory("ccp-wave-cue-");
         var oldOverride = global::ConditioningControlPanel.CoreModArt.AudioOverridePathProvider;
         var oldAudio = global::ConditioningControlPanel.CoreAudio.PlayOneShotProvider;
         var paths = new System.Collections.Generic.List<string>();
-        try
-        {
+        try {
             var folder = System.IO.Directory.CreateDirectory(System.IO.Path.Combine(dir.FullName, "resources", "sounds", "chaos"));
             var file = System.IO.Path.Combine(folder.FullName, "wave_clear." + extension);
             System.IO.File.WriteAllBytes(file, new byte[1]);
@@ -375,11 +310,9 @@ public sealed class ChaosBoonDraftRunTests
             Assert.Equal(file, Assert.Single(paths));
             System.IO.File.Delete(file);
             ChaosOverlayWindow.ChaosSfx.PlayWaveClear();
-            Assert.Equal(2, paths.Count);
-            Assert.EndsWith("lvup.mp3", paths[1]);
+            Assert.Equal(2, paths.Count); Assert.EndsWith("lvup.mp3", paths[1]);
         }
-        finally
-        {
+        finally {
             global::ConditioningControlPanel.CoreModArt.AudioOverridePathProvider = oldOverride;
             global::ConditioningControlPanel.CoreAudio.PlayOneShotProvider = oldAudio;
             dir.Delete(true);
