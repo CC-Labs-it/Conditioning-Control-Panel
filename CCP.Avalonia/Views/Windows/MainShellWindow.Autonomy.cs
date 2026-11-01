@@ -127,7 +127,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!on) CancelAutonomyPulses();
                 FollowTakeoverQuestTick(on);
                 SetTakeoverActiveUi(on);
-                UpdateAutonomyButtonState(on);
+                // WPF MainWindow.TakeoverUi.cs:58-83 repaints the hero, not the button on Stop.
+                // Panic leaves the saved switch on; its next click must still be labelled Stop
+                // (MainWindow.Autonomy.cs:129-185). A queued start must not repaint after a stop.
+                if (on && CoreSettings.Current.AutonomyModeEnabled) UpdateAutonomyButtonState(true);
             });
             // WPF AnnounceAction: matching mod event audio, otherwise text-only.
             Autonomy.AnnouncementMade += (_, phrase) => Dispatcher.UIThread.Post(() =>
