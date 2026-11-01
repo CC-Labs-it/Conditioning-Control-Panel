@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -163,12 +165,22 @@ public sealed partial class AccountSeedTests
                 var boardTabGets = BoardGets();
                 var list = board.FindControl<ListBox>("LstLeaderboard")!;
                 var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
+                w.CompleteTabTransition();
+                row.BringIntoView();
+                Dispatcher.UIThread.RunJobs();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                for (var i = 0; i < 2; i++)
-                {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-                }
+                var hit = Assert.IsAssignableFrom<Control>(w.InputHitTest(at));
+                Assert.Same(row, hit.FindAncestorOfType<ListBoxItem>(includeSelf: true));
+                w.MouseDown(at, MouseButton.Left);
+                w.MouseUp(at, MouseButton.Left);
+                // Headless input pumps rendering and uses wall-clock timestamps between calls. A
+                // busy runner can turn the second click into a single. As in AssetsTabTests,
+                // give the hit-tested second press its click count and let Avalonia route it.
+                var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+                hit.RaiseEvent(new PointerPressedEventArgs(hit, pointer, w, at, 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
+                    KeyModifiers.None, 2));
                 for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
