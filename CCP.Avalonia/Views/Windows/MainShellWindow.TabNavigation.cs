@@ -9,7 +9,6 @@
 //   - Transition choreography lives in MainShellWindow.TabTransitions.cs. Season shimmer,
 //     skill-tree air and vault motion park with IsVisible. RefreshEntitlementVeils owns the
 //     tab half of UpdatePatreonUI, AccountSettingsSection owns its account half.
-//   - AvailableSubjects StopPolling/LeaveLobbyTab await the unported directory + lobby lifecycle.
 //     (WPF BtnPresets_Click's RefreshPresetsList is dead: no XAML names the handler.)
 //     The FIVE that do not are restored in OnTabShown below:
 //       * StudioTab.OnTabShown() for "studio" and StudioTab.FocusRackEntry("haptics") for the
@@ -168,6 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             EmiDesk.EmiTargets.NoteTabOpened(tab); // WPF counts after the bark hook (TabNavigation.cs:298).
 
+            LeaveLobbyTab(); // WPF TabNavigation.cs:340-341, including repeat visits
             foreach (var name in new HashSet<string>(TabPanels.Values))
             {
                 var panel = this.FindControl<Control>(name);
@@ -199,6 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshEntitlementVeils();
                 switch (tab)
                 {
+                    case "availablesubjects": EnterLobbyTab(); break; // WPF :609-615
                     // WPF re-derives the session feature lock on the way into each of these
                     // three (MainWindow.TabNavigation.cs:260/476/501): the Dashboard and the rack
                     // both host real dose dials, so a lock that was latched rather than re-derived
