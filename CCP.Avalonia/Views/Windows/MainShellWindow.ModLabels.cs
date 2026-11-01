@@ -55,6 +55,18 @@ public partial class MainShellWindow
             dash.ComboMindDrain.TitleA = CardLabel("Mind Wipe", "label_mind_wipe");
             dash.ComboMindDrain.TitleB = CardLabel("Brain Drain", "label_brain_drain");
         }
+        // WPF MainWindow.UiUpdates.cs:145-152: preset and session details share this refresh.
+        var presets = Named<Tabs.PresetsTabView>("PresetsTab");
+        void PresetLabel(string name, string english, string key)
+        {
+            if (presets?.FindControl<IconLabel>(name) is { } label) label.Text = ModAwareLabel(english, key);
+        }
+        PresetLabel("TxtFeatureCornerGif", "🖼 Corner GIF", "label_corner_gif");
+        PresetLabel("TxtDetailFlashLabel", "⚡ Flash Images", "section_flash_images");
+        PresetLabel("TxtDetailVideoLabel", "🎬 Mandatory Videos", "label_mandatory_videos");
+        PresetLabel("TxtDetailSubLabel", "💭 Subliminals", "section_subliminals");
+        PresetLabel("TxtSessionFlashLabel", "⚡ Flash Images", "section_flash_images");
+        PresetLabel("TxtSessionSubLabel", "💭 Subliminals", "section_subliminals");
         // WPF MainWindow.UiUpdates.cs:164-189: explicit mod tooltip, then mod-aware
         // English replacement, then localized fallback. Re-run for mod and language changes.
         void StatTip(string name, string skill, string english, string key)
