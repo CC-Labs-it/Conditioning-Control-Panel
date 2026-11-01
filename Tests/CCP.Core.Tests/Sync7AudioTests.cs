@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using ConditioningControlPanel.Tests;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services.AudioPlayer;
 using Xunit;
@@ -8,6 +10,13 @@ namespace CCP.Core.Tests;
 
 public class Sync7AudioTests
 {
+    [Fact]
+    public void PlaylistRulesHaveOnlyOneProductSource()
+    {
+        var source = Assert.Single(SourceRoots.EnumerateProductSources("AudioPlaylistRules.cs"));
+        Assert.Equal(Path.Combine(SourceRoots.RepoRoot, "CCP.Core", "Services", "AudioPlayer", "AudioPlaylistRules.cs"), source);
+    }
+
     [Fact]
     public void DiagnosticsArePrivateAndRateLimitedPerPlayer()
     {
