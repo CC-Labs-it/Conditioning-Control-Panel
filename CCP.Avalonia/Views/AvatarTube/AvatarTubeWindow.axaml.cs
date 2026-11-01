@@ -1192,9 +1192,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         ///   <item>The typewriter. Cosmetic, and WPF adds its runtime to the display duration - so
         ///         dropping it shortens the window rather than truncating the line. The reading
         ///         floor below is kept, which is the half that protects a long reply.</item>
-        ///   <item>The lead-in timer and <paramref name="mood"/>. Both exist to time the avatar's
-        ///         emotive-portrait pose swap against the voice; that system did not port, so a
-        ///         lead-in would be a pause with nothing happening in it.</item>
         ///   <item>EMI Desk's <c>NoteAvatarSpeaking</c>: its only consumer is her line engine,
         ///         which is not on this head. Her <c>AvatarMuted</c> IS honoured below, as WPF
         ///         ShowGiggle (Speech.cs:461): the line still reaches the chat log, no bubble, no voice.</item>
@@ -1214,7 +1211,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 ClearSpeechQueue();   // WPF Speech.cs:345-350: the priority line drops the queue
                 _isGiggling = false;
-                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken);
+                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken, mood);
             });
         }
 
@@ -1223,21 +1220,22 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
         /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
         /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
-        public void Giggle(string text)
+        public void Giggle(string text, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
             {
                 if (_isWaitingForAi || _isShowingAiBubble) return;   // re-checked on the UI thread, as WPF
-                if (_isGiggling) { _speechQueue.Enqueue(text); return; }
+                var id = phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath);
+                if (_isGiggling) { _speechQueue.Enqueue((text, id, mood)); return; }
                 if (!IsSpeechReady())
                 {
-                    _speechQueue.Enqueue(text);
+                    _speechQueue.Enqueue((text, id, mood));
                     _isGiggling = true;
                     ProcessNextSpeech();
                     return;
                 }
-                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true);
+                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true, mood: mood, emotionLineId: id);
             });
         }
 
@@ -1245,7 +1243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool NextPresetGiggleSound() => ++_presetGiggleCounter % 5 == 0;
 
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
-                                bool barkVoice, bool preset, Action? onSpoken = null)
+                                bool barkVoice, bool preset, Action? onSpoken = null, string? mood = null, string? emotionLineId = null)
         {
                 var spokenHandled = false;
                 var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1263,6 +1261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     var source = preset ? SpeechSource.Preset : SpeechSource.AI;
                     if (Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
                     {
+                        StopRainSpeech();
                         _isGiggling = false;   // WPF Speech.cs:452-460: skipped, but it still spaces the next
                         NoteSpeechEnded(source, text.Length);
                         return;
@@ -1287,7 +1286,34 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
-                    if (!IsMuted) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken); spokenHandled = true; }
+                    if (IsMuted) StopRainSpeech();
+                    if (!IsMuted)
+                    {
+                        var id = emotionLineId ?? (phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath));
+                        int leadIn = StartRainSpeech(id, mood, text, phraseAudioPath, RainEstimatedSeconds(text));
+                        int rainVersion = _rainSpeechVersion;
+                        void PlayLineAudio()
+                        {
+                            PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken, duration => RunOnAvatar(() =>
+                            {
+                                if (leadIn == 0 && duration.TotalSeconds > 0 && rainVersion == _rainSpeechVersion)
+                                    StartRainSpeech(id, mood, text, phraseAudioPath, duration.TotalSeconds);
+                            }));
+                        }
+                        if (leadIn > 0 && (playSound || !string.IsNullOrEmpty(phraseAudioPath)))
+                        {
+                            bool cancelled = false;
+                            var pending = RainSchedule(TimeSpan.FromMilliseconds(leadIn), () =>
+                            {
+                                if (cancelled || _avatarSetsClosed || IsMuted) return;
+                                _stopSpoken = static () => { };
+                                PlayLineAudio();
+                            });
+                            _stopSpoken = () => { cancelled = true; pending.Dispose(); spoken(); };
+                        }
+                        else PlayLineAudio();
+                        spokenHandled = true;
+                    }
 
                     SyncAskButtonsFor(text);
                     _txtSpeech.Text = text;
@@ -1384,6 +1410,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal void SetWindowMute(bool muted)
         {
             _windowMuted = muted;
+            if (muted) MuteRainSpeech();
             UpdateQuickMenuState();
         }
 
@@ -1425,7 +1452,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// finished). The voice host waits on it so a bark that cut her confirmation still holds the mic.</summary>
         internal Task SpokenAudioDone { get; private set; } = Task.CompletedTask;
 
-        private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null)
+        private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null, Action<TimeSpan>? onStarted = null)
         {
             var handedOff = false;
             try
@@ -1445,7 +1472,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     handedOff = true;
                     _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
                     _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
-                                          barkVoice ? "bark-voice" : "phrase-audio", onFinished: onSpoken);
+                                          barkVoice ? "bark-voice" : "phrase-audio", onStarted: onStarted, onFinished: onSpoken);
                     return;
                 }
 

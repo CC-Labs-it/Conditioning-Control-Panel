@@ -91,7 +91,7 @@ internal static class BarkHead
     {
         var tube = Views.AvatarTube.AvatarTubeWindow.Live;
         if (tube == null) return;
-        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }
+        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text, mood: s.Mood); return; }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
             phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
     }
