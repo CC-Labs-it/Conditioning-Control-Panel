@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -121,6 +122,25 @@ public class Sync7bEntitlementTests
             Assert.Contains(StartupLadder.Inbox.Items, row => row.Key == "tier-on:2");
         }
         finally { StartupLadder.Inbox.Changed -= Fail; shell.Close(); StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
+    public void HideShowKeepsOneActivationCallback() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>()
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        using var hook = EntitlementRefresh.Install();
+        var window = new Window { ShowActivated = false }; var previous = EntitlementRefresh.Activation; int calls = 0;
+        try
+        {
+            EntitlementRefresh.Activation = shell => { calls++; previous(shell); };
+            window.Show(); window.Hide(); window.Show(); window.Hide(); window.Show();
+            // Headless Activate is a no-op; deliver the native activation notification.
+            var notify = typeof(WindowBase).GetMethod("HandleActivated", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            calls = 0; notify.Invoke(window, null);
+            Assert.Equal(1, calls);
+        }
+        finally { window.Close(); EntitlementRefresh.Activation = previous; }
     });
 
     private sealed class ProfileAnswer : HttpMessageHandler

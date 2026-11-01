@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -21,8 +22,12 @@ internal static class EntitlementRefresh
     internal static int EffectiveTier => CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess
         && !ProviderSubscription.IsInviteWeekOnly(AccountSeed.Patreon, AccountSeed.SubscribeStar, CoreSettings.Current) ? 1 : 0;
 
-    internal static void Install() => Window.WindowOpenedEvent.AddClassHandler<Window>((window, _) =>
-        window.Activated += (_, _) => OnActivated(window is Views.Windows.MainShellWindow));
+    private static readonly ConditionalWeakTable<Window, object> Hooked = new();
+    internal static Action<bool> Activation = OnActivated; // Window callback seam, before throttling.
+    internal static IDisposable Install() => Window.WindowOpenedEvent.AddClassHandler<Window>((window, _) =>
+    {
+        if (Hooked.TryAdd(window, window)) window.Activated += (_, _) => Activation(window is Views.Windows.MainShellWindow);
+    });
 
     internal static void OnActivated(bool shell)
     {
