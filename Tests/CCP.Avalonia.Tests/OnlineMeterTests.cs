@@ -26,12 +26,11 @@ public sealed class OnlineMeterTests
     public void PillAndCardFollowSourceConsentAndTheDaysShare() => Run((shell, s) =>
     {
         FriendsLanding.World = () => Session;   // the spent notice waits; this test is about the pill and card
-        ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes * 42 / 100);
-        shell.RefreshOnlineMeterPill();
-        shell.Named<AssetsTabView>("AssetsTab")!.RefreshOnlineMeter();
-        var pill = shell.Named<Border>("OnlineMeterPill")!;
-        var pillText = shell.Named<TextBlock>("TxtOnlineMeterPill")!;
         var tab = shell.Named<AssetsTabView>("AssetsTab")!;
+        void Refresh() { shell.RefreshOnlineMeterPill(); tab.RefreshOnlineMeter(); }
+        ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes * 42 / 100);
+        Refresh();
+        var (pill, pillText) = (shell.Named<Border>("OnlineMeterPill")!, shell.Named<TextBlock>("TxtOnlineMeterPill")!);
         Assert.True(pill.IsVisible);
         Assert.Equal(string.Format(Loc.Get("online_pill"), ScrolllerAllowance.Percent), pillText.Text);
         Assert.True(tab.OnlineMeterCard.IsVisible);
@@ -49,20 +48,17 @@ public sealed class OnlineMeterTests
         shell.RefreshOnlineMeterPill();
         Assert.Equal(OnlineMeterTone.Amber, shell.OnlinePillRing.Tone);
         (s.RemoteMediaConsented, s.FypOnlineConsented) = (false, false);
-        shell.RefreshOnlineMeterPill();
-        shell.Named<AssetsTabView>("AssetsTab")!.RefreshOnlineMeter();
+        Refresh();
         Assert.False(pill.IsVisible);
         Assert.False(tab.OnlineMeterCard.IsVisible);
         s.RemoteMediaConsented = true;
         s.MediaSource = "local";
-        shell.RefreshOnlineMeterPill();
-        shell.Named<AssetsTabView>("AssetsTab")!.RefreshOnlineMeter();
+        Refresh();
         Assert.False(pill.IsVisible);
         s.MediaSource = "mixed";
         ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes);
         Dispatcher.UIThread.RunJobs();
-        shell.RefreshOnlineMeterPill();
-        shell.Named<AssetsTabView>("AssetsTab")!.RefreshOnlineMeter();
+        Refresh();
         Assert.True(pill.IsVisible);
         Assert.Equal(Loc.Get("online_pill_done"), pillText.Text);
         Assert.Equal(string.Format(Loc.Get("online_meter_spent"), string.Format(Loc.Get("online_meter_hours"), 6)),
@@ -95,7 +91,6 @@ public sealed class OnlineMeterTests
     public void SpentNoticeWaitsOutAHoldThenOffersPlans() => Run((shell, s) =>
     {
         var host = shell.Named<Panel>("NotificationHost")!;
-        global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(host);
         bool Toast() => host.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == Loc.Get("online_toast_spent"));
         FriendsLanding.World = () => Session;
         ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes);   // SpentReached, on the real event path
@@ -209,6 +204,13 @@ public sealed class OnlineMeterTests
         global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
         Assert.Contains(replacement, host.Children.Where(c => c.IsHitTestVisible));
     }, stepBeatTime: true);
+    [Fact]
+    public void HelperRestoresBeatClockBeforeReturning() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var previous = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        Run((_, _) => Assert.IsType<SteppedTime>(global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time), stepBeatTime: true);
+        Assert.Same(previous, global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time);
+    });
     private static void Platform()
     {
         if (Application.Current is null)
@@ -217,7 +219,7 @@ public sealed class OnlineMeterTests
     }
     private static void Run(Action<MainShellWindow, AppSettings> body, bool stepBeatTime = false) => AvaloniaTestDispatcher.Run(() =>
     {
-        if (stepBeatTime) global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = new SteppedTime();
+        var oldTime = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
         Platform();
         LocalizationManager.Instance.SetLanguage("en");
         var oldSettings = ConditioningControlPanel.CoreSettings.ServiceProvider;
@@ -230,12 +232,11 @@ public sealed class OnlineMeterTests
         ScrolllerAllowance.ResetForTests();
         ScrolllerAllowance.PlanProvider = () => ScrolllerPlan.Free;
         ScrolllerAllowance.Now = () => SixPm;
-        ScrolllerAllowance.AccountProvider = () => null;
-        ScrolllerAllowance.LedgerPath = () => null;
-        ScrolllerAllowance.LegacyLedgerPath = () => null;
+        (ScrolllerAllowance.AccountProvider, ScrolllerAllowance.LedgerPath, ScrolllerAllowance.LegacyLedgerPath) = (() => null, () => null, () => null);
         MainShellWindow? shell = null;
         try
         {
+            if (stepBeatTime) global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = new SteppedTime();
             shell = new MainShellWindow();
             shell.Show();
             Dispatcher.UIThread.RunJobs();
@@ -254,6 +255,7 @@ public sealed class OnlineMeterTests
                 ScrolllerAllowance.LedgerPath, ScrolllerAllowance.LegacyLedgerPath, FriendsLanding.World) = saved;
             svc.SealForReset();
             ConditioningControlPanel.CoreSettings.ServiceProvider = oldSettings;
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = oldTime;
         }
     });
 }
