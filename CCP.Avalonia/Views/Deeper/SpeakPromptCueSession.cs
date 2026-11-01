@@ -9,25 +9,27 @@ using ConditioningControlPanel.Services.Deeper;
 namespace ConditioningControlPanel.Avalonia.Views.Deeper;
 
 /// <summary>
-/// Cue-only slice of WPF Services/Deeper/SpeakPromptSession.cs:123-151,334-349.
+/// Cue and playback-hold slice of WPF Services/Deeper/SpeakPromptSession.cs:123-151,167-225,334-349.
 /// The runtime must call Start only after speech availability and mic consent succeed
-/// (WPF :58-111). This does not open a microphone or hold playback.
+/// (WPF :58-111), and Dispose on completion or stop. This does not open a microphone.
 /// </summary>
 internal sealed class SpeakPromptCueSession : IDisposable
 {
     private readonly SpeakPromptPlan _plan;
     private readonly Action<string> _flash;
     private readonly CancellationToken _cancellation;
+    private readonly IPlaybackTimeSource? _source;
     private CancellationTokenRegistration _registration;
-    private DispatcherTimer? _timer;
-    private bool _started, _stopped;
+    private DispatcherTimer? _timer, _holdTimer;
+    private bool _started, _stopped, _paused;
 
     internal SpeakPromptCueSession(SpeakPromptPlan plan, Action<string> flash,
-        CancellationToken cancellation = default)
+        CancellationToken cancellation = default, IPlaybackTimeSource? source = null)
     {
         _plan = plan;
         _flash = flash;
         _cancellation = cancellation;
+        _source = source;
     }
 
     // As in WPF Start/Stop, all cue and timer work belongs to the UI dispatcher.
@@ -57,6 +59,7 @@ internal sealed class SpeakPromptCueSession : IDisposable
             _timer.Tick += OnTick;
             _timer.Start();
         }
+        if (!_stopped && !_cancellation.IsCancellationRequested) StartHoldWatch();
     }
 
     private void OnTick(object? sender, EventArgs e) => Pulse();
@@ -71,6 +74,51 @@ internal sealed class SpeakPromptCueSession : IDisposable
     }
 
     internal TimeSpan? CueInterval => _timer?.Interval;
+    internal TimeSpan? HoldInterval => _holdTimer?.Interval;
+
+    // WPF SpeakPromptSession.cs:167-225. A rule-fired pause has no region end,
+    // so take it immediately; a region is checked every 120 ms.
+    private void StartHoldWatch()
+    {
+        if (!_plan.HoldsPlayback || _source == null) return;
+        if (!_plan.HasRegion)
+        {
+            if (_plan.PausesAtCue) Pause();
+            return;
+        }
+        _holdTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(120)
+        };
+        _holdTimer.Tick += OnHoldTick;
+        _holdTimer.Start();
+    }
+
+    private void OnHoldTick(object? sender, EventArgs e) => HoldTick();
+
+    internal void HoldTick()
+    {
+        if (_holdTimer == null || _stopped || _cancellation.IsCancellationRequested || _source == null) return;
+        try
+        {
+            switch (_plan.HoldStepAt(_source.GetCurrentTimeSeconds(), _paused))
+            {
+                case SpeakHoldStep.SeekToRegionStart:
+                    _source.Seek(_plan.RegionStart!.Value);
+                    break;
+                case SpeakHoldStep.Pause:
+                    Pause();
+                    break;
+            }
+        }
+        catch (Exception ex) { Log.Debug("Speak hold tick: {E}", ex.Message); }
+    }
+
+    private void Pause()
+    {
+        try { _source!.Pause(); _paused = true; }
+        catch (Exception ex) { Log.Debug("Speak hold pause: {E}", ex.Message); }
+    }
 
     public void Dispose()
     {
@@ -83,8 +131,20 @@ internal sealed class SpeakPromptCueSession : IDisposable
             _timer.Tick -= OnTick;
             _timer = null;
         }
-        _registration.Dispose();
         if (_started && _plan.CueMode == SpeakCueMode.Persistent)
             SpeakCueOverlay.HideCue();
+        if (_holdTimer != null)
+        {
+            _holdTimer.Stop();
+            _holdTimer.Tick -= OnHoldTick;
+            _holdTimer = null;
+        }
+        if (_paused)
+        {
+            _paused = false;
+            try { _source?.Play(); }
+            catch (Exception ex) { Log.Debug("Speak hold release: {E}", ex.Message); }
+        }
+        _registration.Dispose();
     }
 }

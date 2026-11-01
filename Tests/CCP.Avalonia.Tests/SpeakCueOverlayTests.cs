@@ -219,6 +219,122 @@ public sealed class SpeakCueOverlayTests
         Assert.Equal(stoppedAt, flashes);
     });
 
+    private sealed class Playback : IPlaybackTimeSource
+    {
+        public event Action<double>? PlaybackTimeChanged { add { } remove { } }
+        public double Time;
+        public int Pauses, Plays;
+        public bool ThrowOnPause;
+        public List<double> Seeks = new();
+        public double GetCurrentTimeSeconds() => Time;
+        public double GetDurationSeconds() => 60;
+        public bool IsPlaying => true;
+        public void Seek(double seconds) => Seeks.Add(seconds);
+        public void Pause() { if (ThrowOnPause) throw new InvalidOperationException(); Pauses++; }
+        public void Play() => Plays++;
+        public PlaybackRect GetVideoRect() => PlaybackRect.Empty;
+    }
+
+    private static SpeakPromptPlan HoldPlan(SpeakHoldMode hold, SpeakCompletion completion = SpeakCompletion.UntilSatisfied,
+        bool region = true) => new(new TriggerEffectAction
+    {
+        SpeakTarget = "YES", SpeakCueMode = SpeakCueMode.Intermittent,
+        SpeakCompletion = completion, SpeakHoldMode = hold,
+        SpeakRegionStartSec = region ? 2 : null, SpeakRegionEndSec = region ? 5 : null
+    }, DateTime.UtcNow);
+
+    [Fact]
+    public Task RulePause_IsImmediateAndCancellationResumesOnce() => Run((_, _) =>
+    {
+        var source = new Playback();
+        using var cancel = new CancellationTokenSource();
+        using var cue = new SpeakPromptCueSession(HoldPlan(SpeakHoldMode.Pause, region: false), _ => { }, cancel.Token, source);
+        cue.Start();
+        Assert.Equal(1, source.Pauses);
+        Assert.Null(cue.HoldInterval);
+        cancel.Cancel();
+        Assert.Equal(1, source.Plays);
+        cue.Dispose();
+        cue.Start();
+        Assert.Equal(1, source.Plays);
+        Assert.Equal(1, source.Pauses);
+    });
+
+    [Fact]
+    public Task RegionLoop_SeeksAtLookaheadAndStopsOnDispose() => Run((_, _) =>
+    {
+        var source = new Playback { Time = 4.69 };
+        using var cue = new SpeakPromptCueSession(HoldPlan(SpeakHoldMode.LoopRegion), _ => { }, source: source);
+        cue.HoldTick();
+        cue.Start();
+        Assert.Equal(TimeSpan.FromMilliseconds(120), cue.HoldInterval);
+        cue.HoldTick();
+        Assert.Empty(source.Seeks);
+        source.Time = 4.7;
+        cue.HoldTick();
+        Assert.Equal(new[] { 2.0 }, source.Seeks);
+        cue.Dispose();
+        Assert.Null(cue.HoldInterval);
+        cue.HoldTick();
+        Assert.Single(source.Seeks);
+        Assert.Equal(0, source.Plays);
+    });
+
+    [Fact]
+    public Task RegionPause_RetriesFailedPauseAndResumesOnlyAfterSuccess() => Run((_, _) =>
+    {
+        var failed = new Playback { Time = 4.7, ThrowOnPause = true };
+        using (var stopped = new SpeakPromptCueSession(HoldPlan(SpeakHoldMode.Pause), _ => { }, source: failed))
+        {
+            stopped.Start();
+            stopped.HoldTick();
+        }
+        Assert.Equal(0, failed.Plays);
+        var source = new Playback { Time = 4.7, ThrowOnPause = true };
+        using var cue = new SpeakPromptCueSession(HoldPlan(SpeakHoldMode.Pause), _ => { }, source: source);
+        cue.Start();
+        cue.HoldTick();
+        Assert.Equal(0, source.Pauses);
+        source.ThrowOnPause = false;
+        cue.HoldTick();
+        cue.HoldTick();
+        Assert.Equal(1, source.Pauses);
+        cue.Dispose();
+        Assert.Equal(1, source.Plays);
+    });
+
+    [Fact]
+    public Task PassiveOrUnboundedLoop_DoesNotHoldOrResumePlayback() => Run((_, _) =>
+    {
+        var source = new Playback { Time = 5 };
+        foreach (var plan in new[] { HoldPlan(SpeakHoldMode.KeepPlaying),
+            HoldPlan(SpeakHoldMode.Pause, SpeakCompletion.Duration), HoldPlan(SpeakHoldMode.LoopRegion, region: false) })
+        {
+            using var cue = new SpeakPromptCueSession(plan, _ => { }, source: source);
+            cue.Start();
+            Assert.Null(cue.HoldInterval);
+            cue.HoldTick();
+        }
+        Assert.Equal(0, source.Pauses);
+        Assert.Equal(0, source.Plays);
+        Assert.Empty(source.Seeks);
+    });
+
+    [Fact]
+    public Task HoldTimer_TicksAndStops() => Run(async (_, _) =>
+    {
+        var source = new Playback { Time = 4.7 };
+        using var cue = new SpeakPromptCueSession(HoldPlan(SpeakHoldMode.Pause), _ => { }, source: source);
+        cue.Start();
+        var until = DateTime.UtcNow.AddSeconds(3);
+        while (source.Pauses == 0 && DateTime.UtcNow < until) await Task.Delay(20);
+        Assert.Equal(1, source.Pauses);
+        cue.Dispose();
+        await Task.Delay(250);
+        Assert.Equal(1, source.Pauses);
+        Assert.Equal(1, source.Plays);
+    });
+
     private static void EnsureAvalonia()
     {
         Assert.True(AvaloniaTestDispatcher.IsDispatcherThread);
