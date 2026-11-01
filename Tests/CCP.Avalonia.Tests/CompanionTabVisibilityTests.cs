@@ -10,6 +10,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.V2;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -109,6 +110,59 @@ public sealed class CompanionTabVisibilityTests
             Dispatcher.UIThread.RunJobs();
             CoreSettings.ServiceProvider = null;
         }
+    });
+
+    // WPF ShowTab always runs SyncCompanionTabUI, even when Companion is already selected.
+    [Fact]
+    public Task ReselectingCompanionRefreshesTheConversationProvider() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.Welcomed = true;
+        s.HasAcceptedAgeVerification = true;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        s.AwarenessModeEnabled = false;
+        s.AiChatEnabled = false;
+        s.CompanionPrompt.AiProvider = AiProviderType.Local;
+
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            // The AI page adopts the engine from the collapsed room.
+            shell.ShowTab("companionai");
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            var page = shell.GetLogicalDescendants().OfType<ConversationPage>().Single();
+            Assert.True(page.Vm.NeedsStart);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("companion_v2_off"),
+                page.FindControl<TextBlock>("StatusText")!.Text);
+
+            // Another surface changed the settings while this tab stayed visible.
+            s.AiChatEnabled = true;
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(page.Vm.NeedsStart);
+            Assert.NotEqual(ConditioningControlPanel.Localization.Loc.Get("companion_v2_off"),
+                page.FindControl<TextBlock>("StatusText")!.Text);
+            Assert.True(s.AiChatEnabled); // refreshing must not write the old provider back
+        }
+        finally
+        {
+            foreach (var w in shell.OwnedWindows.ToList()) w.Close();
+            shell.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
     });
 
     /// <summary>Found by the real-profile migration test: quitting without ever opening the

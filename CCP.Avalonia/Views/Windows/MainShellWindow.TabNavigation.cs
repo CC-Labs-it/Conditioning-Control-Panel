@@ -209,6 +209,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "haptics": StudioRack?.FocusRackEntry("haptics"); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("haptics"); break;
                     // WPF :666, the "Scheduler & Ramp" zone pill: the rack's scheduler module.
                     case "ramp": StudioRack?.FocusRackEntry("scheduler"); RefreshSessionFeatureLock(); break;
+                    // WPF TabNavigation.cs:501-504 -> CompanionTab.cs:79 -> CompanionRoomRuntimeVm.cs:96.
+                    // ShowTab also re-reads the engine when Companion is already visible, where there is no visibility edge.
+                    case "companion":
+                        if (RoomView()?.EngineZone.DataContext is Controls.Companion.EngineRoomVm engine)
+                            engine.Sync();
+                        break;
                     // WPF MainWindow.CompanionTabs.cs NavTabHost(..., OnShown): each page adopts the collapsed room's live zones.
                     case "personality": Named<Controls.Companion.Pages.PersonalityPage>("CompanionPersonalityTab")?.OnShown(RoomView()); break;
                     case "permissions": Named<Controls.Companion.Pages.PermissionsPage>("CompanionPermissionsTab")?.OnShown(RoomView()); break;
