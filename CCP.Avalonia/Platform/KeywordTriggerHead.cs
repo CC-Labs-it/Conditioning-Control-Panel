@@ -162,6 +162,11 @@ internal sealed class KeywordAudioRuntime
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
         }
+        // WPF KeywordTriggerService.cs:1263,1280: panic quiet suppresses dispatch and
+        // its quest credit; each match in a merged dispatch earns one credit.
+        if (Services.Safety.PanicAftermath.TriggersSilenced()) return;
+        foreach (var _ in fired) App.Quests?.TrackKeywordTrigger();
+
         // WPF merge: preset first, and only the first enabled PlayAudio action wins.
         var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
         if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))

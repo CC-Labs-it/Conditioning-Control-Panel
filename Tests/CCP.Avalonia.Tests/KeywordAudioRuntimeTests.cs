@@ -13,6 +13,9 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Safety;
+using AvApp = ConditioningControlPanel.Avalonia.App;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -85,6 +88,74 @@ public sealed class KeywordAudioRuntimeTests
             new PlayAudioAction { FilePath = audio.FilePath, Volume = 100, DuckSystemAudio = false } } });
         Type(engine, "sit");
         Assert.Equal((float)Math.Pow(0.5, 1.5), Assert.Single(played).Volume);
+    });
+
+    [Fact]
+    public void KeyboardMatchesCreditEachDailyAndWeeklyQuestOncePerTrigger() => Run((engine, s, played) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-keyword-quest-").FullName;
+        var oldQuests = AvApp.Quests;
+        var quests = new QuestService(null, dir);
+        try
+        {
+            quests.Progress.DailyQuests = new List<ActiveQuest> { new("trigger_words_d"), new("word_slave_d") };
+            quests.Progress.WeeklyQuest = new ActiveQuest("pavlov_w");
+            AvApp.Quests = quests;
+            var events = 0;
+            quests.QuestProgressChanged += (_, _) => events++;
+            s.KeywordTriggers.Add(new KeywordTrigger { Id = "preset:one", Keyword = "sit", CooldownSeconds = 0 });
+            s.KeywordPerKeywordCooldownSeconds = 10;
+            s.AwarenessLoopProtectionEnabled = false;
+
+            Type(engine, "sit");
+            Assert.All(quests.Progress.DailyQuests, q => Assert.Equal(2, q!.CurrentProgress));
+            Assert.Equal(2, quests.Progress.WeeklyQuest.CurrentProgress);
+            Assert.Equal(6, events);
+            Assert.Single(played); // merged audio dispatch stays single
+            Type(engine, "sit"); // per-keyword mute
+            Assert.Equal(2, quests.Progress.WeeklyQuest.CurrentProgress);
+            engine.FireDemo("sit", "tutorial"); // demo dispatch is not implemented here
+            Assert.Equal(2, quests.Progress.WeeklyQuest.CurrentProgress);
+            CoreEntitlement.HasPremiumProvider = () => false;
+            Type(engine, "sit");
+            Assert.Equal(2, quests.Progress.WeeklyQuest.CurrentProgress);
+        }
+        finally
+        {
+            AvApp.Quests = oldQuests;
+            quests.Dispose();
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    });
+
+    [Fact]
+    public void PanicQuietSuppressesKeyboardDispatchAndQuestCredit() => Run((engine, s, played) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-keyword-quiet-").FullName;
+        var oldQuests = AvApp.Quests;
+        var quests = new QuestService(null, dir);
+        try
+        {
+            quests.Progress.DailyQuests = new List<ActiveQuest> { new("trigger_words_d") };
+            AvApp.Quests = quests;
+            s.AwarenessLoopProtectionEnabled = false;
+            PanicAftermath.ArmQuiet();
+            Type(engine, "sit");
+            Assert.Empty(played);
+            Assert.Equal(0, quests.Progress.DailyQuests[0]!.CurrentProgress);
+            PanicAftermath.EndQuiet();
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 2); // WPF records the suppressed match's cooldown
+            Type(engine, "sit");
+            Assert.Single(played);
+            Assert.Equal(1, quests.Progress.DailyQuests[0]!.CurrentProgress);
+        }
+        finally
+        {
+            PanicAftermath.EndQuiet();
+            AvApp.Quests = oldQuests;
+            quests.Dispose();
+            try { Directory.Delete(dir, true); } catch { }
+        }
     });
 
     [Fact]   // WPF FireDemoTrigger never reads saved triggers or plays audio (#887 back door)
