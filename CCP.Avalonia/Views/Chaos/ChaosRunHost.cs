@@ -120,10 +120,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>The countdown's completion. WPF BeginRun also applies the start boon and
-        /// lifetime boons and builds the toys; the clock, lifetime boons and toy buttons are here.</summary>
+        /// lifetime boons and builds the toys.</summary>
         internal static void BeginRun()
         {
             if (!_active || _state == null || _spawning) return;
+            // WPF ChaosModeService.cs:422-443: the scripted first descent falls in bare.
+            var equipped = _state.Config.ScriptedFirstRun ? null : ChaosMeta.State.EquippedStartBoon;
+            var boon = ChaosBoonPool.All.FirstOrDefault(b => b.Id == equipped);
+            if (boon != null)
+            {
+                _state.ApplyBoon(boon);
+                ChaosMeta.MarkDiscovered("boon:" + boon.Id);
+                ChaosAnnouncerOverlay.Announce($"◈ {boon.Name}", ChaosAnnounceKind.Mantra, artKey: boon.Id);
+            }
             ChaosRunEffects.ApplyLifetimeBoons(_state);
             _hud?.SetPreRunExpanded(false);
             _hud?.SetClockVisible(_state.ShowWaveTimer);

@@ -90,6 +90,35 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    // WPF ChaosModeService.cs:422-443: start boon applies before wave 1, except on the scripted first run.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Starting_mantra_applies_on_countdown_only_for_a_regular_run(bool scripted)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            try
+            {
+                ChaosMeta.State.EquippedStartBoon = "extra_shield";
+                var cfg = Cfg();
+                cfg.ScriptedFirstRun = scripted;
+                ChaosRunHost.StartRun(cfg);
+                var state = ChaosRunHost.State!;
+                Assert.Empty(state.ActiveBoons);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.Equal(scripted ? 0 : 2, state.Shields);
+                Assert.Equal(!scripted, state.ActiveBoons.Any(b => b.Id == "extra_shield"));
+                Assert.Equal(!scripted, ChaosMeta.IsDiscovered("boon:extra_shield"));
+                Assert.Equal(!scripted, state.RunPickTiles.Any());
+            }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>WPF ChaosToyButtonWindow: one hero button per equipped toy; a real click fires the
     /// toy (cooldown starts, the status counts down on the run clock); the toy key rides the panic
     /// key's listener; panic closes every button and unhooks the key.</summary>
