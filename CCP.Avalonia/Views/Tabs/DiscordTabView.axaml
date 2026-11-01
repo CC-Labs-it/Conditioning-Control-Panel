@@ -232,13 +232,8 @@
                                                  the whole held delta into the glass. Drawn in
                                                  XAML (no bitmap): metallic grays with the app's
                                                  pink accent on the handle.
-                                                 ponytail: the shake/scale/tilt transforms cannot
-                                                 be x:Named (a Transform is not a StyledElement)
-                                                 and every animation on them lives in
-                                                 MainWindow.ProfileFaucet.cs, which is not on this
-                                                 head. The static frame is drawn; re-attach a
-                                                 TransformGroup from code when ProfileFaucet moves
-                                                 to Core. -->
+                                                 Waiting-state transforms are attached by the
+                                                 faucet host; gesture feedback remains follow-up. -->
                                             <Grid x:Name="ProfileVatFaucet"
                                                   ZIndex="3" Focusable="True"
                                                   Width="40" Height="42" HorizontalAlignment="Left"
@@ -355,9 +350,7 @@
                                             <!-- THE CHIP - the screen's ONE breather and the vat's
                                                  primary explainer. Gold, so it reads as "something
                                                  is owed to you" rather than as chrome; it is on
-                                                 screen only while XP is actually waiting.
-                                                 ponytail: the 2.8s breath ScaleTransform is dropped
-                                                 with the rest of the faucet clock. -->
+                                                 screen only while XP is actually waiting. -->
                                             <Border x:Name="ProfileVatChip"
                                                     IsVisible="False" CornerRadius="8"
                                                     HorizontalAlignment="Center" VerticalAlignment="Top"

@@ -79,7 +79,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void OnProfileVatVisibilityChanged(bool onScreen)
         {
             _vatOnScreen = onScreen;
-            if (onScreen) _vatDescent?.RequestRefresh("trainer card open");
+            if (onScreen)
+            {
+                _vatDescent?.RequestRefresh("trainer card open");
+                UpdateFaucetPresentation();
+            }
             // ponytail: keep the jar dark until the coordinator feeds the persisted faucet hold.
             // A server reading alone must not auto-pour or strand held XP in a jar without a tap.
             EvaluateVatPoll();
