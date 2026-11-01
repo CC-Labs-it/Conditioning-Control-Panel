@@ -73,8 +73,10 @@ public sealed class RequiredNameTests
     }
 
     // WPF DisplayNameDialog.xaml.cs:44-62,105-166,201-205.
-    [Fact]
-    public Task RequiredModeValidatesRetriesAndIgnoresAnAnswerAfterClose() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RequiredModeValidatesRetriesAndIgnoresAnAnswerAfterClose(bool throws) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var owner = new Window();
@@ -83,6 +85,10 @@ public sealed class RequiredNameTests
         int calls = 0;
         var d = new DisplayNameDialog(null, _ => { calls++; return answer.Task; });
         var shown = d.ShowDialog<bool>(owner);
+        var copy = (d.FindControl<TextBlock>("TxtTitle")!.Text, d.FindControl<TextBlock>("TxtPrompt")!.Text);
+        LocalizationManager.Instance.SetLanguage("de");
+        Assert.Equal(copy, (d.FindControl<TextBlock>("TxtTitle")!.Text, d.FindControl<TextBlock>("TxtPrompt")!.Text));
+        LocalizationManager.Instance.SetLanguage("en");
         var input = d.FindControl<TextBox>("TxtDisplayName")!;
         var confirm = d.FindControl<Button>("BtnConfirm")!;
         var close = d.FindControl<Button>("BtnClose")!;
@@ -108,12 +114,12 @@ public sealed class RequiredNameTests
         Click();
         Assert.Equal(1, calls);
         Assert.False(input.IsEnabled);
-        answer.SetResult("taken");
-        await answer.Task;
+        if (throws) answer.SetException(new InvalidOperationException("save failed")); else answer.SetResult("taken");
+        if (!throws) await answer.Task;
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Assert.True(input.IsEnabled);
         Assert.True(confirm.IsEnabled);
-        Assert.Equal("taken", d.FindControl<TextBlock>("TxtStatus")!.Text);
+        Assert.Equal(throws ? Loc.Get("msg_failed_to_change_display_name") : "taken", d.FindControl<TextBlock>("TxtStatus")!.Text);
         answer = new TaskCompletionSource<string?>();
         Click();
         d.Close(false);
@@ -138,6 +144,8 @@ public sealed class RequiredNameTests
         var change = CoreAccount.ChangeDisplayNameProvider;
         var factory = AccountSeed.NewV2;
         var wire = new Wire();
+        var providerSlot = typeof(AccountSeed).GetProperty(nameof(AccountSeed.Patreon), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var priorProvider = AccountSeed.Patreon;
         var shell = new MainShellWindow();
         shell.Show();
         try
@@ -152,6 +160,11 @@ public sealed class RequiredNameTests
             s.UnifiedId = "u1";
             card.DisplayOwnProfile();
             Assert.Equal(Loc.Get("account_name_not_set"), card.FindControl<TextBlock>("TxtProfileViewerName")!.Text);
+            providerSlot.SetValue(null, new ProviderSubscription("patreon", () => new()) { DisplayName = "Patreon name" });
+            card.DisplayOwnProfile();
+            Assert.Equal("Patreon name", card.FindControl<TextBlock>("TxtProfileViewerName")!.Text);
+            providerSlot.SetValue(null, priorProvider);
+            card.DisplayOwnProfile();
             await shell.AskDisplayNameAfterSignIn(shell, null, false);
             Assert.Empty(shell.OwnedWindows);
             var ask = shell.AskDisplayNameAfterSignIn(shell, null, true);
@@ -175,6 +188,7 @@ public sealed class RequiredNameTests
             foreach (var d in shell.OwnedWindows.ToArray()) d.Close();
             shell.Close();
             (s.UnifiedId, s.UserDisplayName) = old;
+            providerSlot.SetValue(null, priorProvider);
             CoreAccount.ChangeDisplayNameProvider = change;
             AccountSeed.NewV2 = factory;
         }

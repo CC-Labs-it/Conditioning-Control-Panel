@@ -64,7 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             ShowStatus(Loc.Get("login_checking"));
             string? error;
             try { error = await _save!(name); }
-            catch { error = Loc.Get("msg_failed_to_change_display_name"); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Display name save failed"); error = Loc.Get("msg_failed_to_change_display_name"); }
             if (_closed) return;
             if (error == null) { DisplayName = name; Close(true); return; }
             _txtDisplayName.IsEnabled = true;
