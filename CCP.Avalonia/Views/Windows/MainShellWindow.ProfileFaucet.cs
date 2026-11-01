@@ -1,5 +1,5 @@
 // Charge/pour host: WPF MainWindow.ProfileFaucet.cs:135-348, 544-844, 1067-1144.
-// Coordinator wiring and decorative motion remain part B.
+// Coordinator wiring and gesture feedback remain part B.
 using System;
 using Avalonia;
 using Avalonia.Controls;
@@ -62,6 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void DisarmFaucet()
         {
             CancelFaucetCharge(silent: true);
+            StopFaucetWaitingMotion();
             _faucetHold.Reset();
             foreach (string name in new[] { "ProfileVatFaucet", "ProfileVatChip", "ProfileVatChargeRing", "ProfileVatTickDrain", "ProfileVatTickCap", "ProfileVatTickMax" })
                 if (Vat<Control>(name) is { } control) control.IsVisible = false;
@@ -114,13 +115,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 glass.FillPercentChanged += OnVatFillPercentChanged;
                 glass.SizeChanged += (_, _) => PositionVatTickGlyphs();
             }
-            Deactivated += (_, _) => OnFaucetVatOffScreen();
-            Closed += (_, _) => CancelFaucetCharge(silent: true);
+            Deactivated += (_, _) => { _faucetKeyHeld = false; CancelFaucetCharge(silent: true); };
+            Activated += (_, _) => UpdateFaucetPresentation();
+            PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) UpdateFaucetPresentation(); };
+            AmbientFxCanvas.Env.MotionGateChanged += UpdateFaucetPresentation;
+            Closed += (_, _) =>
+            {
+                AmbientFxCanvas.Env.MotionGateChanged -= UpdateFaucetPresentation;
+                CancelFaucetCharge(silent: true);
+                StopFaucetWaitingMotion();
+            };
         }
         private void OnFaucetVatOffScreen()
         {
             _faucetKeyHeld = false;
             CancelFaucetCharge(silent: true);
+            StopFaucetWaitingMotion();
         }
 
         private void UpdateFaucetPresentation()
@@ -136,6 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Vat<Border>("ProfileVatChip") is { } chip) chip.IsVisible = waiting;
             if (Vat<TextBlock>("ProfileVatChipText") is { } text) text.Text = Loc.GetF("profile_vat_chip", held);
             if (Vat<Control>("ProfileVatFaucetBadge") is { } badge) badge.IsVisible = held > 0 && !AmbientFxCanvas.Env.AllowAmbientLoops;
+            UpdateFaucetWaitingMotion(waiting);
         }
 
         internal void BeginFaucetCharge()

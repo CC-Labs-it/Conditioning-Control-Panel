@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -179,4 +180,98 @@ public sealed class ProfileFaucetTests
         }
         return Task.CompletedTask;
     });
+    private sealed class FaucetClock : TimeProvider
+    {
+        public double Seconds;
+        public override long TimestampFrequency => 1000;
+        public override long GetTimestamp() => (long)(Seconds * 1000);
+    }
+
+    [Fact]
+    public Task WaitingMotionFollowsTheHoldAndParksWithTheCard() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var oldClock = BeatLoop.Time;
+        var oldAudio = CoreAudio.PlayOneShotProvider;
+        var clock = new FaucetClock();
+        var cues = new List<string>();
+        BeatLoop.Time = clock;
+        CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(System.IO.Path.GetFileName(path));
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = Create();
+            var page = shell.ProfilePage!;
+            var tap = page.FindControl<Grid>("ProfileVatFaucet")!;
+            var chip = page.FindControl<Border>("ProfileVatChip")!;
+            var drop = page.FindControl<Ellipse>("ProfileVatFaucetDrop")!;
+            var badge = page.FindControl<Ellipse>("ProfileVatFaucetBadge")!;
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(badge.IsVisible);
+            var tilt = Assert.IsType<RotateTransform>(tap.RenderTransform);
+            var scale = Assert.IsType<ScaleTransform>(chip.RenderTransform);
+            var fall = Assert.IsType<TranslateTransform>(drop.RenderTransform);
+            Assert.Equal(-2.2, tilt.Angle, 3);
+            clock.Seconds = .45; BeatLoop.StepAll();
+            Assert.Equal(.85, drop.Opacity, 3);
+            Assert.Equal(1.75, fall.Y, 3);
+            clock.Seconds = .55; BeatLoop.StepAll();
+            Assert.Equal(2.2, tilt.Angle, 3);
+            clock.Seconds = 2.8; BeatLoop.StepAll();
+            Assert.Equal(1.05, scale.ScaleX, 3);
+            Assert.Equal(scale.ScaleX, scale.ScaleY);
+            Assert.Empty(cues);
+            clock.Seconds = 3.8; BeatLoop.StepAll();
+            Assert.Equal(new[] { "faucet_tick.wav" }, cues);
+            // Headless windows do not deactivate each other, so deliver the platform callback.
+            typeof(WindowBase).GetMethod("HandleDeactivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(shell, null);
+            Assert.False(shell.IsActive);
+            Assert.Contains(BeatLoop.Running, loop => loop.Owner == tap);
+            cues.Clear(); clock.Seconds = 7.61; BeatLoop.StepAll();
+            Assert.Empty(cues); // WPF keeps the wobble but suppresses ticks in the background.
+            typeof(WindowBase).GetMethod("HandleActivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(shell, null);
+
+            shell.BeginFaucetCharge();
+            Assert.Equal(0, tilt.Angle);
+            Assert.Equal(1, scale.ScaleX);
+            Assert.Equal(0, drop.Opacity);
+            shell.CancelFaucetCharge(silent: true);
+            Assert.NotEqual(0, tilt.Angle);
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.True(badge.IsVisible);
+            Assert.Equal(0, tilt.Angle);
+            Assert.Equal(1, scale.ScaleX);
+            Assert.Equal(0, drop.Opacity);
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            CoreSettings.Current.PerformanceMode = true;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.True(badge.IsVisible);
+            Assert.Equal(0, tilt.Angle);
+            CoreSettings.Current.PerformanceMode = false;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.NotEqual(0, tilt.Angle);
+            shell.ShowTab("settings");
+            Assert.Equal(0, tilt.Angle);
+            Assert.Equal(1, scale.ScaleX);
+            Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == tap);
+            shell.ShowTab("discord"); shell.Activate(); Dispatcher.UIThread.RunJobs();
+            Assert.NotEqual(0, tilt.Angle);
+            shell.WindowState = WindowState.Minimized; Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, tilt.Angle);
+            Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == tap);
+            shell.WindowState = WindowState.Normal; shell.Activate(); Dispatcher.UIThread.RunJobs();
+            Assert.NotEqual(0, tilt.Angle);
+            shell.DisarmVat();
+            Assert.Equal(0, tilt.Angle);
+            Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == tap);
+        }
+        finally
+        {
+            try { shell?.Close(); }
+            finally { BeatLoop.Time = oldClock; CoreAudio.PlayOneShotProvider = oldAudio; }
+        }
+        return Task.CompletedTask;
+    });
+
 }
