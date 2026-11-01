@@ -60,7 +60,7 @@ public class ShopCosmeticsTests
         Assert.True(File.Exists(path), path);
         Assert.Contains("creativecommons.org/licenses/by/4.0", File.ReadAllText(path));
         Assert.Contains("Resources\\cosmetics\\shop\\ATTRIBUTION.txt",
-            File.ReadAllText(RepoFile("ConditioningControlPanel.csproj")));
+            File.ReadAllText(RepoFile("ConditioningControlPanel", "ConditioningControlPanel.csproj")));
     }
 
     [Fact]

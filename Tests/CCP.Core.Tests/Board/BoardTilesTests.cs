@@ -468,8 +468,8 @@ public class BoardTilesTests
         // With the message glow, field/message passes, face cache and packed CRT (same day, watch-party
         // sample, every effect): pitch 14 + CRT 1.6-1.7 ms (1.93 ms before on the same machine).
         // This guard is loose (Debug, cold JIT, a loaded CI runner) and only catches a gross regression.
-        // 13.23 ms under a whole-suite load on 2026-10-31, under 2 ms alone: 40 ms is still 20x the budget.
-        Assert.True(ms < 40, $"a board frame took {ms:F2} ms");
+        // CI runs this guard in a separate test process to avoid other tests' background work.
+        Assert.True(ms < 12, $"a board frame took {ms:F2} ms");
     }
 }
 
