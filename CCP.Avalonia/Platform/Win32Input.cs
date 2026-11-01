@@ -47,7 +47,7 @@ internal static class Win32Input
             _escDown = true;
             // WPF checks WantsGlobalEscape in the hook: post only while a non-strict clip is up (a racy
             // pre-filter; EscapeDoor re-checks on the UI thread), never every Escape in every app.
-            if (MandatoryVideoOverlay.Instance.WantsGlobalEscape) Dispatcher.UIThread.Post(EscapeDoor);
+            QueueVideoEscape();
         };
         Win32PanicKey.KeyUp += (vk, _) =>
         {
@@ -110,6 +110,12 @@ internal static class Win32Input
         if (!OperatingSystem.IsWindows() || !_wired) return;
         var want = lockdownActive && blockSystemKeys;
         if (Win32PanicKey.SuppressSystemKeys != want) Win32PanicKey.SuppressSystemKeys = want;
+    }
+
+    /// <summary>Queue only while a non-strict video is visible; EscapeDoor rechecks on the UI thread.</summary>
+    internal static void QueueVideoEscape()
+    {
+        if (MandatoryVideoOverlay.Instance.WantsGlobalEscape) Dispatcher.UIThread.Post(EscapeDoor);
     }
 
     /// <summary>WPF OnGlobalKeyPressed's first branch (MainWindow.xaml.cs:885): a plain Esc reaches a

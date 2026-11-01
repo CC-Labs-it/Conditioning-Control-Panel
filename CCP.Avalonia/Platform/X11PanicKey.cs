@@ -83,6 +83,19 @@ internal static class X11PanicKey
         return true;
     }
 
+    /// <summary>Route the raw key to panic first, then one video Esc per physical press. XInput raw
+    /// events do not consume the key from its focused client.</summary>
+    internal static void RouteRawKey(bool press, int keycode, int escapeCode, ref bool escapeDown,
+        Action onPanic, Action onVideoEscape)
+    {
+        Route(press, keycode, onPanic);
+        if (escapeCode == 0 || keycode != escapeCode) return;
+        if (!press) { escapeDown = false; return; }
+        if (escapeDown) return;
+        escapeDown = true;
+        onVideoEscape();
+    }
+
     [DllImport(LibX11)] private static extern int XQueryKeymap(IntPtr display, byte[] keys);
     private static IntPtr _queryDisplay;
     private static readonly object QueryGate = new();
@@ -156,6 +169,8 @@ internal static class X11PanicKey
     {
         var ev = Marshal.AllocHGlobal(XEventSize);
         string? boundName = null;
+        var escapeCode = XKeysymToKeycode(display, KeysymOf("Escape"));
+        bool escapeDown = false;
         void Resolve()
         {
             var name = currentKey();
@@ -176,6 +191,8 @@ internal static class X11PanicKey
                     // Layout/keymap change: refresh Xlib's cache and re-resolve the keycode.
                     XRefreshKeyboardMapping(ev);
                     boundName = null;
+                    escapeCode = XKeysymToKeycode(display, KeysymOf("Escape"));
+                    escapeDown = false;
                     Resolve();
                     continue;
                 }
@@ -189,8 +206,10 @@ internal static class X11PanicKey
                 if (keycode < 0) continue;
 
                 Resolve();
-                if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
-                Route(true, keycode, onPress);
+                var press = evType == XI_RawKeyPress;
+                // WPF MainWindow.xaml.cs:858: Esc reaches a non-strict video even when it is unfocused.
+                RouteRawKey(press, keycode, escapeCode, ref escapeDown, onPress, Win32Input.QueueVideoEscape);
+                if (!press) continue;
                 // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).
                 if (PushToTalk is { } ptt && KeysymOf(PushToTalkKey?.Invoke()) is var ps and not 0
                     && keycode == XKeysymToKeycode(display, ps)) ptt();
