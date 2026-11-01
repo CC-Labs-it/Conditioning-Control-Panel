@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -77,7 +78,39 @@ public sealed class DeeperDesktopLifecycleTests
         finally { Directory.Delete(profile, true); }
     }
 
-    private static async Task RunChild(string profile, string phase)
+    [Fact]
+    public async Task DesktopFirstStartKeepsMixedCaseEditedDemo()
+    {
+        var phase = Environment.GetEnvironmentVariable(LifecycleProfile.PhaseVariable);
+        if (phase != null)
+        {
+            Assert.Equal("edited", phase);
+            await RunDesktop(phase);
+            return;
+        }
+
+        var profile = Directory.CreateTempSubdirectory("ccp-deeper-edited-").FullName;
+        try
+        {
+            var folder = Directory.CreateDirectory(Path.Combine(profile, "enhancements")).FullName;
+            var editedPath = Path.Combine(folder, "WELCOME.CCPENH.JSON");
+            var demo = EnhancementSerializer.LoadFromFile(Path.Combine(AppContext.BaseDirectory, "Resources", "DeeperDemos", "welcome.ccpenh.json"));
+            demo.Metadata.Name = "Edited welcome";
+            var editedJson = EnhancementSerializer.Save(demo);
+            File.WriteAllText(editedPath, editedJson);
+            var settings = Path.Combine(profile, "settings.json");
+            File.WriteAllText(settings, "{\"HasSeededDeeperDemos\":false}");
+            await RunChild(profile, "edited", nameof(DesktopFirstStartKeepsMixedCaseEditedDemo));
+            Assert.Equal(editedJson, File.ReadAllText(editedPath));
+            Assert.Single(Directory.GetFiles(folder), path =>
+                string.Equals(Path.GetFileName(path), "welcome.ccpenh.json", StringComparison.OrdinalIgnoreCase));
+            using var saved = JsonDocument.Parse(File.ReadAllText(settings));
+            Assert.True(saved.RootElement.GetProperty("HasSeededDeeperDemos").GetBoolean());
+        }
+        finally { Directory.Delete(profile, true); }
+    }
+
+    private static async Task RunChild(string profile, string phase, string? methodName = null)
     {
         var executable = Environment.ProcessPath!;
         var start = new ProcessStartInfo(executable) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
@@ -86,7 +119,7 @@ public sealed class DeeperDesktopLifecycleTests
         start.ArgumentList.Add("-noLogo");
         start.ArgumentList.Add("-noColor");
         start.ArgumentList.Add("-method");
-        start.ArgumentList.Add("CCP.Avalonia.DeeperLifecycle.Tests.DeeperDesktopLifecycleTests.DesktopStartupAndExitPersistDemoSeedAcrossRestart");
+        start.ArgumentList.Add(typeof(DeeperDesktopLifecycleTests).FullName + "." + (methodName ?? nameof(DesktopStartupAndExitPersistDemoSeedAcrossRestart)));
         start.Environment[LifecycleProfile.ProfileVariable] = profile;
         start.Environment[LifecycleProfile.PhaseVariable] = phase;
         using var process = Process.Start(start)!;
@@ -112,7 +145,14 @@ public sealed class DeeperDesktopLifecycleTests
             library = Assert.IsType<EnhancementLibrary>(property.GetValue(null));
             Assert.NotNull(EnhancementResolver.LibraryMatchProvider);
             Assert.True(App.Settings!.Current.HasSeededDeeperDemos);
-            Assert.Equal(phase == "first", File.Exists(Path.Combine(LifecycleProfile.Root, "enhancements", "welcome.ccpenh.json")));
+            if (phase == "edited")
+            {
+                var edited = Assert.Single(library.ScanLibrary(), entry =>
+                    string.Equals(Path.GetFileName(entry.FilePath), "welcome.ccpenh.json", StringComparison.OrdinalIgnoreCase));
+                Assert.Equal("WELCOME.CCPENH.JSON", Path.GetFileName(edited.FilePath));
+                Assert.Equal("Edited welcome", edited.Name);
+            }
+            else Assert.Equal(phase == "first", File.Exists(Path.Combine(LifecycleProfile.Root, "enhancements", "welcome.ccpenh.json")));
         }
         finally
         {

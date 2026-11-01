@@ -66,7 +66,11 @@ namespace ConditioningControlPanel.Services.Deeper
                 {
                     var name = Path.GetFileName(src);
                     var dst = Path.Combine(LibraryFolder, name);
-                    if (File.Exists(dst)) continue; // respect user-edited copy
+                    // Windows finds a differently cased name too; preserve that edit on Linux.
+                    if (File.Exists(dst) || (Directory.Exists(LibraryFolder) &&
+                        Directory.EnumerateFiles(LibraryFolder).Any(existing =>
+                            string.Equals(Path.GetFileName(existing), name, StringComparison.OrdinalIgnoreCase))))
+                        continue;
                     try { File.Copy(src, dst, overwrite: false); copied++; }
                     catch (Exception ex) { Log.Debug("EnhancementLibrary: failed to copy demo {Name}: {Error}", name, ex.Message); }
                 }
