@@ -236,13 +236,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// pixels (the corner GIF decodes to the pixels its overlay occupies, WPF CornerGifMedia).</param>
         /// <param name="maxFrames">When &gt; 0, at most this many frames are kept, strided across the whole
         /// animation (the chaos wash keeps 40, WPF ChaosFlashOverlay.cs:222 after the #476 OOM).</param>
-        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0)
+        /// <param name="maxMemoryBytes">When positive, cap kept frames by their scaled byte size (minimum ten).</param>
+        /// <param name="maxDecodedFrames">When positive, bound the frames visited, including discarded frames.</param>
+        /// <param name="maxSourcePixels">When positive, reject larger source canvases before allocating them.</param>
+        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0,
+            long maxMemoryBytes = 0, int maxDecodedFrames = 0, long maxSourcePixels = 0)
         {
             var frames = new List<Bitmap>();
             try
             {
                 using var codec = SKCodec.Create(path);
                 if (codec is null) return (frames, TimeSpan.FromMilliseconds(50));
+                if (maxSourcePixels > 0 && (codec.Info.Width <= 0 || codec.Info.Height <= 0 ||
+                    (long)codec.Info.Width * codec.Info.Height > maxSourcePixels))
+                    return (frames, TimeSpan.FromMilliseconds(50));
                 var count = Math.Max(1, codec.FrameCount);
                 var info = codec.FrameInfo;
                 var plan = SpiralFrames.Plan(codec.Info.Width, codec.Info.Height, count,
@@ -253,6 +260,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     plan.Width = Math.Max(1, (int)Math.Round(plan.Width * k));
                     plan.Height = Math.Max(1, (int)Math.Round(plan.Height * k));
                 }
+                if (maxMemoryBytes > 0)
+                {
+                    // Cascade frames are budgeted at their displayed size, not their source size.
+                    plan = SpiralFrames.Plan(plan.Width, plan.Height, count,
+                        codec.FrameCount > 0 ? codec.FrameInfo[0].Duration : 50);
+                    long bytesPerFrame = (long)plan.Width * plan.Height * 4;
+                    int memoryFrames = (int)Math.Max(10, maxMemoryBytes / Math.Max(1, bytesPerFrame));
+                    maxFrames = maxFrames > 0 ? Math.Min(maxFrames, memoryFrames) : memoryFrames;
+                }
                 if (maxFrames > 0 && plan.Frames > maxFrames)
                 {
                     var step = (int)Math.Ceiling(count / (double)maxFrames);
@@ -262,7 +278,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var full = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
                 using var canvas = new SKBitmap(full);
                 using var scaled = new SKBitmap(new SKImageInfo(plan.Width, plan.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
-                for (var i = 0; i < count && frames.Count < plan.Frames; i++)
+                var decodeCount = maxDecodedFrames > 0 ? Math.Min(count, maxDecodedFrames) : count;
+                for (var i = 0; i < decodeCount && frames.Count < plan.Frames; i++)
                 {
                     // canvas holds frame i-1. Reuse it only when that is the frame i builds on; otherwise
                     // (restore-previous disposal) the codec decodes the required frame itself.
