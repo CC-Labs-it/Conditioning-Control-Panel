@@ -652,12 +652,19 @@
             </Grid>
         </Border>
 
+        <!-- WPF MainWindow.xaml:817: the rail casts a six pixel shadow onto the page. -->
+        <Border x:Name="NavRailShadow" Grid.Row="1" Grid.RowSpan="5" Grid.Column="1"
+                Width="6" HorizontalAlignment="Left" ZIndex="59" Background="{DynamicResource DepthRailShadow}" IsHitTestVisible="False"/>
+
         <!-- THE HUD BAND (WPF MainWindow.xaml:805, nav polish wave 2): the header row and the XP row
              read as one zone - 20% black over the window ground and a 1px TextMuted divider at 30%
              under the XP row. Drawn before the header so its controls sit on it; never hit-testable.
-             (The depth well along its top is sync6-nav-polish-c.) -->
+             Its top edge is a sunken well (WPF MainWindow.xaml:830). -->
         <Border x:Name="HudBand" Grid.Row="1" Grid.RowSpan="3" Grid.Column="1" Background="#33000000" IsHitTestVisible="False">
-            <Border Height="1" VerticalAlignment="Bottom" Background="{DynamicResource TextMutedBrush}" Opacity="0.3"/>
+            <Grid>
+                <Border x:Name="HudBandWellTop" Height="9" VerticalAlignment="Top" Background="{DynamicResource DepthWellTop}"/>
+                <Border Height="1" VerticalAlignment="Bottom" Background="{DynamicResource TextMutedBrush}" Opacity="0.3"/>
+            </Grid>
         </Border>
 
         <!-- Header Bar - Row 1 -->
@@ -1657,10 +1664,14 @@
                          sits, and after a level-up the fill has already wrapped back to a sliver. -->
                     <!-- ToolTip is a live readout of the ambient-bubble daily XP budget (#1019/#1026);
                          the placeholder here only exists so ToolTipOpening fires, which rewrites it. -->
-                    <Border x:Name="XPBarTrack" Grid.Column="2" Background="{DynamicResource PanelAccentBrush}" CornerRadius="4" Height="8" Margin="0,0,10,0"
+                    <Border x:Name="XPBarTrack" Grid.Column="2" Background="{DynamicResource DepthWellFloorBrush}" CornerRadius="5" Height="10" Margin="0,0,10,0"
                             ToolTip.Tip=" ">
                         <Grid>
-                            <Border x:Name="XPBar" Background="{DynamicResource PinkBrush}" CornerRadius="4"
+                            <!-- WPF MainWindow.xaml:1867: the empty groove is shaded under the fill. -->
+                            <Border x:Name="XPGrooveTop" Height="5" VerticalAlignment="Top" CornerRadius="5,5,0,0" Background="{DynamicResource DepthWellTop}" IsHitTestVisible="False"/>
+                            <Border x:Name="XPGrooveLeft" Width="6" HorizontalAlignment="Left" CornerRadius="5,0,0,5" Background="{DynamicResource DepthWellLeft}" IsHitTestVisible="False"/>
+                            <Border x:Name="XPGrooveFoot" Height="1" VerticalAlignment="Bottom" Margin="5,0" Background="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
+                            <Border x:Name="XPBar" Background="{DynamicResource PinkBrush}" CornerRadius="5"
                                     HorizontalAlignment="Left" Width="100">
                                 <!-- Chrome FX (PR-1): a slow gloss travelling along the filled part of
                                      the bar. White on purpose - it reads as light catching the fill
