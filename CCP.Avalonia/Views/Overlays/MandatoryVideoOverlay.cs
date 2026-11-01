@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -265,7 +266,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return targets;
         }
 
-        internal static Func<Action, TimeSpan, IDisposable> RestackLater = (action, delay) => DispatcherTimer.RunOnce(action, delay);
+        // WPF VideoService.cs:5809-5822: one cancellable wall-time delay, not a rendering timer.
+        internal static Func<Action, int, IDisposable> RestackLater = (action, delay) => new RestackRequest(action, delay);
+
+        internal sealed class RestackRequest : IDisposable
+        {
+            private CancellationTokenSource? _source = new();
+
+            internal RestackRequest(Action action, int delayMs, Action<Action>? post = null)
+            {
+                var token = _source.Token;
+                Action<Action> enqueue = post ?? (callback => Dispatcher.UIThread.Post(callback));
+                _ = RunAsync();
+                async Task RunAsync()
+                {
+                    try
+                    {
+                        await Task.Delay(delayMs, token).ConfigureAwait(false);
+                        enqueue(() =>
+                        {
+                            if (!token.IsCancellationRequested) action();
+                        });
+                    }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+                }
+            }
+
+            public void Dispose()
+            {
+                var source = Interlocked.Exchange(ref _source, null);
+                if (source == null) return;
+                source.Cancel();
+                source.Dispose();
+            }
+        }
 
         internal Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
         {
@@ -294,7 +328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 restack = RestackLater(() =>
                 {
                     if (w.IsVisible) global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosDvdOverlay.RaiseActive();
-                }, TimeSpan.FromMilliseconds(50));
+                }, 50);
             }
             w.Activated += (_, _) => RestackAfterActivation();
             w.AddHandler(InputElement.PointerPressedEvent, (_, _) => RestackAfterActivation(),

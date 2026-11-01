@@ -9,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Input.Raw;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
 using System.Runtime.InteropServices;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
@@ -283,6 +284,43 @@ public sealed class ChaosDvdPartBTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RestackDelayQueuesOnceAndCancellationSuppressesQueuedWork(bool cancel)
+    {
+        var posted = new TaskCompletionSource<Action>(TaskCreationOptions.RunContinuationsAsynchronously);
+        int posts = 0, calls = 0;
+        using var request = new MandatoryVideoOverlay.RestackRequest(() => calls++, 50, callback =>
+        {
+            System.Threading.Interlocked.Increment(ref posts);
+            posted.TrySetResult(callback);
+        });
+        var callback = await posted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.Equal(1, posts);
+        Assert.Equal(0, calls);
+        if (cancel)
+        {
+            request.Dispose();
+            request.Dispose();
+        }
+        callback();
+        Assert.Equal(cancel ? 0 : 1, calls);
+    }
+
+    [Fact]
+    public async Task RestackDelayReturnsToUiDispatcher()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var called = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var request = new MandatoryVideoOverlay.RestackRequest(
+                () => called.TrySetResult(Dispatcher.UIThread.CheckAccess()), 50);
+            Assert.True(await called.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        });
+    }
+
     // WPF VideoService.cs:3708,5809-5822 -> ChaosModeService.cs:745-757.
     [Fact]
     public async Task VideoSurfaceRaisesDvdOnlyDuringPinnedRun()
@@ -306,7 +344,7 @@ public sealed class ChaosDvdPartBTests
                 var pending = new List<Action>();
                 MandatoryVideoOverlay.RestackLater = (action, delay) =>
                 {
-                    Assert.Equal(TimeSpan.FromMilliseconds(50), delay);
+                    Assert.Equal(50, delay);
                     pending.Add(action);
                     return new System.Threading.CancellationTokenSource();
                 };
