@@ -2919,9 +2919,9 @@ namespace ConditioningControlPanel
             try
             {
                 var s = App.Settings?.Current;
-                if (s == null || (s.GraceClosedTier == null && App.Patreon?.GrantLooksDead == true)) return null;
+                if (s == null || (Services.EntitlementTierRule.ClosedTierNow(s, DateTime.UtcNow) == null && App.Patreon?.GrantLooksDead == true)) return null;
                 if (!Services.EntitlementTierSync.ServerAnsweredThisRun) return null;   // never from memory alone
-                var reading = Services.Startup.Conversion.ConversionRules.DecideLapseFor(s, DateTime.UtcNow, liveCoversIt: false);
+                var reading = Services.Startup.Conversion.ConversionRules.DecideLapseFor(s, DateTime.UtcNow);
                 if (reading.Row != Services.Startup.Conversion.LapseRow.Closed || MainWindow.LiveCovers(reading.Tier)) return null;
                 const string key = Services.Startup.Conversion.ConversionRules.KeyLapseGreeting;
                 if (!Services.Startup.Conversion.ConversionRules.Owed(s.InboxStamps, key, reading.Stamp)) return null;

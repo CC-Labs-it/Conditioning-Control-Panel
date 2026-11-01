@@ -22,11 +22,12 @@ namespace ConditioningControlPanel.Services
         public static event Action<int>? TierRaised;
 
         /// <summary>Raised on the UI thread after a reading the lapse rows care about was applied
-        /// (a Lower verdict stored or cleared again, or a grace window closed).</summary>
+        /// (a Lower verdict stored or cleared again). A close raises GraceClosed instead.</summary>
         public static event Action? ReadingApplied;
 
         /// <summary>Raised on the UI thread after a confirmed reading ended a grace window, so doors
-        /// repaint. Deliberately not TierChanged: that path celebrates and barks a tier-up.</summary>
+        /// repaint and the closed row posts, in that order. Deliberately not TierChanged: that path
+        /// celebrates and barks a tier-up.</summary>
         public static event Action? GraceClosed;
 
         /// <summary>
@@ -43,10 +44,15 @@ namespace ConditioningControlPanel.Services
         private static string? _pendingUid;
         private static GracePending? _pending;
 
-        /// <summary>A session or a game owns the screen: the window closes after it, never during.</summary>
+        /// <summary>A session, the engine, Lockdown or a game is running: the window closes after it,
+        /// never during. A close switches premium features off.</summary>
         private static bool HoldGraceClose()
         {
-            try { return App.IsSessionRunning || Safety.GameSurfaces.AnyOwnsTheScreen(); }
+            try
+            {
+                return App.IsSessionRunning || App.IsEngineRunning || App.Lockdown?.IsActive == true
+                    || Safety.GameSurfaces.AnyOwnsTheScreen();
+            }
             catch { return true; }
         }
 
@@ -82,6 +88,7 @@ namespace ConditioningControlPanel.Services
                 var verdict = EntitlementTierRule.Decide(settings!.PatreonTier, serverTier);
                 var nowUtc = DateTime.UtcNow;
 
+                var before = EffectiveTierNow();
                 // A different account starts its own confirmation.
                 if (_pendingUid != settings.UnifiedId)
                 {
@@ -98,7 +105,7 @@ namespace ConditioningControlPanel.Services
                 var seenMoved = seen != settings.ServerTierSeen;
                 if (seenMoved) settings.ServerTierSeen = seen;
                 if ((outcome.Dirty || seenMoved) && verdict != EntitlementVerdict.Rise) App.Settings?.Save(); // a rise saves below
-                if (seenMoved || outcome.Closed)
+                if (seenMoved && !outcome.Closed)
                 {
                     try { ReadingApplied?.Invoke(); }
                     catch (Exception ex) { App.Logger?.Debug("[Entitlement] ReadingApplied handler failed: {Error}", ex.Message); }
@@ -107,6 +114,13 @@ namespace ConditioningControlPanel.Services
                 {
                     try { GraceClosed?.Invoke(); }
                     catch (Exception ex) { App.Logger?.Warning(ex, "[Entitlement] GraceClosed handler failed"); }
+                }
+                else if (verdict != EntitlementVerdict.Rise && EffectiveTierNow() is var after && after > before)
+                {
+                    // The renewal brought back a lapsed window (a payer away over 14 days): the same
+                    // refresh a rise gets, or the doors stay locked until something else repaints.
+                    CheckoutWatch.Disarm();
+                    App.Patreon?.NotifyEntitlementRaised(after >= 2 ? PatreonTier.Level2 : PatreonTier.Level1);
                 }
 
                 switch (verdict)

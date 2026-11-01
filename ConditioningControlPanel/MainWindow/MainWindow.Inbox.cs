@@ -178,11 +178,11 @@ namespace ConditioningControlPanel
         {
             // Never from memory alone: the server must have answered this run (it may have just cleared the reading).
             if (!Services.EntitlementTierSync.ServerAnsweredThisRun) return false;
-            var reading = Services.Startup.Conversion.ConversionRules.DecideLapseFor(settings, DateTime.UtcNow, liveCoversIt: false);
+            var reading = Services.Startup.Conversion.ConversionRules.DecideLapseFor(settings, DateTime.UtcNow);
             if (reading.Row == Services.Startup.Conversion.LapseRow.None || LiveCovers(reading.Tier)) return false;
             var stamps = settings.InboxStamps;
 
-            if (settings.GraceClosedTier == null && (App.Patreon?.GrantLooksDead == true || Services.TierGate.ReconnectIsTheAnswer()))
+            if (Services.EntitlementTierRule.ClosedTierNow(settings, DateTime.UtcNow) == null && (App.Patreon?.GrantLooksDead == true || Services.TierGate.ReconnectIsTheAnswer()))
             {
                 var today = Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now);
                 const string reconnectKey = Services.Startup.Conversion.ConversionRules.KeyLapseReconnect;

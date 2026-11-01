@@ -664,7 +664,7 @@ namespace ConditioningControlPanel.Services
             // self-renews on each network re-validate and survives restarts).
             if (App.Settings?.Current != null)
             {
-                App.Settings.Current.PatreonPremiumValidUntil = DateTime.UtcNow.AddHours(25);
+                EntitlementTierRule.ExtendPremiumTo(App.Settings.Current, DateTime.UtcNow.AddHours(25));
                 App.Settings.Save();
             }
             App.Patreon?.SetWhitelistStatus(true);

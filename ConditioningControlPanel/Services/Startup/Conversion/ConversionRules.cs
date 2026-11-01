@@ -85,14 +85,14 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
         }
 
         /// <summary>
-        /// <see cref="DecideLapse"/> for this install. A window a confirmed reading closed
-        /// (<see cref="Models.AppSettings.GraceClosedTier"/>) is a close the server already reported,
-        /// after the stored tier moved down with it.
+        /// <see cref="DecideLapse"/> for this install. A window a confirmed reading closed is the
+        /// closed row on its own day, whatever the stamps say by now: a kept Basic renews, and a Prime
+        /// window can have no Lab stamp at all. The caller checks live coverage, it needs the tier first.
         /// </summary>
-        public static LapseReading DecideLapseFor(Models.AppSettings s, DateTime nowUtc, bool liveCoversIt)
-            => s.GraceClosedTier is int closed
-                ? DecideLapse(closed, closed - 1, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, nowUtc, liveCoversIt)
-                : DecideLapse(s.PatreonTier, s.ServerTierSeen, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, nowUtc, liveCoversIt);
+        public static LapseReading DecideLapseFor(Models.AppSettings s, DateTime nowUtc)
+            => EntitlementTierRule.ClosedTierNow(s, nowUtc) is int closed
+                ? new LapseReading(LapseRow.Closed, closed >= 2 ? 2 : 1, s.GraceClosedAtUtc!.Value, 0)
+                : DecideLapse(s.PatreonTier, s.ServerTierSeen, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, nowUtc, liveCoversIt: false);
 
         // ------------------------------------------------------------------ outside the moment (proposal 7)
 

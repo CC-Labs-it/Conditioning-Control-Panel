@@ -1316,7 +1316,7 @@ namespace ConditioningControlPanel.Services
                 {
                     if (settings != null)
                     {
-                        settings.PatreonPremiumValidUntil = DateTime.UtcNow.AddHours(25);
+                        EntitlementTierRule.ExtendPremiumTo(settings, DateTime.UtcNow.AddHours(25));
                     }
                     App.Patreon?.SetWhitelistStatus(true);
                     App.Logger?.Information("Boot heal (#293): whitelisted user — premium access applied via read-only fetch");
@@ -2202,7 +2202,7 @@ namespace ConditioningControlPanel.Services
                         if (v2Result?.PatreonIsWhitelisted == true)
                         {
                             // Refresh the cached premium access window (25h > sync interval)
-                            settings.PatreonPremiumValidUntil = DateTime.UtcNow.AddHours(25);
+                            EntitlementTierRule.ExtendPremiumTo(settings, DateTime.UtcNow.AddHours(25));
                             App.Settings?.Save();
 
                             // Set whitelist + tier on PatreonService so Lab access works
@@ -4773,6 +4773,7 @@ namespace ConditioningControlPanel.Services
             // A restore must not bring back a stale reading or re-open a once-ever row.
             nameof(AppSettings.ServerTierSeen),
             nameof(AppSettings.GraceClosedTier),
+            nameof(AppSettings.GraceClosedAtUtc),
             nameof(AppSettings.InboxStamps),
             nameof(AppSettings.LastKnownEffectiveTier),
             // Free member fields mirror the server profile; the next profile read refills them.
@@ -4844,6 +4845,7 @@ namespace ConditioningControlPanel.Services
             restored.InboxStamps = current.InboxStamps;
             restored.ServerTierSeen = current.ServerTierSeen;
             restored.GraceClosedTier = current.GraceClosedTier;
+            restored.GraceClosedAtUtc = current.GraceClosedAtUtc;
             restored.PatreonMember = current.PatreonMember;
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;

@@ -3423,6 +3423,16 @@ namespace ConditioningControlPanel.Models
             set { _graceClosedTier = value; OnPropertyChanged(); }
         }
 
+        private DateTime? _graceClosedAtUtc = null;
+        /// <summary>When <see cref="GraceClosedTier"/> closed: the closed row's day, and the end of what
+        /// the close still says (EntitlementTierRule.ClosedTierNow). Machine-local.</summary>
+        [JsonProperty("grace_closed_at")]
+        public DateTime? GraceClosedAtUtc
+        {
+            get => _graceClosedAtUtc;
+            set { _graceClosedAtUtc = value; OnPropertyChanged(); }
+        }
+
         private int? _lastKnownEffectiveTier = null;
         /// <summary>
         /// The effective tier (0..2) this install last knew, for the "Your Prime is on" card

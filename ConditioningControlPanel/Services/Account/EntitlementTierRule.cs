@@ -121,6 +121,7 @@ namespace ConditioningControlPanel.Services
                 if (nowUtc - next.SinceUtc >= GraceConfirmGap && !held())
                 {
                     settings.GraceClosedTier = Math.Clamp(settings.PatreonTier, 0, MaxTier);
+                    settings.GraceClosedAtUtc = nowUtc;
                     CloseGrace(settings, tier, nowUtc);
                     settings.PatreonTier = tier;
                     closed = dirty = true;
@@ -128,9 +129,10 @@ namespace ConditioningControlPanel.Services
                 }
             }
             if (!closed && verdict != EntitlementVerdict.Rise && RenewGrace(settings, tier, nowUtc)) dirty = true;
-            if (settings.GraceClosedTier is int lost && tier >= lost)
+            if (settings.GraceClosedTier is int lost && (tier >= lost || ClosedTierNow(settings, nowUtc) == null))
             {
                 settings.GraceClosedTier = null;
+                settings.GraceClosedAtUtc = null;
                 dirty = true;
             }
             return new GraceOutcome(closed, dirty, next);
@@ -154,23 +156,31 @@ namespace ConditioningControlPanel.Services
         /// A believed reading ends the stamps it no longer backs (owner, 2026-11-01). The stamp is
         /// what a Discord sign-in patron's access rides on, so it stays: an offline PC has no reading
         /// and keeps its window. Set to now rather than cleared, so the lapse row can name the day.
-        /// True when a stamp moved.
         /// </summary>
-        public static bool CloseGrace(AppSettings settings, int? serverTier, DateTime nowUtc)
+        public static void CloseGrace(AppSettings settings, int tier, DateTime nowUtc)
         {
-            if (settings == null || serverTier is not int tier || tier < 0 || tier > MaxTier) return false;
-            var moved = false;
-            if (tier < 1 && settings.PatreonPremiumValidUntil > nowUtc)
-            {
-                settings.PatreonPremiumValidUntil = nowUtc;
-                moved = true;
-            }
-            if (tier < 2 && settings.PatreonLabValidUntil > nowUtc)
-            {
-                settings.PatreonLabValidUntil = nowUtc;
-                moved = true;
-            }
-            return moved;
+            if (tier < 1 && settings.PatreonPremiumValidUntil > nowUtc) settings.PatreonPremiumValidUntil = nowUtc;
+            if (tier < 2 && settings.PatreonLabValidUntil > nowUtc) settings.PatreonLabValidUntil = nowUtc;
+        }
+
+        /// <summary>
+        /// The tier a confirmed reading closed, while that is still the news: for the closed row's
+        /// window, then null. It says "subscribe" rather than "reconnect", and a link that broke months
+        /// later needs the Reconnect answer back.
+        /// </summary>
+        public static int? ClosedTierNow(AppSettings? settings, DateTime nowUtc)
+            => settings?.GraceClosedTier is int tier && settings.GraceClosedAtUtc is DateTime at
+               && nowUtc - at <= Startup.Conversion.ConversionRules.ClosedRowWindow
+                ? tier
+                : null;
+
+        /// <summary>
+        /// The whitelist's premium refresh: at least this far ahead, never shorter than a reading's
+        /// stamp. Writing it flat made every sync shorten what the next reading renewed.
+        /// </summary>
+        public static void ExtendPremiumTo(AppSettings settings, DateTime untilUtc)
+        {
+            if (!(settings.PatreonPremiumValidUntil >= untilUtc)) settings.PatreonPremiumValidUntil = untilUtc;
         }
     }
 

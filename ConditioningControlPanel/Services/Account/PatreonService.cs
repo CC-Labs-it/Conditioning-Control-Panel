@@ -293,9 +293,14 @@ namespace ConditioningControlPanel.Services
                         var hasUnifiedSession =
                             !string.IsNullOrWhiteSpace(App.Settings.Current.UnifiedId) ||
                             !string.IsNullOrWhiteSpace(App.Settings.Current.AuthToken);
+                        // The tier stays only where a reading can land: the entitlement sync needs both,
+                        // and the profile badge reads this value directly.
+                        var readingsCanLand =
+                            !string.IsNullOrWhiteSpace(App.Settings.Current.UnifiedId) &&
+                            !string.IsNullOrWhiteSpace(App.Settings.Current.AuthToken);
+                        if (!readingsCanLand) App.Settings.Current.PatreonTier = 0;
                         if (!hasUnifiedSession)
                         {
-                            App.Settings.Current.PatreonTier = 0;
                             App.Settings.Current.PatreonPremiumValidUntil = null;
                             App.Settings.Current.PatreonLabValidUntil = null;
                         }
@@ -1135,6 +1140,7 @@ namespace ConditioningControlPanel.Services
                 App.Settings.Current.PatreonLabValidUntil = null;
                 App.Settings.Current.InviteGrantUntil = null; // the week belongs to the account, not the machine
                 App.Settings.Current.GraceClosedTier = null;
+                App.Settings.Current.GraceClosedAtUtc = null;
                 App.Settings.Current.PatreonTier = 0; // Clear cached tier
                 App.Settings.Save(); // Force save immediately
             }
