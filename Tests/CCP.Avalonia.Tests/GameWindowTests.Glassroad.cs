@@ -28,13 +28,19 @@ public sealed partial class GameWindowTests
     private sealed class GrHttp : System.Net.Http.HttpMessageHandler
     {
         public readonly List<(string Method, string Url, string Body, string? Token)> Seen = new();
+        public readonly Queue<(int Status, string Body)> Replies = new();
+        public readonly System.Threading.ManualResetEventSlim RequestSeen = new();
+        public System.Threading.Tasks.TaskCompletionSource<bool>? ReplyGate;
         protected override async System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
             System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
         {
             var body = request.Content == null ? "" : await request.Content.ReadAsStringAsync(ct);
             Seen.Add((request.Method.Method, request.RequestUri!.ToString(), body,
                 request.Headers.TryGetValues("X-Auth-Token", out var t) ? t.Single() : null));
-            return new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new System.Net.Http.StringContent("{\"ok\":1}") };
+            RequestSeen.Set();
+            if (ReplyGate != null) await ReplyGate.Task;
+            var reply = Replies.Count > 0 ? Replies.Dequeue() : (200, "{\"ok\":1}");
+            return new System.Net.Http.HttpResponseMessage((System.Net.HttpStatusCode)reply.Item1) { Content = new System.Net.Http.StringContent(reply.Item2) };
         }
     }
 

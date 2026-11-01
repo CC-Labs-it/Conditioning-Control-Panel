@@ -1,6 +1,6 @@
 // PORTED from ConditioningControlPanel/Services/Glassroad/GlassroadHostService.cs (feat/glassroad-a 5121933ee):
-// GLASSROAD, the 3D race (Assets/web/glassroad/index.html), private preview behind CCP_GLASSROAD=1. With the switch
-// on, the Racing Thoughts door opens this page instead (GameWindow.Launch); without it nothing changes for anyone.
+// GLASSROAD, the 3D race (Assets/web/glassroad/index.html). The launcher uses this host behind its Lab gate;
+// the older direct race route still uses the CCP_GLASSROAD preview switch (GameWindow.Launch).
 // INIT GOES OUT BEFORE READY: the page awaits init at boot (3 s, then defaults with no net) but says ready only once
 // shaders are warm, so init is posted at the page's load (NavigationCompleted, this engine's nearest seam to WPF's
 // DOMContentLoaded), on the first message and on ready (a repeat is harmless). The relay signs as the player, so it
@@ -9,6 +9,7 @@
 // Not here yet: MergedAccountRecovery on a merged-account answer (the board host lacks it too).
 using System;
 using System.Net.Http;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -16,6 +17,9 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.Glassroad;
+using ConditioningControlPanel.Services.Prizes;
+using ConditioningControlPanel.Services.Sparkles;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
@@ -34,7 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The live read of the door switch. Never throws.</summary>
         internal static bool GlassroadDoorOpen() { try { return GlassroadHostRules.DoorOpen(GlassroadDoorEnv()); } catch { return false; } }
 
-        /// <summary>WPF LauncherCatalogue "race": with the switch on, every Racing Thoughts door opens Glassroad.</summary>
+        /// <summary>The older direct race route on this head; the launcher uses the current WPF route.</summary>
         internal static string ResolveDoor(string id) =>
             string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) && GlassroadDoorOpen() ? GlassroadId : id;
 
@@ -135,6 +139,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "net":
                         OnGlassroadNet(o);
                         return true;
+                    case "friends-list": // WPF GlassroadHostService.cs:225-229
+                        Post(new { type = "friends-list-reply", id = (string?)o["id"] ?? "",
+                            friends = GlassroadRules.FriendRows(FriendsHead.Service?.Snapshot.Friends) });
+                        return true;
+                    case "invite-friend":
+                        GlassroadPending = InviteGlassroadFriend(o);
+                        return true;
+                    case "race-result":
+                        ClaimGlassroadResult(o);
+                        return true;
                     case "exit":
                     case "menu-back":
                         // The page's own Leave / the menu's Back link. Escape never sends these.
@@ -148,6 +162,78 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 return true;
             }
             return false;
+        }
+
+        // WPF GlassroadHostService.cs:314-343: only a known friend and a valid room can be sent.
+        private async Task InviteGlassroadFriend(JObject o)
+        {
+            var id = (string?)o["id"] ?? "";
+            var uid = (string?)o["friendUid"];
+            var room = (string?)o["roomId"];
+            var outcome = new SendOutcome(SendResult.Refused, null);
+            try
+            {
+                var svc = FriendsHead.Service;
+                if (svc != null && !string.IsNullOrEmpty(uid) && svc.Snapshot.Friends.Any(f => f.Id == uid)
+                    && InviteDestination.IsRoomId(room))
+                    outcome = await svc.InviteToRaceAsync(uid, room!).ConfigureAwait(false);
+            }
+            catch (Exception ex) { Log.Debug("Glassroad invite failed: {E}", ex.Message); outcome = new(SendResult.TryLater, null); }
+            void Reply()
+            {
+                if (_closing) return;
+                try
+                {
+                    var note = GlassroadRules.Sentence(Loc.Get(GlassroadRules.InviteNoteKey(outcome)));
+                    Post(new { type = "invite-friend-reply", id,
+                        sent = global::ConditioningControlPanel.Controls.Friends.FriendsDrawerRules.IsGood(outcome.Result), note });
+                }
+                catch (Exception ex) { Log.Debug("Glassroad invite reply failed: {E}", ex.Message); }
+            }
+            if (Dispatcher.UIThread.CheckAccess()) Reply(); else Dispatcher.UIThread.Post(Reply);
+        }
+
+        // WPF GlassroadHostService.cs:253-266: the server prices a finished race and returns the slip.
+        private void ClaimGlassroadResult(JObject o)
+        {
+            var result = GlassroadRules.SparklesClaimFor(o);
+            if (result == null) return;
+            var claim = SparklesClaim.Create(GlassroadRules.SparklesGame, result.Mode, result.Result,
+                (long)result.Duration.TotalMilliseconds, result.Detail, result.Proof);
+            var identity = FriendsHead.Identity();
+            var url = FriendsHead.BaseUrl(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
+                Environment.GetEnvironmentVariable(V2PurchaseHead.EnvVar));
+            var http = PbpHttpClient();
+            GlassroadPending = Task.Run(async () =>
+            {
+                try
+                {
+                    var outcome = await SparklesClaimService.ClaimAsync(claim, identity, url, http).ConfigureAwait(false);
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        try { DeliverGlassroadReceipt(outcome, identity?.UnifiedId); }
+                        catch (Exception ex) { Log.Debug("Glassroad slip failed: {E}", ex.Message); }
+                    });
+                }
+                catch (Exception ex) { Log.Debug("Glassroad claim failed: {E}", ex.Message); }
+            });
+        }
+
+        private void DeliverGlassroadReceipt(SparklesClaimOutcome outcome, string? account)
+        {
+            var r = outcome.Receipt;
+            var s = CoreSettings.Current;
+            if (r is { Shadow: false, Credited: > 0, Sp: >= 0 } && account != null &&
+                V2WalletAdoption.Decide(FriendsHead.Identity()?.UnifiedId == account, false, r.Sp.Value, s.SkillPoints, out var next))
+            {
+                int before = s.SkillPoints;
+                s.SkillPoints = next;
+                CoreSettings.Save();
+                SparklePointRewards.PublishCredit(before, next, SparklePointSource.Place);
+            }
+            var slip = SparklesSlip.Build(outcome, GentleVisuals.On, Loc.Get);
+            if (slip?["sp"]?.Type == JTokenType.Integer && s.SkillPoints > (long)slip["sp"]!) slip["sp"] = s.SkillPoints;
+            if (!_closing && slip != null) Post(slip);
         }
 
         /// <summary><c>net { id, method, path, body }</c> -&gt; <c>net-reply { id, status, body }</c>. A refusal or
