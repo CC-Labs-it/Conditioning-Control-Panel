@@ -282,6 +282,177 @@ public sealed class KeywordAudioRuntimeTests
         finally { (CoreFlash.ShowProvider, CoreProgression.AddXPProvider) = old; }
     });
 
+    [Fact]
+    public Task OverlappingKeywordAudioKeepsTheFirstFireResponses() => RunAsync(async (engine, s, played) =>
+    {
+        var old = (CoreHaptics.Service, CoreFlash.ShowProvider, CoreProgression.AddXPProvider, s.AwarenessLoopProtectionEnabled);
+        var settings = new HapticSettings { Enabled = true };
+        settings.EnsureV2Migrated();
+        var rule = settings.V2.Rule(ConditioningControlPanel.Services.Haptics.Core.HapticEventKind.KeywordTrigger);
+        rule.Enabled = true; rule.Intensity = 1;
+        using var haptics = new ConditioningControlPanel.Services.HapticService(settings);
+        var events = new List<string>(); var gap = new TaskCompletionSource();
+        haptics.HapticTriggered += (_, message) => { if (message.StartsWith("KeywordTrigger:")) events.Add("haptic"); };
+        try
+        {
+            CoreHaptics.Service = haptics;
+            CoreFlash.ShowProvider = () => events.Add("flash");
+            CoreProgression.AddXPProvider = (amount, _) => events.Add($"xp:{amount}");
+            s.AwarenessLoopProtectionEnabled = false;
+            var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+            audio.PlayCount = 2; audio.DelayBetweenMs = 5000;
+            s.KeywordTriggers[0].Actions.AddRange(new KeywordAction[] { new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash },
+                new HapticAction { Intensity = .4 }, new AddXpAction { Amount = 7 } });
+            s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "stay", Actions = new() {
+                new PlayAudioAction { FilePath = audio.FilePath, DuckSystemAudio = false } } });
+            engine.Delay = (_, _) => gap.Task;
+            var now = engine.Now();
+            Type(engine, "sit");
+            engine.Now = () => now.AddSeconds(2);
+            Type(engine, "stay");
+            Assert.Equal(2, played.Count(p => p.Path != "stopped")); Assert.Empty(events);
+            gap.SetResult(); await Task.Yield();
+            Assert.Equal(3, played.Count(p => p.Path != "stopped"));
+            Assert.Equal(new[] { "flash", "haptic", "xp:7" }, events);
+        }
+        finally { (CoreHaptics.Service, CoreFlash.ShowProvider, CoreProgression.AddXPProvider, s.AwarenessLoopProtectionEnabled) = old; }
+    });
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public Task AudioActionsDuckOnceForTheWholeList(bool firstDucks, bool secondDucks) => RunAsync(async (engine, s, _) =>
+    {
+        var old = (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
+            CoreAudio.PlayStoppableProvider, s.AudioDuckingEnabled);
+        var events = new List<string>(); var delays = new List<int>(); var release = new TaskCompletionSource(); var play = 0;
+        try
+        {
+            s.AudioDuckingEnabled = true;
+            CoreAudio.DuckProvider = _ => events.Add("duck");
+            CoreAudio.DuckGenerationProvider = () => 31;
+            CoreAudio.UnduckProvider = gen => events.Add($"unduck:{gen}");
+            CoreAudio.PlayStoppableProvider = (_, _, _, started, finished) =>
+            {
+                var n = ++play; events.Add($"play:{n}");
+                started?.Invoke(TimeSpan.FromMilliseconds(n == 1 ? 2000 : 400));
+                return () => { events.Add($"stop:{n}"); finished?.Invoke(); };
+            };
+            engine.Delay = (ms, _) => { delays.Add(ms); return release.Task; };
+            var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+            audio.DuckSystemAudio = firstDucks;
+            s.KeywordTriggers[0].Actions.Add(new PlayAudioAction { FilePath = audio.FilePath, DuckSystemAudio = secondDucks });
+            Type(engine, "sit");
+            Assert.Equal(new[] { "duck", "play:1", "stop:1", "play:2" }, events);
+            Assert.Equal(new[] { 2500 }, delays);
+            release.SetResult(); await Task.Yield();
+            Assert.Equal("unduck:31", events.Last());
+            Assert.Single(events.Where(e => e.StartsWith("unduck:")));
+        }
+        finally
+        {
+            engine.StopAudio();
+            (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
+                CoreAudio.PlayStoppableProvider, s.AudioDuckingEnabled) = old;
+        }
+    });
+
+    [Fact]
+    public Task MissingClipStillDucksForHalfASecond() => RunAsync(async (engine, s, played) =>
+    {
+        var old = (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, s.AudioDuckingEnabled);
+        var events = new List<string>(); var release = new TaskCompletionSource();
+        try
+        {
+            s.AudioDuckingEnabled = true;
+            CoreAudio.DuckProvider = _ => events.Add("duck");
+            CoreAudio.DuckGenerationProvider = () => 17;
+            CoreAudio.UnduckProvider = gen => events.Add($"unduck:{gen}");
+            engine.Delay = (ms, _) => { Assert.Equal(500, ms); return release.Task; };
+            var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+            audio.FilePath = null; audio.DuckSystemAudio = true;
+            Type(engine, "sit");
+            Assert.Empty(played); Assert.Equal(new[] { "duck" }, events);
+            release.SetResult(); await Task.Yield();
+            Assert.Equal(new[] { "duck", "unduck:17" }, events);
+        }
+        finally
+        {
+            engine.StopAudio();
+            (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, s.AudioDuckingEnabled) = old;
+        }
+    });
+
+    [Fact]
+    public Task UnknownClipDurationStaysDuckedUntilPlaybackEnds() => RunAsync(async (engine, s, _) =>
+    {
+        var old = (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
+            CoreAudio.PlayStoppableProvider, s.AudioDuckingEnabled);
+        var events = new List<string>(); var release = new TaskCompletionSource();
+        var delayed = new TaskCompletionSource(); var unducked = new TaskCompletionSource(); Action? finish = null;
+        try
+        {
+            s.AudioDuckingEnabled = true;
+            CoreAudio.DuckProvider = _ => events.Add("duck");
+            CoreAudio.DuckGenerationProvider = () => 23;
+            CoreAudio.UnduckProvider = _ => { events.Add("unduck"); unducked.TrySetResult(); };
+            CoreAudio.PlayStoppableProvider = (_, _, _, started, finished) =>
+            {
+                events.Add("play"); started?.Invoke(TimeSpan.Zero); finish = finished; return () => { };
+            };
+            engine.Delay = (ms, _) => { Assert.Equal(500, ms); events.Add("delay"); delayed.TrySetResult(); return release.Task; };
+            ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).DuckSystemAudio = true;
+            Type(engine, "sit"); await Task.Yield();
+            Assert.Equal(new[] { "duck", "play" }, events);
+            finish!(); await delayed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(new[] { "duck", "play", "delay" }, events);
+            release.SetResult(); await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(new[] { "duck", "play", "delay", "unduck" }, events);
+        }
+        finally
+        {
+            engine.StopAudio();
+            (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
+                CoreAudio.PlayStoppableProvider, s.AudioDuckingEnabled) = old;
+        }
+    });
+
+    [Fact]
+    public Task StopCancelsOverlappingResponsesAndReleasesEachDuck() => RunAsync(async (engine, s, played) =>
+    {
+        var old = (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
+            CoreFlash.ShowProvider, s.AudioDuckingEnabled, s.AwarenessLoopProtectionEnabled);
+        var ducks = 0; var unducks = 0; var flashes = 0; var gap = new TaskCompletionSource();
+        try
+        {
+            s.AudioDuckingEnabled = true; s.AwarenessLoopProtectionEnabled = false;
+            CoreAudio.DuckProvider = _ => ducks++;
+            CoreAudio.DuckGenerationProvider = () => 41;
+            CoreAudio.UnduckProvider = _ => unducks++;
+            CoreFlash.ShowProvider = () => flashes++;
+            var audio = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+            audio.DuckSystemAudio = true; audio.PlayCount = 2; audio.DelayBetweenMs = 5000;
+            s.KeywordTriggers[0].Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash });
+            s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "stay", Actions = new() {
+                new PlayAudioAction { FilePath = audio.FilePath, DuckSystemAudio = true, PlayCount = 2, DelayBetweenMs = 5000 },
+                new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash } } });
+            engine.Delay = (_, _) => gap.Task;
+            var now = engine.Now(); Type(engine, "sit"); engine.Now = () => now.AddSeconds(2); Type(engine, "stay");
+            Assert.Equal(2, ducks); Assert.Equal(0, unducks);
+            engine.StopAudio();
+            Assert.Equal(2, unducks);
+            gap.SetResult(); await Task.Yield();
+            Assert.Equal(2, played.Count(p => p.Path != "stopped")); Assert.Equal(0, flashes);
+            Assert.Equal(2, unducks);
+        }
+        finally
+        {
+            engine.StopAudio();
+            (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
+                CoreFlash.ShowProvider, s.AudioDuckingEnabled, s.AwarenessLoopProtectionEnabled) = old;
+        }
+    });
+
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
 
     [Fact]
