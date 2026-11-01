@@ -293,6 +293,12 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
+    <!-- WPF ConditioningControlPanel.csproj:696: the library seeds these on first use. -->
+    <Content Include="..\Assets\DeeperDemos\**\*" Link="Resources\DeeperDemos\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
     <!-- Awareness Engine preset packs, as WPF ConditioningControlPanel.csproj:658. -->
     <Content Include="..\Assets\AwarenessPresets\**\*" Link="Resources\AwarenessPresets\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
