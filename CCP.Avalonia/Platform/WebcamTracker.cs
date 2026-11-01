@@ -89,8 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// BlinkDetector + GazeEngine, the same pipeline WebcamTrackingService.ProcessFrame runs on WPF:
     /// blinks, face lost/found, head pose, raw iris, gaze side and the projected gaze point. Camera
     /// open only between Start and Stop, only with current consent.
-    /// Mouth MAR is shared with Core. ponytail: tongue HSV remains WPF-only, so calibration's tongue
-    /// prompt times out to "moving on", as WPF does on a miss. Gaze lock-on (Core GazeLock) and long
+    /// Mouth MAR is shared with Core; tongue HSV follows WPF. Gaze lock-on (Core GazeLock) and long
     /// stare (Core LongStareDetector) run as WPF EmitGazeEvents does.
     /// </summary>
     internal sealed class WebcamTracker
@@ -104,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         public event Action? OnBlink;
         public event Action? OnMouthOpen;
+        public event Action? OnTongueOut;
         /// <summary>Eyes held shut past BlinkDetector.EyesClosedLongMs (WPF OnEyesClosedLong).</summary>
         public event Action? OnEyesClosedLong;
         public event Action? StateChanged;
@@ -194,6 +194,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal bool IsClosing => _wedged is { IsAlive: true };
         private readonly BlinkDetector _blink = new();
         private readonly MouthOpenDetector _mouth = new();
+        // WPF WebcamTrackingService.cs:265-290,2087-2150; capture thread only.
+        private static readonly int[] InnerLip = { 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 191, 80, 81, 82 };
+        private bool _tongueOut;
+        private DateTime? _tongueSince;
+        private DateTime _lastTongueOut = DateTime.MinValue;
         private readonly GazeEngine _gaze = new();
         private readonly GazeLock _gazeLock = new();
         private readonly LongStareDetector _longStare = new();
@@ -288,6 +293,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 _blink.Reset();
                 _mouth.Reset();
+                ResetTongueVisibility();
                 _gaze.Reset();
                 _longStare.Clear();
                 run.Thread = new Thread(() => Loop(run)) { IsBackground = true, Name = "WebcamCapture", Priority = ThreadPriority.BelowNormal };
@@ -440,8 +446,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 composed.X0, composed.X1, composed.Y0, composed.Y1, persist);
         }
 
-        /// <summary>WPF ProcessFrame without tongue: face, mesh, face lost/found, head pose,
-        /// iris, EAR blink, mouth MAR, then the shared gaze lock, follower and long-stare chain.</summary>
+        /// <summary>WPF ProcessFrame: face, mesh, iris, blink, mouth and tongue, then gaze.</summary>
         private void ProcessFrame(Run run, Mat bgr)
         {
             var found = run.Face!.Detect(bgr);
@@ -469,7 +474,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (ev == BlinkEvent.Blink) Dispatcher.UIThread.Post(() => OnBlink?.Invoke());
                 else if (ev == BlinkEvent.EyesClosedLong) Dispatcher.UIThread.Post(() => OnEyesClosedLong?.Invoke());
             }
-            ProcessMouthLandmarks(lm, DateTime.UtcNow, run);   // WPF :1740 order: after blink, skipped when both irises are missing
+            var now = DateTime.UtcNow;
+            ProcessMouthLandmarks(lm, now, run);   // WPF :1755-1780: after blink, skipped without either iris
+            ProcessTongueLandmarks(bgr, lm, now, run);
             (double Dx, double Dy)? vl = left == null ? null
                 : _gaze.NormalizeIris(left.IrisCenter, lm[FaceMeshDetector.LeftEyeOuterIdx], lm[FaceMeshDetector.LeftEyeInnerIdx], rightEye: false);
             (double Dx, double Dy)? vr = right == null ? null
@@ -530,6 +537,70 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return fired;
         }
 
+        // WPF WebcamTrackingService.cs:2087-2150: strict thresholds, 350 ms hold, 700 ms cooldown.
+        internal bool ProcessTongueFrame(Mat bgr, float[][] landmarks, bool mouthOpen, DateTime now)
+        {
+            if (!mouthOpen) { ResetTongueVisibility(); return false; }
+            double ratio = ComputeTongueRatio(bgr, landmarks);
+            bool nowOut = _tongueOut ? ratio > .18 : ratio > .28;
+            bool fired = false;
+            if (nowOut && !_tongueOut) _tongueSince = now;
+            else if (nowOut && _tongueSince is { } since && _lastTongueOut < since
+                && (now - since).TotalMilliseconds >= 350 && (now - _lastTongueOut).TotalMilliseconds >= 700)
+            { _lastTongueOut = now; fired = true; }
+            else if (!nowOut && _tongueOut) _tongueSince = null;
+            _tongueOut = nowOut;
+            return fired;
+        }
+
+        private void ResetTongueVisibility() { _tongueOut = false; _tongueSince = null; }
+
+        private void ProcessTongueLandmarks(Mat bgr, float[][] landmarks, DateTime now, Run run)
+        {
+            if (ProcessTongueFrame(bgr, landmarks, _mouth.IsOpen, now))
+                Dispatcher.UIThread.Post(() => { if (ReferenceEquals(_run, run)) OnTongueOut?.Invoke(); });
+        }
+
+        // WPF WebcamTrackingService.cs:2153-2222: only pixels inside the clipped inner-lip polygon;
+        // shadow and teeth are excluded from the denominator, fewer than eight valid pixels rejects.
+        internal static double ComputeTongueRatio(Mat bgr, float[][] landmarks)
+        {
+            var points = new Point[InnerLip.Length];
+            int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
+            for (int i = 0; i < points.Length; i++)
+            {
+                int x = (int)Math.Round(landmarks[InnerLip[i]][0]), y = (int)Math.Round(landmarks[InnerLip[i]][1]);
+                points[i] = new Point(x, y);
+                minX = Math.Min(minX, x); minY = Math.Min(minY, y);
+                maxX = Math.Max(maxX, x); maxY = Math.Max(maxY, y);
+            }
+            minX = Math.Max(0, minX); minY = Math.Max(0, minY);
+            maxX = Math.Min(bgr.Width - 1, maxX); maxY = Math.Min(bgr.Height - 1, maxY);
+            int width = maxX - minX + 1, height = maxY - minY + 1;
+            if (width < 4 || height < 4) return 0;
+            for (int i = 0; i < points.Length; i++) points[i] = new Point(points[i].X - minX, points[i].Y - minY);
+            using var mask = new Mat(height, width, MatType.CV_8UC1, Scalar.All(0));
+            Cv2.FillPoly(mask, new[] { points }, Scalar.All(255));
+            using var crop = new Mat(bgr, new Rect(minX, minY, width, height));
+            using var hsv = new Mat();
+            Cv2.CvtColor(crop, hsv, ColorConversionCodes.BGR2HSV);
+            int total = width * height, tongue = 0, other = 0;
+            var colors = new byte[total * 3];
+            var included = new byte[total];
+            System.Runtime.InteropServices.Marshal.Copy(hsv.Data, colors, 0, colors.Length);
+            System.Runtime.InteropServices.Marshal.Copy(mask.Data, included, 0, included.Length);
+            for (int i = 0; i < total; i++)
+            {
+                if (included[i] == 0) continue;
+                int h = colors[3 * i], s = colors[3 * i + 1], v = colors[3 * i + 2];
+                if (v < 40 || (v >= 200 && s <= 50)) continue;
+                if ((h <= 20 || h >= 160) && s >= 30 && v >= 40) tongue++;
+                else other++;
+            }
+            int valid = tongue + other;
+            return valid < 8 ? 0 : (double)tongue / valid;
+        }
+
         /// <summary>Tests call it bare; the capture thread passes its run so a stale run never publishes.</summary>
         internal void NoFace() => NoFace(null);
 
@@ -542,6 +613,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             _blink.CancelClosure();
             _mouth.FaceMissing();
+            ResetTongueVisibility();
             if (_gaze.NoFaceFrames > GazeEngine.FaceLostFramesThreshold * 2) _longStare.Clear();
         }
     }

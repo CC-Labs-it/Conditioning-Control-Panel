@@ -2,7 +2,7 @@
 // consent/calibration/test/recalibration handlers and diagnostics; the status chips are shared
 // through WebcamStatusPresentation. SafetyPills and BlinkStop own the privacy stop/6-blink gesture.
 // ponytail: GazeRefineOverlay, the gaze cursor/drift services, Quick Recal hint/Linux hotkey,
-// mouth/tongue diagnostics and the capture probe's in-use distinction remain unported.
+// the capture probe's in-use distinction remain unported.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
