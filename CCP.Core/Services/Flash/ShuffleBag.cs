@@ -46,6 +46,7 @@ namespace ConditioningControlPanel.Services.Flash
             _poolCount = -1;
             _order = Array.Empty<int>();
             _next = 0;
+            _lastKey = null;
         }
 
         /// <summary>The next entry of <paramref name="pool"/>, or false when the pool is empty.</summary>

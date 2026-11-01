@@ -440,7 +440,11 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF VideoService.ReloadAssets: drop the dealt queue so the next pick re-reads the
         /// enabled library (an untick or preset switch takes effect on the very next video, #130).</summary>
-        public void ReloadAssets() => _queue = new Queue<string>();
+        public void ReloadAssets()
+        {
+            _queue = new Queue<string>();
+            PackVideos?.ResetShuffle();
+        }
 
         /// <summary>WPF GetNextVideo, local half: a shuffled queue refilled when it runs dry.</summary>
         internal string? PickNext()

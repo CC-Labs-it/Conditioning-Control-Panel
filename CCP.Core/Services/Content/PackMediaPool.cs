@@ -105,6 +105,9 @@ namespace ConditioningControlPanel.Services
             return temp;
         }
 
+        /// <summary>Forget the dealt pack queue without deleting files still in use (WPF VideoService.cs:1555-1561).</summary>
+        public void ResetShuffle() { lock (_lock) _bag.Reset(); }
+
         /// <summary>WPF CleanupTempPackFiles: delete every decrypt this pool has on record.</summary>
         public void CleanupTemps()
         {

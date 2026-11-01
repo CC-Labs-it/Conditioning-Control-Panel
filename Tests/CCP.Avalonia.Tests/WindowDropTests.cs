@@ -99,6 +99,58 @@ public sealed class WindowDropTests
         finally { overlay.Scheduler = original; }
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task ImportResetsPackVideoShuffleOnlyForVideos(bool isVideo) => Run(async (shell, root, _) =>
+    {
+        // Plain test manifest and decrypt seam; each temp contains its pack clip's name.
+        var pack = Path.Combine(root, "pack-assets", ".packs", "guid");
+        var content = Directory.CreateDirectory(Path.Combine(pack, "content")).FullName;
+        File.WriteAllText(Path.Combine(pack, ".manifest.enc"), """
+            {"PackId":"p1","PackGuid":"guid","Files":[
+              {"OriginalName":"a.mp4","ObfuscatedName":"a.enc","FileType":"video","Extension":".mp4"},
+              {"OriginalName":"b.mp4","ObfuscatedName":"b.enc","FileType":"video","Extension":".mp4"},
+              {"OriginalName":"c.mp4","ObfuscatedName":"c.enc","FileType":"video","Extension":".mp4"}]}
+            """);
+        foreach (var name in new[] { "a", "b", "c" }) File.WriteAllText(Path.Combine(content, name + ".enc"), name);
+        var settings = new ConditioningControlPanel.Models.AppSettings();
+        var store = new ContentPackStore(() => Path.Combine(root, "pack-assets"), () => settings, () => { },
+            loadManifest: File.ReadAllText, decryptFile: File.ReadAllBytes, tempDir: () => Path.Combine(root, "temps"));
+        var pool = new PackMediaPool(ContentPackStore.VideoType, new ZeroRandom(), () => store);
+        var overlay = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        var original = overlay.Scheduler;
+        var scheduler = new MandatoryVideoScheduler(overlay, library: () => Array.Empty<string>()) { PackVideos = pool };
+        overlay.Scheduler = scheduler;
+        try
+        {
+            var firstPath = scheduler.PickNext()!;
+            var first = File.ReadAllText(firstPath);
+            var dropped = Path.Combine(root, isVideo ? "new.mp4" : "new.png");
+            File.WriteAllBytes(dropped, new byte[] { 1, 2, 3 });
+            Drop(shell, dropped);
+            MessageDialog? ask = null;
+            if (isVideo)
+            {
+                ask = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
+                Click(ask, "BtnOk");
+            }
+            var done = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault(d => d != ask));
+
+            var next = File.ReadAllText(scheduler.PickNext()!);
+            if (isVideo) Assert.Equal(first, next); // a new shuffle can deal the first clip again
+            else Assert.NotEqual(first, next);      // image import keeps the current video shuffle
+            Assert.True(File.Exists(firstPath));    // refreshing does not delete a clip in use
+            done.Close();
+        }
+        finally { overlay.Scheduler = original; pool.CleanupTemps(); }
+    });
+
+    private sealed class ZeroRandom : Random
+    {
+        public override int Next(int maxValue) => 0;
+    }
+
     [Fact]
     public Task MediaDropCancelledImportsNothing() => Run(async (shell, root, assets) =>
     {
