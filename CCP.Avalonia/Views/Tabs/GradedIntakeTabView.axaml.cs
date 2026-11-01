@@ -208,6 +208,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 live.Activate();
                 return live;
             }
+            // WPF IntakeHostService.cs:108-109 and EmiDeskService.cs:1542-1549: count
+            // each new launch, including ones started outside the desk ring.
+            ConditioningControlPanel.Services.EmiDesk.EmiState.NoteUsage("intake");
             var intake = new Windows.IntakeHostWindow { DuckTarget = duckMain ? owner : null };
             if (!recovery && CoreSettings.Current.IntakeFullscreen) intake.WindowState = WindowState.FullScreen;
             intake.Relaunch = () => OpenIntake(owner, duckMain, recovery: true);
