@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
-    /// <para>ponytail: not here yet, each a later branch - the whisper-to-bark gate (owned by the idle/whisper branch),
+    /// <para>ponytail: not here yet, each a later branch - the subliminal whisper source,
     /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
     /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), content-pack and remote pools, avatar pre-announce.</para>
     /// </summary>
@@ -95,9 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
 
                 // WPF's pre-announce has a one second lead before ShowImages starts the voice.
-                await Task.Delay(1000);
-                if (_closed || generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
-                var voiceSeconds = await PlayFlashVoice(s, generation: generation);
+                var voiceSeconds = await VoiceAfterLead(s, generation);
                 if (_closed || generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
                 var clickable = s.FlashClickable;
                 var lifetime = VoiceLifetime(s, ambient, durationMs, voiceSeconds);
@@ -151,6 +149,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static readonly Queue<string> VoiceQueue = new();
         private static Action? _stopFlashVoice;
+        private static object? _voiceStarting;
+        internal static bool VoiceStarting => Volatile.Read(ref _voiceStarting) != null;
+        internal static Func<Task> VoiceLead = () => Task.Delay(1000);
+        internal static TimeProvider VoiceClock = TimeProvider.System;
+        internal static Func<string, Task<double?>> VoiceDuration = async path =>
+        {
+            try { using var audio = await Views.Deeper.DeeperLocalAudio.Open(path); return audio?.DurationSeconds; }
+            catch (Exception ex) { Log.Debug("Flash: duration probe failed: {Error}", ex.Message); return null; }
+        };
         internal static Action<int, Action> AfterVoice = (ms, action) => _ = Task.Delay(ms).ContinueWith(_ => action());
 
         internal static string? NextVoice(AppSettings s)
@@ -163,6 +170,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return VoiceQueue.Count == 0 ? null : VoiceQueue.Dequeue();
         }
 
+        internal static async Task<double?> VoiceAfterLead(AppSettings s, int generation, string? path = null)
+        {
+            await VoiceLead();
+            return generation == Volatile.Read(ref _generation) && !_closed
+                ? await PlayFlashVoice(s, path, generation) : null;
+        }
+
         /// <summary>WPF ShowImages/PlaySound: one voice per burst, respect voice mutes, use the
         /// clip length for images, and return the generation-guarded duck 1.5 s after its duration.</summary>
         internal static async Task<double?> PlayFlashVoice(AppSettings s, string? path = null, int? generation = null)
@@ -170,21 +184,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             path ??= NextVoice(s);
             if (!s.FlashAudioEnabled || s.MasterVolume <= 0 || s.AvatarMuted || s.CompanionVoiceLinesMuted
                 || string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+            var probed = await VoiceDuration(path);
+            if ((generation.HasValue && generation.Value != Volatile.Read(ref _generation)) || !s.FlashAudioEnabled
+                || s.MasterVolume <= 0 || s.AvatarMuted || s.CompanionVoiceLinesMuted) return null;
             var gain = CompanionVoiceGain.ApplyLevel(Math.Max(0.05f, (float)Math.Pow(s.MasterVolume / 100f, 1.5))
                 * CompanionVoiceGain.BarkTrim, s.CompanionVoiceLevel);
-            var started = new TaskCompletionSource<TimeSpan?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var started = new TaskCompletionSource<double?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            long startedAt = -1;
+            var pending = new object();
             Interlocked.Exchange(ref _stopFlashVoice, null)?.Invoke();
-            var stop = CoreAudio.PlayStoppable(path, gain, "flash-voice",
-                length => started.TrySetResult(length), () => started.TrySetResult(null));
-            _stopFlashVoice = stop;
-            var completed = await Task.WhenAny(started.Task, Task.Delay(1000));
-            var length = completed == started.Task ? await started.Task : null;
-            if (length == null || (generation.HasValue && generation.Value != _generation))
+            Interlocked.Exchange(ref _voiceStarting, pending);
+            void ClearPending() => Interlocked.CompareExchange(ref _voiceStarting, null, pending);
+            var stop = CoreAudio.PlayStoppable(path, gain, "flash-voice", reported =>
             {
-                if (ReferenceEquals(Interlocked.CompareExchange(ref _stopFlashVoice, null, stop), stop)) stop();
+                var stamp = VoiceClock.GetTimestamp();
+                var first = Interlocked.CompareExchange(ref startedAt, stamp, -1);
+                var actual = reported.TotalSeconds > 0 ? reported.TotalSeconds : probed.GetValueOrDefault();
+                if (actual <= 0 || (generation.HasValue && generation.Value != Volatile.Read(ref _generation))) return;
+                var elapsed = first < 0 ? 0 : Math.Max(0, VoiceClock.GetElapsedTime(first, stamp).TotalSeconds);
+                var remaining = Math.Max(0.001, actual - elapsed);
+                if (started.TrySetResult(remaining))
+                {
+                    Platform.BarkHead.Engine?.MarkWhisperAudio(remaining);
+                    ClearPending();
+                }
+            }, () => { if (started.TrySetResult(null)) ClearPending(); });
+            var cancelled = 0;
+            Action cancel = () =>
+            {
+                if (Interlocked.Exchange(ref cancelled, 1) != 0) return;
+                started.TrySetResult(null); ClearPending(); stop();
+            };
+            _stopFlashVoice = cancel;
+            if (generation.HasValue && generation.Value != Volatile.Read(ref _generation)) cancel();
+            var length = await started.Task;
+            if (length == null || (generation.HasValue && generation.Value != Volatile.Read(ref _generation)))
+            {
+                if (ReferenceEquals(Interlocked.CompareExchange(ref _stopFlashVoice, null, cancel), cancel)) cancel();
                 return null;
             }
-            var seconds = length.Value.TotalSeconds > 0 ? length.Value.TotalSeconds : 5.0;
+            var seconds = length.Value;
             if (s.AudioDuckingEnabled)
             {
                 CoreAudio.Duck(s.DuckingLevel);
@@ -411,8 +450,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// re-enabled flash can show again.</summary>
         public static void CloseAll(bool final = true)
         {
-            _generation++;
+            RetireBurst();
+            CloseWindows(final);
+        }
+
+        private static void RetireBurst()
+        {
+            Interlocked.Increment(ref _generation);
             Interlocked.Exchange(ref _stopFlashVoice, null)?.Invoke();
+        }
+
+        private static void CloseWindows(bool final)
+        {
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
@@ -432,6 +481,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Fire(h, ambient);
                 noteUsed();
             }
+            CoreFlash.StopProvider = () => { RetireBurst(); CoreDispatch.Post(() => CloseWindows(false)); };
             CoreFlash.IsBusyProvider = () => IsBusy || StayScreenFull(CoreSettings.Current);
             CoreFlash.ShowProvider = () => Show(ambient: false);
             CoreFlash.AmbientShowProvider = () => Show(ambient: true);

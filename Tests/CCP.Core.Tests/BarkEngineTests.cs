@@ -108,6 +108,31 @@ public sealed class BarkEngineTests : IDisposable
         public void Emit(Serilog.Events.LogEvent e) => Events.Enqueue(e);
     }
 
+    [Fact] // WPF AudioService.cs:948 and BarkService.cs:1664-1670.
+    public void WhisperHoldsOrdinaryBarksUntilTheLongestTailButNotSafetyGuaranteedOrAttribution()
+    {
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        var normal = Rule("AttentionCheckFail", "ordinary");
+        var attribution = Rule("PossessionEffect", "text");
+        var panic = Rule("Panic", "safe");
+        panic.ClassRaw = "safety";
+        var e = Engine(normal, attribution, panic);
+        e.Clock = clock;
+        e.MarkWhisperAudio(4);
+        e.MarkWhisperAudio(1);
+        Assert.False(e.Raise("AttentionCheckFail"));
+        Assert.True(e.Raise("PossessionEffect"));
+        Assert.True(e.Raise("AttentionCheckFail", guaranteed: true));
+        Assert.True(e.Raise("Panic"));
+
+        e = Engine(normal); e.Clock = clock;
+        e.MarkWhisperAudio(4); e.MarkWhisperAudio(1);
+        clock.Advance(TimeSpan.FromSeconds(4.1));
+        Assert.False(e.Raise("AttentionCheckFail"));
+        clock.Advance(TimeSpan.FromSeconds(0.2));
+        Assert.True(e.Raise("AttentionCheckFail"));
+    }
+
     [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()
     {

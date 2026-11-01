@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
     /// ponytail: DispatchIdle and the awareness arbiter land with a caller;
-    /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
+    /// the Chaos-narrator gate with a source; tier latches key on "None" until a tier reaches Core.
     /// </summary>
     public sealed class BarkEngine
     {
@@ -48,6 +48,7 @@ namespace ConditioningControlPanel.Services.Bark
         private DateTime _globalLastFireUtc = DateTime.MinValue;
         private DateTime _safetyHoldUntilUtc = DateTime.MinValue;
         private DateTime _lastUserMessageUtc = DateTime.MinValue;
+        private DateTime _whisperBusyUntilUtc = DateTime.MinValue;
 
         // WPF BarkState's rolling mod-switch and avatar-click windows, the counters a source on this head feeds.
         private readonly List<DateTime> _modSwitches = new(), _avatarClicks = new();
@@ -66,6 +67,7 @@ namespace ConditioningControlPanel.Services.Bark
         /// <summary>WPF BarkService.cs:180-184: evaluate and log without speaking or persisting.</summary>
         public bool DryRun { get; set; }
         public Action<BarkSpeech>? Speak;
+        public Func<bool>? IsWhisperStarting;
         public Func<bool>? IsSpeaking;                 // App.AvatarWindow.IsSpeaking
         public Func<int, bool>? IsCompanionBusy;       // App.AvatarWindow.IsCompanionBusy(windowMs)
         public Func<bool>? EmiDeskAvatarMuted;         // App.EmiDesk.AvatarMuted
@@ -129,6 +131,22 @@ namespace ConditioningControlPanel.Services.Bark
 
         private BarkRuleSet SafeLoad()
         { try { return _loadRules() ?? BarkRuleSet.Empty; } catch (Exception ex) { Log.Warning(ex, "BarkEngine: rule load failed"); return BarkRuleSet.Empty; } }
+
+        /// <summary>WPF AudioService.MarkWhisperAudio: only extend the hold, with a 250 ms tail.</summary>
+        public void MarkWhisperAudio(double seconds)
+        {
+            if (!double.IsFinite(seconds) || seconds <= 0) return;
+            lock (_gate)
+            {
+                var until = Now.AddSeconds(seconds + 0.25);
+                if (until > _whisperBusyUntilUtc) _whisperBusyUntilUtc = until;
+            }
+        }
+
+        private static bool IsTextAttribution(string trigger) => trigger.ToLowerInvariant() is
+            "possessioneffect" or "possessiontripwire" or "possessionwarden" or "possessionrungchanged"
+            or "possessiontimerrestarted" or "possessionremember" or "lockdownconscript"
+            or "emergencyexitopened" or "emergencyexitverdict";
 
         public void NoteUserMessage() { lock (_gate) _lastUserMessageUtc = Now; }   // WPF :806, chat suppression
 
@@ -274,6 +292,8 @@ namespace ConditioningControlPanel.Services.Bark
             {
                 var now = Now;
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
+                if ((now < _whisperBusyUntilUtc || Safe(IsWhisperStarting)) && !IsTextAttribution(rule.Trigger))
+                    return (false, -1, "whisper-active");
                 int window = s.BarkChatSuppressionMs;
                 if (Safe(() => IsCompanionBusy?.Invoke(window) == true)
                     || (window > 0 && (now - _lastUserMessageUtc).TotalMilliseconds < window))
