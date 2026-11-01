@@ -115,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             IsHitTestVisible = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
             Width = Height = ChaosCursorGlowMath.Size;
+            _breathStart = Clock.GetTimestamp(); // WPF ChaosCursorGlowOverlay.cs:155-163: animation starts at construction
 
             var brush = new RadialGradientBrush
             {
@@ -152,7 +153,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private void StartTracking()
         {
             _halo.IsVisible = true;
-            _breathStart = Clock.GetTimestamp();
             _timer ??= new DispatcherTimer(ChaosCursorGlowMath.FollowInterval, DispatcherPriority.Render, (_, _) => Tick());
             _timer.Start();
             Tick();
