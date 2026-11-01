@@ -453,7 +453,7 @@ namespace ConditioningControlPanel.Services
         /// id then goes back as <c>web_xp_claim_ack</c> on every push.</summary>
         internal void ClaimWebXp(AppSettings s, JObject reply, bool reconcile = false)
         {
-            var claim = reply["web_xp"]?["claim"] as JObject;
+            var claim = reply["web_xp"] is JObject webXp ? webXp["claim"] as JObject : null;
             var id = claim?["id"]?.Type == JTokenType.String ? (string?)claim["id"] : null;
             var amount = claim?["amount"]?.Type == JTokenType.Integer ? (int)claim["amount"]! : 0;
             var pay = !string.IsNullOrEmpty(id) && amount > 0

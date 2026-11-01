@@ -16,6 +16,41 @@ namespace CCP.Avalonia.Tests;
 public sealed partial class AccountSeedTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NullWebXpStillAcknowledgesMigrationAndReconcilesServerXp(bool queued) => WithFreshInstall(async () =>
+    {
+        CoreDispatch.PostProvider = null;
+        var (wire, sync, _) = SignIn("u1", null);
+        var s = CoreSettings.Current;
+        s.LastWebXpClaimId = "previous-claim";
+        sync.MarkLoaded(null);
+        var before = ProfileAdopt.TotalXp(s);
+        var serverXp = (int)XpCurve.CumulativeXpToReachLevel(50, ProfileAdopt.Epoch(s)) + 250;
+        wire.SyncReply = new JObject
+        {
+            ["success"] = true,
+            ["user"] = new JObject { ["level"] = 50, ["xp"] = serverXp, ["current_season"] = "2026-08" },
+            ["web_xp"] = JValue.CreateNull(),
+            ["descent_migration"] = new JObject { ["completed"] = true }
+        }.ToString();
+        var queue = new Queue<System.Action>();
+        if (queued) CoreDispatch.PostProvider = queue.Enqueue;
+        Assert.True(await sync.PushAsync("null web XP"));
+        if (queued)
+        {
+            Assert.False(s.DescentMigrationCompleted);
+            Assert.Equal(before, ProfileAdopt.TotalXp(s));
+            Assert.Single(queue);
+        }
+        while (queue.TryDequeue(out var action)) action();
+        Assert.True(s.DescentMigrationCompleted);
+        Assert.Equal(50, s.PlayerLevel);
+        Assert.Equal(serverXp, ProfileAdopt.TotalXp(s));
+        Assert.Equal("previous-claim", s.LastWebXpClaimId);
+    });
+
+    [Theory]
     [InlineData("null")]
     [InlineData("0")]
     [InlineData("\"scalar\"")]
