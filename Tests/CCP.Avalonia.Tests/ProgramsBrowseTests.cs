@@ -286,13 +286,12 @@ public sealed class ProgramsBrowseTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             EnsureAvalonia();
-            var oldGet = CoreSecrets.RetrieveProvider;
-            var oldSet = CoreSecrets.StoreProvider;
-            CoreSecrets.RetrieveProvider = _ => null;
-            CoreSecrets.StoreProvider = (_, _) => { };
+            var restore = ProcessStateSnapshot.CaptureAccountSeed();
             Window? host = null;
             try
             {
+                CoreSecrets.RetrieveProvider = _ => null;
+                CoreSecrets.StoreProvider = (_, _) => { };
                 Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(p => new ConditioningControlPanel.Services.ProviderSubscription(p)));
                 bool premium = false;
                 CoreAccount.HasPremiumAccessProvider = () => premium;
@@ -318,10 +317,8 @@ public sealed class ProgramsBrowseTests
             }
             finally
             {
-                host?.Close();
-                CoreSecrets.RetrieveProvider = oldGet;
-                CoreSecrets.StoreProvider = oldSet;
-                ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(p => new ConditioningControlPanel.Services.ProviderSubscription(p));
+                try { host?.Close(); }
+                finally { restore(); }
             }
             return Task.CompletedTask;
         });

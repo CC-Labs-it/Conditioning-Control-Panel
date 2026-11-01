@@ -93,12 +93,20 @@ public sealed class PremiumGatesTests
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            bool premium = false, free = false;
-            CoreEntitlement.HasPremiumProvider = () => premium;
-            CoreEntitlement.IsFreeTodayProvider = key => free && key == "takeover";
-            var shell = new MainShellWindow();
+            var old = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider);
+            var settings = CoreSettings.Current;
+            var flags = (settings.KeywordTriggersEnabled, settings.AwarenessModeEnabled, settings.AutonomyModeEnabled,
+                settings.SpokenMantrasEnabled, settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled,
+                settings.MantraChantEnabled);
+            var haptics = settings.Haptics;
+            var hapticsEnabled = haptics?.Enabled;
+            MainShellWindow? shell = null;
             try
             {
+                bool premium = false, free = false;
+                CoreEntitlement.HasPremiumProvider = () => premium;
+                CoreEntitlement.IsFreeTodayProvider = key => free && key == "takeover";
+                shell = new MainShellWindow();
                 shell.Show();
                 var tab = shell.Named<Control>("BambiTakeoverTab")!;
                 var locked = tab.FindControl<Control>("AutonomyLocked")!;
@@ -114,7 +122,18 @@ public sealed class PremiumGatesTests
                 free = false; premium = true; Check(true);
                 premium = false; Check(false);
             }
-            finally { shell.Close(); }
+            finally
+            {
+                try { shell?.Close(); }
+                finally
+                {
+                    (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = old;
+                    (settings.KeywordTriggersEnabled, settings.AwarenessModeEnabled, settings.AutonomyModeEnabled,
+                        settings.SpokenMantrasEnabled, settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled,
+                        settings.MantraChantEnabled) = flags;
+                    if (haptics != null && hapticsEnabled.HasValue) haptics.Enabled = hapticsEnabled.Value;
+                }
+            }
         });
     }
 

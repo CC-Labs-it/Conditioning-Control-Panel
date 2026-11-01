@@ -172,16 +172,18 @@ public sealed class AiPermissionsLiveFeedTests
     [Fact]
     public Task TierChangesRepaintEffectiveEffectsWithoutChangingSavedChoice() => Run(service =>
     {
-        CoreSecrets.RetrieveProvider = _ => null;
-        CoreSecrets.StoreProvider = (_, _) => { };
-        Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(p => new ProviderSubscription(p)));
-        bool lab = false;
-        CoreAccount.HasLabAccessProvider = () => lab;
-        service.Current.CompanionPrompt.AllowAiToControlEffects = true;
-        var grid = new AiPermissionsGrid();
-        var window = new Window { Content = grid };
+        var restore = ProcessStateSnapshot.CaptureAccountSeed();
+        Window? window = null;
         try
         {
+            CoreSecrets.RetrieveProvider = _ => null;
+            CoreSecrets.StoreProvider = (_, _) => { };
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(p => new ProviderSubscription(p)));
+            bool lab = false;
+            CoreAccount.HasLabAccessProvider = () => lab;
+            service.Current.CompanionPrompt.AllowAiToControlEffects = true;
+            var grid = new AiPermissionsGrid();
+            window = new Window { Content = grid };
             window.Show();
             Dispatcher.UIThread.RunJobs();
             var toggle = grid.FindControl<CheckBox>("ChkCapEffects")!;
@@ -200,7 +202,11 @@ public sealed class AiPermissionsLiveFeedTests
             Assert.False(panel.IsVisible);
             Assert.True(service.Current.CompanionPrompt.AllowAiToControlEffects);
         }
-        finally { window.Close(); }
+        finally
+        {
+            try { window?.Close(); }
+            finally { restore(); }
+        }
         return Task.CompletedTask;
     });
 
