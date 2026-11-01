@@ -268,8 +268,9 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>One logical step. <paramref name="held"/> and the cursor (global DIPs) feed a
         /// running defuse channel; a channel pins the bubble and pauses the fuse (WPF :3796).</summary>
-        public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default)
+        public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default, double timeScale = 1)
         {
+            double ts = Spec == null ? 1 : Math.Clamp(timeScale, 0.05, 1);
             if (Popping)
             {
                 // WPF BubbleService.cs:3777-3788: a darter bursts bigger and slower.
@@ -283,11 +284,11 @@ namespace ConditioningControlPanel.Services
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
-            if (Spec?.IsDarter == true) return StepDarter();
+            if (Spec?.IsDarter == true) return StepDarter(ts);
             // WPF :4147-4193: the fuse burns 32 ms a step; fuse-out detonates.
             if (Spec is { IsLive: true } && FuseRemainingMs > 0)
             {
-                FuseRemainingMs -= FuseStepMs;
+                FuseRemainingMs -= FuseStepMs * ts;
                 if (FuseRemainingMs <= 0) return GoOff(null);
             }
             _timeAlive += 0.02;
@@ -299,24 +300,24 @@ namespace ConditioningControlPanel.Services
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
-            Y -= _speed;
+            Y -= _speed * ts;
             X = _startX + offset;
             if (Y >= _top) return Result.Alive;
             return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
         }
 
         // WPF BubbleService.cs:3834-3867,3888-3915,3951: flare in place, reflect three
-        // times, then exit or expire harmlessly. Field time scaling and boon steering are part B.
-        private Result StepDarter()
+        // times, then exit or expire harmlessly. Boon steering remains part B.
+        private Result StepDarter(double ts)
         {
-            _throbPhase += 0.5;
+            _throbPhase += 0.5 * Math.Max(ts, 0.4);
             _throbPunch = Math.Max(0, _throbPunch - 0.05);
             Scale = 1 + 0.10 * Math.Sin(_throbPhase) + _throbPunch;
             if (_telegraphMs > 0) _telegraphMs -= 32;
             else
             {
-                _darterActiveMs += 32;
-                X += _vx; Y += _vy;
+                _darterActiveMs += 32 * Math.Max(ts, 0.15);
+                X += _vx * ts; Y += _vy * ts;
                 if (!_escaping)
                 {
                     bool hit = false;
@@ -337,7 +338,7 @@ namespace ConditioningControlPanel.Services
                         return Result.Done;
                 }
             }
-            _darterLifeMs -= 32;
+            _darterLifeMs -= 32 * Math.Max(ts, 0.15);
             return _darterLifeMs <= 0 ? Result.Done : Result.Alive;
         }
     }
@@ -363,6 +364,7 @@ namespace ConditioningControlPanel.Services
         public readonly Random Random = new();
         /// <summary>WPF SetChaosFrozen: a held Chaos run's live bubbles do not move (a pop burst still plays).</summary>
         public bool HoldChaos;
+        public double ChaosTimeScale = 1;
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
         public bool Held;
         public double CursorX, CursorY;
@@ -425,7 +427,7 @@ namespace ConditioningControlPanel.Services
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
                 if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
-                var r = b.Step(Held, CursorX, CursorY, now);
+                var r = b.Step(Held, CursorX, CursorY, now, ChaosTimeScale);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Defused) { ChaosDefused?.Invoke(b); continue; }

@@ -55,6 +55,29 @@ public sealed class ChaosDarterMotionTests
         Assert.False(b.WasQuickCatch);
     }
 
+    [Fact]
+    public void Slow_field_scales_travel_fuse_and_quick_catch()
+    {
+        var spec = new EffectBubbleSpec { IsLive = true, SizePx = 80, FuseMs = 1000 };
+        var normal = AmbientBubble.SpawnChaos(new Random(9), 0, 0, 0, 1920, 1080, 1, spec);
+        var slow = AmbientBubble.SpawnChaos(new Random(9), 0, 0, 0, 1920, 1080, 1, spec);
+        double start = normal.Y;
+        normal.Step(); slow.Step(timeScale: 0.12);
+        Assert.Equal((start - normal.Y) * 0.12, start - slow.Y, 6);
+        Assert.Equal(1000 - 32 * 0.12, slow.FuseRemainingMs, 6);
+        var rabbit = new EffectBubbleSpec { IsDarter = true, SizePx = 80, QuickWindowMs = 500,
+            DarterSpeed = 9, LifetimeMs = 8000, SpawnAtPxX = 500, SpawnAtPxY = 300 };
+        var fastRabbit = AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1920, 1080, 1, rabbit);
+        var slowRabbit = AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1920, 1080, 1, rabbit);
+        fastRabbit.Step(); slowRabbit.Step(timeScale: 0.12);
+        Assert.Equal((fastRabbit.X - (500 - fastRabbit.Size / 2)) * 0.12,
+            slowRabbit.X - (500 - slowRabbit.Size / 2), 6);
+        for (int i = 0; i < 103; i++) slowRabbit.Step(timeScale: 0.12);
+        Assert.True(slowRabbit.WasQuickCatch);
+        slowRabbit.Step(timeScale: 0.12);
+        Assert.False(slowRabbit.WasQuickCatch);
+    }
+
     private sealed class HorizontalRandom : Random
     {
         public override double NextDouble() => 0;

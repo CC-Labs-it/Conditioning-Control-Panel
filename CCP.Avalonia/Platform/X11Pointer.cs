@@ -36,7 +36,13 @@ internal static class X11Pointer
     public static (PixelPoint At, bool Pressed, bool Escape)? Read() => ReadCore(false);
 
     // WPF RabbitAimTick reads VK_LBUTTON only.
-    public static (PixelPoint At, bool Pressed, bool Escape)? ReadLeft() => ReadCore(true);
+    public static (PixelPoint At, bool Pressed, bool Escape)? ReadLeft() =>
+        IsWaylandSession() ? null : ReadCore(true);
+
+    internal static bool IsWaylandSession() =>
+        string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase)
+        || (!string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "x11", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")));
 
     private static (PixelPoint At, bool Pressed, bool Escape)? ReadCore(bool leftOnly)
     {
