@@ -89,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                     break;
             }
             // ponytail: 12.1's public adapter API has no context-menu, accelerator, zoom,
-            // status/error-page settings, document-created script or process-failure signal.
+            // status/error-page settings, general document-created scripts or process-failure signal.
         }
 
         public void PostState(DescentBlock? block)

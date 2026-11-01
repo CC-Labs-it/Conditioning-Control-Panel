@@ -29,8 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// <see cref="InvokeScriptAsync"/>, plus the live URL (<see cref="CurrentUrl"/>,
     /// <see cref="NavigationCompleted"/>). NativeWebView additionally offers WebMessageReceived,
     /// NewWindowRequested, GoBack/GoForward, Stop and Refresh; nothing needs
-    /// them yet, so they are not wrapped. It has NO zoom factor, no document-created script
-    /// injection, and no fullscreen-element signal.
+    /// them yet, so they are not wrapped. It has no zoom factor or fullscreen-element signal.
     ///
     /// The whole point is the fallback. A Linux box without webkit2gtk installed is the DEFAULT,
     /// not the exception, and a web view with no engine paints nothing: the render proof would
@@ -177,8 +176,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <c>message</c> event in); WebKitGTK injects only <c>window.invokeCSharpAction</c> (strings).
         /// <see cref="CarrierShim"/> gives such a page a <c>chrome.webview</c> over that string
         /// channel (and <c>__ccpRnPush</c> back), and is a no-op where a real one exists (WebView2).
-        /// With <see cref="InjectCarrier"/> it runs after every completed navigation: the engine has
-        /// no document-created script seam, so a page that probes the carrier only at load misses it.
+        /// With <see cref="InjectCarrier"/> WebKitGTK installs it at document start, before navigation.
+        /// It also runs after navigation as a fallback on engines without that native seam.
         /// </summary>
         internal const string CarrierShim =
             "(function(){var w=window;if(w.chrome&&w.chrome.webview&&w.chrome.webview.postMessage)return;"
@@ -188,7 +187,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             + "if(typeof w.__ccpRnPush!=='function')w.__ccpRnPush=function(j){var m;try{m=JSON.parse(j);}catch(e){return;}"
             + "t.dispatchEvent(new MessageEvent('message',{data:m}));};})();";
 
-        /// <summary>Run <see cref="CarrierShim"/> after each completed navigation (see there).</summary>
+        /// <summary>Install the carrier before navigation where supported, with a completed-navigation fallback.
+        /// Set before attaching the host or navigating.</summary>
         public bool InjectCarrier { get; set; }
 
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post): the page's string push, else a message
@@ -263,8 +263,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// (a string result arrives quoted), WebKitGTK hands back the raw value. Callers that read
         /// the result must tolerate both — see <c>EnhancementPlayerWindow.Unquote</c>.
         ///
-        /// There is no equivalent of <c>AddScriptToExecuteOnDocumentCreatedAsync</c>, so anything
-        /// that must be present before the page's own scripts run has no seam here.
+        /// The carrier is separately installed at document start on WebKitGTK when requested.
         /// </summary>
         public async Task<string?> InvokeScriptAsync(string javaScript)
         {
@@ -442,8 +441,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal bool? ScrolllerGate => _scrolllerGate;
 
         /// <summary>Which engine the gate's reports belong to, and whether a page started loading on it.</summary>
-        private int _scrolllerEngine;
+        private int _scrolllerEngine, _gateReport;
         private bool _loadedOnThisEngine;
+        private Task<bool>? _carrierInstall;
+        internal Func<string, Task<bool>>? NativeCarrierInvoker { get; set; }
 
         /// <summary>A new engine behind this view, or the old one gone (UI thread). Avalonia.Controls.WebView destroys
         /// the native control on every detach (nothing here calls BeginReparenting), so a view that is unloaded and
@@ -453,6 +454,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             _scrolllerGate = null;
             _loadedOnThisEngine = false;
+            _carrierInstall = null;
+            _gateReport = 0;
             var engine = ++_scrolllerEngine;
             return gated => OnScrolllerGate(engine, gated);
         }
@@ -462,9 +465,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal async void OnScrolllerGate(int engine, bool gated)
         {
             if (engine != _scrolllerEngine) return;
+            var report = ++_gateReport;
             // WPF BrowserService.cs:245-246: fresh engines get the preference before navigation.
             if (_engineMuted is { } muted) await SetEngineMutedAsync(muted);
-            if (engine != _scrolllerEngine) return;
+            if (engine != _scrolllerEngine || report != _gateReport) return;
+            if (InjectCarrier)
+            {
+                _carrierInstall ??= InstallCarrierAsync();
+                await _carrierInstall;
+            }
+            if (engine != _scrolllerEngine || report != _gateReport) return;
             _scrolllerGate = gated;
             var src = Source;
             if (ReloadAfterGate(_web?.Source, src, _loadedOnThisEngine) && ConditioningControlPanel.Services.SandboxNet.Allows(src))
@@ -474,6 +484,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 return;
             }
             ApplySource();
+        }
+
+        private async Task<bool> InstallCarrierAsync()
+        {
+            try
+            {
+                return await (NativeCarrierInvoker?.Invoke(CarrierShim)
+                    ?? Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), CarrierShim));
+            }
+            catch (Exception ex) { Log.Debug("WebHost: carrier install failed: {E}", ex.Message); return false; }
         }
 
         /// <summary>Pure: the engine already names the page (a rebuilt engine) and nothing loaded on it yet (held or
