@@ -14,6 +14,10 @@ internal static class AccountSeed
     internal static ProviderSubscription? SubscribeStar { get; private set; }
     internal static DiscordAccount? Discord { get; private set; }
 
+    // WPF App.xaml.cs:2572-2577 and MainWindow.Login.cs:353-354.
+    internal static string? StartupUnifiedId;
+    internal static string? LastKnownUnifiedId;
+
     /// <summary>True when the last <see cref="Seed"/> granted the local sandbox whitelist (see
     /// <see cref="SandboxWhitelistRequested"/>). Always false in a Release build.</summary>
     internal static bool SandboxWhitelisted { get; private set; }
@@ -93,6 +97,7 @@ internal static class AccountSeed
     internal static void RestoreSession()
     {
         var id = CoreSettings.Current.UnifiedId;
+        StartupUnifiedId = id;
         if (string.IsNullOrEmpty(id)) return;
         if (string.IsNullOrEmpty(CoreSettings.Current.AuthToken)
             && Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true && SubscribeStar?.IsAuthenticated != true)
@@ -212,6 +217,7 @@ internal static class AccountSeed
     internal static async Task Logout(bool accountDeleted = false)
     {
         if (!accountDeleted && Sync is { Loaded: true } sync) await sync.PushAsync("pre-logout", waitForGate: true);
+        if (!accountDeleted) LastKnownUnifiedId = CoreAccount.UnifiedUserId ?? CoreSettings.Current.UnifiedId;
         Sync?.StopHeartbeat();
         SecretStore.ClearFailed = false;
         Patreon?.Logout();

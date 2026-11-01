@@ -106,4 +106,72 @@ public sealed partial class AccountSeedTests
         }
         finally { AvApp.Quests = oldQuests; quests.Dispose(); Directory.Delete(dir, true); }
     });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LogoutThenLogin_PreservesSameOwnerOrGeneratesForDifferentOwner(bool same) => WithFreshInstall(async () =>
+    {
+        AccountSeed.StartupUnifiedId = AccountSeed.LastKnownUnifiedId = null;
+        var oldQuests = AvApp.Quests;
+        var dir = Path.Combine(Path.GetTempPath(), "ccp-quest-relogin-" + Guid.NewGuid());
+        Directory.CreateDirectory(dir);
+        var quests = new QuestService(null, dir);
+        try
+        {
+            AvApp.Quests = quests;
+            var (wire, _, _) = SignIn("a", profile: null);
+            quests.Progress.TotalDailyQuestsCompleted = 17;
+            quests.Progress.DailyQuests[0].CurrentProgress = 2;
+            await AccountSeed.Logout();
+            wire.ProfileHold = new TaskCompletionSource();
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (global::Avalonia.Application.Current is null)
+                    AppBuilder.Configure<AvApp>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                var dialog = new LoginDialog();
+                dialog.Succeed(new V2AuthService.V2User { UnifiedId = same ? "a" : "b" }, "tok", null, false);
+                Assert.False(dialog.ProfileLoad.IsCompleted);
+                if (same) Assert.Equal(2, quests.Progress.DailyQuests[0].CurrentProgress);
+                else Assert.Empty(quests.Progress.DailyQuests);
+                wire.ProfileHold.SetResult();
+                await dialog.ProfileLoad; // failed GET still generates for a proven switch
+                Assert.NotEmpty(quests.Progress.DailyQuests);
+                Assert.Equal(same ? 17 : 0, quests.Progress.TotalDailyQuestsCompleted);
+                if (same) Assert.Equal(2, quests.Progress.DailyQuests[0].CurrentProgress);
+            });
+        }
+        finally { AvApp.Quests = oldQuests; quests.Dispose(); Directory.Delete(dir, true); }
+    });
+
+    [Theory]
+    [InlineData("a", null, "a", false)]
+    [InlineData("a", null, "b", true)]
+    [InlineData(null, null, "b", false)]
+    [InlineData("a", "b", "b", false)]
+    public void ExpiredStartupIdentity_OnlyClearsAProvenDifferentAccount(string? startup, string? last, string next, bool clears) => WithFreshInstall(async () =>
+    {
+        AccountSeed.StartupUnifiedId = AccountSeed.LastKnownUnifiedId = null;
+        var (wire, _, _) = SignIn(startup ?? "temporary", profile: null);
+        CoreSettings.Current.UnifiedId = startup;
+        AccountSeed.RestoreSession();
+        AccountSeed.LastKnownUnifiedId = last;
+        CoreAccount.UnifiedUserId = null;
+        CoreSettings.Current.UnifiedId = null; // session validation expired before the dialog opened
+        CoreSettings.Current.PlayerLevel = 23;
+        wire.ProfileHold = new TaskCompletionSource();
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (global::Avalonia.Application.Current is null)
+                AppBuilder.Configure<AvApp>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var dialog = new LoginDialog();
+            // A provider can alter live state during authentication; the decision uses the earlier snapshot.
+            CoreSettings.Current.UnifiedId = "provider-temporary";
+            dialog.Succeed(new V2AuthService.V2User { UnifiedId = next }, "tok", null, false);
+            Assert.Equal(clears ? 1 : 23, CoreSettings.Current.PlayerLevel);
+            wire.ProfileHold.SetResult();
+            await dialog.ProfileLoad;
+        });
+    });
+
 }
