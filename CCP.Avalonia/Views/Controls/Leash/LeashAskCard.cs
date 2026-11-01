@@ -214,7 +214,7 @@ public sealed class LeashAskCard : Border
         var lines = new StackPanel { Margin = new Thickness(6, 8, 6, 0) };
         lines.Children.Add(Bullet(IconKind.Eye, F.Lilac, see, "leash-explain-line:see"));
         // WPF LeashExplainCard.cs:91; on Wayland the reliable route is the own-card button.
-        var cut = LeashHead.WaylandSession ? Loc.Get("leash_explain_cut_wayland")
+        var cut = LeashHead.WaylandSession ? Loc.GetF("leash_explain_cut_wayland", Loc.Get("nav_tab_leash"))
             : Loc.GetF("leash_explain_leashed_cut", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey));
         lines.Children.Add(Bullet(IconKind.Cut, F.Mint, cut, "leash-explain-line:cut"));
         root.Children.Add(lines);
