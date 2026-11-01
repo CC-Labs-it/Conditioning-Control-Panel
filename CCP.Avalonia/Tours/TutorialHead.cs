@@ -120,7 +120,10 @@ namespace ConditioningControlPanel.Avalonia.Tours
             Service.TutorialFinished += OnFinished;
             try
             {
-                if (!await Service.StartAsync(type, SummonForTour) || !Service.IsActive || !shell.IsVisible) return;
+                var start = Service.StartAsync(type, SummonForTour, () => shell.IsVisible);
+                int version = Service.StartVersion;
+                if (!await start || !Service.IsActive || version != Service.StartVersion) return;
+                if (!shell.IsVisible) { Service.Skip(); return; }
             }
             finally { Unhook(); }
 

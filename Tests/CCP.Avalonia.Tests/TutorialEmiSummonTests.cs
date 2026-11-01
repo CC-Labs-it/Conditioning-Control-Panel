@@ -115,6 +115,9 @@ public sealed class TutorialEmiSummonTests
     [InlineData("panic")]
     [InlineData("restart")]
     [InlineData("close")]
+    [InlineData("hide")]
+    [InlineData("hide_on_activate")]
+    [InlineData("superseded_hidden")]
     public Task PendingMutePromptPrecedesTheFirstCard(string outcome) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current == null)
@@ -145,7 +148,13 @@ public sealed class TutorialEmiSummonTests
         desk.AskMute = () => answer.Task;
         desk.OutChanged += OnOut;
         TutorialHead.Service.StepChanged += OnStep;
+        // A returning user has no first-run modal to close the shell on hide.
+        settings.Current.Welcomed = true;
+        settings.Current.HasAcceptedAgeVerification = true;
+        settings.Current.WhatMovedCardShown = 1;
         var shell = new MainShellWindow();
+        bool shellClosed = false;
+        shell.Closed += (_, _) => shellClosed = true;
         try
         {
             settings.Current.PerformanceMode = true;
@@ -168,6 +177,15 @@ public sealed class TutorialEmiSummonTests
             Assert.Null(TutorialHead.ShellOverlay);
             CoreTutorial.Start("Settings");
             Assert.Equal("GettingStarted", CoreTutorial.CurrentTourName);
+            var firstStep = TutorialHead.Service.CurrentStep!;
+            var activate = firstStep.OnActivate;
+            int activated = 0;
+            firstStep.OnActivate = () =>
+            {
+                activated++;
+                if (outcome == "hide_on_activate") shell.Hide();
+                activate?.Invoke();
+            };
 
             if (outcome is "panic" or "restart") TutorialHead.OnPanic();
             if (outcome == "restart")
@@ -176,25 +194,51 @@ public sealed class TutorialEmiSummonTests
                 Assert.Equal("Settings", CoreTutorial.CurrentTourName);
                 Assert.False(stepped.Task.IsCompleted);
             }
+            TutorialStep? successor = null;
+            if (outcome == "superseded_hidden")
+            {
+                TutorialHead.Service.Start(TutorialType.Modding);
+                successor = TutorialHead.Service.CurrentStep;
+                shell.Hide();
+            }
             if (outcome == "close") shell.Close();
+            if (outcome == "hide") { shell.Hide(); Assert.False(shellClosed); }
             if (outcome == "failure") answer.SetException(new InvalidOperationException("prompt failed"));
             else answer.SetResult(EmiMuteChoice.Keep);
             await summoned.Task.WaitAsync(TimeSpan.FromSeconds(10));
             await pendingSummon.WaitAsync(TimeSpan.FromSeconds(10));
             Dispatcher.UIThread.RunJobs();
-            if (outcome is "answer" or "existing" or "failure" or "restart")
+            if (outcome == "superseded_hidden")
+            {
+                Assert.True(CoreTutorial.IsActive);
+                Assert.Same(successor, TutorialHead.Service.CurrentStep);
+                Assert.Equal(0, activated);
+                Assert.Null(TutorialHead.ShellOverlay);
+            }
+            else if (outcome is "answer" or "existing" or "failure" or "restart")
             {
                 Assert.True(await stepped.Task.WaitAsync(TimeSpan.FromSeconds(10)));
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(1, stepCount);
+                Assert.Equal(outcome == "restart" ? 0 : 1, activated);
                 Assert.NotNull(TutorialHead.ShellOverlay);
             }
             else
             {
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(CoreTutorial.IsActive);
-                Assert.False(stepped.Task.IsCompleted);
+                Assert.Equal(outcome == "hide_on_activate" ? 1 : 0, activated);
+                Assert.Equal(outcome == "hide_on_activate", stepped.Task.IsCompleted);
                 Assert.Null(TutorialHead.ShellOverlay);
+                if (outcome is "hide" or "hide_on_activate")
+                {
+                    Assert.False(shellClosed);
+                    shell.Show();
+                    shell.Named<Button>("BtnMainHelp")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    shell.Named<Button>("BtnTutorialGettingStarted")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Assert.True(CoreTutorial.IsActive);
+                    Assert.NotNull(TutorialHead.ShellOverlay);
+                }
             }
         }
         finally

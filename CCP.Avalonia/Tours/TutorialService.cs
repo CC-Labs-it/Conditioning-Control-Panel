@@ -417,12 +417,16 @@ namespace ConditioningControlPanel.Avalonia.Tours
             ActivateFirstStep(BeginStart(type));
         }
 
+        internal int StartVersion => _startVersion;
+
         // WPF TutorialService.cs:354-361: its synchronous narrator finishes before the first step.
-        internal async Task<bool> StartAsync(TutorialType type, Func<Task> beforeFirstStep)
+        internal async Task<bool> StartAsync(TutorialType type, Func<Task> beforeFirstStep, Func<bool> canShow)
         {
             int version = BeginStart(type);
             try { await beforeFirstStep(); }
             catch (Exception ex) { Serilog.Log.Debug(ex, "Tutorial: EMI summon failed"); }
+            if (!IsActive || version != _startVersion) return false;
+            if (!canShow()) { Skip(); return false; }
             return ActivateFirstStep(version);
         }
 
@@ -448,7 +452,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
                 CurrentStep.OnActivate?.Invoke();
                 StepChanged?.Invoke(this, CurrentStep);
             }
-            return true;
+            return IsActive && version == _startVersion;
         }
 
         /// <summary>
