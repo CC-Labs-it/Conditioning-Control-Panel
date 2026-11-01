@@ -258,6 +258,21 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                 shell.OnSessionTick();
                 Assert.Equal(SpiralFrames.Paint(runner.SpiralOpacity!.Value / 100), SpiralOverlay.Shown[0].Spiral.Opacity, 3);
                 Assert.Equal(40, s.SpiralOpacity);   // the user's slider is held, never written (#897)
+
+                // WPF SessionEngine.cs:530: pause stops the ramp's ownership, so a new hold paints the saved slider.
+                s.SkipPauseXpWarning = true;
+                var pause = shell.Named<Button>("BtnPauseSession")!;
+                pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.True(runner.IsPaused);
+                Assert.NotNull(runner.SpiralOpacity);   // the runner keeps its ramp value across the pause
+                SpeakSpiral(shell, "spiral on");
+                await Settle();
+                Assert.True(SpiralOverlay.IsShowing, Why());
+                Assert.Equal(SpiralFrames.Paint(0.40), SpiralOverlay.Shown[0].Spiral.Opacity, 3);
+                pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.False(runner.IsPaused);
+                await Settle();
+                Assert.Equal(SpiralFrames.Paint(runner.SpiralOpacity!.Value / 100), SpiralOverlay.Shown[0].Spiral.Opacity, 3);
             }
             finally
             {

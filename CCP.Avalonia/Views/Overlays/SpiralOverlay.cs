@@ -95,10 +95,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
         }
 
-        /// <summary>WPF SessionEngine.cs:814: a live session ramp replaces a voice hold's opacity.
+        /// <summary>WPF SessionEngine.cs:814: a running session's ramp replaces a voice hold's opacity; a paused
+        /// one does not (pause ran Overlay.Stop, SessionEngine.cs:530, and the ramp tick is stopped).
         /// Otherwise use the hold or saved slider, clamped before WPF's #722 paint curve.</summary>
         internal static double PaintedOpacity => SpiralFrames.Paint(Math.Clamp(
-            App.Sessions?.SpiralOpacity / 100.0 ?? _sustainedOpacity ?? CoreSettings.Current.SpiralOpacity / 100.0, 0, 1));
+            (App.Sessions is { IsRunning: true, IsPaused: false, SpiralOpacity: { } ramp } ? ramp / 100.0 : (double?)null)
+                ?? _sustainedOpacity ?? CoreSettings.Current.SpiralOpacity / 100.0, 0, 1));
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
