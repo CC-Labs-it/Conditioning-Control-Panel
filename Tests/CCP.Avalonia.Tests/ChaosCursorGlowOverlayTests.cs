@@ -160,6 +160,20 @@ public sealed class ChaosCursorGlowOverlayTests
     });
 
     [Fact]
+    public Task Retained_halo_breath_keeps_its_phase_while_hidden() => WithSeams(() => true, (clock, _) =>
+    {
+        ChaosCursorGlowOverlay.EnsureCreated();
+        clock.Now += TimeSpan.FromMilliseconds(620).Ticks;
+        ChaosCursorGlowOverlay.Arm();
+        var w = ChaosCursorGlowOverlay.Active!;
+        Assert.Equal(1.12, w.HaloScale, 6);
+        ChaosCursorGlowOverlay.Disarm();
+        clock.Now += TimeSpan.FromMilliseconds(620).Ticks;
+        ChaosCursorGlowOverlay.Arm();
+        Assert.Equal(0.85, w.HaloScale, 6);
+    });
+
+    [Fact]
     public Task Chaos_teardown_closes_it_even_when_no_run_is_active() => WithSeams(() => true, (_, _) =>
     {
         ChaosCursorGlowOverlay.Arm();

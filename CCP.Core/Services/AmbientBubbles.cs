@@ -60,6 +60,11 @@ namespace ConditioningControlPanel.Services
         public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
         private int _animType;
+        // WPF BubbleService.cs:2656,3380-3400,3834-3952: darter state.
+        private double _vx, _vy, _left, _right, _upper, _lower;
+        private double _telegraphMs, _darterLifeMs, _throbPhase, _throbPunch;
+        private int _bounces;
+        private bool _escaping;
 
         // ---- live chaos bubble (WPF Bubble _fuseRemainingMs / _isChanneling / TickChannel) ----
         /// <summary>WPF's fuse tick: 32 ms per logical step (BubbleService.cs:4149).</summary>
@@ -156,8 +161,8 @@ namespace ConditioningControlPanel.Services
             return b;
         }
 
-        /// <summary>WPF Bubble ctor with a Chaos spec, FloatUp only: the spec's size, the chaos
-        /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
+        /// <summary>WPF Bubble ctor with a Chaos spec: FloatUp, or the darter's RoamBounce origin.
+        /// Other Chaos motion and darter boon interactions are not yet ported.</summary>
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
             double scaling, Chaos.EffectBubbleSpec spec)
         {
@@ -171,6 +176,26 @@ namespace ConditioningControlPanel.Services
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
             b.Y = (areaY + areaH) / scaling;
+            if (spec.IsDarter)
+            {
+                // RoamBounce starts within the working area, then a pinned summon overrides its origin.
+                // WPF BubbleService.cs:3325-3348,3380-3400.
+                b._left = areaX / scaling;
+                b._right = (areaX + areaW) / scaling - b.Size;
+                b._upper = areaY / scaling;
+                b._lower = (areaY + areaH) / scaling - b.Size;
+                b.Y = (areaY + r.Next(50, (int)Math.Max(100, areaH - b.Size - 50))) / scaling;
+                double angle = r.NextDouble() * Math.PI * 2;
+                b._vx = Math.Cos(angle) * spec.DarterSpeed;
+                b._vy = Math.Sin(angle) * spec.DarterSpeed;
+                if (spec.SpawnAtPxX is double x && spec.SpawnAtPxY is double y)
+                {
+                    b.X = b._startX = x / scaling - b.Size / 2;
+                    b.Y = y / scaling - b.Size / 2;
+                }
+                b._telegraphMs = Math.Max(0, spec.TelegraphMs);
+                b._darterLifeMs = Math.Max(1, spec.LifetimeMs);
+            }
             return b;
         }
 
@@ -195,6 +220,7 @@ namespace ConditioningControlPanel.Services
         {
             get
             {
+                if (Spec?.IsDarter == true) return Scale; // WPF :4255: no second wobble
                 double calm = Spec?.VariantId is "video" or "htlink" ? 0.4 : 1.0, d = DangerFactor;
                 return Scale + (0.06 + d * 0.0225 * calm) * Math.Sin(_timeAlive * (7.5 + d * 9.0 * calm) + _wobbleOffset);
             }
@@ -242,13 +268,18 @@ namespace ConditioningControlPanel.Services
         {
             if (Popping)
             {
-                // Pop animation - expand and fade; lucky pops linger ~50% longer.
-                Scale += Deflating ? -0.03 : 0.04;
-                Fade -= Lucky ? 0.044 : 0.066;
-                Angle += 2;
+                // WPF BubbleService.cs:3777-3788: a darter bursts bigger and slower.
+                if (Spec?.IsDarter == true) { Scale += 0.07; Fade -= 0.030; }
+                else
+                {
+                    Scale += Deflating ? -0.03 : 0.04;
+                    Fade -= Lucky ? 0.044 : 0.066;
+                    Angle += 2;
+                }
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
+            if (Spec?.IsDarter == true) return StepDarter();
             // WPF :4147-4193: the fuse burns 32 ms a step; fuse-out detonates.
             if (Spec is { IsLive: true } && FuseRemainingMs > 0)
             {
@@ -268,6 +299,41 @@ namespace ConditioningControlPanel.Services
             X = _startX + offset;
             if (Y >= _top) return Result.Alive;
             return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
+        }
+
+        // WPF BubbleService.cs:3834-3867,3888-3915,3951: flare in place, reflect three
+        // times, then exit or expire harmlessly. Field time scaling and boon steering are part B.
+        private Result StepDarter()
+        {
+            _throbPhase += 0.5;
+            _throbPunch = Math.Max(0, _throbPunch - 0.05);
+            Scale = 1 + 0.10 * Math.Sin(_throbPhase) + _throbPunch;
+            if (_telegraphMs > 0) _telegraphMs -= 32;
+            else
+            {
+                X += _vx; Y += _vy;
+                if (!_escaping)
+                {
+                    bool hit = false;
+                    if (X < _left) { X = _left; _vx = Math.Abs(_vx); hit = true; }
+                    else if (X > _right) { X = _right; _vx = -Math.Abs(_vx); hit = true; }
+                    if (Y < _upper) { Y = _upper; _vy = Math.Abs(_vy); hit = true; }
+                    else if (Y > _lower) { Y = _lower; _vy = -Math.Abs(_vy); hit = true; }
+                    if (hit)
+                    {
+                        _throbPunch = 0.22;
+                        if (++_bounces >= Chaos.ChaosBubbleVariants.DARTER_MAX_BOUNCES) _escaping = true;
+                    }
+                }
+                else
+                {
+                    double pad = Size + 80;
+                    if (X < _left - pad || X > _right + pad || Y < _upper - pad || Y > _lower + pad)
+                        return Result.Done;
+                }
+            }
+            _darterLifeMs -= 32;
+            return _darterLifeMs <= 0 ? Result.Done : Result.Alive;
         }
     }
 
