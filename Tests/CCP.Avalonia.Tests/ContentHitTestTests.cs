@@ -65,6 +65,9 @@ public sealed class ContentHitTestTests
                     if (!new Rect(w.Bounds.Size).Contains(p) || b.GetVisualAncestors().OfType<ScrollViewer>().Any(s => !Inside(s, p, w))) continue;
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
+                    w.MouseMove(p);
+                    RenderLiveTree(w);
+                    p = b.TranslatePoint(new Point(b.Bounds.Width / 2, b.Bounds.Height / 2), w)!.Value;
                     var hit = w.InputHitTest(p) as Visual;
                     // Hover/press can replace the template and detach the visual returned by this hit.
                     var hitsButton = hit is not null && (hit == b || b.IsVisualAncestorOf(hit));
@@ -91,9 +94,10 @@ public sealed class ContentHitTestTests
     /// committed after it is missing from the frame. Every tab's first probe ran with one batch pending,
     /// and on a slow runner the stale frame still had no hero there (Linux CI 38316007639: awareness
     /// BtnAwarenessTutorial / ChkAwarenessMaster hit ScrollContentPresenter, pressed False).</summary>
-    private static void RenderLiveTree(Visual w)
+    internal static void RenderLiveTree(TopLevel w)
     {
-        Dispatcher.UIThread.RunJobs();
+        // SceneInvalidated can change hover/layout after a frame. Drain that work before fencing the next batch.
+        using var frame = w.CaptureRenderedFrame();
         var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
         var deadline = Stopwatch.StartNew();
         while (!batch.Rendered.IsCompleted)
