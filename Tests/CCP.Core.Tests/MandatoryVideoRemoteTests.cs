@@ -81,6 +81,34 @@ public sealed class MandatoryVideoRemoteTests
         finally { (s.MediaSource, s.RemoteMediaConsented) = old; }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task QueuedClipDownloadsWhileTheNextFetchFails(bool throws)
+    {
+        var s = CoreSettings.Current; var old = (s.MediaSource, s.RemoteMediaConsented);
+        var pending = new TaskCompletionSource<(List<FypAssetManifest.Entry>, string?)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            s.MediaSource = "online"; s.RemoteMediaConsented = true;
+            var allow = false; var cached = false; var calls = 0; var downloads = 0;
+            var v = new MandatoryVideoScheduler(new Host(), library: Array.Empty<string>)
+            {
+                RemoteMedia = true, MayFetchRemote = _ => allow, CachedRemote = _ => cached,
+                FetchRemote = _ => ++calls == 1 ? Task.FromResult((new List<FypAssetManifest.Entry> { Clip() }, (string?)null)) : pending.Task,
+                DownloadRemote = (_, _) => { downloads++; cached = true; return Task.FromResult<string?>("/cache.mp4"); },
+            };
+            await v.RefillRemoteForTest(); allow = true;
+            var fill = v.RefillRemoteForTest();
+            var readyBeforeFailure = cached && !fill.IsCompleted;
+            if (throws) pending.SetException(new InvalidOperationException("offline")); else pending.SetResult((new List<FypAssetManifest.Entry>(), "offline"));
+            try { await fill; } catch (InvalidOperationException) when (throws) { }
+            Assert.True(readyBeforeFailure); Assert.Equal(1, downloads); Assert.Equal(Url, v.PickNext());
+            s.MediaSource = "local"; if (v.RemoteTask != null) await v.RemoteTask;
+        }
+        finally { (s.MediaSource, s.RemoteMediaConsented) = old; }
+    }
+
     [Fact]
     public async Task Changed_channels_discard_a_pending_batch_before_downloading()
     {

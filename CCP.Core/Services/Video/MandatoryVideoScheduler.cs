@@ -530,8 +530,10 @@ namespace ConditioningControlPanel.Services
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
             bool fetch;
             lock (_remoteLock) fetch = _remoteQueue.Count < 4;
-            if (fetch)
+            var queued = DownloadRemoteQueueAsync(selection);
+            try
             {
+                if (!fetch) return;
                 var (entries, error) = await FetchRemote(timeout.Token).ConfigureAwait(false);
                 if (error != null || RefreshRemoteSelection() != selection) return;
                 lock (_remoteLock)
@@ -545,6 +547,11 @@ namespace ConditioningControlPanel.Services
                     }
                 }
             }
+            finally { await queued.ConfigureAwait(false); }
+            await DownloadRemoteQueueAsync(selection).ConfigureAwait(false);
+        }
+        private async Task DownloadRemoteQueueAsync(string selection)
+        {
             // Only Scrolller URLs are downloaded; never stream them on a cache miss.
             for (var i = 0; i < 60 && RefreshRemoteSelection() == selection; i++)
             {
