@@ -757,7 +757,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// <summary>The read-only profile load Succeed started (tests await it).</summary>
         internal Task ProfileLoad { get; private set; } = Task.CompletedTask;
 
-        internal void Succeed(V2AuthService.V2User user, string? authToken, string? provider, bool legacy)
+        internal void Succeed(V2AuthService.V2User user, string? authToken, string? provider, bool legacy, bool? serverNeedsDisplayName = null)
         {
             if (_closed) { Log.Warning("Sign-in finished after the login dialog closed; ignored"); return; }
             // WPF MainWindow.Login.cs:110-141: a PROVEN different account never inherits the last one's progression.
@@ -782,7 +782,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 ShouldShowOgWelcome = legacy && CoreSettings.Current.HasShownOgWelcome != true,
                 UnifiedId = user.UnifiedId,
                 DisplayName = user.DisplayName,
-                ServerNeedsDisplayName = user.NeedsDisplayName,
+                ServerNeedsDisplayName = serverNeedsDisplayName ?? user.NeedsDisplayName,
                 Provider = provider,
             };
             Close(true);
@@ -968,7 +968,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             // The full user when the server sent it (SP3 fix): the same adopt + load as every other sign-in.
             if (result.User != null)
             {
-                Succeed(result.User, result.AuthToken, "device_code", legacy: false);
+                Succeed(result.User, result.AuthToken, "device_code", legacy: false, serverNeedsDisplayName: result.NeedsDisplayName);
                 return;
             }
             if (_closed) return;

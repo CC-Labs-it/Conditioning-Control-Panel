@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using Newtonsoft.Json.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -144,17 +145,27 @@ public sealed class LoginDeviceCodeTests
     }
 
     [Theory]
-    [InlineData(false, null)]
-    [InlineData(true, true)]
-    [InlineData(true, false)]
-    public Task TheBrowserConfirmationSignsInAfterPollingEveryThreeSeconds(bool bare, bool? needsName)
+    [InlineData(false, null, null)]
+    [InlineData(true, true, null)]
+    [InlineData(true, false, null)]
+    [InlineData(false, true, null)]
+    [InlineData(false, false, null)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public Task TheBrowserConfirmationSignsInAfterPollingEveryThreeSeconds(bool bare, bool? needsName, bool? nestedName)
     {
-        var confirmed = bare
-            ? $$"""{"auth_token":"tok-dev","unified_id":"u_dev","needs_display_name":{{(needsName == true ? "true" : "false")}}}"""
-            : """{"auth_token":"tok-dev","unified_id":"u_dev","user":{"unified_id":"u_dev","display_name":"Bambi Dev"}}""";
+        var confirmed = JObject.Parse(bare
+            ? """{"auth_token":"tok-dev","unified_id":"u_dev"}"""
+            : """{"auth_token":"tok-dev","unified_id":"u_dev","user":{"unified_id":"u_dev","display_name":"Bambi Dev"}}""");
+        if (needsName is bool needed) confirmed["needs_display_name"] = needed;
+        if (confirmed["user"] is JObject user)
+        {
+            user["display_name"] = needsName == true ? "Old name" : needsName == false ? null : "Bambi Dev";
+            if (nestedName is bool nested) user["needs_display_name"] = nested;
+        }
         var wire = new Wire(T0.AddMinutes(10),
             (HttpStatusCode.Accepted, "{}"),
-            (HttpStatusCode.OK, confirmed));
+            (HttpStatusCode.OK, confirmed.ToString()));
         return AvaloniaTestDispatcher.RunAsync(() => Run(wire, async (dialog, clock, s) =>
             {
                 var shell = Assert.IsType<MainShellWindow>(dialog.Owner);
