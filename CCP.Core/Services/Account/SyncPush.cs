@@ -332,7 +332,8 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
-                    if (reply["user"]?["achievements"] is JArray achievements
+                    if (reply["user"] is JObject user
+                        && user["achievements"] is JArray achievements
                         && achievements.All(a => a.Type == JTokenType.String))
                         RestoreCloudAchievements(achievements.Values<string>().Select(a => a!));
                     if (AdoptFromResponse(s, reply)) _adopted = true;
@@ -358,15 +359,25 @@ namespace ConditioningControlPanel.Services
             finally { _gate.Release(); }
         }
 
-        // WPF ProfileSyncService.cs:1895-1954,2172-2227: skills, cosmetics, companion/time adoption.
+        /// <summary>
+        /// WPF SyncProfileAsync:1897-1954, in its order: the force_skills_reset (clear the tree, take the server's points,
+        /// or level x PointsPerLevel; ack pending until a response no longer carries the flag), else skill points
+        /// MergeMax; the unlocked-skills union (skipped on level_reset, whose own branch unions); then the cloud loadout
+        /// into an EMPTY local one only (WPF AdoptCloudCosmetics). Does not save. True when the response carried both
+        /// skill_points and unlocked_skills, i.e. the server's skills are now known.
+        /// </summary>
         internal bool AdoptFromResponse(AppSettings s, JObject reply)
         {
-            bool Flag(string k) => reply[k]?.Type == JTokenType.Boolean && reply.Value<bool>(k); int? points = reply["skill_points"]?.Type == JTokenType.Integer ? reply.Value<int>("skill_points") : null;
+            bool Flag(string k) => reply[k]?.Type == JTokenType.Boolean && reply.Value<bool>(k);
+            int? points = reply["skill_points"]?.Type == JTokenType.Integer ? reply.Value<int>("skill_points") : null;
             var forceReset = Flag("force_skills_reset");
             if (forceReset && !s.PendingSkillsResetAck)
             {
-                var refunded = points ?? s.PlayerLevel * PointsPerLevel; Log.Information("V2 Sync: Force skills reset - clearing {Count} skills, setting points to {Points}", s.UnlockedSkills?.Count ?? 0, refunded);
-                s.UnlockedSkills = new List<string>(); s.SkillPoints = refunded; s.PendingSkillsResetAck = true;
+                var refunded = points ?? s.PlayerLevel * PointsPerLevel;
+                Log.Information("V2 Sync: Force skills reset - clearing {Count} skills, setting points to {Points}", s.UnlockedSkills?.Count ?? 0, refunded);
+                s.UnlockedSkills = new List<string>();
+                s.SkillPoints = refunded;
+                s.PendingSkillsResetAck = true;
             }
             else if (s.PendingSkillsResetAck && !forceReset)
                 s.PendingSkillsResetAck = false;   // the server flag was cleared by our ack
@@ -375,16 +386,19 @@ namespace ConditioningControlPanel.Services
                 var max = SparklePoints.MergeMax(p, s.SkillPoints);
                 if (max != s.SkillPoints)
                 {
-                    Log.Information("V2 Sync: Skill points server={Server}, local={Local} - taking max ({Max})", p, s.SkillPoints, max); s.SkillPoints = max;
+                    Log.Information("V2 Sync: Skill points server={Server}, local={Local} - taking max ({Max})", p, s.SkillPoints, max);
+                    s.SkillPoints = max;
                 }
             }
             var skills = reply["unlocked_skills"] as JArray;
             if (skills is { Count: > 0 } && !Flag("level_reset"))
             {
-                var local = s.UnlockedSkills ?? new List<string>(); var add = skills.Values<string>().OfType<string>().Where(k => k.Length > 0 && !local.Contains(k)).Distinct().ToList();
+                var local = s.UnlockedSkills ?? new List<string>();
+                var add = skills.Values<string>().OfType<string>().Where(k => k.Length > 0 && !local.Contains(k)).Distinct().ToList();
                 if (add.Count > 0)
                 {
-                    Log.Information("V2 Sync: Adding {Count} unlocked skills from server: {Skills}", add.Count, string.Join(", ", add)); s.UnlockedSkills = local.Concat(add).ToList();
+                    Log.Information("V2 Sync: Adding {Count} unlocked skills from server: {Skills}", add.Count, string.Join(", ", add));
+                    s.UnlockedSkills = local.Concat(add).ToList();
                 }
             }
             try
@@ -401,13 +415,17 @@ namespace ConditioningControlPanel.Services
                 }
             }
             catch (Exception ex) { Log.Debug("AdoptCloudCosmetics skipped: {E}", ex.Message); }
+            // WPF ProfileSyncService:2175-2231: time takes higher; a companion's whole record
+            // is selected by level, then lifetime XP. Missing fields never arm a defaults push.
+            // Own try like the cosmetics block: a malformed record must not skip ApplySyncResponse/ClaimWebXp.
             try
             {
                 if (reply["total_conditioning_minutes"] is { Type: JTokenType.Integer or JTokenType.Float } minutes)
                 {
                     if (minutes.Value<double>() > s.TotalConditioningMinutes)
                     {
-                        s.TotalConditioningMinutes = minutes.Value<double>(); LifetimeLifted?.Invoke();
+                        s.TotalConditioningMinutes = minutes.Value<double>();
+                        LifetimeLifted?.Invoke();
                     }
                     _knownProgress |= SyncBody.Field.TotalConditioningMinutes;
                 }
@@ -415,7 +433,9 @@ namespace ConditioningControlPanel.Services
                 {
                     foreach (var entry in companions.Properties())
                     {
-                        if (!int.TryParse(entry.Name, out var id) || entry.Value is not JObject record) continue; var server = record.ToObject<CompanionProgress>(); if (server == null) continue;
+                        if (!int.TryParse(entry.Name, out var id) || entry.Value is not JObject record) continue;
+                        var server = record.ToObject<CompanionProgress>();
+                        if (server == null) continue;
                         s.CompanionProgressData.TryGetValue(id, out var local);
                         if (local == null || server.Level > local.Level
                             || server.Level == local.Level && server.TotalXPEarned > local.TotalXPEarned)
@@ -427,6 +447,7 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Debug("Companion/time merge skipped: {E}", ex.Message); }
             return points != null && skills != null;
         }
+
         /// <summary>WPF SyncProfileAsync:1970-1985: a new web XP claim is persisted (and saved) BEFORE its XP is added, so a
         /// crash under-pays once instead of paying twice; skipped on level_reset, whose level/XP overwrite would eat it. The
         /// id then goes back as <c>web_xp_claim_ack</c> on every push.</summary>
@@ -455,7 +476,9 @@ namespace ConditioningControlPanel.Services
                     }
                     if (reconcile)
                     {
-                        // WPF :1987 migration ack also follows payment, before XP adoption.
+                        // WPF ProfileSyncService.cs:1987 HandleDescentMigrationAck: settle/heal an account
+                        // migrated on any device. This head never takes the offer (no descent_auto),
+                        // so only the ack half runs here, after claim payment and before XP adoption.
                         Descent.DescentMigrationAck.Apply(s, reply);
                         ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                         CoreSettings.Save();
