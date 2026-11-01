@@ -548,6 +548,44 @@ public sealed class FirstShowStageTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task DebugPreviewConnectsItsCuesToTheStandalonePlayer() => Run(_ =>
+    {
+        FirstShowService.Stop();
+        EmiDeskService.Instance.Window?.ShutDown();
+        var desktop = new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime
+        { Args = new[] { "--first-show-preview" } };
+        var path = Path.GetTempFileName();
+        var settings = CoreSettings.ServiceProvider;
+        var overridePath = CoreModArt.AudioOverridePathProvider;
+        var suppressed = CoreAudio.IsOutputSuppressedProvider;
+        var stoppable = CoreAudio.PlayStoppableProvider;
+        var oneShot = CoreAudio.PlayOneShotProvider;
+        try
+        {
+            CoreSettings.ServiceProvider = null; CoreModArt.AudioOverridePathProvider = _ => path;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreAudio.PlayStoppableProvider = null; CoreAudio.PlayOneShotProvider = null;
+            Assert.True(ConditioningControlPanel.Avalonia.App.TryStartFirstShowPreview(desktop));
+            var stage = Assert.IsType<FirstShowStageWindow>(desktop.MainWindow);
+            int played = 0, stopped = 0;
+            stage.Audio.CreatePreviewPlayer = () => (_, volume, _) =>
+            { Assert.Equal(.208f, volume); played++; return () => stopped++; };
+            stage.Audio.Cue("click"); Assert.Equal(1, played);
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            stage.Close(); Assert.Equal(1, stopped);
+        }
+        finally
+        {
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            FirstShowService.Stop(); desktop.MainWindow = null; desktop.Dispose();
+            CoreSettings.ServiceProvider = settings; CoreModArt.AudioOverridePathProvider = overridePath;
+            CoreAudio.IsOutputSuppressedProvider = suppressed; CoreAudio.PlayStoppableProvider = stoppable;
+            CoreAudio.PlayOneShotProvider = oneShot; File.Delete(path);
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData("--first-show-preview-extra")]
     [InlineData("--FIRST-SHOW-PREVIEW")]

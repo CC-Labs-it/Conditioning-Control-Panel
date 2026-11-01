@@ -26,7 +26,7 @@ internal static class FirstShowService
         try
         {
             FirstShowStageWindow.SweepTemp();
-            window = new FirstShowStageWindow(owner);
+            window = new FirstShowStageWindow(owner, preview);
             if (!window.Launch() && RequireClickThrough)
             {
                 Log.Warning("[FirstShow] not opened: this desktop cannot make the stage click-through");
