@@ -41,6 +41,7 @@ public sealed class ProfileFaucetTests
     [InlineData("off")]
     [InlineData("minimize")]
     [InlineData("intro")]
+    [InlineData("retune")]
     public Task TrainerCardHoldsUntilACompletedKeyboardCharge(string action) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
@@ -94,6 +95,7 @@ public sealed class ProfileFaucetTests
         };
         var reply = DescentReader.ParseWire("{\"descent\":{\"devotion_days\":3,\"vat\":{\"cap\":4000,\"today_xp\":1000,\"fill_lip_pct\":120}}}")!;
         if (action == "brim") reply["descent"]!["vat"]!["today_xp"] = earned;
+        if (action == "retune") { reply["descent"]!["vat"]!["today_xp"] = 200; new AppSettingsVatPourLedger().Record(200); }
         var service = new DescentService(_ => Task.FromResult<JObject?>(reply));
         AvApp.Descent = service;
         try
@@ -106,6 +108,7 @@ public sealed class ProfileFaucetTests
             var tap = page.FindControl<Grid>("ProfileVatFaucet")!;
             var ring = page.FindControl<Grid>("ProfileVatChargeRing")!;
             Assert.True(glass.IsVisible); Assert.True(tap.IsVisible);
+            if (action == "retune") { Assert.Equal(.05, glass.Fill); reply["descent"]!["vat"]!["cap"] = 4100; await service.RefreshAsync("cap retune", force: true); Dispatcher.UIThread.RunJobs(); Assert.Equal(5, (int)Math.Round(glass.Fill * 100)); Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("profile_vat_readout", "200", 4100.ToString("N0"), 5), page.FindControl<TextBlock>("ProfileVatReadout")!.Text); return; }
             Assert.Equal(0, glass.Fill); Assert.Equal(0, s.VatPouredTodayXp);
             if (action == "intro") { Assert.True(StartupLadder.Inbox.Contains("intro:descent-vat")); Assert.DoesNotContain("descent-vat", s.SeenFeatureIntros); return; }
             if (action == "off") s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;

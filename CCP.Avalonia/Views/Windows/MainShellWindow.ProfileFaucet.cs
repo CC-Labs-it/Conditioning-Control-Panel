@@ -20,8 +20,7 @@ public partial class MainShellWindow
     private int _faucetPours, _faucetRungs;
     private DateTime _faucetDay;
     private T? FaucetControl<T>(string name) where T : Control => ProfilePage?.FindControl<T>(name);
-    // WPF MainWindow.ProfileVat.cs:268-334. Read server truth through the shared hold.
-    private void ApplyFaucetReading()
+    private void ApplyFaucetReading() // WPF MainWindow.ProfileVat.cs:268-334. Read server truth through the shared hold.
     {
         var glass = VatGlass;
         if (glass == null) return;
@@ -47,10 +46,10 @@ public partial class MainShellWindow
                 else glass.EaseTo(step.Fill);
                 break;
         }
+        UpdateVatReadout(); // WPF MainWindow.ProfileVat.cs:340-344: cap retunes may keep the whole percent unchanged
         UpdateFaucetPresentation();
     }
-    // WPF MainWindow.ProfileFaucet.cs:141-205, 280-292, 552-603.
-    private void ArmFaucet(VatGlassCanvas glass, double w, double h)
+    private void ArmFaucet(VatGlassCanvas glass, double w, double h) // WPF MainWindow.ProfileFaucet.cs:141-205, 280-292, 552-603.
     {
         var tap = FaucetControl<Grid>("ProfileVatFaucet");
         if (tap == null) return;
@@ -89,8 +88,7 @@ public partial class MainShellWindow
         };
         _faucetChargeBeat = new BeatLoop(tap, seconds => AdvanceFaucetCharge(seconds * 1000)) { OnParked = () => CancelFaucetCharge() };
     }
-    // WPF MainWindow.ProfileFaucet.cs:296-361. Existing localized copy, still waiting badge.
-    private void UpdateFaucetPresentation()
+    private void UpdateFaucetPresentation() // WPF MainWindow.ProfileFaucet.cs:296-361. Existing localized copy, still waiting badge.
     {
         int held = _faucetHold.HeldXp;
         bool waiting = held > 0 && VatGlass?.IsPouring != true && !_faucetCharging;
@@ -105,8 +103,7 @@ public partial class MainShellWindow
         if (FaucetControl<TextBlock>("ProfileVatChipText") is { } label) label.Text = Loc.GetF("profile_vat_chip", held);
         if (FaucetControl<Control>("ProfileVatFaucetBadge") is { } badge) badge.IsVisible = held > 0;
     }
-    // WPF MainWindow.ProfileFaucet.cs:609-683, 1080-1095. Same budget and daily compact cut.
-    private void BeginFaucetCharge()
+    private void BeginFaucetCharge() // WPF MainWindow.ProfileFaucet.cs:609-683, 1080-1095. Same budget and daily compact cut.
     {
         if (_faucetCharging || !_vatArmed || !_vatOnScreen || VatGlass?.IsPouring != false || _faucetHold.HeldXp <= 0) return;
         if (_faucetDay != DateTime.UtcNow.Date) { _faucetDay = DateTime.UtcNow.Date; _faucetPours = 0; }
