@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using ConditioningControlPanel;
@@ -125,16 +126,118 @@ public sealed class LeashIncomingAskTests
             }
         });
 
+    [Fact]
+    public void LookConsumesItsQueuedOfferAndEscapeAdvancesToTheOtherOffer() =>
+        LeashGateCardTests.Run(false, (shell, _, service) =>
+        {
+            service.ApplyBlock(Block((First, "juno"), (Second, "vex"))); // Both windows are hidden.
+            shell.Show();
+            shell.ShowTab("leash");
+            var page = shell.Named<LeashTabView>("LeashTab")!;
+            try
+            {
+                var row = page.GetLogicalDescendants().OfType<Border>().Single(c => c.Tag as string == "leash-offer-row:vex");
+                var look = row.GetLogicalDescendants().OfType<Button>().Single(c => c.Tag as string == "leash-offer-look");
+                LeashGateCardTests.Click(look);
+                var manual = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:vex", manual.Card.Tag);
+                manual.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+                Dispatcher.UIThread.RunJobs();
+                var next = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:juno", next.Card.Tag); // The other offer still waits.
+                next.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current); // The offer opened by Look must not return.
+                Assert.Contains(page.GetLogicalDescendants().OfType<Border>(), c => c.Tag as string == "leash-offer-row:vex");
+            }
+            finally
+            {
+                service.ApplyBlock(Block());
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Theory]
+    [InlineData("wayland-test", null)]
+    [InlineData(null, "wayland")]
+    public void WaylandWithoutPortalShowsTheAvailableCutButtonOnTheOwnCard(string? display, string? session) =>
+        LeashGateCardTests.Run(true, (shell, _, service) =>
+        {
+            if (!OperatingSystem.IsLinux()) return;
+            var old = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+            var oldSession = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
+            try
+            {
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", display);
+                Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", session);
+                Assert.False(PortalPanicShortcut.IsBound);
+                shell.Show();
+                shell.ShowTab("leash");
+                var page = shell.Named<LeashTabView>("LeashTab")!;
+                var hint = page.GetLogicalDescendants().OfType<TextBlock>().Single(t => t.Tag as string == "leash-self-hold");
+                Assert.Equal(Loc.Get("leash_self_cut_wayland"), hint.Text);
+                Assert.NotEqual("leash_self_cut_wayland", hint.Text);
+                var cut = page.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag as string == "leash-cut");
+                LeashGateCardTests.Click(cut);
+                Assert.Null(service.Snapshot.Me);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", old);
+                Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", oldSession);
+            }
+        });
+
+    [Theory]
+    [InlineData("wayland-test", null)]
+    [InlineData(null, "wayland")]
+    public void WaylandWithoutPortalExplainsTheAvailableCutRouteBeforeAccepting(string? display, string? session) =>
+        LeashGateCardTests.Run(false, (_, _, _) =>
+        {
+            if (!OperatingSystem.IsLinux()) return;
+            var old = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+            var oldSession = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
+            try
+            {
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", display);
+                Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", session);
+                Assert.False(PortalPanicShortcut.IsBound);
+                var card = new LeashAskCard();
+                var line = card.GetLogicalDescendants().OfType<Grid>().Single(c => c.Tag as string == "leash-explain-line:cut");
+                var text = line.Children.OfType<TextBlock>().Single().Text;
+                Assert.Equal(Loc.Get("leash_explain_cut_wayland"), text);
+                Assert.NotEqual("leash_explain_cut_wayland", text);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", old);
+                Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", oldSession);
+            }
+        });
+
     [Theory]
     [InlineData("Escape", "Esc")]
     [InlineData("F10", "F10")]
     public void OwnCardShowsTheConfiguredHoldToCutKey(string key, string label) =>
         LeashGateCardTests.Run(true, (shell, _, _) =>
         {
-            CoreSettings.Current.PanicKey = key;
-            shell.ShowTab("leash");
-            var page = shell.Named<LeashTabView>("LeashTab")!;
-            var hint = page.GetLogicalDescendants().OfType<TextBlock>().Single(t => t.Tag as string == "leash-self-hold");
-            Assert.Equal(Loc.GetF("leash_self_hold_hint", label), hint.Text);
+            var display = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+            var session = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
+            try
+            {
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", null);
+                Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", null);
+                CoreSettings.Current.PanicKey = key;
+                shell.ShowTab("leash");
+                var page = shell.Named<LeashTabView>("LeashTab")!;
+                var hint = page.GetLogicalDescendants().OfType<TextBlock>().Single(t => t.Tag as string == "leash-self-hold");
+                Assert.Equal(Loc.GetF("leash_self_hold_hint", label), hint.Text);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", display);
+                Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", session);
+            }
         });
 }
