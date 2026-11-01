@@ -55,6 +55,21 @@ public partial class MainShellWindow
             dash.ComboMindDrain.TitleA = CardLabel("Mind Wipe", "label_mind_wipe");
             dash.ComboMindDrain.TitleB = CardLabel("Brain Drain", "label_brain_drain");
         }
+        // WPF MainWindow.UiUpdates.cs:145-152: preset and session details share this refresh.
+        // Keep ModAwareLabel so an empty mod replacement still wins, as in WPF.
+        // The subliminal English probe uses _2 while its localized fallback uses the original key.
+        var presets = Named<Tabs.PresetsTabView>("PresetsTab");
+        void PresetLabel(string name, string key, string? englishKey = null)
+        {
+            if (presets?.FindControl<IconLabel>(name) is { } label)
+                label.Text = ModAwareLabel(LocalizationManager.Instance.GetEnglish(englishKey ?? key) ?? string.Empty, key);
+        }
+        PresetLabel("TxtFeatureCornerGif", "label_corner_gif");
+        PresetLabel("TxtDetailFlashLabel", "section_flash_images");
+        PresetLabel("TxtDetailVideoLabel", "label_mandatory_videos");
+        PresetLabel("TxtDetailSubLabel", "section_subliminals", "section_subliminals_2");
+        PresetLabel("TxtSessionFlashLabel", "section_flash_images");
+        PresetLabel("TxtSessionSubLabel", "section_subliminals", "section_subliminals_2");
         // WPF MainWindow.UiUpdates.cs:164-189: explicit mod tooltip, then mod-aware
         // English replacement, then localized fallback. Re-run for mod and language changes.
         void StatTip(string name, string skill, string english, string key)
