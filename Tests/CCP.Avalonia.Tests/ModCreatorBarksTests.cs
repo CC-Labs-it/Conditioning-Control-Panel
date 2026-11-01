@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using Avalonia;
@@ -256,6 +257,58 @@ public sealed class ModCreatorBarksTests
         Assert.Equal(10, result["conditions"]!.Value<int>("level_gte"));
         Assert.Equal(42, result.Value<int>("future"));
         Assert.Equal("line", Assert.Single((JArray)result["variant_pool"]!).Value<string>());
+    });
+
+    [Theory]
+    [InlineData("-3", "-7", -3, -7)]
+    [InlineData("4", "-7", 4, -7)]
+    [InlineData("4.5", "-2.5", 4, -2)]
+    [InlineData("4", "-2.5", 4, -2)]
+    public void LoadedIntegerSettingsRoundTripUnderSwedishCulture(string priority, string cooldown, int expectedPriority, int expectedCooldown) => Run((w, root) =>
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("sv-SE");
+            Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+            File.WriteAllText(FileAt(root), $"[{{id:'loaded',trigger:'Event',priority:{priority},cooldown_ms:{cooldown},variant_pool:['line']}}]");
+            w.LoadBarksFrom(root);
+            var result = (JObject)Assert.Single(Export(w, Path.Combine(root, "out")));
+            Assert.Equal(expectedPriority, result.Value<int?>("priority"));
+            Assert.Equal(expectedCooldown, result.Value<int?>("cooldown_ms"));
+            var boxes = Card(w).GetLogicalDescendants().OfType<TextBox>();
+            Assert.Equal(expectedPriority.ToString(CultureInfo.InvariantCulture), boxes.Single(b => Equals(b.Tag, "mod_barks_priority")).Text);
+            Assert.Equal(expectedCooldown.ToString(CultureInfo.InvariantCulture), boxes.Single(b => Equals(b.Tag, "mod_barks_cooldown")).Text);
+        }
+        finally { CultureInfo.CurrentCulture = previous; }
+    });
+
+    [Theory]
+    [InlineData("en", "Mood (comma-separated flavor words)", "e.g. teasing, soft")]
+    [InlineData("fr", "Humeur (mots d'ambiance séparés par des virgules)", "p. ex. teasing, soft")]
+    [InlineData("de", "Stimmung (durch Kommas getrennte Stimmungswörter)", "z. B. teasing, soft")]
+    [InlineData("es", "Ánimo (palabras de ambiente separadas por comas)", "p. ej. teasing, soft")]
+    [InlineData("it", "Umore (parole descrittive separate da virgole)", "es. teasing, soft")]
+    [InlineData("ja", "雰囲気（カンマ区切りの表現）", "例: teasing, soft")]
+    [InlineData("ko", "분위기 (쉼표로 구분한 표현)", "예: teasing, soft")]
+    [InlineData("pt-BR", "Humor (palavras de ambiente separadas por vírgulas)", "ex. teasing, soft")]
+    [InlineData("ru", "Настроение (слова через запятую)", "напр. teasing, soft")]
+    [InlineData("zh-CN", "情绪（用逗号分隔的描述词）", "例如: teasing, soft")]
+    public void MoodFieldShowsLocalizedFormatAndExample(string language, string label, string example) => Run((w, root) =>
+    {
+        var manager = LocalizationManager.Instance;
+        var previous = manager.CurrentLanguage;
+        var add = w.GetLogicalDescendants().OfType<Button>().First(b => Equals(b.Content, Loc.Get("mod_barks_add")));
+        try
+        {
+            manager.SetLanguage(language);
+            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var mood = Card(w).GetLogicalDescendants().OfType<TextBox>().Single(b => Equals(b.Tag, "mood"));
+            var fields = (StackPanel)mood.Parent!;
+            Assert.Contains(fields.Children.OfType<TextBlock>(), t => t.Text == label);
+            Assert.Equal(example, mood.PlaceholderText);
+        }
+        finally { manager.SetLanguage(previous); }
     });
 
 }

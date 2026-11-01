@@ -98,8 +98,10 @@ public partial class ModCreatorWindow
         settings.Child = fields;
         card.Panel.Children.Add(settings);
         var numeric = new StackPanel { Orientation = Orientation.Horizontal };
-        AddBarkField(numeric, card.Priority, "mod_barks_priority", "0", 60, loaded?["priority"]?.ToString());
-        AddBarkField(numeric, card.Cooldown, "mod_barks_cooldown", "0", 80, loaded?["cooldown_ms"]?.ToString());
+        AddBarkField(numeric, card.Priority, "mod_barks_priority", "0", 60,
+            loaded?["priority"] == null ? null : loaded.Value<int>("priority").ToString(CultureInfo.InvariantCulture));
+        AddBarkField(numeric, card.Cooldown, "mod_barks_cooldown", "0", 80,
+            loaded?["cooldown_ms"] == null ? null : loaded.Value<int>("cooldown_ms").ToString(CultureInfo.InvariantCulture));
         AddBarkField(numeric, card.Chance, "mod_barks_chance", "1.0", 60,
             loaded?["chance"] == null ? null : loaded.Value<double>("chance").ToString(CultureInfo.InvariantCulture));
         fields.Children.Add(numeric);
@@ -112,6 +114,7 @@ public partial class ModCreatorWindow
         fields.Children.Add(options);
         fields.Children.Add(CreateFieldLabel(Loc.Get("mod_barks_mood")));
         card.Mood.Tag = "mood"; card.Mood.Width = 260; card.Mood.HorizontalAlignment = HorizontalAlignment.Left;
+        card.Mood.PlaceholderText = Loc.Get("mod_barks_mood_example");
         card.Mood.Text = loaded?.Value<string>("mood") ?? "";
         fields.Children.Add(card.Mood);
         fields.Children.Add(CreateFieldLabel(Loc.Get("mod_barks_conditions")));
