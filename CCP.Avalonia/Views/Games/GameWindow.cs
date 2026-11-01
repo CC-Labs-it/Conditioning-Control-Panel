@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.JustDrop;
 using ConditioningControlPanel.Services.Chaos;
@@ -28,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// <c>ready</c>, the host answers <c>init</c> (language + identity + Breakout access), a station's
     /// <c>media-request</c> gets a library deal (<see cref="GameMediaManifest.Deal"/>), <c>fx</c> gets its
     /// <c>fx-ack</c>, and <c>exit</c> / <c>exit-done</c> / <c>boot-error</c> close it.
-    /// Ported from trunk's Views/Games/GameWindow.cs with the Breakout demo and Piece by Piece (GameWindow.Pbp.cs), Racing Thoughts (GameWindow.Race.cs) and Down the Rabbit Hole (GameWindow.Dtrh.cs) registered; every other
+    /// Ported from trunk's Views/Games/GameWindow.cs with Breakout, Piece by Piece (GameWindow.Pbp.cs), Racing Thoughts (GameWindow.Race.cs) and Down the Rabbit Hole (GameWindow.Dtrh.cs) registered; every other
     /// game lands with its own frames.</para>
     /// </summary>
     internal sealed partial class GameWindow : Window
@@ -43,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
             // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
             ["breakoutdemo"] = new("breakoutdemo", "launcher_game_breakoutdemo_title", "backroom/stations/breakout/play.html", null, "desktop=1&demo=1"),
+            // WPF BreakoutHostService.LaunchFull: Tier 2 before opening or focusing.
+            ["breakout"] = new("breakout", "launcher_game_breakout_title", "backroom/stations/breakout/play.html", BreakoutGate, "desktop=1"),
             // WPF FypHostService.cs:94 StartUrl, behind OpenFypFeed's premium gate (MainWindow.Lab.cs:246).
             [FypId] = new(FypId, "tab_fyp", "fyp/index.html", FypGate),
             // WPF JustDropHostService: the live shop at app.cclabs.app, not a page off disk (GameWindow.JustDrop.cs).
@@ -69,16 +73,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal bool IsReady { get; private set; }
         private bool _closing;
 
-        /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
-        /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
+        // WPF BackRoomHostService.cs:291-325: both modes share one host and ask before switching.
+        internal static Func<Window, Task<bool>> ConfirmBreakoutSwitch { get; set; } = owner =>
+            Views.Dialogs.MessageDialog.ConfirmAsync(owner, Loc.Get("launcher_switch_title"), Loc.Get("launcher_switch_body"),
+                defaultToCancel: true, okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"));
+        private bool _breakoutSwitchPending;
+
         internal static GameWindow? Launch(string id)
         {
-            id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
+            var task = LaunchAsync(id);
+            return task.IsCompleted ? task.GetAwaiter().GetResult() : null;
+        }
+
+        internal static Task<GameWindow?> LaunchAsync(string id) => LaunchAsync(id, false);
+
+        private static async Task<GameWindow?> LaunchAsync(string id, bool gateChecked)
+        {
+            id = ResolveDoor(id);
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
+            if (spec.Id == "breakout" && !gateChecked && !BreakoutGate()) return null;
+            bool breakout = spec.Id is "breakout" or "breakoutdemo";
             GameWindow? live;
-            lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
-            if (live != null) { live.Activate(); return live; }
-            try { if (spec.Gate != null && !spec.Gate()) return null; }
+            lock (Open) live = Open.FirstOrDefault(w => breakout
+                ? w.Spec.Id is "breakout" or "breakoutdemo"
+                : string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
+            if (live != null)
+            {
+                live.Activate();
+                if (live.Spec.Id == spec.Id) return live;
+                if (live._breakoutSwitchPending) return null;
+                live._breakoutSwitchPending = true;
+                try
+                {
+                    if (!await ConfirmBreakoutSwitch(live)) return null;
+                    if (!live._closing) live.Close();
+                    return await LaunchAsync(id, true); // WPF checked the tier before the confirmation
+                }
+                catch (Exception ex) { Log.Warning(ex, "[Game] Breakout switch failed"); return null; }
+                finally { live._breakoutSwitchPending = false; }
+            }
+            try { if (spec.Id != "breakout" && spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             var window = new GameWindow(spec);
             window.Load(Server());
@@ -101,9 +135,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.WebMessage += OnPageMessage;
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
-            Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
+            Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); if (spec.Id == "breakout") StartBreakoutAccessWatch(); };
             Closing += (_, _) => _closing = true;
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); StopBreakoutAccessWatch(); DisposeRace(); DisposeDtrh(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
@@ -231,11 +265,56 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             breakoutStandalone = Spec.Id.StartsWith("breakout", StringComparison.OrdinalIgnoreCase),
         };
 
-        /// <summary>WPF BreakoutAccess.Current(demo): the demo door is 3 levels, whatever the tier.</summary>
-        internal static object? BreakoutEntitlementFor(string id) =>
-            id.Equals("breakoutdemo", StringComparison.OrdinalIgnoreCase)
-                ? new { storyLimit = 3, endless = false, demo = true }
-                : null;
+        // WPF BreakoutAccess.cs:9-16 and BackRoomHostService.cs:737-763: the full
+        // game follows entitlement changes, including silent grace expiry; the demo stays a demo.
+        private static bool BreakoutGate() => TierGate.DemandLab(Loc.Get("launcher_game_breakout_title"));
+        internal static object? BreakoutEntitlementFor(string id)
+        {
+            if (id.Equals("breakoutdemo", StringComparison.OrdinalIgnoreCase))
+                return new { storyLimit = 3, endless = false, demo = true };
+            if (!id.Equals("breakout", StringComparison.OrdinalIgnoreCase)) return null;
+            bool full = CoreEntitlement.HasLab;
+            return new { storyLimit = full ? 8 : 3, endless = full, demo = !full };
+        }
+
+        internal static Func<(ProviderSubscription? Patreon, ProviderSubscription? SubscribeStar)> BreakoutTierSources { get; set; } =
+            () => (AccountSeed.Patreon, AccountSeed.SubscribeStar);
+        private ProviderSubscription? _breakoutPatreon, _breakoutSubscribeStar;
+        private DispatcherTimer? _breakoutAccessWatch;
+        private bool _lastBreakoutAccess;
+
+        private void StartBreakoutAccessWatch()
+        {
+            _lastBreakoutAccess = CoreEntitlement.HasLab;
+            (_breakoutPatreon, _breakoutSubscribeStar) = BreakoutTierSources();
+            if (_breakoutPatreon != null) _breakoutPatreon.TierChanged += OnBreakoutTierChanged;
+            if (_breakoutSubscribeStar != null) _breakoutSubscribeStar.TierChanged += OnBreakoutTierChanged;
+            _breakoutAccessWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _breakoutAccessWatch.Tick += (_, _) => CheckBreakoutAccess();
+            _breakoutAccessWatch.Start();
+        }
+
+        private void StopBreakoutAccessWatch()
+        {
+            _breakoutAccessWatch?.Stop();
+            if (_breakoutPatreon != null) _breakoutPatreon.TierChanged -= OnBreakoutTierChanged;
+            if (_breakoutSubscribeStar != null) _breakoutSubscribeStar.TierChanged -= OnBreakoutTierChanged;
+        }
+
+        private void OnBreakoutTierChanged(object? sender, PatreonTier tier)
+        {
+            if (Dispatcher.UIThread.CheckAccess()) CheckBreakoutAccess();
+            else Dispatcher.UIThread.Post(CheckBreakoutAccess);
+        }
+
+        internal void CheckBreakoutAccess()
+        {
+            if (_closing) return;
+            bool allowed = CoreEntitlement.HasLab;
+            if (allowed == _lastBreakoutAccess) return;
+            _lastBreakoutAccess = allowed;
+            if (IsReady) Post(new { type = "settings", breakout = BreakoutEntitlementFor(Spec.Id), breakoutStandalone = true });
+        }
 
         /// <summary>Every host -&gt; page frame, as sent (tests read the bridge from here).</summary>
         internal event Action<string>? Posted;

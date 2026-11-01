@@ -520,9 +520,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF LauncherHost.LaunchGame (:335): the game opens, then the launcher hides behind it;
         /// the return poll brings the launcher back when the game closes and the panel is not up. A gate
         /// that refused leaves the launcher where it is.</summary>
-        private void LaunchGameWindow(string id)
+        private async void LaunchGameWindow(string id)
         {
-            var game = Games.GameWindow.Launch(id);
+            var game = await Games.GameWindow.LaunchAsync(id);
             if (game == null) return;
             AfterExitBeat(() =>
             {

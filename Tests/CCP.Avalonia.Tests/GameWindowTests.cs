@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -88,6 +89,28 @@ public sealed partial class GameWindowTests
         games.Stop(shell);
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    [Fact]
+    public void LauncherSwitchToDemo_RetainsTheReturnAfterGameCloses() => Run((_, launcher) =>
+    {
+        var oldLab = CoreEntitlement.HasLabProvider;
+        CoreEntitlement.HasLabProvider = () => true;
+        try
+        {
+            launcher.Hide();
+            var full = GameWindow.Launch("breakout")!;
+            launcher.Play(LauncherCards.Find("breakoutdemo")!);
+            var dialog = Assert.Single(full.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+            dialog.FindControl<Button>("BtnOk")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var demo = Assert.IsType<GameWindow>(GameWindow.OpenForTests("breakoutdemo"));
+            Assert.False(launcher.IsVisible);
+            demo.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(launcher.IsVisible);
+        }
+        finally { CoreEntitlement.HasLabProvider = oldLab; }
     });
 
     /// <summary>WPF LauncherHost.cs:360-366: a pending leash punishment sends the tile to the gate, not the game.</summary>
