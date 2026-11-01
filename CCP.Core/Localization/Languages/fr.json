@@ -7959,5 +7959,6 @@
   "online_official_plan_prime": "Prime a la plus grosse part quotidienne. Ce que tu as déjà vu se rejoue gratuitement.",
   "online_official_nice": "Cool",
   "online_official_stamped_line": "Les médias en ligne viennent de Scrolller. Chaque image et clip porte une petite mention \"via Scrolller\".",
-  "online_cache_day_line": "Les médias en ligne restent un jour dans un petit cache sur cet ordinateur, jamais envoyés."
+  "online_cache_day_line": "Les médias en ligne restent un jour dans un petit cache sur cet ordinateur, jamais envoyés.",
+  "installer_avalonia_upgrade_notice": "Mise à niveau vers Avalonia\n\nLa mise à niveau depuis WPF réinitialise les connexions du navigateur intégré. Reconnectez-vous aux sites ouverts dans CCP.\n\nLe nouveau profil browser_data_avalonia se trouve dans le dossier de données utilisateur de CCP. L’ancien profil browser_data est conservé.\n\nCe changement n’efface pas les jetons du compte CCP, les paramètres ni la progression."
 }

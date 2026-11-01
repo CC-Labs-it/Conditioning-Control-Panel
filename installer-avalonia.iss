@@ -3,7 +3,7 @@
 ;
 ; Requirements:
 ; 1. Install Inno Setup from https://jrsoftware.org/isinfo.php
-; 2. Build the app first: dotnet publish CCP.Avalonia/CCP.Avalonia.csproj -c Release -p:PublishProfile=win-x64 (.NET 10 SDK; build-installer.bat does this)
+; 2. Build the app first: dotnet publish CCP.Avalonia/CCP.Avalonia.csproj -c Release -p:PublishProfile=win-x64 (.NET 10 SDK)
 ; 3. Compile this script with Inno Setup Compiler
 ;
 ; The installer will:
@@ -110,7 +110,16 @@ ShowLanguageDialog=auto
 InfoBeforeFile=INSTALL_AVALONIA.txt
 
 [Languages]
-Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"; InfoBeforeFile: "INSTALL_AVALONIA.txt"
+Name: "chinesesimplified"; MessagesFile: "compiler:Default.isl,installer-notices\zh-CN.isl"; InfoBeforeFile: "installer-notices\zh-CN.txt"
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"; InfoBeforeFile: "installer-notices\ja.txt"
+Name: "korean"; MessagesFile: "compiler:Default.isl,installer-notices\ko.isl"; InfoBeforeFile: "installer-notices\ko.txt"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"; InfoBeforeFile: "installer-notices\es.txt"
+Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"; InfoBeforeFile: "installer-notices\pt-BR.txt"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"; InfoBeforeFile: "installer-notices\fr.txt"
+Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"; InfoBeforeFile: "installer-notices\it.txt"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"; InfoBeforeFile: "installer-notices\de.txt"
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"; InfoBeforeFile: "installer-notices\ru.txt"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -138,7 +147,7 @@ Source: "redist\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall;
 ;   https://go.microsoft.com/fwlink/p/?LinkId=2124703
 Source: "redist\MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: WebView2RuntimeNeeded
 
-; Main executable: the SIGNED Avalonia exe, renamed on install (build-installer.bat signs it before staging)
+; Main executable: the Avalonia exe, renamed on install. Sign it before staging for release.
 Source: "{#PublishDir}\{#SourceExeName}"; DestDir: "{app}"; DestName: "{#MyAppExeName}"; Flags: ignoreversion
 
 ; All other files from publish directory (the original exe name is excluded: it is installed above)

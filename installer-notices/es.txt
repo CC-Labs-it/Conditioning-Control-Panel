@@ -1,0 +1,7 @@
+﻿Actualización a Avalonia
+
+Al actualizar desde WPF se restablecen las sesiones del navegador integrado. Vuelve a iniciar sesión en los sitios abiertos dentro de CCP.
+
+El nuevo perfil browser_data_avalonia está en la carpeta de datos de usuario de CCP. Se conserva el perfil anterior browser_data.
+
+Este cambio no borra los tokens de cuenta de CCP, los ajustes ni el progreso.

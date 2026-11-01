@@ -1,0 +1,7 @@
+﻿Upgrade auf Avalonia
+
+Beim Upgrade von WPF werden die Anmeldungen im eingebetteten Browser zurückgesetzt. Melde dich bei den in CCP geöffneten Websites erneut an.
+
+Das neue Browserprofil browser_data_avalonia liegt im CCP-Benutzerdatenordner. Das alte Profil browser_data bleibt erhalten.
+
+Diese Änderung löscht weder CCP-Kontotokens noch Einstellungen oder Fortschritt.

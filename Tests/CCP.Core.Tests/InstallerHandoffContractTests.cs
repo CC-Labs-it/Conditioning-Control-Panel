@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using Xunit;
 
 namespace CCP.Core.Tests;
@@ -13,13 +14,14 @@ namespace CCP.Core.Tests;
 // Text-level cross-head contract, not a substitute for a real Windows upgrade (part B).
 public class InstallerHandoffContractTests
 {
-    private static string Read(string path)
+    private static string RepoPath(string path)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "installer.iss"))) dir = dir.Parent;
         Assert.NotNull(dir);
-        return File.ReadAllText(Path.Combine(dir!.FullName, path));
+        return Path.Combine(dir!.FullName, path);
     }
+    private static string Read(string path) => File.ReadAllText(RepoPath(path));
     private static string Define(string source, string name) =>
         Regex.Match(source, "#define " + name + " \"([^\"]+)\"").Groups[1].Value;
     private static string Directive(string source, string name) =>
@@ -197,6 +199,69 @@ public class InstallerHandoffContractTests
         Assert.Contains("The old browser_data profile is kept.", notice);
         Assert.Contains("does not clear CCP account tokens, settings or progress.", notice);
         Assert.DoesNotContain("InfoBeforeFile=INSTALL_AVALONIA.txt", Read("installer.iss"));
+    }
+
+    [Fact]
+    public void WpfInstallerUsesProjectPublishOutputAndIcon()
+    {
+        var project = XDocument.Parse(Read("ConditioningControlPanel/ConditioningControlPanel.csproj"));
+        var framework = project.Descendants("TargetFramework").Single().Value;
+        var icon = project.Descendants("ApplicationIcon").Single().Value;
+        var installer = Read("installer.iss");
+        var batch = Read("build-installer.bat");
+        Assert.Equal($@"ConditioningControlPanel\bin\Release\{framework}\win-x64\publish", Define(installer, "PublishDir"));
+        Assert.Contains($@"set PUBLISH_DIR=%PROJECT_DIR%\bin\Release\{framework}\win-x64\publish", batch);
+        Assert.Equal(@"..\Assets\app.ico", icon);
+        Assert.Equal(@"Assets\app.ico", Directive(installer, "SetupIconFile"));
+        Assert.NotEmpty(Read(Directive(installer, "SetupIconFile").Replace('\\', '/')));
+    }
+
+    [Fact]
+    public void InstallerNoticeUsesTheSelectedLanguageAndMatchesCoreTranslations()
+    {
+        var languages = new[]
+        {
+            ("en", "english", "Default.isl", "INSTALL_AVALONIA.txt"),
+            ("zh-CN", "chinesesimplified", @"Default.isl,installer-notices\zh-CN.isl", "installer-notices/zh-CN.txt"),
+            ("ja", "japanese", @"Languages\Japanese.isl", "installer-notices/ja.txt"),
+            ("ko", "korean", @"Default.isl,installer-notices\ko.isl", "installer-notices/ko.txt"),
+            ("es", "spanish", @"Languages\Spanish.isl", "installer-notices/es.txt"),
+            ("pt-BR", "brazilianportuguese", @"Languages\BrazilianPortuguese.isl", "installer-notices/pt-BR.txt"),
+            ("fr", "french", @"Languages\French.isl", "installer-notices/fr.txt"),
+            ("it", "italian", @"Languages\Italian.isl", "installer-notices/it.txt"),
+            ("de", "german", @"Languages\German.isl", "installer-notices/de.txt"),
+            ("ru", "russian", @"Languages\Russian.isl", "installer-notices/ru.txt"),
+        };
+        Assert.Equal(LocalizationManager.AvailableLanguages.Select(x => x.Code).OrderBy(x => x), languages.Select(x => x.Item1).OrderBy(x => x));
+        var section = Read("installer-avalonia.iss").Split("[Languages]")[1].Split("[Tasks]")[0];
+        Assert.Equal(languages.Length, section.Split('\n').Count(line => line.TrimStart().StartsWith("Name: \"")));
+        var utf8Bom = new byte[] { 0xef, 0xbb, 0xbf };
+        foreach (var (code, nativeName, id, page) in new[] { ("zh-CN", "简体中文", "$0804", "936"), ("ko", "한국어", "$0412", "949") })
+        {
+            var overlayFile = $"installer-notices/{code}.isl";
+            Assert.True(File.ReadAllBytes(RepoPath(overlayFile)).AsSpan().StartsWith(utf8Bom));
+            var overlay = Read(overlayFile);
+            Assert.Contains("[LangOptions]", overlay);
+            Assert.Contains("LanguageName=" + nativeName, overlay);
+            Assert.Contains("LanguageID=" + id, overlay);
+            Assert.Contains("LanguageCodePage=" + page, overlay);
+        }
+        string? english = null;
+        foreach (var (code, name, messages, file) in languages)
+        {
+            Assert.Contains($"Name: \"{name}\"; MessagesFile: \"compiler:{messages}\"; InfoBeforeFile: \"{file.Replace('/', '\\')}\"", section);
+            using var json = JsonDocument.Parse(Read($"CCP.Core/Localization/Languages/{code}.json"));
+            var translation = json.RootElement.GetProperty("installer_avalonia_upgrade_notice").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(translation));
+            if (code != "en") Assert.True(File.ReadAllBytes(RepoPath(file)).AsSpan().StartsWith(utf8Bom));
+            Assert.Equal(translation!.Replace("\r\n", "\n").TrimEnd(), Read(file).Replace("\r\n", "\n").TrimEnd());
+            Assert.Contains("browser_data_avalonia", translation);
+            Assert.Contains("browser_data", translation);
+            Assert.DoesNotContain("!", translation);
+            Assert.DoesNotContain("—", translation);
+            Assert.DoesNotContain("–", translation);
+            if (code == "en") english = translation; else Assert.NotEqual(english, translation);
+        }
     }
 
     [Fact]
