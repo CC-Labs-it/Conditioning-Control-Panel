@@ -35,13 +35,15 @@ internal sealed class TypoHeadEffect : HeadEffect
     internal override bool CanApply(Control target)
     {
         var tb = FindText(target);
-        return tb != null && BindingOperations.GetBindingExpressionBase(tb, TextBlock.TextProperty) == null
-            && !string.IsNullOrWhiteSpace(tb.Text) && tb.Text.Length >= 3
-            && (tb.Inlines == null || tb.Inlines.Count == 0 || tb.Inlines.Count == 1 && tb.Inlines[0] is Run)
-            && Candidates(tb.Text).Count > 0;
+        return IsRewritable(tb, 3) && Candidates(tb!.Text!).Count > 0;
     }
 
-    private static TextBlock? FindText(Visual root, int depth = 0)
+    internal static bool IsRewritable(TextBlock? tb, int minLength) =>
+        tb != null && BindingOperations.GetBindingExpressionBase(tb, TextBlock.TextProperty) == null
+        && !string.IsNullOrWhiteSpace(tb.Text) && tb.Text.Length >= minLength
+        && (tb.Inlines == null || tb.Inlines.Count == 0 || tb.Inlines.Count == 1 && tb.Inlines[0] is Run);
+
+    internal static TextBlock? FindText(Visual root, int depth = 0)
     {
         if (depth > 12) return null;
         if (root is TextBlock tb) return tb;
