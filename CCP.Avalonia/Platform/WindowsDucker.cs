@@ -125,7 +125,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (_lock) { _retry?.Dispose(); _retry = null; }
         }
 
-        internal void Drain(int ms = 2000) { try { _work.Wait(ms); } catch { } }
+        // Tests need the queued sweep to finish; shutdown supplies its own bounded wait.
+        internal void Drain(int ms = Timeout.Infinite)
+        {
+            Task work;
+            lock (_lock) work = _work;
+            try { work.Wait(ms); } catch { }
+        }
 
         private void DisposeDuckTimers()
         {
