@@ -21,7 +21,7 @@ internal static class BrainDrainOverlay
     private static AppSettings? _settings;
     private static SettingsService? _service;
     private static bool? _clear;
-    private static bool _refused;
+    private static DateTime _retryAfterUtc = DateTime.MinValue; private static int _retrySeconds = 5;
     private static readonly DispatcherTimer Timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     internal static Func<Window, bool> Prepare = X11Overlay.EnableDesktopBlur;
     internal static Func<IReadOnlyList<Window>, IReadOnlyList<BrainDrainKeepClear.BandEntry>> ReadBand = X11Overlay.VisibleOwnBand;
@@ -57,12 +57,12 @@ internal static class BrainDrainOverlay
         if (Dispatcher.UIThread.CheckAccess()) Reconcile();
         else Dispatcher.UIThread.Post(() => Reconcile());
     }
-    internal static void Reconcile()
+    internal static void Reconcile(DateTime? now = null)
     {
         if (_owner == null) return;
         if (!CoreSession.IsEngineRunning && App.Sessions?.IsRunning != true || App.Sessions?.IsPaused == true)
         { CloseAll(); return; }
-        var s = CoreSettings.Current;
+        var s = CoreSettings.Current; var utcNow = now ?? DateTime.UtcNow;
         var affinity = Win32Overlay.CaptureAffinity(s.AllowOverlayCapture); // WPF OverlayCaptureAffinity.cs:27-28,51.
         if (!ReferenceEquals(s, _settings))
         {
@@ -70,15 +70,15 @@ internal static class BrainDrainOverlay
             _settings = s; s.PropertyChanged += Changed;
         }
         if (!BrainDrainVisualPolicy.WantsBlur(s.BrainDrainEnabled, s.BrainDrainBlurStrength))
-        { CloseHosts(); return; } // WPF :2247: zero means no picture, not a faint haze.
-        if (_refused) return;
+        { CloseHosts(); _retryAfterUtc = DateTime.MinValue; _retrySeconds = 5; return; } // WPF :2247,2577-2579.
+        if (utcNow < _retryAfterUtc) return;
         var screens = Screens(_owner);
         var targets = screens.Where(x => s.DualMonitorEnabled || x.IsPrimary).ToArray();
         if (targets.Length == 0 && screens.Count > 0) targets = new[] { screens[0] };
         // WPF OverlayService.cs:2985-3023: retain full physical bounds and scaling.
         if (Hosts.Count != targets.Length || Hosts.Where((w, i) => i < targets.Length && (!Equals(w.Tag, targets[i]) || w.Position != targets[i].Bounds.Position)).Any())
         {
-            CloseHosts();
+            CloseHosts(); _retryAfterUtc = utcNow.AddSeconds(_retrySeconds); _retrySeconds = Math.Min(_retrySeconds * 2, 60); // WPF :3803-3810,3858-3872.
             foreach (var screen in targets)
             {
                 var b = screen.Bounds; var scale = screen.Scaling > 0 ? screen.Scaling : 1;
@@ -88,12 +88,12 @@ internal static class BrainDrainOverlay
                     Topmost = true, Background = Brushes.Transparent,
                     TransparencyLevelHint = new[] { WindowTransparencyLevel.Blur, WindowTransparencyLevel.Transparent },
                     Tag = screen, Position = b.Position, Width = b.Width / scale, Height = b.Height / scale };
-                try { Capture(w, affinity); w.Show(); Capture(w, affinity); if (!Prepare(w)) { w.Close(); CloseHosts(); _refused = true; Serilog.Log.Warning("Brain Drain: compositor blur or click-through unavailable"); return; } Hosts.Add(w); }
-                catch { w.Close(); CloseHosts(); _refused = true; return; }
+                try { Capture(w, affinity); w.Show(); Capture(w, affinity); if (!Prepare(w)) { w.Close(); CloseHosts(); Serilog.Log.Warning("Brain Drain: compositor blur or click-through unavailable"); return; } Hosts.Add(w); }
+                catch { w.Close(); CloseHosts(); return; }
             }
         }
         // WPF OverlayService.cs:2814-2823,3786: creation, live change and replacement.
-        foreach (var w in Hosts) Capture(w, affinity);
+        foreach (var w in Hosts) Capture(w, affinity); _retryAfterUtc = DateTime.MinValue; _retrySeconds = 5;
         // WPF Compositor/BrainDrainLayer.cs:296-301, rounded alpha at 1..100 strength.
         foreach (var w in Hosts) Alpha(w, Math.Round((.10 + .75 * Math.Pow((Math.Clamp(s.BrainDrainBlurStrength, 1, 100) - 1) / 99.0, .66)) * 255) / 255);
         // Forced off transition raises the blur again. Ordinary ticks only repair an actual drift.
@@ -115,7 +115,7 @@ internal static class BrainDrainOverlay
     }
     internal static void CloseAll()
     {
-        Timer.Stop(); _refused = false;
+        Timer.Stop(); _retryAfterUtc = DateTime.MinValue; _retrySeconds = 5;
         if (_settings != null) _settings.PropertyChanged -= Changed;
         if (_service != null) _service.CurrentReplaced -= SettingsReplaced;
         if (_owner != null) _owner.Closed -= OwnerClosed;

@@ -97,10 +97,11 @@ public sealed class BrainDrainIntegrationTests
     [Fact]
     public Task RefusedCompositorLeavesNoHostAndDoesNotRetryEveryTick() => Run(owner =>
     {
-        int tries = 0;
-        BrainDrainOverlay.Prepare = _ => { tries++; return false; };
-        BrainDrainOverlay.Start(owner); BrainDrainOverlay.Reconcile();
-        Assert.Empty(BrainDrainOverlay.Active); Assert.Equal(1, tries); return Task.CompletedTask;
+        int tries = 0; bool supported = false; BrainDrainOverlay.Prepare = _ => { tries++; return supported; }; BrainDrainOverlay.Start(owner); var now = DateTime.UtcNow; BrainDrainOverlay.Reconcile(DateTime.MinValue);
+        Assert.Empty(BrainDrainOverlay.Active); Assert.Equal(1, tries); now = now.AddSeconds(5); BrainDrainOverlay.Reconcile(now); Assert.Equal(2, tries); int expected = 2;
+        foreach (var delay in new[] { 10, 20, 40, 60, 60 }) { BrainDrainOverlay.Reconcile(now.AddSeconds(delay - 1)); Assert.Equal(expected, tries); now = now.AddSeconds(delay); BrainDrainOverlay.Reconcile(now); Assert.Equal(++expected, tries); }
+        supported = true; BrainDrainOverlay.Reconcile(now.AddSeconds(60)); Assert.Equal(expected + 2, tries); Assert.Equal(2, BrainDrainOverlay.Active.Count); CoreSettings.Current.BrainDrainEnabled = false; supported = false; CoreSettings.Current.BrainDrainEnabled = true; Assert.Equal(expected + 3, tries);
+        CoreSettings.Current.BrainDrainEnabled = false; supported = true; CoreSettings.Current.BrainDrainEnabled = true; Assert.Equal(expected + 5, tries); Assert.Equal(2, BrainDrainOverlay.Active.Count); return Task.CompletedTask;
     }, supported: false);
     [Theory]
     [InlineData(false)]
