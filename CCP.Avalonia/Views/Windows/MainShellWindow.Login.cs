@@ -53,6 +53,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshProfileBubble();   // WPF UpdateXPBarLoginState: the bubble paints the same identity
                 // WPF UpdatePatreonUI -> RefreshEntitlementVeils: an account change moves every veil.
                 RefreshEntitlementVeils(persist: accountChanged);
+                // WPF Login.cs:322-330: logout repaints the effective companion controls even without TierChanged.
+                if (accountChanged)
+                    RoomView()?.FindControl<Controls.Companion.AiPermissionsGrid>("PermissionsZone")?.RefreshTierState();
                 // WPF Patreon.cs:294: the pass is per-account, so sign-in/out moves the intake door.
                 App.IntakePass.RaiseChanged();
             }

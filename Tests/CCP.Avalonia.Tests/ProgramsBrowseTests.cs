@@ -280,6 +280,50 @@ public sealed class ProgramsBrowseTests
         });
     }
 
+    [Fact]
+    public async Task ProviderChangesRefreshOpenAndHiddenPremiumCards()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureAvalonia();
+            var restore = ProcessStateSnapshot.CaptureAccountSeed();
+            Window? host = null;
+            try
+            {
+                CoreSecrets.RetrieveProvider = _ => null;
+                CoreSecrets.StoreProvider = (_, _) => { };
+                Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(p => new ConditioningControlPanel.Services.ProviderSubscription(p)));
+                bool premium = false;
+                CoreAccount.HasPremiumAccessProvider = () => premium;
+                var view = new ProgramsTabView();
+                host = new Window { Content = view };
+                host.Show();
+                Dispatcher.UIThread.RunJobs();
+                var list = view.FindControl<ListBox>("ProgramLibraryList")!;
+                bool Locked() => list.Items.Cast<ProgramBrowseItem>().First(r => r.Definition.Tier == ProgramTier.Premium).IsLocked;
+                Assert.True(Locked());
+                premium = true;
+                ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon!.NotifyEntitlementRaised(PatreonTier.Level1);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(Locked());
+                view.IsVisible = false;
+                premium = false;
+                ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar!.NotifyEntitlementRaised(PatreonTier.None);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(Locked()); // hidden: defer the rebuild
+                view.IsVisible = true;
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(Locked());
+            }
+            finally
+            {
+                try { host?.Close(); }
+                finally { restore(); }
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void EnsureAvalonia()
     {
         if (Application.Current is not null) return;

@@ -24,6 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     {
         private IReadOnlyList<ProgramDefinition> _library = BuiltInPrograms.All();
         private string? _selectedProgramId;
+        private Services.ProviderSubscription? _patreon, _subscribeStar;
 
         public ProgramsTabView()
         {
@@ -38,6 +39,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             CoreMods.ModChanged += OnModChanged;   // the active mod's programs lead (WPF #966)
             Platform.ProgramEngineBridge.SessionChanged += OnProgramSessionChanged;   // P41
+            // WPF MainWindow.Patreon.cs:1115-1127 and SubscribeStar.cs:39-47.
+            _patreon = Platform.AccountSeed.Patreon;
+            _subscribeStar = Platform.AccountSeed.SubscribeStar;
+            if (_patreon != null) _patreon.TierChanged += OnTierChanged;
+            if (_subscribeStar != null) _subscribeStar.TierChanged += OnTierChanged;
             HookIgnition();
             RefreshPrograms();
         }
@@ -47,11 +53,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             CoreMods.ModChanged -= OnModChanged;
             Platform.ProgramEngineBridge.SessionChanged -= OnProgramSessionChanged;
+            if (_patreon != null) _patreon.TierChanged -= OnTierChanged;
+            if (_subscribeStar != null) _subscribeStar.TierChanged -= OnTierChanged;
+            _patreon = _subscribeStar = null;
             UnsubscribePrograms();
             StopSessionSheen();
             UnhookIgnition();
             base.OnDetachedFromVisualTree(e);
         }
+
+        // WPF Patreon.cs:1127 -> ProgramsTab.cs:469-478 refreshes the dashboard even while this tab is hidden.
+        private void OnTierChanged(object? sender, Models.PatreonTier tier) => Dispatcher.UIThread.Post(() =>
+        {
+            if (VisualRoot is null) return;
+            RefreshPrograms();
+            (TopLevel.GetTopLevel(this) as MainShellWindow)?.SettingsPage?.RefreshProgramTodayCard();
+        });
 
         private void OnModChanged(object? sender, ConditioningControlPanel.Models.ModPackage e) => OnLanguageChanged(sender, EventArgs.Empty);
 
