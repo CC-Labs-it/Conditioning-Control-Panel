@@ -23,6 +23,7 @@ internal static class SharedOverlayHost
         private readonly PixelRect _bounds;
         private Window? _window;
         internal Grid Canvas { get; }
+        internal Window Window => _window!;
         internal bool IsOpen => _window?.IsVisible == true;
         internal Lease(PixelRect bounds, Window window, Grid canvas) => (_bounds, _window, Canvas) = (bounds, window, canvas);
         internal void Raise() { if (IsOpen) SharedOverlayHost.Raise(_window!); }

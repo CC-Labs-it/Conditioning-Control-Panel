@@ -37,6 +37,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly List<SubliminalOverlayWindow> Active = new();
         private static bool _warnedUnavailable;
         internal static Func<bool> IsAvailable = () => X11Overlay.IsAvailable;
+        internal static Func<int> VideoWindowCount = () => MandatoryVideoOverlay.Instance.Windows.Count;
+        internal static Func<Window, PixelRect, bool> ConfigureClassic = (w, bounds) =>
+            X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOpacity(w, 0) && X11Overlay.SetOverrideRedirect(w, bounds);
         private static readonly Dictionary<PixelRect, SharedOverlayHost.Lease> Hosts = new();
         private static readonly List<Action> RetireHosted = new();
         internal static Action<Action, TimeSpan> Schedule = (action, delay) => DispatcherTimer.RunOnce(action, delay);
@@ -72,23 +75,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 lease.Canvas.Children.Remove(card);
             };
             RetireHosted.Add(retire);
-            void Step(double value, TimeSpan at) => Schedule(() =>
+            void Finish()
             {
-                if (!retired) card.Opacity = Math.Clamp(value, 0, 1);
-            }, at);
-            var fade = TimeSpan.FromMilliseconds(GentleVisuals.FadeMs(SubliminalCard.DefaultFadeMs));
-            var steps = FadeSteps(fade);
-            for (var i = 1; i <= steps; i++)
-            {
-                Step(alpha * i / steps, fade * i / steps);
-                Step(alpha * (1 - i / (double)steps), fade + hold + fade * i / steps);
-            }
-            Schedule(() =>
-            {
+                if (retired) return;
                 retire();
                 RetireHosted.Remove(retire);
                 if (!CoreSubliminal.IsRunning && RetireHosted.Count == 0) ReleaseHosts();
-            }, fade + hold + fade);
+            }
+            var started = false;
+            var fade = TimeSpan.FromMilliseconds(GentleVisuals.FadeMs(SubliminalCard.DefaultFadeMs));
+            // XWayland can delay a first frame for seconds. Do not retain a card forever if it never comes.
+            Schedule(() => { if (!started) Finish(); }, TimeSpan.FromSeconds(3));
+            try
+            {
+                SubliminalOverlayWindow.RequestFrame(lease.Window, _ =>
+                {
+                    if (retired || started) return;
+                    started = true;
+                    void Step(double value, TimeSpan at) => Schedule(() =>
+                    {
+                        if (!retired) card.Opacity = Math.Clamp(value, 0, 1);
+                    }, at);
+                    var steps = FadeSteps(fade);
+                    for (var i = 1; i <= steps; i++)
+                    {
+                        Step(alpha * i / steps, fade * i / steps);
+                        Step(alpha * (1 - i / (double)steps), fade + hold + fade * i / steps);
+                    }
+                    Schedule(Finish, fade + hold + fade);
+                });
+            }
+            catch { Finish(); return false; }
             return true;
         }
 
@@ -126,10 +143,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 // WPF SubliminalService.cs:650-661: the compositor covers both modes.
-                if (UseSolidHost(s.SubliminalSolidMode || s.UnifiedOverlayHost, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
+                if (UseSolidHost(s.SubliminalSolidMode || s.UnifiedOverlayHost, s.SubliminalStealsFocus, VideoWindowCount()) &&
                     ShowHosted(screens[i].Bounds, text, alpha, hold)) continue;
                 var w = new SubliminalOverlayWindow(text);
-                if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds))
+                if (!ConfigureClassic(w, screens[i].Bounds))
                 {
                     if (!_warnedUnavailable) Log.Warning("Subliminal: the platform refused a click-through topmost overlay window; skipped");
                     _warnedUnavailable = true;

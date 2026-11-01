@@ -42,6 +42,7 @@ public sealed class SubliminalGentleTests
         var transparency = SharedOverlayHost.IsTransparent;
         var raise = SharedOverlayHost.Raise;
         var scheduler = SubliminalOverlay.Schedule;
+        var requestFrame = SubliminalOverlayWindow.RequestFrame;
         var settings = new SettingsService();
         settings.Current.GentleVisuals = true;
         settings.Current.GentleFadeSeconds = 0.75;
@@ -52,6 +53,7 @@ public sealed class SubliminalGentleTests
         SharedOverlayHost.IsTransparent = _ => true;
         SharedOverlayHost.Raise = _ => true;
         SubliminalOverlay.Schedule = (action, at) => pending.Add((action, at));
+        SubliminalOverlayWindow.RequestFrame = (_, action) => action(TimeSpan.Zero);
         void Advance(int ms)
         {
             foreach (var item in pending.Where(x => x.At <= TimeSpan.FromMilliseconds(ms)).OrderBy(x => x.At).ToArray())
@@ -80,6 +82,7 @@ public sealed class SubliminalGentleTests
         {
             SubliminalOverlay.CloseAll();
             SubliminalOverlay.Schedule = scheduler;
+            SubliminalOverlayWindow.RequestFrame = requestFrame;
             SharedOverlayHost.Configure = configure;
             SharedOverlayHost.IsTransparent = transparency;
             SharedOverlayHost.Raise = raise;
