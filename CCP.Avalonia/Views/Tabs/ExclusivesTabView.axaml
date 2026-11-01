@@ -165,6 +165,23 @@
                         </Grid>
                     </Border>
 
+                    <Button x:Name="BtnSeePremium" Theme="{StaticResource SecondaryButton}"
+                            HorizontalAlignment="Left" Margin="0,-8,0,18" Padding="18,7"
+                            IsVisible="False" Click="SeePremium_Click">
+                        <TextBlock Text="{loc:Str plans_see_premium}"/>
+                    </Button>
+
+                    <StackPanel x:Name="JustSubscribedRow" Orientation="Horizontal"
+                                HorizontalAlignment="Left" Margin="0,-8,0,18" IsVisible="False">
+                        <Button x:Name="BtnJustSubscribed" Theme="{StaticResource SecondaryButton}"
+                                Padding="14,5" Click="JustSubscribed_Click">
+                            <TextBlock Text="{loc:Str plans_just_subscribed}"/>
+                        </Button>
+                        <TextBlock x:Name="TxtJustSubscribed" FontSize="11.5"
+                                   Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"
+                                   Margin="12,0,0,0" TextWrapping="Wrap" MaxWidth="420"/>
+                    </StackPanel>
+
                     <!-- Spotlight: the newest exclusive, hero-sized -->
                     <Border x:Name="SpotlightCard"
                             Height="250" CornerRadius="14" Margin="0,0,0,22"
@@ -307,12 +324,6 @@
                             </Border>
                         </Grid>
                     </Border>
-
-                    <Button x:Name="BtnSeePremium" Theme="{StaticResource SecondaryButton}"
-                            HorizontalAlignment="Left" Margin="0,-8,0,18" Padding="18,7"
-                            IsVisible="False" Click="SeePremium_Click">
-                        <TextBlock Text="{loc:Str plans_see_premium}"/>
-                    </Button>
 
                     <!-- Collection label: dropped since polish 12 (WPF collapses it); the shelf carries
                          its own Basic / Prime / Free headers (ExclusiveGroupRow). -->
