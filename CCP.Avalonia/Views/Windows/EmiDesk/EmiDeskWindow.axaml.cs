@@ -385,7 +385,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             if (change.Property != IsVisibleProperty) return;
             try
             {
-                if (IsVisible) { StartAlive(); return; }
+                if (IsVisible) { StartAlive(); StartGlassWatch(); return; }
+                StopGlassWatch();
                 StopAlive();
                 CloseOptionsPanel();
                 ResetChrome();
@@ -2772,6 +2773,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 _closingForGood = true;
+                StopGlassWatch();
                 _player.Dispose();
                 UnhookDeskItems();
                 _bodyImage.Source = null;
