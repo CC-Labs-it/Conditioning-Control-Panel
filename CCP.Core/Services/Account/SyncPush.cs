@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Descent;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -23,7 +24,7 @@ namespace ConditioningControlPanel.Services
     public sealed class SyncPush
     {
         public const SyncBody.Field Sent = SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
-            | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements;
+            | SyncBody.Field.DescentEpoch | SyncBody.Field.DescentAuto | SyncBody.Field.Achievements;
         public const SyncBody.Field Privacy = SyncBody.Field.AllowDiscordDm | SyncBody.Field.ShowOnlineStatus
             | SyncBody.Field.ShareProfilePicture | SyncBody.Field.PublicShareAvatar
             | SyncBody.Field.GoonShareAvatar | SyncBody.Field.GoonShareDm;
@@ -128,8 +129,90 @@ namespace ConditioningControlPanel.Services
 
         public bool Loaded { get; private set; }
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
-        public Descent.DescentCountdownService? Countdown { get; set; }
+        private DescentCountdownService? _countdown;
+        public DescentCountdownService? Countdown
+        {
+            get => _countdown;
+            set
+            {
+                if (_countdown != null) { _countdown.PhaseChanged -= OnMigrationPhase; _countdown.ZeroReached -= OnMigrationZero; _countdown.ZeroObservedLate -= OnMigrationZero; }
+                _countdown = value;
+                if (_countdown != null) { _countdown.PhaseChanged += OnMigrationPhase; _countdown.ZeroReached += OnMigrationZero; _countdown.ZeroObservedLate += OnMigrationZero; }
+            }
+        }
         public Descent.DescentService? DescentReader { get; set; }
+        private readonly object _migrationGate = new();
+        private DescentMigrationOffer? _migrationOffer;
+        private AppSettings? _migrationOwner;
+        private string? _migrationAccount;
+        private int _migrationGeneration;
+        // The desktop head posts unconditionally, after the rest of the response (WPF DescentMigrationService.cs:185-195).
+        public Action<Action> PostMigration { get; set; } = CoreDispatch.Post;
+        public Action<int>? StageCeremonyDue { get; set; }
+        public bool HasLiveMigrationOffer(AppSettings settings)
+        {
+            lock (_migrationGate) return ReferenceEquals(_migrationOwner, settings) && _migrationOffer != null
+                && string.Equals(_migrationAccount, settings.UnifiedId, StringComparison.Ordinal);
+        }
+
+        // WPF ProfileSyncService.cs:4928-4948 and DescentMigrationService.cs:132-150.
+        private void ReceiveMigrationOffer(AppSettings settings, JObject response, string account)
+        {
+            if (response["descent_migration"] is not JObject block || block["required"]?.Type != JTokenType.Boolean
+                || !block.Value<bool>("required") || settings.DescentMigrationCompleted
+                || DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice)) return;
+            static double Number(JToken? token) => token?.Type is JTokenType.Integer or JTokenType.Float ? token.Value<double>() : 0;
+            var offer = new DescentMigrationOffer
+            {
+                TotalXpEarned = Number(block["total_xp_earned"]),
+                DevotionDays = (int)Number(block["devotion_days"]),
+                RestoreBasisXp = Number(block["restore_basis_xp"]),
+            };
+            int generation;
+            lock (_migrationGate)
+            {
+                _migrationOwner = settings;
+                _migrationAccount = account;
+                _migrationOffer = offer;
+                generation = ++_migrationGeneration;
+            }
+            DescentReader?.NotifySurfaces("descent migration offered");
+            PostApplyMigration(settings, offer, account, generation);
+        }
+
+        // WPF DescentShowDirector.cs:281-307, 482-495 and :133-160: defer an offer behind
+        // the pre-zero fuse, then release at live zero, a late zero, or a cleared timestamp.
+        private bool MigrationHeld => Countdown is { CeremonyAtUtc: not null, ZeroPassedWhileAway: false } fuse
+            && fuse.Phase < DescentFusePhase.Zero;
+
+        private void OnMigrationPhase(object? sender, DescentFusePhaseChangedEventArgs e)
+        {
+            if (e.Current == DescentFusePhase.Dark || (e.Current >= DescentFusePhase.Zero && Countdown?.ZeroPassedWhileAway == true))
+                ReplayMigration();
+        }
+        private void OnMigrationZero(object? sender, EventArgs e) => ReplayMigration();
+        private void ReplayMigration()
+        {
+            lock (_migrationGate)
+                if (_migrationOwner is { } settings && _migrationOffer is { } offer && _migrationAccount is { } account)
+                    PostApplyMigration(settings, offer, account, _migrationGeneration);
+        }
+
+        private void PostApplyMigration(AppSettings settings, DescentMigrationOffer offer, string account, int generation)
+        {
+            PostMigration(() =>
+            {
+                lock (_migrationGate)
+                {
+                    if (generation != _migrationGeneration || !Loaded || !ReferenceEquals(settings, CoreSettings.Current)
+                        || !string.Equals(settings.UnifiedId, account, StringComparison.Ordinal) || MigrationHeld) return;
+                    if (!DescentMigration.ApplyRestore(settings, offer, DescentReader?.Current?.Stage, DateTime.UtcNow)) return;
+                }
+                CoreSettings.Save();
+                DescentReader?.NotifySurfaces("descent migration committed");
+                _ = PushAsync("descent migration");
+            });
+        }
         public DateTime? LastSyncTime { get; private set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
@@ -154,6 +237,7 @@ namespace ConditioningControlPanel.Services
         public void Reset()
         {
             StopHeartbeat();
+            lock (_migrationGate) { _migrationOffer = null; _migrationOwner = null; _migrationAccount = null; _migrationGeneration++; }
             DescentReader?.Reset();
             Loaded = false;
             _serverAchievements = null;
@@ -175,6 +259,7 @@ namespace ConditioningControlPanel.Services
             Xp = (int)ProfileAdopt.TotalXp(s),
             Level = s.PlayerLevel,
             DescentEpoch = Descent.DescentEpochs.ClientEpoch,
+            DescentAuto = true,
             Achievements = achievements?.Distinct().OrderBy(a => a, StringComparer.Ordinal).ToList(),
             Cosmetics = cosmetics,
             AllowDiscordDm = s.AllowDiscordDm,
@@ -224,7 +309,7 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 var totalXp = ProfileAdopt.TotalXp(s);
-                var watermark = ProfileAdopt.ActiveXpWatermark(s);
+                var watermark = DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice) ? 0 : ProfileAdopt.ActiveXpWatermark(s);
                 if (watermark > 0 && totalXp < watermark)
                 {
                     Log.Error("[XP watermark] Sync REFUSED — would push {Xp} XP, below the {Watermark} XP last agreed", (int)totalXp, (int)watermark);
@@ -236,6 +321,12 @@ namespace ConditioningControlPanel.Services
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
                 var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s)));
+                if (DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice))
+                {
+                    var payload = JObject.Parse(body);
+                    payload["descent_migration"] = new JObject { ["choice"] = s.PendingDescentMigrationChoice };
+                    body = payload.ToString(Formatting.None);
+                }
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -288,20 +379,25 @@ namespace ConditioningControlPanel.Services
                 // The clear has reached the server; an empty loadout goes back to meaning "no change" (WPF).
                 if (clearing && cosmetics?.IsEmpty == true) _pendingCosmeticsClear = false;
                 Log.Information("V2 Profile synced successfully ({Bytes} bytes)", json.Length);
+                JObject? migrationReply = null;
                 try
                 {
                     var reply = JObject.Parse(json);
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
-                    // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
-                    // takes the offer (no descent_auto), so only the ack half runs here.
+                    // WPF ProfileSyncService.cs:1984-1994: the ack wins over an offer in the same reply.
                     Descent.DescentMigrationAck.Apply(s, reply);
+                    migrationReply = reply;
                 }
                 catch (Exception ex) { Log.Debug("V2 Sync: Could not parse server flags: {Error}", ex.Message); }
                 // THE FUSE's cache, off the RAW body (WPF ProfileSyncService.HandleDescentCountdown).
                 if (Countdown != null && Descent.DescentCountdownService.TryReadCeremonyAt(json, out var ceremonyAt))
                     Countdown.ApplyCeremonyAt(ceremonyAt);
                 if (DescentReader?.HasSeenBlock == true) DescentReader.RequestRefresh("profile synced");
+                // WPF ProfileSyncService.cs:2000-2005 and DescentMigrationService.cs:390-445.
+                var stage = migrationReply != null ? DescentMigration.ReleaseStageCeremony(s, DateTime.Now) : null;
                 CoreSettings.Save();
+                if (stage is { } due && StageCeremonyDue is { } speak) CoreDispatch.Post(() => speak(due));
+                if (migrationReply != null) ReceiveMigrationOffer(s, migrationReply, id);
                 return true;
             }
             catch (Exception ex)

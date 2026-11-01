@@ -41,12 +41,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// <para><b>What is stubbed, and why each one is a stub:</b></para>
     /// <list type="bullet">
-    ///   <item><c>SpiralRoom.StateFor</c> (Core) reads the real settings and fuse. The withhold
-    ///     reads the persisted migration gates through the shared <c>SpiralRoom.SpiralWithheldFor</c>,
-    ///     but the live offer-in-hand input still needs migration ownership (WPF ceremony-open is false).
-    ///     The block comes from the shared DescentService and its BlockChanged event.</item>
-    ///   <item>The first-light canvas supplies the fog; the one-shot reveal still needs the
-    ///     ceremony director and block-service handoff, timeout and cancellation integration.</item>
+    ///   <item><c>SpiralRoom.StateFor</c> reads the settings, live offer, fuse and DescentService block.
+    ///     WPF reports ceremony-open as false (DescentMigrationService.cs:66).</item>
+    ///   <item>The first-light canvas supplies the fog; WPF's reveal is capture-rig-only since the
+    ///     ceremony retired (DescentShowDirector.cs:420-428).</item>
     ///   <item><c>SpiralEmbedView</c> now carries the Core ready/state protocol over WebHost;
     ///     native process-loss reporting and a pre-document carrier remain
     ///     unavailable on this seam.</item>
@@ -387,9 +385,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     CoreSettings.Current,
                     fuse?.LastAnnouncedPhase ?? DescentFusePhase.Dark,
                     fuse?.IsArmed == true,
-                    // ponytail: live offers still need the migration lane. WPF
-                    // DescentMigrationService.cs:66 also reports ceremony-open as false.
-                    spiralWithheld: SpiralRoom.SpiralWithheldFor(CoreSettings.Current, false, false),
+                    // WPF DescentMigrationService.cs:66, 84-90: no ceremony window, but a live offer withholds.
+                    spiralWithheld: SpiralRoom.SpiralWithheldFor(CoreSettings.Current,
+                        Platform.AccountSeed.Sync?.HasLiveMigrationOffer(CoreSettings.Current) == true, false),
                     hasBlock: App.Descent?.Current is not null));
             }
             catch (Exception ex)
