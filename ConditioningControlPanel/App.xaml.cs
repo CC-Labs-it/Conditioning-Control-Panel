@@ -495,8 +495,13 @@ namespace ConditioningControlPanel
             CoreQuests.TrackProgramVerifierProvider = (category, amount) => Programs?.TrackVerifier(category, amount);
             CoreQuests.PlayCompletionEffectsProvider = () =>
             {
-                // Play Windows notification sound
-                SystemSounds.Exclamation.Play();
+                // Play Windows notification sound. The perk opt-out drops the popup and its clip in
+                // MainWindow.Quests.cs; this ding has to go with them or it plays with nothing to explain it.
+                if (!PerkNotificationsSuppressed)
+                {
+                    SystemSounds.Exclamation.Play();
+                    Services.Audio.EngineOffAudioLog.Note("system:quest", "Exclamation");
+                }
 
                 // Quest completion posts its OWN event kind, so the Haptics tab's "Quest complete"
                 // routing row (enable / intensity / pattern / target toy) is what decides how this

@@ -149,7 +149,12 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public static bool ReconnectIsTheAnswer()
         {
-            try { return ReconnectIsTheAnswerProvider?.Invoke() == true; }
+            try
+            {
+                // The server just said this tier ended: reconnecting a cancelled pledge cannot help.
+                if (EntitlementTierRule.ClosedTierNow(CoreSettings.Current, DateTime.UtcNow) != null) return false;
+                return ReconnectIsTheAnswerProvider?.Invoke() == true;
+            }
             catch (Exception ex) { Log.Debug("TierGate: reconnect probe failed: {E}", ex.Message); return false; }
         }
 
