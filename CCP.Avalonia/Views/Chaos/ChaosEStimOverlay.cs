@@ -1,9 +1,9 @@
 // PORTED from ConditioningControlPanel/Chaos/ChaosEStimOverlay.cs (ChaosEStimOverlay + ChaosEStimGlow).
 // The maths (bolt path, strike timeline, halo follow and pulse) is Core's ChaosEStimMath; this file only draws.
 //
-// ponytail: nothing calls Strike/Arm yet. WPF fires them from BubbleService (charged pops, :440/:478/:1726)
-// and ChaosModeService's e_stim toy (:2770/:2800); neither the bubble field nor the toys exist on this head
-// (ChaosRunHost header). The e-stim DEVICE output is untouched here.
+// ponytail: no charged-pop or e_stim toy effect calls Strike/Arm yet. WPF callers:
+// Services/BubbleService.cs:441/479/1753 and Services/Chaos/ChaosModeService.cs:2767/2797.
+// Run-start pre-creation is wired; e-stim DEVICE output is untouched here.
 
 using System;
 using System.Collections.Generic;
@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
     /// <summary>
     /// E-Stim's lightning: jagged tether bolts arcing bubble-to-bubble for a quarter second, on one
-    /// click-through primary-screen window (WPF ChaosEStimOverlay). Created on the first strike, hidden
+    /// click-through stage window (WPF ChaosEStimOverlay). Created at run start, hidden
     /// between strikes, closed only by <see cref="CloseActive"/> (run end, panic). Refuses where there is
     /// no compositor: without per-pixel alpha the "window" would be an opaque screen-sized block.
     /// </summary>
@@ -53,6 +53,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (Dispatcher.UIThread.CheckAccess()) a(); else Dispatcher.UIThread.Post(a);
         }
+
+        /// <summary>WPF ChaosEStimOverlay.cs:46-68: realize once at run start, idle hidden.</summary>
+        public static void EnsureCreated() => OnUi(() =>
+        {
+            try
+            {
+                if (Refused || !CanShow()) return;
+                ChaosEStimGlow.EnsureCreated();
+                if (Refused || _active != null) return;
+                var w = new ChaosEStimOverlay(sample: false);
+                if (!w.Prepare()) { Refused = true; w.Close(); return; }
+                w.SetAlpha(0);
+                w.Show();
+                w.Hide();
+                _active = w;
+            }
+            catch (Exception ex) { Log.Debug("ChaosEStim.EnsureCreated: {E}", ex.Message); }
+        });
 
         /// <summary>Fire one strike along <paramref name="boltsPx"/> (physical-pixel segment endpoints,
         /// in strike order): flicker for the hot window, fade, hide. Safe from any thread.</summary>
@@ -238,6 +256,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosEStimGlow? _active;
         internal static ChaosEStimGlow? Active => _active;
         internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadPointer = X11Pointer.Read;
+
+        // WPF ChaosEStimOverlay.cs:329-350: pre-create without starting cursor follow.
+        internal static void EnsureCreated()
+        {
+            if (_active != null || ChaosEStimOverlay.Refused || !ChaosEStimOverlay.CanShow()) return;
+            var w = new ChaosEStimGlow();
+            if (!w.Prepare()) { ChaosEStimOverlay.Refused = true; w.Close(); return; }
+            w.Show();
+            w.Hide();
+            _active = w;
+        }
 
         /// <summary>Charges armed: show the halo and follow the cursor. Safe from any thread.</summary>
         public static void Arm() => ChaosEStimOverlay.OnUi(() =>
