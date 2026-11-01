@@ -162,6 +162,10 @@ internal sealed class KeywordAudioRuntime
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
         }
+        // WPF KeywordTriggerService.cs:1189-1200,1257-1269: matching still consumes the
+        // buffer and records cooldowns, but dispatch stays silent during the post-panic quiet.
+        if (Services.Safety.PanicAftermath.TriggersSilenced()) return;
+
         // WPF merge: preset first, and only the first enabled PlayAudio action wins.
         var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
         if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
