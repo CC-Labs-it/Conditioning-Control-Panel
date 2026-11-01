@@ -7,6 +7,7 @@ public class BrainDrainAudioTestsPresence
     [Fact]
     public void OnlyStoppingARunningPlayerClearsPresence()
     {
+        var state = new BrainDrainTestState();
         var oldRpc = global::ConditioningControlPanel.Avalonia.App.DiscordRpc;
         using var rpc = new ConditioningControlPanel.Services.DiscordRichPresenceService();
         global::ConditioningControlPanel.Avalonia.App.DiscordRpc = rpc;
@@ -21,6 +22,6 @@ public class BrainDrainAudioTestsPresence
             rpc.SetVideoActivity(); var video = rpc.CurrentState;
             player.Stop(); Assert.Equal(video, rpc.CurrentState);
         }
-        finally { player.Stop(); global::ConditioningControlPanel.Avalonia.App.DiscordRpc = oldRpc; }
+        finally { player.Stop(); state.Dispose(); global::ConditioningControlPanel.Avalonia.App.DiscordRpc = oldRpc; }
     }
 }

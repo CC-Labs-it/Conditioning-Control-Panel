@@ -31,9 +31,31 @@ public class BrainDrainAudioTests
         public double Volume { set => Gain = value; }
         public void Dispose() => Disposed = true;
     }
+    [Theory]
+    [InlineData("clips")] [InlineData("stop")] [InlineData("race")] [InlineData("media")] [InlineData("presence")]
+    public void TestMethodsRestoreTheirStateBeforeReturning(string method)
+    {
+        using var state = new BrainDrainTestState();
+        Func<string> assets = () => Path.GetTempPath();
+        Func<ConditioningControlPanel.Services.SettingsService?> provider = () => null;
+        CorePaths.EffectiveAssetsProvider = assets; CoreSettings.ServiceProvider = provider;
+        CoreSettings.Current.BrainDrainEnabled = false;
+        switch (method)
+        {
+            case "clips": ClipsFinishLiveGainFollowsRestoreAndPanicStops(); break;
+            case "stop": StopDuringDecoderCreationDisposesTheLateVoice(); break;
+            case "race": StoppedGenerationNeverStartsPlayback(true, true); break;
+            case "media": MediaLogRecordsOnlySuccessfulPlayback("success"); break;
+            case "presence": new BrainDrainAudioTestsPresence().OnlyStoppingARunningPlayerClearsPresence(); break;
+        }
+        Assert.Same(assets, CorePaths.EffectiveAssetsProvider);
+        Assert.Same(provider, CoreSettings.ServiceProvider);
+        Assert.False(CoreSettings.Current.BrainDrainEnabled);
+    }
     [Fact]
     public void ClipsFinishLiveGainFollowsRestoreAndPanicStops()
     {
+        var state = new BrainDrainTestState();
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(Path.Combine(root, "braindrain"));
         File.WriteAllText(Path.Combine(root, "braindrain", "clip.wav"), "");
@@ -64,11 +86,12 @@ public class BrainDrainAudioTests
             Assert.True(voice.Disposed); Assert.False(player.IsRunning);
             player.Tick(TimeSpan.FromSeconds(5)); Assert.Equal(2, plays);
         }
-        finally { player.Stop(); BrainDrainPlayer.Instance = oldInstance; Directory.Delete(root, true); }
+        finally { player.Stop(); BrainDrainPlayer.Instance = oldInstance; state.Dispose(); Directory.Delete(root, true); }
     }
     [Fact]
     public void StopDuringDecoderCreationDisposesTheLateVoice()
     {
+        var state = new BrainDrainTestState();
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(Path.Combine(root, "braindrain"));
         File.WriteAllText(Path.Combine(root, "braindrain", "clip.wav"), "");
@@ -82,7 +105,7 @@ public class BrainDrainAudioTests
             Assert.True(voice.Disposed); Assert.False(player.IsRunning);
             Assert.Equal(0, voice.Plays);
         }
-        finally { player?.Stop(); Directory.Delete(root, true); }
+        finally { player?.Stop(); state.Dispose(); Directory.Delete(root, true); }
     }
 
     [Theory]
@@ -92,6 +115,7 @@ public class BrainDrainAudioTests
     [InlineData(true, true)]
     public void StoppedGenerationNeverStartsPlayback(bool panic, bool restart)
     {
+        var state = new BrainDrainTestState();
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(Path.Combine(root, "braindrain"));
         File.WriteAllText(Path.Combine(root, "braindrain", "clip.wav"), "");
@@ -133,7 +157,7 @@ public class BrainDrainAudioTests
             {
                 player.Stop(); BrainDrainPlayer.Instance = oldInstance;
                 global::ConditioningControlPanel.Avalonia.App.MediaHistory = oldHistory;
-                history.Dispose(); Directory.Delete(root, true);
+                state.Dispose(); history.Dispose(); Directory.Delete(root, true);
             }
         }
     }
@@ -145,6 +169,7 @@ public class BrainDrainAudioTests
     [InlineData("failed-play")]
     public void MediaLogRecordsOnlySuccessfulPlayback(string outcome)
     {
+        var state = new BrainDrainTestState();
         var root = Directory.CreateTempSubdirectory("ccp-drain-log-").FullName;
         Directory.CreateDirectory(Path.Combine(root, "braindrain"));
         var path = Path.Combine(root, "braindrain", "clip.wav"); File.WriteAllText(path, "");
@@ -170,7 +195,19 @@ public class BrainDrainAudioTests
         finally
         {
             player.Stop(); global::ConditioningControlPanel.Avalonia.App.MediaHistory = oldHistory;
-            history.Dispose(); Directory.Delete(root, true);
+            state.Dispose(); history.Dispose(); Directory.Delete(root, true);
         }
     }
+}
+
+// Explicit local cleanup also covers direct calls that do not get a separate assembly hook.
+internal sealed class BrainDrainTestState : IDisposable
+{
+    private readonly Func<string>? _assets = CorePaths.EffectiveAssetsProvider;
+    private readonly Func<ConditioningControlPanel.Services.SettingsService?>? _provider = CoreSettings.ServiceProvider;
+    private readonly ConditioningControlPanel.Models.AppSettings _settings = CoreSettings.Current;
+    private readonly bool _enabled;
+    public BrainDrainTestState() => _enabled = _settings.BrainDrainEnabled;
+    public void Dispose()
+    { CorePaths.EffectiveAssetsProvider = _assets; CoreSettings.ServiceProvider = _provider; _settings.BrainDrainEnabled = _enabled; }
 }
