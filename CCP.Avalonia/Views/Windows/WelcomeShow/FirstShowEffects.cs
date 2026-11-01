@@ -49,6 +49,7 @@ internal sealed class FirstShowEffects : Control, IDisposable
     private (Func<byte[]?> Take, Action Stop)? _capture;
     private int _drainPhase;
     internal Func<bool, (Func<byte[]?> Take, Action Stop)?>? StartCapture;
+    internal Func<bool> CaptureSafe = () => true;
     private double _time, _nextFlash = S.FlashAt, _nextBubble = S.BubblesAt, _nextSub = S.WordsAt, _subAt = -10;
     private int _serial;
     private bool _disposed, _revealed, _wordsSpawned;
@@ -76,11 +77,14 @@ internal sealed class FirstShowEffects : Control, IDisposable
             return 70 / 255.0 * Math.Clamp(Math.Min(_time - (first ? S.DrainAt : S.DrainDeepAt), (first ? S.DrainDeepAt : S.WordsAt) - _time) / .3, 0, 1);
         }
     }
-    public FirstShowEffects(Action<string> cue, PixelRect screen = default, bool captureAllowed = false)
+    public FirstShowEffects(Action<string> cue, PixelRect screen = default, Func<bool>? captureAllowed = null)
     {
         _cue = cue; IsHitTestVisible = false;
-        if (captureAllowed && screen.Width > 0 && screen.Height > 0)
+        if (captureAllowed != null && screen.Width > 0 && screen.Height > 0)
+        {
+            CaptureSafe = captureAllowed;
             StartCapture = melt => { var pump = new FirstShowCapture(screen, melt); return (pump.Take, pump.Stop); };
+        }
     }
     internal FirstShowEffects() : this(_ => { }) { }   // --render-all: an empty layer (no deck loaded)
     private double W => Math.Max(1, double.IsNaN(Width) ? Bounds.Width : Width);
@@ -106,12 +110,12 @@ internal sealed class FirstShowEffects : Control, IDisposable
         // WPF FirstShowEffects.cs:121-127: fresh pump for each two-second beat, melt only
         // in the second beat when motion is enabled. Stop even if a frame never arrived.
         int drain = seconds >= S.DrainAt && seconds < S.DrainDeepAt ? 1 : seconds >= S.DrainDeepAt && seconds < S.WordsAt ? 2 : 0;
-        if (drain != _drainPhase)
+        if (drain != _drainPhase || (_capture != null && !CaptureSafe()))
         {
             _capture?.Stop(); _capture = null; _drainFrame?.Dispose(); _drainFrame = null;
             _drainPhase = drain;
-            if (drain != 0) _capture = StartCapture?.Invoke(drain == 2 && Motion != MotionLevel.Off);
         }
+        if (drain != 0 && _capture == null && CaptureSafe()) _capture = StartCapture?.Invoke(drain == 2 && Motion != MotionLevel.Off);
         if (_capture?.Take() is { } bytes)
         {
             try { using var stream = new MemoryStream(bytes); var frame = new Bitmap(stream); _drainFrame?.Dispose(); _drainFrame = frame; }

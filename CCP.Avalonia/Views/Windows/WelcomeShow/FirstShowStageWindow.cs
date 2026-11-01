@@ -71,7 +71,6 @@ internal sealed partial class FirstShowStageWindow : Window
     private double _scale;
     private readonly bool _redirected;
     private FirstShowEffects? _effects;
-    private bool _captureAllowed;
     private CancellationTokenSource? _load;
     internal Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadDesktopInput = X11Pointer.Read;
     private PixelRect[] _inputBuf = new PixelRect[64];   // reused every frame
@@ -163,7 +162,6 @@ internal sealed partial class FirstShowStageWindow : Window
         try { ok &= X11Overlay.SetClickThrough(this, true); }
         catch (Exception ex) { ok = false; Log.Debug(ex, "First show stage: click-through failed"); }
         Show();
-        _captureAllowed = FirstShowCapture.CanCapture(this);
         // WPF ran its own keyboard hook so Esc stops the show even with the panic key off (:52, :92).
         if (OperatingSystem.IsWindows()) Win32PanicKey.KeyDown += OnGlobalKey;
         return ok;
@@ -300,7 +298,7 @@ internal sealed partial class FirstShowStageWindow : Window
                 progress => Dispatcher.UIThread.Post(() => { if (!_closed && _load == request) ShowLoading(progress); }));
             if (paths.Count == 0) throw new IOException("No demo images available");
             ShowPreparing();
-            candidate = new FirstShowEffects(_audio.Cue, _screenPx, _captureAllowed);
+            candidate = new FirstShowEffects(_audio.Cue, _screenPx, () => FirstShowCapture.CanCapture(this, _emi, _speechWindow));
             await candidate.LoadAsync(paths);
             request.Token.ThrowIfCancellationRequested();
             if (_closed || _load != request) return;
@@ -332,7 +330,7 @@ internal sealed partial class FirstShowStageWindow : Window
     {
         _load?.Cancel(); _load?.Dispose(); _load = null;
         Ask(Text("loading")); ShowPreparing(); AddButton(Text("later"), Close);
-        var effects = new FirstShowEffects(_audio.Cue, _screenPx, _captureAllowed);
+        var effects = new FirstShowEffects(_audio.Cue, _screenPx, () => FirstShowCapture.CanCapture(this, _emi, _speechWindow));
         try
         {
             await effects.LoadAsync(BundledPictures());

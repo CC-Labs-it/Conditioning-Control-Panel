@@ -26,13 +26,18 @@ internal sealed class FirstShowCapture
     internal void Stop() { _stop = true; Interlocked.Exchange(ref _pending, null); }
 
     // WPF BrainDrainCapturePump.cs:106-112: SRCCOPY skips layered windows. The existing
-    // Win32Overlay seam keeps that style on the stage, including when Avalonia rebuilds styles.
-    // Otherwise use the veil rather than capture the stage's own previous frame.
+    // Win32Overlay keeps that style on the stage; EMI and speech must also be checked.
+    // Otherwise use the veil rather than capture any of the show windows.
     internal static bool CanCapture(Window stage)
     {
         if (!OperatingSystem.IsWindows()) return false;
         var handle = stage.TryGetPlatformHandle();
         return handle?.HandleDescriptor == "HWND" && handle.Handle != IntPtr.Zero && CanCaptureStyle(Win32Overlay.GetWindowLong(handle.Handle, -20));
+    }
+    internal static bool CanCapture(Window? stage, Window? emi, Window? speech, Func<Window, bool>? layered = null)
+    {
+        layered ??= CanCapture;
+        return stage != null && emi != null && speech != null && layered(stage) && layered(emi) && layered(speech);
     }
     internal static bool CanCaptureStyle(uint style) => (style & Win32Overlay.WsExLayered) != 0;
 

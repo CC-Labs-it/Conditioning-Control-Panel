@@ -310,6 +310,34 @@ public sealed class FirstShowStageTests
         return Task.CompletedTask;
     });
 
+    // WPF EMI and speech are layered (EmiDeskWindow.xaml:8, FirstShowDesktopWindow.cs:33).
+    [Fact]
+    public Task DrainRequiresAllThreeWindowsToStayExcluded() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var stage = new Window(); var emi = new Window(); var speech = new Window();
+        var layered = new HashSet<Window> { stage, emi, speech }; int starts = 0, stops = 0;
+        using var pixels = new SkiaSharp.SKBitmap(2, 2); using var image = SkiaSharp.SKImage.FromBitmap(pixels);
+        using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100); var png = data.ToArray();
+        Assert.False(FirstShowCapture.CanCapture(stage, null, speech, layered.Contains));
+        var fx = new FirstShowEffects(_ => { }) { Width = 80, Height = 80, Particles = () => false };
+        fx.CaptureSafe = () => FirstShowCapture.CanCapture(stage, emi, speech, layered.Contains);
+        fx.StartCapture = _ => { starts++; return (() => png, () => stops++); };
+        try
+        {
+            fx.Tick(S.DrainAt + .5, .016); Assert.Equal(1, starts); Assert.True(fx.HasDrainFrame);
+            foreach (var window in new[] { stage, emi, speech })
+            {
+                layered.Remove(window); fx.Tick(S.DrainAt + .6, .016); Assert.Equal(starts, stops); Assert.False(fx.HasDrainFrame);
+                fx.Tick(S.DrainAt + .65, .016); Assert.Equal(stops, starts);
+                layered.Add(window); fx.Tick(S.DrainAt + .7, .016); Assert.Equal(stops + 1, starts);
+            }
+        }
+        finally { fx.Dispose(); stage.Close(); emi.Close(); speech.Close(); }
+        Assert.Equal(starts, stops);
+        return Task.CompletedTask;
+    });
+
     /// <summary>WPF BrainDrainCapturePump.cs:431-477, 500-527: GDI BGRX is opaque,
     /// blurred and channel-correct, and the second phase displaces the image over time.</summary>
     [Fact]
