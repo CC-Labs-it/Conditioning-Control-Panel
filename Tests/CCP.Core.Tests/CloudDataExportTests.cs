@@ -129,6 +129,28 @@ public sealed class CloudDataExportTests : IDisposable
         }
     }
 
+    // WPF ProfileSyncService.cs:4296-4301 falls back to the status when deserialization returns null.
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData("null")]
+    public async Task ExportWithEmptyErrorBodyReportsServerStatus(string body)
+    {
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("en");
+            _server.Replies.Enqueue((HttpStatusCode.InternalServerError, body));
+            var result = await new CloudSettingsBackup(_server).ExportDataAsync(_settings);
+            Assert.False(result.Success);
+            Assert.Equal("Server error: InternalServerError", result.Error);
+            Assert.Null(result.JsonData);
+            Assert.Single(_server.Calls);
+        }
+        finally { loc.SetLanguage(previous); }
+    }
+
     [Fact]
     public async Task ExportReportsServerError()
     {

@@ -518,7 +518,7 @@ namespace ConditioningControlPanel.Services
                 }
                 if ((int)result.Status < 200 || (int)result.Status >= 300)
                 {
-                    var error = (string?)JObject.Parse(result.Body)["error"] ?? Localization.Loc.GetF("cloud_export_server_error", result.Status);
+                    var error = (string?)JsonConvert.DeserializeObject<JObject>(result.Body)?["error"] ?? Localization.Loc.GetF("cloud_export_server_error", result.Status);
                     return (false, error, null);
                 }
                 return (true, null, JToken.Parse(result.Body).ToString(Formatting.Indented));
