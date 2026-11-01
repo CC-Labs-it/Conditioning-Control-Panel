@@ -247,9 +247,9 @@ internal static class X11Overlay
     /// <returns>False when the platform cannot do this (no XID, no display, not 64-bit) or the server refused it.</returns>
     /// <param name="passive">A toast that takes clicks but never focus: Windows keeps WS_EX_NOACTIVATE
     /// (X11 override-redirect already never takes focus).</param>
-    internal static bool SetOverrideRedirect(Window window, PixelRect bounds, bool passive = false)
+    internal static bool SetOverrideRedirect(Window window, PixelRect bounds, bool passive = false, bool topmost = true)
     {
-        var ok = SetOverrideRedirect(window, passive);
+        var ok = SetOverrideRedirect(window, passive, topmost);
         window.WindowStartupLocation = WindowStartupLocation.Manual;
         window.Position = bounds.Position;
         window.Width = bounds.Width / window.DesktopScaling;
@@ -257,9 +257,9 @@ internal static class X11Overlay
         return ok;
     }
 
-    private static bool SetOverrideRedirect(TopLevel window, bool passive)
+    private static bool SetOverrideRedirect(TopLevel window, bool passive, bool topmost)
     {
-        if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.SetOverrideRedirect(window, hwnd, passive);
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.SetOverrideRedirect(window, hwnd, passive, topmost);
         // The struct offsets below are the LP64 layout (x86_64, arm64).
         if (IntPtr.Size != 8 || !TryGetXid(window, out var xid)) return false;
 
@@ -272,8 +272,7 @@ internal static class X11Overlay
             var attrs = Marshal.AllocHGlobal(XSetWindowAttributesSize);
             try
             {
-                for (var i = 0; i < XSetWindowAttributesSize; i += IntPtr.Size) Marshal.WriteIntPtr(attrs, i, IntPtr.Zero);
-                Marshal.WriteInt32(attrs, 88, 1);
+                WriteOverrideRedirect(attrs);
                 _xErrored = false;
                 XChangeWindowAttributes(_display, xid, CWOverrideRedirect, attrs);
                 XSync(_display, false);
@@ -281,6 +280,14 @@ internal static class X11Overlay
             }
             finally { Marshal.FreeHGlobal(attrs); }
         }
+    }
+
+    // WPF ChaosWindowZ.cs:38-53 changes stacking, never the tool/no-activate window class.
+    // X11 must stay outside the WM even when RaiseActive is gated off (geometry contract above).
+    internal static void WriteOverrideRedirect(IntPtr attrs)
+    {
+        for (var i = 0; i < XSetWindowAttributesSize; i += IntPtr.Size) Marshal.WriteIntPtr(attrs, i, IntPtr.Zero);
+        Marshal.WriteInt32(attrs, 88, 1);
     }
 
     /// <summary>Back on top of everything (WPF ReassertTopmost: SetWindowPos HWND_TOPMOST). An

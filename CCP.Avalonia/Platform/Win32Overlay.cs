@@ -65,13 +65,15 @@ internal static class Win32Overlay
     }
 
     /// <summary>Tool/no-activate/layered + HWND_TOPMOST: the Windows form of an override-redirect overlay.</summary>
-    internal static bool SetOverrideRedirect(TopLevel window, IntPtr hwnd, bool passive = false)
+    internal static bool SetOverrideRedirect(TopLevel window, IntPtr hwnd, bool passive = false, bool topmost = true)
     {
         if (!OperatingSystem.IsWindows()) return false;
         if (passive) Passive.AddOrUpdate(window, Passive);
         return Apply(hwnd, Track(window).Value, IsPassive(window), AllowsFocus(window))
-            && SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+            && SetWindowPos(hwnd, StackAfter(topmost), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
     }
+
+    internal static IntPtr StackAfter(bool topmost) => new(topmost ? -1 : -2); // HWND_TOPMOST / HWND_NOTOPMOST
 
     /// <summary>WPF ApplyWindowStyles(stealsFocus): activation and mouse pass-through are independent.</summary>
     internal static bool AllowFocus(TopLevel window, IntPtr hwnd)

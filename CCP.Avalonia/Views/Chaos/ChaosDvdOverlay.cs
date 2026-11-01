@@ -4,6 +4,8 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Input;
+using ConditioningControlPanel.Services;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using IFrameSource = ConditioningControlPanel.Avalonia.Controls.Fx.IFrameSource;
@@ -15,19 +17,9 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
-    /// <summary>
-    /// PORTED from ConditioningControlPanel/Chaos/ChaosDvdOverlay.cs and ChaosDvdHostOverlay.cs: the
-    /// Porn DVD toy / Intrusive Thoughts logos. WPF's default is one layered window per logo, with the
-    /// experimental shared host (ChaosDvdSharedHost) as one full-stage click-through canvas; this head
-    /// always uses the host shape - one click-through override-redirect window over the primary work
-    /// area (WPF bounces in SystemParameters.WorkArea), every logo an <see cref="OutlinedTextBlock"/>
-    /// on its canvas. Motion is Core <see cref="ChaosDvdFlock"/>, stepped from the window's shared
-    /// <see cref="TopLevelFrameSource"/> (WPF CompositionTarget.Rendering, dt clamped at 0.1 s); the
-    /// subscription drops when the last logo retires. The window lives until <see cref="CloseActive"/>.
-    ///
-    /// <para>The Porn DVD toy is launched by ChaosRunHost. Thoughts and rabbit contacts are connected. Remaining: Spanker input, per-logo hosts,
-    /// video restacking, and the run-host rabbit/freeze producers.</para>
-    /// </summary>
+    /// <summary>WPF ChaosDvdOverlay.cs:98-107,204-239: shared host is optional;
+    /// Spanker logos always use an input-enabled per-logo window. One frame subscription drives all.
+    /// Remaining: the run-host rabbit/freeze producers.</summary>
     internal static class ChaosDvdOverlay
     {
         internal static readonly ChaosDvdFlock Flock = new();
@@ -35,11 +27,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// logo would draw on a black slab). Tests swap both seams: headless has no X server.</summary>
         internal static Func<bool> CanOverlay = () => X11Overlay.IsAvailable && X11Overlay.IsCompositing;
         internal static Func<Window, PixelRect, bool> PrepareWindow = (w, bounds) =>
-            X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, bounds);
+            X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, bounds, passive: true, topmost: w.Topmost);
         /// <summary>Tests swap in a stepped source; live: the host window's own frame source.</summary>
         internal static Func<TopLevel, IFrameSource> FrameSourceFor = top => TopLevelFrameSource.For(top);
+        internal static Action<Window> RaiseWindow = w => X11Overlay.Raise(w);
         internal static Action<string, float> PlaySfx = (k, v) => ChaosOverlayWindow.ChaosSfx.Play(k, v);
 
+        internal static Func<bool> SharedHost = () => CoreSettings.Current.ChaosDvdSharedHost;
+        internal static Func<bool> SpankerRedirect = () => ChaosRunHost.State is { SpankerActive: true } s
+            && s.MaxedBoons.Contains("the_spanker"); // WPF ChaosModeService.cs:407-408
+        // WPF ChaosDvdOverlay.cs:164,473-484 and ChaosWindowZ.cs:35,50: input never activates or forces pinning.
+        internal static Func<Window, PixelRect, bool, bool, bool, bool> PrepareNativeWindow = (w, bounds, through, passive, pin) =>
+            X11Overlay.SetClickThrough(w, through) && X11Overlay.SetOverrideRedirect(w, bounds, passive, pin);
+        internal static Func<Window, PixelRect, bool, bool> PrepareLogoWindow = (w, bounds, clickable) =>
+            PrepareNativeWindow(w, bounds, !clickable, true, w.Topmost);
+        private static readonly Dictionary<ChaosDvdLogo, Window> Windows = new();
+        internal static IReadOnlyDictionary<ChaosDvdLogo, Window> LogoWindows => Windows;
+        private static bool _shared;
+        private static double _scaling;
+        private static Window? _clockWindow;
         private static Window? _window;
         private static Canvas? _canvas;
         private static IFrameSource? _source;
@@ -69,14 +75,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     Log.Debug("ChaosDvd: no composited click-through overlay on this platform; skipped");
                     return;
                 }
-                if (_window == null && !Create(host)) return;
+                if (_canvas == null && !Create(host)) return;
                 foreach (var l in Flock.Launch(durationSec, speedMult, scale, count, text, splitBounces, splitOnRabbit)) AddLabel(l);
-                if (_source == null && _window != null)
-                {
-                    _last = null;
-                    _source = FrameSourceFor(_window);
-                    _source.Subscribe(OnFrameAction);
-                }
+                EnsureClock();
             }
             catch (Exception ex) { Log.Debug("ChaosDvdOverlay.Launch: {E}", ex.Message); }
         }
@@ -88,6 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var primary = screens.FirstOrDefault(s => s.IsPrimary) ?? screens[0];
             var wa = primary.WorkingArea;
             var k = primary.Scaling > 0 ? primary.Scaling : 1.0;
+            _shared = SharedHost();
+            _scaling = k;
             _origin = new Point(wa.X / k, wa.Y / k);
             Flock.Left = 0;
             Flock.Top = 0;
@@ -96,12 +99,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Flock.Measure = Measure;
 
             _canvas = new Canvas { IsHitTestVisible = false };
+            if (!_shared) return true;
             var w = new Window
             {
                 WindowDecorations = WindowDecorations.None,
                 TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
                 Background = Brushes.Transparent,
-                Topmost = true,
+                Topmost = CoreSettings.Current.ChaosPinOnTop,
                 ShowInTaskbar = false,
                 ShowActivated = false,
                 CanResize = false,
@@ -147,7 +151,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             t.Opacity = l.Opacity;
             Canvas.SetLeft(t, l.X);
             Canvas.SetTop(t, l.Y);
-            _canvas.Children.Add(t);
+            bool clickable = SpankerRedirect(); // WPF samples the gate per launch, not per click.
+            if (_shared && !clickable) _canvas.Children.Add(t);
+            else
+            {
+                var panel = new Border { Child = t, Background = clickable
+                    ? new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)) : Brushes.Transparent };
+                if (clickable) panel.Cursor = new Cursor(StandardCursorType.Hand);
+                var w = new Window
+                {
+                    WindowDecorations = WindowDecorations.None,
+                    TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
+                    Background = Brushes.Transparent, Topmost = CoreSettings.Current.ChaosPinOnTop, ShowInTaskbar = false,
+                    ShowActivated = false, CanResize = false, Focusable = false,
+                    IsHitTestVisible = clickable, Content = panel,
+                };
+                var bounds = new PixelRect((int)Math.Round((_origin.X + l.X) * _scaling),
+                    (int)Math.Round((_origin.Y + l.Y) * _scaling),
+                    (int)Math.Ceiling(l.W * _scaling), (int)Math.Ceiling(l.H * _scaling));
+                if (!PrepareLogoWindow(w, bounds, clickable)) { w.Close(); Flock.Discard(l); return; }
+                w.Position = bounds.Position;
+                w.Width = l.W; w.Height = l.H;
+                t.IsHitTestVisible = clickable;
+                if (clickable)
+                {
+                    panel.PointerPressed += (_, e) =>
+                    {
+                        if (e.GetCurrentPoint(panel).Properties.IsLeftButtonPressed && Smack(l)) e.Handled = true;
+                    };
+                }
+                Windows[l] = w;
+                w.Show();
+            }
             Labels[l] = t;
         }
 
@@ -174,12 +209,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             foreach (var l in f.Spawned) AddLabel(l);
             foreach (var l in f.Recolored) if (Labels.TryGetValue(l, out var t)) Recolor(t, l);
             foreach (var l in f.Removed)
+            {
                 if (Labels.Remove(l, out var t)) _canvas?.Children.Remove(t);
+                if (Windows.Remove(l, out var w)) w.Close();
+            }
             var clones = new List<ChaosDvdLogo>();
             foreach (var (l, t) in Labels)
             {
-                Canvas.SetLeft(t, l.X);
-                Canvas.SetTop(t, l.Y);
+                if (Windows.TryGetValue(l, out var w))
+                    w.Position = new PixelPoint((int)Math.Round((_origin.X + l.X) * _scaling),
+                        (int)Math.Round((_origin.Y + l.Y) * _scaling));
+                else { Canvas.SetLeft(t, l.X); Canvas.SetTop(t, l.Y); }
                 t.Opacity = l.Opacity;
                 // WPF ChaosDvdOverlay.cs:388-390: collide after moving, never while retiring.
                 if (l.FadeOutSec < 0 && !f.Spawned.Contains(l))
@@ -194,12 +234,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (f.BounceCue) PlaySfx("dvd_bounce", 0.35f);
             if (f.LaunchCue) PlaySfx("dvd_launch", 0.35f);
             if (!Flock.AnyActive) StopLoop();
+            else EnsureClock();
+        }
+
+        // WPF ChaosDvdOverlay.cs:204-206,305-319: launch-latched input, hue hop and unthrottled cue.
+        internal static bool Smack(ChaosDvdLogo l)
+        {
+            if (!Windows.TryGetValue(l, out var window) || !window.IsHitTestVisible || !Flock.Redirect(l)) return false;
+            if (Labels.TryGetValue(l, out var t)) Recolor(t, l);
+            PlaySfx("dvd_bounce", 0.4f);
+            return true;
+        }
+
+        private static void EnsureClock()
+        {
+            var next = _window ?? Windows.Values.FirstOrDefault();
+            if (next == _clockWindow && _source != null) return;
+            StopLoop();
+            if (next == null) return;
+            _clockWindow = next;
+            _last = null;
+            _source = FrameSourceFor(next);
+            _source.Subscribe(OnFrameAction);
+        }
+
+        // WPF ChaosDvdOverlay.cs:128-132, ChaosModeService.cs:745-757.
+        internal static void RaiseActive()
+        {
+            if (!ChaosRunHost.IsDescending || !CoreSettings.Current.ChaosPinOnTop) return;
+            if (_window is { IsVisible: true }) RaiseWindow(_window);
+            foreach (var w in Windows.Values) if (w.IsVisible) RaiseWindow(w);
         }
 
         private static void StopLoop()
         {
             _source?.Unsubscribe(OnFrameAction);
             _source = null;
+            _clockWindow = null;
         }
 
         /// <summary>WPF CloseActive (run teardown, panic): every logo and the host window go now. Idempotent.</summary>
@@ -210,6 +281,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             StopLoop();
             Flock.Clear();
             Labels.Clear();
+            foreach (var logoWindow in Windows.Values) logoWindow.Close();
+            Windows.Clear();
             var w = _window;
             _window = null;
             _canvas = null;

@@ -6,7 +6,23 @@ namespace CCP.Core.Tests;
 
 public sealed class ChaosDvdPartBTests
 {
-    // WPF ChaosDvdOverlay.cs:322-331,392-398.
+    // WPF ChaosDvdOverlay.cs:305-331,392-398.
+    [Fact]
+    public void RedirectCapsSpeedThroughFadeAndRejectsRemovedLogos()
+    {
+        var flock = new ChaosDvdFlock(new Random(1));
+        var logo = Assert.Single(flock.Launch(5, 2, 1));
+        logo.Vx = logo.Vy = 0;
+        Assert.True(flock.Redirect(logo));
+        Assert.Equal(230 * 1.18, Math.Sqrt(logo.Vx * logo.Vx + logo.Vy * logo.Vy), 6);
+        for (int i = 0; i < 20; i++) Assert.True(flock.Redirect(logo));
+        Assert.Equal(230 * 2.5, Math.Sqrt(logo.Vx * logo.Vx + logo.Vy * logo.Vy), 6);
+        logo.FadeOutSec = 0;
+        Assert.True(flock.Redirect(logo)); // WPF click handler stays attached through the fade
+        flock.Clear();
+        Assert.False(flock.Redirect(logo));
+    }
+
     [Fact]
     public void RabbitSplitIsArmedOnceExtendsAtCapAndRejectsRetiringAndOrdinaryLogos()
     {

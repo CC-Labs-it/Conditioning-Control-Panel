@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -265,7 +266,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return targets;
         }
 
-        private Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
+        // WPF VideoService.cs:5809-5822: one cancellable wall-time delay, not a rendering timer.
+        internal static Func<Action, int, IDisposable> RestackLater = (action, delay) => new RestackRequest(action, delay);
+
+        internal sealed class RestackRequest : IDisposable
+        {
+            private CancellationTokenSource? _source = new();
+
+            internal RestackRequest(Action action, int delayMs, Action<Action>? post = null)
+            {
+                var token = _source.Token;
+                Action<Action> enqueue = post ?? (callback => Dispatcher.UIThread.Post(callback));
+                _ = RunAsync();
+                async Task RunAsync()
+                {
+                    try
+                    {
+                        await Task.Delay(delayMs, token).ConfigureAwait(false);
+                        enqueue(() =>
+                        {
+                            if (!token.IsCancellationRequested) action();
+                        });
+                    }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+                }
+            }
+
+            public void Dispose()
+            {
+                var source = Interlocked.Exchange(ref _source, null);
+                if (source == null) return;
+                source.Cancel();
+                source.Dispose();
+            }
+        }
+
+        internal Surface Build(global::Avalonia.Platform.Screen? screen, bool strict)
         {
             var fill = new Image { Stretch = Stretch.UniformToFill, IsVisible = false };
             RenderOptions.SetBitmapInterpolationMode(fill, BitmapInterpolationMode.HighQuality);
@@ -284,6 +320,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Background = Brushes.Black,
                 Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row } },
             };
+            // WPF VideoService.cs:3708,5809-5822: restore the game layer AFTER native activation.
+            IDisposable? restack = null;
+            void RestackAfterActivation()
+            {
+                restack?.Dispose();
+                restack = RestackLater(() =>
+                {
+                    if (w.IsVisible) global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosDvdOverlay.RaiseActive();
+                }, 50);
+            }
+            w.Activated += (_, _) => RestackAfterActivation();
+            w.AddHandler(InputElement.PointerPressedEvent, (_, _) => RestackAfterActivation(),
+                global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+            w.Closed += (_, _) => restack?.Dispose();
             var floating = Floating;
             if (floating)
             {
@@ -333,6 +383,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
+            // WPF VideoService.cs:5822 -> ChaosModeService.cs:757: game logos above the video.
+            global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosDvdOverlay.RaiseActive();
             return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
         }
 

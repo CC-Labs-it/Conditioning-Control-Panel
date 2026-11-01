@@ -20,6 +20,7 @@ public sealed class ChaosDvdToyTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        ChaosDvdOverlay.SharedHost = () => true;
         ChaosDvdOverlay.CanOverlay = () => true;
         ChaosDvdOverlay.PrepareWindow = (_, _) => true;
         ChaosDvdOverlay.PlaySfx = (_, _) => { };
@@ -35,6 +36,7 @@ public sealed class ChaosDvdToyTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
+            var savedSharedHost = ChaosDvdOverlay.SharedHost;
             var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
                 ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ConditioningControlPanel.CoreAudio.PlayOneShotProvider);
             var oldClock = ChaosEffectBannerOverlay.Clock;
@@ -115,6 +117,7 @@ public sealed class ChaosDvdToyTests
                 ChaosEffectBannerOverlay.Clock = oldClock;
                 (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
                     ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ConditioningControlPanel.CoreAudio.PlayOneShotProvider) = saved;
+                ChaosDvdOverlay.SharedHost = savedSharedHost;
                 LocalizationManager.Instance.SetLanguage(savedLanguage);
                 Newtonsoft.Json.JsonConvert.PopulateObject(savedMeta, meta,
                     new Newtonsoft.Json.JsonSerializerSettings { ObjectCreationHandling = Newtonsoft.Json.ObjectCreationHandling.Replace });
@@ -133,6 +136,7 @@ public sealed class ChaosDvdToyTests
     public async Task ConsecutiveToyCasesRestoreOverriddenGlobals()
     {
         var clock = ChaosEffectBannerOverlay.Clock;
+        var savedSharedHost = ChaosDvdOverlay.SharedHost;
         var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
             ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ConditioningControlPanel.CoreAudio.PlayOneShotProvider);
         var language = LocalizationManager.Instance.CurrentLanguage;
@@ -142,6 +146,7 @@ public sealed class ChaosDvdToyTests
             Assert.Same(clock, ChaosEffectBannerOverlay.Clock);
             Assert.Equal(saved, (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
                 ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ConditioningControlPanel.CoreAudio.PlayOneShotProvider));
+            Assert.Equal(savedSharedHost, ChaosDvdOverlay.SharedHost);
             Assert.Equal(language, LocalizationManager.Instance.CurrentLanguage);
         }
     }
@@ -152,6 +157,7 @@ public sealed class ChaosDvdToyTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
+            var savedSharedHost = ChaosDvdOverlay.SharedHost;
             var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
                 ChaosEffectBannerOverlay.SkipPlatformChecksForTests);
             Setup();
@@ -194,6 +200,7 @@ public sealed class ChaosDvdToyTests
                 BubbleOverlay.EndChaos(); ChaosDvdOverlay.CloseActive(); host.Close();
                 (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
                     ChaosEffectBannerOverlay.SkipPlatformChecksForTests) = saved;
+                ChaosDvdOverlay.SharedHost = savedSharedHost;
             }
             return Task.CompletedTask;
         });

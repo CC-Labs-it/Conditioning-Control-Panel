@@ -35,7 +35,7 @@ public readonly record struct ChaosDvdFrame(
 /// Thoughts logo maths, head-free. Launch (:94), Begin (:180), StepAll (:274), StepOne (:327) and
 /// FadeOutAndRetire (:405), minus drawing: a DVD-screensaver label drifts across the area, bounces
 /// off the edges with one hue step per bounce, and Casting Couch splits it on wall hits.
-/// Rabbit contact accepts head-free input from the overlay.
+/// Redirect and rabbit contact accept head-free inputs from the overlay.
 /// </summary>
 public sealed class ChaosDvdFlock
 {
@@ -166,6 +166,20 @@ public sealed class ChaosDvdFlock
         return new ChaosDvdFrame(spawned, recolored, removed, cue, launchCue);
     }
 
+    /// <summary>WPF ChaosDvdOverlay.cs:305-319. The head gates the Spanker click.</summary>
+    public bool Redirect(ChaosDvdLogo l)
+    {
+        if (!_active.Contains(l)) return false;
+        double speed = Math.Sqrt(l.Vx * l.Vx + l.Vy * l.Vy);
+        if (speed < 1) speed = BaseSpeed;
+        speed = Math.Min(speed * 1.18, BaseSpeed * 2.5);
+        double angle = _rng.NextDouble() * Math.PI * 2;
+        l.Vx = Math.Cos(angle) * speed;
+        l.Vy = Math.Sin(angle) * speed;
+        l.HueIndex = (l.HueIndex + 1) % Hues.Length;
+        return true;
+    }
+
     /// <summary>WPF ChaosDvdOverlay.cs:322-331,392-398. Once per logo, extend even at cap.</summary>
     public ChaosDvdLogo? TouchRabbit(ChaosDvdLogo l)
     {
@@ -182,6 +196,7 @@ public sealed class ChaosDvdFlock
     }
 
     /// <summary>Run teardown (WPF CloseActive): every logo gone at once.</summary>
+    public void Discard(ChaosDvdLogo logo) => _active.Remove(logo);
 
     public void Clear() => _active.Clear();
 }
