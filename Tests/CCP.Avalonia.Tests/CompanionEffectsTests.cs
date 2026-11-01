@@ -89,7 +89,7 @@ public sealed class CompanionEffectsTests
         });
     }
 
-    /// <summary>The AI's lock card follows the user's strict switch and reports "fired" only when a card really came up: a
+    /// <summary>The AI's lock card follows the user's strict switch and reports accepted queued requests; a
     /// second request while one is open never stacks, so it is reported as not fired.</summary>
     [Fact]
     public void LockCardSurfaceReportsOnlyACardThatShowed()
@@ -98,7 +98,7 @@ public sealed class CompanionEffectsTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (global::Avalonia.Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -112,6 +112,22 @@ public sealed class CompanionEffectsTests
                 Assert.True(LockCardWindow.IsAnyOpen());
                 Assert.False(MantraLockScreenCommand.Surface!("again", 1));
                 LockCardWindow.ForceCloseAll();
+
+                // WPF App.AiEffects.cs:50-55 and LockCardService.cs:201-210: accepted while queued.
+                var bubble = new BubbleCountScheduler(BubbleCountHost.Instance, new BubbleCountQueueTests.Clock(), () => System.Array.Empty<string>());
+                var saved = (CoreEngine.BubbleCount, CoreSubliminal.BambiFreezeProvider);
+                CoreEngine.BubbleCount = bubble; CoreSubliminal.BambiFreezeProvider = () => { };
+                try
+                {
+                    bubble.Trigger(forceTest: true);
+                    Assert.True(MantraLockScreenCommand.Surface!("queued mantra", 2));
+                    Assert.False(LockCardWindow.IsAnyOpen());
+                    Assert.False(MantraLockScreenCommand.Surface!("duplicate", 1));
+                    bubble.ForceCleanup(); LockCardWindow.ReplayAfterGame();
+                    Assert.Equal("queued mantra", LockCardWindow.Primary!.PhraseShown);
+                    Assert.Equal(2, LockCardWindow.Primary.RequiredRepeats);
+                }
+                finally { bubble.ForceCleanup(); LockCardWindow.ForceCloseAll(); (CoreEngine.BubbleCount, CoreSubliminal.BambiFreezeProvider) = saved; }
 
                 // Held behind the portal panic bind, then a panic: the start must be dropped when released.
                 System.Action? held = null;

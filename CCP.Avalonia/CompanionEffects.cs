@@ -93,9 +93,8 @@ namespace ConditioningControlPanel.Avalonia
             {
                 if (LockCardWindow.IsAnyOpen()) return false;   // never stacks (WPF), so nothing showed
                 // Strict follows the user's own Lock Card switch, never forced (owner 2026-10-22).
-                LockCardWindow.ShowOnAllMonitors(phrase, repeats, strictMode: CoreSettings.Current.LockCardStrict, isTest: false,
+                return LockCardWindow.ShowOnAllMonitors(phrase, repeats, strictMode: CoreSettings.Current.LockCardStrict, isTest: false,
                     voiceMode: CoreSettings.Current.LockCardVoiceMode);
-                return LockCardWindow.IsAnyOpen();
             });
             // Without WPF's BypassLevelCheck the tint shows only while the engine does; refused otherwise.
             // Null opacity for "off" (and an "on" with no intensity): the saved opacity is the user's.

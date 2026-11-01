@@ -29,10 +29,7 @@ public sealed class BubbleCountQueueTests
     [InlineData(true)]
     public Task DeferredCardAndVideoExcludeEachOtherInEitherReplayOrder(bool cardFirst) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApp();
         var clock = new Clock();
         var b = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => Array.Empty<string>());
         var video = new MandatoryVideoScheduler(
@@ -87,17 +84,12 @@ public sealed class BubbleCountQueueTests
         }
         return Task.CompletedTask;
     });
-
-    // WPF LockCardService.cs:201-251: queue before drawing or resolving live settings.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public Task ShowNextUsesTheEnabledPoolAndSettingsAtReplay(bool disableAll) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApp();
         var s = CoreSettings.Current;
         var saved = (s.LockCardPhrases, s.LockCardRepeats, s.LockCardRandomRepeats,
             s.LockCardTargetLengthEnabled, s.LockCardStrict, s.LockCardVoiceMode);
@@ -137,14 +129,10 @@ public sealed class BubbleCountQueueTests
         }
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task ShowNextDuplicatesDoNotConsumeRotationWhileWaiting() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApp();
         var scheduler = LockCardScheduler.Instance;
         var recent = (Queue<string>)typeof(LockCardScheduler).GetField("_recentPhrases", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(scheduler)!;
@@ -179,16 +167,12 @@ public sealed class BubbleCountQueueTests
         }
         return Task.CompletedTask;
     });
-
     // WPF LockCardService.cs:201-210 defers ordinary cards; the game's own mercy
     // bypasses that service (BubbleCountResultWindow.xaml.cs:304-346).
     [Fact]
     public Task LockCardWaitsThroughRoundButMercyOpensImmediately() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApp();
         var b = new BubbleCountScheduler(BubbleCountHost.Instance, new Clock(), () => Array.Empty<string>());
         var (oldBubble, oldFreeze) = (CoreEngine.BubbleCount, CoreSubliminal.BambiFreezeProvider);
         CoreEngine.BubbleCount = b;
@@ -200,14 +184,12 @@ public sealed class BubbleCountQueueTests
             LockCardWindow.ShowOnAllMonitors("duplicate", 1, false, isTest: true);
             LockCardWindow.ReplayAfterGame();
             Assert.False(LockCardWindow.IsAnyOpen());
-
             BubbleCountResultWindow.ShowOnAllMonitors(7, true, _ => { });
             typeof(BubbleCountResultWindow).GetMethod("ShowMercyCard", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .Invoke(Assert.Single(BubbleCountResultWindow.OpenWindows), null);
             Assert.True(b.IsBusy);
             Assert.Equal(2, LockCardWindow.Primary!.RequiredRepeats);
             Assert.All(BubbleCountResultWindow.OpenWindows, w => Assert.False(w.IsVisible));
-            // Close mercy normally: ForceCloseAll intentionally drops pending requests.
             typeof(LockCardWindow).GetMethod("CloseAllWindows", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .Invoke(LockCardWindow.Primary, null);
             LockCardWindow.ReplayAfterGame();
@@ -224,16 +206,12 @@ public sealed class BubbleCountQueueTests
         }
         return Task.CompletedTask;
     });
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public Task StoppingDropsTheCardHeldForAGame(bool forceClose) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApp();
         var b = new BubbleCountScheduler(BubbleCountHost.Instance, new Clock(), () => Array.Empty<string>());
         var (oldBubble, oldFreeze) = (CoreEngine.BubbleCount, CoreSubliminal.BambiFreezeProvider);
         CoreEngine.BubbleCount = b;
@@ -256,14 +234,10 @@ public sealed class BubbleCountQueueTests
         }
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task VideoTestNowWaitsForTheBubbleRound() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApp();
         var clock = new Clock();
         var b = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => Array.Empty<string>());
         var video = new MandatoryVideoScheduler(
@@ -295,7 +269,6 @@ public sealed class BubbleCountQueueTests
         }
         return Task.CompletedTask;
     });
-
     [Fact]
     public Task TestNowOverALockCardWaitsForIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -521,10 +494,7 @@ public sealed class BubbleCountQueueTests
     [InlineData(2)]
     public Task HeldCardWaitsThroughAttentionVerdict(int exit) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApp();
         var host = new VerdictHost();
         var video = new MandatoryVideoScheduler(host, new Clock(), () => new[] { "/none/clip.mp4" });
         var s = CoreSettings.Current;
@@ -556,7 +526,6 @@ public sealed class BubbleCountQueueTests
         finally { video.Stop(); LockCardWindow.ForceCloseAll(); (CoreEngine.Video, s.AttentionChecksEnabled, s.MercySystemEnabled) = saved; }
         return Task.CompletedTask;
     });
-
     private sealed class VerdictHost : IMandatoryVideoHost
     {
         public Action? Then;
@@ -564,9 +533,15 @@ public sealed class BubbleCountQueueTests
         public double CloseAll() => 0;
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => Then = then;
     }
-
+    private static void EnsureApp()
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+    }
     /// <summary>Stepped clock: timers fire only on <see cref="Advance"/>.</summary>
-    private sealed class Clock : TimeProvider
+    internal sealed class Clock : TimeProvider
     {
         private DateTimeOffset _now = DateTimeOffset.UnixEpoch;
         private readonly List<T> _timers = new();

@@ -1062,7 +1062,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// ignores <c>Position</c>, so a mirror is un-maximized, moved and re-maximized and the WM
         /// decides — where WPF could insist with <c>SetWindowPos</c> in device pixels.</para>
         /// </summary>
-        public static void ShowOnAllMonitors(string phrase, int repeats, bool strictMode, bool isTest = false, bool voiceMode = false)
+        public static bool ShowOnAllMonitors(string phrase, int repeats, bool strictMode, bool isTest = false, bool voiceMode = false)
             => ShowCard(phrase, repeats, strictMode, isTest, voiceMode, gameOwned: false);
 
         // WPF BubbleCountResultWindow.xaml.cs:304-346: mercy belongs to the active game,
@@ -1070,21 +1070,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void ShowGameMercy(string phrase, int repeats, bool strictMode)
             => ShowCard(phrase, repeats, strictMode, false, false, gameOwned: true);
 
-        private static void ShowCard(string phrase, int repeats, bool strictMode, bool isTest, bool voiceMode, bool gameOwned)
+        private static bool ShowCard(string phrase, int repeats, bool strictMode, bool isTest, bool voiceMode, bool gameOwned)
         {
-            if (!gameOwned && HoldForGame(() => ShowOnAllMonitors(phrase, repeats, strictMode, isTest, voiceMode)))
-                return;
+            var pending = _heldForGame != null;
+            if (!gameOwned && _allWindows.Count == 0 && HoldForGame(() => ShowOnAllMonitors(phrase, repeats, strictMode, isTest, voiceMode)))
+                return !pending;
             // A card is already up. Reconfiguring live covers would drop the lock mid-solve, which
             // is also why the WPF original deferred a second show rather than reusing the set.
-            if (_allWindows.Count > 0) return;
+            if (_allWindows.Count > 0) return false;
 
             // #763 (WPF LockCardService.cs:157): a visible pop quiz blocks the card. Hold one
             // replay until the last quiz closes, as PopQuizHost does the other way round.
             if (PopQuizWindow.IsAnyOpen())
             {
                 Log.Warning("LockCard: a pop quiz is on screen. Holding this card until it closes.");
+                if (_heldForQuiz != null) return false;
                 _heldForQuiz = () => ShowCard(phrase, repeats, strictMode, isTest, voiceMode, gameOwned);
-                return;
+                return true;
             }
 
             try
@@ -1112,11 +1114,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 primary.Activate();
                 Log.Information("Lock Card shown on {Count} window(s) - {Repeats} repeat(s), strict={Strict}, test={Test}",
                     _allWindows.Count, repeats, strictMode, isTest);
+                return true;
             }
             catch (Exception ex)
             {
                 Log.Warning("LockCardWindow.ShowOnAllMonitors failed: {Error}", ex.Message);
                 ForceCloseAll();
+                return false;
             }
         }
 
