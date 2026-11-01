@@ -338,6 +338,104 @@ public sealed class FirstShowStageTests
         return Task.CompletedTask;
     });
 
+    // WPF FirstShowEffects.cs:121-127: the real show starts capture during each drain beat.
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public Task ShowLayersEmiAndSpeechAndReleasesThem(bool closeDuringDrain, bool speechCleanupFails) => Run(async stage =>
+    {
+        var emi = EmiDeskService.Instance.Window!;
+        var excluded = new HashSet<Window> { stage }; var requested = new List<Window>();
+        int released = 0, started = 0, stopped = 0;
+        stage.CaptureExcluded = excluded.Contains;
+        stage.LayerForCapture = window =>
+        {
+            requested.Add(window); excluded.Add(window);
+            return new CaptureTestLease(() =>
+            {
+                excluded.Remove(window); released++;
+                if (speechCleanupFails && window == stage.SpeechWindow) throw new IOException("cleanup probe");
+            });
+        };
+        double t = 0; stage.Clock = () => t;
+        await stage.Bundled(); Assert.NotNull(stage.Effects); Assert.NotNull(stage.Effects!.StartCapture);
+        stage.Effects.StartCapture = _ => { started++; return (() => null, () => stopped++); };
+        stage.Start(); t = S.DrainAt + .5; stage.Frame();
+        Assert.Equal(new Window[] { emi, stage.SpeechWindow }, requested);
+        Assert.Equal(1, started); Assert.Equal(0, released);
+        // A recreated or restyled speech window must discard the old pump before retrying.
+        excluded.Remove(stage.SpeechWindow); t = S.DrainAt + .6; stage.Frame();
+        Assert.Equal(2, started); Assert.Equal(1, stopped); Assert.Equal(2, released);
+        if (closeDuringDrain) stage.Close();
+        else
+        {
+            t = S.DrainDeepAt + .5; stage.Frame(); Assert.Equal(3, started); Assert.Equal(2, stopped);
+            t = S.WordsAt; stage.Frame();
+        }
+        Assert.Equal(started, stopped); Assert.Equal(4, released);
+        Assert.DoesNotContain(emi, excluded); Assert.DoesNotContain(stage.SpeechWindow, excluded);
+    });
+
+    [Fact]
+    public Task AlreadyLayeredEmiLosingStyleDiscardsTheOldFrame() => Run(async stage =>
+    {
+        var emi = EmiDeskService.Instance.Window!; var excluded = new HashSet<Window> { stage, emi };
+        int started = 0, stopped = 0;
+        stage.CaptureExcluded = excluded.Contains;
+        stage.LayerForCapture = window => { excluded.Add(window); return new CaptureTestLease(() => excluded.Remove(window)); };
+        using var pixels = new SkiaSharp.SKBitmap(2, 2); using var image = SkiaSharp.SKImage.FromBitmap(pixels);
+        using var encoded = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100); byte[]? next = encoded.ToArray();
+        double t = 0; stage.Clock = () => t;
+        await stage.Bundled(); Assert.NotNull(stage.Effects); Assert.NotNull(stage.Effects!.StartCapture);
+        stage.Effects.StartCapture = _ => { started++; return (() => { var frame = next; next = null; return frame; }, () => stopped++); };
+        stage.Start(); t = S.DrainAt + .5; stage.Frame(); Assert.True(stage.Effects.HasDrainFrame);
+        excluded.Remove(emi); t += .1; stage.Frame();
+        Assert.Equal(2, started); Assert.Equal(1, stopped); Assert.False(stage.Effects.HasDrainFrame);
+    });
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task FailedSpeechExclusionRollsBackAndNeverStartsCapture(int failure) => Run(async stage =>
+    {
+        var emi = EmiDeskService.Instance.Window!; var excluded = new HashSet<Window> { stage };
+        int released = 0, started = 0, attempts = 0;
+        stage.CaptureExcluded = window =>
+        {
+            if (window == emi) attempts++;
+            if ((failure == 1 && window == stage.SpeechWindow) || (failure == 2 && window == emi)) throw new IOException("exclusion probe");
+            return excluded.Contains(window);
+        };
+        stage.LayerForCapture = window =>
+        {
+            if (window == stage.SpeechWindow) return null;
+            excluded.Add(window); return new CaptureTestLease(() => { excluded.Remove(window); released++; });
+        };
+        double t = 0; stage.Clock = () => t;
+        await stage.Bundled(); Assert.NotNull(stage.Effects); Assert.NotNull(stage.Effects!.StartCapture);
+        stage.Effects.StartCapture = _ => { started++; return (() => null, () => { }); };
+        stage.Start(); t = S.DrainAt + .5; stage.Frame();
+        Assert.Equal(0, started); Assert.Equal(failure == 2 ? 0 : 1, released); Assert.DoesNotContain(emi, excluded);
+        int before = attempts; t += .1; stage.Frame(); Assert.Equal(before, attempts);
+        t += 1; stage.Frame(); Assert.True(attempts > before); Assert.Equal(0, started);
+    });
+
+    [Fact]
+    public void CaptureLayerStyleKeepsInputAndActivationBits()
+    {
+        const uint style = Win32Overlay.WsExTransparent | Win32Overlay.WsExNoActivate | Win32Overlay.WsExToolWindow;
+        Assert.Equal(style | Win32Overlay.WsExLayered, Win32Overlay.CaptureStyle(style, true));
+        Assert.Equal(style, Win32Overlay.CaptureStyle(style, false)); Assert.Equal(style | Win32Overlay.WsExLayered, Win32Overlay.CaptureStyle(style | Win32Overlay.WsExLayered, false));
+    }
+
+    private sealed class CaptureTestLease(Action release) : IDisposable
+    {
+        public void Dispose() => release();
+    }
+
     /// <summary>WPF BrainDrainCapturePump.cs:431-477, 500-527: GDI BGRX is opaque,
     /// blurred and channel-correct, and the second phase displaces the image over time.</summary>
     [Fact]

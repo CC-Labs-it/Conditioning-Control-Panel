@@ -41,6 +41,49 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
+    // WPF FirstShowDesktopWindow.cs:33 and EmiDeskWindow.xaml:8 use layered windows. Add only
+    // that bit for the drain; input, activation and taskbar flags stay as the window chose them.
+    private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> CaptureLayers = new();
+    internal static uint CaptureStyle(uint style, bool enabled) => enabled ? style | WsExLayered : style;
+    internal static IDisposable? CaptureLayer(TopLevel window)
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+        var handle = window.TryGetPlatformHandle();
+        if (handle?.HandleDescriptor != "HWND" || handle.Handle == IntPtr.Zero) return null;
+        var box = CaptureLayers.GetValue(window, w =>
+        {
+            var state = new StrongBox<bool>();
+            Win32Properties.AddWindowStylesCallback(w, (style, ex) => (style, CaptureStyle(ex, state.Value)));
+            return state;
+        });
+        if (box.Value) return null; // one lease owns a window
+        var hwnd = handle.Handle;
+        uint before = GetWindowLong(hwnd, GwlExStyle);
+        bool hadLayer = (before & WsExLayered) != 0;
+        box.Value = true;
+        SetWindowLong(hwnd, GwlExStyle, CaptureStyle(before, true));
+        if ((GetWindowLong(hwnd, GwlExStyle) & WsExLayered) == 0 ||
+            (!hadLayer && !SetLayeredWindowAttributes(hwnd, 0, 255, LwaAlpha)))
+        {
+            box.Value = false;
+            if (!hadLayer) SetWindowLong(hwnd, GwlExStyle, GetWindowLong(hwnd, GwlExStyle) & ~WsExLayered);
+            return null;
+        }
+        return new CaptureLayerLease(window, hwnd, box, hadLayer);
+    }
+    private sealed class CaptureLayerLease(TopLevel window, IntPtr hwnd, StrongBox<bool> active, bool hadLayer) : IDisposable
+    {
+        private bool _disposed;
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true; active.Value = false;
+            // Do not touch a replaced handle or remove a layer another overlay now owns.
+            if (!hadLayer && window.TryGetPlatformHandle()?.Handle == hwnd && !Wanted.TryGetValue(window, out _))
+                SetWindowLong(hwnd, GwlExStyle, GetWindowLong(hwnd, GwlExStyle) & ~WsExLayered);
+        }
+    }
+
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
 
