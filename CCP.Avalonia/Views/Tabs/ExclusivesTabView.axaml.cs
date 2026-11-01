@@ -23,7 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// <para>The WPF shell owns only the backdrop and geometry chores; all roster/card logic lives
     /// in MainWindow.Exclusives.cs. What survived here is the ambient canvas tuning (fog + dust +
-    /// aurora at 0.55, copied from StartExclusivesMotion - canvas composition, not service logic)
+    /// aurora at 0.75 plus VaultMotes, copied from StartExclusivesMotion - canvas composition, not service logic)
     /// plus the roster/gate repaint (RefreshVault), which reads Core's ExclusiveFeature.All.</para>
     ///
     /// <para>Dropped:
@@ -115,7 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Layers = AmbientFxCanvas.Env.Level == MotionLevel.Full
                     ? AmbientFxLayers.FogDrift | AmbientFxLayers.DustField | AmbientFxLayers.AuroraWash | AmbientFxLayers.VaultMotes
                     : AmbientFxLayers.VaultMotes,
-                Intensity = 0.55,
+                Intensity = 0.75,
                 FogPuffs = 3,
             }, preservePause: true);
 
