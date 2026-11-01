@@ -244,6 +244,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// navigation while paused stays muted, as WPF's engine-level IsMuted does.</summary>
         internal bool MediaPaused { get; set; }
 
+        // Remember the preference before an adapter exists, and reapply before a rebuilt engine loads.
+        private bool? _engineMuted;
+        internal Func<bool, Task<bool>>? NativeMuteInvoker { get; set; }
+        internal Task<bool> SetEngineMutedAsync(bool muted)
+        {
+            _engineMuted = muted;
+            if (NativeMuteInvoker != null) return NativeMuteInvoker(muted);
+            try { return Platform.WebViewAudio.SetMutedAsync(_web?.TryGetPlatformHandle(), muted); }
+            catch (Exception ex) { Log.Debug("WebHost: native mute failed: {E}", ex.Message); return Task.FromResult(false); }
+        }
+
         /// <summary>
         /// Runs JS in the current page and returns its result, or null when there is no engine.
         /// The stand-in for <c>CoreWebView2.ExecuteScriptAsync</c>.
@@ -448,8 +459,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         /// <summary>One engine's gate report (UI thread): the held page loads now. A rebuilt engine already carries
         /// the same Source (assigning it again does nothing), so its held page is loaded with Navigate.</summary>
-        internal void OnScrolllerGate(int engine, bool gated)
+        internal async void OnScrolllerGate(int engine, bool gated)
         {
+            if (engine != _scrolllerEngine) return;
+            // WPF BrowserService.cs:245-246: fresh engines get the preference before navigation.
+            if (_engineMuted is { } muted) await SetEngineMutedAsync(muted);
             if (engine != _scrolllerEngine) return;
             _scrolllerGate = gated;
             var src = Source;

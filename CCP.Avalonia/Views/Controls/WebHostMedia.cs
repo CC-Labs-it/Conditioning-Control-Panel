@@ -2,17 +2,8 @@ using System.Threading.Tasks;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls
 {
-    /// <summary>
-    /// The WebHost media seam. Mute IMPORTED-AND-ADAPTED from trunk e3109afdf; playback shares the WPF script.
-    /// WPF mutes the Home browser with CoreWebView2.IsMuted (MainWindow.Browser.cs:2603); NativeWebView has no engine
-    /// mute on either adapter, so this rides the one channel WebHost does have, <see cref="WebHost.InvokeScriptAsync"/>,
-    /// and reads its answer as a plain string (both adapters; no window.chrome.webview on the page side).
-    ///
-    /// <para>The script keeps a flag on the page, mutes every media element it can reach (the document and same-origin
-    /// frames) and keeps new ones muted with a capturing play / volumechange listener and a MutationObserver. A new
-    /// document has no flag, so the Home card re-runs it after every navigation. Limit, stated rather than hidden: a
-    /// player inside a CROSS-ORIGIN iframe is out of reach; BambiCloud and HypnoTube play first-party video.</para>
-    /// </summary>
+    /// <summary>Native engine mute covers cross-origin frames (WPF BrowserService.cs:119-122).
+    /// The script remains a fallback for adapters without a native mute API.</summary>
     internal static class WebHostMedia
     {
         /// <summary>The script for a mute state. Idempotent: running it twice installs one observer.</summary>
@@ -34,6 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// The answer arrives JSON-quoted (WebView2) or raw (WebKitGTK); the quotes are trimmed to read both.</summary>
         internal static async Task<bool> SetMutedAsync(this WebHost host, bool muted)
         {
+            if (await host.SetEngineMutedAsync(muted)) return true;
             if (!host.HasEngine) return false;
             var result = await host.InvokeScriptAsync(MuteScript(muted));
             return result?.Trim('"') == (muted ? "muted" : "unmuted");

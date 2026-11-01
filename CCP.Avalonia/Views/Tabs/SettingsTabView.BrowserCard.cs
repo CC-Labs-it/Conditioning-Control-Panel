@@ -30,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void HookBrowserCard()
         {
+            _ = BrowserWebHost.SetMutedAsync(CoreSettings.Current.BrowserVideoMuted); // seed before adapter creation
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
             BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };
             AttachedToVisualTree += (_, _) =>
