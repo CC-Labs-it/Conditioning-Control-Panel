@@ -7959,6 +7959,8 @@
   "leash_video_max": "Längstes Video",
   "leash_video_max_hint": "Ein Video endet, wenn es fertig ist oder diese Länge erreicht, je nachdem, was zuerst kommt.",
   "leash_self_hold_hint": "Halte {0} 5 Sekunden lang, egal wo, um die Leine zu kappen.",
+  "leash_self_cut_wayland": "Nutze oben „Leine kappen“.",
+  "leash_explain_cut_wayland": "Du kannst die Leine jederzeit auf der Seite Leine kappen. Dabei werden die Strikte Sperre ausgeschaltet und die Paniktaste wieder eingeschaltet.",
   "leash_evt_punish_done": "{0} hat die Strafe erledigt",
   "leash_evt_punish_skipped": "{0} konnte das Video nicht abspielen, also wurde die Strafe übersprungen",
   "leash_skip_unplayable": "Das Video lief bei der Person nicht. Keine Begnadigung verbraucht.",

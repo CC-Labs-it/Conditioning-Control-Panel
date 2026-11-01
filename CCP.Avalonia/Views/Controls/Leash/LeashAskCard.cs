@@ -12,6 +12,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
 using F = ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer;
@@ -212,7 +213,10 @@ public sealed class LeashAskCard : Border
         var see = string.IsNullOrWhiteSpace(name) ? Loc.Get("leash_explain_leashed_see_anon") : Loc.GetF("leash_explain_leashed_see", name.Trim());
         var lines = new StackPanel { Margin = new Thickness(6, 8, 6, 0) };
         lines.Children.Add(Bullet(IconKind.Eye, F.Lilac, see, "leash-explain-line:see"));
-        lines.Children.Add(Bullet(IconKind.Cut, F.Mint, Loc.GetF("leash_explain_leashed_cut", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey)), "leash-explain-line:cut"));
+        // WPF LeashExplainCard.cs:91; on Wayland the reliable route is the own-card button.
+        var cut = LeashHead.WaylandSession ? Loc.Get("leash_explain_cut_wayland")
+            : Loc.GetF("leash_explain_leashed_cut", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey));
+        lines.Children.Add(Bullet(IconKind.Cut, F.Mint, cut, "leash-explain-line:cut"));
         root.Children.Add(lines);
         return root;
     }

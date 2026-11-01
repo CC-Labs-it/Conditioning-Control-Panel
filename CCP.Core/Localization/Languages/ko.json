@@ -7959,6 +7959,8 @@
   "leash_video_max": "영상 최대 길이",
   "leash_video_max_hint": "영상은 끝나거나 이 길이에 닿으면 멈춰요. 먼저 오는 쪽으로요.",
   "leash_self_hold_hint": "어디서든 {0} 키를 5초간 누르고 있으면 목줄이 끊겨요.",
+  "leash_self_cut_wayland": "위의 목줄 끊기를 사용하세요.",
+  "leash_explain_cut_wayland": "목줄 페이지에서 언제든 끊을 수 있어요. 끊으면 엄격 잠금이 꺼지고 패닉 키도 다시 켜져요.",
   "leash_evt_punish_done": "{0}님이 벌을 마쳤어요",
   "leash_evt_punish_skipped": "{0}님 쪽에서 그 영상이 재생되지 않아서 벌은 건너뛰었어요",
   "leash_skip_unplayable": "상대 쪽에서 영상이 재생되지 않았어요. 사면권은 쓰지 않았어요.",

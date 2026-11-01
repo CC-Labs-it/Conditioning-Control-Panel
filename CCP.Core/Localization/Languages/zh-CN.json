@@ -8464,6 +8464,8 @@
   "leash_video_max": "最长视频",
   "leash_video_max_hint": "视频播完或到达这个时长时结束，以先到者为准。",
   "leash_self_hold_hint": "在任何地方按住 {0} 5 秒，即可剪断牵绳。",
+  "leash_self_cut_wayland": "使用上方的“剪断牵绳”。",
+  "leash_explain_cut_wayland": "你随时可以在牵绳页面剪断。剪断也会关闭严格锁定，并重新打开紧急键。",
   "leash_evt_punish_done": "{0} 完成了惩罚",
   "leash_evt_punish_skipped": "{0} 那边播放不了那个视频，所以惩罚跳过了",
   "leash_skip_unplayable": "对方那边视频播放不了。没有用掉赦免。",

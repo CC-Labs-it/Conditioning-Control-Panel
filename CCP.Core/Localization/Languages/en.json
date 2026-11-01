@@ -8705,6 +8705,8 @@
   "leash_video_max": "Longest video",
   "leash_video_max_hint": "A video ends when it finishes or at this length, whichever comes first.",
   "leash_self_hold_hint": "Hold {0} for 5 seconds, anywhere, to cut the leash.",
+  "leash_self_cut_wayland": "Use Cut leash above.",
+  "leash_explain_cut_wayland": "You can cut it any time on the Leash page. Cutting also turns Strict Lock off and the panic key back on.",
   "leash_evt_punish_done": "{0} finished the punishment",
   "leash_evt_punish_skipped": "{0} could not play that video, so the punishment was skipped",
   "leash_skip_unplayable": "The video would not play for them. No pardon spent.",

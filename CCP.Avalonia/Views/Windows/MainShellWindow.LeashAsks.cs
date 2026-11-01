@@ -19,9 +19,11 @@ public partial class MainShellWindow
     private void InitializeLeashAsks()
     {
         LeashAskWindow.CurrentClosed += OnLeashAskClosed;
+        LeashAskWindow.OfferShown += OnLeashOfferShown;
         Closed += (_, _) =>
         {
             LeashAskWindow.CurrentClosed -= OnLeashAskClosed;
+            LeashAskWindow.OfferShown -= OnLeashOfferShown;
             if (_askService != null) _askService.SnapshotChanged -= OnLeashAskSnapshot;
             _askService = null;
             _waitingLeashAsks.Clear();
@@ -64,6 +66,11 @@ public partial class MainShellWindow
         _waitingLeashAsks.RemoveAll(w => !snap.Offers.Any(o => o.From.Id == w.From.Id));
         TryShowLeashAsk();
     }
+
+    // WPF LeashSurfaces.cs:117-125, :230-255 drains waiting asks when an overlay closes.
+    // A manual Look has already shown this offer, but other queued offers still wait.
+    private void OnLeashOfferShown(LeashOffer offer) =>
+        _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id && w.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds());
 
     private void OnLeashAskClosed() => Dispatcher.UIThread.Post(TryShowLeashAsk);
 
