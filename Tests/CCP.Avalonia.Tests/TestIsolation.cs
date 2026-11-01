@@ -77,6 +77,7 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             // PLAYBOOK P52: a passive card (FeatureIntroPopup, AnnouncementPopup) or any other app
             // window a test left open holds the next test's startup surfaces, so close it first.
             OpenWindows.CloseLeftovers();
+            ConditioningControlPanel.Avalonia.Views.Overlays.LuckyToastWindow.CloseToast();
             ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
             // A Ctrl+K a test pressed and never released would swallow the next test's press (P02).
             ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow.ChordReleased();

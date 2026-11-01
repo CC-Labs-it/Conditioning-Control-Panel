@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal static class BubbleOverlay
     {
-        internal static readonly AmbientBubbleField Field = new();
+        internal static readonly AmbientBubbleField Field = new() { LuckyProc = m => LuckyToastWindow.Post(false, m) };
         private static readonly List<BubbleOverlayWindow> Windows = new();
         private static readonly List<Screen> Targets = new();
         private static DispatcherTimer? _spawnTimer;
