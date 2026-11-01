@@ -1,9 +1,21 @@
 using System.Collections.Generic;
-using ConditioningControlPanel.Services.MediaFiles;
+using System.IO;
+using System.Text.RegularExpressions;
+using ConditioningControlPanel.Tests;
+using ConditioningControlPanel.Services;
 using Xunit;
 namespace CCP.Core.Tests;
 public class MediaTempFileLedgerTests
 {
+    [Fact]
+    public void BothHeadsShareOneCoreLedger()
+    {
+        var source = Assert.Single(SourceRoots.EnumerateProductSources("*.cs"),
+            p => Regex.IsMatch(File.ReadAllText(p), @"(?m)^\s*(?:(?:public|internal|protected|private|sealed|partial|abstract|static|file)\s+)*class\s+MediaTempFileLedger\b"));
+        Assert.Equal(Path.Combine(SourceRoots.RepoRoot, "CCP.Core", "Services", "Media", "MediaTempFileLedger.cs"), source);
+        Assert.Equal(typeof(ConditioningControlPanel.Services.PackMediaPool).Assembly, typeof(MediaTempFileLedger).Assembly);
+        Assert.Equal("ConditioningControlPanel.Services", typeof(MediaTempFileLedger).Namespace);
+    }
     [Fact]
     public void RefusedFilesStayOnRecordAndAreRetriedAtTheNextSweep()
     {

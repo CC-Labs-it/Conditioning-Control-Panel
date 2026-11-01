@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using ConditioningControlPanel.Services.Flash;
-using ConditioningControlPanel.Services.MediaFiles;
 using Serilog;
 
 namespace ConditioningControlPanel.Services
