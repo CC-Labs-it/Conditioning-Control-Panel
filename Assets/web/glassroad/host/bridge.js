@@ -110,7 +110,7 @@ export function mergeInit(base, m = {}) {
 }
 
 export function createBridge({ win = globalThis.window } = {}) {
-  const webview = win?.chrome?.webview || null;
+  const webview = win?.chrome?.webview || win?.ccpHost || null;
   const handlers = new Map();   // type -> Set(fn)
   const early = [];             // messages that came before any handler of their type
   const base = defaultInit({

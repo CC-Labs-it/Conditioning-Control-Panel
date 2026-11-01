@@ -113,9 +113,13 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
     }
   }
 
+  const signalUnlock = () => {
+    if (!dead && !paused && ctx?.state === 'running') { try { win?.ccpHost?.audioUnlocked?.(); } catch (e) { /* host gone */ } }
+  };
   const unlock = () => {
     if (paused || !ensure()) return;
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    if (ctx.state === 'suspended') ctx.resume().then(signalUnlock).catch(() => {});
+    else signalUnlock();
   };
   for (const ev of GESTURES) win?.addEventListener?.(ev, unlock, { passive: true });
 
@@ -171,6 +175,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
       if (paused) return;
       if (!ensure()) return;
       if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) { /* stays silent */ } }
+      signalUnlock();
     },
     /** rivals = racers.nearby(ai.audibleKarts, 80): [{ i, distM, pan, speedPct, boosting }] */
     update(speedPct, flags = {}, list = []) {
