@@ -36,6 +36,17 @@ public sealed class X11ForegroundProbeTests
         var monitors = new[] { (0, 0, 800, 600), (800, 0, 1920, 1080) };
         Assert.False(X11ActiveWindow.CoversBestMonitor(0, 0, 2000, 1080, monitors));
         Assert.True(X11ActiveWindow.CoversBestMonitor(0, 0, 800, 600, monitors));
+        Assert.False(X11ActiveWindow.CoversBestMonitor(700, 0, 600, 600, monitors));
+        Assert.True(X11ActiveWindow.CoversBestMonitor(700, 0, 600, 600, monitors, new uint[] { 700, 0, 0, 0 }));
+    }
+
+    [Fact]
+    public void DecorationsAreIncludedBeforeMonitorSelectionAndCoverage()
+    {
+        var monitors = new[] { (0, 0, 1920, 1080) };
+        Assert.False(X11ActiveWindow.CoversBestMonitor(8, 30, 1904, 1042, monitors));
+        Assert.True(X11ActiveWindow.CoversBestMonitor(8, 30, 1904, 1042, monitors, new uint[] { 8, 8, 30, 8 }));
+        Assert.False(X11ActiveWindow.CoversBestMonitor(8, 30, 1904, 1042, monitors, new uint[] { 8, 8, 30 }));
     }
 
     [Fact]

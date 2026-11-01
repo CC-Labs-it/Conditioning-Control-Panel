@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using ConditioningControlPanel.Services.Awareness;
 using System.Text;
@@ -43,8 +44,7 @@ internal static class X11ActiveWindow
     private struct MonitorInfo
     {
         public IntPtr Name;
-        public int Primary, Automatic, OutputCount;
-        public int X, Y, Width, Height, MillimeterWidth, MillimeterHeight;
+        public int Primary, Automatic, OutputCount, X, Y, Width, Height, MillimeterWidth, MillimeterHeight;
         public IntPtr Outputs;
     }
     [DllImport(LibX11)] private static extern int XGetWindowProperty(IntPtr display, IntPtr window, IntPtr property,
@@ -61,7 +61,7 @@ internal static class X11ActiveWindow
 
     private static IntPtr _display;
     private static bool _tried;
-    private static IntPtr _root, _active, _netWmName, _utf8, _wmName, _pid, _windowType, _desktop, _dock;
+    private static IntPtr _root, _active, _netWmName, _utf8, _wmName, _pid, _windowType, _desktop, _dock, _frameExtents;
 
     /// <summary>Set once by the test assembly's module initializer: no test may read the real desktop.</summary>
     internal static bool Disabled;
@@ -69,15 +69,13 @@ internal static class X11ActiveWindow
     public static string ReadTitle() => ReadActive(window => ReadTitle(window)) ?? "";
 
     // WPF AwarenessProbes.cs:72-96. One active X11 window supplies title, process and geometry.
-    // Wayland windows not exposed through XWayland remain unavailable, rather than guessed.
     internal static ForegroundSample? ReadForeground() => ReadActive(window =>
     {
-        string title = ReadTitle(window);
-        string process = ProcessName(ReadCardinal(window, _pid));
-        bool shell = HasAtom(window, _windowType, _desktop) || HasAtom(window, _windowType, _dock);
-        return CreateSample(window, title, process, shell, !shell && CoversMonitor(window));
+        var types = ReadValues(window, _windowType, 32);
+        bool shell = types.Contains((uint)_desktop.ToInt64()) || types.Contains((uint)_dock.ToInt64());
+        return CreateSample(window, ReadTitle(window), ProcessName(ReadValues(window, _pid, 1).FirstOrDefault()), shell,
+            !shell && CoversMonitor(window));
     });
-
     private static T? ReadActive<T>(Func<IntPtr, T> read) where T : class
     {
         if (Disabled) return null;
@@ -98,6 +96,7 @@ internal static class X11ActiveWindow
                 _windowType = XInternAtom(_display, "_NET_WM_WINDOW_TYPE", false);
                 _desktop = XInternAtom(_display, "_NET_WM_WINDOW_TYPE_DESKTOP", false);
                 _dock = XInternAtom(_display, "_NET_WM_WINDOW_TYPE_DOCK", false);
+                _frameExtents = XInternAtom(_display, "_NET_FRAME_EXTENTS", false);
             }
             if (_display == IntPtr.Zero) return null;
 
@@ -112,51 +111,33 @@ internal static class X11ActiveWindow
         catch { return null; }   // unavailable X11 or a window that disappeared
     }
 
-    private static string ReadTitle(IntPtr window) =>
-        ReadString(window, _netWmName, _utf8) ?? ReadString(window, _wmName, IntPtr.Zero) ?? "";
+    private static string ReadTitle(IntPtr window) => ReadString(window, _netWmName, _utf8) ?? ReadString(window, _wmName, IntPtr.Zero) ?? "";
 
-    private static uint ReadCardinal(IntPtr window, IntPtr property)
+    // Xlib stores format-32 items in native longs. EWMH frame extents require four CARDINALs.
+    private static uint[] ReadValues(IntPtr window, IntPtr property, int length, IntPtr requiredType = default)
     {
-        if (XGetWindowProperty(_display, window, property, 0, 1, false, IntPtr.Zero, out _, out var format,
-                out var count, out _, out var data) != 0 || data == IntPtr.Zero) return 0;
-        try { return format == 32 && count > 0 ? unchecked((uint)Marshal.ReadIntPtr(data).ToInt64()) : 0; }
-        finally { XFree(data); }
+        if (XGetWindowProperty(_display, window, property, 0, length, false, requiredType,
+                out var type, out var format, out var count, out var remaining, out var data) != 0 || data == IntPtr.Zero) return Array.Empty<uint>();
+        try {
+            if (format != 32 || (requiredType != IntPtr.Zero && (type != requiredType || count != (ulong)length || remaining != 0))) return Array.Empty<uint>();
+            var values = new uint[(int)count];
+            for (int i = 0; i < values.Length; i++) values[i] = unchecked((uint)Marshal.ReadIntPtr(data, i * IntPtr.Size).ToInt64());
+            return values;
+        } finally { XFree(data); }
     }
-
-    private static bool HasAtom(IntPtr window, IntPtr property, IntPtr atom)
-    {
-        if (XGetWindowProperty(_display, window, property, 0, 32, false, IntPtr.Zero, out _, out var format,
-                out var count, out _, out var data) != 0 || data == IntPtr.Zero) return false;
-        try
-        {
-            if (format != 32) return false;
-            for (int i = 0; i < (int)count; i++)
-                if (Marshal.ReadIntPtr(data, i * IntPtr.Size) == atom) return true;
-            return false;
-        }
-        finally { XFree(data); }
-    }
-
     private static string ProcessName(uint pid)
     {
-        try
-        {
+        try {
             if (pid == 0 || pid > int.MaxValue) return "";
             using var process = Process.GetProcessById((int)pid);
             return process.ProcessName;
-        }
-        catch { return ""; } // exited or inaccessible, as in WPF AwarenessProbes.cs:109-132
+        } catch { return ""; } // exited or inaccessible, as in WPF AwarenessProbes.cs:109-132
     }
-
-    internal static ForegroundSample CreateSample(IntPtr window, string title, string? process, bool shell, bool covers) =>
-        new(window, title, NormalizeProcessName(process), !shell && covers);
-
-    internal static string NormalizeProcessName(string? name)
+    internal static ForegroundSample CreateSample(IntPtr window, string title, string? process, bool shell, bool covers)
     {
-        var lower = (name ?? "").ToLowerInvariant();
-        return lower.EndsWith(".exe", StringComparison.Ordinal) ? lower[..^4] : lower;
+        var lower = (process ?? "").ToLowerInvariant();
+        return new(window, title, lower.EndsWith(".exe", StringComparison.Ordinal) ? lower[..^4] : lower, !shell && covers);
     }
-
     private static bool CoversMonitor(IntPtr window)
     {
         if (XGetGeometry(_display, window, out _, out _, out _, out var width, out var height, out _, out _) == 0 ||
@@ -167,41 +148,38 @@ internal static class X11ActiveWindow
             monitors = XRRGetMonitors(_display, _root, true, out int count);
             int size = Marshal.SizeOf<MonitorInfo>();
             var rectangles = new List<(int X, int Y, int Width, int Height)>();
-            for (int i = 0; monitors != IntPtr.Zero && i < count; i++)
-            {
+            for (int i = 0; monitors != IntPtr.Zero && i < count; i++) {
                 var m = Marshal.PtrToStructure<MonitorInfo>(IntPtr.Add(monitors, i * size));
                 rectangles.Add((m.X, m.Y, m.Width, m.Height));
             }
-            return CoversBestMonitor(x, y, width, height, rectangles);
+            return CoversBestMonitor(x, y, width, height, rectangles, ReadValues(window, _frameExtents, 4, new IntPtr(6)));
         }
         catch { } // no RandR or no monitor: the optional fullscreen signal is absent
         finally { if (monitors != IntPtr.Zero) XRRFreeMonitors(monitors); }
         return false;
     }
-
     // MonitorFromWindow selects the monitor with the greatest intersection (WPF AwarenessProbes.cs:139).
-    internal static bool CoversBestMonitor(int x, int y, uint width, uint height,
-        IEnumerable<(int X, int Y, int Width, int Height)> monitors)
+    internal static bool CoversBestMonitor(long x, long y, long width, long height,
+        IEnumerable<(int X, int Y, int Width, int Height)> monitors, uint[]? extents = null)
     {
-        long best = 0;
-        bool covers = false;
+        if (extents?.Length == 4) {
+            x -= extents[0]; y -= extents[2];
+            width += (long)extents[0] + extents[1]; height += (long)extents[2] + extents[3];
+        }
+        long best = 0; bool covers = false;
         foreach (var m in monitors)
         {
             if (m.Width <= 0 || m.Height <= 0) continue;
             long overlapWidth = Math.Max(0, Math.Min((long)x + width, (long)m.X + m.Width) - Math.Max((long)x, m.X));
             long overlapHeight = Math.Max(0, Math.Min((long)y + height, (long)m.Y + m.Height) - Math.Max((long)y, m.Y));
             long area = overlapWidth * overlapHeight;
-            if (area > best)
-            {
-                best = area;
-                covers = CoversMonitor(x, y, width, height, m.X, m.Y, m.Width, m.Height);
-            }
+            if (area <= best) continue;
+            best = area; covers = CoversMonitor(x, y, width, height, m.X, m.Y, m.Width, m.Height);
         }
         return covers;
     }
-
     // WPF AwarenessProbes.cs:59-60,135-149: two pixels of slack on every edge.
-    internal static bool CoversMonitor(int x, int y, uint width, uint height, int mx, int my, int mw, int mh) =>
+    internal static bool CoversMonitor(long x, long y, long width, long height, int mx, int my, int mw, int mh) =>
         mw > 0 && mh > 0 && x <= (long)mx + 2 && y <= (long)my + 2 &&
         (long)x + width >= (long)mx + mw - 2 && (long)y + height >= (long)my + mh - 2;
 
