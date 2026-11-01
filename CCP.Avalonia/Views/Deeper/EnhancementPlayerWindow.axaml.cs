@@ -154,6 +154,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private EnhancementFetcher? _fetcher;
         private EnhancementLibrary? _library;
         private DispatcherTimer? _hintTimer;
+        // A player opened while the shell is hidden has no owner, so keep this link weak.
+        internal WeakReference<MainShellWindow>? LibraryRefreshShell { get; init; }
 
         // Tracks WHICH branch supplied the current enhancement. Drives the source badge.
         private enum DiscoverySource { Manual, Library, Sidecar, Embedded, Url, PromotedFromEmbedded }
@@ -623,8 +625,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                             var saved = _library.PromoteToLibrary(embedded, mediaPath);
                             if (!string.IsNullOrEmpty(saved))
                             {
-                                // WPF's LibraryChanged refreshes the visible Deeper tab on save.
-                                if (Owner is MainShellWindow shell) shell.OnDeeperLibraryChanged();
+                                // WPF's library event reaches the shell even when the player is unowned.
+                                MainShellWindow? shell = null;
+                                LibraryRefreshShell?.TryGetTarget(out shell);
+                                shell ??= MainShellWindow.Current ?? Owner as MainShellWindow;
+                                shell?.OnDeeperLibraryChanged();
                                 _lastDiscoverySource = DiscoverySource.PromotedFromEmbedded;
                                 LoadEnhancementFile(saved);
                                 ShowHint(Loc.GetF("deeper_player_promoted_to_library_fmt", System.IO.Path.GetFileName(saved)), 6);
