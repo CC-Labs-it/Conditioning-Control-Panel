@@ -23,7 +23,7 @@ internal sealed class LinuxRaceHost : IDisposable
     private Task _writes = Task.CompletedTask;
     private int _closed;
     private long _lastEscape;
-    private string? _displayBackend;
+    private volatile string? _displayBackend;
     private readonly Func<bool> _x11Listening;
     internal bool InFront { get; private set; }
     internal bool Ready => _session.Ready;
@@ -41,6 +41,7 @@ internal sealed class LinuxRaceHost : IDisposable
         };
         // setsid execs without forking: this child's pid is its process group, never CCP's group.
         start.ArgumentList.Add(EnginePath);
+        start.ArgumentList.Add("--ozone-platform=x11");
         start.ArgumentList.Add(ShellPath);
         start.ArgumentList.Add(url.AbsoluteUri);
         var process = new Process { StartInfo = start };
@@ -65,7 +66,7 @@ internal sealed class LinuxRaceHost : IDisposable
         _panic = panic ?? (now => MainShellWindow.Current?.HandlePanicKeyPress(now));
         _session = new GlassroadSession(Post, Dispose, () => Post(new { type = "focus" }));
         _watch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        _watch.Tick += (_, _) => _session.CheckGlassroadWatch(DateTime.UtcNow);
+        _watch.Tick += (_, _) => { if (UnsupportedPanicKey) Dispose(); else _session.CheckGlassroadWatch(DateTime.UtcNow); };
         _watch.Start(); Current = this;
     }
     internal void StartReading()
@@ -81,7 +82,7 @@ internal sealed class LinuxRaceHost : IDisposable
                     if (buffer[0] == '\n')
                     {
                         var frame = RaceShellProtocol.Parse(line.ToString()); line.Clear();
-                        Dispatcher.UIThread.Post(() => Receive(frame));
+                        ReadFrame(frame);
                     }
                     else if (line.Length >= RaceShellProtocol.MaxLineLength) break;
                     else line.Append(buffer[0]);
@@ -92,20 +93,37 @@ internal sealed class LinuxRaceHost : IDisposable
         });
         _ = Task.Run(async () => { try { var b = new char[1024]; while (await _process.StandardError.ReadAsync(b, 0, b.Length) != 0) { } } catch { } });
     }
+    private bool UnsupportedPanicKey => _displayBackend != "x11" && CoreSettings.Current.PanicKey != "Escape";
+    // Runs on the pipe reader: arm the watchdog before anything is queued behind a wedged UI.
+    internal void ReadFrame(JObject frame)
+    {
+        if (Volatile.Read(ref _closed) != 0) return;
+        var type = (string?)frame["type"];
+        if (type == RaceShellProtocol.Loaded)
+        {
+            _displayBackend = (string?)frame["displayBackend"];
+            if (UnsupportedPanicKey) { Kill(); Dispatcher.UIThread.Post(Dispose); return; }
+        }
+        if (type != RaceShellProtocol.Escape) { Dispatcher.UIThread.Post(() => Receive(frame)); return; }
+        if (!RaceShellProtocol.AcceptEscape(ref _lastEscape, (long?)frame["sequence"] ?? 0,
+            _x11Listening() && CoreSettings.Current.PanicKey == "Escape", _displayBackend)) return;
+        void Handle() { if (_closed != 0) return; InFront = true; if (CoreSettings.Current.PanicKey == "Escape") _panic(DateTime.Now); else Pause(); }
+        if (CoreSettings.Current.PanicKey == "Escape" && CoreSettings.Current.PanicKeyEnabled && !MainShellWindow.LockdownActive
+            && !MainShellWindow.CapturingPanicKey && !Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
+            Platform.PanicWatchdog.QueueWatched(Handle);
+        else Dispatcher.UIThread.Post(Handle);
+    }
     internal void Receive(JObject frame)
     {
         if (Volatile.Read(ref _closed) != 0) return;
         switch ((string?)frame["type"])
         {
-            case RaceShellProtocol.Loaded: _displayBackend = (string?)frame["displayBackend"]; _session.PostGlassroadInit(); break;
+            case RaceShellProtocol.Loaded:
+                _displayBackend = (string?)frame["displayBackend"];
+                if (UnsupportedPanicKey) { Dispose(); break; }
+                _session.PostGlassroadInit(); break;
             case RaceShellProtocol.Focus: InFront = (bool?)frame["active"] == true; break;
-            case RaceShellProtocol.Escape:
-                if (!RaceShellProtocol.AcceptEscape(ref _lastEscape, (long?)frame["sequence"] ?? 0,
-                    _x11Listening() && CoreSettings.Current.PanicKey == "Escape", _displayBackend)) break;
-                InFront = true;
-                if (CoreSettings.Current.PanicKey == "Escape") _panic(DateTime.Now);
-                else Pause();
-                break;
+            case RaceShellProtocol.Escape: ReadFrame(frame); break;
             case "boot-error": Dispose(); break;
             default: _session.HandleGlassroad(frame); break;
         }

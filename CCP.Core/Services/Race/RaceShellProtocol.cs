@@ -1,6 +1,8 @@
 using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.Race;
 /// <summary>UTF-8 JSON objects, one per line, no stdout diagnostics. Page messages are unwrapped.
+/// The shell runs under XWayland (--ozone-platform=x11) so every configured panic key reaches X11.
+/// A non-x11 backend is refused unless the configured panic key is Escape.
 /// Shell emits shell-loaded {displayBackend:"x11"|"wayland"} from the actual window backend after navigation, shell-focus {active}, shell-escape on non-repeat
 /// keydown with a positive, increasing sequence per process (repeat deliveries keep the same sequence).
 /// X11 owns Escape only for a confirmed x11 shell when listening; the shell is the fallback. Host sends focus or existing Glassroad frames. EOF in either direction ends the race.

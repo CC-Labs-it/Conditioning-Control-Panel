@@ -186,7 +186,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!claim) { _lastGameEscapeClaim = null; return false; }
                 _lastGameEscapeClaim = now;
                 Serilog.Log.Information("Panic: Escape kept by {Game} as its pause (again within 2 s = full panic)",
-                    game?.Spec.Id ?? "intake");
+                    linux != null ? "glassroad" : game?.Spec.Id ?? "intake");
                 switch (Route(claim))
                 {
                     case PanicPolicy.KeptEscapePage.Intake: intake!.PostKeptEscape(); break;

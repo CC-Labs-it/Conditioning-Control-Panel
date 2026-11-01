@@ -71,6 +71,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
+        internal static Func<Uri, bool> LinuxRaceLaunch { get; set; } = LinuxRaceHost.TryLaunch;
+
         internal static GameWindow? Launch(string id)
         {
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
@@ -80,7 +82,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (live != null) { live.Activate(); return live; }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
-            if (spec.Id == GlassroadId && LinuxRaceHost.TryLaunch(new Uri(Server().Url(spec.Page, spec.Query)))) return null;
+            try { if (spec.Id == GlassroadId && LinuxRaceLaunch(new Uri(Server().Url(spec.Page, spec.Query)))) return null; }
+            catch (Exception ex) { Log.Warning(ex, "Glassroad: shell launch failed"); return null; }
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();

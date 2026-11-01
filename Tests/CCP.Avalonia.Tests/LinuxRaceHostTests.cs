@@ -22,6 +22,14 @@ public sealed class LinuxRaceHostTests
         Assert.Equal(accepted, RaceShellProtocol.AcceptEscape(ref last, 2, listening, backend));
     }
     [Fact]
+    public void InitTransportFailureDoesNotEscapeTheUiCallback()
+    {
+        var attempts = 0;
+        using var session = new GlassroadSession(_ => { attempts++; throw new System.IO.IOException("closed pipe"); }, () => { }, () => { });
+        Assert.Null(Record.Exception(session.PostGlassroadInit));
+        Assert.Equal(1, attempts);
+    }
+    [Fact]
     public void ProtocolRejectsMalformedAndUnboundedFrames()
     {
         Assert.ThrowsAny<Exception>(() => RaceShellProtocol.Parse("[]"));
