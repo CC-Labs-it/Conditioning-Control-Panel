@@ -45,10 +45,18 @@
    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/><Setter Property="FontSize" Value="12.5"/>
    <Setter Property="Margin" Value="4,6,6,0"/><Setter Property="TextWrapping" Value="Wrap"/>
   </ControlTheme>
+  <LinearGradientBrush x:Key="LobbyGlass" StartPoint="0%,0%" EndPoint="0%,100%">
+   <GradientStop Color="#24FFFFFF" Offset="0"/><GradientStop Color="#0CFFFFFF" Offset="1"/>
+  </LinearGradientBrush>
   <DataTemplate x:Key="LobbyRowTemplate" x:DataType="tabs:LobbyCardView">
-   <Border Margin="0,0,6,8" CornerRadius="14" Padding="10,9" Background="#14FFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1">
-    <Grid ColumnDefinitions="*,Auto">
-     <StackPanel>
+   <Grid Margin="0,0,6,8" Classes="lobby-card">
+    <Border Height="10" Margin="8,0,8,-6" VerticalAlignment="Bottom" CornerRadius="7" Background="{Binding CardShadow}" IsHitTestVisible="False"/>
+    <Border Classes="lobby-face" CornerRadius="14" Padding="10,9" Background="{StaticResource LobbyGlass}" BorderThickness="1">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+     <Border Width="40" Height="40" CornerRadius="11" Margin="0,0,10,0" VerticalAlignment="Center" BorderBrush="#40FFFFFF" BorderThickness="1">
+      <Border.Background><ImageBrush Source="{Binding Art}" Stretch="UniformToFill"/></Border.Background>
+     </Border>
+     <StackPanel Grid.Column="1" VerticalAlignment="Center">
       <StackPanel Orientation="Horizontal">
        <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextLightBrush}" FontWeight="SemiBold" MaxLines="1" TextTrimming="CharacterEllipsis" MaxWidth="190"/>
        <Ellipse Width="7" Height="7" Margin="7,1,0,0" VerticalAlignment="Center" Fill="#5FFFD0" IsVisible="{Binding Friend}" ToolTip.Tip="{loc:Str lobby_friend_tip}"/>
@@ -56,13 +64,23 @@
       <TextBlock Text="{Binding Line}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="0,2,0,0" MaxLines="1" TextTrimming="CharacterEllipsis"/>
      </StackPanel>
      <!-- ponytail: the row's game/claim door is not wired in this slice. -->
-     <Button Grid.Column="1" IsEnabled="False" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
+     <Button Grid.Column="2" IsEnabled="False" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
       <StackPanel Orientation="Horizontal" Spacing="4"><fx:IconGlyph Kind="LockClosed" Size="12" IsVisible="{Binding Locked}"/><TextBlock Text="{Binding ButtonText}"/></StackPanel>
      </Button>
     </Grid>
-   </Border>
+    </Border>
+    <Border Classes="lobby-sheen" CornerRadius="14" IsHitTestVisible="False">
+     <Border.Background><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%"><GradientStop Color="#00FFFFFF" Offset="0.2"/><GradientStop Color="#1EFFFFFF" Offset="0.5"/><GradientStop Color="#00FFFFFF" Offset="0.8"/></LinearGradientBrush></Border.Background>
+    </Border>
+   </Grid>
   </DataTemplate>
  </UserControl.Resources>
+ <UserControl.Styles>
+  <Style Selector="Border.lobby-face"><Setter Property="BorderBrush" Value="{DynamicResource DepthFloatRim}"/></Style>
+  <Style Selector="Border.lobby-sheen"><Setter Property="Opacity" Value="0"/></Style>
+  <Style Selector="Grid.lobby-card:pointerover Border.lobby-sheen"><Setter Property="Opacity" Value="1"/></Style>
+  <Style Selector="Grid.lobby-card:pointerover Border.lobby-face"><Setter Property="BorderBrush" Value="#66FF8CC0"/></Style>
+ </UserControl.Styles>
  <Grid>
   <Border IsHitTestVisible="False"><Border.Background><RadialGradientBrush GradientOrigin="28%,10%" Center="28%,10%" RadiusX="90%" RadiusY="90%"><GradientStop Color="#552C1450" Offset="0"/><GradientStop Color="#00100A1E" Offset="1"/></RadialGradientBrush></Border.Background></Border>
   <Border IsHitTestVisible="False" Opacity="0.30"><Border.Background><RadialGradientBrush GradientOrigin="82%,15%" Center="82%,15%" RadiusX="50%" RadiusY="50%"><GradientStop Color="{DynamicResource FxGlowColor}" Offset="0"/><GradientStop Color="#00000000" Offset="1"/></RadialGradientBrush></Border.Background></Border>
