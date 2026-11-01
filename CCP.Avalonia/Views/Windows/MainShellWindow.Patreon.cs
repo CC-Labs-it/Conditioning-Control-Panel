@@ -273,29 +273,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             System.EventHandler<Models.PatreonTier> tier = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(MaybeShowPremiumCelebration);
             var patreon = Platform.AccountSeed.Patreon;
             var substar = Platform.AccountSeed.SubscribeStar;
+            Platform.AccountSeed.SubscriptionTierRaised += OnSubscriptionTierRaised;
             if (patreon != null) patreon.TierChanged += tier;
             if (substar != null) substar.TierChanged += tier;
             Closed += (_, _) =>
             {
+                Platform.AccountSeed.SubscriptionTierRaised -= OnSubscriptionTierRaised;
                 if (patreon != null) patreon.TierChanged -= tier;
                 if (substar != null) substar.TierChanged -= tier;
             };
         }
 
+        private int _pendingRiseTier;
+        private void OnSubscriptionTierRaised(int tier)
+        {
+            if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            {
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(() => OnSubscriptionTierRaised(tier));
+                return;
+            }
+            _pendingRiseTier = tier;
+            var color = tier >= 2 ? global::Avalonia.Media.Color.FromRgb(0x5E, 0xE6, 0xFF) : global::Avalonia.Media.Color.FromRgb(0xFF, 0xD7, 0x00);
+            RefreshProfileBubble();
+            if (Named<global::Avalonia.Controls.Button>("BtnProfileBubble") is { } bubble) _profileBubbleBurst.Fire(bubble, 60, color: color);
+            FlashProfileBubbleGlow(color);
+        }
+
         /// <summary>WPF MaybeShowPremiumCelebration (MainWindow.Patreon.cs:1118): the one-time card per tier, re-read from
         /// the combined entitlement, never for an invite week, through the presenter (an Inbox row when quiet). The seen-flag
-        /// is spent at open time. ponytail: no live-rise path (EntitlementTierSync.TierRaised, the immediate card and the
-        /// profile-bubble fanfare) on this head yet, so every grant takes the presenter route.</summary>
+        /// is spent at open time. WPF's live rise arms the immediate card and profile fanfare.</summary>
         internal void MaybeShowPremiumCelebration()
         {
+            var onRise = _pendingRiseTier > 0;
+            _pendingRiseTier = 0;
             try
             {
                 if (!CoreAccount.HasPremiumAccess) return;
                 var s = CoreSettings.Current;
                 if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
                 var tier = CoreAccount.HasLabAccess ? 2 : 1;
-                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise: false)) return;
+                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise)) return;
                 var key = TierCelebration.KeyFor(tier)!;
+                if (onRise && IsVisible && WindowState != global::Avalonia.Controls.WindowState.Minimized
+                    && !CoreSession.IsSessionRunning && !CoreTutorial.IsActive && !Platform.AppUpdater.IsUpdateDialogActive
+                    && !IsStartupDialogShowing && !Games.GameWindow.IsAnyOpen())
+                {
+                    FeatureIntroPopup.ShowCelebrationIfFirstTime(this, key);
+                    return;
+                }
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
                     Key = "intro:" + key,

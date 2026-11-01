@@ -127,7 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void SetPlansActive(bool active)
         {
             _plansActive = active;
-            if (active) { RefreshJustSubscribed(); RefreshVault(); _ambientFx.Resume(); }
+            if (active) { RefreshVault(); _ambientFx.Resume(); }
             else _ambientFx.Pause();
             UpdateMotion();
         }

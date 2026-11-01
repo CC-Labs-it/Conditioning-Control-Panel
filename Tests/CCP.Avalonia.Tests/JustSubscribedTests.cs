@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -51,6 +52,10 @@ public sealed class JustSubscribedTests
         var s = settings.Current;
         s.Welcomed = s.HasAcceptedAgeVerification = true;
         s.WhatMovedCardShown = 1;
+        foreach (var key in FeatureIntros.All.Keys) if (!s.SeenFeatureIntros.Contains(key)) s.SeenFeatureIntros.Add(key);
+        s.SeenFeatureIntros.Add(TierCelebration.LegacyKey);
+        s.SeenFeatureIntros.Remove(TierCelebration.KeyT2);
+        StartupLadder.ResetForTests(); FeatureIntroPopup.ResetForTests();
         s.MotionLevel = MotionLevel.Off;
         s.PatreonTier = 0; s.PatreonPremiumValidUntil = null; s.PatreonLabValidUntil = null;
         s.InviteGrantUntil = null; s.OfflineMode = false;
@@ -88,8 +93,16 @@ public sealed class JustSubscribedTests
             Assert.Equal(1, wire.Reads);
             Assert.False(button.IsEnabled);
             Assert.Equal(Loc.Get("plans_just_subscribed_checking"), text.Text);
+            s.PerformanceMode = false; s.AutoPerformanceMode = false; s.GentleVisuals = false; s.MotionLevel = MotionLevel.Full;
+            shell.Activate();
+            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(1));
             wire.Answer("{\"user\":{\"effective_tier\":2}}");
             await Until(() => button.IsEnabled);
+            await Until(() => s.SeenFeatureIntros.Contains(TierCelebration.KeyT2));
+            Assert.Equal(1, shell._profileBubbleBurst.Count);
+            var ring = shell.Named<global::Avalonia.Controls.Shapes.Ellipse>("ProfileBubbleGlowRing")!;
+            Assert.Equal("#ff5ee6ff", ((global::Avalonia.Media.ISolidColorBrush)ring.Stroke!).Color.ToString().ToLowerInvariant());
+            s.MotionLevel = MotionLevel.Off;
             Assert.Equal(Loc.Get("plans_just_subscribed_prime"), text.Text);
             Assert.True(CoreEntitlement.HasLab);
             Assert.True(row.IsVisible); // the answer stays readable until leaving the page
@@ -97,8 +110,13 @@ public sealed class JustSubscribedTests
             shell.ShowTab("premium");
             Assert.False(row.IsVisible);
 
-            // Account & Plans uses the same tier rule on entry, including when it changes between visits.
+            // The Settings page refreshes the inline row even while another section is selected.
+            shell.OpenAppSettingsSection("general");
+            shell.ShowTab("settings");
             s.PatreonTier = 0; s.PatreonPremiumValidUntil = null; s.PatreonLabValidUntil = null;
+            shell.ShowTab("appsettings");
+            Assert.Equal("general", shell.Named<AppSettingsTabView>("AppSettingsTab")!.CheckedSectionKey);
+            Assert.True(shell.PlansVaultView!.FindControl<Control>("JustSubscribedRow")!.IsVisible);
             shell.OpenAppSettingsSection("account");
             Dispatcher.UIThread.RunJobs();
             var plans = shell.PlansVaultView!;
@@ -110,6 +128,7 @@ public sealed class JustSubscribedTests
         finally
         {
             AccountSeed.NewV2 = oldFactory;
+            foreach (var child in shell.OwnedWindows.ToArray()) child.Close();
             shell.Close();
             CoreSettings.ServiceProvider = null;
         }
@@ -220,6 +239,54 @@ public sealed class JustSubscribedTests
         }
         finally { AccountSeed.NewV2 = oldFactory; CoreSettings.ServiceProvider = null; }
     });
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    public Task PendingPatreonReplyCannotRestoreAChangedSession(bool logout, bool expired, bool newGrant) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var settings = new SettingsService(); var s = settings.Current;
+        s.PatreonTier = 0; s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = null;
+        s.UnifiedId = "first"; s.OfflineMode = false;
+        CoreSettings.ServiceProvider = () => settings;
+        var secrets = new Dictionary<string, string?> { ["patreon_auth"] = JsonConvert.SerializeObject(new PatreonTokenData
+            { AccessToken = "a", RefreshToken = "r", ExpiresAt = DateTime.UtcNow.AddDays(expired ? -1 : 1) }) };
+        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
+        CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        var wire = new PendingValidation();
+        AccountSeed.Seed(p => new ProviderSubscription(p, () => s, p == "patreon" ? wire : null));
+        var old = AccountSeed.NewV2;
+        try
+        {
+            s.AuthToken = "first";
+            AccountSeed.NewV2 = () => throw new InvalidOperationException();
+            var check = AccountSeed.CheckSubscriptionNowAsync();
+            Assert.Equal(1, wire.Reads);
+            if (logout) AccountSeed.Patreon!.Logout();
+            else if (newGrant) AccountSeed.Patreon!.StoreTokens("new", "new", DateTime.UtcNow.AddDays(1));
+            else { s.UnifiedId = "second"; s.AuthToken = "second"; }
+            wire.Reply.SetResult(new HttpResponseMessage(HttpStatusCode.OK)
+                { Content = new StringContent(expired ? "{\"access_token\":\"old\",\"refresh_token\":\"old\",\"expires_in\":3600}" : "{\"is_active\":true,\"tier\":2,\"auth_token\":\"old\"}") });
+            await check;
+            Assert.Equal(PatreonTier.None, AccountSeed.Patreon!.CurrentTier);
+            Assert.Null(s.PatreonPremiumValidUntil); Assert.Null(s.PatreonLabValidUntil);
+            Assert.Null(AccountSeed.Patreon.RetrieveCachedState());
+            if (logout) Assert.False(AccountSeed.Patreon.IsAuthenticated);
+            if (newGrant) Assert.Equal("new", AccountSeed.Patreon.GetAccessToken());
+            Assert.Equal(logout || newGrant ? "first" : "second", s.AuthToken);
+        }
+        finally { AccountSeed.NewV2 = old; CoreSettings.ServiceProvider = null; }
+    });
+
+    private sealed class PendingValidation : HttpMessageHandler
+    {
+        internal readonly TaskCompletionSource<HttpResponseMessage> Reply = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal int Reads;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        { Reads++; return Reply.Task; }
+    }
 
     private sealed class ValidationWire : HttpMessageHandler
     {

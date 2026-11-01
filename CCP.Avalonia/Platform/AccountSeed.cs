@@ -195,6 +195,7 @@ internal static class AccountSeed
         return CoreAccount.HasPremiumAccess && !ProviderSubscription.IsInviteWeekOnly(Patreon, SubscribeStar, CoreSettings.Current) ? 1 : 0;
     }
 
+    internal static event Action<int>? SubscriptionTierRaised;
     private static int _subscriptionReadInFlight;
 
     internal static async Task<JustSubscribedOutcome> CheckSubscriptionNowAsync()
@@ -202,6 +203,11 @@ internal static class AccountSeed
         var before = EffectivePaidTier();
         var s = CoreSettings.Current;
         var patreon = Patreon;
+        var idAtStart = s.UnifiedId;
+        var tokenAtStart = s.AuthToken;
+        var generation = patreon?.SessionGeneration;
+        bool SameSession() => ReferenceEquals(s, CoreSettings.Current) && s.UnifiedId == idAtStart
+            && s.AuthToken == tokenAtStart && ReferenceEquals(patreon, Patreon) && patreon?.SessionGeneration == generation;
         var signedInV2 = !string.IsNullOrEmpty(s.UnifiedId) && !string.IsNullOrEmpty(s.AuthToken);
         var signedIn = signedInV2 || patreon?.IsAuthenticated == true;
         bool reached = false;
@@ -210,12 +216,11 @@ internal static class AccountSeed
             if (signedInV2 && !s.OfflineMode && Interlocked.Exchange(ref _subscriptionReadInFlight, 1) == 0)
             {
                 var id = s.UnifiedId!;
-                var token = s.AuthToken;
                 try
                 {
                     var node = await NewV2().GetUserProfileNodeAsync(id);
                     // A late response must not apply to a different account or a signed-out session.
-                    if (node != null && ReferenceEquals(s, CoreSettings.Current) && s.UnifiedId == id && s.AuthToken == token)
+                    if (node != null && SameSession())
                     {
                         reached = true;
                         var tier = EntitlementTierRule.ParseTier(node["effective_tier"]);
@@ -234,16 +239,17 @@ internal static class AccountSeed
                         if (rose || afterRestamp > accessBeforeRestamp)
                         {
                             CheckoutWatch.Disarm();
-                            patreon?.NotifyEntitlementRaised(afterRestamp >= 2 ? PatreonTier.Level2 : PatreonTier.Level1);
+                            if (rose) { try { SubscriptionTierRaised?.Invoke(tier!.Value); } catch (Exception ex) { Log.Warning(ex, "Tier rise handler failed"); } }
+                            patreon?.NotifyEntitlementRaised((rose ? tier!.Value : afterRestamp) >= 2 ? PatreonTier.Level2 : PatreonTier.Level1);
                         }
                     }
                 }
                 catch (Exception ex) { Log.Debug("Just-subscribed profile read failed: {E}", ex.Message); }
                 finally { Interlocked.Exchange(ref _subscriptionReadInFlight, 0); }
             }
-            if (patreon?.IsAuthenticated == true)
+            if (SameSession() && patreon?.IsAuthenticated == true)
             {
-                try { await patreon.ValidateSubscriptionAsync(forceRefresh: true); reached = true; }
+                try { await patreon.ValidateSubscriptionAsync(forceRefresh: true, canApply: SameSession); reached |= SameSession(); }
                 catch (Exception ex) { Log.Debug("Just-subscribed validation failed: {E}", ex.Message); }
             }
         }
