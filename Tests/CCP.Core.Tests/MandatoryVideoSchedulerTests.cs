@@ -112,6 +112,142 @@ public sealed class MandatoryVideoSchedulerTests
         v.Stop();
     });
 
+    // WPF VideoService.cs:1978,2012,2071,2243: a visible feed holds non-earned requests.
+    [Fact]
+    public void FeedHoldsCoalescesAndReplaysTheFirstRequestOnTheHalfSecondPoll() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true; var notices = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { FeedOwnsTheScreen = () => feed };
+        v.FeedDeferred += () => notices++;
+        v.Start();
+        Assert.True(v.Trigger(true, Clips[0], userEarned: false, userInitiated: true));
+        Assert.True(v.Trigger(false, Clips[1], userEarned: false));
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.False(v.IsPlaying);
+        Assert.Empty(host.Shown);
+        Assert.Equal(1, notices);
+        feed = false;
+        clock.Advance(TimeSpan.FromMilliseconds(499));
+        Assert.False(v.IsPlaying);
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.True(v.IsPlaying);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal((Clips[0], true), Assert.Single(host.Shown));
+        v.Stop();
+    });
+
+    [Fact]
+    public void RealSchedulerTickDefersWhileFeedIsVisible() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true; var probes = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips)
+            { FeedOwnsTheScreen = () => { probes++; return feed; } };
+        v.Start();
+        for (var second = 0; second < 722 && probes == 0; second++) clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.True(probes > 0);
+        Assert.False(v.IsPlaying);
+        Assert.Empty(host.Shown);
+        feed = false;
+        clock.Advance(TimeSpan.FromMilliseconds(500) + MandatoryVideoScheduler.PreRoll);
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
+    public void EarnedVideoBypassesVisibleFeedAndDoesNotAnnounce() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var notices = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { FeedOwnsTheScreen = () => true };
+        v.FeedDeferred += () => notices++;
+        Assert.True(v.Trigger(path: Clips[0], userEarned: true, userInitiated: true));
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(Clips[0], Assert.Single(host.Shown).Path);
+        Assert.Equal(0, notices);
+        v.Stop();
+    });
+
+    [Fact]
+    public void EarnedVideoCanPlayWhileAnAmbientFeedRequestIsPending() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { FeedOwnsTheScreen = () => feed };
+        v.Start();
+        v.Trigger(path: Clips[0], userEarned: false);
+        v.Trigger(path: Clips[1], userEarned: true);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(Clips[1], Assert.Single(host.Shown).Path);
+        v.End();
+        feed = false;
+        clock.Advance(TimeSpan.FromMilliseconds(500) + MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(Clips[0], host.Shown[1].Path);
+        v.Stop();
+    });
+
+    [Fact]
+    public void RemoteTriggerIsNotTreatedAsAnEarnedBubble() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { FeedOwnsTheScreen = () => feed };
+        var old = CoreEngine.Video;
+        try
+        {
+            CoreEngine.Video = v; v.Start();
+            Assert.Null(RemoteCommands.Execute("trigger_video", null));
+            Assert.False(v.IsPlaying);
+            feed = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500) + MandatoryVideoScheduler.PreRoll);
+            Assert.Single(host.Shown);
+        }
+        finally { v.Stop(); CoreEngine.Video = old; }
+    });
+
+    [Theory]
+    [InlineData("expire")]
+    [InlineData("stop")]
+    [InlineData("cleanup")]
+    [InlineData("disabled")]
+    public void FeedHoldExpiresOrCancelsWithoutPlayingAndCanBeUsedAgain(string reason) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { FeedOwnsTheScreen = () => feed };
+        v.Start();
+        Assert.True(v.Trigger(userEarned: false));
+        if (reason == "expire")
+        {
+            clock.Advance(TimeSpan.FromSeconds(89));
+            Assert.True(v.Trigger(userEarned: false)); // does not renew the first deadline
+            clock.Advance(TimeSpan.FromSeconds(1));
+        }
+        else if (reason == "stop") v.Stop();
+        else if (reason == "cleanup") v.ForceCleanup();
+        else CoreSettings.Current.MandatoryVideosEnabled = false;
+        feed = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        CoreSettings.Current.MandatoryVideosEnabled = true;
+        Assert.True(v.Trigger(path: Clips[0], userEarned: true));
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
+    public void CascadeThenFeedRechecksEachGuardAndKeepsTheOriginalRequest() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true; var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips)
+            { FeedOwnsTheScreen = () => feed, CascadeIsRaining = () => rain };
+        v.Start();
+        v.Trigger(true, Clips[0], userEarned: false);
+        rain = false;
+        clock.Advance(TimeSpan.FromMilliseconds(250));
+        Assert.False(v.IsPlaying);
+        feed = false;
+        clock.Advance(TimeSpan.FromMilliseconds(500) + MandatoryVideoScheduler.PreRoll);
+        Assert.Equal((Clips[0], true), Assert.Single(host.Shown));
+        v.Stop();
+    });
+
     [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
     {

@@ -46,7 +46,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public MandatoryVideoScheduler Scheduler   // tests swap in a fixed library
         {
             get => _scheduler;
-            internal set { if (_scheduler != null) _scheduler.NoVideos -= ShowNoVideos; _scheduler = value; value.NoVideos += ShowNoVideos; }
+            internal set
+            {
+                if (_scheduler != null) { _scheduler.NoVideos -= ShowNoVideos; _scheduler.FeedDeferred -= ShowFeedDeferred; }
+                _scheduler = value;
+                value.NoVideos += ShowNoVideos;
+                value.FeedDeferred += ShowFeedDeferred;
+            }
         }
 
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
@@ -83,9 +89,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             DurationOf = LengthOf,
             CascadeIsRaining = () => Views.Chaos.ChaosGifCascadeOverlay.IsRaining,
+            FeedOwnsTheScreen = () => Dispatcher.UIThread.Invoke(Views.Games.GameWindow.IsForYouOnScreen),
             // WPF VideoService _packVideoQueue: active content-pack clips join the pick.
             PackVideos = new ConditioningControlPanel.Services.PackMediaPool(ConditioningControlPanel.Services.ContentPackStore.VideoType),
         };
+
+        private static void ShowFeedDeferred() => Dispatcher.UIThread.Invoke(() =>
+            App.Notifications.Show(Loc.Get("video_toast_feed_has_the_screen"), Helpers.NotificationType.Info, TimeSpan.FromSeconds(6)));
 
         /// <summary>WPF VideoService.MetadataCache: created on first use on the shared LibVLC; a miss starts
         /// a background parse and the clip is kept this refill.</summary>

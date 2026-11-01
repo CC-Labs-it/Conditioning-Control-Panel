@@ -126,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     break;
                 case AutonomyActionType.LockCard: CoreLockCard.Show(); break;
                 // No strict override: a Takeover video follows the global StrictLockEnabled (WPF TriggerVideoSafely).
-                case AutonomyActionType.Video: CoreEngine.Video?.Trigger(); break;
+                case AutonomyActionType.Video: CoreEngine.Video?.Trigger(userEarned: false); break;
                 case AutonomyActionType.StartBubbles:
                     if (_bubblesPulse || BubbleOverlay.IsRunning) break;
                     _bubblesPulse = true;

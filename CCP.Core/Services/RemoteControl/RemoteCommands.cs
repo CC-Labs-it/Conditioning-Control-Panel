@@ -79,7 +79,7 @@ namespace ConditioningControlPanel.Services
                 case "stop_bubbles": CoreBubbles.Stop(); return null;
                 case "start_bounce_text": CoreBouncingText.Start(); return null;
                 case "stop_bounce_text": CoreBouncingText.Stop(); return null;
-                case "trigger_video": return CoreEngine.Video?.Trigger() == true ? null : CoreEngine.Video == null ? NotOnThisBuild : "a video is already playing";
+                case "trigger_video": return CoreEngine.Video?.Trigger(userEarned: false) == true ? null : CoreEngine.Video == null ? NotOnThisBuild : "a video is already playing";
                 case "start_video": if (CoreEngine.Video == null) return NotOnThisBuild; CoreEngine.Video.Start(); return null;
                 case "stop_video": CoreEngine.Video?.Stop(); return null;
                 case "trigger_bubble_count": if (CoreEngine.BubbleCount == null) return NotOnThisBuild; CoreEngine.BubbleCount.Trigger(forceTest: true); return null;
