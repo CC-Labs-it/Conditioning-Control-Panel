@@ -34,7 +34,8 @@ public sealed class ContentHitTestTests
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            var w = new MainShellWindow { TabClock = new SteppedTime() };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -45,6 +46,8 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                Assert.NotNull(w.EnteringTab);
+                w.CompleteTabTransition(); // Sample the resting tab, regardless of runner speed.
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
@@ -63,6 +66,7 @@ public sealed class ContentHitTestTests
                     if (!new Rect(w.Bounds.Size).Contains(p) || b.GetVisualAncestors().OfType<ScrollViewer>().Any(s => !Inside(s, p, w))) continue;
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
+                    p = RenderedCenter(w, b);
                     var hit = w.InputHitTest(p) as Visual;
                     bool pressed = false;
                     void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
@@ -90,6 +94,7 @@ public sealed class ContentHitTestTests
     private static void RenderLiveTree(Visual w)
     {
         Dispatcher.UIThread.RunJobs();
+        if (w is Control control) control.UpdateLayout();
         var batch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
         var deadline = Stopwatch.StartNew();
         while (!batch.Rendered.IsCompleted)
@@ -98,6 +103,22 @@ public sealed class ContentHitTestTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
+    }
+
+    // A layout or scroll can reach the UI tree before the compositor publishes its hit-test tree.
+    // Retry frames for a bounded time; a covered or broken control still fails the caller's assertion.
+    internal static Point RenderedCenter(Window w, Control target)
+    {
+        var deadline = Stopwatch.StartNew();
+        Point p;
+        do
+        {
+            RenderLiveTree(w);
+            p = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), w)!.Value;
+            var hit = w.InputHitTest(p) as Visual;
+            if (hit == target || (hit != null && target.IsVisualAncestorOf(hit))) return p;
+        } while (deadline.Elapsed < TimeSpan.FromSeconds(2));
+        return p;
     }
 
     private static bool Inside(Visual v, Point p, Visual root)
