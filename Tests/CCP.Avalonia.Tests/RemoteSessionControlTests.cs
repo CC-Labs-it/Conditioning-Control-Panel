@@ -36,17 +36,18 @@ public sealed class RemoteSessionControlTests
     public Task Controller_stop_ends_the_running_session() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         const string action = "stop_session";
+        var saved = (CoreDispatch.InvokeProvider, AvApp.Sessions);
         var runner = new SessionRunner(new SessionLogService());
-        AvApp.Sessions = runner;
         var s = CoreSettings.Current;
         var previousFrequency = s.FlashFrequency;
         var handler = new RelayHandler();
         using var relay = new RemoteRelay(() => "token", () => "user", "1", RemoteControlTabView.ExecuteRemoteCommand,
             RemoteCommands.StopEffects, handler) { AutoPoll = false };
         // Relay's production dispatcher hops to the UI; this test's handler returns synchronously.
-        CoreDispatch.InvokeProvider = (f, _) => (true, f());
         try
         {
+            AvApp.Sessions = runner;
+            CoreDispatch.InvokeProvider = (f, _) => (true, f());
             runner.Start(new Session { Id = "remote-test", Name = "Remote test", DurationMinutes = 30,
                 Settings = new SessionSettings { FlashEnabled = true, FlashPerHour = 37, SubliminalEnabled = false } });
             Assert.True(runner.IsRunning && CoreEngine.IsRunning);
@@ -63,35 +64,45 @@ public sealed class RemoteSessionControlTests
         }
         finally
         {
-            runner.Stop();
-            CoreEngine.Stop();
+            try { runner.Stop(); CoreEngine.Stop(); }
+            finally { (CoreDispatch.InvokeProvider, AvApp.Sessions) = saved; }
         }
     });
 
     [Fact]
     public Task Stop_also_stops_an_engine_without_a_session() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        AvApp.Sessions = null;
+        var saved = AvApp.Sessions;
         try
         {
+            AvApp.Sessions = null;
             CoreEngine.Start();
             Assert.True(CoreEngine.IsRunning);
             Assert.Null(RemoteControlTabView.ExecuteRemoteCommand("stop_session", null));
             Assert.False(CoreEngine.IsRunning);
         }
-        finally { CoreEngine.Stop(); }
+        finally
+        {
+            try { CoreEngine.Stop(); }
+            finally { AvApp.Sessions = saved; }
+        }
         return Task.CompletedTask;
     });
 
     [Fact]
     public Task Stop_invalidates_a_start_waiting_for_the_portal() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        AvApp.Sessions = null;
-        CoreEngine.Stop();
-        var field = typeof(MainShellWindow).GetField("_engineGen", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
-        var before = (int)field.GetValue(null)!;
-        Assert.Null(RemoteControlTabView.ExecuteRemoteCommand("stop_session", null));
-        Assert.NotEqual(before, (int)field.GetValue(null)!); // StartEffect's queued callback compares this generation
+        var saved = AvApp.Sessions;
+        try
+        {
+            AvApp.Sessions = null;
+            CoreEngine.Stop();
+            var field = typeof(MainShellWindow).GetField("_engineGen", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            var before = (int)field.GetValue(null)!;
+            Assert.Null(RemoteControlTabView.ExecuteRemoteCommand("stop_session", null));
+            Assert.NotEqual(before, (int)field.GetValue(null)!); // StartEffect's queued callback compares this generation
+        }
+        finally { AvApp.Sessions = saved; }
         return Task.CompletedTask;
     });
 }
