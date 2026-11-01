@@ -278,7 +278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
-            PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
+            PlayChaosCue(b.Spec.IsDarter ? "rabbit_catch" : null, b.Spec.IsDarter ? 0.6f : 1f);
             _chaosPopped?.Invoke(b);
             RequestFrame();
         }
@@ -499,6 +499,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         }
                         if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        if (b.DarterFlareFraction > 0 && !b.Popping) // WPF BubbleService.cs:3853-3859,5104-5120
+                        {
+                            var fraction = b.DarterFlareFraction;
+                            using (dc.PushOpacity(0.85 * fraction))
+                                dc.DrawEllipse(null, FusePen(b.Spec!.Tint | 0xff000000), new Point(cx, cy),
+                                    size / 2 * (1 + 0.3 * fraction), size / 2 * (1 + 0.3 * fraction));
+                        }
                         if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                         {
                             double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);

@@ -62,7 +62,7 @@ namespace ConditioningControlPanel.Services
         private int _animType;
         // WPF BubbleService.cs:2656,3380-3400,3834-3952: darter state.
         private double _vx, _vy, _left, _right, _upper, _lower;
-        private double _telegraphMs, _darterLifeMs, _throbPhase, _throbPunch;
+        private double _telegraphMs, _darterLifeMs, _darterActiveMs, _throbPhase, _throbPunch;
         private int _bounces;
         private bool _escaping;
 
@@ -85,6 +85,10 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
+        // WPF BubbleService.cs:4704-4706: catching during the flare is not quick.
+        public bool WasQuickCatch => Spec is { IsDarter: true } && _telegraphMs <= 0 && _darterActiveMs <= Spec.QuickWindowMs;
+        public double DarterFlareFraction => Spec is { IsDarter: true, TelegraphMs: > 0 }
+            ? Math.Clamp(_telegraphMs / Spec.TelegraphMs, 0, 1) : 0;
         public double FuseSecLeft => Math.Max(0, FuseRemainingMs) / 1000.0;
         /// <summary>WPF DefuseJudgeFuseSec: a held snap is judged at the channel's start (the fuse pauses).</summary>
         public double DefuseJudgeFuseSec => DefusedViaChannel ? _channelStartFuseSec : FuseSecLeft;
@@ -166,7 +170,7 @@ namespace ConditioningControlPanel.Services
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
             double scaling, Chaos.EffectBubbleSpec spec)
         {
-            var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
+            var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.IsDarter ? Math.Max(60, (int)Math.Round(spec.SizePx)) : spec.SizePx };
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
                        * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
@@ -311,6 +315,7 @@ namespace ConditioningControlPanel.Services
             if (_telegraphMs > 0) _telegraphMs -= 32;
             else
             {
+                _darterActiveMs += 32;
                 X += _vx; Y += _vy;
                 if (!_escaping)
                 {

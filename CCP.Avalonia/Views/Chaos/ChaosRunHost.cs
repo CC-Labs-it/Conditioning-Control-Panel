@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
@@ -35,10 +36,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// collar pay first, and a detonation makes the loop unclean (no doubled tip, no silk_touch).
     /// The run-end lessons go through Core ChaosRunLessons.</para>
     ///
-    /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
+    /// <para>ponytail: still NOT here: the freeze pickup, natural darter spawns, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
-    /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
+    /// motion but FloatUp and darter RoamBounce, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
@@ -61,7 +62,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosHudWindow? _hud;
         private static ChaosOverlayWindow? _overlay;
         private static ChaosBoonBarOverlay? _boonBar;
-        private static DispatcherTimer? _runTimer, _spawnTimer;
+        private static DispatcherTimer? _runTimer, _spawnTimer, _rabbitAimTimer;
+        private static int _rabbitCallPending;
+        private static bool _rabbitCallMaxed, _rabbitAimPrevDown;
+        private static double _rabbitStormRemainingSec, _rabbitStormAccumSec;
+        internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadRabbitPointer = X11Pointer.ReadLeft;
         private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
         private static DateTime _invulnUntilUtc = DateTime.MinValue;   // Snap Chain, wall time (WPF :1916)
         /// <summary>The host's dice (loop-tip roll, chance flip, prism). Tests seed it and put it back.</summary>
@@ -208,6 +213,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
+            if (spec.IsDarter)
+            {
+                // WPF ChaosModeService.cs:2351-2360. Slow motion and its other feedback remain open.
+                int points = ChaosBubbleVariants.DARTER_BASE_POINTS + (b.WasQuickCatch ? ChaosBubbleVariants.DARTER_QUICK_BONUS : 0);
+                _state.Score += points * _state.TotalMult;
+                _state.Focus += ChaosTuning.FOCUS_PER_RABBIT;
+                _state.Combo++;
+                _state.Heat = Math.Min(1.0, _state.Heat + 0.05);
+                ChaosLessons.Tick("rabbit_caller");
+                return;
+            }
             EffectLabel(b);   // WPF Bubble.Pop: ShowChaosEffectLabel before onBenignPop (:4685)
             if (spec.IsPrism)
             {
@@ -377,6 +393,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             _spawnTimer?.Stop();
             _spawnTimer = null;
+            DisarmRabbitCall();
+            _rabbitStormRemainingSec = _rabbitStormAccumSec = 0;
             BubbleOverlay.EndChaos();
         }
 
@@ -490,6 +508,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             ChaosUnlockCardOverlay.CloseActive();
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
+            DisarmRabbitCall();
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
             ChaosSkiaFxOverlay.CloseActive();   // WPF ChaosModeService.ForceShutdown; before the idle return
             if (!_active && _hud == null && _overlay == null && _fx == null) return;
@@ -625,14 +644,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _toyButtons.Clear();
         }
 
-        /// <summary>WPF TickActiveToys' toy loop. ponytail: no toy effect runs on this head yet (they
-        /// live with the bubble field), so the glow state drops on the next tick.</summary>
+        /// <summary>WPF TickActiveToys: cooldowns, Rabbit Caller storm and toy glow.</summary>
         private static void TickToys()
         {
             if (_state == null) return;
             foreach (var t in ChaosToyRules.Tick(_state.ActiveToys, ChaosRunEngine.TICK_SEC))
                 ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.45f);
-            foreach (var t in _state.ActiveToys) t.IsEffectActive = false;
+            // WPF ChaosModeService.cs:2986-2992: eight storm spawns over ten seconds.
+            if (_rabbitStormRemainingSec > 0)
+            {
+                _rabbitStormRemainingSec -= ChaosRunEngine.TICK_SEC;
+                _rabbitStormAccumSec += ChaosRunEngine.TICK_SEC;
+                if (_rabbitStormAccumSec >= 1.25) { _rabbitStormAccumSec = 0; SpawnDarter(); }
+                if (_rabbitStormRemainingSec <= 0) ChaosEffectBannerOverlay.End("rabbits");
+            }
+            foreach (var t in _state.ActiveToys)
+                t.IsEffectActive = t.Id == "rabbit_caller" && (_rabbitCallPending > 0 || _rabbitStormRemainingSec > 0);
         }
 
         /// <summary>WPF OnToyKey (UI thread): a toy keybind press. The panic key never fires a toy.</summary>
@@ -652,13 +679,75 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (t.Id == id) { UseToy(t); return; }
         }
 
-        /// <summary>WPF UseToy, the gate + cooldown half. ponytail: the effect itself (vibe sweep,
-        /// freeze, DVD, snap, rabbits, e-stim) and the first_play Spark award are not wired yet.</summary>
+        /// <summary>WPF UseToy: Rabbit Caller; other toy effects and first-play award remain open.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused);
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
+            if (r != ChaosToyRules.UseResult.Fired || toy.Id != "rabbit_caller") return;
+            double power = _state.ToyPower.TryGetValue(toy.Id, out var p) ? p : 0;
+            ArmRabbitCall(Math.Max(1, (int)power), _state.MaxedBoons.Contains(toy.Id));
+            ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
+            _state.PushEvent("🐇 the whistle hangs. your next click calls them");
+        }
+
+        // WPF ChaosModeService.cs:2834-2914: hold the whistle until a fresh left press on a live field.
+        private static void SpawnDarter(double? x = null, double? y = null)
+        {
+            if (_state == null) return;
+            var spec = ChaosBubbleVariants.BuildDarter(_state.RunIntensity, spotlight: false, x, y);
+            ChaosMeta.MarkDiscovered("bubble:darter");
+            BubbleOverlay.SpawnChaos(spec);
+        }
+
+        private static void ArmRabbitCall(int rabbits, bool maxed)
+        {
+            _rabbitCallPending = rabbits;
+            _rabbitCallMaxed = maxed;
+            _rabbitAimPrevDown = true;
+            if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.ArmCursorGlow();
+            else ChaosCursorGlowOverlay.Arm();
+            if (_rabbitAimTimer == null)
+            {
+                _rabbitAimTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => RabbitAimTick());
+            }
+            _rabbitAimTimer.Start();
+        }
+
+        private static void DisarmRabbitCall()
+        {
+            _rabbitCallPending = 0;
+            _rabbitAimTimer?.Stop();
+            ChaosSkiaFxOverlay.DisarmCursorGlow();
+            ChaosCursorGlowOverlay.Disarm();
+        }
+
+        internal static void RabbitAimTick()
+        {
+            if (_rabbitCallPending <= 0 || _state == null || !_active) { DisarmRabbitCall(); return; }
+            var pointer = ReadRabbitPointer();
+            if (pointer == null) return;
+            var (at, down, _) = pointer.Value;
+            if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.MoveCursorGlowToPx(at.X, at.Y);
+            else ChaosCursorGlowOverlay.MoveToPx(at.X, at.Y);
+            bool pressed = down && !_rabbitAimPrevDown;
+            _rabbitAimPrevDown = down;
+            if (!pressed || _manualPaused || _lessonCardPaused || !_spawning) return;
+            int rabbits = _rabbitCallPending;
+            bool maxed = _rabbitCallMaxed;
+            DisarmRabbitCall();
+            for (int i = 0; i < rabbits; i++)
+                SpawnDarter(at.X + Rng.Next(-60, 61), at.Y + Rng.Next(-60, 61));
+            if (maxed)
+            {
+                _rabbitStormRemainingSec = 10;
+                _rabbitStormAccumSec = 0;
+                ChaosEffectBannerOverlay.Show("rabbits", "Rabbit Storm", Color.FromRgb(0xFF, 0x4D, 0xC4));
+            }
+            ChaosOverlayWindow.ChaosSfx.Play("rabbit_spawn", 0.5f);
+            _state.PushEvent(maxed ? $"🐇 {rabbits} at your fingertip. the burrow is emptying"
+                                   : $"🐇 {rabbits} answered at your fingertip");
         }
 
         private static void RunAgain()
