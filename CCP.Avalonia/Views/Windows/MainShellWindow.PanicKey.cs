@@ -213,7 +213,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Views.Overlays.BlinkTrainerSession.Stop();
             var tracker = Platform.WebcamTracker.Instance;
             bool on = tracker.IsRunning || tracker.IsStarting;
-            _ = tracker.StopAsync();
+            Games.GameWindow.TrackFypCameraStop(tracker.StopAsync());
             if (on) App.Notifications.Show(Loc.Get("panic_camera_stopped"), Helpers.NotificationType.Info, TimeSpan.FromSeconds(5));
         }
 
