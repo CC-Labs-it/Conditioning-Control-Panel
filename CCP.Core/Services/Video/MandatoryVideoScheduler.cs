@@ -234,30 +234,32 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF VoutGraceMs: no frame this long after Play is a dead output.</summary>
         public const double NoFrameSeconds = 8;
+        /// <summary>WPF RemoteVoutGraceMs: remote clips have longer to produce their first frame.</summary>
+        public const double RemoteNoFrameSeconds = 20;
         /// <summary>WPF VoutLostGraceMs: output that was there and stays gone this long is lost.</summary>
         public const double OutputLostSeconds = 5;
         /// <summary>WPF MaxVideoFallbackSeconds: the cap when the clip never reports a length.</summary>
         public const double FallbackSeconds = 600;
 
         /// <summary>WPF's clip guards, on unpaused clocks (a grace pause freezes them, as WPF re-phases
-        /// its timers). <paramref name="sinceShow"/> counts from the window opening,
-        /// <paramref name="played"/> from the first frame (from the opening for a clip with no video
-        /// track, which WPF lets play out). "no frame": no output 8 s after Play (vout watchdog);
-        /// "output lost": frames stopped for 5 s mid-clip (mid-play vout loss) - both heal, see
+        /// its timers). <paramref name="sinceShow"/> counts from playback start,
+        /// <paramref name="played"/> from the first frame (from playback start for a local clip with no video
+        /// track, which WPF lets play out). "no frame": no output after 8 s locally or 20 s remotely
+        /// (VideoService.cs:6804-6809,8097-8100); "output lost": frames stopped for 5 s mid-clip. See
         /// <see cref="GuardHeals"/>. "max length" (VideoMaxDurationSeconds cap), "overran" (length + 5 s
         /// safety timer, or 600 s with no length) end the clip. Null = fine.</summary>
         public static string? Guard(double sinceShow, double played, bool framed, bool hasVideo, double lengthSeconds,
-            double sinceFrame, int maxSeconds, double capSpentBefore = 0)
+            double sinceFrame, int maxSeconds, double capSpentBefore = 0, bool remote = false)
         {
-            if (!framed && hasVideo) return sinceShow >= NoFrameSeconds ? "no frame" : null;
+            if (!framed && (hasVideo || remote)) return sinceShow >= (remote ? RemoteNoFrameSeconds : NoFrameSeconds) ? "no frame" : null;
             if (VideoMaxCap.CapLeft(maxSeconds, capSpentBefore + played) <= 0) return "max length";
             if (lengthSeconds > 0 ? played >= lengthSeconds + 5 : played >= FallbackSeconds) return "overran";
             return framed && sinceFrame >= OutputLostSeconds ? "output lost" : null;
         }
 
-        /// <summary>WPF VoutWatchdogFire / VoutMidPlayTick: a dead or lost output replays the same clip
-        /// once; after that (or for any other guard) the clip ends like a dismiss.</summary>
-        public static bool GuardHeals(string why, bool healUsed) => !healUsed && why is "no frame" or "output lost";
+        /// <summary>WPF VideoService.cs:6872-6885,6972-6982: remote output failures end the clip;
+        /// local output failures replay once. Other guards end either kind.</summary>
+        public static bool GuardHeals(string why, bool healUsed, bool remote = false) => !remote && !healUsed && why is "no frame" or "output lost";
 
         /// <summary>WPF PlayVideo(isVoutRetry): the replayed clip starts its attention checks afresh.</summary>
         public void NoteReplay() => AttentionSpawned = AttentionHits = 0;

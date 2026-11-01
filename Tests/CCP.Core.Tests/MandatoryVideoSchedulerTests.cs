@@ -424,6 +424,41 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.False(MandatoryVideoScheduler.GuardHeals("max length", false));
     }
 
+    [Fact]
+    public void RemoteClipGuardWaitsTwentySecondsForTheFirstFrame()
+    {
+        string? G(double show, bool framed, double sinceFrame, bool remote) =>
+            MandatoryVideoScheduler.Guard(show, 0, framed, true, 0, sinceFrame, 0, remote: remote);
+        Assert.Null(G(7.99, false, 0, false));
+        Assert.Equal("no frame", G(8, false, 0, false));
+        Assert.Null(G(8, false, 0, true));
+        Assert.Null(G(19.99, false, 0, true));
+        Assert.Equal("no frame", G(20, false, 0, true));
+    }
+
+    [Fact]
+    public void RemoteClipWithNoReportedVideoTrackStillTimesOut()
+    {
+        Assert.Null(MandatoryVideoScheduler.Guard(19.99, 0, false, false, 0, 0, 0, remote: true));
+        Assert.Equal("no frame", MandatoryVideoScheduler.Guard(20, 0, false, false, 0, 0, 0, remote: true));
+        Assert.Null(MandatoryVideoScheduler.Guard(20, 0, false, false, 0, 0, 0)); // local audio-only
+    }
+
+    [Fact]
+    public void RemoteClipOutputFailuresEndWithoutReplay()
+    {
+        string? G(double show, bool framed, double sinceFrame, bool remote) =>
+            MandatoryVideoScheduler.Guard(show, 0, framed, true, 0, sinceFrame, 0, remote: remote);
+        Assert.Null(G(25, true, 4.99, true));
+        Assert.Equal("output lost", G(25, true, 5, true));
+        foreach (var why in new[] { "no frame", "output lost" })
+        {
+            Assert.True(MandatoryVideoScheduler.GuardHeals(why, false));
+            Assert.False(MandatoryVideoScheduler.GuardHeals(why, false, remote: true));
+            Assert.False(MandatoryVideoScheduler.GuardHeals(why, true));
+        }
+    }
+
     // WPF CompanionService.OnAttentionCheckFailed: only the Trainer's perk costs 25 XP, floored at 0.
     [Fact]
     public void TrainerPerkPaysForAFailedCheck()

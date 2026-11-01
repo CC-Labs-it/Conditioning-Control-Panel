@@ -1,4 +1,12 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Xunit;
@@ -24,4 +32,80 @@ public sealed class MandatoryVideoRemoteTests
         Assert.True(MandatoryVideoOverlay.CreditFor(cdn, _ => new ScrolllerCacheMeta("clip", "test")).Shown);
         Assert.False(MandatoryVideoOverlay.CreditFor("/local.mp4").Shown);
     });
+    private sealed class Host : IMandatoryVideoHost
+    {
+        public int Closed;
+        public void Show(string path, bool strict) { }
+        public double CloseAll() { Closed++; return 0; }
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }
+    }
+
+    private sealed class StillTime : TimeProvider
+    {
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period) => new Never();
+        private sealed class Never : ITimer
+        {
+            public bool Change(TimeSpan due, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => default;
+        }
+    }
+
+    // No native player is needed to exercise GuardTick: the scheduler's frozen pre-roll never fires.
+    // The source path is the URL selected by the scheduler, even when playback resolves to a cache file.
+    private static void WithRemoteGuard(Action<MandatoryVideoOverlay, MandatoryVideoScheduler, Host> check)
+    {
+        var o = (MandatoryVideoOverlay)Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
+        var fields = BindingFlags.Instance | BindingFlags.NonPublic;
+        var path = typeof(MandatoryVideoOverlay).GetField("_path", fields)!;
+        var surfaces = (List<MandatoryVideoOverlay.Surface>)o.Surfaces;
+        Assert.Empty(surfaces);
+        var host = new Host();
+        var scheduler = new MandatoryVideoScheduler(host, new StillTime(), Array.Empty<string>);
+        const string url = "https://v.scrolller.com/cached.mp4";
+        Assert.Equal("/cache.mp4", MandatoryVideoOverlay.PlaybackPath(url, _ => "/cache.mp4"));
+        o.Scheduler = scheduler;
+        surfaces.Add(new(null!, null!, null!, null!, null!, null!, null!, null!));
+        path.SetValue(o, url);
+        try
+        {
+            Assert.True(scheduler.Trigger(path: url));
+            scheduler.NoteSpawn();
+            check(o, scheduler, host);
+        }
+        finally
+        {
+            scheduler.ForceCleanup();
+            surfaces.Clear();
+        }
+    }
+
+    [Fact]
+    public void CachedRemoteUrlKeepsItsTwentySecondStartGrace() => AvaloniaTestDispatcher.Run(() =>
+        WithRemoteGuard((o, scheduler, host) =>
+        {
+            var first = typeof(MandatoryVideoOverlay).GetProperty("FirstFrameMs", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            first.SetValue(o, -1L);
+            // Ten seconds of window/player setup precede Play; the watchdog starts at Play.
+            typeof(MandatoryVideoOverlay).GetField("_guardStartedAt", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(o, 10d);
+            o.GuardTick(18); Assert.True(scheduler.IsPlaying);
+            o.GuardTick(29.99); Assert.True(scheduler.IsPlaying);
+            o.GuardTick(30); Assert.False(scheduler.IsPlaying);
+            Assert.Equal(1, host.Closed);
+            Assert.Equal(1, scheduler.AttentionSpawned); // ending does not enter the replay path
+        }));
+
+    [Fact]
+    public void CachedRemoteUrlEndsWithoutReplayWhenFramesStop() => AvaloniaTestDispatcher.Run(() =>
+        WithRemoteGuard((o, scheduler, host) =>
+        {
+            var first = typeof(MandatoryVideoOverlay).GetProperty("FirstFrameMs", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            first.SetValue(o, 0L);
+            o.FrameTs = Stopwatch.GetTimestamp() - 6 * Stopwatch.Frequency;
+            o.GuardTick(25);
+            Assert.False(scheduler.IsPlaying);
+            Assert.Equal(1, host.Closed);
+            Assert.Equal(1, scheduler.AttentionSpawned); // a replay would reset the checks
+        }));
+
 }

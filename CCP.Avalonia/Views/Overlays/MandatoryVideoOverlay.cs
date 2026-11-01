@@ -32,9 +32,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// master x video volume; other apps are ducked while it plays (AudioDuckingEnabled).
     /// The Esc grace pause (WPF #735) draws its Paused/Resume card inside each video window, not as a
     /// separate topmost window; the clip guards (Core <see cref="MandatoryVideoScheduler.Guard"/>) run
-    /// on a 1 s UI timer: a dead (8 s) or lost (5 s without frames) output replays the clip once, as
-    /// WPF's vout heal, but on the same shared LibVLC (docs/avalonia-decisions.html). Ambient bubbles
-    /// are paused by the Core scheduler.
+    /// on a 1 s UI timer: no first frame after 8 s locally or 20 s remotely, or 5 s of lost output.
+    /// Local output failures replay once on the shared LibVLC; remote failures end the clip.
+    /// Ambient bubbles are paused by the Core scheduler.
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
     /// attention input, no-activate z-order, the remote-media offer after the "no videos" dialog,
@@ -79,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private DateTime Now => Time.GetUtcNow().UtcDateTime;
         private DispatcherTimer? _graceTimer, _guard;
         private readonly Stopwatch _sinceShow = new();
+        private double _guardStartedAt;
 
         private MandatoryVideoOverlay() => Scheduler = new MandatoryVideoScheduler(this)
         {
@@ -135,6 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
+            _guardStartedAt = 0;
             _sinceFrame.Reset();
             PlayedSkew = 0;
             FirstFrameMs = -1;
@@ -234,6 +236,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
+            _guardStartedAt = Elapsed; // WPF VideoService.cs:3956-3959,3984-3998 arms after Play
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _guard.Tick += (_, _) => GuardTick();
             _guard.Start();
@@ -506,21 +509,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Log.Information("VideoService: grace pause released ({Reason}) after {Sec:F1}s", reason, (Now - _gracePausedAt).TotalSeconds);
         }
 
-        /// <summary>WPF safety/fallback/max-length timers and the vout watchdog, as one tick: a clip
-        /// that shows no frame, stalls, overruns or passes the user's max ends like a dismiss.</summary>
-        internal void GuardTick()
+        /// <summary>WPF safety/fallback/max-length timers and the vout watchdog, as one tick: output
+        /// failures may replay local clips once; remote failures and length limits end the clip.</summary>
+        internal void GuardTick(double? elapsedOverride = null)
         {
             if (_gracePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
+            var elapsed = Math.Max(0, (elapsedOverride ?? Elapsed) - _guardStartedAt); // tests step the opening clock
             var framed = FirstFrameMs >= 0;
-            var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
-            var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
+            var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : elapsed) + PlayedSkew;
+            // WPF VideoService.cs:3082-3085: keep the original URL identity even when VLC plays a cached file.
+            var remote = VideoSelectionRules.IsRemoteMediaPath(_path);
+            var why = MandatoryVideoScheduler.Guard(elapsed, played, framed,
                 (_player?.VideoTrackCount ?? -1) != 0, (_player?.Length ?? 0) / 1000.0,
-                Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent);
+                Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent, remote);
             if (why == null) return;
-            if (MandatoryVideoScheduler.GuardHeals(why, _healUsed))
+            if (MandatoryVideoScheduler.GuardHeals(why, _healUsed, remote))
             {
                 // WPF DispatchVoutHeal(retry): the same clip once more, same strictness.
-                Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - replaying the clip once", why, Elapsed);
+                Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - replaying the clip once", why, elapsed);
                 Scheduler.NoteReplay();
                 var spent = _capSpent + played;
                 Play(_path, _strict);
@@ -528,7 +534,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _healUsed = true;
                 return;
             }
-            Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - ending the clip", why, Elapsed);
+            Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - ending the clip", why, elapsed);
             Scheduler.End();
         }
 
