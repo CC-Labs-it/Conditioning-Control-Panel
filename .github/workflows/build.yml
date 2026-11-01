@@ -460,6 +460,20 @@ jobs:
           echo "::error::LibVLC package installation failed after 3 attempts"
           exit 1
       - run: dotnet build Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release
+      # A separate testhost keeps the native X11 probe away from the headless shard.
+      - name: Require the X11 foreground privacy test
+        if: matrix.shard == 0
+        run: |
+          sudo apt-get install -y --no-install-recommends xvfb xauth
+          xvfb-run -a sh -c 'CCP_TEST_X11_DISPLAY="$DISPLAY" dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --no-build --filter "FullyQualifiedName=CCP.Avalonia.Tests.AwarenessX11ForegroundTests.ReadsTitleAndPidFromOneIsolatedX11WindowAndDropsMissingOrStalePid" --logger "trx;LogFileName=awareness-x11.trx" --results-directory "$RUNNER_TEMP/awareness-x11"'
+          python3 - "$RUNNER_TEMP/awareness-x11/awareness-x11.trx" <<'PYTHON'
+          import sys
+          import xml.etree.ElementTree as ET
+          results = ET.parse(sys.argv[1]).findall('.//{*}UnitTestResult')
+          expected = 'ReadsTitleAndPidFromOneIsolatedX11WindowAndDropsMissingOrStalePid'
+          if len(results) != 1 or not results[0].get('testName', '').endswith(expected) or results[0].get('outcome') != 'Passed':
+              sys.exit('X11 foreground test did not run and pass')
+          PYTHON
       - name: Test Avalonia notification suite (shard ${{ matrix.shard }})
         run: bash .github/scripts/avalonia-tests-sharded.sh --shard ${{ matrix.shard }}
         env:
