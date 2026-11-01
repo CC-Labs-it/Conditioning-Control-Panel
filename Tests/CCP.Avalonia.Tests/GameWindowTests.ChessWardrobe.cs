@@ -10,7 +10,6 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Services.PieceByPiece;
-using ConditioningControlPanel.Services.PieceByPiece.Wardrobe;
 using Newtonsoft.Json.Linq;
 using Xunit;
 namespace CCP.Avalonia.Tests;

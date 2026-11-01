@@ -8,7 +8,6 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.PieceByPiece;
-using ConditioningControlPanel.Services.PieceByPiece.Wardrobe;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
