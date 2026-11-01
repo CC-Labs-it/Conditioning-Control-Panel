@@ -1850,7 +1850,11 @@ public class QuestService : IDisposable
         {
             // Play Windows notification sound. The perk opt-out drops the popup and its clip in
             // MainWindow.Quests.cs; this ding has to go with them or it plays with nothing to explain it.
-            if (!App.PerkNotificationsSuppressed) SystemSounds.Exclamation.Play();
+            if (!App.PerkNotificationsSuppressed)
+            {
+                SystemSounds.Exclamation.Play();
+                Audio.EngineOffAudioLog.Note("system:quest", "Exclamation");
+            }
 
             // Quest completion posts its OWN event kind, so the Haptics tab's "Quest complete"
             // routing row (enable / intensity / pattern / target toy) is what decides how this
