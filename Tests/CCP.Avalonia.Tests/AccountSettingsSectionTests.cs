@@ -12,6 +12,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -173,6 +174,87 @@ public sealed class AccountSettingsSectionTests
         }
     });
 
+    [Fact]
+    public Task ExportButtonFetchesThenSavesAndRestoresItsLabel() => RunAsync(async (shell, section, s, _) =>
+    {
+        s.UnifiedId = "u-test";
+        s.AuthToken = "TOK";
+        var server = new CannedBackup("{\"data\":{\"name\":\"Ada\"}}");
+        var oldBackup = AccountSettingsSection.NewBackup;
+        var oldPick = AccountSettingsSection.PickExport;
+        var oldTell = AccountSettingsSection.Tell;
+        var picked = new TaskCompletionSource<string?>();
+        var told = new TaskCompletionSource<(string Title, string Body)>();
+        var path = Path.Combine(CorePaths.UserData, "export-test.json");
+        FilePickerSaveOptions? options = null;
+        AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(server);
+        AccountSettingsSection.PickExport = (owner, o) => { Assert.Same(shell, owner); options = o; return picked.Task; };
+        AccountSettingsSection.Tell = (_, title, body) => { Dispatcher.UIThread.Post(() => told.TrySetResult((title, body))); return Task.CompletedTask; };
+        try
+        {
+            section.Refresh();
+            Click(section, "BtnExportData");
+            Assert.False(section.FindControl<Button>("BtnExportData")!.IsEnabled);
+            Assert.Equal(Loc.Get("btn_exporting"), Text(section, "TxtBtnExportData"));
+            Assert.Contains("/v2/user/export-data", server.Paths);
+            Assert.NotNull(options);
+            Assert.Equal(Loc.Get("title_save_data_export"), options!.Title);
+            Assert.Equal($"my-data-export-{DateTime.Now:yyyy-MM-dd}.json", options.SuggestedFileName);
+            Assert.Contains("*.json", Assert.Single(options.FileTypeChoices!).Patterns!);
+            picked.SetResult(path);
+            var dialog = await told.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(Loc.Get("title_export_complete"), dialog.Title);
+            Assert.Contains(path, dialog.Body);
+            Assert.Equal(Newtonsoft.Json.Linq.JToken.Parse("{\"data\":{\"name\":\"Ada\"}}").ToString(), File.ReadAllText(path));
+            Assert.True(section.FindControl<Button>("BtnExportData")!.IsEnabled);
+            Assert.Equal(Loc.Get("btn_export_my_data"), Text(section, "TxtBtnExportData"));
+        }
+        finally
+        {
+            File.Delete(path);
+            AccountSettingsSection.NewBackup = oldBackup;
+            AccountSettingsSection.PickExport = oldPick;
+            AccountSettingsSection.Tell = oldTell;
+        }
+    });
+
+    [Fact]
+    public Task ExportCancellationAndFailureDoNotSave() => RunAsync(async (_, section, s, _) =>
+    {
+        s.UnifiedId = "u-test";
+        var oldBackup = AccountSettingsSection.NewBackup;
+        var oldPick = AccountSettingsSection.PickExport;
+        var oldTell = AccountSettingsSection.Tell;
+        var picks = 0;
+        var dialogs = new List<string>();
+        AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(new CannedBackup("{}"));
+        AccountSettingsSection.PickExport = (_, _) => { picks++; return Task.FromResult<string?>(null); };
+        AccountSettingsSection.Tell = (_, title, _) => { dialogs.Add(title); return Task.CompletedTask; };
+        try
+        {
+            await section.ExportDataAsync();
+            Assert.Equal(1, picks);
+            Assert.Empty(dialogs);
+            // Saving to a directory fails after the picker, and reports the write error.
+            AccountSettingsSection.PickExport = (_, _) => Task.FromResult<string?>(CorePaths.UserData);
+            await section.ExportDataAsync();
+            Assert.Equal(Loc.Get("title_export_error"), Assert.Single(dialogs));
+            dialogs.Clear();
+            s.UnifiedId = null;
+            await section.ExportDataAsync();
+            Assert.Equal(1, picks);
+            Assert.Equal(Loc.Get("title_export_failed"), Assert.Single(dialogs));
+            Assert.True(section.FindControl<Button>("BtnExportData")!.IsEnabled);
+            Assert.Equal(Loc.Get("btn_export_my_data"), Text(section, "TxtBtnExportData"));
+        }
+        finally
+        {
+            AccountSettingsSection.NewBackup = oldBackup;
+            AccountSettingsSection.PickExport = oldPick;
+            AccountSettingsSection.Tell = oldTell;
+        }
+    });
+
     private static string Text(Control c, string name) => c.FindControl<TextBlock>(name)!.Text ?? "";
     private static bool Shown(Control c, string name) => c.FindControl<Control>(name)!.IsVisible;
     private static void Click(Control c, string name)
@@ -263,7 +345,7 @@ public sealed class AccountSettingsSectionTests
             Assert.True(Shown(section, "BtnLinkDiscord"));
             Assert.False(Shown(section, "BtnLinkPatreon"));         // the grant works
             Assert.True(Shown(section, "DataPrivacySection"));
-            Assert.False(Shown(section, "BtnExportData"));          // not ported: hidden, not inert
+            Assert.True(Shown(section, "BtnExportData"));           // available inside the signed-in privacy section
 
             Click(section, "BtnPatreonLogin");     // the only provider: the whole account goes
 
