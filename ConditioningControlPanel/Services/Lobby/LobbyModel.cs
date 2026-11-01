@@ -286,7 +286,7 @@ public static class LobbySummary
                 break;
             case LobbyGame.Remote:
                 if (!string.IsNullOrEmpty(row.RemoteTier)) parts.Add(loc("lobby_remote_tier_" + row.RemoteTier));
-                if (row.Tags.Count > 0) parts.Add(string.Join(", ", row.Tags.Take(3)));
+                if (row.Tags.Count > 0) parts.Add(string.Join(", ", row.Tags));
                 break;
             case LobbyGame.Race:
                 var track = RaceOpenApi.TrackName(row.Track);
