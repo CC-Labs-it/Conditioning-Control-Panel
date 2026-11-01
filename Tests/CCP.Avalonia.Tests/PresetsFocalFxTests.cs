@@ -66,8 +66,10 @@ public sealed class PresetsFocalFxTests
     [Fact]
     public Task PointerLiftAndPrimaryButtonSquishMatchWpfSnapAtOff() => WithPresets((host, view) =>
     {
+        view.IsVisible = false; view.IsVisible = true; // switch Off while the new entrance still owns Y
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Settle(); Assert.All(view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>(), c => Assert.Equal(1, c.Opacity));
         var chip = view.FindControl<WrapPanel>("PresetCardsPanel")!.Children.OfType<Border>().First(b => b.Tag is string);
         host.MouseMove(Center(host, chip)); Settle();
         var scale = Assert.IsType<TransformGroup>(chip.RenderTransform).Children.OfType<ScaleTransform>().Single();

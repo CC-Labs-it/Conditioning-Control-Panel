@@ -8,9 +8,7 @@ using Avalonia.Media.Immutable;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services.Billboard;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
-
 namespace ConditioningControlPanel.Avalonia.Controls.Billboard;
-
 /// <summary>WPF ConditioningControlPanel/Controls/Billboard/BuiltInArt.cs:276-401: sparse counted days, lifted today and progress bar.
 /// Uses the shell's shared beat; no Effects, bitmap ownership or OS-specific APIs.</summary>
 public sealed partial class CalendarArtView : Control, IBillboardArtView
@@ -77,7 +75,6 @@ public sealed partial class CalendarArtView : Control, IBillboardArtView
     {
         foreach (var art in new List<CalendarArtView>(Active)) art.Hold();
     }
-
     private FormattedText Number(int day, bool lit, double cell)
     {
         if (cell != _numbersCell) { _numbers.Clear(); _numbersCell = cell; }

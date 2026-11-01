@@ -109,6 +109,7 @@ public partial class PresetsTabView
 
     internal void RefreshCardSheen()
     {
+        if (!Env.AllowTransitions) CancelEntrances(); // release entrance opacity/Y overrides before Off-mode interaction
         Control? target = null;
         if (IsEffectivelyVisible && _fxWindow is { IsActive: true } window
             && window.WindowState != WindowState.Minimized && Env.AllowAmbientLoops)

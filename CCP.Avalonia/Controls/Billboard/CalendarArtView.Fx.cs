@@ -4,9 +4,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
-
 namespace ConditioningControlPanel.Avalonia.Controls.Billboard;
-
 // WPF Controls/Billboard/BillboardVectorArt.cs:115-126,191-407; BuiltInArt.cs:298-347.
 public sealed partial class CalendarArtView
 {
