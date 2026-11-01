@@ -8,6 +8,7 @@ using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Controls.Studio;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -117,6 +118,55 @@ public sealed class BrainDrainIntegrationTests
         Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0x11u : 0u, x.Flag));
         calls.Clear(); service.RestoreFrom(new() { BrainDrainEnabled = true, BrainDrainBlurStrength = 50, AllowOverlayCapture = allow });
         Assert.NotEmpty(calls); Assert.All(calls, x => Assert.Equal(allow ? 0u : 0x11u, x.Flag)); return Task.CompletedTask;
+    });
+    // WPF BrainDrainFeatureControl.xaml.cs:346-355 and OverlayService.cs:3749-3758.
+    [Fact]
+    public Task CaptureControlUpdatesRunningHostsAndSaves() => Run(owner =>
+    {
+        var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
+        service.Current.BrainDrainEnabled = true; service.Current.BrainDrainBlurStrength = 50;
+        service.Current.AllowOverlayCapture = true;
+        var card = new BrainDrainFeatureControl(); owner.Content = card;
+        var check = card.FindControl<CheckBox>("ChkAllowCapture")!;
+        Assert.True(check.IsChecked); Assert.False(service.HasPendingSave);
+        var calls = new List<uint>(); BrainDrainOverlay.Capture = (_, flag) => calls.Add(flag);
+        BrainDrainOverlay.Start(owner); calls.Clear();
+        check.IsChecked = false;
+        Assert.False(service.Current.AllowOverlayCapture); Assert.True(service.HasPendingSave);
+        Assert.NotEmpty(calls); Assert.All(calls, flag => Assert.Equal(0x11u, flag));
+        calls.Clear(); check.IsChecked = true;
+        Assert.True(service.Current.AllowOverlayCapture);
+        Assert.NotEmpty(calls); Assert.All(calls, flag => Assert.Equal(0u, flag));
+        return Task.CompletedTask;
+    });
+    // WPF BrainDrainFeatureControl.xaml.cs:106,207-217: load and external edits repaint the card.
+    [Fact]
+    public Task CaptureControlTracksExternalEditsAndSettingsReplacement() => Run(owner =>
+    {
+        var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
+        service.Current.AllowOverlayCapture = true;
+        var card = new BrainDrainFeatureControl(); owner.Content = card;
+        var check = card.FindControl<CheckBox>("ChkAllowCapture")!;
+        Assert.True(check.IsChecked); Assert.False(service.HasPendingSave);
+        service.Current.AllowOverlayCapture = false;
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.False(check.IsChecked);
+        var old = service.Current;
+        service.RestoreFrom(new() { AllowOverlayCapture = true });
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.True(check.IsChecked);
+        old.AllowOverlayCapture = false;
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.True(check.IsChecked);
+        owner.Content = null;
+        service.Current.AllowOverlayCapture = false;
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.True(check.IsChecked);
+        return Task.CompletedTask;
+    });
+    // WPF capture affinity is Windows-only: Compositor/OverlayCaptureAffinity.cs:48-55.
+    [Fact]
+    public Task CaptureControlIsHiddenWhereExclusionIsUnavailable() => Run(owner =>
+    {
+        var card = new BrainDrainFeatureControl(); owner.Content = card;
+        Assert.Equal(OperatingSystem.IsWindows(), card.FindControl<Grid>("CaptureRow")!.IsVisible);
+        return Task.CompletedTask;
     });
     [Fact]
     public Task SameOriginResolutionAndDpiChangesRecreateFullMonitorHosts() => Run(owner =>

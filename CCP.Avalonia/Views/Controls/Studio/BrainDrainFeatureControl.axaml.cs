@@ -33,6 +33,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
                 { CoreSettings.Current.BrainDrainBlurStrength = (int)this.FindControl<Slider>("SliderBlurStrength")!.Value; CoreSettings.Save(); }
             };
 
+            // WPF .xaml.cs:106,213-217,346-355: capture visibility is a live comfort setting.
+            // X11 has no capture-exclusion equivalent (Win32Overlay.cs:50-54).
+            this.FindControl<Grid>("CaptureRow")!.IsVisible = System.OperatingSystem.IsWindows();
+            var capture = this.FindControl<CheckBox>("ChkAllowCapture")!;
+            capture.IsCheckedChanged += (_, _) =>
+            {
+                if (_loading) return;
+                CoreSettings.Current.AllowOverlayCapture = capture.IsChecked ?? false;
+                CoreSettings.Save();
+            };
+
             _keepClear = this.FindControl<CheckBox>("ChkKeepClear")!;
             LoadKeepClear();
             _keepClear.IsCheckedChanged += (_, _) =>
@@ -68,7 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 
         // WPF BrainDrainFeatureControl.xaml.cs:213-235: external writers repaint the live card.
         private void SettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-        { if (e.PropertyName is nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainEnabled) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainBlurStrength) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainKeepPicturesClear)) QueueLoad(); }
+        { if (e.PropertyName is nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainEnabled) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainBlurStrength) or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainKeepPicturesClear) or nameof(ConditioningControlPanel.Models.AppSettings.AllowOverlayCapture)) QueueLoad(); }
         private void QueueLoad() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (TopLevel.GetTopLevel(this) != null) LoadKeepClear(); });
         private void LoadKeepClear()
         {
@@ -81,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             try
             {
                 _keepClear.IsChecked = CoreSettings.Current.BrainDrainKeepPicturesClear;
+                this.FindControl<CheckBox>("ChkAllowCapture")!.IsChecked = CoreSettings.Current.AllowOverlayCapture;
                 this.FindControl<CheckBox>("ChkEnable")!.IsChecked = CoreSettings.Current.BrainDrainEnabled;
                 this.FindControl<Slider>("SliderBlurStrength")!.Value = CoreSettings.Current.BrainDrainBlurStrength;
             }
