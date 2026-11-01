@@ -475,7 +475,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private async void BtnAutonomyStartStop_Click(object? sender, RoutedEventArgs e)
         {
             var s = CoreSettings.Current;
-            var turningOn = !s.AutonomyModeEnabled;
+            // Panic stops the scheduler but keeps the saved switch; Start must restart it.
+            var turningOn = Shell is { } shell ? !shell.Autonomy.IsEnabled : !s.AutonomyModeEnabled;
             if (turningOn && !s.AutonomyConsentGiven)
             {
                 var owner = TopLevel.GetTopLevel(this) as Window;

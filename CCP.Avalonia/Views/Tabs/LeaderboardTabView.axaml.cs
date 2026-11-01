@@ -191,7 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Dispatcher.UIThread.Post(() => { if (VisualRoot != null) UpdateModeButtons(); }, DispatcherPriority.Background);
 
         /// <summary>WPF Leaderboard.cs:809-845: repaint the mode pill from the active mod.</summary>
-        private void UpdateModeButtons()
+        internal void UpdateModeButtons()
         {
             var monthly = this.FindControl<Button>("BtnLeaderboardMonthly");
             var allTime = this.FindControl<Button>("BtnLeaderboardAllTime");

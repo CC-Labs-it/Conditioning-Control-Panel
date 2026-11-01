@@ -71,13 +71,55 @@ public sealed class ShellUiModAndGateTests
         {
             shell.Show(); Settle();
             CoreSettings.Current.AutonomyModeEnabled = true;
+            CoreSettings.Current.AutonomyConsentGiven = true;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            Assert.True(shell.Autonomy.Start(withTimer: false));
+            Settle();
             var button = shell.Named<Control>("BambiTakeoverTab")!.FindControl<Button>("BtnAutonomyStartStop")!;
             RaiseMod(); Settle();
             Assert.Equal(Color.Parse(accent), ColorOf(button.Foreground));
             accent = "#654321"; RaiseMod(); Settle();
             Assert.Equal(Color.Parse(accent), ColorOf(button.Foreground));
-            CoreSettings.Current.AutonomyModeEnabled = false; RaiseMod(); Settle();
+            CoreSettings.Current.AutonomyModeEnabled = false; shell.Autonomy.Stop(); RaiseMod(); Settle();
             Assert.Equal(Color.FromRgb(144, 238, 144), ColorOf(button.Foreground));
+        }
+        finally { shell.Close(); }
+    });
+
+    [Fact]
+    public void PanicThenModChangeKeepsTakeoverStopped() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        CoreEntitlement.HasPremiumProvider = () => true;
+        CoreMods.AccentColorHexProvider = () => "#123456";
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show(); Settle();
+            var s = CoreSettings.Current;
+            s.AutonomyModeEnabled = s.AutonomyConsentGiven = true;
+            Assert.True(shell.Autonomy.Start(withTimer: false)); Settle();
+            var tab = shell.Named<Control>("BambiTakeoverTab")!;
+            var button = tab.FindControl<Button>("BtnAutonomyStartStop")!;
+            var status = tab.FindControl<TextBlock>("TxtTakeoverStatus")!;
+            Assert.Equal(Color.Parse("#123456"), ColorOf(button.Foreground));
+            Assert.Equal("● ACTIVE", status.Text);
+            PanicSurfaces.StopAll("test", shell); Settle();
+            Assert.True(s.AutonomyModeEnabled);
+            Assert.False(shell.Autonomy.IsEnabled);
+            Assert.Equal("○ DORMANT", status.Text);
+            Assert.Equal(Color.FromRgb(144, 238, 144), ColorOf(button.Foreground));
+            RaiseMod(); Settle();
+            Assert.True(s.AutonomyModeEnabled);
+            Assert.False(shell.Autonomy.IsEnabled);
+            Assert.Equal("○ DORMANT", status.Text);
+            Assert.Equal(Color.FromRgb(144, 238, 144), ColorOf(button.Foreground));
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_start_2"), Assert.IsType<TextBlock>(button.Content).Text);
+            button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle();
+            Assert.True(shell.Autonomy.IsEnabled);
+            Assert.True(s.AutonomyModeEnabled);
+            Assert.Equal("● ACTIVE", status.Text);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_stop_2"), Assert.IsType<TextBlock>(button.Content).Text);
         }
         finally { shell.Close(); }
     });

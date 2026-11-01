@@ -183,6 +183,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeModSelector();
             LoadLogo();   // WPF MainWindow.xaml.cs:3127
             RefreshThemeAwareElements();
+            // The manager can raise ModChanged while its dialog is open, before this palette pass.
+            Named<Tabs.LeaderboardTabView>("LeaderboardTab")?.UpdateModeButtons();
 
             // WPF ApplyActiveModChange: restore only an explicit pick remembered in this mod.
             // A restore keeps custom prompts intact and does not record a new pick.

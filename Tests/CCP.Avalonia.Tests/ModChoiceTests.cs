@@ -179,6 +179,41 @@ public sealed class ModChoiceTests
         Assert.Equal(active, ((ModSelectorItem)combo.SelectedItem!).Id);
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task ManagerSwitchRepaintsLeaderboardAfterPalette(bool allTime) => Run(async (shell, svc, server) =>
+    {
+        CoreSettings.Current.OfflineMode = true;
+        shell.ShowTab("leaderboard");
+        Dispatcher.UIThread.RunJobs();
+        var board = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.LeaderboardTabView>("LeaderboardTab")!;
+        await board.SetLeaderboardMode(allTime);
+        Dispatcher.UIThread.RunJobs();
+        var monthly = board.FindControl<Button>("BtnLeaderboardMonthly")!;
+        var all = board.FindControl<Button>("BtnLeaderboardAllTime")!;
+        var inactive = allTime ? monthly : all;
+        var before = ((ISolidColorBrush)inactive.Background!).Color;
+        Assert.Equal(((ISolidColorBrush)Application.Current!.Resources["AccentTintedBgBrush"]!).Color, before);
+
+        shell.FindControl<Button>("BtnManageMods")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var manager = await Owned<ModManagerDialog>(shell);
+        var list = manager.FindControl<ListBox>("ModList")!;
+        list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => (string?)i.Tag == BuiltInMods.DronificationId);
+        manager.FindControl<Button>("BtnActivate")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs(); // the mod event runs while the manager is still open
+        Assert.Equal(BuiltInMods.DronificationId, AvApp.Mods!.ActiveModId);
+        Assert.Equal(before, ((ISolidColorBrush)inactive.Background!).Color);
+        manager.Close();
+        await WaitFor(() => (Color)Application.Current!.Resources["PinkColor"]! == Color.Parse(AvApp.Mods.GetAccentColorHex()));
+        Dispatcher.UIThread.RunJobs();
+        var expected = ((ISolidColorBrush)Application.Current!.Resources["AccentTintedBgBrush"]!).Color;
+        Assert.NotEqual(before, expected);
+        Assert.Equal(expected, ((ISolidColorBrush)inactive.Background!).Color);
+        if (allTime) Assert.Equal(((ISolidColorBrush)Application.Current.Resources["DarkerBgBrush"]!).Color, ((ISolidColorBrush)all.Foreground!).Color);
+        Assert.Equal(allTime, board.IsAllTimeMode);
+    });
+
     [Fact]
     public Task HeaderModSwitchRepaintsHomeArtAndExternalModChangeRestoresShippedArt() => Run(async (shell, svc, server) =>
     {
