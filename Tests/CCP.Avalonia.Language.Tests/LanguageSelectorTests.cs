@@ -98,6 +98,8 @@ public sealed class LanguageSelectorTests
 
             try
         {
+            Assert.True(CoreSettings.Current.HasSeededDeeperDemos);
+            Assert.False(File.Exists(Path.Combine(TestProfile.DirectoryPath, "enhancements", "welcome.ccpenh.json")));
             Assert.Equal("ja", LocalizationManager.Instance.CurrentLanguage);
             Assert.Equal("ja", SelectedCode(Pill(shell)));
             Assert.Equal("ja", SelectedCode(General(shell)));
@@ -469,6 +471,9 @@ public sealed class LanguageSelectorTests
         settings.Current.Language = "ja";
         settings.Current.SessionRackSourceFilter = "all";
         settings.Current.Welcomed = true;
+        // A returning user already seeded the bundled Deeper demo (WPF App.xaml.cs:3418).
+        // Its one-time save must not be confused with a redundant startup save here.
+        settings.Current.HasSeededDeeperDemos = true;
         // The Dashboard's launch cards spend their seen-flag (a real save) when they open, like WPF;
         // spent here so the no-startup-save assertion keeps measuring startup itself.
         settings.Current.SeenFeatureIntros.AddRange(new[] { "daily-free", "one-account" });
