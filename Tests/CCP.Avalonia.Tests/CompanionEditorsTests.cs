@@ -4,10 +4,13 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -184,7 +187,12 @@ public sealed class CompanionEditorsTests
     });
 
     [Fact]
-    public Task PromptEditor_is_reachable_from_make_her_yours_links() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task PromptEditor_is_reachable_from_make_her_yours_links() => ExercisePromptEditorLinks(queuedLayout: false);
+
+    [Fact]
+    public Task PromptEditor_links_remain_clickable_when_layout_is_queued() => ExercisePromptEditorLinks(queuedLayout: true);
+
+    private static Task ExercisePromptEditorLinks(bool queuedLayout) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var service = new SettingsService();
@@ -197,7 +205,7 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Dispatcher.UIThread.RunJobs();
+            HeadlessRender.WaitForLiveTree(shell);
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
             // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
@@ -205,8 +213,20 @@ public sealed class CompanionEditorsTests
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
-                Dispatcher.UIThread.RunJobs();
+                var margin = button.Margin;
+                if (queuedLayout)
+                {
+                    // Reproduce layout queued by a composition commit on a busy runner.
+                    var compositor = ElementComposition.GetElementVisual(shell)!.Compositor;
+                    compositor.RequestCompositionUpdate(() => compositor.RequestCompositionUpdate(() =>
+                        button.Margin = new Thickness(margin.Left + 80, margin.Top, margin.Right, margin.Bottom)));
+                }
+                HeadlessRender.WaitForLiveTree(shell);
+                if (queuedLayout) Assert.Equal(margin.Left + 80, button.Margin.Left);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                var hit = shell.InputHitTest(at) as Visual;
+                Assert.True(hit == button || (hit != null && button.IsVisualAncestorOf(hit)),
+                    $"Prompt link at {at} hit {hit?.GetType().Name} instead of its button");
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
@@ -214,6 +234,7 @@ public sealed class CompanionEditorsTests
                 var editor = shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Single();
                 Click(editor.FindControl<Button>("BtnCancel")!);
                 await Until(() => !editor.IsVisible);
+                if (queuedLayout) button.Margin = margin;
             }
         }
         finally { shell.Close(); CoreSettings.ServiceProvider = null; }

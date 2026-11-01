@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -49,12 +48,12 @@ public sealed class ContentHitTestTests
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
                 if (tab == "awareness") w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")!.IsVisible = false;
-                RenderLiveTree(w);
+                HeadlessRender.WaitForLiveTree(w);
                 int tested = 0;
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
                     // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
-                    RenderLiveTree(w);
+                    HeadlessRender.WaitForLiveTree(w);
                     // !IsHitTestVisible: inert until hovered by design (the privacy card's chip close, WPF the same).
                     if (!b.IsEffectivelyVisible || !b.IsEffectivelyEnabled || !b.IsHitTestVisible || b.Bounds.Width < 4 || b.TemplatedParent is ScrollBar) continue;
                     // Click-proof on purpose (WPF Hidden): only the Presets rack row actions at rest; their hover path has its own test.
@@ -99,7 +98,7 @@ public sealed class ContentHitTestTests
         try
         {
             window.Show();
-            RenderLiveTree(window);
+            HeadlessRender.WaitForLiveTree(window);
             var compositor = ElementComposition.GetElementVisual(window)!.Compositor;
             void ChangeOnCommit()
             {
@@ -107,7 +106,7 @@ public sealed class ContentHitTestTests
                 else Canvas.SetLeft(button, 200);
             }
             compositor.RequestCompositionUpdate(ChangeOnCommit);
-            RenderLiveTree(window);
+            HeadlessRender.WaitForLiveTree(window);
             Assert.Equal(200, button.Bounds.X);
             var point = button.TranslatePoint(new Point(40, 15), window)!.Value;
             var hit = window.InputHitTest(point) as Visual;
@@ -117,42 +116,6 @@ public sealed class ContentHitTestTests
         finally { window.Close(); }
         return Task.CompletedTask;
     });
-
-    /// <summary>A completed batch can queue more UI layout work. Drain that batch first, then
-    /// arrange and render a fresh one. If layout changes while rendering, its coordinates belong
-    /// to a newer scene, so commit them before probing. No hit-test result is used as a wait condition.</summary>
-    private static void RenderLiveTree(Window window)
-    {
-        var compositor = ElementComposition.GetElementVisual(window)!.Compositor;
-        var deadline = Stopwatch.StartNew();
-        void RenderBatch()
-        {
-            var batch = compositor.RequestCompositionBatchCommitAsync();
-            while (!batch.Rendered.IsCompleted)
-            {
-                Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never rendered the live tree");
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                Dispatcher.UIThread.RunJobs();
-            }
-        }
-
-        Dispatcher.UIThread.RunJobs();
-        RenderBatch();
-        bool layoutChanged = false;
-        void LayoutChanged(object? sender, EventArgs e) => layoutChanged = true;
-        window.LayoutUpdated += LayoutChanged;
-        try
-        {
-            do
-            {
-                Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "layout did not settle before hit testing");
-                window.UpdateLayout();
-                layoutChanged = false;
-                RenderBatch();
-            } while (layoutChanged);
-        }
-        finally { window.LayoutUpdated -= LayoutChanged; }
-    }
 
     private static bool Inside(Visual v, Point p, Visual root)
         => v.TranslatePoint(default, root) is { } tl && v.TranslatePoint(new Point(v.Bounds.Width, v.Bounds.Height), root) is { } br

@@ -26,7 +26,7 @@ public sealed class CompanionPersonalityZoneTests
     private static void Click(Window shell, Control c)
     {
         c.BringIntoView();
-        Dispatcher.UIThread.RunJobs();
+        HeadlessRender.WaitForLiveTree(shell);
         var at = c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), shell)!.Value;
         shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
         shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
@@ -43,7 +43,7 @@ public sealed class CompanionPersonalityZoneTests
     public Task PresetChipsSpiceAndResetGoThroughTheGate() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
