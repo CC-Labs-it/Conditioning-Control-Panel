@@ -13,6 +13,8 @@ using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -48,6 +50,8 @@ public sealed class WorkshopPhrasePresetTests
     {
         var saved = new PhrasePreset { Name = "Saved", DisabledPhraseIds = new() { "saved" } };
         var other = new PhrasePreset { Name = "Other", DisabledPhraseIds = new() { "other" } };
+        other.CustomPhrases.AddRange(s.CustomCompanionPhrases);
+        other.CustomPhrases.Add(new CustomCompanionPhrase { Id = "preset-count", Text = "Preset phrase", Enabled = true });
         s.PhrasePresets.AddRange(new[] { saved, other });
         s.CurrentPhrasePresetId = saved.Id;
         s.DisabledPhraseIds.Add("live");
@@ -57,7 +61,11 @@ public sealed class WorkshopPhrasePresetTests
         Assert.Equal(saved, combo.SelectedItem);
         Assert.Contains("live", s.DisabledPhraseIds);
         Assert.DoesNotContain("saved", s.DisabledPhraseIds);
+        var count = parts.Triggers.FindControl<TextBlock>("TxtPhraseCount")!;
+        var before = count.Text;
         combo.SelectedItem = other;
+        Assert.NotEqual(before, count.Text);
+        Assert.Equal(Loc.GetF("label_active_phrase_count", CompanionPhraseEditorDialog.ActivePhraseCount()), count.Text);
         Assert.Equal(other.Id, s.CurrentPhrasePresetId);
         Assert.Contains("other", s.DisabledPhraseIds);
         s.DisabledPhraseIds.Add("later");

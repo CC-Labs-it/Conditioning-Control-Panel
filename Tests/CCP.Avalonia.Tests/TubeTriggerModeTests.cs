@@ -13,13 +13,9 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using Xunit;
 using ConditioningControlPanel.Services.Safety;
-using AvApp = global::ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>The tube's Trigger mode loop (WPF AvatarTube/AvatarTubeWindow.Speech.cs:1594-1635, 2047-2160):
-/// started on open when enabled at the user's interval, first word 2 s in, a random custom trigger per
-/// tick unless a line is up, haptic-only while muted, and restarted/stopped by the setting.</summary>
 public sealed class TubeTriggerModeTests
 {
     [Theory]
@@ -78,7 +74,6 @@ public sealed class TubeTriggerModeTests
             Assert.Equal(0, tube.QueuedSpeechCount);
             Assert.Equal("", text.Text);
             Assert.Equal(5.75, AvatarTubeWindow.TriggerDisplaySeconds("freeze"), 3);
-
             tube.EndSpeechBubble();
             ((Stepped)tube.SpeechClock).Now += TimeSpan.FromSeconds(3);
             s.AvatarMuted = true;                          // muted: haptic only, no bubble
@@ -86,7 +81,6 @@ public sealed class TubeTriggerModeTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("", text.Text);
             Assert.False(tube.IsSpeaking);
-
             // Panic refuses a ready tick, even while muted. Fail-proof: removing the guard
             // updates the speech end stamp, so the following unmuted tick cannot speak.
             ((Stepped)tube.SpeechClock).Now += TimeSpan.FromSeconds(3);
@@ -116,7 +110,6 @@ public sealed class TubeTriggerModeTests
             interruptedTyping.Tick();
             Assert.True(interruptedTyping.Stopped());
             Assert.Equal(afterPanic, text.Text); // fail-proof: even an already dispatched tick is stale
-
             ((Stepped)tube.SpeechClock).Now += TimeSpan.FromSeconds(3);
             loop.Tick();
             delays[^1].Fire();
@@ -126,7 +119,6 @@ public sealed class TubeTriggerModeTests
             Assert.True(replacedTyping.Stopped());
             Assert.Equal("replacement", text.Text);
             tube.EndSpeechBubble();
-
             // Linked-trigger regression: type the label, then render a real link, preserving surrounding text.
             s.CustomTriggers = new() { "Before [Watch](https://example.com) [Local](file:///tmp/a) after" };
             ((Stepped)tube.SpeechClock).Now += TimeSpan.FromSeconds(8); // replacement earned the AI-source gap
@@ -152,7 +144,6 @@ public sealed class TubeTriggerModeTests
             finally { CompanionLinkLauncher.Navigate = previousNavigate; }
             tube.EndSpeechBubble();
             s.CustomTriggers = new() { "freeze" }; // retain the close-path audio fail-proof
-
             s.TriggerIntervalSeconds = 120; // the settings event alone must restart the loop
             Dispatcher.UIThread.RunJobs();
             Assert.True(loop.Stopped());
