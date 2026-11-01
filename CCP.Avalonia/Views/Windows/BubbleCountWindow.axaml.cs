@@ -536,33 +536,62 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static readonly List<object> _quarantinedNative = new();
         internal static volatile bool NativeUnavailable;
 
-        internal static bool StopNative(Action stop, Action dispose, Action freeSink, object resources, int budgetMs)
+        internal static bool StopNative(Action stop, Action dispose, Action freeSink, object resources, int budgetMs,
+            Action<Action>? post = null)
         {
-            var task = Task.Run(stop);
+            post ??= action => Dispatcher.UIThread.Post(action);
+            var pending = Task.Run(stop);
+            var needsDispose = true;
+            var sinkFailed = false;
             try
             {
-                if (!task.Wait(budgetMs))
+                if (pending.Wait(budgetMs))
                 {
-                    _ = task.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
-                }
-                else
-                {
-                    // Never dispose a player whose Stop returned after the deadline.
-                    var disposal = Task.Run(dispose);
-                    if (disposal.Wait(budgetMs))
+                    pending = Task.Run(dispose);
+                    needsDispose = false;
+                    if (pending.Wait(budgetMs))
                     {
-                        freeSink();
-                        return true;
+                        try { freeSink(); return true; }
+                        catch { sinkFailed = true; }
                     }
-                    _ = disposal.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
                 }
             }
-            catch { /* A failed Stop or dispose is just as unsafe as a timeout. */ }
-            // WPF retires the shared instance; this head cannot rebuild it yet.
-            _quarantinedNative.Add(resources);
-            NativeUnavailable = true;
-            Serilog.Log.Warning("Bubble count native teardown did not settle; player quarantined");
+            catch { /* Keep failed native resources rooted. */ }
+
+            // WPF VideoService.cs:1320-1344 gives a slow Stop background grace before
+            // quarantine. This head cannot retire LibVLC, so keep starts blocked until
+            // teardown actually settles, even if that takes longer than the WPF grace.
+            lock (_quarantinedNative)
+            {
+                _quarantinedNative.Add(resources);
+                NativeUnavailable = true;
+            }
+            if (!sinkFailed) _ = FinishNativeAsync();
             return false;
+
+            async Task FinishNativeAsync()
+            {
+                try
+                {
+                    await pending.ConfigureAwait(false);
+                    if (needsDispose) await Task.Run(dispose).ConfigureAwait(false);
+                    post(() =>
+                    {
+                        try
+                        {
+                            freeSink(); // Bitmap and its callbacks belong to the UI thread.
+                            lock (_quarantinedNative)
+                            {
+                                var index = _quarantinedNative.FindIndex(item => ReferenceEquals(item, resources));
+                                if (index >= 0) _quarantinedNative.RemoveAt(index);
+                                NativeUnavailable = _quarantinedNative.Count != 0;
+                            }
+                        }
+                        catch (Exception ex) { Serilog.Log.Warning(ex, "Bubble count sink cleanup failed"); }
+                    });
+                }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Bubble count native teardown failed; player quarantined"); }
+            }
         }
 
         private static void StopPlayer()
