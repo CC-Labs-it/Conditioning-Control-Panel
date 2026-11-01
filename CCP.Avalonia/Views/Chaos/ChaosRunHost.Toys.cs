@@ -13,7 +13,7 @@ internal static partial class ChaosRunHost
     private static double _vibeRemaining, _snapRemaining;
     private static bool _afterglow, _vibeHover;
     private static FrameClock? _sweepTimer;
-    internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadToyPointer = X11Pointer.Read;
+    internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadToyPointer = X11Pointer.Read; // Same desktop pointer seam as the cursor/trail surfaces; null off X11.
     // WPF ChaosModeService.cs:2697-2709,2736-2749,2779-2780.
     private static bool FireToyEffect(ChaosToyState toy)
     {
@@ -47,7 +47,7 @@ internal static partial class ChaosRunHost
                 s.PushEvent(Loc.Get(maxed ? "chaos_toy_snap_all" : "chaos_toy_snap_live"));
                 return true;
             default:
-                // Freeze, DVD, rabbit and e-stim mechanics remain unported.
+                // ponytail: freeze, DVD contacts, rabbit aim/motion and e-stim need their BubbleService mechanics ported; do not award first_play for an inert toy.
                 return false;
         }
     }
