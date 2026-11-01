@@ -64,6 +64,8 @@ public class PaletteSynonymTests
     [InlineData("rabbit hole", "game.dtrh")]
     [InlineData("monitor", "section.monitors")]
     [InlineData("second monitor", "section.monitors")]
+    [InlineData("wallpaper", "section.wallpaper")]
+    [InlineData("live wallpaper", "section.wallpaper")]
     [InlineData("assets path", "tab.folders")]
     [InlineData("lock cards", "tab.permissions")]
     [InlineData("hypnotube", "tab.companionlinks")]
