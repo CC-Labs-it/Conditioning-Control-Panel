@@ -127,16 +127,27 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF App.AiEffects.cs:63,128-150: set, start the overlay even with the engine off,
         /// refresh and save. Refuse an unsafe or absent host before changing the user's settings.</summary>
-        internal static bool ApplySpiral(Window? host, bool on, int? opacity) => Start(() =>
+        internal static bool ApplySpiral(Window? host, bool on, int? opacity) => OnUi(() =>
         {
-            if (host is null || (on && !SpiralOverlay.CanStartForAi)) return false;
-            var s = CoreSettings.Current;
-            if (opacity is int value) s.SpiralOpacity = value;
-            s.SpiralEnabled = on;
-            if (on) SpiralOverlay.StartForAi(host);
-            else SpiralOverlay.Refresh(host);
-            CoreSettings.Save();
-            return true;   // the GIF may still be decoding, as for a deferred portal start
+            var generation = MainShellWindow.EngineGeneration;
+            return Start(() =>
+            {
+                if (generation != MainShellWindow.EngineGeneration || host is null
+                    || (on && !SpiralOverlay.CanStartForAi(host))) return false;
+                var s = CoreSettings.Current;
+                var (oldEnabled, oldOpacity) = (s.SpiralEnabled, s.SpiralOpacity);
+                if (opacity is int value) s.SpiralOpacity = value;
+                s.SpiralEnabled = on;
+                if (!SpiralOverlay.StartForAi(host))
+                {
+                    (s.SpiralEnabled, s.SpiralOpacity) = (oldEnabled, oldOpacity);
+                    SpiralOverlay.Refresh(host);
+                    return false;
+                }
+                PinkFilterOverlay.Refresh(host);   // WPF OverlayService.Start/RefreshOverlays
+                CoreSettings.Save();
+                return true;   // GIF decode and portal binding may still be in flight
+            });
         });
 
         /// <summary>True once the clip is really playing, false when refused or it never starts.</summary>

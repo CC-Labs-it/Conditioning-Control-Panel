@@ -36,6 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>A Takeover pulse holds the tint up with the engine off (WPF: the pulse starts
         /// OverlayService, #1180). MainShellWindow.Autonomy.cs sets and releases it.</summary>
         internal static bool PulseHold;
+        internal static bool SkipPlatformChecksForTests;
 
         private static bool _refused;
 
@@ -100,7 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // once per tick and logs a warning each time. Accept still runs - IsAvailable being
             // true does not promise THIS window is an X11 one, nor that the compositor granted
             // transparency.
-            if (!X11Overlay.IsAvailable)
+            if (!SkipPlatformChecksForTests && !X11Overlay.IsAvailable)
             {
                 Log.Debug("Pink filter: no X11 display, so no tint on this platform");
                 return;
@@ -172,7 +173,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <para>A session counts as running (WPF ResumeSession's App.Overlay.Start() after a panic) and a
         /// paused one hides the tint (PauseSession's App.Overlay.Stop()).</para>
         private static bool ShouldShow()
-            => PulseHold || (App.Sessions?.IsPaused != true
+            => PulseHold || SpiralOverlay.AiRunning || (App.Sessions?.IsPaused != true
                && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true));
 
         // Start (MainShellWindow.StartEngine) is what restores a tint left enabled - WPF OverlayService.Start().
@@ -180,6 +181,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The two safety refusals. False means the window has already been closed.</summary>
         private static bool Accept(TintOverlayWindow w)
         {
+            if (SkipPlatformChecksForTests) return true;
             if (!X11Overlay.SetClickThrough(w, true))
             {
                 Log.Warning("Pink filter: this platform cannot make the tint click-through, so it is not shown - a full-screen topmost window that swallows clicks would lock the desktop");

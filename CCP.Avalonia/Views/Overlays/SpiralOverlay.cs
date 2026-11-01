@@ -46,14 +46,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _refused;
         private static bool _aiRunning;
         internal static bool AiRunning => _aiRunning;
-        internal static bool CanStartForAi => SkipPlatformChecksForTests
-            || (!_refused && X11Overlay.IsAvailable && X11Overlay.IsCompositing);
+        internal static bool CanStartForAi(TopLevel host) => SkipPlatformChecksForTests
+            || CanStartForAi(host.TryGetPlatformHandle(), X11Overlay.IsAvailable, X11Overlay.IsCompositing, _refused);
+        internal static bool CanStartForAi(IPlatformHandle? handle, bool available, bool compositing, bool refused) =>
+            !refused && X11Overlay.BackendOf(handle) != OverlayBackend.None && available && compositing;
 
         // WPF App.AiEffects.cs:139-149 starts OverlayService even while the engine is off.
-        internal static void StartForAi(Visual host)
+        internal static bool StartForAi(Visual host)
         {
+            bool wasRunning = _aiRunning;
             _aiRunning = true;
-            Refresh(host);
+            try { if (Refresh(host)) return true; }
+            catch (Exception ex) { Log.Warning(ex, "Spiral: AI start failed"); CloseWindows(); }
+            _aiRunning = wasRunning;
+            return false;
         }
 
         /// <summary>The off-thread decode in flight, if any (tests await it).</summary>
@@ -96,11 +102,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
-        public static void Refresh(Visual host)
+        public static bool Refresh(Visual host)
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (!s.SpiralEnabled || !ShouldShow()) { CloseSpiral(); return true; }
 
             var path = SourcePath();
             var video = IsVideo(path);
@@ -110,7 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (!video)
                 {
                     BeginDecode(TopLevel.GetTopLevel(host) ?? host, path);
-                    return;
+                    return true;   // accepted; decoding completes asynchronously
                 }
                 foreach (var old in _frames) old.Dispose();
                 (_frames, _framesKey, _index) = (new List<Bitmap>(), path, 0);
@@ -118,10 +124,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_frames.Count == 0 && !video)   // undecodable: logged once by the decode
             {
                 // WPF's 500 ms tick re-picks past a broken random file; re-pick once so the run is not blank.
-                if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; Refresh(host); return; }
-                _aiRunning = false;
+                if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; return Refresh(host); }
                 CloseWindows();
-                return;
+                return false;
             }
 
             var screens = ScreenList.Enumerate(host);
@@ -133,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
             {
                 foreach (var w in Windows) w.Spiral.Opacity = opacity;   // WPF UpdateSpiralOpacity
-                return;
+                return true;
             }
 
             CloseWindows();
@@ -141,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
             {
                 Log.Debug("Spiral: no composited click-through overlay on this platform, so no spiral");
-                return;
+                return false;
             }
 
             foreach (var i in want)
@@ -158,11 +163,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Log.Warning("Spiral: the platform refused a click-through topmost overlay window, so the spiral is not shown");
                     _refused = true;
                     w.Close();
-                    CloseAll();
-                    return;
+                    CloseWindows();
+                    return false;
                 }
+                Windows.Add(w);   // CloseWindows can also clean up if Show throws
                 w.Show();
-                Windows.Add(w);
             }
             _shownOn = want;
             QuestMinutes.Follow(Windows.Count > 0);
@@ -170,7 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 try { _videoPlayer = VideoStart(path, ShowVideoFrame); }
                 catch (Exception ex) { Log.Warning(ex, "Spiral: video could not start"); }
-                if (_videoPlayer == null) { _aiRunning = false; CloseWindows(); return; }
+                if (_videoPlayer == null) { CloseWindows(); return false; }
             }
             if (_frames.Count > 1 && Windows.Count > 0)
             {
@@ -179,6 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _timer.Start();
             }
             Log.Debug("Spiral showing on {Count} screen(s) at {Opacity}%", Windows.Count, s.SpiralOpacity);
+            return Windows.Count > 0;
         }
 
         /// <summary>WPF GifFrameTimer_Tick: next frame on every window. Allocation-free.</summary>
@@ -194,6 +200,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void CloseAll()
         {
             _aiRunning = false;
+            CloseSpiral();
+        }
+
+        private static void CloseSpiral()
+        {
             _sourcePath = null;
             _configuredPath = null;
             _randomizeAtStart = null;
@@ -221,8 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF AchievementService:276 - quest minutes while the spiral is on screen.</summary>
         internal static readonly OverlayQuestMinutes QuestMinutes = new(m => App.Quests?.TrackSpiralMinutes(m));
 
-        /// <summary>Same gate as the pink tint (WPF RefreshOverlays returns early unless the engine runs):
-        /// a running engine or session, not paused. Unseeded (renders, tests) means the card owns it.</summary>
+        /// <summary>WPF OverlayService stays running after an AI off command, until stop or pause.</summary>
         private static bool ShouldShow()
             => _aiRunning || (App.Sessions?.IsPaused != true
                && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true));

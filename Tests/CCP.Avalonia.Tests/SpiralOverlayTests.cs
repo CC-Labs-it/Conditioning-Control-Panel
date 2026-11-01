@@ -386,6 +386,170 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
             }
         });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_held_ai_start_is_cancelled_by_stop_or_session_pause(bool pause)
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var lab = CoreAccount.HasLabAccessProvider;
+            var consent = s.CompanionPrompt.AllowAiToControlEffects;
+            SessionRunner? runner = null;
+            try
+            {
+                CoreAccount.HasLabAccessProvider = () => true;
+                s.CompanionPrompt.AllowAiToControlEffects = true;
+                if (pause)
+                {
+                    runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+                    s.SkipPauseXpWarning = true;
+                    shell.StartSession(new Session { Id = "held_ai", Name = "Held AI", DurationMinutes = 1 });
+                    Assert.True(runner.IsRunning);
+                }
+                (s.SpiralEnabled, s.SpiralOpacity) = (false, 40);
+                Action? held = null;
+                CompanionEffects.StartEffect = start => held = start;
+                Assert.True(CompanionEffects.ApplySpiral(shell, true, 25));
+                if (pause)
+                {
+                    shell.Named<Button>("BtnPauseSession")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                    await Task.Yield();
+                    Assert.True(runner!.IsPaused);
+                }
+                else MainShellWindow.StopEngine();
+                Assert.NotNull(held);
+                held!();
+                await Settle();
+                Assert.Equal((false, 40), (s.SpiralEnabled, s.SpiralOpacity));
+                Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.AiRunning);
+            }
+            finally
+            {
+                CompanionEffects.StartEffect = MainShellWindow.StartEffect;
+                runner?.Stop();
+                if (runner != null) { CoreSession.IsSessionRunningProvider = null; global::ConditioningControlPanel.Avalonia.App.Sessions = null; }
+                s.CompanionPrompt.AllowAiToControlEffects = consent;
+                CoreAccount.HasLabAccessProvider = lab;
+            }
+        });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Either_ai_command_starts_pink_and_off_keeps_the_service_running(bool on)
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var lab = CoreAccount.HasLabAccessProvider;
+            var consent = s.CompanionPrompt.AllowAiToControlEffects;
+            var pink = s.PinkFilterEnabled;
+            Window? cardHost = null;
+            try
+            {
+                CoreAccount.HasLabAccessProvider = () => true;
+                s.CompanionPrompt.AllowAiToControlEffects = true;
+                PinkFilterOverlay.SkipPlatformChecksForTests = true;
+                (s.SpiralEnabled, s.PinkFilterEnabled) = (false, true);
+                Assert.True(CompanionEffects.ApplySpiral(shell, on, on ? 25 : null));
+                await Settle();
+                Assert.True(PinkFilterOverlay.IsShowing);
+                Assert.True(SpiralOverlay.AiRunning);
+                if (on) Assert.True(CompanionEffects.ApplySpiral(shell, false, null));
+                Assert.False(SpiralOverlay.IsShowing);
+                Assert.True(SpiralOverlay.AiRunning);
+                var card = new SpiralFeatureControl();
+                cardHost = new Window { Content = card };
+                cardHost.Show();
+                card.FindControl<CheckBox>("ChkEnable")!.IsChecked = true;
+                await Settle();
+                Assert.True(SpiralOverlay.IsShowing, Why());
+                MainShellWindow.StopEngine();
+                Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.AiRunning || PinkFilterOverlay.IsShowing);
+            }
+            finally
+            {
+                cardHost?.Close();
+                PinkFilterOverlay.CloseAll();
+                PinkFilterOverlay.SkipPlatformChecksForTests = false;
+                s.PinkFilterEnabled = pink;
+                s.CompanionPrompt.AllowAiToControlEffects = consent;
+                CoreAccount.HasLabAccessProvider = lab;
+            }
+        });
+
+    [Fact]
+    public async Task Ai_off_keeps_the_service_running_for_the_spiral_card_until_stop()
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var lab = CoreAccount.HasLabAccessProvider;
+            var consent = s.CompanionPrompt.AllowAiToControlEffects;
+            try
+            {
+                CoreAccount.HasLabAccessProvider = () => true;
+                s.CompanionPrompt.AllowAiToControlEffects = true;
+                s.SpiralEnabled = false;
+                Assert.True(CompanionEffects.ApplySpiral(shell, false, null));
+                Assert.True(SpiralOverlay.AiRunning);
+                var card = new SpiralFeatureControl();
+                var host = new Window { Content = card };
+                try
+                {
+                    host.Show();
+                    card.FindControl<CheckBox>("ChkEnable")!.IsChecked = true;
+                    await Settle();
+                    Assert.True(SpiralOverlay.IsShowing, Why());
+                    MainShellWindow.StopEngine();
+                    Assert.False(SpiralOverlay.AiRunning || SpiralOverlay.IsShowing);
+                }
+                finally { host.Close(); }
+            }
+            finally
+            {
+                s.CompanionPrompt.AllowAiToControlEffects = consent;
+                CoreAccount.HasLabAccessProvider = lab;
+            }
+        });
+
+    [Theory]
+    [InlineData("XID", true)]
+    [InlineData("HWND", true)]
+    [InlineData("WL_SURFACE", false)]
+    [InlineData("headless", false)]
+    public void Ai_spiral_checks_the_actual_window_backend(string descriptor, bool expected)
+    {
+        var handle = new global::Avalonia.Platform.PlatformHandle(new IntPtr(1), descriptor);
+        Assert.Equal(expected, SpiralOverlay.CanStartForAi(handle, true, true, false));
+        Assert.False(SpiralOverlay.CanStartForAi(handle, true, false, false));
+        Assert.False(SpiralOverlay.CanStartForAi(handle, true, true, true));
+    }
+
+    [Fact]
+    public async Task A_synchronous_spiral_start_failure_is_reported_without_saving_settings()
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var lab = CoreAccount.HasLabAccessProvider;
+            var consent = s.CompanionPrompt.AllowAiToControlEffects;
+            var player = SpiralOverlay.VideoStart;
+            try
+            {
+                CoreAccount.HasLabAccessProvider = () => true;
+                s.CompanionPrompt.AllowAiToControlEffects = true;
+                (s.SpiralEnabled, s.SpiralOpacity) = (false, 40);
+                s.SpiralPath = Path.ChangeExtension(gif, ".mp4");
+                File.WriteAllBytes(s.SpiralPath, Array.Empty<byte>());
+                SpiralOverlay.VideoStart = (_, _) => null;
+                Assert.False(CompanionEffects.ApplySpiral(shell, true, 25));
+                Assert.Equal((false, 40), (s.SpiralEnabled, s.SpiralOpacity));
+                Assert.False(SpiralOverlay.IsShowing || SpiralOverlay.AiRunning);
+                await Task.CompletedTask;
+            }
+            finally
+            {
+                SpiralOverlay.VideoStart = player;
+                s.CompanionPrompt.AllowAiToControlEffects = consent;
+                CoreAccount.HasLabAccessProvider = lab;
+            }
+        });
+
     /// <summary>Waits out every in-flight decode, including one a landing decode starts for a newer path.</summary>
     private static async Task Settle()
     {
