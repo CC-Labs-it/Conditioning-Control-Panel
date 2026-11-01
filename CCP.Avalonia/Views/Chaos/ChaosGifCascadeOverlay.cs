@@ -40,8 +40,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         internal static ChaosGifCascadeOverlay? Active => _active;
         internal static Task? LastPick { get; private set; }
-        /// <summary>The newest clip decode (tests await it, then run the posted attach).</summary>
+        /// <summary>The newest worker; use PendingDecodes before releasing input files.</summary>
         internal static Task? LastDecode { get; private set; }
+        /// <summary>All outstanding decode workers, including earlier clips and closed windows.</summary>
+        internal static Task? PendingDecodes { get; private set; }
+        internal static Action? BeforeDecodeForTests;
 
         /// <summary>WPF IsRaining: a cascade is spawning or clips are still falling.</summary>
         public static bool IsRaining => _active?._cascade.IsRaining == true;
@@ -284,9 +287,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             bool animate = f.Animated;
             int px = (int)Math.Round(size * _scale);
             if (RenderProof.Rendering) { Attach(f, clip, Decode(path, px, animate)); return; }
-            LastDecode = Task.Run(() => Decode(path, px, animate)).ContinueWith(t =>
+            var pending = PendingDecodes;
+            LastDecode = Task.Run(() =>
+            {
+                BeforeDecodeForTests?.Invoke();
+                return Decode(path, px, animate);
+            }).ContinueWith(t =>
                 Dispatcher.UIThread.Post(() => Attach(f, clip, t.IsCompletedSuccessfully ? t.Result : (new List<Bitmap>(), default))),
                 TaskScheduler.Default);
+            PendingDecodes = pending is { IsCompleted: false } ? Task.WhenAll(pending, LastDecode) : LastDecode;
         }
 
         private static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int px, bool animate)

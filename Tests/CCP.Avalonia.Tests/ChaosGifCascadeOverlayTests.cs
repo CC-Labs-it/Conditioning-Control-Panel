@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -97,12 +98,13 @@ public sealed class ChaosGifCascadeOverlayTests
             finally
             {
                 ChaosGifCascadeOverlay.CloseActive();
+                await Decoded();
                 ChaosGifCascadeOverlay.Clock = TimeProvider.System;
                 ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
                 ChaosGifCascadeOverlay.ManualFramesForTests = false;
             }
         });
-        try { Directory.Delete(dir, true); } catch { }
+        Directory.Delete(dir, true);
     }
 
     [Fact]
@@ -148,6 +150,7 @@ public sealed class ChaosGifCascadeOverlayTests
                 finally
                 {
                     ChaosGifCascadeOverlay.CloseActive();
+                    await Decoded();
                     ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
                     ChaosGifCascadeOverlay.ManualFramesForTests = false;
                     global::ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = previousRoot;
@@ -414,8 +417,7 @@ public sealed class ChaosGifCascadeOverlayTests
                 {
                     ChaosRunHost.ForceShutdown();
                     ChaosGifCascadeOverlay.CloseActive();
-                    if (ChaosGifCascadeOverlay.LastDecode is { } decode) await decode;
-                    Dispatcher.UIThread.RunJobs();
+                    await Decoded();
                     ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
                     ChaosGifCascadeOverlay.ManualFramesForTests = false;
                     CorePaths.EffectiveAssetsProvider = previousRoot;
@@ -428,14 +430,73 @@ public sealed class ChaosGifCascadeOverlayTests
         finally { Directory.Delete(dir, true); }
     }
 
+    [Fact]
+    public async Task DecodeDrainWaitsForEarlierFileReadersAfterWindowCloses()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-cascade-decode-").FullName;
+        var gif = Path.Combine(dir, "tiny.gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
+        using var release = new ManualResetEventSlim();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                int calls = 0;
+                Task? firstDecode = null;
+                try
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    ChaosGifCascadeOverlay.BeforeDecodeForTests = () =>
+                    {
+                        if (Interlocked.Increment(ref calls) != 1) return;
+                        using var held = File.Open(gif, FileMode.Open, FileAccess.Read, FileShare.Read);
+                        started.SetResult();
+                        if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("decode not released");
+                    };
+                    Show(gif);
+                    firstDecode = ChaosGifCascadeOverlay.LastDecode;
+                    await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                    ChaosGifCascadeOverlay.Active!.Cascade.Step(0.6); // a second decode overtakes the first
+                    await ChaosGifCascadeOverlay.LastDecode!;
+                    var drain = ChaosGifCascadeOverlay.PendingDecodes!;
+                    ChaosGifCascadeOverlay.CloseActive();
+                    Assert.False(drain.IsCompleted); // the earlier worker still owns tiny.gif
+                    release.Set();
+                    await Decoded();
+                    Assert.True(drain.IsCompletedSuccessfully);
+                    Assert.Null(ChaosGifCascadeOverlay.Active);
+                    using var exclusive = File.Open(gif, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                }
+                finally
+                {
+                    release.Set();
+                    ChaosGifCascadeOverlay.CloseActive();
+                    if (firstDecode != null) await firstDecode;
+                    await Decoded();
+                    ChaosGifCascadeOverlay.BeforeDecodeForTests = null;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     private static void Show(string gif) => ChaosGifCascadeOverlay.ShowWithFiles(new() { gif },
         GifCascade.PayloadSpawnRatePerSec, GifCascade.PayloadDurationSec, GifCascade.PayloadGifSize,
         GifCascade.PayloadFallSpeed, GifCascade.PayloadOpacity, GifCascade.PayloadStartScale);
 
-    /// <summary>The decode runs on the thread pool; await it, then run the attach it posted.</summary>
+    /// <summary>Drain every decode worker, then run their posted attaches/disposals before deleting files.</summary>
     private static async Task Decoded()
     {
-        if (ChaosGifCascadeOverlay.LastDecode is { } d) await d;
+        if (ChaosGifCascadeOverlay.PendingDecodes is { } d) await d;
         Dispatcher.UIThread.RunJobs();
     }
 }
