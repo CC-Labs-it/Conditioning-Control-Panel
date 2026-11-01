@@ -54,7 +54,11 @@ public sealed partial class GameWindowTests
             Assert.Empty(pools);
             Assert.False((bool)sent.Last()["value"]!);
             w.GlassroadAskConsent = () => Task.FromResult(true);
+            int beforeAccept = sent.Count;
             w.SetGlassroadPicturesAsync(JObject.Parse("{\"key\":\"media.remoteConsent\",\"value\":true,\"ask\":true}")).GetAwaiter().GetResult();
+            var echo = Assert.Single(sent.Skip(beforeAccept).Where(o => (string?)o["type"] == "setting"));
+            Assert.Equal("media.remoteConsent", (string?)echo["key"]);
+            Assert.True((bool)echo["value"]!);
             var pool = Assert.Single(pools);
             Assert.Contains("EroticHypnosis", pool.Channels);
             Assert.DoesNotContain("unknown", pool.Channels);
@@ -73,14 +77,20 @@ public sealed partial class GameWindowTests
             Assert.Empty((JArray)sent.Last(o => (string?)o["type"] == "scrolller-feed")["rows"]!);
             var current = pools.Last();
             Assert.Contains("Sissies", current.Channels);
+            int beforeOffline = sent.Count;
             s.OfflineMode = true;
+            var offlineEcho = Assert.Single(sent.Skip(beforeOffline).Where(o => (string?)o["type"] == "setting"));
+            Assert.False((bool)offlineEcho["value"]!);
             Assert.True(current.Disposed);
             Assert.Empty((JArray)sent.Last(o => (string?)o["type"] == "scrolller-feed")["rows"]!);
             pool.Snapshot(new GoonOnlineMedia.Snapshot("ready", pool.Channels,
                 new[] { new GoonOnlineMedia.Item("one", "x", path) }, Array.Empty<GoonOnlineMedia.Item>(), 1, 1));
             Dispatcher.UIThread.RunJobs();
             Assert.Empty((JArray)sent.Last(o => (string?)o["type"] == "scrolller-feed")["rows"]!);
+            int beforeOnline = sent.Count;
             s.OfflineMode = false;
+            var onlineEcho = Assert.Single(sent.Skip(beforeOnline).Where(o => (string?)o["type"] == "setting"));
+            Assert.True((bool)onlineEcho["value"]!);
             Assert.Equal(3, pools.Count);
             PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
             Dispatcher.UIThread.RunJobs();

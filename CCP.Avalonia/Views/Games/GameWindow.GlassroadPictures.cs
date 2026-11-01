@@ -48,6 +48,7 @@ internal sealed partial class GameWindow
     private List<string> _grNiches = new();
     private IReadOnlyList<string> _grChannels = Array.Empty<string>();
     private int _grPictureOffset, _grPictureVersion, _grSettingVersion;
+    private bool _grWritingSetting;
 
     private static bool GlassroadPicturesOn()
     {
@@ -64,21 +65,29 @@ internal sealed partial class GameWindow
         bool asked = o["ask"]?.Type == JTokenType.Boolean && (bool)o["ask"]!;
         try
         {
+            bool consent = false, newConsent = false;
             if (want && asked)
             {
-                bool consent = s.HasRemoteMediaConsent;
+                consent = s.HasRemoteMediaConsent;
                 if (!consent)
                 {
                     var (title, message) = AssetsTabView.RemoteMediaConsentText();
                     consent = GlassroadAskConsent != null ? await GlassroadAskConsent()
                         : await MessageDialog.ConfirmAsync(this, title, message, okText: Loc.Get("label_yes"));
                     if (!_grOpen || _closing || version != _grSettingVersion) return;
-                    if (consent) s.RemoteMediaConsented = true;
+                    newConsent = consent;
                 }
-                if (consent) s.GlassroadPictures = true;
             }
-            else if (!want) s.GlassroadPictures = false;
-            CoreSettings.Save();
+            // The page treats its first echo as the answer, so publish only after both writes.
+            _grWritingSetting = true;
+            try
+            {
+                if (newConsent) s.RemoteMediaConsented = true;
+                if (want && asked && consent) s.GlassroadPictures = true;
+                else if (!want) s.GlassroadPictures = false;
+                CoreSettings.Save();
+            }
+            finally { _grWritingSetting = false; }
             bool on = GlassroadPicturesOn();
             if (on) StartGlassroadPictures(); else StopGlassroadPictures();
             Post(new { type = "setting", key = GlassroadPictures.SettingKey, value = on });
@@ -160,6 +169,7 @@ internal sealed partial class GameWindow
 
     private void OnGlassroadSettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (_grWritingSetting) return;
         if (e.PropertyName is not ("OfflineMode" or "MediaSource" or "RemoteMediaConsented" or "FypOnlineConsented" or "GlassroadPictures")) return;
         void Apply()
         {
