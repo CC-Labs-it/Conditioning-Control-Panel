@@ -44,6 +44,30 @@ public sealed class TubeContentGatesTests
     }
 
     [Fact]
+    public async Task MenuRendersAfterAvatarGeometryIsReadOnAWorker()
+    {
+        // Geometry is used by pure callers too; touching it first must not bind menu brushes to that thread.
+        await Task.Run(() => AvatarTubeWindow.TubeMotesBox(false));
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var tube = new AvatarTubeWindow(null);
+            var menu = tube.FindControl<ContextMenu>("AvatarContextMenu")!;
+            try
+            {
+                tube.Show();
+                menu.Open(tube.FindControl<Border>("AvatarBorder") ?? (Control)tube);
+                Dispatcher.UIThread.RunJobs(); // render the actual icon headers and their foregrounds
+                Assert.True(menu.IsOpen);
+            }
+            finally { menu.Close(); tube.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public Task ExplicitPresetFromTheMenuWaitsOnTheAcknowledgement() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
