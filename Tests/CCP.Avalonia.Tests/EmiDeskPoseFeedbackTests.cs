@@ -43,7 +43,7 @@ public sealed class EmiDeskPoseFeedbackTests
             // Cancellation does not complete the wake; a subsequent pat takes over its pose.
             desk.PlayChain("wake", () => done++);
             desk.CancelChain();
-            Assert.Same(shock, body.Source); Assert.Equal(1, done);
+            Assert.Same(idle, body.Source); Assert.Same(idleOver, over.Source); Assert.Equal(1, done);
             Pat(desk);
             Assert.NotSame(shock, body.Source);
             Assert.Equal("pet", Pose(desk));

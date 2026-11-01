@@ -31,7 +31,7 @@ public partial class EmiDeskWindow
     // The wordless wake and pat faces share this clock; only wake may be cut for a pat.
     private void StartPatFeedback(IReadOnlyList<EmiPatFrame> frames, string pose)
     {
-        StopPatFeedback();
+        StopPatFeedback(restorePose: false);
         SetPose(pose);
         _patFeedback = frames;
         _patFaceDrawn = null;
@@ -53,13 +53,12 @@ public partial class EmiDeskWindow
             var done = _wakeFeedbackDone;
             bool wake = _summonChainLive;
             StopPatFeedback(restoreFace: !wake);
-            SetPose("idle");
             done?.Invoke();
         }
         else if (face != _patFaceDrawn) { _patFaceDrawn = face; DrawFace(face); }   // P07
     }
 
-    private void StopPatFeedback(bool restoreFace = true)
+    private void StopPatFeedback(bool restoreFace = true, bool restorePose = true)
     {
         if (_patFeedbackTimer is not null)
         {
@@ -68,7 +67,11 @@ public partial class EmiDeskWindow
             _patFeedbackTimer = null;
         }
         _wakeFeedbackDone = null; // cancellation never completes the entrance
-        if (restoreFace && _patFeedback is not null) DrawFace(EmiChains.RestFace);
+        if (_patFeedback is not null)
+        {
+            if (restoreFace) DrawFace(EmiChains.RestFace);
+            if (restorePose) SetPose("idle");
+        }
         _patFeedback = null;
     }
 }

@@ -1243,6 +1243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void OnBodyPointerMoved(object? sender, PointerEventArgs e)
         {
+            if (PresentationActive) { e.Handled = true; return; } // WPF xaml.cs:1515-1517
             try
             {
                 if (!_dragging)
@@ -1353,12 +1354,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 e.Handled = true;
-                if (InputLocked || _transiting) return;
+                if (PresentationActive || InputLocked || _transiting) return;
 
                 // The two buttons agree about the entrance: if the left one may cut it, so may this
                 // one, or the ring would open over a chain that is still animating her body.
-                FinishSummon();
-                CancelChain();
+                if (_summonChainLive) { FinishSummon(); CancelChain(); }
 
                 RaiseActivity();
                 PlayClickSquash();
@@ -1653,7 +1653,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 if (_petTimer != null) { _petTimer.Stop(); _petTimer.Tick -= OnPetTick; _petTimer = null; }
-                if (_closingForGood) return;
+                if (_closingForGood || PresentationActive) return;
                 if (_transiting || InputLocked) return;
                 // LAW 3: a line in flight is never cut for a head-pat. Ignore, do not queue.
                 if (ChainLive) return;
