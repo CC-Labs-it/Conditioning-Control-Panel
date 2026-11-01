@@ -250,6 +250,7 @@ public sealed class ShellTrayTests
             return Task.CompletedTask;
         });
     }
+
     [Fact]
     public async Task DeniedTrayDoesNotRaisePanelOverLauncherBoot()
     {
@@ -293,4 +294,56 @@ public sealed class ShellTrayTests
         });
     }
 
+    [Fact]
+    public async Task DeniedTrayAfterTrayBackToLauncherKeepsPanelHidden()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            CoreSettings.Current.Welcomed = true;
+            CoreSettings.Current.HasAcceptedAgeVerification = true;
+            // Routing is synchronous with motion off; launcher fade tests cover the animation.
+            CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Off;
+            var shell = new MainShellWindow();
+            var boot = LauncherWindow.Boot;
+            try
+            {
+                LauncherWindow.Boot = global::ConditioningControlPanel.Services.Launcher.BootDecision.LauncherFirst;
+                shell.CreateTray();
+                shell.TrayHostPresent = () => true;
+                shell.Show();
+                LauncherWindow.RouteBoot(shell);
+                LauncherWindow.OpenPanel(shell); // Establish the existing launcher/panel link.
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(shell.IsVisible);
+                Assert.False(LauncherWindow.Instance!.IsVisible);
+                shell.Close(); // X-to-tray, with no ShowFromTray before the menu handoff.
+                Assert.False(shell.IsVisible);
+                var back = Assert.IsType<NativeMenuItem>(shell.Tray!.Menu!.Items[1]);
+                Assert.True(back.IsVisible);
+                Assert.True(back.IsEnabled);
+                back.Command!.Execute(null);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(LauncherWindow.Instance.IsVisible);
+                Assert.False(shell.IsVisible);
+                Dispatcher.UIThread.Post(() => throw TrayFailure());
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(shell.CanHideToTray);
+                Assert.False(shell.IsVisible);
+                Assert.True(LauncherWindow.Instance.IsVisible);
+            }
+            finally
+            {
+                LauncherWindow.Instance?.Close();
+                LauncherWindow.Boot = boot;
+                shell.Tray?.Dispose();
+                shell.MarkExitRequestedForTest();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
 }

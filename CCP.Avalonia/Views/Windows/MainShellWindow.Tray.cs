@@ -53,6 +53,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private bool _trayRegistrationDenied;
         private bool _hiddenToTray;
+        // WPF LauncherHost.cs:304-328 and App.xaml.cs:4286: routing owns the hidden panel now.
+        internal void ClearTrayHide() => _hiddenToTray = false;
+
         internal bool CanHideToTray => Tray is not null && !_trayRegistrationDenied && TrayHostPresent();
 
         private void DetachTrayHandlers(object? sender, EventArgs e)

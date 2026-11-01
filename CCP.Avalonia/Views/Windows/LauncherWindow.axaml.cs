@@ -151,6 +151,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The launcher goes with its panel: hidden, it would keep a trayless process alive UI-less.</summary>
         private LauncherWindow Link(MainShellWindow panel)
         {
+            // Also on a reused link: X-to-tray may have happened since the last handoff.
+            panel.ClearTrayHide();
             if (!ReferenceEquals(_panel, panel)) { _panel = panel; panel.Closed += (_, _) => Close(); }
             return this;
         }
@@ -167,6 +169,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                panel.ClearTrayHide();
                 panel.Hide();
                 panel.HideAvatarTube();
                 if (!(Boot.Surface == BootSurface.Game && Boot.GameId is { } id && LaunchGame(panel, id)))
