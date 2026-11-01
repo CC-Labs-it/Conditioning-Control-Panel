@@ -960,6 +960,7 @@ public sealed partial class GameWindowTests
             Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
             Assert.Equal("reduced", (string?)sent[0]["motionLevel"]);
             Assert.Equal("Normal", (string?)sent[0]["runSetup"]!["difficulty"]);
+            Assert.Equal("Basic", (string?)sent[0]["plans"]!["basic"]!["name"]);
             Assert.EndsWith("/ccp.assets/images/pic.png", (string?)sent[1]["images"]!.Single()["url"]);
             Assert.EndsWith("/ccp.assets/videos/clip.mp4", (string?)sent[1]["videos"]!.Single()["url"]);
             sent.Clear();
@@ -1066,6 +1067,50 @@ public sealed partial class GameWindowTests
         Assert.NotNull(GameWindow.OpenForTests("dtrh"));
         PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
         Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    [Fact]
+    public void Dtrh_FunnelOpensOnlyOutsideTheRunAndExit() => RunDtrh(lab: true, (shell, _, _, _) =>
+    {
+        FunnelPageMessage.ResetForTests();
+        var opened = new List<string>();
+        int counts = 0;
+        var now = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc);
+        bool offline = CoreSettings.Current.OfflineMode;
+        try
+        {
+            CoreSettings.Current.OfflineMode = false;
+            FunnelPageMessage.BaseUrlOverride = "http://127.0.0.1:9";
+            FunnelPageMessage.SendOverride = (_, _) => { Interlocked.Increment(ref counts); return Task.CompletedTask; };
+            FunnelPageMessage.OpenCheckout = url => { opened.Add(url); return true; };
+            FunnelPageMessage.UtcNow = () => now;
+            var w = GameWindow.Launch("dtrh")!;
+            const string cta = "{\"type\":\"funnel\",\"event\":\"cta_clicked\",\"a\":\"dtrh\",\"b\":\"patreon\",\"plan\":\"basic\"}";
+            w.HandleMessage(cta);
+            Assert.Equal(ConditioningControlPanel.Services.Vault.PlanCatalog.Current.Basic.PatreonUrl, Assert.Single(opened));
+            w.HandleMessage(cta); // throttled, but counted
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            now = now.AddSeconds(4);
+            w.HandleMessage(cta); // during a run
+            Assert.Single(opened);
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+            w.HandleMessage(cta);
+            Assert.Equal(2, opened.Count);
+            w.HandleMessage("{\"type\":\"exit\"}");
+            now = now.AddSeconds(4);
+            w.HandleMessage(cta); // page is exiting
+            Assert.Equal(2, opened.Count);
+            PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+            w.HandleMessage(cta); // the window is closed
+            Assert.Equal(2, opened.Count);
+            Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref counts) == 6, TimeSpan.FromSeconds(5)));
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        finally
+        {
+            CoreSettings.Current.OfflineMode = offline;
+            FunnelPageMessage.ResetForTests();
+        }
     });
 
     /// <summary>WPF DtrhHostService.PostManifest / OnRemoteCopiesReady (724ac82bc): the manifest's urls are root-relative

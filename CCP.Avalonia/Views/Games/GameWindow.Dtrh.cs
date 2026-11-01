@@ -71,6 +71,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     IsReady = true;
                     OnDtrhPageReady();
                     return true;
+                case "funnel":
+                    FunnelPageMessage.Handle(o, !_dtrhRunActive && !_dtrhExiting && !_closing);
+                    return true;
                 case "heartbeat":
                 case "pong":
                     return true;   // the watchdog lands with game-dtrh-host-b
@@ -104,6 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try { Web.Focus(); }   // Escape (pause / hold-to-exit) works from the first frame
             catch (Exception ex) { Log.Debug("DtrhHost: focus: {E}", ex.Message); }
             Post(DtrhInitMessage());
+            _ = ConditioningControlPanel.Services.Vault.PlanCatalog.GetAsync();
             try { PostDtrhManifest(); }
             catch (Exception ex) { Log.Warning("DtrhHostService.OnPageReady: {E}", ex.Message); }
             // WPF :303: online media copied to this machine after this frame reaches the page as a fresh manifest
@@ -147,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             modContent = (object?)null,   // WPF DtrhModContent.BuildInitPayload: null = shipped assets
             runSetup = DtrhRunWire.RunSetup(CoreSettings.Current),
             m2Test = false,
+            plans = ConditioningControlPanel.Services.Vault.PlanCatalog.ToWire(ConditioningControlPanel.Services.Vault.PlanCatalog.Current),
         };
 
         /// <summary>WPF OnRequestRun (:523): persist the hub's choices, deal the run, answer run-config.</summary>
