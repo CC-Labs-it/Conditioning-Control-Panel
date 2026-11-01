@@ -437,9 +437,9 @@ namespace ConditioningControlPanel.Services
                 .Where(p => listNames.Contains(PropertyNameOfJsonKey(p.Name), StringComparer.OrdinalIgnoreCase))
                 .Select(p => new JProperty(p.Name, p.Value.DeepClone())));
             var slotLists = ListsOnly(slotSettings);
-            // Older Linux backups leaked preset paths. Only Windows-style slot paths help frozen WPF.
+            // Only Windows-rooted slot paths may fill omitted paths; old relative values must not undo local choices.
             foreach (var p in slotLists.Descendants().OfType<JProperty>().Where(p => p.Value.Type == JTokenType.String
-                && ((string?)p.Value)?.StartsWith('/') == true
+                && !(IsRootedPath((string?)p.Value) && ((string?)p.Value)?.StartsWith('/') == false)
                 && (p.Name.ToLowerInvariant() is "path" or "gifpath" or "audiofilepath" or "filepath")).ToList())
                 p.Remove();
             var local = slotLists.ToObject<AppSettings>(serializer)!;

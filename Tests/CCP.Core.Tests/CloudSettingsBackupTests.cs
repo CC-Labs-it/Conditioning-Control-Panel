@@ -188,6 +188,8 @@ public sealed class CloudSettingsBackupTests : IDisposable
 
     [Theory]
     [InlineData("/home/me/old.mp3", false)]
+    [InlineData("AwarenessPresets/audio/bell.wav", false)]
+    [InlineData("", false)]
     [InlineData(@"C:\old.mp3", true)]
     [InlineData(@"\\server\share\old.mp3", true)]
     public async Task LegacySlotPathsDropLinuxLeaksButCarryWindowsPaths(string path, bool carry)
@@ -200,10 +202,19 @@ public sealed class CloudSettingsBackupTests : IDisposable
             ? new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(slotJson.ToString()) } }.ToString() : null;
         var here = Signed();
         SetItemPaths(here, "/home/me/current.mp3");
+        here.KeywordTriggers[0].RebuildActionsFromFlatFields();
+        here.KeywordTriggerPresets[0].Triggers[0].RebuildActionsFromFlatFields();
         Assert.True(await new CloudSettingsBackup(_fake).BackupAsync(here));
         var sent = Unpack((string)JObject.Parse(Assert.Single(Uploads).Body)["settings_data"]!);
         Assert.DoesNotContain("/home/me", sent.ToString());
         if (carry) AssertItemPaths(sent.ToObject<AppSettings>()!, path);
+        else
+        {
+            // An older relative/empty slot value must not replace the rooted file choice made here.
+            _fake.BodyFor = null;
+            _fake.Body = new JObject { ["backup"] = new JObject { ["settings_data"] = Pack(sent.ToString()) } }.ToString();
+            AssertItemPaths((await new CloudSettingsBackup(_fake).DownloadAsync(here))!, "/home/me/current.mp3");
+        }
         AssertItemPaths(slotJson.ToObject<AppSettings>()!, path); // only the slot copy is filtered
         AssertItemPaths(here, "/home/me/current.mp3");
     }

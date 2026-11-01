@@ -1419,6 +1419,9 @@ and relative paths still travel unchanged. Applies to all four portable lists an
 <li><strong>2026-10-31: clean old Linux slot leaks.</strong> Before list-item matching, remove leading-slash path values
 from a copy of the slot lists. Earlier Avalonia backups leaked preset paths there. Windows drive and backslash UNC
 paths still carry; portable relative paths remain unchanged. Null preset trigger bundles normalize to empty.</li>
+<li><strong>2026-11-01: carry only Windows-rooted slot item paths.</strong> Relative and empty slot path strings are
+also removed from the slot copy before matching. They must not fill an omitted upload path and later replace a rooted
+local choice. Relative and explicit empty values supplied by current settings still travel unchanged.</li>
 <li>Tests: <code>Tests/CCP.Core.Tests/CloudSettingsBackupTests.cs</code>, <code>AccountSettingsSectionTests.CloudRestoreAsksFirstAndKeepsThisMachinesPaths</code>.</li>
 </ul>
 <h2 id="2026-10-14-companion-v2-room-collapse-and-the-companion-pages-avalonia-portcompanion-v2-pages-b">2026-10-14: Companion v2 room collapse and the Companion pages (avalonia-port/companion-v2-pages-b)</h2>
