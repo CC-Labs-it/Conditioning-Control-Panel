@@ -21,22 +21,23 @@ public partial class AvatarTubeWindow
     private AppSettings? _rainSettings;
     private RainPackReader? _rainPack;
     private JObject? _rainMap;
-    private string? _rainFolder, _rainClip;
-    private int _rainLayer, _rainVersion, _rainFailures;
+    private string? _rainFolder, _rainClip, _rainPending;
+    private int _rainLayer, _rainVersion, _rainFailures, _rainHoldVersion;
+    private long _rainClipStarted;
     private long _rainClickTick = -3000; // not WPF's long.MinValue (CirceEmotes.cs:138): now minus it wraps negative and blocks every click
-    private IDisposable? _rainFade;
+    private IDisposable? _rainFade, _rainHold;
+    internal Func<long> RainClock = static () => Environment.TickCount64;
+    internal Func<Action, TimeSpan, IDisposable> RainHoldScheduler = (action, delay) => DispatcherTimer.RunOnce(action, delay);
+    internal TimeSpan RainRetryDelay = TimeSpan.FromMilliseconds(1200);
+    internal int RainFailureCount => _rainFailures;
+    internal int RainVersion => _rainVersion;
     internal string RainPackRoot { get; set; } = Path.Combine(CorePaths.UserData, "rain-packs");
     internal string? RainFolder => _rainFolder;
     internal string? RainClip => _rainClip;
     internal RainClipPlayer? RainActivePlayer => _rainPlayers[_rainLayer];
 
-    private void WatchRainSettings()
-    {
-        _rainSettings = CoreSettings.Current;
-        _rainSettings.PropertyChanged += RainSettingsChanged;
-    }
-    private void RainSettingsChanged(object? sender, PropertyChangedEventArgs e)
-    {
+    private void WatchRainSettings() { _rainSettings = CoreSettings.Current; _rainSettings.PropertyChanged += RainSettingsChanged; }
+    private void RainSettingsChanged(object? sender, PropertyChangedEventArgs e) {
         if (e.PropertyName is nameof(AppSettings.AvatarGeneration) or nameof(AppSettings.RainPackHash))
             RunOnAvatar(() => { if (!_avatarSetsClosed) _ = RefreshRainPlayback(); });
     }
@@ -82,7 +83,7 @@ public partial class AvatarTubeWindow
         var outgoing = this.FindControl<Image>(_rainLayer == 0 ? "ImgAvatarAnimated" : "ImgAvatarAnimatedB")!;
         _rainPlayers[next]?.Dispose();
         var player = _rainPlayers[next] = new RainClipPlayer(image);
-        player.Completed += sender => { if (version == _rainVersion) _ = PlayRainClip(PickRainIdle()); };
+        player.Completed += sender => { if (version == _rainVersion && _rainPending == null) _ = PlayRainClip(PickRainIdle()); };
         if (_rainPack != null && _rainPack.Clips.TryGetValue(clip, out var entry))
             await player.LoadStrip(Path.Combine(_rainFolder, entry.File), entry.Frames, entry.Fps);
         else
@@ -92,10 +93,10 @@ public partial class AvatarTubeWindow
         if (!player.IsReady)
         {   // WPF watchdog (CirceEmotes.cs:555) re-issues a failed load, then advances; the shown frame stays up.
             _rainFade?.Dispose();
-            if (++_rainFailures <= 3) _rainFade = DispatcherTimer.RunOnce(() => { if (version == _rainVersion) _ = PlayRainClip(PickRainIdle()); }, TimeSpan.FromMilliseconds(1200));
+            ++_rainFailures; _rainFade = DispatcherTimer.RunOnce(() => { if (version == _rainVersion && _rainPending == null) _ = PlayRainClip(PickRainIdle()); }, RainRetryDelay);
             return;
         }
-        _rainFailures = 0; _rainClip = clip; _rainLayer = next; image.Tag = clip; ApplyTubeLayoutOffsets(); _poseTimer.Stop(); _imgAvatar.IsVisible = false;
+        _rainFailures = 0; _rainClip = clip; _rainClipStarted = RainClock(); _rainLayer = next; image.Tag = clip; ApplyTubeLayoutOffsets(); _poseTimer.Stop(); _imgAvatar.IsVisible = false;
         int fade = ConditioningControlPanel.Services.Safety.GentleVisuals.FadeMs(Math.Max(0, (int?)_rainMap["fadeMs"] ?? 1000));
         image.Transitions = outgoing.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(fade) } };
         image.IsVisible = true; image.Opacity = 1; outgoing.Opacity = 0;
@@ -105,17 +106,27 @@ public partial class AvatarTubeWindow
     // WPF CirceClickEmote (CirceEmotes.cs:866): a click plays one click emote per 3 s, then idle resumes.
     internal bool RainClickEmote()
     {
-        long now = Environment.TickCount64;
+        long now = RainClock();
         var pool = (_rainMap?["clickEmotes"] as JArray)?.Select(c => (string?)c).Where(c => c != null && (_rainPack?.Clips.ContainsKey(c) ?? true)).ToList();
         if (pool == null || pool.Count == 0 || now - _rainClickTick < 3000) return false;
         if (pool.Count > 1) pool.Remove(_rainClip);
         _rainClickTick = now;
-        _ = PlayRainClip(pool[_random.Next(pool.Count)]!);
+        RequestRainClip(pool[_random.Next(pool.Count)]!);
         return true;
+    }
+    // WPF CirceCrossfadeTo holds the current clip for 2 s and coalesces requests.
+    internal void RequestRainClip(string clip)
+    {
+        if (_rainMap == null || clip == _rainClip) return;
+        _rainHold?.Dispose(); int holdVersion = ++_rainHoldVersion;
+        long delay = _rainClip == null ? 0 : Math.Max(0, 2000 - (RainClock() - _rainClipStarted));
+        if (delay == 0) { _rainHold = null; _rainPending = null; _ = PlayRainClip(clip); return; }
+        _rainPending = clip;
+        _rainHold = RainHoldScheduler(() => { if (holdVersion != _rainHoldVersion) return; _rainHold = null; _rainPending = null; if (clip != _rainClip) _ = PlayRainClip(clip); }, TimeSpan.FromMilliseconds(delay));
     }
     private void StopRainPlayback()
     {
-        ++_rainVersion; _rainFade?.Dispose(); _rainFade = null;
+        ++_rainVersion; ++_rainHoldVersion; _rainFade?.Dispose(); _rainHold?.Dispose(); _rainFade = _rainHold = null; _rainPending = null; _rainFailures = 0;
         foreach (var player in _rainPlayers) player?.Dispose();
         Array.Clear(_rainPlayers);
         foreach (var name in new[] { "ImgAvatarAnimated", "ImgAvatarAnimatedB" }) this.FindControl<Image>(name)!.IsVisible = false;
