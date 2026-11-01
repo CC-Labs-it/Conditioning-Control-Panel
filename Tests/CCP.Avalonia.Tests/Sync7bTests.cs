@@ -185,7 +185,7 @@ public class Sync7bTests
             Assert.True(drone.Last > 0);
             CoreSettings.Current.MasterVolume = 0; Assert.Equal(0,drone.Last);
             CoreSettings.Current.MasterVolume = 25;
-            Assert.Equal(ToneWav.VlcVolume(0.05 * 0.25 * ToneWav.DronePeak), drone.Last);
+            Assert.Equal(ToneWav.VlcVolume(0.05 * CoreSettings.Current.MantraDroneVolume / 100 * 0.25 * ToneWav.DronePeak), drone.Last);
             float gain = -1;
             CoreAudio.PlayOneShotProvider = (_, v, _, _, _) => gain = v;
             typeof(MantraWindow).GetMethod("PlayTone", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null,new object[] { 400.0, 150 });
@@ -197,7 +197,7 @@ public class Sync7bTests
         return Task.CompletedTask;
     });
     [Fact]
-    public Task MantraRampIgnoresMasterAndMasterResetsToIdleGain() => Run(() =>
+    public Task MantraDroneFollowsMasterInEveryPhase() => Run(() =>
     {
         var (opener, master, mantra) = (MantraWindow.DroneOpener, CoreSettings.Current.MasterVolume, CoreSettings.Current.MantraDroneVolume);
         var drone = new Drone();
@@ -207,17 +207,20 @@ public class Sync7bTests
         void Call(string name) => typeof(MantraWindow).GetMethod(name, F)!.Invoke(w, null);
         float Cur() => (float)typeof(MantraWindow).GetField("_droneCurrentGain", F)!.GetValue(w)!;
         void Tick() => typeof(MantraWindow).GetMethod("FloatTimer_Tick", F)!.Invoke(w, new object?[] { null, EventArgs.Empty });
+        int Expect(double m) => ToneWav.VlcVolume(Cur() * 0.3 * m * ToneWav.DronePeak);
         try
         {
             CoreSettings.Current.MasterVolume = 50; CoreSettings.Current.MantraDroneVolume = 30; Call("StartDrone");
+            Assert.Equal(Expect(0.5), drone.Last);   // idle: level x drone dial x master
             typeof(MantraWindow).GetField("_droneTargetGain", F)!.SetValue(w, 0.4f);
-            // WPF FloatTimer_Tick (MantraWindow.xaml.cs:193): ramp gain x MantraDroneVolume only, no master.
-            Tick(); Assert.Equal(ToneWav.VlcVolume(Cur() * 0.3 * ToneWav.DronePeak), drone.Last);
-            // WPF OnMasterVolumeChanged (:374): fixed 0.05 x master, during and after the ramp.
-            CoreSettings.Current.MasterVolume = 80; Assert.Equal(ToneWav.VlcVolume(0.05 * 0.8 * ToneWav.DronePeak), drone.Last);
-            Tick(); Assert.Equal(ToneWav.VlcVolume(Cur() * 0.3 * ToneWav.DronePeak), drone.Last);
+            Tick(); Assert.Equal(Expect(0.5), drone.Last);
+            // A master change keeps the ramped level (WPF :374 dropped it to idle).
+            CoreSettings.Current.MasterVolume = 80; Assert.Equal(Expect(0.8), drone.Last);
             for (var i = 0; i < 1000; i++) Tick();
-            CoreSettings.Current.MasterVolume = 20; Assert.Equal(ToneWav.VlcVolume(0.05 * 0.2 * ToneWav.DronePeak), drone.Last);
+            // Master 0 silences a fully ramped streak (WPF :193 skipped master, PR #4080).
+            CoreSettings.Current.MasterVolume = 0; Assert.Equal(0, drone.Last);
+            typeof(MantraWindow).GetField("_droneCurrentGain", F)!.SetValue(w, 0.2f);
+            Tick(); Assert.Equal(0, drone.Last);
         }
         finally
         {

@@ -289,8 +289,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_drone != null && Math.Abs(_droneCurrentGain - _droneTargetGain) > 0.001f)
             {
                 _droneCurrentGain += (_droneTargetGain - _droneCurrentGain) * 0.02f;
-                // WPF FloatTimer_Tick (MantraWindow.xaml.cs:193): MantraDroneVolume only, no master.
-                ApplyDroneVolume(_droneCurrentGain * CoreSettings.Current.MantraDroneVolume / 100f);
+                ApplyDroneVolume(DroneGain());
             }
         }
 
@@ -492,9 +491,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_volumeSettings != null) _volumeSettings.PropertyChanged -= OnMasterVolumeChanged;
             _volumeSettings = CoreSettings.Current;
             _volumeSettings.PropertyChanged += OnMasterVolumeChanged;
-            // WPF StartDrone / OnMasterVolumeChanged (MantraWindow.xaml.cs:374): fixed 0.05 x master, even mid-ramp.
-            ApplyDroneVolume(0.05f * MasterGain());
+            ApplyDroneVolume(DroneGain());
         }
+
+        /// <summary>The drone's gain in every phase: level x Mantra drone dial x master. Deliberately not WPF's
+        /// ramp (MantraWindow.xaml.cs:193 skips master, so a streak is audible at master 0) nor its master
+        /// change (:374, resets a ramped drone to idle); WPF fix: PR #4080.</summary>
+        private float DroneGain() => _droneCurrentGain * (float)Math.Clamp(CoreSettings.Current.MantraDroneVolume / 100.0, 0.0, 1.0) * MasterGain();
 
         private void StartDrone()
         {
