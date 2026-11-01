@@ -1,5 +1,9 @@
 using System;
 using System.Globalization;
+using System.Collections.Generic;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -10,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Services.UI;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
@@ -142,6 +147,7 @@ public sealed class LobbyCardView
 {
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {
+        Art = ArtFor(row.Game);
         Title = LobbyPageRules.Title(row, Loc.Get);
         Line = LobbyPageRules.Line(Loc.Get(LobbyPageRules.LabelKey(row.Game)), LobbySummary.For(row, Loc.Get));
         Friend = row.Friend;
@@ -149,6 +155,34 @@ public sealed class LobbyCardView
         Locked = LobbyPageRules.Locked(row, gates);
         ButtonText = Loc.Get(row.CanJoin ? "lobby_btn_join" : "lobby_btn_watch");
         ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
+    }
+    // WPF Views/Tabs/LobbyRowView.cs:87-113: one cached, text-free feature thumbnail per game.
+    private static readonly Dictionary<LobbyGame, Bitmap?> ArtCache = new();
+    internal static string ArtPath(LobbyGame game) => game switch
+    {
+        LobbyGame.Chess => "piecebypiece.png", LobbyGame.Goon => "goon_game_tile.png",
+        LobbyGame.Race => "race.png", _ => "lobby_remote.png"
+    };
+    private static Bitmap? ArtFor(LobbyGame game)
+    {
+        if (ArtCache.TryGetValue(game, out var art)) return art;
+        try
+        {
+            using var stream = AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/" + ArtPath(game)));
+            art = Bitmap.DecodeToWidth(stream, 96);
+        }
+        catch { art = null; }
+        return ArtCache[game] = art;
+    }
+    public IImage? Art { get; }
+    // WPF LobbyRowView.cs:44-57 and SectionTabStrip.Depth.cs:52: Social float band.
+    public IBrush CardShadow => SharedCardShadow;
+    private static readonly IBrush SharedCardShadow = MakeCardShadow();
+    private static IBrush MakeCardShadow()
+    {
+        var c = Color.FromUInt32(DepthLaw.ShadowColor(NavStripPaint.Accent(NavSections.Social), DepthLaw.FloatAlpha));
+        return new LinearGradientBrush { StartPoint = RelativePoint.TopLeft, EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops = new GradientStops { new(c, 0), new(Color.FromArgb(0, c.R, c.G, c.B), 1) } };
     }
     public string Title { get; }
     public string Line { get; }

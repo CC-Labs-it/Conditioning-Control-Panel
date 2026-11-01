@@ -4,6 +4,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.VisualTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -202,6 +204,59 @@ public sealed class LobbyPageTests
         }
         finally { window.Close(); }
         Assert.False(page.Discovery.IsWatched);
+    });
+
+    [Fact]
+    public void LiveRowsShowGameArtAndCardDepthAndReactToHover() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        var pending = new System.Threading.Tasks.TaskCompletionSource<PbpLobbyReply>();
+        page.ReadGates = () => LobbyGates.From(true, false, false);
+        page.Discovery.SignedIn = () => true;
+        page.Discovery.FetchChess = _ => pending.Task;
+        page.Discovery.FetchGoon = _ => System.Threading.Tasks.Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty);
+        page.Discovery.FetchRace = _ => System.Threading.Tasks.Task.FromResult(RaceOpenReply.Empty);
+        var window = new Window { Width = 1300, Height = 700, Content = page };
+        window.Show();
+        try
+        {
+            var games = new[] { LobbyGame.Chess, LobbyGame.Goon, LobbyGame.Race, LobbyGame.Remote };
+            var paths = new[] { "piecebypiece.png", "goon_game_tile.png", "race.png", "lobby_remote.png" };
+            var rows = games.Select((g, i) => new LobbyRow { Game = g, Key = "row" + i, HostName = "Host" + i }).ToArray();
+            page.PaintSnapshot(new LobbySnapshot(rows, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), LobbyGates.From(true, true, true));
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var list = Named<ItemsControl>(page, "AvailableSubjectsList");
+            for (int i = 0; i < games.Length; i++)
+            {
+                var model = Assert.IsType<LobbyCardView>(list.Items[i]);
+                Assert.Equal(paths[i], LobbyCardView.ArtPath(games[i]));
+                Assert.NotNull(model.Art);
+                var container = list.ContainerFromIndex(i)!;
+                var thumbnail = container.GetVisualDescendants().OfType<Border>()
+                    .Single(b => b.Background is ImageBrush);
+                Assert.Same(model.Art, Assert.IsType<ImageBrush>(thumbnail.Background).Source);
+                Assert.Equal(40, thumbnail.Width);
+                var shadow = Assert.IsType<LinearGradientBrush>(model.CardShadow);
+                Assert.Equal(Color.Parse("#661F3353"), shadow.GradientStops[0].Color);
+                Assert.Equal(0, shadow.GradientStops[1].Color.A);
+                var band = container.GetVisualDescendants().OfType<Border>().Single(b => ReferenceEquals(b.Background, model.CardShadow));
+                Assert.Equal(10, band.Height);
+            }
+            var card = list.ContainerFromIndex(0)!.GetVisualDescendants().OfType<Grid>().Single(g => g.Classes.Contains("lobby-card"));
+            var face = card.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("lobby-face"));
+            var sheen = card.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("lobby-sheen"));
+            Assert.IsType<LinearGradientBrush>(face.Background);
+            Assert.Equal(0, sheen.Opacity);
+            window.MouseMove(card.TranslatePoint(new Point(card.Bounds.Width / 2, card.Bounds.Height / 2), window)!.Value);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, sheen.Opacity);
+            Assert.Equal(Color.Parse("#66FF8CC0"), Assert.IsAssignableFrom<ISolidColorBrush>(face.BorderBrush).Color);
+            window.MouseMove(new Point(-10, -10));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, sheen.Opacity);
+        }
+        finally { window.Close(); pending.TrySetResult(PbpLobbyReply.Empty); }
     });
 
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
