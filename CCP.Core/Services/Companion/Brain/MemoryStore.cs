@@ -129,13 +129,14 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         private readonly object _lock = new();
 
         /// <summary>
-        /// Serialises the FILE write only. Separate from <see cref="_lock"/> (which guards the model)
-        /// because there are three legitimate concurrent callers of <see cref="SaveNow"/> — the
-        /// debounce timer thread, <see cref="Dispose"/> on the caller's thread, and the
-        /// <c>AppDomain.ProcessExit</c> backstop — and two of them racing on the same path means one
-        /// loses with an IOException and that shutdown's signals are gone.
+        /// Serializes saves with wipes, including the snapshot, so a pre-wipe save cannot write
+        /// old data after deletion. When both locks are needed, take this before <see cref="_lock"/>.
         /// </summary>
         private readonly object _writeLock = new();
+
+        // A wiped store stays off disk until a later model mutation, even if an old timer or
+        // the shutdown backstop calls SaveNow after the wipe.
+        private bool _wiped;
 
         private readonly string _path;
         private readonly Func<DateTime> _clock;
@@ -274,6 +275,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                 {
                     if (value == null) _profile.Remove(key);
                     else _profile[key] = value;
+                    _wiped = false;
                 }
             }
 
@@ -313,6 +315,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             {
                 var state = _relationship.TryGetValue(key, out var existing) ? existing : RelationshipState.Empty;
                 _relationship[key] = state with { ChatTurnsTotal = state.ChatTurnsTotal + 1, LastChat = _clock() };
+                _wiped = false;
             }
             RequestSave();
         }
@@ -336,7 +339,11 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         {
             if (string.IsNullOrWhiteSpace(feature)) return;
             var key = feature.Trim();
-            lock (_lock) _usage[key] = (_usage.TryGetValue(key, out var n) ? n : 0) + 1;
+            lock (_lock)
+            {
+                _usage[key] = (_usage.TryGetValue(key, out var n) ? n : 0) + 1;
+                _wiped = false;
+            }
             RequestSave();
         }
 
@@ -418,6 +425,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             {
                 _facts.Add(fact);
                 EnforceFactCap();
+                _wiped = false;
             }
             RequestSave();
             return fact;
@@ -428,22 +436,31 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             if (!ChatDerivedPersistenceEnabled || !IsStorable(name ?? "", MemoryFact.SourceChat)) return;
             lock (_lock)
             {
-                if (name == null) _profile.Remove(KeyPreferredName);
-                else _profile[KeyPreferredName] = name;
+                if (name == null)
+                {
+                    if (_profile.Remove(KeyPreferredName)) _wiped = false;
+                }
+                else
+                {
+                    _profile[KeyPreferredName] = name;
+                    _wiped = false;
+                }
             }
             RequestSave();
         }
 
         internal void ForgetUncertainAutomaticFacts()
         {
-            lock (_lock) _facts.RemoveAll(f => f.Source == MemoryFact.SourceChat
-                && !f.Pinned && f.Kind != MemoryFactKind.Boundary);
+            lock (_lock)
+                if (_facts.RemoveAll(f => f.Source == MemoryFact.SourceChat
+                    && !f.Pinned && f.Kind != MemoryFactKind.Boundary) > 0) _wiped = false;
             RequestSave();
         }
 
         internal void ForgetAutomaticFact(string id)
         {
-            lock (_lock) _facts.RemoveAll(f => f.Id == id && f.Source == MemoryFact.SourceChat);
+            lock (_lock)
+                if (_facts.RemoveAll(f => f.Id == id && f.Source == MemoryFact.SourceChat) > 0) _wiped = false;
             RequestSave();
         }
 
@@ -485,6 +502,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                     // future extractor never silently overwrites it.
                     Source = text != null ? MemoryFact.SourceUserEdited : f.Source
                 };
+                _wiped = false;
             }
             ChatMemoryEdited?.Invoke();
             RequestSave();
@@ -495,7 +513,11 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         {
             if (string.IsNullOrEmpty(id)) return false;
             bool removed;
-            lock (_lock) removed = _facts.RemoveAll(f => f.Id == id) > 0;
+            lock (_lock)
+            {
+                removed = _facts.RemoveAll(f => f.Id == id) > 0;
+                if (removed) _wiped = false;
+            }
             if (removed) { ChatMemoryEdited?.Invoke(); RequestSave(); }
             return removed;
         }
@@ -508,6 +530,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                 int i = _facts.FindIndex(f => f.Id == id);
                 if (i < 0) return;
                 _facts[i] = _facts[i] with { LastUsed = _clock(), Uses = _facts[i].Uses + 1 };
+                _wiped = false;
             }
             RequestSave();
         }
@@ -677,46 +700,54 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         public void Wipe()
         {
             ChatMemoryEdited?.Invoke();
-            lock (_lock)
+            // Serialize, write and delete in the same order. A save that already started
+            // must finish before deletion; one that arrives later sees _wiped.
+            lock (_writeLock)
             {
-                // firstSeen survives. It is a latch, not a memory: MemorySignalWriter recomputes the
-                // profile on the next flash/level-up/settings change and would re-latch it to TODAY,
-                // silently rewriting the anniversary the latch exists to protect. Carrying it across
-                // is both the honest value and the deterministic one.
-                _profile.TryGetValue(KeyFirstSeen, out var firstSeen);
-
-                _profile.Clear();
-                _relationship.Clear();
-                _usage.Clear();
-                _facts.Clear();
-
-                if (firstSeen != null) _profile[KeyFirstSeen] = firstSeen;
-            }
-
-            var dir = Path.GetDirectoryName(_path);
-            foreach (var file in new[]
-                     {
-                         _path,
-                         dir == null ? null : Path.Combine(dir, "episodes.json"),
-                         dir == null ? null : Path.Combine(dir, "maintenance.json"),
-                         dir == null ? null : Path.Combine(dir, "session.json"),
-                         LegacyLocalHistoryPath()
-                     })
-            {
-                if (string.IsNullOrEmpty(file)) continue;
-                try
+                lock (_lock)
                 {
-                    if (File.Exists(file)) File.Delete(file);
-                    // Temp/backup siblings (memory.json.tmp from an interrupted atomic save, *.bak)
-                    // hold the same text; a wipe that leaves them has not wiped.
-                    var parent = Path.GetDirectoryName(file);
-                    if (parent != null && Directory.Exists(parent))
-                        foreach (var sibling in Directory.GetFiles(parent, Path.GetFileName(file) + ".*"))
-                            File.Delete(sibling);
+                    // firstSeen survives. It is a latch, not a memory: MemorySignalWriter recomputes the
+                    // profile on the next flash/level-up/settings change and would re-latch it to TODAY,
+                    // silently rewriting the anniversary the latch exists to protect. Carrying it across
+                    // is both the honest value and the deterministic one.
+                    _profile.TryGetValue(KeyFirstSeen, out var firstSeen);
+
+                    _profile.Clear();
+                    _relationship.Clear();
+                    _usage.Clear();
+                    _facts.Clear();
+
+                    if (firstSeen != null) _profile[KeyFirstSeen] = firstSeen;
+                    _wiped = true;
+                    try { _saveTimer?.Change(Timeout.Infinite, Timeout.Infinite); }
+                    catch (ObjectDisposedException) { }
                 }
-                catch (Exception ex)
+
+                var dir = Path.GetDirectoryName(_path);
+                foreach (var file in new[]
+                         {
+                             _path,
+                             dir == null ? null : Path.Combine(dir, "episodes.json"),
+                             dir == null ? null : Path.Combine(dir, "maintenance.json"),
+                             dir == null ? null : Path.Combine(dir, "session.json"),
+                             LegacyLocalHistoryPath()
+                         })
                 {
-                    Log.Warning(ex, "MemoryStore: failed to delete {File} during wipe", file);
+                    if (string.IsNullOrEmpty(file)) continue;
+                    try
+                    {
+                        if (File.Exists(file)) File.Delete(file);
+                        // Temp/backup siblings (memory.json.tmp from an interrupted atomic save, *.bak)
+                        // hold the same text; a wipe that leaves them has not wiped.
+                        var parent = Path.GetDirectoryName(file);
+                        if (parent != null && Directory.Exists(parent))
+                            foreach (var sibling in Directory.GetFiles(parent, Path.GetFileName(file) + ".*"))
+                                File.Delete(sibling);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning(ex, "MemoryStore: failed to delete {File} during wipe", file);
+                    }
                 }
             }
 
@@ -781,21 +812,16 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         /// <summary>Writes memory.json synchronously. Used on shutdown and by tests.</summary>
         public void SaveNow()
         {
-            string json;
-            try
-            {
-                lock (_lock) json = SerializeLocked();
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "MemoryStore: failed to serialize memory");
-                return;
-            }
-
             lock (_writeLock)
             {
                 try
                 {
+                    string json;
+                    lock (_lock)
+                    {
+                        if (_wiped) return;
+                        json = SerializeLocked();
+                    }
                     var dir = Path.GetDirectoryName(_path);
                     if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
                     AtomicWrite(_path, json);
