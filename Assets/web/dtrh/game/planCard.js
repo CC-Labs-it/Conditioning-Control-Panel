@@ -12,7 +12,7 @@
  * sits under "fall again / wake up", never in front of them.
  *
  * The price shows only when the init payload carried C1 `plans`. The count
- * (C5) goes to the host as a `funnel` frame, or as a beacon on an https page,
+ * (C5) goes to the host as a `funnel` frame (either carrier), or as a beacon on an https page,
  * or nowhere. No DOM at import.
  * ==========================================================================*/
 
@@ -67,10 +67,13 @@ export function postFunnel(event, a = '', b = '', env = globalThis, plan = '') {
   if (!line) return 'none';
   try {
     const wv = env && env.chrome && env.chrome.webview;
-    if (wv && typeof wv.postMessage === 'function') {
+    // WPF's WebView2, else the Avalonia head's WebKitGTK string carrier (shared/carrier.js shape).
+    const post = wv && typeof wv.postMessage === 'function' ? (m) => wv.postMessage(m)
+      : env && typeof env.invokeCSharpAction === 'function' ? (m) => env.invokeCSharpAction(JSON.stringify(m)) : null;
+    if (post) {
       const [, , ca, cb] = line.split('|');
       // With a plan named, the HOST opens that plan's checkout in the browser (its own links, its own throttle).
-      wv.postMessage(plan ? { type: 'funnel', event, a: ca, b: cb, plan } : { type: 'funnel', event, a: ca, b: cb });
+      post(plan ? { type: 'funnel', event, a: ca, b: cb, plan } : { type: 'funnel', event, a: ca, b: cb });
       return 'host';
     }
     const nav = env && env.navigator, loc = env && env.location;

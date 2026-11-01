@@ -102,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
+            Activated += (_, _) => FunnelPageMessage.OnAppActivated();   // WPF's Application.Activated covers every window
             Closing += (_, _) => _closing = true;
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();

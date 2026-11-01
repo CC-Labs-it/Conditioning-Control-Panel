@@ -3,11 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Headless;
-using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
-using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Vault;
 using Newtonsoft.Json.Linq;
@@ -73,52 +69,43 @@ public sealed class DtrhFunnelTests
     }
 
     [Fact]
-    public void GameHostForwardsClicksAndBlocksRunsExitAndClose() => AvaloniaTestDispatcher.Run(() =>
+    public void OpenedCheckoutRereadsTheAccountOnReturnWithinTheWatch()
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
         FunnelPageMessage.ResetForTests();
         bool offline = CoreSettings.Current.OfflineMode;
-        var opened = new List<string>();
-        int counts = 0;
+        int refreshes = 0;
         var now = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc);
-        GameWindow? running = null, exiting = null;
         try
         {
             CoreSettings.Current.OfflineMode = false;
-            FunnelPageMessage.BaseUrlOverride = "http://127.0.0.1:9";
-            FunnelPageMessage.SendOverride = (_, _) => { Interlocked.Increment(ref counts); return Task.CompletedTask; };
-            FunnelPageMessage.OpenCheckout = url => { opened.Add(url); return true; };
+            FunnelPageMessage.SendOverride = (_, _) => Task.CompletedTask;
+            FunnelPageMessage.OpenCheckout = _ => true;
+            FunnelPageMessage.RefreshAccount = () => { refreshes++; return Task.CompletedTask; };
             FunnelPageMessage.UtcNow = () => now;
-            var cta = Message("cta_clicked", "basic").ToString();
-            running = new GameWindow(GameWindow.Games["dtrh"]);
-            running.Show();
-            running.HandleMessage(cta);
-            Assert.Equal(PlanCatalog.Current.Basic.PatreonUrl, Assert.Single(opened));
-            now = now.AddSeconds(4);
-            running.HandleMessage("{\"type\":\"run-started\"}");
-            running.HandleMessage(cta);
-            running.Close();
-            running.HandleMessage(cta);
-            exiting = new GameWindow(GameWindow.Games["dtrh"]);
-            exiting.Show();
-            exiting.HandleMessage("{\"type\":\"exit\"}");
-            exiting.HandleMessage(cta);
-            exiting.Close();
-            exiting.HandleMessage(cta);
-            Assert.Single(opened);
-            Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref counts) == 5, TimeSpan.FromSeconds(5)));
+            FunnelPageMessage.OnAppActivated();
+            Assert.Equal(0, refreshes); // nothing opened, nothing owed
+            FunnelPageMessage.Handle(Message("cta_clicked", "basic"), true);
+            now = now.AddSeconds(5);
+            FunnelPageMessage.OnAppActivated();
+            FunnelPageMessage.OnAppActivated();
+            Assert.Equal(1, refreshes); // WPF CheckoutWatch.Gap
+            now = now.AddSeconds(20);
+            FunnelPageMessage.OnAppActivated();
+            Assert.Equal(2, refreshes);
+            CoreSettings.Current.OfflineMode = true;
+            now = now.AddSeconds(20);
+            FunnelPageMessage.OnAppActivated();
+            CoreSettings.Current.OfflineMode = false;
+            now = now.AddMinutes(30);
+            FunnelPageMessage.OnAppActivated();
+            Assert.Equal(2, refreshes); // offline, then past CheckoutWatch.WatchFor
         }
         finally
         {
-            running?.Close();
-            exiting?.Close();
             CoreSettings.Current.OfflineMode = offline;
             FunnelPageMessage.ResetForTests();
         }
-    });
+    }
 
     [Theory]
     [InlineData("basic", "patreon")]

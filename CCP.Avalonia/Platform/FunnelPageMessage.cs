@@ -46,9 +46,37 @@ internal static class FunnelPageMessage
             }
             try { Post(evt, a, b); }
             catch (Exception ex) { Log.Debug("[Funnel] beacon failed: {Error}", ex.Message); }
-            if (url != null && mayOpen && TakeOpenSlot(UtcNow())) OpenCheckout(url);
+            if (url == null || !mayOpen || !TakeOpenSlot(UtcNow())) return;
+            CheckoutWatch.NoteOpened(url, UtcNow());   // WPF FunnelPageMessage.cs:72
+            OpenCheckout(url);
         }
         catch (Exception ex) { Log.Debug("[Funnel] page message failed: {Error}", ex.Message); }
+    }
+
+    /// <summary>The account re-read a return from checkout owes; tests swap it.</summary>
+    internal static Func<Task> RefreshAccount = RefreshAccountAsync;
+
+    /// <summary>WPF EntitlementTierSync.OnAppActivatedAfterCheckout: a window came to the front within the watch.</summary>
+    internal static void OnAppActivated()
+    {
+        try
+        {
+            if (CoreSettings.Current.OfflineMode || !CheckoutWatch.TakeCheck(UtcNow())) return;
+            Log.Debug("[Entitlement] back from a checkout: re-reading the tier");
+            _ = RefreshAccount();
+        }
+        catch (Exception ex) { Log.Debug("[Entitlement] checkout hook failed: {Error}", ex.Message); }
+    }
+
+    private static async Task RefreshAccountAsync()
+    {
+        try
+        {
+            if (AccountSeed.Patreon is { IsAuthenticated: true } patreon) await patreon.ValidateSubscriptionAsync(forceRefresh: true);
+            await AccountSeed.LoadProfileAsync();   // offers the server tier rise (EntitlementTierRule.ApplyRise)
+            if (CoreAccount.HasPremiumAccess) CheckoutWatch.Disarm();   // WPF EntitlementTierSync.cs:90
+        }
+        catch (Exception ex) { Log.Debug("[Entitlement] checkout refresh failed: {Error}", ex.Message); }
     }
 
     private static bool TakeOpenSlot(DateTime now)
@@ -98,6 +126,8 @@ internal static class FunnelPageMessage
         lock (Gate) _lastOpenUtc = DateTime.MinValue;
         UtcNow = () => DateTime.UtcNow;
         OpenCheckout = ExternalOpener.Open;
+        RefreshAccount = RefreshAccountAsync;
+        CheckoutWatch.Disarm();
         SendOverride = null;
         BaseUrlOverride = null;
     }

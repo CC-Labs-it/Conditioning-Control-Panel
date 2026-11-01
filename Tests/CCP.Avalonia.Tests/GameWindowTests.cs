@@ -1084,7 +1084,9 @@ public sealed partial class GameWindowTests
             FunnelPageMessage.SendOverride = (_, _) => { Interlocked.Increment(ref counts); return Task.CompletedTask; };
             FunnelPageMessage.OpenCheckout = url => { opened.Add(url); return true; };
             FunnelPageMessage.UtcNow = () => now;
+            FunnelPageMessage.RefreshAccount = () => Task.CompletedTask;
             var w = GameWindow.Launch("dtrh")!;
+            // The exact string planCard.js hands WebKitGTK's invokeCSharpAction (plan-card.test.mjs asserts it).
             const string cta = "{\"type\":\"funnel\",\"event\":\"cta_clicked\",\"a\":\"dtrh\",\"b\":\"patreon\",\"plan\":\"basic\"}";
             w.HandleMessage(cta);
             Assert.Equal(ConditioningControlPanel.Services.Vault.PlanCatalog.Current.Basic.PatreonUrl, Assert.Single(opened));
