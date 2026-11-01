@@ -1850,6 +1850,7 @@ public class QuestService : IDisposable
         {
             // Play Windows notification sound
             SystemSounds.Exclamation.Play();
+            Audio.EngineOffAudioLog.Note("system:quest", "Exclamation");
 
             // Quest completion posts its OWN event kind, so the Haptics tab's "Quest complete"
             // routing row (enable / intensity / pattern / target toy) is what decides how this
