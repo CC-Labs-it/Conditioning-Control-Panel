@@ -1,4 +1,9 @@
 {
+  "chaos_draft_reroll_event": "🎲 le sort est de nouveau tenté",
+  "chaos_draft_sin_bonus_event": "🕯 péché accepté (+{0:0.00}x)",
+  "chaos_draft_shielded_sin_event": "🕯 la bougie a retiré la douleur (sans contrepartie)",
+  "chaos_draft_surrender_event": "🕯 tu as dit oui. elle a rendu quelque chose (+1 résistance)",
+  "chaos_draft_skip_event": "♥ résisté → +1 résistance",
   "chaos_welcome_shower_event": "🚿 pluie de bienvenue : friandises venues d’en haut",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",

@@ -110,6 +110,10 @@ public sealed class ChaosBoonBarOverlayTests
             var path = System.IO.Path.Combine(global::ConditioningControlPanel.CorePaths.UserData,
                 "assets", "assets", "Chaos", "boons", boon.Id + ".png");
             var prior = System.IO.File.Exists(path) ? System.IO.File.ReadAllBytes(path) : null;
+            var cache = (System.Collections.Generic.Dictionary<string, global::Avalonia.Media.Imaging.Bitmap?>)typeof(ChaosEffectBannerOverlay)
+                .GetField("ArtCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+            bool wasCached = cache.TryGetValue(path, out var previousArt);
+            cache.Remove(path); // another run may have cached the absent file before this fixture creates it
             try {
                 System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
                 using (var bitmap = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(2, 2),
@@ -153,6 +157,8 @@ public sealed class ChaosBoonBarOverlayTests
                 meta.EquippedStartBoon = equipped;
                 CoreAudio.PlayOneShotProvider = audio;
                 if (prior == null) System.IO.File.Delete(path); else System.IO.File.WriteAllBytes(path, prior);
+                cache.Remove(path);
+                if (wasCached) cache[path] = previousArt;
             }
             return Task.CompletedTask;
         });
