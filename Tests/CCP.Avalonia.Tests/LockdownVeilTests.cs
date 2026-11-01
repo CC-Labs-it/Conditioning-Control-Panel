@@ -485,6 +485,13 @@ public sealed class LockdownVeilTests
 
     private static string? Hex(object? brush) => (brush as global::Avalonia.Media.ISolidColorBrush)?.Color.ToUInt32().ToString("x8");
 
+    private sealed class FlashClock : TimeProvider
+    {
+        internal long Ticks;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Ticks;
+    }
+
     /// <summary>WPF ApplyLockdownTheme / RestoreLockdownTheme / PlayLockdownActivationAnimation
     /// (Lab.cs:1147/1203/1254): Activate turns window, title bar, accent brushes and the Lockdown card
     /// blood-red and drops a crimson veil that fades out over 600 ms; Deactivate gives every one back.</summary>
@@ -499,9 +506,15 @@ public sealed class LockdownVeilTests
         var windowBefore = Hex(shell.Background);
         var card = shell.Named<LockdownTabView>("LockdownTab")!.LockdownCardBorder;
         var root = shell.Named<Grid>("RootGrid")!;
+        var clock = new FlashClock();
+        shell.LockdownFlashClock = clock;
         Assert.Null(shell.LockdownFlash);
 
         ld.Activate(TimeSpan.FromMinutes(30));
+        Dispatcher.UIThread.RunJobs(); // the activation posts creation of the flash
+        Assert.NotNull(shell.LockdownFlash);
+        // A slow CI frame can exceed the 600 ms animation before its assertions run.
+        System.Threading.Thread.Sleep(750);
         Frame();
         Assert.True(res.TryGetResource("PinkBrush", null, out pb));
         Assert.Equal("ffdc143c", Hex(pb));
@@ -513,6 +526,10 @@ public sealed class LockdownVeilTests
         var flash = shell.LockdownFlash!;
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
+        clock.Ticks = TimeSpan.FromMilliseconds(300).Ticks;
+        System.Threading.Thread.Sleep(80); // allow the real 33 ms dispatcher timer to become due
+        Frame();
+        Assert.Equal(0.25, flash.Opacity, 3); // the timer reads the stepped clock
         shell.PaintLockdownFlash(300);
         Assert.Equal(0.25, flash.Opacity, 3);
         shell.PaintLockdownFlash(600);

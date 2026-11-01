@@ -7960,5 +7960,6 @@
   "online_official_nice": "Genial",
   "online_official_stamped_line": "Los medios en línea vienen de Scrolller. Cada imagen y clip lleva una pequeña marca \"via Scrolller\".",
   "online_cache_day_line": "Los medios en línea se guardan un día en una pequeña caché de este ordenador y nunca se suben.",
+  "webcam_debug_tongue_out_fmt": "Lengua fuera #{0}",
   "webcam_debug_mouth_open_fmt": "Boca abierta #{0}"
 }
