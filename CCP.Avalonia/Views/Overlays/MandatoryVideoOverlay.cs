@@ -37,7 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// are paused by the Core scheduler.
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
-    /// attention input and no-activate z-order.
+    /// attention input, no-activate z-order, and the remote-media offer after the "no videos" dialog
+    /// (WPF VideoService.cs:2469; deferred until online clips can play here, WPF :7973).
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
@@ -862,18 +863,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // Headless tests supply an owner; production resolves the desktop shell.
         internal Window? NoVideosOwnerForTests { get; set; }
 
-        /// <summary>WPF VideoService.cs:2448-2469: show guidance when no video can be picked.
-        /// Its remote-media offer is deferred until online clips can play (WPF :7973-8005).</summary>
-        private void ShowNoVideos() => Dispatcher.UIThread.Post(async () =>
+        /// <summary>WPF's guidance dialog when the library is empty (once per launch).</summary>
+        private void ShowNoVideos() => Dispatcher.UIThread.Post(() =>
         {
             var owner = NoVideosOwnerForTests ?? (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             if (owner == null) return;
-            var scheduler = Scheduler;
-            try
-            {
-                await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(scheduler));
-            }
-            catch (Exception ex) { Log.Debug(ex, "VideoService: no-videos dialog failed"); }
+            _ = Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(Scheduler));
         });
 
         /// <summary>WPF TriggerVideo's guidance text: #1352 names the length filter when it emptied a
