@@ -156,6 +156,118 @@ public sealed class ProgramIgnitionTests
             ((ISolidColorBrush)F<Border>("ProgramsGraduatedCard").BorderBrush!).Color);
     });
 
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Off)]
+    public void SavedCompletedDaySpringsOnFirstOpenAndDoesNotReplay(MotionLevel motion) =>
+        WithRun(lastDay: false, (shell, tab, svc, _) =>
+        {
+            Assert.Equal(motion, CoreSettings.Current.MotionLevel);
+            var banner = tab.FindControl<Border>("TodayCompleteBanner")!;
+            var scale = (ScaleTransform)banner.RenderTransform!;
+            Assert.True(svc.TodayRecord!.DayCompleted);
+            Assert.True(banner.IsVisible);
+            Assert.Equal(.9, scale.ScaleX, 3);
+            Assert.Equal(.9, scale.ScaleY, 3);
+            Step(.175);
+            Assert.Equal(1.0175, scale.ScaleX, 4);
+            tab.RefreshPrograms();
+            Assert.Equal(1.0175, scale.ScaleX, 4);
+            Step(.175);
+            Assert.Equal(1, scale.ScaleX, 3);
+            shell.ShowTab("settings");
+            shell.ShowTab("programs");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, scale.ScaleX, 3);
+        }, savedComplete: true, motion: motion);
+
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off)]
+    public void DayCompleteBannerSpringsOncePerDayAndAgainForANewAttempt(MotionLevel motion) => WithRun(lastDay: false, (_, tab, svc, _) =>
+    {
+        CoreSettings.Current.MotionLevel = motion;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        var banner = tab.FindControl<Border>("TodayCompleteBanner")!;
+        var scale = (ScaleTransform)banner.RenderTransform!;
+        Assert.False(banner.IsVisible);
+        svc.TodayRecord!.DayCompleted = true;
+        tab.RefreshPrograms();
+        Assert.True(banner.IsVisible);
+        Assert.Equal(.9, scale.ScaleX, 3);
+        Assert.Equal(.9, scale.ScaleY, 3);
+        Step(.175);
+        Assert.Equal(1.0175, scale.ScaleX, 4); // WPF BackEase out, amplitude 0.6
+        Assert.Equal(scale.ScaleX, scale.ScaleY, 4);
+        tab.RefreshPrograms(); // a repaint must not restart the spring
+        Assert.Equal(1.0175, scale.ScaleX, 4);
+        Step(.175);
+        Assert.Equal(1, scale.ScaleX, 3);
+        tab.RefreshPrograms();
+        Assert.Equal(1, scale.ScaleX, 3);
+        svc.ActiveEnrollment!.AttemptNumber++;
+        tab.RefreshPrograms();
+        Assert.Equal(.9, scale.ScaleX, 3);
+    });
+
+    [Fact]
+    public void DayCompletedWithMotionOffContinuesWhenMotionReturns() => WithRun(lastDay: false, (_, tab, svc, _) =>
+    {
+        var scale = (ScaleTransform)tab.FindControl<Border>("TodayCompleteBanner")!.RenderTransform!;
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        svc.TodayRecord!.DayCompleted = true;
+        tab.RefreshPrograms();
+        Assert.Equal(.9, scale.ScaleX, 3);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        tab.RefreshPrograms();
+        Step(.175);
+        Assert.Equal(1.0175, scale.ScaleX, 4);
+        Step(.175);
+        Assert.Equal(1, scale.ScaleX, 3);
+    });
+
+    [Theory]
+    [InlineData("off")]
+    [InlineData("minimise")]
+    [InlineData("hide")]
+    [InlineData("leave")]
+    public void DayCompleteBannerSettlesWhenMotionStopsAndDoesNotReplay(string gate) => WithRun(lastDay: false, (shell, tab, svc, _) =>
+    {
+        var scale = (ScaleTransform)tab.FindControl<Border>("TodayCompleteBanner")!.RenderTransform!;
+        svc.TodayRecord!.DayCompleted = true;
+        tab.RefreshPrograms();
+        Assert.Equal(.9, scale.ScaleX, 3);
+        if (gate == "off")
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.Equal(.9, scale.ScaleX, 3);
+            Step(.175);
+            Assert.Equal(1.0175, scale.ScaleX, 4);
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Step(.175);
+            Assert.Equal(1, scale.ScaleX, 3);
+            return;
+        }
+        else if (gate == "minimise") shell.WindowState = WindowState.Minimized;
+        else if (gate == "hide") tab.IsVisible = false;
+        else { svc.ActiveEnrollment!.State = ProgramEnrollmentState.Lapsed; tab.RefreshPrograms(); }
+        Assert.Equal(1, scale.ScaleX, 3);
+        Assert.Equal(1, scale.ScaleY, 3);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        shell.WindowState = WindowState.Normal;
+        tab.IsVisible = true;
+        if (gate == "leave") svc.ActiveEnrollment!.State = ProgramEnrollmentState.Active;
+        tab.RefreshPrograms();
+        Step(.175);
+        Assert.Equal(1, scale.ScaleX, 3);
+    });
+
     [Fact]
     public void TodaysPipBreathesOnTheBeatAndParksWithEveryGate() => WithRun(lastDay: true, (shell, tab, _, _) =>
     {
@@ -262,7 +374,8 @@ public sealed class ProgramIgnitionTests
         BeatLoop.StepAll();
     }
 
-    private static void WithRun(bool lastDay, Action<MainShellWindow, ProgramsTabView, ProgramService, ProgramDefinition> body) =>
+    private static void WithRun(bool lastDay, Action<MainShellWindow, ProgramsTabView, ProgramService, ProgramDefinition> body,
+        bool savedComplete = false, MotionLevel motion = MotionLevel.Full) =>
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
@@ -282,7 +395,7 @@ public sealed class ProgramIgnitionTests
                 }
             };
             for (var i = 1; i < day; i++) state.Active.GetOrCreateRecord(i, today.AddDays(i - day)).DayCompleted = true;
-            state.Active.GetOrCreateRecord(day, today);
+            state.Active.GetOrCreateRecord(day, today).DayCompleted = savedComplete;
 
             var dir = Directory.CreateTempSubdirectory("ccp-programs-ignition-").FullName;
             var path = System.IO.Path.Combine(dir, "programs.json");
@@ -291,10 +404,10 @@ public sealed class ProgramIgnitionTests
 
             var oldPrograms = AvApp.Programs;
             var settings = CoreSettings.Current;
-            var (motion, perf) = (settings.MotionLevel, settings.PerformanceMode);
+            var (oldMotion, perf) = (settings.MotionLevel, settings.PerformanceMode);
             var (seenTab, seenIntro) = (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro);
             settings.HasSeenProgramsTab = settings.HasSeenProgramsIntro = true;
-            settings.MotionLevel = MotionLevel.Full;
+            settings.MotionLevel = motion;
             settings.PerformanceMode = false;
             MainShellWindow? shell = null;
             BeatLoop.Time = _time = new SteppedTime();
@@ -303,6 +416,11 @@ public sealed class ProgramIgnitionTests
                 var svc = AvApp.Programs = new ProgramService(path, readOnly: true);
                 shell = new MainShellWindow { Width = 1400, Height = 900 };
                 shell.Show();
+                if (savedComplete)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.False(shell.Named<ProgramsTabView>("ProgramsTab")!.IsVisible);
+                }
                 shell.ShowTab("programs");
                 Dispatcher.UIThread.RunJobs();
                 var tab = shell.Named<ProgramsTabView>("ProgramsTab")!;
@@ -318,7 +436,7 @@ public sealed class ProgramIgnitionTests
                 Dispatcher.UIThread.RunJobs();
                 AvApp.Programs?.Dispose();
                 AvApp.Programs = oldPrograms;
-                (settings.MotionLevel, settings.PerformanceMode) = (motion, perf);
+                (settings.MotionLevel, settings.PerformanceMode) = (oldMotion, perf);
                 (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro) = (seenTab, seenIntro);
                 Directory.Delete(dir, true);
                 BeatLoop.Time = TimeProvider.System;

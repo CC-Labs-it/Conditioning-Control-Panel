@@ -91,13 +91,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF RefreshProgramsUI + RebuildProgramsTab (:490-584): pick the panel, build it, reveal it.</summary>
         internal void RefreshPrograms()
         {
-            if (!IsVisible && VisualRoot is not null)
+            SubscribePrograms(); // WPF :453 subscribes even while the tab is hidden.
+            if (!IsVisible || VisualRoot is null)
             {
                 _refreshPending = true;
                 return;
             }
             _refreshPending = false;
-            SubscribePrograms();
 
             var svc = AvApp.Programs;
             var enrollment = svc?.ActiveEnrollment;
@@ -146,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ToolTip.SetTip(Find<Button>("BtnProgramRestart"), restartBlocked);
                 Find<Button>("BtnProgramDismissGraduated").IsEnabled = !readOnly;
                 // WPF :540: the edge glow is a sibling of the whole view; leaving the run parks it.
-                if (!run) { StopIgnitionLoops(); _ignitionEnrollment = null; }
+                if (!run) { StopIgnitionLoops(); StopBannerPop(); _ignitionEnrollment = null; }
             }
         }
 
@@ -221,7 +221,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BuildDayStrip(program, enrollment, accent, stale);
             BuildTodayPanel(svc, program, enrollment, accent, stale);
             ApplyIgnition(enrollment);
-            if (_dayJustCompleted) PlayDayCompleteMoment(svc.Today);
+            if (_dayJustCompleted)
+            {
+                PopDayCompleteBanner();
+                PlayDayCompleteMoment(svc.Today);
+            }
         }
 
         /// <summary>WPF UpdateProgramSessionRow :1451-1585, button and glyph states. Repainted on every
