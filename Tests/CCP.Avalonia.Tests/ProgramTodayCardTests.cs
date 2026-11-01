@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -32,7 +33,7 @@ public sealed class ProgramTodayCardTests
     public void DashboardCardShowsTodayForAnActiveRunAndItsLoopsStopWhenHidden() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -181,20 +182,27 @@ public sealed class ProgramTodayCardTests
 
         // Hover nudge (:478-490): 260 ms quadratic ease-out to -10, per rendered frame.
         var art = F<Rectangle>("ProgramTodayArt");
+        shell.MouseMove(new Point(1, 1)); Dispatcher.UIThread.RunJobs();
+        var frames = new Queue<Action<TimeSpan>>();
+        dash.ProgramBannerRequestFrameForTests = frames.Enqueue;
         typeof(SettingsTabView).GetMethod("NudgeProgramBannerArt", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
             .Invoke(dash, new object[] { -10.0 });                               // what PointerEntered calls
         Assert.True(art.IsVisible, "no banner art - the nudge test proves nothing");
         double Nudged(double seconds)
         {
             time.Advance(TimeSpan.FromSeconds(seconds));
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            var frame = Assert.Single(frames); frames.Clear();
+            frame(TimeSpan.Zero); // Deliver the one-shot frame on the same stepped clock.
             Dispatcher.UIThread.RunJobs();
             return ((TranslateTransform)art.RenderTransform!).X;
         }
         var p = 0.13 / 0.26;
         Assert.Equal(-10 * (1 - (1 - p) * (1 - p)), Nudged(0.13), 3);       // halfway in time, 75% of the way
+        Assert.Single(frames); // The halfway callback must request another frame.
         Nudged(0.2);
         Assert.Equal(-10, ((TranslateTransform)art.RenderTransform!).X, 3);
+        Assert.Empty(frames); // Completion must stop requesting frames.
+        dash.ProgramBannerRequestFrameForTests = null;
     }
 
     [Fact]
@@ -205,7 +213,7 @@ public sealed class ProgramTodayCardTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var dash = new SettingsTabView();
