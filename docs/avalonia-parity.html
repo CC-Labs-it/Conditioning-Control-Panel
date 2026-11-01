@@ -793,15 +793,10 @@ Tick its rows as each lane lands.</p>
 ported-by-merge, needs-port (with its lane, 9 lanes incl. the A5 group <code>a5-glassroad-sync10</code>) or n/a with a reason. The
 Prize Counter shop is WPF desktop only in 7.2 (B3), so its rows are n/a; its web tree still moved to
 <code>Assets/web/prizecounter</code>. Tick its rows as each lane lands.</p>
-<p id="sync10-rain-gate-review-base">Explicit independent Codex Cloud critical review request for <code>sync10-rain-gate</code>:
-please review the isolated lane <code>6121afbeb..7930e2338</code> (12 files, +329/-85, 414 changed lines).
-This requests a scope amendment from the previously requested <code>74ac6ce3d..7930e2338</code>;
-it does not make that original range meet the 600-line limit. Scope acceptance and a new review verdict remain pending.</p>
-<p>Request a separate critical review of the prerequisite import <code>74ac6ce3d..6121afbeb</code>
-(720 files, +25577/-1266, including 60 WPF paths). The release imports <code>cd4dd330f</code> and <code>1ebeb0a91</code>
-are already in the lane's implementation base <code>6121afbebda83bbbb3fe81c610c7c84a03c7e05c</code>
-(<code>avalonia-port/main-20261031-compat</code>). The prerequisite import remains uncertified;
-a lane verdict must not certify it. Review this documentation-only request follow-up separately on top of <code>7930e2338</code>.</p>
+<p id="sync10-rain-gate-review-base">Review range for <code>sync10-rain-gate</code> (PR #3861): the PR base is
+<code>avalonia-port/main-20261031-compat</code> (<code>6121afbeb</code>), so the lane is reviewed and sized against it only
+(orchestrator decision, round r72). The import below that base (<code>74ac6ce3d..6121afbeb</code>, release imports
+<code>cd4dd330f</code> and <code>1ebeb0a91</code>) is the -compat branch's own PR and is reviewed there; a verdict on this lane does not certify it.</p>
 
 <h2 id="dtrh-feel-rework-dtrh-feel-17-pace-merge-23054e370">DTRH feel rework (dtrh-feel 17-pace, merge <code>23054e370</code>)</h2>
 <p>The delta ledger for the DTRH feel rework (<code>11d7c3afc..46e9e908d</code>) is
