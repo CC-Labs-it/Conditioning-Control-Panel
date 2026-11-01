@@ -7856,6 +7856,8 @@
   "premium_celebration_inbox_t1": "프리미엄은 이제 당신 거예요",
   "premium_celebration_inbox_t2": "프라임은 이제 당신 거예요",
   "premium_celebration_inbox_summary": "잠겨 있던 모든 것이 열렸어요.",
+  "remote_media_offer_title": "다운로드 없는 미디어",
+  "remote_media_offer_summary": "폴더가 비어 있어요. 온라인 미디어를 재생할 수 있어요.",
   "vaultgate_price_year": "/ 년 · 월 {0}",
   "vaultgate_yearly_hint": "또는 Patreon에서 연 {0}: {1}% 할인.",
   "vaultgate_billing_monthly": "월간",

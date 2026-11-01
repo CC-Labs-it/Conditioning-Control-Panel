@@ -69,7 +69,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// stack a card on a modal. Set around the first-run wizard and the welcome-back offer;
         /// WPF's other startup modals (What's New, season recap) have no startup caller here yet.
         /// </summary>
-        public static bool IsStartupDialogShowing { get; set; }
+        private static bool _isStartupDialogShowing;
+        public static bool IsStartupDialogShowing
+        {
+            get => _isStartupDialogShowing;
+            set
+            {
+                if (_isStartupDialogShowing == value) return;
+                _isStartupDialogShowing = value;
+                // Post so the first-run tail can enter its quiet window before the offer is routed.
+                if (!value) global::Avalonia.Threading.Dispatcher.UIThread.Post(App.FlushPendingRemoteMediaOffer);
+            }
+        }
 
         private const int BannerFadeMs = 500;
         private static readonly TimeSpan BannerRotationInterval = TimeSpan.FromSeconds(4);

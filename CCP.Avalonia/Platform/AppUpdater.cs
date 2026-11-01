@@ -212,6 +212,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 OpenDialog = null;
                 _busy = _offering = false;
+                // The update offer no longer owns the screen (WPF App.xaml.cs:906-912).
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(App.FlushPendingRemoteMediaOffer);
             }
         }
 

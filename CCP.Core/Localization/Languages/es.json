@@ -7856,6 +7856,8 @@
   "premium_celebration_inbox_t1": "Premium es tuyo",
   "premium_celebration_inbox_t2": "Prime es tuyo",
   "premium_celebration_inbox_summary": "Todo lo que estaba bloqueado está abierto.",
+  "remote_media_offer_title": "Contenido sin descargar",
+  "remote_media_offer_summary": "Tus carpetas están vacías. Ella puede reproducir contenido en línea.",
   "vaultgate_price_year": "/ año · {0} al mes",
   "vaultgate_yearly_hint": "O {0} al año en Patreon: {1} % menos.",
   "vaultgate_billing_monthly": "Mensual",

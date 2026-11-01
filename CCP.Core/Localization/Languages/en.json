@@ -8609,6 +8609,8 @@
   "premium_celebration_inbox_t1": "Premium is yours",
   "premium_celebration_inbox_t2": "Prime is yours",
   "premium_celebration_inbox_summary": "Everything that was locked is open.",
+  "remote_media_offer_title": "Media without the download",
+  "remote_media_offer_summary": "Your folders are empty - she can stream from the online pool instead.",
   "vaultgate_price_year": "/ year · {0} a month",
   "vaultgate_yearly_hint": "Or {0} a year on Patreon: {1}% off.",
   "vaultgate_billing_monthly": "Monthly",

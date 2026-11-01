@@ -1178,20 +1178,30 @@ namespace ConditioningControlPanel.Avalonia
 
         // WPF App.xaml.cs:891-940: one empty-library offer per launch, claimed only when opened.
         private static int _remoteMediaOfferClaimed;
+        private static global::Avalonia.Controls.Window? _pendingRemoteMediaOfferOwner;
 
         internal static void OfferRemoteMediaSource(global::Avalonia.Controls.Window owner)
         {
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                Dispatcher.UIThread.Post(() => OfferRemoteMediaSource(owner));
+                return;
+            }
             try
             {
                 if (!string.Equals(CoreSettings.Current.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return;
-                // WPF parks this during startup; this video path can retry on a later launch.
-                if (Platform.AppUpdater.IsUpdateDialogActive || Views.Windows.MainShellWindow.IsStartupDialogShowing) return;
+                // WPF App.xaml.cs:906-912: keep an unspent offer while a startup modal is up.
+                if (Platform.AppUpdater.IsUpdateDialogActive || Views.Windows.MainShellWindow.IsStartupDialogShowing)
+                {
+                    Interlocked.CompareExchange(ref _pendingRemoteMediaOfferOwner, owner, null);
+                    return;
+                }
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
                     Key = "intro:remote-media",
                     Glyph = "🌐",
-                    Title = "Media without the download",
-                    Summary = "Your folders are empty - she can stream from the online pool instead.",
+                    Title = Loc.Get("remote_media_offer_title"),
+                    Summary = Loc.Get("remote_media_offer_summary"),
                     Open = () =>
                     {
                         if (Interlocked.CompareExchange(ref _remoteMediaOfferClaimed, 1, 0) != 0) return;
@@ -1202,7 +1212,19 @@ namespace ConditioningControlPanel.Avalonia
             catch (Exception ex) { Serilog.Log.Warning(ex, "Remote media offer failed"); }
         }
 
-        internal static void ResetRemoteMediaOfferForTests() => _remoteMediaOfferClaimed = 0;
+        // WPF App.xaml.cs:958-965: retry after startup, rechecking both gates and the source.
+        internal static void FlushPendingRemoteMediaOffer()
+        {
+            if (Platform.AppUpdater.IsUpdateDialogActive || Views.Windows.MainShellWindow.IsStartupDialogShowing) return;
+            var owner = Interlocked.Exchange(ref _pendingRemoteMediaOfferOwner, null);
+            if (owner != null) OfferRemoteMediaSource(owner);
+        }
+
+        internal static void ResetRemoteMediaOfferForTests()
+        {
+            _remoteMediaOfferClaimed = 0;
+            Interlocked.Exchange(ref _pendingRemoteMediaOfferOwner, null);
+        }
 
         private string ResolveEffectiveAssetsPath()
         {
