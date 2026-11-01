@@ -84,6 +84,16 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
             return row == LapseRow.None ? LapseReading.Nothing : new LapseReading(row, tier, end, days);
         }
 
+        /// <summary>
+        /// <see cref="DecideLapse"/> for this install. A window a confirmed reading closed
+        /// (<see cref="Models.AppSettings.GraceClosedTier"/>) is a close the server already reported,
+        /// whatever a launch did to the stored tier.
+        /// </summary>
+        public static LapseReading DecideLapseFor(Models.AppSettings s, DateTime nowUtc, bool liveCoversIt)
+            => s.GraceClosedTier is int closed
+                ? DecideLapse(closed, closed - 1, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, nowUtc, liveCoversIt)
+                : DecideLapse(s.PatreonTier, s.ServerTierSeen, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, nowUtc, liveCoversIt);
+
         // ------------------------------------------------------------------ outside the moment (proposal 7)
 
         public const string KeyCompanionCap = "companion_cap";

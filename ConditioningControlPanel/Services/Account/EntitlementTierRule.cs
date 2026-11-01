@@ -18,8 +18,9 @@ namespace ConditioningControlPanel.Services
         Rise,
 
         /// <summary>
-        /// The server says less. Remembered for the lapse rows; a second reading that agrees ends
-        /// whatever grace it no longer backs (<see cref="EntitlementTierRule.ConfirmedLower"/>).
+        /// The server says less than the stored tier. Remembered for the lapse rows, never an access
+        /// decision: a launch zeroes the stored tier of a tokenless install, so this verdict rarely
+        /// exists for them. <see cref="EntitlementTierRule.StepGrace"/> reads the stamps instead.
         /// </summary>
         Lower
     }
@@ -94,23 +95,37 @@ namespace ConditioningControlPanel.Services
                 settings.PatreonLabValidUntil = until;
         }
 
-        /// <summary>
-        /// The drop is believed: a Lower verdict that repeats the reading already remembered. One
-        /// reading is not enough, because <see cref="EntitlementTierSync.Offer"/> carries no account
-        /// or order, so a heartbeat from before a purchase or an account switch can land late. A
-        /// Same verdict never qualifies: after a sign-in lowered the stored tier, it can just as
-        /// well be a blank twin record that has no tier yet.
-        /// </summary>
-        public static bool ConfirmedLower(EntitlementVerdict verdict, int? serverTier, int? seenBefore)
-            => verdict == EntitlementVerdict.Lower && serverTier is int && serverTier == seenBefore;
+        /// <summary>The shortest time between the two agreeing readings that end a grace window.</summary>
+        public static readonly TimeSpan GraceConfirmGap = TimeSpan.FromSeconds(90);
 
         /// <summary>
-        /// The server now says more than the lower reading it last gave: someone paid again while
-        /// the stored tier stayed high, so <see cref="Decide"/> cannot call it a rise. Only after a
-        /// remembered lower reading, so a frozen tier never re-stamps itself on every heartbeat.
+        /// One server reading against the grace stamps (owner, 2026-11-01). Compared with the stamps
+        /// and never with the stored tier, which a launch zeroes for every install with no Patreon
+        /// tokens. A window the reading does not back closes only on the same reading again at least
+        /// <see cref="GraceConfirmGap"/> later, because a reading carries no account or order; only
+        /// on an account linked to Patreon, because a blank twin record also reads 0; and never while
+        /// <paramref name="held"/> (a session or a game owns the screen). The pending reading is kept
+        /// while held, so the next reading after it closes. A reopen needs a window that really closed.
         /// </summary>
-        public static bool ReopensGrace(int? serverTier, int? seenBefore)
-            => serverTier is int now && seenBefore is int before && now > before && now >= 1 && now <= MaxTier;
+        public static GraceStep StepGrace(int? serverTier, DateTime? premiumUntilUtc, DateTime? labUntilUtc, int? closedTier,
+            bool linkedToPatreon, bool held, int? pendingTier, DateTime? pendingSinceUtc, DateTime nowUtc)
+        {
+            if (serverTier is not int tier || tier < 0 || tier > MaxTier)
+                return new GraceStep(false, null, false, false, pendingTier, pendingSinceUtc);
+
+            var premiumLive = premiumUntilUtc > nowUtc;
+            var labLive = labUntilUtc > nowUtc;
+            var reopen = closedTier is int && tier >= 1 && !(tier >= 2 ? labLive : premiumLive);
+            var clearClosed = closedTier is int closed && tier >= closed;
+
+            var unbacked = (tier < 1 && premiumLive) || (tier < 2 && labLive);
+            if (!unbacked) return new GraceStep(false, null, reopen, clearClosed, null, null);
+            if (pendingTier != tier || pendingSinceUtc is not DateTime since)
+                return new GraceStep(false, null, reopen, clearClosed, tier, nowUtc);
+
+            var close = nowUtc - since >= GraceConfirmGap && linkedToPatreon && !held;
+            return new GraceStep(close, close ? (labLive ? 2 : 1) : null, reopen, clearClosed, tier, since);
+        }
 
         /// <summary>
         /// A believed reading ends the stamps it no longer backs (owner, 2026-11-01). The stamp is
@@ -135,6 +150,9 @@ namespace ConditioningControlPanel.Services
             return moved;
         }
     }
+
+    /// <summary>What one reading does to the grace: <see cref="EntitlementTierRule.StepGrace"/>.</summary>
+    public sealed record GraceStep(bool Close, int? ClosedTier, bool Reopen, bool ClearClosedTier, int? PendingTier, DateTime? PendingSinceUtc);
 
     /// <summary>
     /// Which "premium unlocked" card an install still owes. One seen-flag per tier, so a

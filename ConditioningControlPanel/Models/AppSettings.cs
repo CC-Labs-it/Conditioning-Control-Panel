@@ -3400,14 +3400,27 @@ namespace ConditioningControlPanel.Models
         /// <summary>
         /// The last server <c>effective_tier</c> that read LOWER than <see cref="PatreonTier"/>
         /// (EntitlementTierSync). Null when the server agrees or rose. The grace stamps above still
-        /// decide access; a second reading that repeats this value ends them, and the lapse rows read
-        /// it (Services/Startup/Conversion/ConversionRules). Machine-local.
+        /// decide access; this only tells the lapse rows that the window is really closing
+        /// (Services/Startup/Conversion/ConversionRules). Machine-local.
         /// </summary>
         [JsonProperty("server_tier_seen")]
         public int? ServerTierSeen
         {
             get => _serverTierSeen;
             set { _serverTierSeen = value; OnPropertyChanged(); }
+        }
+
+        private int? _graceClosedTier = null;
+        /// <summary>
+        /// The tier whose grace a confirmed server reading ended (EntitlementTierRule.StepGrace), until
+        /// the server gives it back. A launch zeroes <see cref="PatreonTier"/> on a tokenless install,
+        /// so this is what keeps the closed lapse row owed. Machine-local.
+        /// </summary>
+        [JsonProperty("grace_closed_tier")]
+        public int? GraceClosedTier
+        {
+            get => _graceClosedTier;
+            set { _graceClosedTier = value; OnPropertyChanged(); }
         }
 
         private int? _lastKnownEffectiveTier = null;

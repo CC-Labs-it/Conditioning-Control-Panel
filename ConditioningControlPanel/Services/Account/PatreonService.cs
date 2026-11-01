@@ -148,12 +148,6 @@ namespace ConditioningControlPanel.Services
         public void NotifyEntitlementRaised(PatreonTier tier) => TierChanged?.Invoke(this, tier);
 
         /// <summary>
-        /// A confirmed lower server reading just ended the grace (EntitlementTierSync). Only a
-        /// repaint, so doors that read the gate at build time show the lock. Call on the UI thread.
-        /// </summary>
-        public void NotifyEntitlementClosed(PatreonTier tier) => TierChanged?.Invoke(this, tier);
-
-        /// <summary>
         /// Whether the user has AI access (Tier 1+ OR whitelisted).
         /// All features are currently Tier 1. Also grants access during the 2-week grace period.
         /// This is the app's canonical AI gate: SubscribeStar is OR'd in here so either
@@ -1141,6 +1135,7 @@ namespace ConditioningControlPanel.Services
                 App.Settings.Current.PatreonPremiumValidUntil = null;
                 App.Settings.Current.PatreonLabValidUntil = null;
                 App.Settings.Current.InviteGrantUntil = null; // the week belongs to the account, not the machine
+                App.Settings.Current.GraceClosedTier = null;
                 App.Settings.Current.PatreonTier = 0; // Clear cached tier
                 App.Settings.Save(); // Force save immediately
             }

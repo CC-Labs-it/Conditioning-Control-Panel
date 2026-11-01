@@ -4772,6 +4772,7 @@ namespace ConditioningControlPanel.Services
             // Conversion rows (C9): machine-local stamps and the last server tier reading.
             // A restore must not bring back a stale reading or re-open a once-ever row.
             nameof(AppSettings.ServerTierSeen),
+            nameof(AppSettings.GraceClosedTier),
             nameof(AppSettings.InboxStamps),
             nameof(AppSettings.LastKnownEffectiveTier),
             // Free member fields mirror the server profile; the next profile read refills them.
@@ -4842,6 +4843,7 @@ namespace ConditioningControlPanel.Services
             // not wipe it, or the once-ever rows post again and a post-code grant goes missing.
             restored.InboxStamps = current.InboxStamps;
             restored.ServerTierSeen = current.ServerTierSeen;
+            restored.GraceClosedTier = current.GraceClosedTier;
             restored.PatreonMember = current.PatreonMember;
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;
