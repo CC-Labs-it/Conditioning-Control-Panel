@@ -12,6 +12,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Safety;
 using Xunit;
+using AvApp = global::ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
@@ -145,9 +146,13 @@ public class LockdownDoseEngineTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, true)]
-    public async Task KeeperTickDoesNotSupersedeAUserStartWaitingForThePortal(bool keeperFirst, bool exitBeforePortal)
+    [InlineData(false, false, false, false, false)]
+    [InlineData(true, true, false, false, false)]
+    [InlineData(false, false, true, false, false)]
+    [InlineData(true, true, true, false, false)]
+    [InlineData(false, true, false, true, false)]
+    [InlineData(false, true, true, false, true)]
+    public async Task KeeperTickDoesNotSupersedeAUserStartWaitingForThePortal(bool keeperFirst, bool exitBeforePortal, bool sessionStart, bool stoppedKeeper, bool runningKeeper)
     {
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
@@ -167,6 +172,10 @@ public class LockdownDoseEngineTests
             var ld = LockdownService.Current = new LockdownService();
             var shell = new MainShellWindow();
             shell.Show();
+            var oldSessions = AvApp.Sessions; var oldProvider = CoreSession.IsSessionRunningProvider;
+            var runner = sessionStart ? new SessionRunner(new SessionLogService()) : null;
+            if (runner != null) AvApp.Sessions = runner;
+            var session = new ConditioningControlPanel.Models.Session { Id = "portal_test", Name = "Portal Test", DurationMinutes = 1 };
             try
             {
                 Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", null);
@@ -174,25 +183,36 @@ public class LockdownDoseEngineTests
                 PortalPanicShortcut.SetSessionForTests(null, null);
                 allowed.SetValue(null, true); failed.SetValue(null, false); bind.SetValue(null, pending.Task);
                 ld.Activate(TimeSpan.FromMinutes(20));
+                if (stoppedKeeper || runningKeeper)
+                {
+                    PortalPanicShortcut.SetSessionForTests("/test/session", null);
+                    shell.EnforceLockdownDoseEngine(true);
+                    Assert.True(CoreEngine.IsRunning);
+                    if (stoppedKeeper) MainShellWindow.StopEngine();
+                    PortalPanicShortcut.SetSessionForTests(null, null);
+                }
                 if (keeperFirst) shell.EnforceLockdownDoseEngine(true);
-                shell.StartEngineFromUser();
-                Assert.False(CoreEngine.IsRunning);
+                if (sessionStart) shell.StartSession(session); else shell.StartEngineFromUser();
+                Assert.Equal(runningKeeper, CoreEngine.IsRunning);
                 shell.EnforceLockdownDoseEngine(true);
                 for (var i = 0; i < 4; i++) shell.EnforceLockdownDoseEngine(false);
-                Assert.False(CoreEngine.IsRunning);
+                Assert.Equal(runningKeeper, CoreEngine.IsRunning);
                 if (exitBeforePortal) ld.Deactivate();
                 pending.SetResult();
                 var until = System.Diagnostics.Stopwatch.StartNew();
-                while (!CoreEngine.IsRunning && until.Elapsed < TimeSpan.FromSeconds(5)) await Task.Delay(20);
+                while ((!CoreEngine.IsRunning || (sessionStart && !runner!.IsRunning)) && until.Elapsed < TimeSpan.FromSeconds(5)) await Task.Delay(20);
                 Assert.True(CoreEngine.IsRunning);
-                Assert.Equal(count + 1, s.TotalSessions);
+                Assert.Equal(count + (runningKeeper ? 0 : 1), s.TotalSessions);
+                if (sessionStart) { Assert.True(runner!.IsRunning); Assert.Same(session, runner.CurrentSession); }
                 if (!exitBeforePortal) ld.Deactivate();
                 Assert.True(CoreEngine.IsRunning);
             }
             finally
             {
                 pending.TrySetResult();
-                ld.Dispose(); MainShellWindow.StopEngine(); LockdownService.Current = null; shell.RequestExit();
+                ld.Dispose(); runner?.Stop(); runner?.SessionLog.Dispose(); AvApp.Sessions = oldSessions;
+                CoreSession.IsSessionRunningProvider = oldProvider;
+                MainShellWindow.StopEngine(); LockdownService.Current = null; shell.RequestExit();
                 PortalPanicShortcut.SetSessionForTests(null, null);
                 allowed.SetValue(null, oldAllowed); failed.SetValue(null, oldFailed); bind.SetValue(null, oldBind);
                 Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", oldWayland);

@@ -47,7 +47,8 @@ public partial class MainShellWindow
             _doseEngineArmed = false;
             // Stop also invalidates a start waiting for the Wayland portal (StartStop.cs).
             if (!_doseEngineWasRunning && !IsSessionFeatureLockActive
-                && (_doseEngineStarted || (_doseEngineRequested && !CoreEngine.IsRunning && _engineGen == _doseEngineGeneration)))
+                && _pendingUserEngineGen != _engineGen
+                && ((_doseEngineStarted && CoreEngine.IsRunning) || (_doseEngineRequested && !CoreEngine.IsRunning && _engineGen == _doseEngineGeneration)))
                 StopEngine();
         });
         ld.LockdownActivated += Activate;
@@ -73,7 +74,7 @@ public partial class MainShellWindow
             || (Autonomy.IsEnabled && s.AutonomyModeEnabled && s.AutonomyConsentGiven);
     }
 
-    // A pending user START owns the portal request until it runs or Stop invalidates it.
+    // A pending user engine or session start owns the portal request until it runs or Stop invalidates it.
     private bool CanStartLockdownDoseEngine() => _doseEngineArmed && LockdownActive
         && _pendingUserEngineGen != _engineGen
         && CoreSettings.Current.LockdownDoseKeeperEnabled && !IsSessionFeatureLockActive
