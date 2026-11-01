@@ -31,6 +31,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Test seam: the owned-check every caller uses.</summary>
         internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
 
+        // WPF PrizeGrants.GrantsChanged; snapshots can arrive on a worker thread.
+        internal static event Action? Changed;
+
         private static readonly object Gate = new();
         private static string? _heldAccount;
         private static long _revision;
@@ -50,11 +53,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             var current = FriendsHead.Identity()?.UnifiedId;
             if (string.IsNullOrEmpty(accountId) || grants is null || current != accountId) return;
+            bool changed;
             lock (Gate)
             {
                 if (_heldAccount == accountId && revision < _revision) return;
-                (_heldAccount, _revision) = (accountId, revision);
-                _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                var next = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                changed = _heldAccount != accountId || !_grants.SetEquals(next);
+                (_heldAccount, _revision, _grants) = (accountId, revision, next);
+            }
+            if (changed)
+            {
+                try { Changed?.Invoke(); }
+                catch (Exception ex) { Serilog.Log.Debug("Prize ownership repaint: {E}", ex.Message); }
             }
         }
 

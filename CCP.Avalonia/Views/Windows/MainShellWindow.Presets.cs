@@ -189,7 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // the Studio rack's right-click QuickToggle. The rings repaint from HookWallRings.
         //
         // Mystery tile repaint uses CoreEntitlement in MainShellWindow.MysteryTile.cs.
-        // Prize v2 livery and mystery hover choreography remain unported.
+        // Prize v2 livery is refreshed in MainShellWindow.FavoritesRail.cs; hover is in MysteryTile.cs.
 
         /// <summary>The persisted flag behind a wall key. Unknown key = false.</summary>
         internal static bool IsWallFeatureOn(string key)

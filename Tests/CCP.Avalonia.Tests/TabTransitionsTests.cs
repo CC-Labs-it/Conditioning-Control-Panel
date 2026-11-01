@@ -413,6 +413,83 @@ public sealed class TabTransitionsTests
         Assert.False(badge.FreeToday);
     });
 
+    [Fact]
+    public Task HomeAndFavoriteShowOwnedV2PrizesAndRefreshOnSnapshot() => Run(shell =>
+    {
+        // WPF TabNavigation.cs:389, Presets.cs:1144-1147, FavoritesRail.cs:91-92,256-263.
+        var s = CoreSettings.Current;
+        var (offline, user) = (s.OfflineMode, s.UnifiedId);
+        var secretProvider = CoreSecrets.RetrieveProvider;
+        var favorites = s.RailFavorites.ToArray();
+        var recent = s.RailRecent.ToArray();
+        var grants = ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.IsGranted;
+        try
+        {
+            s.OfflineMode = false; s.UnifiedId = "badge-test";
+            CoreSecrets.RetrieveProvider = name => name == CoreSecrets.AuthToken ? "fake-token" : null;
+            s.RailFavorites.Clear(); s.RailFavorites.Add("door.studio");
+            s.RailRecent.Clear();
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.IsGranted = ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Held;
+            shell.ShowTab("quests"); shell.ShowTab("settings");
+            var dash = shell.SettingsPage!;
+            Border CardBadge(Control card) => card.FindControl<Border>("V2BadgeHost")!;
+            Border? ChipBadge() => ((Grid)((Button)Assert.Single(dash.FavoritesList.Children)).Content!).Children
+                .OfType<Border>().FirstOrDefault(b => b.Child is TextBlock t && t.Text == ConditioningControlPanel.Localization.Loc.Get("badge_v2"));
+            Assert.False(CardBadge(dash.CardFlash).IsVisible);
+            Assert.False(CardBadge(dash.CardBubblePop).IsVisible);
+            Assert.Null(ChipBadge());
+
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("badge-test", 2,
+                new[] { ConditioningControlPanel.Services.Prizes.PrizeGrants.JackpotRemix });
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(CardBadge(dash.CardFlash).IsVisible);
+            Assert.False(CardBadge(dash.CardBubblePop).IsVisible);
+            var pill = Assert.IsType<Border>(ChipBadge());
+            Assert.False(pill.IsHitTestVisible);
+            Assert.Equal(global::Avalonia.Layout.HorizontalAlignment.Right, pill.HorizontalAlignment);
+
+            // Older or another account's snapshot cannot revoke the current account's badge.
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("badge-test", 1, Array.Empty<string>());
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("other", 9, Array.Empty<string>());
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(CardBadge(dash.CardFlash).IsVisible);
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("badge-test", 3,
+                new[] { ConditioningControlPanel.Services.Prizes.PrizeGrants.BubbleRain });
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(CardBadge(dash.CardFlash).IsVisible);
+            Assert.True(CardBadge(dash.CardBubblePop).IsVisible);
+            Assert.NotNull(ChipBadge());
+
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("badge-test", 4, Array.Empty<string>());
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(CardBadge(dash.CardBubblePop).IsVisible);
+            Assert.Null(ChipBadge());
+
+            // Home entry re-reads ownership even if it changed while another page was showing.
+            shell.ShowTab("quests");
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.IsGranted = id =>
+                id == ConditioningControlPanel.Services.Prizes.PrizeGrants.FlashPendulum;
+            shell.ShowTab("settings");
+            Assert.True(CardBadge(dash.CardFlash).IsVisible);
+            Assert.NotNull(ChipBadge());
+            dash.CardFlash.TierBadge = "TIER";
+            var tier = dash.CardFlash.FindControl<Border>("TierBadgeHost")!;
+            Assert.Same(tier.Parent, CardBadge(dash.CardFlash).Parent);
+            Assert.Equal(4, tier.Margin.Bottom);
+            Assert.False(CardBadge(dash.CardFlash).IsHitTestVisible);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.IsGranted = grants;
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ResetHeld();
+            (s.OfflineMode, s.UnifiedId) = (offline, user);
+            CoreSecrets.RetrieveProvider = secretProvider;
+            s.RailFavorites.Clear(); s.RailFavorites.AddRange(favorites);
+            s.RailRecent.Clear(); s.RailRecent.AddRange(recent);
+        }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

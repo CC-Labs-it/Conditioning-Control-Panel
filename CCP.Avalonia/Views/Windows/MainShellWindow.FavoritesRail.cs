@@ -7,8 +7,7 @@
 // AppSettings.RailFavorites / RailRecent. Lock truth is IsNavEntryLocked (NavPremiumTags.cs), so the
 // chip's padlock and the rail's gold star cannot disagree.
 //
-// ponytail: not on this head yet - the champagne v2 pill (Services/Prizes/V2Badges + PrizeGrants are
-// WPF-only) and a mod's own art framing (WPF ActiveModFraming); mod art is centre-cropped instead.
+// A mod's own art framing (WPF ActiveModFraming) is not ported; mod art is centre-cropped instead.
 
 using System;
 using System.Collections.Generic;
@@ -19,6 +18,9 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Prizes;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -54,17 +56,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 WireFavoritePinMenus();
                 EventHandler onLanguage = (_, _) => RefreshFavoritesRail();
                 LocalizationManager.Instance.LanguageChanged += onLanguage;
-                Closed += (_, _) => LocalizationManager.Instance.LanguageChanged -= onLanguage;
+                PrizeOwnership.Changed += OnPrizeOwnershipChanged;
+                Closed += (_, _) =>
+                {
+                    _favoritesRailHooked = false;
+                    PrizeOwnership.Changed -= OnPrizeOwnershipChanged;
+                    LocalizationManager.Instance.LanguageChanged -= onLanguage;
+                };
             }
             RefreshFavoritesRail();
             SettingsPage?.ApplyFavoritesDrawerSetting();
         }
+
+        // WPF FavoritesRail.cs:91-92: a grant change repaints the dashboard funnel on the UI thread.
+        private void OnPrizeOwnershipChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_favoritesRailHooked) RefreshFavoritesRail();
+        });
 
         /// <summary>WPF RefreshFavoritesRail (:121): rebuilds both chip stacks from settings.</summary>
         internal void RefreshFavoritesRail()
         {
             RefreshDashboardToggleHint();
             RefreshMysteryTile();
+            if (SettingsPage is { } page)
+            {
+                page.CardFlash.ShowV2Badge = PrizeOwnership.FlashV2Owned();
+                page.CardBubblePop.ShowV2Badge = PrizeOwnership.BubbleV2Owned();
+            }
             _ = Tabs.SettingsTabView.RefreshDailyGift(); // WPF MainWindow.Presets.cs:1152; service owns success/retry throttles.
             var dash = SettingsPage;
             var s = CoreSettings.Current;
@@ -122,6 +141,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 });
             }
 
+            // WPF FavoritesRail.cs:256-263: keep the pill clear of a lock in the same corner.
+            if (V2Badges.ChipWearsV2Pill(entry.Id, PrizeOwnership.FlashV2Owned(), PrizeOwnership.BubbleV2Owned()))
+            {
+                var pill = Features.FlashFeatureControl.NewV2Badge(
+                    locked ? new Thickness(3, 2, 0, 0) : new Thickness(0, 2, 3, 0), compact: true);
+                pill.HorizontalAlignment = locked ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+                pill.VerticalAlignment = VerticalAlignment.Top;
+                grid.Children.Add(pill);
+            }
             var chip = new Button { Content = grid, Tag = entry.Id };
             if (dash.FavoritesRail.TryFindResource("RailChipStyle", out var theme) && theme is global::Avalonia.Styling.ControlTheme ct)
                 chip.Theme = ct;
