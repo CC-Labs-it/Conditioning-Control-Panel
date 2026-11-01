@@ -86,4 +86,33 @@ public sealed class HeadlessInputTests
         finally { window.Close(); }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task AnimationFrameBarrierWaitsForTheQueuedCallback() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var window = new Window();
+        try
+        {
+            window.Show();
+            HeadlessInput.RenderLiveTree(window);
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            bool called = false;
+            window.RequestAnimationFrame(_ => called = true);
+            int pumps = 0;
+            HeadlessInput.RenderAnimationFrame(window, () =>
+            {
+                if (++pumps == 1) return;   // the first render tick was throttled
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            });
+            Assert.True(called);
+            Assert.True(pumps >= 2);
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
 }

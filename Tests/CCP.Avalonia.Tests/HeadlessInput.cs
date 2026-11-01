@@ -30,6 +30,21 @@ internal static class HeadlessInput
         batch.Rendered.GetAwaiter().GetResult();
     }
 
+    // A forced render tick may be throttled while an older batch is in flight.
+    internal static void RenderAnimationFrame(TopLevel root, Action? pump = null)
+    {
+        // A regression can suppress one pump to replay a throttled frame without sleeping.
+        pump ??= () => { AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); };
+        bool rendered = false;
+        root.RequestAnimationFrame(_ => rendered = true);
+        var deadline = Stopwatch.StartNew();
+        while (!rendered)
+        {
+            Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the requested animation frame never ran");
+            pump();
+        }
+    }
+
     internal static (bool Hit, bool Pressed, Visual? Target) PressAt(Button button, Window window, Point at)
     {
         var hit = window.InputHitTest(at) as Visual;

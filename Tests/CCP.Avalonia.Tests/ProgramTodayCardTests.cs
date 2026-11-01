@@ -187,8 +187,7 @@ public sealed class ProgramTodayCardTests
         double Nudged(double seconds)
         {
             time.Advance(TimeSpan.FromSeconds(seconds));
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
+            HeadlessInput.RenderAnimationFrame(shell);
             return ((TranslateTransform)art.RenderTransform!).X;
         }
         var p = 0.13 / 0.26;
