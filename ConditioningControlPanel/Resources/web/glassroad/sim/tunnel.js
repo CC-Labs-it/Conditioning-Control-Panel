@@ -11,7 +11,7 @@
  * Every other kart the ride passes through is launched once (the BUBBLE_RAM fling, no spin, no stall) and
  * `tunnel-ram { attacker, victim, p }` goes out; the target never is.
  * Landing: the ride locks beside the target, one kart width to the side and just behind it. Once the target is on the
- * ground on solid railed road (rails both sides, no court, stone field, jump, loop, ramp wedge, water or fork for
+ * ground on solid railed road, water included (rails both sides, no court, stone field, jump, loop, ramp wedge or fork for
  * SOLID_AHEAD_M) the hover settles and the kart is handed back at the target's speed, closing sideways by
  * items.tunnelLandDvMps: contact.js makes a normal bump of that. Unsafe road waits, so a landing can pass tunnelMaxS.
  * With no target (all finished, or the rest are riding or being rescued) it runs tunnelMaxS at the floor pace and leaves
@@ -50,7 +50,6 @@ const LAND_OVERLAP_M = 0.1;  // feel gap: the settle ends this far inside contac
 const SIDE_NEAR_M = 0.5;     // feel gap: the settle starts once the ride is this close to its place at the target's side
 const RAM_MIN_CLOSING_MPS = 12;   // feel gap: slower than this past a kart is no ram (braking into a pack, a lock)
 const SLICE_M = STEP_MAX_M * 2 / 3;   // a ride tick longer than this goes in slices, so progress.js credits its lap lines
-const WET = ['stream', 'pool'];
 
 export function createTunnel(track, feel, events, { sink = null } = {}) {
   const L = track.lengthM;
@@ -71,7 +70,6 @@ export function createTunnel(track, feel, events, { sink = null } = {}) {
     const f = track.frameAt(s, fs), fl = f.flags || [];
     if (!(fl.includes('rail') || (fl.includes('railL') && fl.includes('railR')))) return false;
     if (fl.includes('jump') || fl.includes('magnet')) return false;
-    if (WET.includes(f.surface) || (track.nodeSurface && WET.includes(track.nodeSurface(f.seg)))) return false;
     if (courtAt(track.courts, s) || fieldAt(track.fields, s)) return false;
     for (const r of track.ramps || []) { const d = toLip(r, s, L); if (d >= -2 && d <= r.lenM + 2) return false; }
     return true;
