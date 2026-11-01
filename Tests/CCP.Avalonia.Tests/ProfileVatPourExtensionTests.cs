@@ -37,6 +37,7 @@ public sealed class ProfileVatPourExtensionTests
         s.VatPouredDayUtc = DateTime.UtcNow.ToString("yyyy-MM-dd");
         s.VatPouredTodayXp = 600;
         s.SeenFeatureIntros.Add("profile-hub");
+        s.SeenFeatureIntros.Add("descent-vat");
         CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? "test-token" : null;
         CoreSecrets.StoreProvider = (_, _) => { };
         JObject? reply = Wire(1000);

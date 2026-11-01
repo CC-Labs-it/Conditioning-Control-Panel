@@ -18,7 +18,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class ProfileVatHoldTests
 {
     [Fact]
-    public Task CardEntryAndServerChangesApplyThePersistedHoldWithoutRevealingOrPouring() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task CardEntryAndServerChangesApplyThePersistedHoldWithoutAutoPouring() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -42,15 +42,17 @@ public sealed class ProfileVatHoldTests
         try
         {
             await service.RefreshAsync("seed before shell", force: true);
-            shell = new MainShellWindow(); shell.Show(); shell.ShowTab("discord");
+            shell = new MainShellWindow(); shell.Show(); shell.Activate();
+            Assert.DoesNotContain("descent-vat", s.SeenFeatureIntros); // No card while off screen.
+            s.SeenFeatureIntros.Add("descent-vat"); // Keep the modal out of the hold assertions.
+            shell.ShowTab("discord");
             Dispatcher.UIThread.RunJobs();
             var glass = shell.ProfilePage.FindControl<VatGlassCanvas>("ProfileVatGlass")!;
             Assert.Equal(400, shell.VatHeldXp);
             Assert.Equal(.15, glass.Fill, 6); // Only the persisted 600 XP are in the glass.
-            Assert.False(glass.IsVisible);
+            Assert.True(glass.IsVisible);
             Assert.False(glass.IsPouring);
-            Assert.False(shell.VatPollRunning);
-            Assert.DoesNotContain("descent-vat", s.SeenFeatureIntros);
+            Assert.True(shell.VatPollRunning);
 
             glass.SnapTo(.2);
             Assert.Contains(800.ToString("N0"), shell.ProfilePage.FindControl<TextBlock>("ProfileVatReadout")!.Text);

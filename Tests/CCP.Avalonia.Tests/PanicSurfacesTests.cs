@@ -130,6 +130,7 @@ public sealed class PanicSurfacesTests
         "companion-transcript",
         "possession",
         "attention-test",
+        "profile-faucet",
         "descent-fuse",
         "deeper-editor-audio",
         "knock-cards",

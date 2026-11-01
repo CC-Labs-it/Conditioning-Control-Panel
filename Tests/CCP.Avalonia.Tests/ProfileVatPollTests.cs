@@ -93,6 +93,7 @@ public sealed class ProfileVatPollTests
             CoreSecrets.RetrieveProvider = name => name == CoreSecrets.AuthToken ? token : null;
             CoreSecrets.StoreProvider = (name, value) => { if (name == CoreSecrets.AuthToken) token = value; };
             (s.UnifiedId, s.OfflineMode) = ("vat-test", false);
+            s.SeenFeatureIntros.Add("descent-vat");
             await service.RefreshAsync("accepted", force: true);
             shell = new MainShellWindow();
             shell.Show(); shell.Activate(); Dispatcher.UIThread.RunJobs();
@@ -100,11 +101,10 @@ public sealed class ProfileVatPollTests
             var page = shell.ProfilePage!;
             Assert.True(page.IsVisible);
             var glass = page.FindControl<VatGlassCanvas>("ProfileVatGlass")!;
-            // The faucet host is a follow-up: no misleading jar is revealed just because data arrived,
-            // and no 60 s poll runs for a jar nobody sees (P07).
-            Assert.False(glass.IsVisible);
-            Assert.False(shell.VatPollRunning);
-            // Stand-in for lane -b's ApplyDescentToVat, the only future ArmVat caller.
+            // A valid block now arms the visible jar and starts its gated poll.
+            Assert.True(glass.IsVisible);
+            Assert.True(shell.VatPollRunning);
+            // Re-arming is idempotent.
             shell.ArmVat(glass, 4000);
             Assert.True(shell.VatPollRunning);
             shell.WindowState = WindowState.Minimized;
@@ -119,7 +119,7 @@ public sealed class ProfileVatPollTests
             s.OfflineMode = true; service.Reset(); Dispatcher.UIThread.RunJobs();
             Assert.False(shell.VatPollRunning);
             s.OfflineMode = false; await service.RefreshAsync("rearm", force: true); Dispatcher.UIThread.RunJobs();
-            Assert.False(shell.VatPollRunning); // Withdrawal disarms the jar, as WPF does.
+            Assert.True(shell.VatPollRunning); // A new valid block re-arms the jar.
             shell.ArmVat(glass, 4000);
             Assert.True(shell.VatPollRunning);
             shell.Close();

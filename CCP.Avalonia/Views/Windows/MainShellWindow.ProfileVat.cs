@@ -19,8 +19,7 @@
 //
 // The shared DescentService now supplies read-only server data, sign-in/logout and gated polling.
 // The coordinator and persisted hold now feed the hidden glass on card entry and block changes.
-// The jar remains dark until the charge host from PR #3671 is integrated. That integration must
-// share _vatHold, arm the jar, position the ticks and show the visible-only explainer.
+// The charge host shares this hold and arms the jar when a server vat is present.
 
 
 using System;
@@ -93,8 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ApplyDescentToVat();
                 _vatDescent?.RequestRefresh("trainer card open");
             }
-            // ponytail: keep the jar dark until the faucet host can honor the persisted hold.
-            // A server reading alone must not auto-pour or strand held XP in a jar without a tap.
+            else OnFaucetVatOffScreen();
             EvaluateVatPoll();
         }
 
@@ -107,8 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             EvaluateVatPoll();
         }
 
-        // WPF MainWindow.ProfileVat.cs:267-286,302-344. Keep the jar hidden until the
-        // charge host can consume this same hold. Never substitute server fill for held fill.
+        // WPF MainWindow.ProfileVat.cs:267-344: arm only for a server vat and fold the shared hold.
         private void ApplyDescentToVat()
         {
             if (VatGlass is not { } glass) return;
@@ -121,7 +118,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 DisarmVat();
                 return;
             }
+            ArmVat(glass, read.Cap);
             glass.SetLip(read.Lip);
+            PositionVatTickGlyphs(); // WPF ProfileVat.cs:276-280.
+            if (_vatOnScreen) MaybeShowFeatureIntro("descent-vat", "discord"); // WPF :288-300.
             _vatCap = read.Cap; // Before synchronous FillPercentChanged.
             var step = _vatHold.Fold(read, pouring: glass.IsPouring);
             switch (step.Action)
@@ -135,6 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     break;
             }
             UpdateVatReadout(); // Cap retunes need repaint even without a percent change.
+            UpdateFaucetPresentation();
         }
 
         private void EvaluateVatPoll()
@@ -259,7 +260,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             UpdateVatReadout();
             EvaluateVatPoll();   // the jar is drawn now: the recurring read has a reader
 
-            // ponytail: ArmFaucet(glass, jarW, jarH) belongs here - see the header.
+            ArmFaucet(glass, jarW, jarH); // WPF ProfileVat.cs:385.
             Log.Information("[Descent] vat armed on the Trainer Card");
         }
 
@@ -267,7 +268,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Put the hero back exactly as it ships without the Descent: 104px avatar at its original
         /// 6px margin, no jar, no readout, and a bay that measures to the avatar alone.
         /// </summary>
-        private void DisarmVat()
+        internal void DisarmVat()
         {
             var glass = VatGlass;
             if (!_vatArmed)
@@ -293,7 +294,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (readout != null) readout.IsVisible = false;
             EvaluateVatPoll();
 
-            // ponytail: DisarmFaucet() belongs here - see the header.
+            DisarmFaucet(); // WPF ProfileVat.cs:421.
         }
     }
 }
