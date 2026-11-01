@@ -13,18 +13,18 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>CompanionBrain slice 4 on this head: the brain's commands reach Core's gate, a surface
-/// this head lacks is refused (never faked), and the capability list holds only what opens here.</summary>
+/// that cannot show is refused (never faked), and the capability list holds only what opens here.</summary>
 public sealed class CompanionEffectsTests
 {
     [Fact]
-    public void SeedWiresTheGateAndLeavesAMissingSurfaceRefused()
+    public void SeedWiresTheGateAndRefusesAnUnavailableOverlay()
     {
         AvaloniaTestDispatcher.Run(() =>
         {
             CompanionEffects.Seed();
             Assert.NotNull(CompanionBrain.CommandExecutor);
             Assert.NotNull(CompanionBrain.ActivitiesProvider);
-            Assert.Null(SpiralCommand.Surface);                     // no spiral overlay port
+            Assert.NotNull(SpiralCommand.Surface);
             // No main window / click-through here: the overlay surface refuses instead of claiming a flash.
             Assert.False(FlashImageCommand.Surface!(3, 1000, 100));
         });

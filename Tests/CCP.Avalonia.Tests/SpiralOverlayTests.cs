@@ -7,11 +7,14 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Models.CommandData;
+using ConditioningControlPanel.Services.Commands;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json;
 using Xunit;
@@ -266,6 +269,121 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
             }
             Assert.Null(runner.SpiralOpacity);   // WPF ReleaseOpacityRampHolds
             Assert.Equal(SpiralFrames.Paint(0.40), SpiralOverlay.PaintedOpacity, 3);
+        });
+
+    [Fact]
+    public async Task Ai_spiral_runs_with_engine_off_preserves_opacity_on_off_and_stops_on_panic()
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var lab = CoreAccount.HasLabAccessProvider;
+            var oldSwitch = s.CompanionPrompt.AllowAiToControlEffects;
+            var surface = SpiralCommand.Surface;
+            try
+            {
+                CoreAccount.HasLabAccessProvider = () => true;
+                s.CompanionPrompt.AllowAiToControlEffects = true;
+                s.SpiralEnabled = false;
+                CompanionEffects.Seed();
+                Assert.NotNull(SpiralCommand.Surface);
+                // The desktop lifetime supplies this same host; headless has no desktop lifetime.
+                SpiralCommand.Surface = (on, opacity) => CompanionEffects.ApplySpiral(shell, on, opacity);
+                Assert.True(await new SpiralCommand(new SpiralPinkFiler(true, 25)).ExecuteAsync());
+                await Settle();
+                Assert.False(CoreEngine.IsRunning);
+                Assert.True(SpiralOverlay.IsShowing, Why());
+                Assert.True(MainShellWindow.KeepPortalBound);
+                Assert.Equal(25, s.SpiralOpacity);
+                Assert.Equal(SpiralFrames.Paint(0.25), SpiralOverlay.Shown[0].Spiral.Opacity, 10);
+
+                Assert.True(await new SpiralCommand(new SpiralPinkFiler(false, 0)).ExecuteAsync());
+                Assert.False(SpiralOverlay.IsShowing);
+                Assert.False(s.SpiralEnabled);
+                Assert.Equal(25, s.SpiralOpacity);
+                var nextGif = Path.Combine(Path.GetDirectoryName(gif)!, "next.gif");
+                File.Copy(gif, nextGif);
+                s.SpiralPath = nextGif;   // force a fresh decode that can land after the panic
+                Assert.True(await new SpiralCommand(new SpiralPinkFiler(true, 0)).ExecuteAsync());
+                Assert.Equal(25, s.SpiralOpacity);
+                MainShellWindow.StopEngine();   // panic's engine stop also runs when the engine was off
+                await Settle();
+                Assert.False(SpiralOverlay.IsShowing);
+                Assert.False(SpiralOverlay.AiRunning);
+                Assert.True(s.SpiralEnabled);  // panic does not change the saved switch
+            }
+            finally
+            {
+                SpiralCommand.Surface = surface;
+                s.CompanionPrompt.AllowAiToControlEffects = oldSwitch;
+                CoreAccount.HasLabAccessProvider = lab;
+            }
+        });
+
+    [Fact]
+    public async Task Ai_spiral_refusal_and_delayed_start_leave_settings_untouched()
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var lab = CoreAccount.HasLabAccessProvider;
+            var oldSwitch = s.CompanionPrompt.AllowAiToControlEffects;
+            try
+            {
+                CoreAccount.HasLabAccessProvider = () => true;
+                s.CompanionPrompt.AllowAiToControlEffects = true;
+                (s.SpiralEnabled, s.SpiralOpacity) = (false, 40);
+                Assert.False(CompanionEffects.ApplySpiral(null, true, 25));
+                SpiralOverlay.SkipPlatformChecksForTests = false;
+                Assert.False(CompanionEffects.ApplySpiral(shell, true, 25)); // headless has no X11 compositor
+                SpiralOverlay.SkipPlatformChecksForTests = true;
+                Assert.Equal((false, 40), (s.SpiralEnabled, s.SpiralOpacity));
+
+                Action? held = null;
+                CompanionEffects.StartEffect = start => held = start;
+                Assert.True(CompanionEffects.ApplySpiral(shell, true, 25));
+                MainShellWindow.CancelPendingAi();
+                held!();
+                await Settle();
+                Assert.Equal((false, 40), (s.SpiralEnabled, s.SpiralOpacity));
+                Assert.False(SpiralOverlay.IsShowing);
+            }
+            finally
+            {
+                CompanionEffects.StartEffect = MainShellWindow.StartEffect;
+                SpiralOverlay.SkipPlatformChecksForTests = true;
+                s.CompanionPrompt.AllowAiToControlEffects = oldSwitch;
+                CoreAccount.HasLabAccessProvider = lab;
+            }
+        });
+
+    [Fact]
+    public async Task Pausing_a_session_stops_an_ai_spiral()
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var lab = CoreAccount.HasLabAccessProvider;
+            var oldSwitch = s.CompanionPrompt.AllowAiToControlEffects;
+            var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+            try
+            {
+                CoreAccount.HasLabAccessProvider = () => true;
+                s.CompanionPrompt.AllowAiToControlEffects = true;
+                s.SkipPauseXpWarning = true;
+                var session = new Session { Id = "ai_spiral", Name = "AI Spiral", DurationMinutes = 1 };
+                shell.StartSession(session);
+                Assert.True(CompanionEffects.ApplySpiral(shell, true, 25));
+                await Settle();
+                Assert.True(SpiralOverlay.IsShowing, Why());
+                shell.Named<Button>("BtnPauseSession")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                await Task.Yield();
+                Assert.True(runner.IsPaused);
+                Assert.False(SpiralOverlay.IsShowing);
+                Assert.False(SpiralOverlay.AiRunning);
+            }
+            finally
+            {
+                runner.Stop();
+                CoreSession.IsSessionRunningProvider = null;
+                global::ConditioningControlPanel.Avalonia.App.Sessions = null;
+                s.CompanionPrompt.AllowAiToControlEffects = oldSwitch;
+                CoreAccount.HasLabAccessProvider = lab;
+            }
         });
 
     /// <summary>Waits out every in-flight decode, including one a landing decode starts for a newer path.</summary>

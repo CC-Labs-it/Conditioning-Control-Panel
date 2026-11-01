@@ -44,6 +44,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static DispatcherTimer? _timer;
         private static int _index;
         private static bool _refused;
+        private static bool _aiRunning;
+        internal static bool AiRunning => _aiRunning;
+        internal static bool CanStartForAi => SkipPlatformChecksForTests
+            || (!_refused && X11Overlay.IsAvailable && X11Overlay.IsCompositing);
+
+        // WPF App.AiEffects.cs:139-149 starts OverlayService even while the engine is off.
+        internal static void StartForAi(Visual host)
+        {
+            _aiRunning = true;
+            Refresh(host);
+        }
 
         /// <summary>The off-thread decode in flight, if any (tests await it).</summary>
         internal static Task? Decoding { get; private set; }
@@ -108,6 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 // WPF's 500 ms tick re-picks past a broken random file; re-pick once so the run is not blank.
                 if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; Refresh(host); return; }
+                _aiRunning = false;
                 CloseWindows();
                 return;
             }
@@ -158,7 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 try { _videoPlayer = VideoStart(path, ShowVideoFrame); }
                 catch (Exception ex) { Log.Warning(ex, "Spiral: video could not start"); }
-                if (_videoPlayer == null) { CloseWindows(); return; }
+                if (_videoPlayer == null) { _aiRunning = false; CloseWindows(); return; }
             }
             if (_frames.Count > 1 && Windows.Count > 0)
             {
@@ -181,6 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
         {
+            _aiRunning = false;
             _sourcePath = null;
             _configuredPath = null;
             _randomizeAtStart = null;
@@ -211,8 +224,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Same gate as the pink tint (WPF RefreshOverlays returns early unless the engine runs):
         /// a running engine or session, not paused. Unseeded (renders, tests) means the card owns it.</summary>
         private static bool ShouldShow()
-            => App.Sessions?.IsPaused != true
-               && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true);
+            => _aiRunning || (App.Sessions?.IsPaused != true
+               && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true));
 
         private static void BeginDecode(Visual host, string path)
         {
