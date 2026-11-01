@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using LibVLCSharp.Shared;
 
@@ -34,6 +35,8 @@ internal static class VideoThumbnail
             media.AddOption(LibVlcSilence.NoAudioOption);
             var frame = new TaskCompletionSource<byte[]?>(TaskCreationOptions.RunContinuationsAsynchronously);
             player.EncounteredError += (_, _) => frame.TrySetResult(null);
+            // Let already queued render-priority blits deliver a last frame before ending.
+            player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => frame.TrySetResult(null), DispatcherPriority.Background);
             sink = new VlcFrameSink(player, () => media, _ => { }, () =>
             {
                 try
@@ -53,11 +56,14 @@ internal static class VideoThumbnail
             finally
             {
                 try { player.Stop(); } catch { }
-                sink.Free(); // Stop joins the callbacks before the native frame buffer is freed.
+                // Stop joins decoder callbacks; queued UI blits must finish before bitmap disposal.
+                await FreeOnUiAsync(sink.Free).ConfigureAwait(false);
             }
         }
         catch { return null; }
     }
+
+    internal static async Task FreeOnUiAsync(Action free) => await Dispatcher.UIThread.InvokeAsync(free);
 
     // Executable is injectable for exercising the process boundary without an installed decoder.
     internal static async Task<byte[]?> ReadAsync(string path, string executable)
