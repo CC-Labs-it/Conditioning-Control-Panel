@@ -32,7 +32,8 @@ public sealed class KeywordAudioRuntimeTests
         var s = CoreSettings.Current;
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
             s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled);
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled,
+            CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider);
         var engine = new KeywordAudioRuntime();
         var played = new List<(string, float)>();
         var file = Path.GetTempFileName();
@@ -45,6 +46,8 @@ public sealed class KeywordAudioRuntimeTests
             s.KeywordGlobalCooldownSeconds = 0; s.KeywordPerKeywordCooldownSeconds = 0; s.MasterVolume = 50;
             CoreEntitlement.HasPremiumProvider = () => true;
             CoreEntitlement.IsFreeTodayProvider = _ => false;
+            CoreSession.IsEngineRunningProvider = () => true;
+            CoreSession.IsSessionRunningProvider = () => false;
             CoreAudio.PlayStoppableProvider = (path, volume, _, _, _) => { played.Add((path, volume)); return () => played.Add(("stopped", 0)); };
             engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 0);
             engine.Start();
@@ -56,7 +59,8 @@ public sealed class KeywordAudioRuntimeTests
             engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled) = saved;
+                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled,
+                CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider) = saved;
         }
     });
 
@@ -232,6 +236,59 @@ public sealed class KeywordAudioRuntimeTests
             Assert.Single(played);
         }
         finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, true)]
+    public void AudioRequiresEngineOrSessionAtEachMatch(bool legacy, bool running, bool session) => Run((engine, s, played) =>
+    {
+        var trigger = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)trigger.Actions[0];
+        if (legacy)
+        {
+            trigger.AudioFilePath = audio.FilePath;
+            trigger.DuckAudio = false;
+            trigger.Actions.Clear();
+        }
+        else audio.DuckSystemAudio = true;
+        var oldDuck = CoreAudio.DuckProvider;
+        var oldEnabled = s.AudioDuckingEnabled;
+        var ducks = 0;
+        try
+        {
+            s.AudioDuckingEnabled = true;
+            CoreAudio.DuckProvider = _ => ducks++;
+            CoreSession.IsEngineRunningProvider = () => running;
+            CoreSession.IsSessionRunningProvider = () => session;
+            s.AwarenessLoopProtectionEnabled = false;
+            s.KeywordPerKeywordCooldownSeconds = 15;
+            var now = new DateTime(2026, 10, 14, 12, 0, 0);
+            engine.Now = () => now;
+            Type(engine, "sit");
+            Assert.Equal(running || session ? 1 : 0, played.Count);
+            if (!legacy) Assert.Equal(running || session ? 1 : 0, ducks);
+            Assert.Equal(now, trigger.LastTriggeredAt);
+            if (!running && !session)
+            {
+                // Starting later does not replay a held match or erase its cooldown.
+                running = true;
+                Assert.Empty(played);
+                now = now.AddSeconds(1);
+                Type(engine, "sit");
+                Assert.Empty(played);
+                now = now.AddSeconds(15);
+                Type(engine, "sit");
+                Assert.Single(played);
+            }
+        }
+        finally { CoreAudio.DuckProvider = oldDuck; s.AudioDuckingEnabled = oldEnabled; }
     });
 
     [Fact]
