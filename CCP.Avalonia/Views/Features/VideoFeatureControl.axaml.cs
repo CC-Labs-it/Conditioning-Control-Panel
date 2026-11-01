@@ -11,6 +11,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
+using VideoShow = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation;
 
 namespace ConditioningControlPanel.Avalonia.Views.Features
 {
@@ -51,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderPerHour.ValueChanged += SliderPerHour_Changed;
             ChkStrict.IsCheckedChanged += ChkStrict_Changed;
             CmbAppearance.SelectionChanged += CmbAppearance_Changed;
+            SliderFloatingSize.ValueChanged += SliderFloatingSize_Changed;
             // WPF Lab.cs:640-647 / 726-732: greyed while a Lockdown forces Strict Lock, given back on exit.
             Windows.MainShellWindow.HoldWhileLockdown(ChkStrict, () => ConditioningControlPanel.Services.LockdownStrictHold.HoldsNow);
             SliderVideoMinDur.ValueChanged += SliderVideoMinDur_Changed;
@@ -163,6 +165,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
                 CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
                 TxtAppearanceNote.IsVisible = s.MandatoryVideoFloating;
+                PanelFloatingOptions.IsVisible = s.MandatoryVideoFloating;
+                SliderFloatingSize.Value = VideoShow.ClampSizePercent(s.MandatoryVideoFloatingSizePercent);
+                TxtFloatingSize.Text = SliderFloatingSize.Value.ToString("0") + "%";
                 ChkMercy.IsChecked = s.MercySystemEnabled;
                 CmbMercyAfter.IsVisible = s.MercySystemEnabled;
                 foreach (var obj in CmbMercyAfter.Items)
@@ -214,6 +219,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             var s = CoreSettings.Current;
             if (s.MandatoryVideoFloating == floating) return;
             s.MandatoryVideoFloating = floating;
+            CoreSettings.Save();
+        }
+
+        // WPF VideoFeatureControl.xaml.cs:175-185: the next floating window takes this size.
+        private void SliderFloatingSize_Changed(object? sender, RangeBaseValueChangedEventArgs e)
+        {
+            var v = VideoShow.ClampSizePercent((int)Math.Round(e.NewValue));
+            TxtFloatingSize.Text = v + "%";
+            var s = CoreSettings.Current;
+            if (_isLoading || s.MandatoryVideoFloatingSizePercent == v) return;
+            s.MandatoryVideoFloatingSizePercent = v;
             CoreSettings.Save();
         }
 
