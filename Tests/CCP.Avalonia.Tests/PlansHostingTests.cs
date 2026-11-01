@@ -67,9 +67,11 @@ public sealed class PlansHostingTests
         Assert.Equal(Loc.Get("premium_page_title"), full.FindControl<TextBlock>("TxtVaultTitle")!.Text);
         Assert.Equal(Loc.Get("premium_page_sub"), full.FindControl<TextBlock>("TxtVaultSub")!.Text);
         var language = LocalizationManager.Instance.CurrentLanguage;
+        var englishTitle = plans.FindControl<TextBlock>("TxtVaultTitle")!.Text;
         try
         {
-            LocalizationManager.Instance.SetLanguage("de");
+            LocalizationManager.Instance.SetLanguage("it");
+            Assert.NotEqual(englishTitle, plans.FindControl<TextBlock>("TxtVaultTitle")!.Text);
             Assert.Equal(Loc.Get("plans_header_title"), plans.FindControl<TextBlock>("TxtVaultTitle")!.Text);
             Assert.Equal(Loc.Get("plans_header_sub"), plans.FindControl<TextBlock>("TxtVaultSub")!.Text);
             Assert.Equal(Loc.Get("premium_page_title"), full.FindControl<TextBlock>("TxtVaultTitle")!.Text);
