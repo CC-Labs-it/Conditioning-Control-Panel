@@ -142,6 +142,8 @@ public sealed class HomeV2BadgeTests
         service.Current.UnifiedId = "badge-account";
         service.Current.AuthToken = "test-token";
         service.Current.OfflineMode = false;
+        var oldId = CoreAccount.UnifiedUserId;
+        CoreAccount.UnifiedUserId = "badge-account";
         PrizeOwnership.ResetHeld();
         int calls = 0;
         void Changed() { calls++; Assert.True(PrizeOwnership.Held(PrizeOwnership.FlashPendulum)); }
@@ -160,6 +162,7 @@ public sealed class HomeV2BadgeTests
             PrizeOwnership.ResetHeld();
             CoreSettings.ServiceProvider = oldProvider;
             (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = oldSecrets;
+            CoreAccount.UnifiedUserId = oldId;
         }
         return Task.CompletedTask;
     });

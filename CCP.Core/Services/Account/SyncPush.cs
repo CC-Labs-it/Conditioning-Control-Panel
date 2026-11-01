@@ -95,6 +95,7 @@ namespace ConditioningControlPanel.Services
         private string[]? _serverAchievements;   // null: the profile carried none, so achievements are not known
         private Timer? _heartbeat;
         private int _nudgePending;
+        private int _loadGeneration;
         private readonly Func<ProfileCosmetics?, ProfileCosmetics>? _sanitizeCosmetics;
         private volatile bool _pendingCosmeticsClear;
 
@@ -153,6 +154,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>Logout: nothing is pushed until the next load.</summary>
         public void Reset()
         {
+            Interlocked.Increment(ref _loadGeneration);
             StopHeartbeat();
             DescentReader?.Reset();
             Loaded = false;
@@ -231,6 +233,7 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 var id = s.UnifiedId!;
+                var generation = Volatile.Read(ref _loadGeneration);
                 if (!Loaded || !SignedIn(s)) return false;   // a logout between the check above and the gate
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
@@ -263,7 +266,7 @@ namespace ConditioningControlPanel.Services
                 }
                 using var _ = response;
                 // Signed out (or into another account) while this was in flight: the answer is not ours to apply.
-                if (!Loaded || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
+                if (!Loaded || generation != Volatile.Read(ref _loadGeneration) || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
                 {
                     Log.Information("Profile sync response dropped - the account changed while it was in flight");
                     return false;
@@ -291,6 +294,9 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    // WPF ProfileSyncService.cs:1874: the sync answers for the requested account.
+                    try { ProviderSubscription.PrizesSink?.Invoke(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync"); }
+                    catch (Exception ex) { Log.Debug("V2 Sync: Could not apply prizes: {Error}", ex.Message); }
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.
