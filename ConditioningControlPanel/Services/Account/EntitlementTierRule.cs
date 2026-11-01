@@ -18,8 +18,8 @@ namespace ConditioningControlPanel.Services
         Rise,
 
         /// <summary>
-        /// The server says less. Remembered for the lapse rows, and whatever grace the reading
-        /// no longer backs ends at once (<see cref="EntitlementTierRule.CloseGrace"/>).
+        /// The server says less. Remembered for the lapse rows; a second reading that agrees ends
+        /// whatever grace it no longer backs (<see cref="EntitlementTierRule.ConfirmedLower"/>).
         /// </summary>
         Lower
     }
@@ -95,10 +95,28 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
-        /// A server reading is the answer the grace stands in for, so a stamp it no longer backs
-        /// ends now (owner, 2026-11-01). The stamp is what a Discord sign-in patron's access rides
-        /// on, so it stays: an offline PC has no reading and keeps its window. Set to now rather
-        /// than cleared, so the lapse row can name the day. True when a stamp moved.
+        /// The drop is believed: a Lower verdict that repeats the reading already remembered. One
+        /// reading is not enough, because <see cref="EntitlementTierSync.Offer"/> carries no account
+        /// or order, so a heartbeat from before a purchase or an account switch can land late. A
+        /// Same verdict never qualifies: after a sign-in lowered the stored tier, it can just as
+        /// well be a blank twin record that has no tier yet.
+        /// </summary>
+        public static bool ConfirmedLower(EntitlementVerdict verdict, int? serverTier, int? seenBefore)
+            => verdict == EntitlementVerdict.Lower && serverTier is int && serverTier == seenBefore;
+
+        /// <summary>
+        /// The server now says more than the lower reading it last gave: someone paid again while
+        /// the stored tier stayed high, so <see cref="Decide"/> cannot call it a rise. Only after a
+        /// remembered lower reading, so a frozen tier never re-stamps itself on every heartbeat.
+        /// </summary>
+        public static bool ReopensGrace(int? serverTier, int? seenBefore)
+            => serverTier is int now && seenBefore is int before && now > before && now >= 1 && now <= MaxTier;
+
+        /// <summary>
+        /// A believed reading ends the stamps it no longer backs (owner, 2026-11-01). The stamp is
+        /// what a Discord sign-in patron's access rides on, so it stays: an offline PC has no reading
+        /// and keeps its window. Set to now rather than cleared, so the lapse row can name the day.
+        /// True when a stamp moved.
         /// </summary>
         public static bool CloseGrace(AppSettings settings, int? serverTier, DateTime nowUtc)
         {

@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Services
     /// The live half of <see cref="EntitlementTierRule"/>: takes an <c>effective_tier</c> reading
     /// from the heartbeat, the read-before-write profile read or a focus refresh, and on a rise
     /// stamps the grace windows, saves, and tells the app. Buy on the site, click back into the
-    /// app, unlocked about a second later.
+    /// app, unlocked about a second later. A drop that a second reading confirms ends the grace.
     /// </summary>
     public static class EntitlementTierSync
     {
@@ -21,7 +21,7 @@ namespace ConditioningControlPanel.Services
         public static event Action<int>? TierRaised;
 
         /// <summary>Raised on the UI thread after a reading the lapse rows care about was applied
-        /// (a Lower verdict stored, or cleared again).</summary>
+        /// (a Lower verdict stored or cleared again, or the grace closed by one).</summary>
         public static event Action? ReadingApplied;
 
         /// <summary>
@@ -66,25 +66,42 @@ namespace ConditioningControlPanel.Services
                 if (serverTier.HasValue) ServerAnsweredThisRun = true;
 
                 var verdict = EntitlementTierRule.Decide(settings!.PatreonTier, serverTier);
+                var seenBefore = settings.ServerTierSeen;
+                var nowUtc = DateTime.UtcNow;
 
-                // Before the lapse rows read the stamps. No TierChanged: a running session is not
-                // repainted or torn down, the gates simply answer no at their next use.
-                if (EntitlementTierRule.CloseGrace(settings, serverTier, DateTime.UtcNow))
-                {
-                    App.Logger?.Information("[Entitlement] {Source}: server tier {Server} closed the grace window", source, serverTier);
-                    App.Settings?.Save();
-                }
+                // A running session keeps what it started with: the reading stays remembered and
+                // the next one after the session closes the window.
+                var closed = !App.IsSessionRunning
+                    && EntitlementTierRule.ConfirmedLower(verdict, serverTier, seenBefore)
+                    && EntitlementTierRule.CloseGrace(settings, serverTier, nowUtc);
+                var reopened = verdict != EntitlementVerdict.Rise && EntitlementTierRule.ReopensGrace(serverTier, seenBefore);
+                if (reopened) EntitlementTierRule.ExtendGrace(settings, serverTier!.Value, nowUtc);
 
-                // The lapse rows' only input from here (ConversionRules.DecideLapse): a lower
-                // reading is remembered, an agreeing or higher one forgets it. Never an access input.
-                var seen = EntitlementTierRule.ServerTierSeenAfter(verdict, serverTier, settings.ServerTierSeen);
-                if (seen != settings.ServerTierSeen)
+                // A lower reading is remembered, an agreeing or higher one forgets it.
+                var seen = EntitlementTierRule.ServerTierSeenAfter(verdict, serverTier, seenBefore);
+                var seenMoved = seen != seenBefore;
+                settings.ServerTierSeen = seen;
+                if ((seenMoved || closed || reopened) && verdict != EntitlementVerdict.Rise) App.Settings?.Save(); // a rise saves below
+                if (closed) App.Logger?.Information("[Entitlement] {Source}: server tier {Server} closed the grace window", source, serverTier);
+                if (seenMoved || closed)
                 {
-                    settings.ServerTierSeen = seen;
-                    if (verdict != EntitlementVerdict.Rise) App.Settings?.Save(); // a rise saves below
                     try { ReadingApplied?.Invoke(); }
                     catch (Exception ex) { App.Logger?.Debug("[Entitlement] ReadingApplied handler failed: {Error}", ex.Message); }
                 }
+
+                if (reopened)
+                {
+                    var back = serverTier!.Value;
+                    App.Logger?.Information("[Entitlement] {Source}: server tier {Server} reopened the grace window", source, back);
+                    _lastLowerLogged = null;
+                    CheckoutWatch.Disarm();
+                    try { TierRaised?.Invoke(back); }
+                    catch (Exception ex) { App.Logger?.Warning(ex, "[Entitlement] TierRaised handler failed"); }
+                    App.Patreon?.NotifyEntitlementRaised(back >= 2 ? PatreonTier.Level2 : PatreonTier.Level1);
+                }
+
+                // The doors repaint with the window: nothing here tears anything down.
+                if (closed) App.Patreon?.NotifyEntitlementClosed(serverTier >= 1 ? PatreonTier.Level1 : PatreonTier.None);
 
                 switch (verdict)
                 {

@@ -11,7 +11,8 @@ namespace ConditioningControlPanel.Services
     /// Keeps the 14-day Patreon grace alive for a patron who never signs in with Patreon (Discord
     /// sign-in, a linked Patreon). The server stamps <c>patreon_confirmed_at</c> whenever it sees an
     /// ACTIVE Patreon reading (webhook, hourly reconcile, validate); a fresh stamp re-stamps the
-    /// grace from that moment. A stale one never does: the grace then runs out on its own.
+    /// grace from that moment. A stale one never does: the grace then runs out on its own, or ends
+    /// sooner on a confirmed lower reading (<see cref="EntitlementTierRule.ConfirmedLower"/>).
     /// </summary>
     public static class PatreonActiveRule
     {

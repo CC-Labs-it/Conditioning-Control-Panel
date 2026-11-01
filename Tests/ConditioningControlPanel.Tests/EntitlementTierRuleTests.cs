@@ -186,13 +186,69 @@ public class EntitlementTierRuleTests
     }
 
     [Fact]
-    public void CloseGrace_PayingAgainReopens()
+    public void CloseGrace_PatreonPayingAgainReopens()
     {
         var s = new AppSettings { PatreonPremiumValidUntil = Now.AddDays(9), PatreonLabValidUntil = Now.AddDays(9) };
         EntitlementTierRule.CloseGrace(s, 0, Now);
         Assert.True(PatreonActiveRule.Restamp(s, new PatreonActiveReading(true, Now, 2), Now));
         Assert.Equal(Now.AddDays(EntitlementTierRule.GraceDays), s.PatreonPremiumValidUntil);
         Assert.Equal(Now.AddDays(EntitlementTierRule.GraceDays), s.PatreonLabValidUntil);
+    }
+
+    [Theory]
+    [InlineData(2, 0, null, false)]  // the first lower reading can be a late one
+    [InlineData(2, 0, 0, true)]      // the second agrees
+    [InlineData(2, 0, 1, false)]     // it moved: this value is new, so it counts as a first reading
+    [InlineData(2, 1, 1, true)]
+    [InlineData(0, 0, 0, false)]     // Same: a sign-in lowered the stored tier, may be a blank twin
+    [InlineData(1, 1, 1, false)]
+    [InlineData(1, 2, 0, false)]
+    public void ConfirmedLower_NeedsTwoAgreeingLowerReadings(int stored, int server, int? seen, bool expected)
+        => Assert.Equal(expected, EntitlementTierRule.ConfirmedLower(EntitlementTierRule.Decide(stored, server), server, seen));
+
+    [Fact]
+    public void ConfirmedLower_NoReadingIsNotConfirmed()
+        => Assert.False(EntitlementTierRule.ConfirmedLower(EntitlementVerdict.NoSignal, null, null));
+
+    [Theory]
+    [InlineData(2, 0, true)]     // PayPal or Stripe paid again: stored stayed 2, so the verdict is Same
+    [InlineData(1, 0, true)]
+    [InlineData(2, 1, true)]     // Prime to Basic and back
+    [InlineData(0, 0, false)]
+    [InlineData(1, 1, false)]
+    [InlineData(0, 1, false)]
+    [InlineData(3, 0, false)]
+    public void ReopensGrace_OnlyAboveTheRememberedLowerReading(int server, int seen, bool expected)
+        => Assert.Equal(expected, EntitlementTierRule.ReopensGrace(server, seen));
+
+    [Theory]
+    [InlineData(null, 0)]
+    [InlineData(1, null)]        // no remembered drop: a frozen tier never re-stamps itself
+    public void ReopensGrace_NeedsBothReadings(int? server, int? seen)
+        => Assert.False(EntitlementTierRule.ReopensGrace(server, seen));
+
+    [Fact]
+    public void Drop_ThenPayAgain_WalksThroughTheSeenValue()
+    {
+        var s = new AppSettings { PatreonTier = 2, PatreonPremiumValidUntil = Now.AddDays(9), PatreonLabValidUntil = Now.AddDays(9) };
+        void Reading(int server)
+        {
+            var verdict = EntitlementTierRule.Decide(s.PatreonTier, server);
+            if (EntitlementTierRule.ConfirmedLower(verdict, server, s.ServerTierSeen)) EntitlementTierRule.CloseGrace(s, server, Now);
+            if (verdict != EntitlementVerdict.Rise && EntitlementTierRule.ReopensGrace(server, s.ServerTierSeen)) EntitlementTierRule.ExtendGrace(s, server, Now.AddHours(1));
+            s.ServerTierSeen = EntitlementTierRule.ServerTierSeenAfter(verdict, server, s.ServerTierSeen);
+        }
+
+        Reading(0);
+        Assert.True(s.PatreonPremiumValidUntil > Now);   // one reading changes nothing
+        Reading(2);
+        Assert.Null(s.ServerTierSeen);                   // a late reading is forgotten
+        Assert.Equal(Now.AddHours(1).AddDays(EntitlementTierRule.GraceDays), s.PatreonPremiumValidUntil);
+
+        Reading(0);
+        Reading(0);
+        Assert.Equal(Now, s.PatreonPremiumValidUntil);   // the second agreeing reading closes it
+        Assert.Equal(Now, s.PatreonLabValidUntil);
     }
 
     [Fact]

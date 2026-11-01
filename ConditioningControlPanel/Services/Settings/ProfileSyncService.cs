@@ -838,7 +838,7 @@ namespace ConditioningControlPanel.Services
                             var body = await v2Response.Content.ReadAsStringAsync();
                             TryAdoptFromHeartbeatBody(body);
                             // Same body, second reading: a tier bought on the site (PayPal / Stripe)
-                            // unlocks here without a sign-in. Rises only; see EntitlementTierRule.
+                            // unlocks here without a sign-in; a confirmed drop ends the grace. See EntitlementTierRule.
                             EntitlementTierSync.Offer(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat");
                             // Third reading: an invite week redeemed on another device opens here too.
                             Invites.InviteGrantSync.Offer(Invites.InviteRules.ParseHeartbeatGrant(body), "heartbeat");
@@ -1196,7 +1196,7 @@ namespace ConditioningControlPanel.Services
                 }
 
                 ApplyServerCurveEpoch(user.CurveEpoch, "read-before-write");
-                // Tier is still not adopted wholesale here; only a RISE of the folded tier is offered.
+                // Tier is still not adopted wholesale here: a rise unlocks, a confirmed drop ends the grace.
                 EntitlementTierSync.Offer(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "read-before-write");
                 // A fresh server Patreon confirmation keeps the grace alive for a Discord sign-in.
                 EntitlementTierSync.OfferPatreon(new PatreonActiveReading(user.PatreonIsActive,

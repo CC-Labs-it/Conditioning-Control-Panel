@@ -3400,8 +3400,8 @@ namespace ConditioningControlPanel.Models
         /// <summary>
         /// The last server <c>effective_tier</c> that read LOWER than <see cref="PatreonTier"/>
         /// (EntitlementTierSync). Null when the server agrees or rose. The grace stamps above still
-        /// decide access; this only tells the lapse rows that the window is really closing
-        /// (Services/Startup/Conversion/ConversionRules). Machine-local.
+        /// decide access; a second reading that repeats this value ends them, and the lapse rows read
+        /// it (Services/Startup/Conversion/ConversionRules). Machine-local.
         /// </summary>
         [JsonProperty("server_tier_seen")]
         public int? ServerTierSeen
