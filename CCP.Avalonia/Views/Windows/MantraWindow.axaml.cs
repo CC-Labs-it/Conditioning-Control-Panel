@@ -59,7 +59,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private Platform.LayeredAudio.ILayerPlayer? _drone;
         private float _droneTargetGain = 0.05f;
         private float _droneCurrentGain = 0.05f;
-        private bool _droneRamped;   // WPF applies MantraDroneVolume only from the first ramp step
 
         // Per-character highlight state
         private readonly List<Run> _mantraRuns = new();
@@ -290,8 +289,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_drone != null && Math.Abs(_droneCurrentGain - _droneTargetGain) > 0.001f)
             {
                 _droneCurrentGain += (_droneTargetGain - _droneCurrentGain) * 0.02f;
-                _droneRamped = true;
-                ApplyDroneVolume();
+                // WPF FloatTimer_Tick (MantraWindow.xaml.cs:193): MantraDroneVolume only, no master.
+                ApplyDroneVolume(_droneCurrentGain * CoreSettings.Current.MantraDroneVolume / 100f);
             }
         }
 
@@ -493,7 +492,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_volumeSettings != null) _volumeSettings.PropertyChanged -= OnMasterVolumeChanged;
             _volumeSettings = CoreSettings.Current;
             _volumeSettings.PropertyChanged += OnMasterVolumeChanged;
-            ApplyDroneVolume();
+            // WPF StartDrone / OnMasterVolumeChanged (MantraWindow.xaml.cs:374): fixed 0.05 x master, even mid-ramp.
+            ApplyDroneVolume(0.05f * MasterGain());
         }
 
         private void StartDrone()
@@ -512,13 +512,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>WPF: the drone opens at a raw 0.05 (StartDrone) and only the ramp multiplies in
-        /// MantraDroneVolume% (FloatTimer_Tick). The file's peak is 1.4 x the fundamental's.</summary>
-        private void ApplyDroneVolume()
+        /// <summary>Fundamental gain as WPF sets it; the file's peak is 1.4 x the fundamental's.</summary>
+        private void ApplyDroneVolume(double gain)
         {
             if (_drone == null) return;
-            var masterVol = (_droneRamped ? CoreSettings.Current.MantraDroneVolume / 100.0 : 1.0) * MasterGain();
-            _drone.Volume = Platform.ToneWav.VlcVolume(_droneCurrentGain * masterVol * Platform.ToneWav.DronePeak);
+            _drone.Volume = Platform.ToneWav.VlcVolume(gain * Platform.ToneWav.DronePeak);
         }
 
         /// <summary>Panic (PanicSurfaces "mantra"): WPF KillAllAudio's "Stop mantra lab audio" ->

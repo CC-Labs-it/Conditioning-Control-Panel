@@ -196,4 +196,34 @@ public class Sync7bTests
         finally { Call("Cleanup"); w.Close(); MantraWindow.DroneOpener = opener; CoreAudio.PlayOneShotProvider = play; }
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task MantraRampIgnoresMasterAndMasterResetsToIdleGain() => Run(() =>
+    {
+        var (opener, master, mantra) = (MantraWindow.DroneOpener, CoreSettings.Current.MasterVolume, CoreSettings.Current.MantraDroneVolume);
+        var drone = new Drone();
+        MantraWindow.DroneOpener = _ => drone;
+        var w = new MantraWindow();
+        const BindingFlags F = BindingFlags.Instance | BindingFlags.NonPublic;
+        void Call(string name) => typeof(MantraWindow).GetMethod(name, F)!.Invoke(w, null);
+        float Cur() => (float)typeof(MantraWindow).GetField("_droneCurrentGain", F)!.GetValue(w)!;
+        void Tick() => typeof(MantraWindow).GetMethod("FloatTimer_Tick", F)!.Invoke(w, new object?[] { null, EventArgs.Empty });
+        try
+        {
+            CoreSettings.Current.MasterVolume = 50; CoreSettings.Current.MantraDroneVolume = 30; Call("StartDrone");
+            typeof(MantraWindow).GetField("_droneTargetGain", F)!.SetValue(w, 0.4f);
+            // WPF FloatTimer_Tick (MantraWindow.xaml.cs:193): ramp gain x MantraDroneVolume only, no master.
+            Tick(); Assert.Equal(ToneWav.VlcVolume(Cur() * 0.3 * ToneWav.DronePeak), drone.Last);
+            // WPF OnMasterVolumeChanged (:374): fixed 0.05 x master, during and after the ramp.
+            CoreSettings.Current.MasterVolume = 80; Assert.Equal(ToneWav.VlcVolume(0.05 * 0.8 * ToneWav.DronePeak), drone.Last);
+            Tick(); Assert.Equal(ToneWav.VlcVolume(Cur() * 0.3 * ToneWav.DronePeak), drone.Last);
+            for (var i = 0; i < 1000; i++) Tick();
+            CoreSettings.Current.MasterVolume = 20; Assert.Equal(ToneWav.VlcVolume(0.05 * 0.2 * ToneWav.DronePeak), drone.Last);
+        }
+        finally
+        {
+            Call("Cleanup"); w.Close(); MantraWindow.DroneOpener = opener;
+            (CoreSettings.Current.MasterVolume, CoreSettings.Current.MantraDroneVolume) = (master, mantra);
+        }
+        return Task.CompletedTask;
+    });
 }
