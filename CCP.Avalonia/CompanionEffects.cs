@@ -133,7 +133,7 @@ namespace ConditioningControlPanel.Avalonia
             return Start(() =>
             {
                 if (generation != MainShellWindow.EngineGeneration || host is null
-                    || (on && !SpiralOverlay.CanStartForAi(host))) return false;
+                    || (on && (!SpiralOverlay.CanStartForAi(host) || !SpiralOverlay.Preflight(host)))) return false;
                 var s = CoreSettings.Current;
                 var (oldEnabled, oldOpacity) = (s.SpiralEnabled, s.SpiralOpacity);
                 if (opacity is int value) s.SpiralOpacity = value;

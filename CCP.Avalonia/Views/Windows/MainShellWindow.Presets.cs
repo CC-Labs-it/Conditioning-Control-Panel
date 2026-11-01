@@ -238,10 +238,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "braindrain": s.BrainDrainEnabled = on; break;
                     default: return;   // unknown key: no write, no save
                 }
+                if (key == "spiral" && !on) InvalidateOverlayStart();
                 CoreSettings.Save();
                 CoreEngine.ApplyLive(key, on);
-                if (key == "spiral") Overlays.SpiralOverlay.Refresh(this);   // WPF RefreshOverlays is unconditional
-                if (key == "pinkfilter") Overlays.PinkFilterOverlay.Refresh(this);   // WPF Presets.cs:1360 RefreshOverlays
+                void RefreshOverlay() { if (key == "spiral") Overlays.SpiralOverlay.Refresh(this); else if (key == "pinkfilter") Overlays.PinkFilterOverlay.Refresh(this); }
+                if (on && Overlays.SpiralOverlay.AiRunning && (key is "spiral" or "pinkfilter"))
+                    QueueCardEffect(() => { if (Overlays.SpiralOverlay.AiRunning && IsWallFeatureOn(key)) RefreshOverlay(); });
+                else RefreshOverlay();   // WPF Presets.cs:1357-1358
             }
             catch (Exception ex)
             {

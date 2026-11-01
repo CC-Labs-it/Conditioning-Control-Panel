@@ -225,13 +225,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static Task? _portalBind;
         private static bool _portalFailed, _portalAllowed;
         private static DispatcherTimer? _portalWatch;
+        private static int _portalStarts;
+        internal static Action<Action> StartCardEffect = StartEffect;
+        internal static void QueueCardEffect(Action start)
+        {
+            _portalStarts++;
+            bool invoked = false;
+            try { StartCardEffect(() => { invoked = true; _portalStarts--; start(); }); }
+            catch { if (!invoked) _portalStarts--; throw; }
+        }
 
         // The shell's live hold, not PortalPanicShortcut.IsHeld: that stays true after a lost Deactivated.
         internal static bool KeepPortalBound => AnyEffectRunning || PortalHoldLive;
+        internal static bool PortalStartPending => _portalStarts > 0 && (_portalBind is null || !_portalBind.IsCompleted);
 
         private static bool AnyEffectRunning =>
             CoreEngine.IsRunning || CoreFlash.IsRunning || CoreSubliminal.IsRunning || BouncingTextOverlay.IsRunning
-            || Views.Overlays.BlinkTrainerSession.IsRunning || SpiralOverlay.AiRunning;
+            || Views.Overlays.BlinkTrainerSession.IsRunning || _portalStarts > 0
+            || SpiralOverlay.IsShowing || PinkFilterOverlay.IsShowing
+            || (SpiralOverlay.AiRunning && CoreSettings.Current.SpiralEnabled && SpiralOverlay.Decoding is { IsCompleted: false });
 
         /// <summary>Every desktop-effect start goes through here. <paramref name="start"/> must re-check
         /// that the effect is still wanted: it can run up to 30 s later, after a panic or an untick.</summary>
@@ -246,14 +258,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal static void StartEffect(Action start)
         {
-            if (!_portalAllowed || PortalPanicShortcut.IsBound || _portalFailed || !CoreSettings.Current.PanicKeyEnabled
+            if (!_portalAllowed || (PortalPanicShortcut.IsBound && _portalBind is not { IsCompleted: false }) || _portalFailed || !CoreSettings.Current.PanicKeyEnabled
                 || !OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
             {
                 start();
                 return;
             }
             _portalBind ??= BindPortalAsync();
-            _portalBind.ContinueWith(_ => Dispatcher.UIThread.Post(start), TaskScheduler.Default);
+            _portalStarts++;
+            _portalBind.ContinueWith(_ => Dispatcher.UIThread.Post(() =>
+            {
+                _portalStarts--;
+                start();
+            }), TaskScheduler.Default);
         }
 
         private static async Task BindPortalAsync()

@@ -387,35 +387,45 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
         });
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task A_held_ai_start_is_cancelled_by_stop_or_session_pause(bool pause)
+    [InlineData(0)] // engine stop
+    [InlineData(1)] // session pause
+    [InlineData(2)] // session end
+    [InlineData(3)] // card off
+    [InlineData(4)] // wall off
+    public async Task A_held_ai_start_is_cancelled_by_stop_or_session_pause(int reason)
         => await WithShell(async (shell, s, gif) =>
         {
             var lab = CoreAccount.HasLabAccessProvider;
             var consent = s.CompanionPrompt.AllowAiToControlEffects;
             SessionRunner? runner = null;
+            Window? cardHost = null;
             try
             {
                 CoreAccount.HasLabAccessProvider = () => true;
                 s.CompanionPrompt.AllowAiToControlEffects = true;
-                if (pause)
+                if (reason is 1 or 2)
                 {
+                    if (reason == 2) (s.SpiralEnabled, s.SpiralOpacity) = (false, 40);   // session snapshot
                     runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
                     s.SkipPauseXpWarning = true;
                     shell.StartSession(new Session { Id = "held_ai", Name = "Held AI", DurationMinutes = 1 });
                     Assert.True(runner.IsRunning);
                 }
-                (s.SpiralEnabled, s.SpiralOpacity) = (false, 40);
+                (s.SpiralEnabled, s.SpiralOpacity) = (reason is 3 or 4, 40);
+                SpiralFeatureControl? card = null;
+                if (reason == 3) { card = new SpiralFeatureControl(); cardHost = new Window { Content = card }; cardHost.Show(); }
                 Action? held = null;
                 CompanionEffects.StartEffect = start => held = start;
                 Assert.True(CompanionEffects.ApplySpiral(shell, true, 25));
-                if (pause)
+                if (reason == 1)
                 {
                     shell.Named<Button>("BtnPauseSession")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                     await Task.Yield();
                     Assert.True(runner!.IsPaused);
                 }
+                else if (reason == 2) runner!.Stop();
+                else if (reason == 3) card!.FindControl<CheckBox>("ChkEnable")!.IsChecked = false;
+                else if (reason == 4) shell.SetWallFeature("spiral", false);
                 else MainShellWindow.StopEngine();
                 Assert.NotNull(held);
                 held!();
@@ -426,6 +436,7 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
             finally
             {
                 CompanionEffects.StartEffect = MainShellWindow.StartEffect;
+                cardHost?.Close();
                 runner?.Stop();
                 if (runner != null) { CoreSession.IsSessionRunningProvider = null; global::ConditioningControlPanel.Avalonia.App.Sessions = null; }
                 s.CompanionPrompt.AllowAiToControlEffects = consent;
@@ -489,6 +500,7 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                 s.SpiralEnabled = false;
                 Assert.True(CompanionEffects.ApplySpiral(shell, false, null));
                 Assert.True(SpiralOverlay.AiRunning);
+                Assert.False(MainShellWindow.KeepPortalBound);
                 var card = new SpiralFeatureControl();
                 var host = new Window { Content = card };
                 try
@@ -549,6 +561,128 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                 CoreAccount.HasLabAccessProvider = lab;
             }
         });
+
+    [Fact]
+    public async Task An_uncached_gif_refuses_a_failed_window_preflight()
+        => await WithShell(async (shell, s, gif) =>
+        {
+            var lab = CoreAccount.HasLabAccessProvider;
+            var consent = s.CompanionPrompt.AllowAiToControlEffects;
+            try
+            {
+                CoreAccount.HasLabAccessProvider = () => true;
+                s.CompanionPrompt.AllowAiToControlEffects = true;
+                (s.SpiralEnabled, s.SpiralOpacity) = (false, 40);
+                SpiralOverlay.PreflightForTests = _ => false;   // window creation or click-through refused
+                Assert.False(CompanionEffects.ApplySpiral(shell, true, 25));
+                Assert.Equal((false, 40), (s.SpiralEnabled, s.SpiralOpacity));
+                Assert.False(SpiralOverlay.AiRunning || SpiralOverlay.IsShowing);
+                Assert.Null(SpiralOverlay.Decoding);
+                await Task.CompletedTask;
+            }
+            finally
+            {
+                SpiralOverlay.PreflightForTests = null;
+                s.CompanionPrompt.AllowAiToControlEffects = consent;
+                CoreAccount.HasLabAccessProvider = lab;
+            }
+        });
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task Idle_service_releases_portal_and_card_activation_binds_before_show(int kind)
+        => await WithShell(async (shell, s, gif) =>
+        {
+            bool pink = (kind & 1) != 0, wall = kind >= 2;
+            var lab = CoreAccount.HasLabAccessProvider;
+            var consent = s.CompanionPrompt.AllowAiToControlEffects;
+            var oldPink = s.PinkFilterEnabled;
+            Window? cardHost = null;
+            Action? held = null;
+            try
+            {
+                CoreAccount.HasLabAccessProvider = () => true;
+                s.CompanionPrompt.AllowAiToControlEffects = true;
+                (s.SpiralEnabled, s.PinkFilterEnabled) = (false, false);
+                PinkFilterOverlay.SkipPlatformChecksForTests = true;
+                Assert.True(CompanionEffects.ApplySpiral(shell, false, null));
+                Assert.True(SpiralOverlay.AiRunning);
+                MainShellWindow.StartCardEffect = start => held = start;
+                UserControl card = pink ? new PinkFilterFeatureControl() : new SpiralFeatureControl();
+                cardHost = new Window { Content = card };
+                cardHost.Show();
+                var toggle = card.FindControl<CheckBox>("ChkEnable")!;
+                if (wall) shell.SetWallFeature(pink ? "pinkfilter" : "spiral", true);
+                else toggle.IsChecked = true;
+                Assert.NotNull(held);
+                Assert.True(MainShellWindow.KeepPortalBound);   // the bind is pending
+                PortalPanicShortcut.SetSessionForTests("/pending", null);   // handle exists before BindShortcuts finishes
+                card.FindControl<Slider>("SliderOpacity")!.Value = 42;
+                Assert.False(SpiralOverlay.IsShowing || PinkFilterOverlay.IsShowing);
+                Assert.Null(SpiralOverlay.Decoding);
+                var release = held!; held = null; release();
+                await Settle();
+                Assert.True(pink ? PinkFilterOverlay.IsShowing : SpiralOverlay.IsShowing);
+                Assert.True(MainShellWindow.KeepPortalBound);
+                if (wall) shell.SetWallFeature(pink ? "pinkfilter" : "spiral", false);
+                else toggle.IsChecked = false;
+                Assert.False(MainShellWindow.KeepPortalBound);
+            }
+            finally
+            {
+                held?.Invoke();
+                PortalPanicShortcut.SetSessionForTests(null, null);
+                MainShellWindow.StartCardEffect = MainShellWindow.StartEffect;
+                cardHost?.Close();
+                PinkFilterOverlay.CloseAll();
+                PinkFilterOverlay.SkipPlatformChecksForTests = false;
+                s.PinkFilterEnabled = oldPink;
+                s.CompanionPrompt.AllowAiToControlEffects = consent;
+                CoreAccount.HasLabAccessProvider = lab;
+            }
+        });
+
+    [Fact]
+    public async Task Portal_session_handle_does_not_mean_shortcut_binding_is_complete()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+            var type = typeof(MainShellWindow);
+            var allowed = type.GetField("_portalAllowed", flags)!;
+            var failed = type.GetField("_portalFailed", flags)!;
+            var bind = type.GetField("_portalBind", flags)!;
+            var saved = (allowed.GetValue(null), failed.GetValue(null), bind.GetValue(null), Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
+            var panic = CoreSettings.Current.PanicKeyEnabled;
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            bool ran = false;
+            try
+            {
+                allowed.SetValue(null, true); failed.SetValue(null, false); bind.SetValue(null, tcs.Task);
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "ccp-test");
+                CoreSettings.Current.PanicKeyEnabled = true;
+                PortalPanicShortcut.SetSessionForTests("/pending", null);
+                MainShellWindow.StartEffect(() => ran = true);
+                Assert.False(ran);   // session exists, but BindShortcuts is still in flight
+                tcs.SetResult(true);
+                for (int i = 0; i < 100 && !ran; i++) await Task.Delay(10);
+                Assert.True(ran);
+            }
+            finally
+            {
+                tcs.TrySetResult(true);
+                for (int i = 0; i < 100 && !ran; i++) await Task.Delay(10);
+                PortalPanicShortcut.SetSessionForTests(null, null);
+                allowed.SetValue(null, saved.Item1); failed.SetValue(null, saved.Item2); bind.SetValue(null, saved.Item3);
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", saved.Item4);
+                CoreSettings.Current.PanicKeyEnabled = panic;
+            }
+        });
+    }
 
     /// <summary>Waits out every in-flight decode, including one a landing decode starts for a newer path.</summary>
     private static async Task Settle()

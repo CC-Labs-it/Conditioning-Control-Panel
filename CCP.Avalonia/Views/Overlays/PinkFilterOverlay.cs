@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Services.UI;               // MonitorTarget
 using Serilog;
@@ -77,6 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var s = CoreSettings.Current;
             if (!s.PinkFilterEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (SpiralOverlay.AiRunning && !IsShowing && MainShellWindow.PortalStartPending) return;
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;

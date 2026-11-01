@@ -166,9 +166,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             var s = CoreSettings.Current;
             var want = ChkEnable.IsChecked ?? false;
             if (s.SpiralEnabled == want) return;   // an echo of the seed must not save
+            if (!want) Windows.MainShellWindow.InvalidateOverlayStart();
             s.SpiralEnabled = want;
             CoreSettings.Save();
-            Overlays.SpiralOverlay.Refresh(this);   // WPF App.Overlay.RefreshOverlays()
+            if (want && Overlays.SpiralOverlay.AiRunning)
+                Windows.MainShellWindow.QueueCardEffect(() => { if (s.SpiralEnabled && Overlays.SpiralOverlay.AiRunning) Overlays.SpiralOverlay.Refresh(this); });
+            else Overlays.SpiralOverlay.Refresh(this);   // WPF App.Overlay.RefreshOverlays()
         }
 
         /// <summary>Takes effect on the next spiral overlay/session start, never mid-run: the

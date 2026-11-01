@@ -116,7 +116,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (s.PinkFilterEnabled == want) return;   // an echo of the seed must not save
             s.PinkFilterEnabled = want;
             CoreSettings.Save();
-            PinkFilterOverlay.Refresh(this);
+            if (want && SpiralOverlay.AiRunning)
+                Windows.MainShellWindow.QueueCardEffect(() => { if (s.PinkFilterEnabled && SpiralOverlay.AiRunning) PinkFilterOverlay.Refresh(this); });
+            else PinkFilterOverlay.Refresh(this);
         }
 
         private void SliderOpacity_Changed(object? sender, RangeBaseValueChangedEventArgs e)

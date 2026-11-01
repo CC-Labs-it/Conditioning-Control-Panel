@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Services;                  // SpiralFrames
 using Serilog;
@@ -50,6 +51,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             || CanStartForAi(host.TryGetPlatformHandle(), X11Overlay.IsAvailable, X11Overlay.IsCompositing, _refused);
         internal static bool CanStartForAi(IPlatformHandle? handle, bool available, bool compositing, bool refused) =>
             !refused && X11Overlay.BackendOf(handle) != OverlayBackend.None && available && compositing;
+
+        // Probe the same click-through windows before accepting an AI start whose GIF still needs decoding.
+        internal static Func<Visual, bool>? PreflightForTests;
+        internal static bool Preflight(Visual host)
+        {
+            if (PreflightForTests is { } test) return test(host);
+            if (SkipPlatformChecksForTests) return true;
+            var screens = ScreenList.Enumerate(host);
+            var primary = -1;
+            for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
+            var s = CoreSettings.Current;
+            var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
+            if (want.Length == 0) return false;
+            foreach (var i in want)
+            {
+                SpiralOverlayWindow? w = null;
+                try
+                {
+                    w = new SpiralOverlayWindow { Opacity = 0 };
+                    if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds)) return false;
+                    w.Show();
+                }
+                catch (Exception ex) { Log.Warning(ex, "Spiral: AI preflight failed"); return false; }
+                finally { try { w?.Close(); } catch { } }
+            }
+            return true;
+        }
 
         // WPF App.AiEffects.cs:139-149 starts OverlayService even while the engine is off.
         internal static bool StartForAi(Visual host)
@@ -107,6 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Refreshes++;
             var s = CoreSettings.Current;
             if (!s.SpiralEnabled || !ShouldShow()) { CloseSpiral(); return true; }
+            if (_aiRunning && !IsShowing && MainShellWindow.PortalStartPending) return true;
 
             var path = SourcePath();
             var video = IsVideo(path);
