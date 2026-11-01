@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Services.Safety;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
@@ -37,6 +38,9 @@ public class TestIsolationTests
     public void EveryTestRunsInsideTheHook() => Assert.NotNull(IsolateProcessStateAttribute.Current);
 
     [Theory]
+    [InlineData(typeof(PanicAftermath), "_quietUntilMs")]
+    [InlineData(typeof(PanicAftermath), "_engineHeld")]
+    [InlineData(typeof(PanicAftermath), "_panics")]
     [InlineData(typeof(CoreSettings), nameof(CoreSettings.ServiceProvider))]
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
     [InlineData(typeof(CoreAccount), nameof(CoreAccount.UnifiedUserId))]
@@ -76,6 +80,41 @@ public class TestIsolationTests
         if (hadFile) Assert.Equal(before, File.ReadAllText(settingsFile));
         Assert.False(File.Exists(stray));
         Assert.False(leaked.HasPendingSave);
+    }
+
+    [Fact]
+    public void RestorePutsPanicQuietHoldAndCounterBack()
+    {
+        var original = ProcessStateSnapshot.Take();
+        try
+        {
+            PanicAftermath.EndQuiet();
+            var before = PanicAftermath.PanicCount;
+            var clear = ProcessStateSnapshot.Take();
+            PanicAftermath.ArmQuiet();
+            Assert.True(PanicAftermath.TriggersSilenced());
+            Assert.True(PanicAftermath.HoldsEngineRestart);
+            Assert.Equal(before + 1, PanicAftermath.PanicCount);
+            clear.Restore();
+            Assert.False(PanicAftermath.TriggersSilenced());
+            Assert.False(PanicAftermath.HoldsEngineRestart);
+            Assert.Equal(before, PanicAftermath.PanicCount);
+
+            PanicAftermath.ArmQuiet();
+            var armedCount = PanicAftermath.PanicCount;
+            var deadline = typeof(PanicAftermath).GetField("_quietUntilMs", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            var armedDeadline = deadline.GetValue(null);
+            var armed = ProcessStateSnapshot.Take();
+            PanicAftermath.EndQuiet();
+            PanicAftermath.ArmQuiet();
+            PanicAftermath.EndQuiet();
+            armed.Restore();
+            Assert.True(PanicAftermath.TriggersSilenced());
+            Assert.True(PanicAftermath.HoldsEngineRestart);
+            Assert.Equal(armedCount, PanicAftermath.PanicCount);
+            Assert.Equal(armedDeadline, deadline.GetValue(null));
+        }
+        finally { original.Restore(); }
     }
 
     /// <summary>A debounce that already FIRED is no longer armed. Its write used to land after Restore

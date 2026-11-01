@@ -243,6 +243,12 @@ internal sealed class ProcessStateSnapshot
         var byName = types.ToLookup(t => t.Name);
         var found = new HashSet<MemberInfo>();
 
+        // Panic state is changed through ArmQuiet/EndQuiet, not direct assignments in tests,
+        // so the source scan below cannot discover these private fields.
+        foreach (var name in new[] { "_quietUntilMs", "_engineHeld", "_panics" })
+            found.Add(typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetField(name, AnyStatic)
+                ?? throw new MissingFieldException(nameof(ConditioningControlPanel.Services.Safety.PanicAftermath), name));
+
         // Whole seam classes: the head's service locator and Core's static Core* seams.
         foreach (var t in types.Where(t => t == typeof(ConditioningControlPanel.Avalonia.App)
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
