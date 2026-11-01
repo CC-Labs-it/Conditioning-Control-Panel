@@ -156,12 +156,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
             CoreAudio.DuckGenerationProvider = () => { lock (_duckLock) return _duckGeneration; };
         }
 
+        private readonly object _soundGate = new();
         private Action? _stopSound;
-        internal void StopSound() => Interlocked.Exchange(ref _stopSound, null)?.Invoke();
+        internal void StopSound() { Action? stop; lock (_soundGate) { stop = _stopSound; _stopSound = null; } stop?.Invoke(); }
         internal void PlaySound(string path, int volume, Action<TimeSpan>? started, Action? finished, Func<Action, ISoundVoice>? create = null)
         {
-            StopSound();
-            _stopSound = StartSound(create ?? (ended => NewVoice(path, ended)), volume, started, finished);
+            lock (_soundGate)
+            {
+                var old = _stopSound; _stopSound = null; old?.Invoke();
+                _stopSound = StartSound(create ?? (ended => NewVoice(path, ended)), volume, started, finished);
+            }
         }
 
         internal interface ISoundVoice : MindWipePlayer.IVoice

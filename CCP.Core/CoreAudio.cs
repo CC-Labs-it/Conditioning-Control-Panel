@@ -56,8 +56,9 @@ namespace ConditioningControlPanel
         public static void PlaySound(string path, int volume, Action<TimeSpan>? started = null, Action? finished = null)
         {
             var play = PlaySoundProvider;
-            if (play == null) { finished?.Invoke(); return; }
-            try { play(path, volume, started, finished); } catch { finished?.Invoke(); }
+            void Finish() { try { finished?.Invoke(); } catch { } }
+            if (play == null) { Finish(); return; }
+            try { play(path, volume, started, finished); } catch { Finish(); }
         }
 
         private static void Noop() { }

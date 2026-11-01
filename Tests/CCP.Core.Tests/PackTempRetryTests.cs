@@ -3,9 +3,7 @@ using System.IO;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
-
 namespace CCP.Core.Tests;
-
 public sealed class PackTempRetryTests
 {
     [Fact]
@@ -30,6 +28,12 @@ public sealed class PackTempRetryTests
             Assert.Equal(0, pool.TempCount);
             Assert.False(File.Exists(path));
             Assert.False(store.TryGetSourceKey(path, out _));
+            var missing = pool.TryDraw(0)!; Assert.True(store.TryGetSourceKey(missing, out _));
+            Directory.Delete(Path.GetDirectoryName(missing)!, true);
+            Assert.True(ConditioningControlPanel.Services.MediaFiles.MediaTempFileLedger.TryDeleteFile(missing));
+            pool.CleanupTemps();
+            Assert.Equal(0, pool.TempCount);
+            Assert.False(store.TryGetSourceKey(missing, out _));
         }
         finally { Directory.Delete(root, true); }
     }

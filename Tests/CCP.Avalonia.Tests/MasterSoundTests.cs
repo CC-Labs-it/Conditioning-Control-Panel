@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Models;
@@ -7,9 +9,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Audio;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public sealed class MasterSoundTests
 {
     private sealed class Voice(Action ended) : LibVlcAudio.ISoundVoice
@@ -23,16 +23,44 @@ public sealed class MasterSoundTests
         public bool Play() { Playing = true; Started?.Invoke(2000); return true; }
         public void Dispose() { Disposed = true; ended(); }
     }
-
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Stop_and_replacement_wait_for_start_publication(bool replace)
+    {
+        var audio = new LibVlcAudio(_ => "");
+        Voice? first = null, second = null;
+        using var creating = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        using var attempting = new ManualResetEventSlim();
+        var start = Task.Run(() => audio.PlaySound("first", 50, null, null, done =>
+        { first = new Voice(done); creating.Set(); release.Wait(); return first; }));
+        Task? other = null;
+        try
+        {
+            Assert.True(creating.Wait(TimeSpan.FromSeconds(5)));
+            other = Task.Run(() => { attempting.Set(); if (replace) audio.PlaySound("second", 50, null, null, done => second = new Voice(done)); else audio.StopSound(); });
+            Assert.True(attempting.Wait(TimeSpan.FromSeconds(5)));
+            Assert.NotSame(other, await Task.WhenAny(other, Task.Delay(100)));
+            release.Set();
+            await Task.WhenAll(start, other);
+            Assert.True(first!.Disposed);
+            if (replace) { Assert.NotNull(second); Assert.False(second.Disposed); }
+            audio.StopSound();
+            Assert.True(second?.Disposed ?? true);
+        }
+        finally { release.Set(); await start; if (other != null) await other; audio.StopSound(); if (first?.Disposed == false) first.Dispose(); if (second?.Disposed == false) second.Dispose(); }
+    }
     [Theory]
     [InlineData("panic")]
     [InlineData("pause")]
     [InlineData("shutdown")]
     public void Stop_routes_release_sound_with_engine_off(string route)
     {
+        var previous = (CoreSession.IsEngineRunningProvider, CoreAudio.StopSoundProvider);
         CoreSession.IsEngineRunningProvider = () => false;
         var audio = new LibVlcAudio(_ => "");
-        audio.Seed();
+        CoreAudio.StopSoundProvider = audio.StopSound;
         var runner = new SessionRunner(new SessionLogService());
         Voice? voice = null;
         var finished = 0;
@@ -48,9 +76,8 @@ public sealed class MasterSoundTests
             audio.StopSound();
             Assert.Equal(1, finished);
         }
-        finally { audio.StopSound(); runner.Stop(); }
+        finally { try { audio.StopSound(); runner.Stop(); } finally { (CoreSession.IsEngineRunningProvider, CoreAudio.StopSoundProvider) = previous; } }
     }
-
     [Fact]
     public void Sound_routes_after_start_follows_master_and_unsubscribes_when_finished()
     {

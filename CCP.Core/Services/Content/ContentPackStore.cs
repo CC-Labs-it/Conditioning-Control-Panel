@@ -391,7 +391,7 @@ namespace ConditioningControlPanel.Services
             try
             {
                 var full = Path.GetFullPath(tempPath);
-                File.Delete(full);
+                try { File.Delete(full); } catch (DirectoryNotFoundException) { }
                 _tempIdentity.TryRemove(full, out _);
                 return true;
             }
