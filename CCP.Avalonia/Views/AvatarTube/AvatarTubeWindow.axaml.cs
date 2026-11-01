@@ -829,8 +829,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 var img = this.FindControl<Image>(name);
                 if (img == null) continue;
                 img.RenderTransformOrigin = new RelativePoint(0.5, 1.0, RelativeUnit.Relative);
-                // WPF Avatar.cs:762-777 scales layout independently of the bob
-                // (Windowing.cs:751). Scale first, then translate without scaling the bob.
+                // WPF Avatar.cs:765-771 sets LayoutTransform; xaml:512-517 bobs RenderTransform.
+                // .NET 10 WPF FrameworkElement.SetLayoutOffset appends layout first, render second
+                // (FrameworkElement.cs:5224,5256), so the bob displacement stays unscaled.
                 img.RenderTransform = name == "ImgAvatar"
                     ? new TransformGroup { Children = { transform ?? new ScaleTransform(1, 1), _avatarFloat } }
                     : transform;
