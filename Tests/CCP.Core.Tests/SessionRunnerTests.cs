@@ -297,36 +297,23 @@ public sealed class SessionRunnerTests : IDisposable
     [Fact]
     public void MindWipe_StartsInSessionModeAtItsMinute_StopsOnPause_ResumesPlain_StopsAtTheEnd() {
         // WPF SessionEngine.cs:207-228 (StartSession, deferred), :528 (pause), :575-576 (plain resume), :368 (stop).
-        var old = (CoreMindWipe.StartSessionProvider, CoreMindWipe.StartProvider, CoreMindWipe.StopProvider);
-        var calls = new System.Collections.Generic.List<string>();
-        CoreMindWipe.StartSessionProvider = (b, v) => calls.Add($"session {b} {v * 100:0}");
-        CoreMindWipe.StartProvider = (f, v) => calls.Add($"start {f} {v * 100:0}");
+        var old = (CoreMindWipe.StartSessionProvider, CoreMindWipe.StartProvider, CoreMindWipe.StopProvider); var calls = new System.Collections.Generic.List<string>();
+        CoreMindWipe.StartSessionProvider = (b, v) => calls.Add($"session {b} {v * 100:0}"); CoreMindWipe.StartProvider = (f, v) => calls.Add($"start {f} {v * 100:0}");
         CoreMindWipe.StopProvider = () => calls.Add("stop");
         try {
-            var session = OneMinute();
-            session.DurationMinutes = 3;
-            session.Settings.MindWipeEnabled = true;
-            session.Settings.MindWipeStartMinute = 1;
-            session.Settings.MindWipeBaseMultiplier = 2;
-            session.Settings.MindWipeVolume = 60;
+            var session = OneMinute(); session.DurationMinutes = 3;
+            session.Settings.MindWipeEnabled = true; session.Settings.MindWipeStartMinute = 1;
+            session.Settings.MindWipeBaseMultiplier = 2; session.Settings.MindWipeVolume = 60;
             _runner.Start(session);
             Assert.DoesNotContain(calls, c => c.StartsWith("session"));   // deferred to minute 1
-            _runner.Pause();
-            _runner.Resume();
-            Assert.DoesNotContain(calls, c => c.StartsWith("session") || c.StartsWith("start"));
-            _runner.Tick(TimeSpan.FromSeconds(61));
-            Assert.Equal("session 2 60", calls.Last());
-            calls.Clear();
-            _runner.Pause();
-            Assert.Equal(new[] { "stop" }, calls);
-            _runner.Resume();
-            Assert.Equal(new[] { "stop", "start 2 60" }, calls);
-            calls.Clear();
-            _runner.Stop();
-            Assert.Equal("stop", calls.First());
-            calls.Clear();
-            session.Settings.MindWipeStartMinute = 0;
-            _runner.Start(session);
+            _runner.Pause(); _runner.Resume();
+            Assert.DoesNotContain(calls, c => c.StartsWith("session") || c.StartsWith("start")); _runner.Tick(TimeSpan.FromSeconds(61));
+            Assert.Equal("session 2 60", calls.Last()); calls.Clear();
+            _runner.Pause(); Assert.Equal(new[] { "stop" }, calls);
+            _runner.Resume(); Assert.Equal(new[] { "stop", "start 2 60" }, calls);
+            calls.Clear(); _runner.Stop();
+            Assert.Equal("stop", calls.First()); calls.Clear();
+            session.Settings.MindWipeStartMinute = 0; _runner.Start(session);
             Assert.Equal("session 2 60", calls.Last()); }
         finally { (CoreMindWipe.StartSessionProvider, CoreMindWipe.StartProvider, CoreMindWipe.StopProvider) = old; } }
     [Fact]
@@ -476,4 +463,17 @@ public sealed class SessionRunnerTests : IDisposable
 
     private static string Fixture([CallerFilePath] string here = "") =>
         Path.Combine(Path.GetDirectoryName(here)!, "Fixtures", "session_log_runner_wpf.json");
+    [Theory, InlineData(false), InlineData(true)]
+    public void Session_cancels_global_brain_drain_on_start_and_pause(bool sessionEnabled) {
+        var s = CoreSettings.Current; var saved = (s.BrainDrainEnabled, s.AudioOnlySession, CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain);
+        int starts = 0, stops = 0; bool playing = false;
+        try {
+            CoreEngine.Stop(); s.BrainDrainEnabled = true; s.AudioOnlySession = false;
+            CoreEngine.StartBrainDrain = () => { starts++; playing = true; };
+            CoreEngine.StopBrainDrain = () => { stops++; playing = false; };
+            var session = OneMinute(); session.Settings.BrainDrainEnabled = sessionEnabled; session.Settings.BrainDrainStartMinute = 1;
+            _runner.Start(session); Assert.Equal(1, starts); Assert.Equal(1, stops); Assert.False(playing);
+            playing = true; _runner.Pause(); Assert.Equal(2, stops); Assert.False(playing);
+            _runner.Resume(); Assert.Equal(1, starts); Assert.False(playing); }
+        finally { _runner.Stop(); (s.BrainDrainEnabled, s.AudioOnlySession, CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain) = saved; } }
 }

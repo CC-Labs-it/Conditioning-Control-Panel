@@ -34,10 +34,8 @@ public sealed class MindWipeTests
     private sealed class Clock : TimeProvider
     {
         private long _now;
-        private DateTimeOffset _wallOrigin = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        public TimeZoneInfo Zone = TimeZoneInfo.Utc;
-        public override TimeZoneInfo LocalTimeZone => Zone;
-        public override DateTimeOffset GetUtcNow() => _wallOrigin.AddMilliseconds(_now);
+        private DateTimeOffset _wallOrigin = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero); public TimeZoneInfo Zone = TimeZoneInfo.Utc;
+        public override TimeZoneInfo LocalTimeZone => Zone; public override DateTimeOffset GetUtcNow() => _wallOrigin.AddMilliseconds(_now);
         public void JumpWallClock(TimeSpan by) => _wallOrigin += by;
         private readonly List<Timer> _timers = new();
         public override long TimestampFrequency => 1000;
