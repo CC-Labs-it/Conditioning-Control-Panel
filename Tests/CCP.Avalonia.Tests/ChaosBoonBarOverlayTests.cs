@@ -100,7 +100,8 @@ public sealed class ChaosBoonBarOverlayTests
     public async Task Equipped_welcome_shower_lands_with_art_and_treats_unless_scripted_or_invalid() {
         await AvaloniaTestDispatcher.RunAsync(() => {
             Setup();
-            ChaosRunState.IconResolver = null; // included in the suite's static seam restore
+            var resolver = ChaosRunState.IconResolver;
+            ChaosRunState.IconResolver = null;
             var boon = ChaosBoonPool.All.First(b => b.Id == "welcome_shower");
             var meta = ChaosMeta.State;
             var equipped = meta.EquippedStartBoon;
@@ -132,7 +133,8 @@ public sealed class ChaosBoonBarOverlayTests
                 });
                 var settings = CoreSettings.Current;
                 Assert.Equal((float)System.Math.Pow(settings.MasterVolume / 100f * (settings.BubblesVolume / 100f), 1.5) * 0.25f, Assert.Single(chimes));
-                Assert.Contains(global::ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("chaos_welcome_shower_event"), ChaosRunHost.State.RecentEvents);
+                var feed = Assert.Single(ChaosRunHost.State.RecentEvents, e => e.EndsWith(Loc.Get("chaos_welcome_shower_event"), System.StringComparison.Ordinal));
+                Assert.Equal("🚿", global::ConditioningControlPanel.Avalonia.Controls.IconText.Split(feed).Icons.Single()); // WPF :1659 marker
                 ChaosRunHost.ForceShutdown();
                 var scripted = Cfg();
                 scripted.ScriptedFirstRun = true;
@@ -152,6 +154,7 @@ public sealed class ChaosBoonBarOverlayTests
                 ChaosRunHost.ForceShutdown();
                 meta.EquippedStartBoon = equipped;
                 CoreAudio.PlayOneShotProvider = audio;
+                ChaosRunState.IconResolver = resolver;
                 if (prior == null) System.IO.File.Delete(path); else System.IO.File.WriteAllBytes(path, prior);
             }
             return Task.CompletedTask;

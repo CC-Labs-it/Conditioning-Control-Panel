@@ -172,14 +172,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void SpawnWelcomeShower()
         {
             if (_state == null) return;
-            for (int i = 0; i < 6; i++)
+            try
             {
-                var variant = ChaosBubbleVariants.All[Random.Shared.Next(2)];
-                BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(variant, _state.RunIntensity,
-                    _state.FuseTimeMult, ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale));
+                for (int i = 0; i < 6; i++)
+                {
+                    var variant = ChaosBubbleVariants.All[Random.Shared.Next(2)];
+                    BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(variant, _state.RunIntensity,
+                        _state.FuseTimeMult, ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale));
+                }
+                BubbleOverlay.PlayChime(0.25f);
+                // The feed draws a leading glyph as its icon (ChaosHudWindow.FeedGlyph), so keep WPF's marker.
+                _state.PushEvent("🚿 " + ConditioningControlPanel.Localization.Loc.Get("chaos_welcome_shower_event"));
             }
-            BubbleOverlay.PlayChime(0.25f);
-            _state.PushEvent(ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("chaos_welcome_shower_event"));
+            catch (Exception ex) { Log.Debug("SpawnWelcomeShower: {E}", ex.Message); } // WPF :1661
         }
         /// <summary>WPF SpawnTick (:1101), the treat half. Re-times its own timer like WPF.</summary>
         internal static void SpawnTick()
