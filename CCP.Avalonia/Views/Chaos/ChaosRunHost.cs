@@ -708,9 +708,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void ActivateFreeze()
         {
             _freezeRemainingSec = 3.5;
-            BubbleOverlay.Field.FreezeChaos = true;
+            BubbleOverlay.StartFreeze();
             EffectPayload.GlobalDurationMult = 2.5;
-            ChaosEffectBannerOverlay.Show("freeze", "Freeze", Color.FromRgb(0x96, 0xD2, 0xFF));
+            ChaosEffectBannerOverlay.Show("freeze", Loc.Get("chaos_freeze_banner"), Color.FromRgb(0x96, 0xD2, 0xFF));
             if (_state?.Config.ColorFlashesEnabled == true)
             {
                 var color = Color.FromRgb(150, 210, 255);
@@ -723,7 +723,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void EndFreeze()
         {
             _freezeRemainingSec = 0;
-            BubbleOverlay.Field.FreezeChaos = false;
+            BubbleOverlay.EndFreeze();
             EffectPayload.GlobalDurationMult = 1.0;
             ChaosEffectBannerOverlay.End("freeze");
             ChaosOverlayWindow.ChaosSfx.Play("freeze_shatter", 0.5f);

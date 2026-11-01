@@ -103,6 +103,7 @@ public sealed class ChaosRunHostTests
             var log = Juice();
             var language = LocalizationManager.Instance.CurrentLanguage;
             LocalizationManager.Instance.SetLanguage("en");
+            ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
             try
             {
                 var meta = ChaosMeta.State;
@@ -129,17 +130,21 @@ public sealed class ChaosRunHostTests
                 Assert.False(treat.Popping);
                 Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
                 Assert.Equal("❄ everything holds still", state.RecentEvents.First());
-                foreach (var (code, expected) in new[]
+                foreach (var (code, expected, banner) in new[]
                 {
-                    ("en", "❄ everything holds still"), ("de", "❄ alles steht still"),
-                    ("es", "❄ todo queda inmóvil"), ("fr", "❄ tout reste immobile"),
-                    ("it", "❄ tutto si ferma"), ("ja", "❄ すべてが静止する"),
-                    ("ko", "❄ 모든 것이 멈춘다"), ("pt-BR", "❄ tudo fica imóvel"),
-                    ("ru", "❄ всё замирает"), ("zh-CN", "❄ 一切静止")
+                    ("en", "❄ everything holds still", "Freeze"), ("de", "❄ alles steht still", "Einfrieren"),
+                    ("es", "❄ todo queda inmóvil", "Congelar"), ("fr", "❄ tout reste immobile", "Gel"),
+                    ("it", "❄ tutto si ferma", "Congelamento"), ("ja", "❄ すべてが静止する", "凍結"),
+                    ("ko", "❄ 모든 것이 멈춘다", "동결"), ("pt-BR", "❄ tudo fica imóvel", "Congelar"),
+                    ("ru", "❄ всё замирает", "Заморозка"), ("zh-CN", "❄ 一切静止", "冻结")
                 })
                 {
                     LocalizationManager.Instance.SetLanguage(code);
                     Assert.Equal(expected, Loc.Get("chaos_freeze_trigger"));
+                    ChaosEffectBannerOverlay.CloseActive();
+                    toy.ChargesLeft = 1; toy.CooldownRemainingSec = 0;
+                    ChaosRunHost.UseToyById("freeze_trigger");
+                    Assert.Equal(banner, Assert.Single(ChaosEffectBannerOverlay.Active!.Strip.Row).Text);
                 }
                 LocalizationManager.Instance.SetLanguage("en");
                 Assert.Contains("sfx:freeze_trigger", log);
@@ -172,14 +177,18 @@ public sealed class ChaosRunHostTests
                 toy.ChargesLeft = 1; toy.CooldownRemainingSec = 0;
                 ChaosRunHost.UseToyById("freeze_trigger");
                 Assert.True(BubbleOverlay.Field.FreezeChaos);
+                BubbleOverlay.Field.Step();
+                Assert.True(BubbleOverlay.Field.FreezeImpactMs > 0);
                 ChaosRunHost.ForceShutdown();
                 Assert.False(BubbleOverlay.Field.FreezeChaos);
+                Assert.Equal(0, BubbleOverlay.Field.FreezeImpactMs);
+                Assert.Equal((0, 0), (treat.FreezeOffsetX, treat.FreezeOffsetY));
                 Assert.Equal(1, EffectPayload.GlobalDurationMult);
             }
             finally
             {
                 ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow;
-                LocalizationManager.Instance.SetLanguage(language); Unjuice(); FreshMeta();
+                LocalizationManager.Instance.SetLanguage(language); ChaosEffectBannerOverlay.SkipPlatformChecksForTests = false; Unjuice(); FreshMeta();
             }
             return Task.CompletedTask;
         });

@@ -56,6 +56,7 @@ namespace ConditioningControlPanel.Services
     {
         public int Screen;
         public double X, Y, Size, Angle, Scale = 1, Fade = 1;
+        public double FreezeOffsetX, FreezeOffsetY, FreezePulsePhase;
         public bool Clickable, Popping, Lucky;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
@@ -296,6 +297,16 @@ namespace ConditioningControlPanel.Services
         public bool HoldChaos;
         /// <summary>WPF freeze power-up: motion and fuse stop, but clicks and channels still work.</summary>
         public bool FreezeChaos;
+        public double FreezeImpactMs { get; private set; }
+
+        /// <summary>WPF BubbleService.cs:250-255,516: freeze and a 200 ms field shudder.</summary>
+        public void StartFreeze() { FreezeChaos = true; FreezeImpactMs = 200; }
+        public void EndFreeze()
+        {
+            FreezeChaos = false;
+            FreezeImpactMs = 0;
+            foreach (var b in Bubbles) b.FreezeOffsetX = b.FreezeOffsetY = 0;
+        }
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
         public bool Held;
         public double CursorX, CursorY;
@@ -383,7 +394,8 @@ namespace ConditioningControlPanel.Services
             for (var i = Bubbles.Count - 1; i >= 0; i--)
             {
                 var b = Bubbles[i];
-                if (b.Screen == screen && b.Clickable && !b.Popping && b.Contains(x, y)) return b;
+                if (b.Screen == screen && b.Clickable && !b.Popping
+                    && b.Contains(x - b.FreezeOffsetX, y - b.FreezeOffsetY)) return b;
             }
             return null;
         }
@@ -394,10 +406,15 @@ namespace ConditioningControlPanel.Services
         {
             var missed = 0;
             var now = Clock();
+            FreezeImpactMs = Math.Max(0, FreezeImpactMs - 32);
             for (var i = Bubbles.Count - 1; i >= 0; i--)
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
+                if (FreezeChaos && b.Spec != null) b.FreezePulsePhase += 0.18;
+                bool shudder = FreezeChaos && FreezeImpactMs > 0 && b.Spec != null;
+                b.FreezeOffsetX = shudder ? (Random.NextDouble() - 0.5) * 8 : 0;
+                b.FreezeOffsetY = shudder ? (Random.NextDouble() - 0.5) * 8 : 0;
                 if (HoldChaos && b.Spec != null && !b.Popping) { b.CancelChannel(); continue; }
                 var r = b.Step(Held, CursorX, CursorY, now, FreezeChaos);
                 if (r == AmbientBubble.Result.Alive) continue;

@@ -255,11 +255,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        internal static void StartFreeze() { Field.StartFreeze(); RequestFrame(); }
+        internal static void EndFreeze()
+        {
+            Field.EndFreeze();
+            foreach (var w in Windows) w.Sync();
+            RequestFrame();
+        }
+
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
             Field.HoldChaos = false;
-            Field.FreezeChaos = false;
+            Field.EndFreeze();
             _chaosPopped = null;
             _chaosCanChannel = null;
             _chaosEStimArc = null;
@@ -443,6 +451,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
+        // WPF BubbleService.cs:2512-2522,4928-4939: the icy radial halo beneath the sprite.
+        private static readonly IBrush FreezeAura = new RadialGradientBrush
+        {
+            GradientStops = { new GradientStop(Color.FromArgb(0, 150, 210, 255), 0.30),
+                new GradientStop(Color.FromArgb(190, 150, 210, 255), 0.66),
+                new GradientStop(Color.FromArgb(0, 150, 210, 255), 1.0) },
+        };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
@@ -539,7 +554,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var b = bubbles[i];
                 if (b.Screen != Index || !b.Clickable || b.Popping) continue;
-                Rects[n++] = new PixelRect((int)(b.X * Scaling) - Bounds.X, (int)(b.Y * Scaling) - Bounds.Y,
+                Rects[n++] = new PixelRect((int)((b.X + b.FreezeOffsetX) * Scaling) - Bounds.X, (int)((b.Y + b.FreezeOffsetY) * Scaling) - Bounds.Y,
                     (int)(b.Size * Scaling), (int)(b.Size * Scaling));
             }
             var drawn = HasBubbles();
@@ -570,12 +585,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var b = bubbles[i];
                     if (b.Screen != _w.Index) continue;
-                    double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
+                    double cx = (b.CenterX + b.FreezeOffsetX - ox) * k, cy = (b.CenterY + b.FreezeOffsetY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {
+                        if (b.Spec != null && BubbleOverlay.Field.FreezeChaos)
+                        {
+                            using (dc.PushOpacity(0.1125 + 0.0875 * Math.Sin(b.FreezePulsePhase)))
+                                dc.DrawEllipse(FreezeAura, null, new Point(cx, cy), (size + 6 * k) / 2, (size + 6 * k) / 2);
+                        }
                         if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
                         {
                             var (fill, pen) = TintPaint(b.Spec.Tint);

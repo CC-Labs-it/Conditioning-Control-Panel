@@ -24,7 +24,7 @@ public sealed class BubbleOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var dir = System.IO.Directory.CreateTempSubdirectory("ccp-bubble-");
             var png = System.IO.Path.Combine(dir.FullName, "pill.png");
@@ -56,7 +56,7 @@ public sealed class BubbleOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var s = CoreSettings.Current;
             var (dayKey, paid) = (s.AmbientBubbleXpDayKey, s.AmbientBubbleXpPaidToday);   // process-global: put it back
@@ -84,6 +84,53 @@ public sealed class BubbleOverlayTests
                 BubbleOverlay.Field.Bubbles.Clear(); w.Close(); host.Close();
                 s.AmbientBubbleXpDayKey = dayKey; s.AmbientBubbleXpPaidToday = paid;
             }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF BubbleService.cs:2512,4281-4289,4928: the frozen bubble draws an icy halo.</summary>
+    [Fact]
+    public async Task Frozen_chaos_bubble_draws_the_aura_and_thaw_removes_it()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var f = BubbleOverlay.Field;
+            var image = BubbleOverlay.Image;
+            var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 300, 250), 1) { Width = 300, Height = 250 };
+            f.Bubbles.Clear();
+            var bubble = new AmbientBubble { X = 100, Y = 70, Size = 100, Screen = 0, Clickable = true,
+                Spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec() };
+            f.Bubbles.Add(bubble);
+            BubbleOverlay.Image = null;
+            try
+            {
+                w.Show();
+                byte Alpha()
+                {
+                    w.Sync(); AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    using var frame = w.CaptureRenderedFrame()!;
+                    var px = new byte[4];
+                    using var fb = frame.Lock();
+                    System.Runtime.InteropServices.Marshal.Copy(fb.Address + 120 * fb.RowBytes + 198 * 4, px, 0, 4);
+                    return px[3];
+                }
+                byte plain = Alpha();
+                f.StartFreeze();
+                bubble.FreezeOffsetX = 4; bubble.FreezeOffsetY = -3;
+                w.Sync();
+                Assert.Equal(new PixelRect(104, 67, 100, 100), w.Rects[0]);
+                for (int i = 0; i < 7; i++) f.Step();
+                for (int i = 0; i < 40 && System.Math.Sin(bubble.FreezePulsePhase) < 0.7; i++) f.Step();
+                byte frozen = Alpha();
+                Assert.True(frozen > plain, $"aura alpha {frozen}, plain {plain}");
+                f.EndFreeze();
+                Assert.Equal(plain, Alpha());
+            }
+            finally { f.EndFreeze(); f.Bubbles.Clear(); BubbleOverlay.Image = image; w.Close(); }
             return Task.CompletedTask;
         });
     }
