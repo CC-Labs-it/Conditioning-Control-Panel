@@ -937,17 +937,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
 
-        // ponytail: the five canon body moves (bounce, thud, nod, droop, shiver) were WPF
-        // DoubleAnimations on _crtScale / _moveShift. Chains now play here; the body moves still
-        // need their own animation port. The
-        // upgrade is an Avalonia.Animation.Animation with KeyFrames on the same two transforms.
-        private void RunBodyMove(string move)
-        {
-            bool handled = false;
-            try { OnBodyMoveCore(move, ref handled); }
-            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] body-move seam threw"); }
-        }
-
         // ---------------------------------------------------------------- idle beats
 
         /// <summary>True when something is on screen that an idle beat must not interrupt.</summary>
@@ -2624,6 +2613,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 }
                 _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
                 StartPatFeedback(EmiPatFeedback.Pet);
+                RunBodyMove("bounce");
                 CountPat();
                 FireDeskEvent("petted");
             }
