@@ -12,15 +12,29 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <c>XQueryKeymap</c> only look, so a click still lands on whatever it was aimed at, exactly as the
 /// WPF hook returned false and let it through. A grab would swallow it, which is why this is not one.
 ///
-/// <para>Only X11/XWayland surfaces report: under Wayland the pointer over a native Wayland window is
-/// invisible to X clients, so click-away there only sees clicks on X windows. Null when there is no
-/// X display at all (headless, Windows, macOS). One owned connection, opened lazily, UI thread only.</para>
+/// <para>Windows uses GetCursorPos and GetAsyncKeyState, like WPF. On Linux only X11/XWayland
+/// surfaces report: the pointer over a native Wayland window is invisible to X clients. Null when
+/// there is no supported desktop pointer. The X connection is opened lazily, UI thread only.</para>
 /// </summary>
 internal static class X11Pointer
 {
     private const string LibX11 = "libX11.so.6";
     private const uint Button1Mask = 1 << 8, Button3Mask = 1 << 10;
     private const long XK_Escape = 0xff1b;
+    private const int VkLeft = 0x01, VkRight = 0x02, VkEscape = 0x1B;
+
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+
+    // WPF ChaosVibeTrailOverlay.cs:229 and BubbleService.cs:546. The injected native reads
+    // let Linux tests cover negative desktop coordinates, button bits and failed reads.
+    internal static (PixelPoint At, bool Pressed, bool Escape)? ReadWindows(
+        Func<PixelPoint?> position, Func<int, short> keyState)
+    {
+        if (position() is not PixelPoint at) return null;
+        bool pressed = ((keyState(VkLeft) | keyState(VkRight)) & 0x8000) != 0;
+        bool escape = (keyState(VkEscape) & 0x8000) != 0;
+        return (at, pressed, escape);
+    }
 
     [DllImport(LibX11)] private static extern IntPtr XOpenDisplay(IntPtr name);
     [DllImport(LibX11)] private static extern IntPtr XDefaultRootWindow(IntPtr display);
@@ -37,6 +51,7 @@ internal static class X11Pointer
     {
         try
         {
+            if (OperatingSystem.IsWindows()) return ReadWindows(Win32Overlay.ReadPointerPosition, GetAsyncKeyState);
             if (!_tried)
             {
                 _tried = true;

@@ -101,6 +101,10 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out PointI p);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RectI r);
 
+    // WPF ChaosVibeTrailOverlay.cs:229: desktop coordinates are physical pixels.
+    internal static global::Avalonia.PixelPoint? ReadPointerPosition() =>
+        OperatingSystem.IsWindows() && GetCursorPos(out var p) ? new global::Avalonia.PixelPoint(p.X, p.Y) : null;
+
     /// <summary>Is the window-relative px point inside any of the first <paramref name="count"/> rects?</summary>
     internal static bool Hits(global::Avalonia.PixelRect[] rects, int count, int x, int y)
     {

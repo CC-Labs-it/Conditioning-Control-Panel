@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -6,6 +7,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
@@ -23,6 +25,43 @@ public sealed class ChaosVibeTrailOverlayTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+    }
+
+    [Fact]
+    public void Windows_pointer_preserves_negative_physical_coordinates()
+    {
+        var at = new PixelPoint(-640, 240);
+        var read = X11Pointer.ReadWindows(() => at, _ => 0);
+        Assert.NotNull(read);
+        Assert.Equal(at, read.Value.At);
+    }
+
+    [Fact]
+    public void Windows_pointer_failure_does_not_read_keys()
+    {
+        Assert.Null(X11Pointer.ReadWindows(() => null, _ => throw new InvalidOperationException()));
+    }
+
+    [Fact]
+    public void Windows_pointer_reports_either_held_button_and_ignores_low_bits()
+    {
+        short[] keys = new short[256];
+        keys[1] = unchecked((short)0x8000);
+        Assert.True(X11Pointer.ReadWindows(() => new PixelPoint(), key => keys[key])!.Value.Pressed);
+        keys[1] = 0; keys[2] = unchecked((short)0x8000);
+        Assert.True(X11Pointer.ReadWindows(() => new PixelPoint(), key => keys[key])!.Value.Pressed);
+        keys[2] = 1;
+        Assert.False(X11Pointer.ReadWindows(() => new PixelPoint(), key => keys[key])!.Value.Pressed);
+    }
+
+    [Fact]
+    public void Windows_pointer_reports_escape_only_while_held()
+    {
+        short escape = 1;
+        short Key(int key) => key == 0x1b ? escape : (short)0;
+        Assert.False(X11Pointer.ReadWindows(() => new PixelPoint(), Key)!.Value.Escape);
+        escape = unchecked((short)0x8000);
+        Assert.True(X11Pointer.ReadWindows(() => new PixelPoint(), Key)!.Value.Escape);
     }
 
     [Fact]
