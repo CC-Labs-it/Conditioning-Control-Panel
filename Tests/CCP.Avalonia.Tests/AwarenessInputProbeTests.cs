@@ -36,6 +36,31 @@ public sealed class AwarenessInputProbeTests
     }
 
     [Fact]
+    public void VariableX11QueryLatencyDoesNotMimicInput()
+    {
+        long now = 100000, lastInput = now - 5000;
+        int reads = 0;
+        bool sampleAtEnd = false;
+        using var probe = new X11AwarenessInputProbe(() =>
+        {
+            int delay = (reads++ % 4) switch { 0 => 0, 1 => 10, 2 => 65, _ => 200 };
+            long idle = now + (sampleAtEnd ? delay : 0) - lastInput;
+            now += delay;
+            return (idle, 10, 10);
+        }, () => now);
+        probe.Start();
+        for (int phase = 0; phase < 2; phase++)
+        {
+            sampleAtEnd = phase == 1;
+            for (int i = 0; i < 32; i++) { now += 250; probe.SampleOnce(); }
+            Assert.False(probe.IsTypingBurst);
+        }
+        // Real input still accumulates despite the same variable latency.
+        for (int i = 0; i < 8; i++) { now += 250; lastInput = now; probe.SampleOnce(); }
+        Assert.True(probe.IsTypingBurst);
+    }
+
+    [Fact]
     public void PointerMovementDoesNotCount()
     {
         long now = 10000; int x = 0;

@@ -88,14 +88,17 @@ internal sealed class X11AwarenessInputProbe : IInputProbe
             bool typing = false;
             try
             {
+                long before = _clock();
                 var sample = _read();
+                long after = _clock();
                 if (sample is { } s)
                 {
-                    long inputAt = _clock() - Math.Max(0, s.IdleMs);
-                    // Allow a few milliseconds of clock/query skew. No key identities are read.
-                    bool fresh = inputAt > _lastInputAt + 5;
+                    long idle = Math.Max(0, s.IdleMs);
+                    // The server sampled somewhere inside the query. Only a non-overlapping
+                    // input-time interval proves fresh input; allow 5 ms for clock skew.
+                    bool fresh = before - idle > _lastInputAt + 5;
                     bool moved = s.X != _x || s.Y != _y;
-                    _lastInputAt = inputAt;
+                    _lastInputAt = after - idle; // latest possible time of this input
                     _x = s.X; _y = s.Y;
                     typing = fresh && !moved;
                 }

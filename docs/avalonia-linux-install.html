@@ -38,10 +38,11 @@ libwebkit2gtk-4.1.so.0 + libjavascriptcoregtk-4.1 + libsoup-3.0/2.4); webkitgtk-
 <tr><td>Fonts</td><td>none: Inter, Fredoka, Noto Sans Mono and Noto Emoji are bundled (a system emoji font is used first when present)</td><td>none</td><td>none</td></tr>
 <tr><td>Sign-in token store</td><td>libsecret</td><td>libsecret-1-0</td><td>libsecret</td></tr>
 <tr><td>Overlays, panic key (X11/XInput2)</td><td>libx11 libxi</td><td>libx11-6 libxi6</td><td>libX11 libXi</td></tr>
+<tr><td>Awareness input (X11)</td><td>libxss</td><td>libxss1</td><td>libXScrnSaver</td></tr>
 </table>
 <p>.NET: publish self-contained, so no runtime dependency.
 openSUSE names (used by <code>packaging/linux/distro-check</code>): libwebkit2gtk-4_1-0, libWPEWebKit-2_0-1 libWPEBackend-fdo-1_0-1
-libwpe-1_0-1, libvlc5 vlc-noX, libsecret-1-0, libX11-6 libXi6.
+libwpe-1_0-1, libvlc5 vlc-noX, libsecret-1-0, libX11-6 libXi6 libXss1.
 Measured 2026-10-10 on stock images (<code>distro-check</code>, ~/ccp-port/evidence/distro-check/findings.md): the WPE row is NOT
 installable on Ubuntu 24.04 (no WPE at all), Ubuntu 22.04 / Debian 12 (WebKit only as libwpewebkit-1.0-3 / -1.1-0) or
 Fedora 44 (none); Arch extra ships all three (<code>pacman -Si</code> 2026-10-10; the image check reported otherwise). libvlc5 / vlc-libs ship only <code>libvlc.so.5</code>,
@@ -53,7 +54,7 @@ finish-args: <code>--socket=x11</code> (overlays need X11/XWayland; not fallback
 (tray), portals for notifications, GlobalShortcuts and Secret (libsecret uses the Secret portal inside Flatpak).
 Updates come from the store. Host: own Flatpak repo + <code>.flatpakref</code> on the website first; Flathub only after checking
 its content policy for this app.</li>
-<li><strong>AUR package</strong> (Arch/CachyOS): <code>depends=(webkit2gtk-4.1 gst-plugins-good vlc libpulse libsecret libx11 libxi icu)</code>, the WPE trio
+<li><strong>AUR package</strong> (Arch/CachyOS): <code>depends=(webkit2gtk-4.1 gst-plugins-good vlc libpulse libsecret libx11 libxi libxss icu)</code>, the WPE trio
 in <code>optdepends</code> (opt-in engine since 2026-10-13).
 Debian/Ubuntu/Fedora: no WPE packages exist, which no longer matters: web pages run on WebKitGTK there too, and the in-app
 messages (startup toast, WebHost panel) no longer name WPE (<code>LinuxDependencies.Required</code>/<code>WebViews</code>).</li>
@@ -94,7 +95,7 @@ A clean-container proof of <code>depends=</code> sufficiency is still owed: the 
 <li><strong>Flatpak:</strong> no flatpak-builder and no org.gnome.Sdk//50 on the box and Docker is down, so the manifest is still unbuilt.
 Substitute proof: the extracted tarball run inside the installed <code>org.gnome.Platform//50</code> runtime (<code>flatpak run --command=...</code>) passes every smoke check except LibVLC (<code>libvlc</code> absent), which is exactly the module the manifest
 bundles (<code>flatpak-runtime-smoke.log</code>). The runtime has webkit2gtk-4.1, javascriptcoregtk-4.1, soup-3, libsecret, libX11,
-libXi, libpulse, ICU and <code>parec</code>; it lacks libvlc and the WPE trio (<code>flatpak-runtime-libs.txt</code>).</li>
+libXi, libpulse, ICU and <code>parec</code>; it lacks libvlc and the WPE trio (<code>flatpak-runtime-libs.txt</code>). XScreenSaver availability was not checked; verify it and bundle it if absent before releasing Flatpak.</li>
 <li><strong>Desktop/metainfo:</strong> <code>desktop-file-validate</code> clean; <code>appstreamcli validate --pedantic</code> passes with two pedantic notes
 (uppercase in the component id, which is the fixed app id, and no <code>&lt;releases&gt;</code>) (<code>validate.txt</code>).</li>
 </ul>
