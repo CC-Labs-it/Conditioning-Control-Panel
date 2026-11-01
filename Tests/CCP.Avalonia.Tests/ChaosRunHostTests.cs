@@ -30,7 +30,7 @@ public sealed class ChaosRunHostTests
                 .SetupWithoutStarting();
     }
 
-    private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3 };
+    private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false };
 
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
@@ -423,6 +423,7 @@ public sealed class ChaosRunHostTests
 
                 ChaosRunHost.Overlay!.FinishCountdown();
                 var state = ChaosRunHost.State!;
+                state.Config.BoonDraftEnabled = false;   // this test exercises payout without draft interruptions
                 state.Score = 1234;
                 var meta = ChaosMeta.State;
                 int gold0 = meta.Gold;
