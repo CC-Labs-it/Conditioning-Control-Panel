@@ -42,7 +42,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Func<Window, PixelRect, bool, bool> PrepareLogoWindow = (w, bounds, clickable) =>
             PrepareNativeWindow(w, bounds, !clickable, true, w.Topmost);
         private static readonly Dictionary<ChaosDvdLogo, Window> Windows = new();
-        private static readonly HashSet<ChaosDvdLogo> Clickable = new();
         internal static IReadOnlyDictionary<ChaosDvdLogo, Window> LogoWindows => Windows;
         private static bool _shared;
         private static double _scaling;
@@ -176,7 +175,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 t.IsHitTestVisible = clickable;
                 if (clickable)
                 {
-                    Clickable.Add(l);
                     panel.PointerPressed += (_, e) =>
                     {
                         if (e.GetCurrentPoint(panel).Properties.IsLeftButtonPressed && Smack(l)) e.Handled = true;
@@ -213,7 +211,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             foreach (var l in f.Removed)
             {
                 if (Labels.Remove(l, out var t)) _canvas?.Children.Remove(t);
-                Clickable.Remove(l);
                 if (Windows.Remove(l, out var w)) w.Close();
             }
             var clones = new List<ChaosDvdLogo>();
@@ -240,10 +237,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             else EnsureClock();
         }
 
-        // WPF ChaosDvdOverlay.cs:305-319: left-button input only, hue hop and unthrottled cue.
+        // WPF ChaosDvdOverlay.cs:204-206,305-319: launch-latched input, hue hop and unthrottled cue.
         internal static bool Smack(ChaosDvdLogo l)
         {
-            if (!Clickable.Contains(l) || !Flock.Redirect(l)) return false;
+            if (!Windows.TryGetValue(l, out var window) || !window.IsHitTestVisible || !Flock.Redirect(l)) return false;
             if (Labels.TryGetValue(l, out var t)) Recolor(t, l);
             PlaySfx("dvd_bounce", 0.4f);
             return true;
@@ -284,7 +281,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             StopLoop();
             Flock.Clear();
             Labels.Clear();
-            Clickable.Clear();
             foreach (var logoWindow in Windows.Values) logoWindow.Close();
             Windows.Clear();
             var w = _window;

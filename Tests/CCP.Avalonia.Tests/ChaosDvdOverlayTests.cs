@@ -39,7 +39,8 @@ public sealed class ChaosDvdOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
-            var (can, prep, frames, sfx, shared) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx, ChaosDvdOverlay.SharedHost);
+            var (can, prep, frames, sfx) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx);
+            var shared = ChaosDvdOverlay.SharedHost;
             var src = new SteppedFrames();
             var host = new Window();
             host.Show();
@@ -73,7 +74,8 @@ public sealed class ChaosDvdOverlayTests
             finally
             {
                 ChaosDvdOverlay.CloseActive();
-                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx, ChaosDvdOverlay.SharedHost) = (can, prep, frames, sfx, shared);
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx) = (can, prep, frames, sfx);
+                ChaosDvdOverlay.SharedHost = shared;
                 host.Close();
             }
             return Task.CompletedTask;
@@ -86,7 +88,8 @@ public sealed class ChaosDvdOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
-            var (can, prep, frames, sfx, shared) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx, ChaosDvdOverlay.SharedHost);
+            var (can, prep, frames, sfx) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx);
+            var shared = ChaosDvdOverlay.SharedHost;
             var src = new SteppedFrames();
             var host = new Window();
             host.Show();
@@ -114,7 +117,8 @@ public sealed class ChaosDvdOverlayTests
             finally
             {
                 ChaosDvdOverlay.CloseActive();
-                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx, ChaosDvdOverlay.SharedHost) = (can, prep, frames, sfx, shared);
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx) = (can, prep, frames, sfx);
+                ChaosDvdOverlay.SharedHost = shared;
                 host.Close();
             }
             return Task.CompletedTask;
@@ -123,79 +127,76 @@ public sealed class ChaosDvdOverlayTests
 
     // WPF ChaosDvdOverlay.cs:266-302,407-429: the shared rendering loop must outlive one retiring logo.
     [Fact]
-    public async Task PerLogoClockTransfersWhenItsWindowRetires()
+    public Task PerLogoClockTransfersWhenItsWindowRetires() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        Setup();
+        var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareLogoWindow,
+            ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx,
+            ChaosDvdOverlay.SharedHost, ChaosDvdOverlay.SpankerRedirect);
+        var first = new SteppedFrames();
+        var next = new SteppedFrames();
+        TopLevel? clockOwner = null;
+        Window? survivorWindow = null;
+        var host = new Window();
+        host.Show();
+        try
         {
-            Setup();
-            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareLogoWindow,
+            ChaosDvdOverlay.CanOverlay = () => true;
+            ChaosDvdOverlay.SharedHost = () => false;
+            ChaosDvdOverlay.SpankerRedirect = () => false;
+            ChaosDvdOverlay.PrepareLogoWindow = (_, _, _) => true;
+            ChaosDvdOverlay.PlaySfx = (_, _) => { };
+            ChaosDvdOverlay.FrameSourceFor = top =>
+            {
+                if (clockOwner == null) clockOwner = top;
+                if (ReferenceEquals(clockOwner, top)) return first;
+                Assert.Same(survivorWindow, top);
+                return next;
+            };
+            ChaosDvdOverlay.Launch(host, 10, 1, 1, count: 2);
+            Assert.Null(ChaosDvdOverlay.Window);
+            Assert.Equal(2, ChaosDvdOverlay.LogoWindows.Count);
+            Assert.Single(first.Subs);
+            Assert.Empty(next.Subs);
+            var owner = Assert.Single(ChaosDvdOverlay.LogoWindows, pair => ReferenceEquals(pair.Value, clockOwner));
+            var survivor = Assert.Single(ChaosDvdOverlay.LogoWindows, pair => !ReferenceEquals(pair.Value, clockOwner));
+            survivorWindow = survivor.Value;
+            Assert.True(owner.Value.IsVisible);
+            Assert.True(survivorWindow.IsVisible);
+            owner.Key.RemainingSec = 0;
+            survivor.Key.X = survivor.Key.Y = 100;
+            survivor.Key.Vx = 100;
+            survivor.Key.Vy = 0;
+            first.Frame(0);
+            for (int i = 1; i <= 10 && owner.Value.IsVisible; i++) first.Frame(i * 0.05);
+            Assert.False(owner.Value.IsVisible);
+            Assert.Empty(first.Subs);
+            Assert.Single(next.Subs);
+            Assert.Same(survivor.Key, Assert.Single(ChaosDvdOverlay.Flock.Active));
+            var beforeX = survivor.Key.X;
+            var beforePosition = survivorWindow.Position;
+            first.Frame(1);
+            next.Frame(1); // the new window's first frame establishes its time baseline
+            Assert.Equal(beforeX, survivor.Key.X);
+            next.Frame(1.05);
+            Assert.True(survivor.Key.X > beforeX);
+            Assert.NotEqual(beforePosition, survivorWindow.Position);
+            ChaosDvdOverlay.CloseActive();
+            Assert.Empty(first.Subs);
+            Assert.Empty(next.Subs);
+            Assert.False(survivorWindow.IsVisible);
+            Assert.False(ChaosDvdOverlay.AnyActive);
+        }
+        finally
+        {
+            ChaosDvdOverlay.CloseActive();
+            (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareLogoWindow,
                 ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx,
-                ChaosDvdOverlay.SharedHost, ChaosDvdOverlay.SpankerRedirect);
-            var first = new SteppedFrames();
-            var next = new SteppedFrames();
-            TopLevel? clockOwner = null;
-            Window? survivorWindow = null;
-            var host = new Window();
-            host.Show();
-            try
-            {
-                ChaosDvdOverlay.CanOverlay = () => true;
-                ChaosDvdOverlay.SharedHost = () => false;
-                ChaosDvdOverlay.SpankerRedirect = () => false;
-                ChaosDvdOverlay.PrepareLogoWindow = (_, _, _) => true;
-                ChaosDvdOverlay.PlaySfx = (_, _) => { };
-                ChaosDvdOverlay.FrameSourceFor = top =>
-                {
-                    if (clockOwner == null) clockOwner = top;
-                    if (ReferenceEquals(clockOwner, top)) return first;
-                    Assert.Same(survivorWindow, top);
-                    return next;
-                };
-                ChaosDvdOverlay.Launch(host, 10, 1, 1, count: 2);
-                Assert.Null(ChaosDvdOverlay.Window);
-                Assert.Equal(2, ChaosDvdOverlay.LogoWindows.Count);
-                Assert.Single(first.Subs);
-                Assert.Empty(next.Subs);
-                var owner = Assert.Single(ChaosDvdOverlay.LogoWindows, pair => ReferenceEquals(pair.Value, clockOwner));
-                var survivor = Assert.Single(ChaosDvdOverlay.LogoWindows, pair => !ReferenceEquals(pair.Value, clockOwner));
-                survivorWindow = survivor.Value;
-                Assert.True(owner.Value.IsVisible);
-                Assert.True(survivorWindow.IsVisible);
-                owner.Key.RemainingSec = 0;
-                survivor.Key.X = survivor.Key.Y = 100;
-                survivor.Key.Vx = 100;
-                survivor.Key.Vy = 0;
-                first.Frame(0);
-                for (int i = 1; i <= 10 && owner.Value.IsVisible; i++) first.Frame(i * 0.05);
-                Assert.False(owner.Value.IsVisible);
-                Assert.Empty(first.Subs);
-                Assert.Single(next.Subs);
-                Assert.Same(survivor.Key, Assert.Single(ChaosDvdOverlay.Flock.Active));
-                var beforeX = survivor.Key.X;
-                var beforePosition = survivorWindow.Position;
-                first.Frame(1);
-                next.Frame(1); // the new window's first frame establishes its time baseline
-                Assert.Equal(beforeX, survivor.Key.X);
-                next.Frame(1.05);
-                Assert.True(survivor.Key.X > beforeX);
-                Assert.NotEqual(beforePosition, survivorWindow.Position);
-                ChaosDvdOverlay.CloseActive();
-                Assert.Empty(first.Subs);
-                Assert.Empty(next.Subs);
-                Assert.False(survivorWindow.IsVisible);
-                Assert.False(ChaosDvdOverlay.AnyActive);
-            }
-            finally
-            {
-                ChaosDvdOverlay.CloseActive();
-                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareLogoWindow,
-                    ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx,
-                    ChaosDvdOverlay.SharedHost, ChaosDvdOverlay.SpankerRedirect) = saved;
-                host.Close();
-            }
-            return Task.CompletedTask;
-        });
-    }
+                ChaosDvdOverlay.SharedHost, ChaosDvdOverlay.SpankerRedirect) = saved;
+            host.Close();
+        }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public async Task NoCompositorMeansNoWindowAndNoLogo()
@@ -203,7 +204,8 @@ public sealed class ChaosDvdOverlayTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
-            var (can, prep, shared) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.SharedHost);
+            var (can, prep) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow);
+            var shared = ChaosDvdOverlay.SharedHost;
             var host = new Window();
             host.Show();
             try
@@ -218,7 +220,8 @@ public sealed class ChaosDvdOverlayTests
             finally
             {
                 ChaosDvdOverlay.CloseActive();
-                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.SharedHost) = (can, prep, shared);
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow) = (can, prep);
+                ChaosDvdOverlay.SharedHost = shared;
                 host.Close();
             }
             return Task.CompletedTask;

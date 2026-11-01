@@ -69,8 +69,8 @@ public sealed class ChaosDvdPartBTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
-            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
-                ChaosDvdOverlay.SharedHost, ChaosEffectBannerOverlay.SkipPlatformChecksForTests);
+            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx, ChaosEffectBannerOverlay.SkipPlatformChecksForTests);
+            var savedSharedHost = ChaosDvdOverlay.SharedHost;
             var pool = CoreSettings.Current.BouncingTextPool;
             var language = LocalizationManager.Instance.CurrentLanguage;
             var meta = ChaosMeta.State;
@@ -155,8 +155,8 @@ public sealed class ChaosDvdPartBTests
                 LocalizationManager.Instance.SetLanguage(language);
                 CoreSettings.Current.BouncingTextPool = pool;
                 JsonConvert.PopulateObject(json, meta, new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
-                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx,
-                ChaosDvdOverlay.SharedHost, ChaosEffectBannerOverlay.SkipPlatformChecksForTests) = saved;
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx, ChaosEffectBannerOverlay.SkipPlatformChecksForTests) = saved;
+                ChaosDvdOverlay.SharedHost = savedSharedHost;
             }
             return Task.CompletedTask;
         });
@@ -168,121 +168,114 @@ public sealed class ChaosDvdPartBTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task NativeLogoPreparationPreservesPassiveInputAndPin(bool pin, bool clickable)
+    public Task NativeLogoPreparationPreservesPassiveInputAndPin(bool pin, bool clickable) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        Setup();
+        var saved = (ChaosDvdOverlay.PrepareNativeWindow, CoreSettings.Current.ChaosPinOnTop);
+        var window = new Window { Topmost = pin };
+        bool called = false;
+        try
         {
-            Setup();
-            var saved = (ChaosDvdOverlay.PrepareNativeWindow, CoreSettings.Current.ChaosPinOnTop);
-            var window = new Window { Topmost = pin };
-            bool called = false;
-            try
+            CoreSettings.Current.ChaosPinOnTop = pin;
+            ChaosDvdOverlay.PrepareNativeWindow = (w, _, through, passive, topmost) =>
             {
-                CoreSettings.Current.ChaosPinOnTop = pin;
-                ChaosDvdOverlay.PrepareNativeWindow = (w, _, through, passive, topmost) =>
-                {
-                    called = true;
-                    Assert.Equal(!clickable, through);
-                    Assert.True(passive);
-                    Assert.Equal(pin, topmost);
-                    uint style = Win32Overlay.Style(0, through, passive);
-                    style = Win32Overlay.Style(style, through, passive); // Avalonia style rebuild
-                    Assert.NotEqual(0u, style & Win32Overlay.WsExNoActivate);
-                    Assert.Equal(clickable ? 0u : Win32Overlay.WsExTransparent, style & Win32Overlay.WsExTransparent);
-                    Assert.Equal(new IntPtr(pin ? -1 : -2), Win32Overlay.StackAfter(topmost));
-                    return true;
-                };
-                Assert.True(ChaosDvdOverlay.PrepareLogoWindow(window, new PixelRect(0, 0, 100, 50), clickable));
-                Assert.True(called);
-            }
-            finally { window.Close(); (ChaosDvdOverlay.PrepareNativeWindow, CoreSettings.Current.ChaosPinOnTop) = saved; }
-            return Task.CompletedTask;
-        });
-    }
+                called = true;
+                Assert.Equal(!clickable, through);
+                Assert.True(passive);
+                Assert.Equal(pin, topmost);
+                uint style = Win32Overlay.Style(0, through, passive);
+                style = Win32Overlay.Style(style, through, passive); // Avalonia style rebuild
+                Assert.NotEqual(0u, style & Win32Overlay.WsExNoActivate);
+                Assert.Equal(clickable ? 0u : Win32Overlay.WsExTransparent, style & Win32Overlay.WsExTransparent);
+                Assert.Equal(new IntPtr(pin ? -1 : -2), Win32Overlay.StackAfter(topmost));
+                return true;
+            };
+            Assert.True(ChaosDvdOverlay.PrepareLogoWindow(window, new PixelRect(0, 0, 100, 50), clickable));
+            Assert.True(called);
+        }
+        finally { window.Close(); (ChaosDvdOverlay.PrepareNativeWindow, CoreSettings.Current.ChaosPinOnTop) = saved; }
+        return Task.CompletedTask;
+    });
 
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task HostsAndSpankerInputFollowLatchedGates(bool shared, bool spanker)
+    public Task HostsAndSpankerInputFollowLatchedGates(bool shared, bool spanker) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        Setup();
+        var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PrepareLogoWindow,
+            ChaosDvdOverlay.SharedHost, ChaosDvdOverlay.SpankerRedirect, ChaosDvdOverlay.PlaySfx);
+        var host = new Window();
+        host.Show();
+        var windows = new List<Window>();
+        int cues = 0;
+        var oldPin = CoreSettings.Current.ChaosPinOnTop;
+        CoreSettings.Current.ChaosPinOnTop = false;
+        try
         {
-            Setup();
-            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PrepareLogoWindow,
-                ChaosDvdOverlay.SharedHost, ChaosDvdOverlay.SpankerRedirect, ChaosDvdOverlay.PlaySfx);
-            var host = new Window();
-            host.Show();
-            var windows = new List<Window>();
-            int cues = 0;
-            var oldPin = CoreSettings.Current.ChaosPinOnTop;
-            CoreSettings.Current.ChaosPinOnTop = false;
-            try
+            ChaosDvdOverlay.CanOverlay = () => true;
+            ChaosDvdOverlay.PrepareWindow = (_, _) => true;
+            ChaosDvdOverlay.PrepareLogoWindow = (w, _, input) =>
             {
-                ChaosDvdOverlay.SharedHost = () => true;
-                ChaosDvdOverlay.CanOverlay = () => true;
-                ChaosDvdOverlay.PrepareWindow = (_, _) => true;
-                ChaosDvdOverlay.PrepareLogoWindow = (w, _, input) =>
-                {
-                    Assert.False(w.Topmost);
-                    Assert.Equal(spanker, input);
-                    windows.Add(w);
-                    return true;
-                };
-                ChaosDvdOverlay.SharedHost = () => shared;
-                ChaosDvdOverlay.SpankerRedirect = () => spanker;
-                ChaosDvdOverlay.PlaySfx = (key, volume) => { Assert.Equal("dvd_bounce", key); Assert.Equal(0.4f, volume); cues++; };
-                ChaosDvdOverlay.Launch(host, 10, 1, 1);
-                var logo = Assert.Single(ChaosDvdOverlay.Flock.Active);
-                Assert.Equal(shared && !spanker ? 0 : 1, windows.Count);
-                if (windows.Count > 0)
-                {
-                    var w = windows[0];
-                    Assert.Equal(spanker, w.IsHitTestVisible);
-                    Assert.False(w.ShowActivated);
-                    Assert.Equal(logo.W, w.Width);
-                    logo.X = logo.Y = 100; // keep the motion check away from random wall bounces
-                    ChaosDvdOverlay.Advance(0);
-                    var before = w.Position;
-                    ChaosDvdOverlay.Advance(0.05);
-                    Assert.NotEqual(before, w.Position);
-                    if (spanker)
-                    {
-                        var panel = Assert.IsType<Border>(w.Content);
-                        var hue = logo.HueIndex;
-                        ChaosDvdOverlay.SpankerRedirect = () => false; // gate sampled at launch
-                        panel.RaiseEvent(new PointerPressedEventArgs(panel, new Pointer(1, PointerType.Mouse, true), panel,
-                            new Point(1, 1), 0, new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
-                        Assert.Equal((hue + 1) % 6, logo.HueIndex);
-                        Assert.Equal(230 * 1.18, Math.Sqrt(logo.Vx * logo.Vx + logo.Vy * logo.Vy), 6);
-                        Assert.Equal(1, cues);
-                    }
-                }
-                Assert.Equal(spanker, ChaosDvdOverlay.Smack(logo));
-                logo.RemainingSec = 0;
+                Assert.False(w.Topmost);
+                Assert.Equal(spanker, input);
+                windows.Add(w);
+                return true;
+            };
+            ChaosDvdOverlay.SharedHost = () => shared;
+            ChaosDvdOverlay.SpankerRedirect = () => spanker;
+            ChaosDvdOverlay.PlaySfx = (key, volume) => { Assert.Equal("dvd_bounce", key); Assert.Equal(0.4f, volume); cues++; };
+            ChaosDvdOverlay.Launch(host, 10, 1, 1);
+            var logo = Assert.Single(ChaosDvdOverlay.Flock.Active);
+            Assert.Equal(shared && !spanker ? 0 : 1, windows.Count);
+            if (windows.Count > 0)
+            {
+                var w = windows[0];
+                Assert.Equal(spanker, w.IsHitTestVisible);
+                Assert.False(w.ShowActivated);
+                Assert.Equal(logo.W, w.Width);
+                logo.X = logo.Y = 100; // keep the motion check away from random wall bounces
+                ChaosDvdOverlay.Advance(0);
+                var before = w.Position;
                 ChaosDvdOverlay.Advance(0.05);
-                Assert.Equal(spanker, ChaosDvdOverlay.Smack(logo)); // fading WPF logos still answer input
-                ChaosDvdOverlay.Advance(0.3);
-                Assert.Empty(ChaosDvdOverlay.LogoWindows);
-                Assert.All(windows, w => Assert.False(w.IsVisible));
-                ChaosDvdOverlay.CloseActive();
-                ChaosDvdOverlay.SharedHost = () => false;
-                ChaosDvdOverlay.PrepareLogoWindow = (_, _, _) => false;
-                ChaosDvdOverlay.Launch(host, 5, 1, 1);
-                Assert.False(ChaosDvdOverlay.AnyActive); // refusal cannot leave a stuck toy glow
-                Assert.Empty(ChaosDvdOverlay.LogoWindows);
+                Assert.NotEqual(before, w.Position);
+                if (spanker)
+                {
+                    var panel = Assert.IsType<Border>(w.Content);
+                    var hue = logo.HueIndex;
+                    ChaosDvdOverlay.SpankerRedirect = () => false; // gate sampled at launch
+                    panel.RaiseEvent(new PointerPressedEventArgs(panel, new Pointer(1, PointerType.Mouse, true), panel,
+                        new Point(1, 1), 0, new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
+                    Assert.Equal((hue + 1) % 6, logo.HueIndex);
+                    Assert.Equal(230 * 1.18, Math.Sqrt(logo.Vx * logo.Vx + logo.Vy * logo.Vy), 6);
+                    Assert.Equal(1, cues);
+                }
             }
-            finally
-            {
-                CoreSettings.Current.ChaosPinOnTop = oldPin;
-                ChaosDvdOverlay.CloseActive();
-                host.Close();
-                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PrepareLogoWindow,
-                    ChaosDvdOverlay.SharedHost, ChaosDvdOverlay.SpankerRedirect, ChaosDvdOverlay.PlaySfx) = saved;
-            }
-            return Task.CompletedTask;
-        });
-    }
+            Assert.Equal(spanker, ChaosDvdOverlay.Smack(logo));
+            logo.RemainingSec = 0;
+            ChaosDvdOverlay.Advance(0.05);
+            Assert.Equal(spanker, ChaosDvdOverlay.Smack(logo)); // fading WPF logos still answer input
+            ChaosDvdOverlay.Advance(0.3);
+            Assert.Empty(ChaosDvdOverlay.LogoWindows);
+            Assert.All(windows, w => Assert.False(w.IsVisible));
+            ChaosDvdOverlay.CloseActive();
+            ChaosDvdOverlay.SharedHost = () => false;
+            ChaosDvdOverlay.PrepareLogoWindow = (_, _, _) => false;
+            ChaosDvdOverlay.Launch(host, 5, 1, 1);
+            Assert.False(ChaosDvdOverlay.AnyActive); // refusal cannot leave a stuck toy glow
+            Assert.Empty(ChaosDvdOverlay.LogoWindows);
+        }
+        finally
+        {
+            CoreSettings.Current.ChaosPinOnTop = oldPin;
+            ChaosDvdOverlay.CloseActive();
+            host.Close();
+            (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PrepareLogoWindow,
+                ChaosDvdOverlay.SharedHost, ChaosDvdOverlay.SpankerRedirect, ChaosDvdOverlay.PlaySfx) = saved;
+        }
+        return Task.CompletedTask;
+    });
 
     [Theory]
     [InlineData(false)]
@@ -309,87 +302,81 @@ public sealed class ChaosDvdPartBTests
     }
 
     [Fact]
-    public async Task RestackDelayReturnsToUiDispatcher()
+    public Task RestackDelayReturnsToUiDispatcher() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
-        {
-            Setup();
-            var called = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            using var request = new MandatoryVideoOverlay.RestackRequest(
-                () => called.TrySetResult(Dispatcher.UIThread.CheckAccess()), 50);
-            Assert.True(await called.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
-        });
-    }
+        Setup();
+        var called = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var request = new MandatoryVideoOverlay.RestackRequest(
+            () => called.TrySetResult(Dispatcher.UIThread.CheckAccess()), 50);
+        Assert.True(await called.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+    });
 
     // WPF VideoService.cs:3708,5809-5822 -> ChaosModeService.cs:745-757.
     [Fact]
-    public async Task VideoSurfaceRaisesDvdOnlyDuringPinnedRun()
+    public Task VideoSurfaceRaisesDvdOnlyDuringPinnedRun() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        Setup();
+        var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow,
+            ChaosDvdOverlay.RaiseWindow, ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ChaosDvdOverlay.SharedHost, MandatoryVideoOverlay.RestackLater);
+        var pin = CoreSettings.Current.ChaosPinOnTop;
+        Window? video = null;
+        try
         {
-            Setup();
-            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow,
-                ChaosDvdOverlay.RaiseWindow, ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ChaosDvdOverlay.SharedHost, MandatoryVideoOverlay.RestackLater);
-            var pin = CoreSettings.Current.ChaosPinOnTop;
-            Window? video = null;
-            try
+            ChaosDvdOverlay.SharedHost = () => true;
+            ChaosDvdOverlay.CanOverlay = () => true;
+            ChaosDvdOverlay.PrepareWindow = (_, _) => true;
+            ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
+            CoreSettings.Current.ChaosPinOnTop = true;
+            var raised = new List<Window>();
+            ChaosDvdOverlay.RaiseWindow = raised.Add;
+            var pending = new List<Action>();
+            MandatoryVideoOverlay.RestackLater = (action, delay) =>
             {
-                ChaosDvdOverlay.SharedHost = () => true;
-                ChaosDvdOverlay.CanOverlay = () => true;
-                ChaosDvdOverlay.PrepareWindow = (_, _) => true;
-                ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
-                CoreSettings.Current.ChaosPinOnTop = true;
-                var raised = new List<Window>();
-                ChaosDvdOverlay.RaiseWindow = raised.Add;
-                var pending = new List<Action>();
-                MandatoryVideoOverlay.RestackLater = (action, delay) =>
-                {
-                    Assert.Equal(50, delay);
-                    pending.Add(action);
-                    return new System.Threading.CancellationTokenSource();
-                };
-                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 600, WaveCount = 3 });
-                ChaosRunHost.Overlay!.FinishCountdown();
-                ChaosRunHost.StopTimerForTests();
-                ChaosDvdOverlay.Launch(ChaosRunHost.Overlay, 5, 1, 1);
-                video = MandatoryVideoOverlay.Instance.Build(null, false).Window;
-                Assert.Contains(ChaosDvdOverlay.Window!, raised);
-                pending.Clear();
-                raised.Clear(); // discard creation callbacks; the next callback must come from a later click
-                void Click() => video.RaiseEvent(new PointerPressedEventArgs(video, new Pointer(1, PointerType.Mouse, true), video, new Point(1, 1), 0,
-                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
-                Click();
-                Assert.Empty(raised);
-                Assert.Single(pending)();
-                Assert.Contains(ChaosDvdOverlay.Window!, raised);
-                raised.Clear();
-                pending.Clear();
-                Click();
-                CoreSettings.Current.ChaosPinOnTop = false;
-                Assert.Single(pending)();
-                Assert.Empty(raised);
-                ChaosDvdOverlay.RaiseActive();
-                Assert.Empty(raised);
-                CoreSettings.Current.ChaosPinOnTop = true;
-                pending.Clear();
-                Click();
-                ChaosRunHost.ForceShutdown();
-                Assert.Single(pending)();
-                Assert.Empty(raised);
-                ChaosDvdOverlay.RaiseActive();
-                Assert.Empty(raised);
-            }
-            finally
-            {
-                video?.Close();
-                ChaosRunHost.ForceShutdown();
-                CoreSettings.Current.ChaosPinOnTop = pin;
-                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.RaiseWindow,
-                    ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ChaosDvdOverlay.SharedHost, MandatoryVideoOverlay.RestackLater) = saved;
-            }
-            return Task.CompletedTask;
-        });
-    }
+                Assert.Equal(50, delay);
+                pending.Add(action);
+                return new System.Threading.CancellationTokenSource();
+            };
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 600, WaveCount = 3 });
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            ChaosDvdOverlay.Launch(ChaosRunHost.Overlay, 5, 1, 1);
+            video = MandatoryVideoOverlay.Instance.Build(null, false).Window;
+            Assert.Contains(ChaosDvdOverlay.Window!, raised);
+            pending.Clear();
+            raised.Clear(); // discard creation callbacks; the next callback must come from a later click
+            void Click() => video.RaiseEvent(new PointerPressedEventArgs(video, new Pointer(1, PointerType.Mouse, true), video, new Point(1, 1), 0,
+                new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
+            Click();
+            Assert.Empty(raised);
+            Assert.Single(pending)();
+            Assert.Contains(ChaosDvdOverlay.Window!, raised);
+            raised.Clear();
+            pending.Clear();
+            Click();
+            CoreSettings.Current.ChaosPinOnTop = false;
+            Assert.Single(pending)();
+            Assert.Empty(raised);
+            ChaosDvdOverlay.RaiseActive();
+            Assert.Empty(raised);
+            CoreSettings.Current.ChaosPinOnTop = true;
+            pending.Clear();
+            Click();
+            ChaosRunHost.ForceShutdown();
+            Assert.Single(pending)();
+            Assert.Empty(raised);
+            ChaosDvdOverlay.RaiseActive();
+            Assert.Empty(raised);
+        }
+        finally
+        {
+            video?.Close();
+            ChaosRunHost.ForceShutdown();
+            CoreSettings.Current.ChaosPinOnTop = pin;
+            (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.RaiseWindow,
+                ChaosEffectBannerOverlay.SkipPlatformChecksForTests, ChaosDvdOverlay.SharedHost, MandatoryVideoOverlay.RestackLater) = saved;
+        }
+        return Task.CompletedTask;
+    });
 
     // WPF ChaosDvdOverlay.cs:322-331,392-398; BubbleService.cs:1916-1924.
     [Fact]
@@ -398,7 +385,8 @@ public sealed class ChaosDvdPartBTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
-            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx, ChaosDvdOverlay.SharedHost);
+            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx);
+            var savedSharedHost = ChaosDvdOverlay.SharedHost;
             var host = new Window();
             host.Show();
             try
@@ -438,7 +426,8 @@ public sealed class ChaosDvdPartBTests
                 BubbleOverlay.EndChaos();
                 ChaosDvdOverlay.CloseActive();
                 host.Close();
-                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx, ChaosDvdOverlay.SharedHost) = saved;
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx) = saved;
+                ChaosDvdOverlay.SharedHost = savedSharedHost;
             }
             return Task.CompletedTask;
         });
