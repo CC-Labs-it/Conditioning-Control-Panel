@@ -36,6 +36,40 @@ public sealed class IntakeDeskHoldTests
     }
 
     [Fact]
+    public Task NewIntakeOpensTeachTheDeskRingButRefocusingDoesNot() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var state = EmiState.Current;
+        var usage = new Dictionary<string, int>(state.Usage);
+        var score = new Dictionary<string, double>(state.OpenScore);
+        var at = new Dictionary<string, long>(state.UsageAt);
+        state.Usage.TryGetValue("intake", out var before);
+        try
+        {
+            var intake = GradedIntakeTabView.OpenIntake(null, duckMain: false);
+            Assert.Equal(before + 1, state.Usage["intake"]);
+            Assert.True(state.OpenScore["intake"] > 0);
+            Assert.True(state.UsageAt["intake"] > 0);
+            var firstScore = state.OpenScore["intake"];
+            Assert.Same(intake, GradedIntakeTabView.OpenIntake(null, duckMain: false));
+            Assert.Equal(before + 1, state.Usage["intake"]);
+            Assert.Equal(firstScore, state.OpenScore["intake"]);
+            intake.Close();
+            GradedIntakeTabView.OpenIntake(null, duckMain: false).Close();
+            Assert.Equal(before + 2, state.Usage["intake"]);
+            Assert.True(state.OpenScore["intake"] > firstScore);
+        }
+        finally
+        {
+            IntakeHostWindow.CloseAllForPanic();
+            state.Usage.Clear(); foreach (var item in usage) state.Usage[item.Key] = item.Value;
+            state.OpenScore.Clear(); foreach (var item in score) state.OpenScore[item.Key] = item.Value;
+            state.UsageAt.Clear(); foreach (var item in at) state.UsageAt[item.Key] = item.Value;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task IntakeMutesDeskCuesUntilItCloses() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
