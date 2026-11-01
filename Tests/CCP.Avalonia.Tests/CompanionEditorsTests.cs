@@ -4,10 +4,12 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -204,9 +206,12 @@ public sealed class CompanionEditorsTests
             foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
+                shell.CompleteTabTransition();
                 button.BringIntoView();
-                Dispatcher.UIThread.RunJobs();
+                ContentHitTestTests.RenderLiveTree(shell);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                var hit = shell.InputHitTest(at) as Visual;
+                Assert.True(hit == button || hit != null && button.IsVisualAncestorOf(hit), "the rendered prompt link must receive the click");
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
