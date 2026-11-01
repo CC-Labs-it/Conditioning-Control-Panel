@@ -20,7 +20,7 @@
 //     scenes), EmberAttribution charge + Ghost, PossessionEvents tripwires, PossessionPointer, Warden,
 //     PossessionAudio, PossessionRemember, bark naming of IsBig effects.
 //   possession-head-c: the remaining effects - crack, delete dialog, dissolve, dodge, doki dialog,
-//     drop, fall, ghost cursor, glitch portrait, glyphrot, melt, misroute, relabel, reorder doors,
+//     drop, fall, ghost cursor, glitch portrait, melt, misroute, relabel, reorder doors,
 //     retitle, room warp, scroll hijack, slider creep, steal card, swap, toast, toggle lie,
 //     xp drain (opacity effects clamp to [0,1], P82).
 
@@ -80,7 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         /// <summary>The ported effects, one instance each (WPF PossessionEffectCatalog.CreateAll).</summary>
         public static HeadEffect[] CreateAll() =>
-            new HeadEffect[] { new NudgeHeadEffect(), new DriftHeadEffect(), new BreatheHeadEffect(), new WobbleHeadEffect(), new TypoHeadEffect(), new RewriteHeadEffect() };
+            new HeadEffect[] { new NudgeHeadEffect(), new DriftHeadEffect(), new BreatheHeadEffect(), new WobbleHeadEffect(), new TypoHeadEffect(), new RewriteHeadEffect(), new GlyphRotHeadEffect() };
 
         /// <summary>WPF CanApply + Apply: refuses an off-limits, hidden, zero-size, wrong-role or already
         /// possessed control, and an effect instance that is already live.</summary>

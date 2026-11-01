@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         internal virtual double UndoMs => PossessionRuntime.ReturnMs;
         internal virtual void Release() { }
         private bool _photosafe;
+        protected bool Photosafe => _photosafe;
 
         internal void Begin(PossessionLease lease, Random rng, bool photosafe)
         {
