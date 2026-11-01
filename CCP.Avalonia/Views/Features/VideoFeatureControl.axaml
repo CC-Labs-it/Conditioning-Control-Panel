@@ -169,12 +169,21 @@
                                           Width="180" VerticalAlignment="Center"
                                           Theme="{DynamicResource DarkComboBoxStyle}"/>
                             </Grid>
-                            <StackPanel x:Name="FloatingSizeRow" IsVisible="False" Spacing="4">
-                                <TextBlock Text="{loc:Str setting_video_appearance_size}"/>
-                                <Slider x:Name="SliderFloatingSize" Minimum="15" Maximum="60"
-                                        ToolTip.Tip="{loc:Str tooltip_video_appearance_size}"/>
-                                <TextBlock x:Name="TxtFloatingSize"/>
-                            </StackPanel>
+                            <Grid x:Name="FloatingSizeRow" IsVisible="False" Height="36" Background="Transparent"
+                                  ToolTip.Tip="{loc:Str tooltip_video_appearance_size}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="56"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance_size}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                <Slider Grid.Column="1" x:Name="SliderFloatingSize" Minimum="15" Maximum="60"
+                                        VerticalAlignment="Center" Margin="14,0"/>
+                                <TextBlock Grid.Column="2" x:Name="TxtFloatingSize" HorizontalAlignment="Right"
+                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                           FontSize="13" FontWeight="Bold"/>
+                            </Grid>
                             <TextBlock x:Name="TxtAppearanceNote" Text="{loc:Str video_appearance_strict_note}" FontSize="11"
                                        Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"
                                        IsVisible="False"/>

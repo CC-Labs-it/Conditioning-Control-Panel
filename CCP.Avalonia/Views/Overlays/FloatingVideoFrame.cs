@@ -7,13 +7,14 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services.Video.Floating;
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 internal sealed class FloatingVideoFrame
 {
     private readonly Window _window;
-    private readonly FloatingVideoMotionModel _motion;
+    private readonly FloatingVideoMotion _motion;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly BeatLoop _beat;
     private readonly Func<double> _nowMs;
@@ -74,6 +75,7 @@ internal sealed class FloatingVideoFrame
     private void Press(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(_window).Properties.IsLeftButtonPressed) return;
+        if (CompositorDrag) { _window.BeginMoveDrag(e); return; }
         _motion.Resync(_window.Position.X, _window.Position.Y,
             _window.Bounds.Width * _window.RenderScaling, _window.Bounds.Height * _window.RenderScaling, rehome: true);
         var p = Pointer(e);
@@ -114,12 +116,12 @@ internal sealed class FloatingVideoFrame
     {
         var now = _nowMs() / 1000.0;
         var dt = Math.Clamp(now - _last, 0, 0.05);
-        _lit = FloatingFrameLookModel.Approach(_lit, _audioLit, dt);
+        _lit = FloatingFrameLook.Approach(_lit, _audioLit, dt);
         if (_audioLit) _breathSeconds += dt;
         if (_frame != null)
         {
-            var (r, g, b) = FloatingFrameLookModel.Border(FloatingFrameLookModel.AccentR, FloatingFrameLookModel.AccentG,
-                FloatingFrameLookModel.AccentB, _lit, FloatingFrameLookModel.Breath(_breathSeconds, CoreSettings.Current.MotionLevel));
+            var (r, g, b) = FloatingFrameLook.Border(FloatingFrameLook.AccentR, FloatingFrameLook.AccentG,
+                FloatingFrameLook.AccentB, _lit, FloatingFrameLook.Breath(_breathSeconds, CoreSettings.Current.MotionLevel));
             var color = Color.FromRgb(r, g, b);
             if (_frame.BorderBrush is not SolidColorBrush brush || brush.Color != color) _frame.BorderBrush = new SolidColorBrush(color);
         }
@@ -132,5 +134,13 @@ internal sealed class FloatingVideoFrame
         Place();
         if (!NeedsClock) _beat.Stop();
     }
-    private void Place() => _window.Position = new PixelPoint((int)Math.Round(_motion.X), (int)Math.Round(_motion.Y));
+    internal static bool UsesCompositorDrag(bool linux, IPlatformHandle? handle) =>
+        linux && handle != null && handle.Handle != IntPtr.Zero && handle.HandleDescriptor != "XID";
+    private bool CompositorDrag => UsesCompositorDrag(OperatingSystem.IsLinux(), _window.TryGetPlatformHandle());
+    private void Place()
+    {
+        if (CompositorDrag) return;
+        var position = new PixelPoint((int)Math.Round(_motion.X), (int)Math.Round(_motion.Y));
+        if (_window.Position != position) _window.Position = position;
+    }
 }

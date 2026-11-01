@@ -2,6 +2,10 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
+using Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Platform;
+using System;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Features;
@@ -17,7 +21,7 @@ public sealed class Sync7BarAndVideoTests
     private static void Setup()
     {
         if (Application.Current == null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            AppBuilder.Configure<AvApp>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
     [Fact]
@@ -52,6 +56,14 @@ public sealed class Sync7BarAndVideoTests
             return Task.CompletedTask;
         });
     }
+    [Theory]
+    [InlineData(true, "wl_surface", 1, true)]
+    [InlineData(true, "XID", 1, false)]
+    [InlineData(true, "Headless", 0, false)]
+    [InlineData(false, "HWND", 1, false)]
+    public void NativeLinuxDragBelongsToTheCompositor(bool linux, string descriptor, int handle, bool expected) =>
+        Assert.Equal(expected, ConditioningControlPanel.Avalonia.Views.Overlays.FloatingVideoFrame.UsesCompositorDrag(
+            linux, new PlatformHandle(new IntPtr(handle), descriptor)));
     [Theory]
     [InlineData(0, "label_session_bar_elapsed")]
     [InlineData(10, "label_session_bar_left")]
@@ -110,17 +122,52 @@ public sealed class Sync7BarAndVideoTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
-            CoreSettings.Current.MandatoryVideoFloating = true;
-            CoreSettings.Current.MandatoryVideoFloatingSizePercent = 40;
-            var control = new VideoFeatureControl();
-            var size = control.FindControl<Slider>("SliderFloatingSize")!;
-            Assert.Equal(40, size.Value);
-            Assert.True(control.FindControl<StackPanel>("FloatingSizeRow")!.IsVisible);
-            size.Value = 55;
-            Assert.Equal(55, CoreSettings.Current.MandatoryVideoFloatingSizePercent);
-            Assert.Equal("55%", control.FindControl<TextBlock>("TxtFloatingSize")!.Text);
-            control.FindControl<ComboBox>("CmbAppearance")!.SelectedIndex = 0;
-            Assert.False(control.FindControl<StackPanel>("FloatingSizeRow")!.IsVisible);
+            var settings = CoreSettings.Current;
+            var savedFloating = settings.MandatoryVideoFloating;
+            var savedSize = settings.MandatoryVideoFloatingSizePercent;
+            Window? host = null;
+            try
+            {
+                settings.MandatoryVideoFloating = true;
+                settings.MandatoryVideoFloatingSizePercent = 40;
+                var control = new VideoFeatureControl();
+                host = new Window { Width = 640, Height = 1000, Content = control };
+                host.Show(); host.UpdateLayout();
+                var size = control.FindControl<Slider>("SliderFloatingSize")!;
+                Assert.Equal(40, size.Value);
+                Assert.True(control.FindControl<Grid>("FloatingSizeRow")!.IsVisible);
+                var row = control.FindControl<Grid>("FloatingSizeRow")!;
+                Assert.Equal(36, row.Height);
+                Assert.Equal(3, row.ColumnDefinitions.Count);
+                Assert.Equal(120, row.ColumnDefinitions[0].MinWidth);
+                Assert.Equal(56, row.ColumnDefinitions[2].MinWidth);
+                Assert.Equal(1, Grid.GetColumn(size));
+                Assert.Equal(new Thickness(14, 0), size.Margin);
+                Assert.NotNull(ToolTip.GetTip(row));
+                var label = Assert.IsType<TextBlock>(row.Children[0]);
+                Assert.Equal(13, label.FontSize); Assert.Equal(FontWeight.SemiBold, label.FontWeight);
+                var referenceLabel = (TextBlock)((Grid)control.FindControl<Slider>("SliderPerHour")!.Parent!).Children[0];
+                Assert.Equal(((ISolidColorBrush)referenceLabel.Foreground!).Color, ((ISolidColorBrush)label.Foreground!).Color);
+                var value = control.FindControl<TextBlock>("TxtFloatingSize")!;
+                Assert.Equal(2, Grid.GetColumn(value)); Assert.Equal(13, value.FontSize);
+                Assert.Equal(FontWeight.Bold, value.FontWeight);
+                Assert.Equal(global::Avalonia.Layout.HorizontalAlignment.Right, value.HorizontalAlignment);
+                Assert.Equal(((ISolidColorBrush)control.FindControl<TextBlock>("TxtPerHour")!.Foreground!).Color, ((ISolidColorBrush)value.Foreground!).Color);
+                Assert.NotEqual(((ISolidColorBrush)label.Foreground!).Color, ((ISolidColorBrush)value.Foreground!).Color);
+                Assert.Equal(label.Bounds.Center.Y, value.Bounds.Center.Y, 1);
+                Assert.Equal(36, row.Bounds.Height);
+                size.Value = 55;
+                Assert.Equal(55, settings.MandatoryVideoFloatingSizePercent);
+                Assert.Equal("55%", control.FindControl<TextBlock>("TxtFloatingSize")!.Text);
+                control.FindControl<ComboBox>("CmbAppearance")!.SelectedIndex = 0;
+                Assert.False(control.FindControl<Grid>("FloatingSizeRow")!.IsVisible);
+            }
+            finally
+            {
+                host?.Close();
+                settings.MandatoryVideoFloating = savedFloating;
+                settings.MandatoryVideoFloatingSizePercent = savedSize;
+            }
             return Task.CompletedTask;
         });
     }
