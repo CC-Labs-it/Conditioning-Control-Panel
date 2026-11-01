@@ -136,25 +136,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (screens.Count == 0) return;
 
             ClearCards();
-            var s = CoreSettings.Current;
-            var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
-            var hold = TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(s.SubliminalDuration));
-            var alpha = SubliminalCard.Alpha(opacity ?? s.SubliminalOpacity);
-            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
+            try
             {
-                // WPF SubliminalService.cs:650-661: the compositor covers both modes.
-                if (UseSolidHost(s.SubliminalSolidMode || s.UnifiedOverlayHost, s.SubliminalStealsFocus, VideoWindowCount()) &&
-                    ShowHosted(screens[i].Bounds, text, alpha, hold)) continue;
-                var w = new SubliminalOverlayWindow(text);
-                if (!ConfigureClassic(w, screens[i].Bounds))
+                var s = CoreSettings.Current;
+                var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
+                var hold = TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(s.SubliminalDuration));
+                var alpha = SubliminalCard.Alpha(opacity ?? s.SubliminalOpacity);
+                foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
                 {
-                    if (!_warnedUnavailable) Log.Warning("Subliminal: the platform refused a click-through topmost overlay window; skipped");
-                    _warnedUnavailable = true;
-                    w.Close();
-                    return;
+                    // WPF SubliminalService.cs:650-661: the compositor covers both modes.
+                    if (UseSolidHost(s.SubliminalSolidMode || s.UnifiedOverlayHost, s.SubliminalStealsFocus, VideoWindowCount()) &&
+                        ShowHosted(screens[i].Bounds, text, alpha, hold)) continue;
+                    var w = new SubliminalOverlayWindow(text);
+                    if (!ConfigureClassic(w, screens[i].Bounds))
+                    {
+                        if (!_warnedUnavailable) Log.Warning("Subliminal: the platform refused a click-through topmost overlay window; skipped");
+                        _warnedUnavailable = true;
+                        w.Close();
+                        return;
+                    }
+                    Present(w);
+                    w.Run(alpha, hold);
                 }
-                Present(w);
-                w.Run(alpha, hold);
+            }
+            finally
+            {
+                // WPF SubliminalService.cs:865-871 releases an idle one-shot host.
+                if (!CoreSubliminal.IsRunning && RetireHosted.Count == 0) ReleaseHosts();
             }
         }
 
