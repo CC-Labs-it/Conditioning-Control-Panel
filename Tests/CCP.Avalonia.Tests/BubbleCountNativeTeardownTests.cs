@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Platform;
+using LibVLCSharp.Shared;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -174,6 +177,134 @@ public sealed class BubbleCountNativeTeardownTests
         finally
         {
             lock (quarantined) quarantined.Remove(resources);
+            BubbleCountWindow.NativeUnavailable = previous;
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Result_waits_for_slow_stop_or_the_four_second_budget(bool timeout)
+    {
+        var previous = BubbleCountWindow.NativeUnavailable;
+        var quarantined = (List<object>)typeof(BubbleCountWindow)
+            .GetField("_quarantinedNative", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+        var resources = new object();
+        using var release = new ManualResetEventSlim();
+        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var deadline = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var delivered = 0;
+        try
+        {
+            Assert.False(BubbleCountWindow.StopNative(() => release.Wait(), () => { }, () => { },
+                resources, 30, action => action(), () => stopped.TrySetResult()));
+            var completing = BubbleCountWindow.CompleteAfterStop(stopped.Task, TimeSpan.FromMilliseconds(3500),
+                () => delivered++, _ => deadline.Task, action => action());
+            Assert.False(completing.IsCompleted);
+            Assert.Equal(0, delivered); // the two-second retry card must not consume a pending retry
+            if (timeout) deadline.SetResult(); else release.Set();
+            await completing.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal(1, delivered);
+            if (!timeout) Assert.True(stopped.Task.IsCompleted);
+        }
+        finally
+        {
+            release.Set();
+            await stopped.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            lock (quarantined) quarantined.Remove(resources);
+            BubbleCountWindow.NativeUnavailable = previous;
+        }
+    }
+
+    [Fact]
+    public async Task Three_second_stop_defers_the_strict_result()
+    {
+        var previous = BubbleCountWindow.NativeUnavailable;
+        using var release = new ManualResetEventSlim();
+        var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var delivered = 0;
+        try
+        {
+            Assert.False(BubbleCountWindow.StopNative(() => release.Wait(), () => { }, () => { },
+                new object(), 500, action => action(), () => settled.TrySetResult()));
+            var result = BubbleCountWindow.CompleteAfterStop(settled.Task, TimeSpan.FromMilliseconds(3500),
+                () => delivered++, post: action => action());
+            await Task.Delay(2000); // the retry message would already have elapsed
+            Assert.Equal(0, delivered);
+            await Task.Delay(500); release.Set(); // three seconds after the stop began
+            await result.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal(1, delivered);
+        }
+        finally { release.Set(); await settled.Task.WaitAsync(TimeSpan.FromSeconds(3)); BubbleCountWindow.NativeUnavailable = previous; }
+    }
+
+    [Fact]
+    public void Wedged_game_engine_cannot_be_the_shared_video_engine()
+    {
+        var property = typeof(LibVlcAudio).GetProperty("Shared", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var previous = LibVlcAudio.Shared;
+        var factory = LibVlcAudio.VideoFactory;
+        var previousUnavailable = BubbleCountWindow.NativeUnavailable;
+        using var release = new ManualResetEventSlim();
+        using var settled = new ManualResetEventSlim();
+        var shared = (LibVLC)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(LibVLC));
+        var isolated = (LibVLC)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(LibVLC));
+        GC.SuppressFinalize(shared); GC.SuppressFinalize(isolated);
+        try
+        {
+            property.SetValue(null, shared);
+            LibVlcAudio.VideoFactory = _ => isolated;
+            Assert.Same(isolated, BubbleCountWindow.CreateGameEngine());
+            Assert.False(BubbleCountWindow.StopNative(() => release.Wait(), () => { }, () => { }, isolated, 30,
+                action => action(), () => settled.Set()));
+            Assert.Same(shared, LibVlcAudio.Shared); // subsequent video uses the untouched engine
+            LibVlcAudio.VideoFactory = _ => shared;
+            Assert.Throws<InvalidOperationException>(() => BubbleCountWindow.CreateGameEngine());
+        }
+        finally
+        {
+            release.Set(); settled.Wait(TimeSpan.FromSeconds(3));
+            BubbleCountWindow.NativeUnavailable = previousUnavailable;
+            LibVlcAudio.VideoFactory = factory; property.SetValue(null, previous);
+        }
+    }
+
+    [Fact]
+    public async Task Shared_video_still_plays_while_an_isolated_game_stop_is_wedged()
+    {
+        try { _ = new LibVlcAudio("--aout=dummy", "--vout=dummy"); }
+        catch (Exception ex)
+        {
+            if (OperatingSystem.IsLinux() && Environment.GetEnvironmentVariable("CI") == "true") throw;
+            Assert.Skip("libvlc unavailable: " + ex.Message);
+        }
+        var previous = BubbleCountWindow.NativeUnavailable;
+        var quarantined = (List<object>)typeof(BubbleCountWindow)
+            .GetField("_quarantinedNative", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+        var game = BubbleCountWindow.CreateGameEngine();
+        var shared = LibVlcAudio.Shared!;
+        Assert.NotSame(shared, game);
+        using var release = new ManualResetEventSlim();
+        var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            Assert.False(BubbleCountWindow.StopNative(() => release.Wait(), () => game.Dispose(), () => { },
+                game, 100, action => action(), () => settled.TrySetResult()));
+            Assert.Same(shared, LibVlcAudio.Shared);
+            using var media = new Media(shared, System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4"), FromType.FromPath);
+            media.AddOption(":no-audio"); media.AddOption(":vout=dummy");
+            using var player = new MediaPlayer(media);
+            var playing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            player.Playing += (_, _) => playing.TrySetResult();
+            Assert.True(player.Play());
+            await playing.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            player.Stop();
+        }
+        finally
+        {
+            release.Set();
+            await settled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            lock (quarantined) quarantined.Remove(game);
             BubbleCountWindow.NativeUnavailable = previous;
         }
     }
