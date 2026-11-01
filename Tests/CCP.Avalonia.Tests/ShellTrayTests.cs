@@ -302,6 +302,50 @@ public sealed class ShellTrayTests
     }
 
     [Fact]
+    public async Task DeniedTrayAfterLauncherClosedToTrayBringsLauncherBack()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            var boot = LauncherWindow.Boot;
+            var session = CoreSession.IsSessionRunningProvider;
+            try
+            {
+                shell.CreateTray();
+                shell.TrayHostPresent = () => true;
+                shell.Show();
+                LauncherWindow.Boot = global::ConditioningControlPanel.Services.Launcher.BootDecision.LauncherFirst;
+                LauncherWindow.RouteBoot(shell);
+                Dispatcher.UIThread.RunJobs();
+                CoreSession.IsSessionRunningProvider = () => true;
+                LauncherWindow.Instance!.RequestClose();
+                Assert.False(LauncherWindow.Instance.IsVisible); // Behind the usable tray icon, as WPF.
+                Assert.False(shell.IsVisible);
+                Dispatcher.UIThread.Post(() => throw TrayFailure());
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(shell.CanHideToTray);
+                Assert.True(LauncherWindow.Instance!.IsVisible); // The icon is gone: the launcher comes back.
+                Assert.NotEqual(WindowState.Minimized, LauncherWindow.Instance.WindowState);
+                Assert.False(shell.IsVisible);
+            }
+            finally
+            {
+                CoreSession.IsSessionRunningProvider = session;
+                LauncherWindow.Instance?.Close();
+                LauncherWindow.Boot = boot;
+                shell.Tray?.Dispose();
+                shell.MarkExitRequestedForTest();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task DeniedTrayAfterTrayBackToLauncherKeepsPanelHidden()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

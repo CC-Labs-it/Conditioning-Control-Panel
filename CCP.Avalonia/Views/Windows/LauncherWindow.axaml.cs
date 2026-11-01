@@ -270,7 +270,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     // WPF LauncherHost.cs:410-424 hides behind the panel's tray icon. Without a
                     // usable tray (no host or denied registration), keep the launcher on the taskbar.
                     if (panel is { IsVisible: false } && !panel.CanHideToTray) WindowState = WindowState.Minimized;
-                    else Hide();
+                    else
+                    {
+                        // A later registration denial must bring this launcher back (no icon left).
+                        if (panel is { IsVisible: false }) panel.MarkLauncherHiddenToTray();
+                        Hide();
+                    }
                     break;
                 case LauncherCloseOutcome.Exit:
                     panel!.RequestExit();

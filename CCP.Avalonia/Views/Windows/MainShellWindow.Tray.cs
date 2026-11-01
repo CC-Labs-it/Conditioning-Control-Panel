@@ -53,8 +53,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private bool _trayRegistrationDenied;
         private bool _hiddenToTray;
+        // The launcher closed behind this panel's tray icon (WPF LauncherHost.cs:410-424).
+        private bool _launcherHiddenToTray;
         // WPF LauncherHost.cs:304-328 and App.xaml.cs:4286: routing owns the hidden panel now.
-        internal void ClearTrayHide() => _hiddenToTray = false;
+        internal void ClearTrayHide() => _hiddenToTray = _launcherHiddenToTray = false;
+        internal void MarkLauncherHiddenToTray() => _launcherHiddenToTray = true;
 
         internal bool CanHideToTray => Tray is not null && !_trayRegistrationDenied && TrayHostPresent();
 
@@ -88,7 +91,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF TrayIconService.cs:195-218 restores access through ShowWindow. With no icon,
             // restore only a tray hide. Launcher/game routing has its own way back to the panel
             // (WPF LauncherHost.cs:304-328, App.xaml.cs:4286). Do not activate over that surface.
-            if (_hiddenToTray && !IsVisible && !_windowClosed && !_exitRequested) ShowFromTray();
+            if (IsVisible || _windowClosed || _exitRequested) return;
+            // A launcher closed to the tray comes back as it left; under Lockdown the panel is the
+            // surface (BackToLauncher refuses there too).
+            if (_launcherHiddenToTray && !LockdownActive) LauncherWindow.OpenFor(this);
+            else if (_hiddenToTray || _launcherHiddenToTray) ShowFromTray();
         }
 
         internal TrayIcon CreateTray()
@@ -183,7 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public void ShowFromTray()
         {
             if (_windowClosed) return;
-            _hiddenToTray = false;
+            _hiddenToTray = _launcherHiddenToTray = false;
             RestoreLauncherPanelOpacity();
             Show();
             WindowState = WindowState.Normal;
