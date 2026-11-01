@@ -142,7 +142,7 @@ public sealed class InvitePanelTests
     [Fact]
     public Task TheHeaderTicketFollowsAnUnusedCodeAndItsClickRefusesUnderLockdown() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        EnsurePlatform();
+        AmbientBeatLoopsTests.Setup();
         var (oldId, oldLd) = (InviteApi.DefaultIdentity, LockdownService.Current);
         var shell = new MainShellWindow();
         try
@@ -159,10 +159,11 @@ public sealed class InvitePanelTests
 
             var vault = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView>("ExclusivesTab")!;
             shell.ShowTab("achievements");
+            Assert.Equal("achievements", shell.CurrentTab);
             var ld = LockdownService.Current = new LockdownService();
             ld.Activate(TimeSpan.FromMinutes(30));
             shell.BtnInviteTicket_Click(ticket, new RoutedEventArgs(Button.ClickEvent));
-            Assert.False(vault.IsVisible);
+            Assert.Equal("achievements", shell.CurrentTab);
             ld.Deactivate();
             shell.BtnInviteTicket_Click(ticket, new RoutedEventArgs(Button.ClickEvent));
             Assert.False(vault.IsVisible);

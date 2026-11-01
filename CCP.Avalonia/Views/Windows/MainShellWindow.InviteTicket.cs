@@ -118,7 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void BtnInviteTicket_Click(object? sender, RoutedEventArgs e) => OpenInvitesCard();
 
-        /// <summary>WPF OpenInvitesCard: the Premium tab, a forced read, and the card scrolled into view.
+        /// <summary>WPF OpenInvitesCard: Settings Account and Plans, a fresh read, and the card scrolled into view.
         /// Refused under Lockdown (no veil on this head yet).</summary>
         internal void OpenInvitesCard()
         {
