@@ -97,6 +97,7 @@ namespace ConditioningControlPanel.Services
         private Timer? _heartbeat;
         private int _nudgePending;
         private int _sessionVersion;
+        internal int SessionVersion => _sessionVersion;
         private readonly Func<ProfileCosmetics?, ProfileCosmetics>? _sanitizeCosmetics;
         private volatile bool _pendingCosmeticsClear;
         private SyncBody.Field _knownProgress;
@@ -104,6 +105,25 @@ namespace ConditioningControlPanel.Services
         public bool Adopted => _adopted;
         public const SyncBody.Field AfterAdopt = SyncBody.Field.UnlockedSkills | SyncBody.Field.SkillPoints;
         public Action? LifetimeLifted { get; set; }
+        public Action<IEnumerable<string>>? RestoreAchievements { get; set; }
+
+        // WPF ProfileSyncService.cs:2099-2118. Dispatch the store mutation with the head's
+        // other achievement work; a queued response must never restore into another session.
+        private void RestoreCloudAchievements(IEnumerable<string>? ids)
+        {
+            if (ids == null) return;
+            var cloud = ids.ToArray();
+            _serverAchievements = (_serverAchievements ?? Array.Empty<string>()).Union(cloud).ToArray();
+            var s = CoreSettings.Current;
+            var id = s.UnifiedId;
+            var version = _sessionVersion;
+            CoreDispatch.Post(() =>
+            {
+                if (!Loaded || version != _sessionVersion || !ReferenceEquals(s, CoreSettings.Current)
+                    || s.UnifiedId != id || !SignedIn(s)) return;
+                RestoreAchievements?.Invoke(cloud);
+            });
+        }
 
         /// <summary>WPF ProfileSyncService.PendingCosmeticsClear: set by an EMPTY Customize save (unequip everything),
         /// cleared once a sync carrying the clear succeeds. In memory, as WPF.</summary>
@@ -155,6 +175,7 @@ namespace ConditioningControlPanel.Services
         {
             _serverAchievements = serverAchievements?.ToArray();
             Loaded = true;
+            RestoreCloudAchievements(_serverAchievements);
         }
 
         /// <summary>Logout: nothing is pushed until the next load.</summary>
@@ -250,6 +271,7 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 var id = s.UnifiedId!;
+                var sessionVersion = _sessionVersion;
                 if (!Loaded || !SignedIn(s)) return false;   // a logout between the check above and the gate
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
@@ -282,7 +304,7 @@ namespace ConditioningControlPanel.Services
                 }
                 using var _ = response;
                 // Signed out (or into another account) while this was in flight: the answer is not ours to apply.
-                if (!Loaded || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
+                if (!Loaded || sessionVersion != _sessionVersion || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
                 {
                     Log.Information("Profile sync response dropped - the account changed while it was in flight");
                     return false;
@@ -310,12 +332,12 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    if (reply["user"] is JObject user
+                        && user["achievements"] is JArray achievements
+                        && achievements.All(a => a.Type == JTokenType.String))
+                        RestoreCloudAchievements(achievements.Values<string>().Select(a => a!));
                     if (AdoptFromResponse(s, reply)) _adopted = true;
-                    ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
-                    ClaimWebXp(s, reply);
-                    // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
-                    // takes the offer (no descent_auto), so only the ack half runs here.
-                    Descent.DescentMigrationAck.Apply(s, reply);
+                    ClaimWebXp(s, reply, reconcile: true);
                 }
                 catch (Exception ex) { Log.Debug("V2 Sync: Could not parse server flags: {Error}", ex.Message); }
                 // THE FUSE's cache, off the RAW body (WPF ProfileSyncService.HandleDescentCountdown).
@@ -429,22 +451,40 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF SyncProfileAsync:1970-1985: a new web XP claim is persisted (and saved) BEFORE its XP is added, so a
         /// crash under-pays once instead of paying twice; skipped on level_reset, whose level/XP overwrite would eat it. The
         /// id then goes back as <c>web_xp_claim_ack</c> on every push.</summary>
-        internal void ClaimWebXp(AppSettings s, JObject reply)
+        internal void ClaimWebXp(AppSettings s, JObject reply, bool reconcile = false)
         {
-            if (reply["web_xp"]?["claim"] is not JObject claim || reply["level_reset"]?.Type == JTokenType.Boolean && reply.Value<bool>("level_reset")) return;
-            var id = claim["id"]?.Type == JTokenType.String ? (string?)claim["id"] : null;
-            var amount = claim["amount"]?.Type == JTokenType.Integer ? (int)claim["amount"]! : 0;
-            if (string.IsNullOrEmpty(id) || amount <= 0 || id == s.LastWebXpClaimId) return;
+            var claim = reply["web_xp"] is JObject webXp ? webXp["claim"] as JObject : null;
+            var id = claim?["id"]?.Type == JTokenType.String ? (string?)claim["id"] : null;
+            var amount = claim?["amount"]?.Type == JTokenType.Integer ? (int)claim["amount"]! : 0;
+            var pay = !string.IsNullOrEmpty(id) && amount > 0
+                && !(reply["level_reset"]?.Type == JTokenType.Boolean && reply.Value<bool>("level_reset"));
+            if (!pay && !reconcile) return;
             var account = s.UnifiedId;
             var session = Volatile.Read(ref _sessionVersion);
             CoreDispatch.Post(() =>
             {
-                // WPF ProfileSyncService:1970-1985 pays immediately. Keep its id/save/payment together on UI dispatch.
                 if (!Loaded || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
-                    || !SignedIn(s) || s.UnifiedId != account || s.LastWebXpClaimId == id) return;
-                s.LastWebXpClaimId = id;
-                CoreSettings.Save();
-                ProgressionBank.AddClaimed(amount);
+                    || !SignedIn(s) || s.UnifiedId != account) return;
+                try
+                {
+                    // WPF ProfileSyncService.cs:1970-1985 pays before the server-ahead reconciliation at :2390.
+                    if (pay && s.LastWebXpClaimId != id)
+                    {
+                        s.LastWebXpClaimId = id;
+                        CoreSettings.Save();
+                        ProgressionBank.AddClaimed(amount);
+                    }
+                    if (reconcile)
+                    {
+                        // WPF ProfileSyncService.cs:1987 HandleDescentMigrationAck: settle/heal an account
+                        // migrated on any device. This head never takes the offer (no descent_auto),
+                        // so only the ack half runs here, after claim payment and before XP adoption.
+                        Descent.DescentMigrationAck.Apply(s, reply);
+                        ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
+                        CoreSettings.Save();
+                    }
+                }
+                catch (Exception ex) { Log.Debug("V2 Sync: Could not apply server XP: {Error}", ex.Message); }
             });
         }
 
