@@ -23,11 +23,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     {
         private bool _nudgingKeys;
         private BeatLoop? _keysBreath;
+        private DropShadowEffect _keysGlow = null!;
         private IDisposable? _keysVisibility;
 
         // WPF ChasterTabView.xaml.cs:283-303 and Fx.cs:206-248: the empty menu points to the keys.
         private void NudgeInit()
         {
+            _keysGlow = (DropShadowEffect)this.FindResource("KeysNudgeGlow")!;
             AttachedToVisualTree += (_, _) =>
             {
                 _keysVisibility = EffectiveVisibility.Watch(this, () => Dispatcher.UIThread.Post(RefreshKeysNudge, DispatcherPriority.Loaded));
@@ -61,25 +63,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             _keysBreath?.Stop();
             PresetRow.Opacity = 1;
-            KeysGlow.IsVisible = false;
+            PresetRow.Classes.Remove("keys-nudge");
             if (!_nudgingKeys || !IsEffectivelyVisible || VisualRoot == null) return;
             var tier = AmbientFxCanvas.Env.CurrentTier;
-            var glow = AmbientFxCanvas.Env.AllowGlow(tier);
-            if (glow)
+            if (AmbientFxCanvas.Env.AllowGlow(tier))
             {
-                KeysGlow.BoxShadow = new BoxShadows(new BoxShadow
-                {
-                    Blur = Math.Min(26, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)),
-                    Color = Color.FromRgb(0xE0, 0xB0, 0x52),
-                });
-                KeysGlow.Opacity = 0.8;
-                KeysGlow.IsVisible = true;
+                _keysGlow.BlurRadius = Math.Min(26, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier));
+                _keysGlow.Opacity = 0.8;
+                PresetRow.Classes.Add("keys-nudge");
             }
             if (!AmbientFxCanvas.Env.AllowAmbientLoops) return;
             _keysBreath ??= new BeatLoop(this, t =>
             {
                 var breath = BeatLoop.Breath(t, 1.1);
-                if (KeysGlow.IsVisible) KeysGlow.Opacity = 0.35 + 0.6 * breath;
+                if (PresetRow.Classes.Contains("keys-nudge")) _keysGlow.Opacity = 0.35 + 0.6 * breath;
                 else PresetRow.Opacity = 0.7 + 0.3 * breath;
             });
             _keysBreath.Start();
