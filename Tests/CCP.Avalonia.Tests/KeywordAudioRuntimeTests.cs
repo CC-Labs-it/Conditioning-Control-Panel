@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Safety;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -30,7 +31,8 @@ public sealed class KeywordAudioRuntimeTests
         var s = CoreSettings.Current;
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
             s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled);
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled,
+            CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider);
         var engine = new KeywordAudioRuntime();
         var played = new List<(string, float)>();
         var file = Path.GetTempFileName();
@@ -41,6 +43,9 @@ public sealed class KeywordAudioRuntimeTests
             s.KeywordTriggersEnabled = true; s.KeywordTriggerIgnoreOwnFocus = false;
             s.KeywordTriggerAppScope = AwarenessAppScope.Everywhere;
             s.KeywordGlobalCooldownSeconds = 0; s.KeywordPerKeywordCooldownSeconds = 0; s.MasterVolume = 50;
+            PanicAftermath.EndQuiet();
+            CoreSession.IsEngineRunningProvider = () => true;
+            CoreSession.IsSessionRunningProvider = () => false;
             CoreEntitlement.HasPremiumProvider = () => true;
             CoreEntitlement.IsFreeTodayProvider = _ => false;
             CoreAudio.PlayStoppableProvider = (path, volume, _, _, _) => { played.Add((path, volume)); return () => played.Add(("stopped", 0)); };
@@ -51,13 +56,62 @@ public sealed class KeywordAudioRuntimeTests
         finally
         {
             engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
+            PanicAftermath.EndQuiet();
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled) = saved;
+                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled,
+                CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider) = saved;
         }
     });
 
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PanicQuietHoldsTypedAudioUntilQuietEnds(bool merged) => Run((engine, s, played) =>
+    {
+        var now = new DateTime(2026, 10, 14, 12, 0, 0);
+        engine.Now = () => now;
+        s.AwarenessLoopProtectionEnabled = false;
+        if (merged)
+            s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "sit", CooldownSeconds = 1 });
+        PanicAftermath.ArmQuiet();
+        Type(engine, "sit");
+        Assert.Empty(played);
+        Assert.All(s.KeywordTriggers, trigger => Assert.Equal(now, trigger.LastTriggeredAt));
+        PanicAftermath.EndQuiet();
+        now = now.AddSeconds(2);
+        Type(engine, "sit");
+        Assert.Single(played);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AudioNeedsMainEngineOrSessionForActionsAndLegacy(bool legacy) => Run((engine, s, played) =>
+    {
+        var now = new DateTime(2026, 10, 14, 12, 0, 0);
+        engine.Now = () => now;
+        s.AwarenessLoopProtectionEnabled = false;
+        if (legacy)
+        {
+            var trigger = s.KeywordTriggers[0];
+            trigger.AudioFilePath = ((PlayAudioAction)trigger.Actions[0]).FilePath;
+            trigger.Actions.Clear();
+        }
+        CoreSession.IsEngineRunningProvider = () => false;
+        CoreSession.IsSessionRunningProvider = () => false;
+        Type(engine, "sit"); Assert.Empty(played);
+        now = now.AddSeconds(2);
+        CoreSession.IsEngineRunningProvider = () => true;
+        Type(engine, "sit"); Assert.Single(played);
+        engine.StopAudio(); played.Clear();
+        now = now.AddSeconds(2);
+        CoreSession.IsEngineRunningProvider = () => false;
+        CoreSession.IsSessionRunningProvider = () => true;
+        Type(engine, "sit"); Assert.Single(played);
+    });
 
     [Fact]
     public void TypedMatchPlaysConfiguredClipAtWpfVolumeAndStopCutsIt() => Run((engine, s, played) =>
