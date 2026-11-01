@@ -65,7 +65,7 @@ public sealed class KnockCardTests
     private static Task Run(Action<FakeFriends, Window, Action<DateTimeOffset>, Func<LandingWorld, LandingWorld>> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (global::Avalonia.Application.Current is null)
-            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var (motion, bell, volume) = (s.MotionLevel, s.FriendNotificationsEnabled, s.MasterVolume);
@@ -201,6 +201,70 @@ public sealed class KnockCardTests
         finally { FriendsLanding.OpenWatchUrl = oldUrl; FriendsLanding.EmiSays = oldSays; }
     });
 
+    // WPF FriendsLanding.cs:475-480: expiry feedback applies before checking the delivery kind.
+    [Theory]
+    [InlineData(SendKind.Invite)]
+    [InlineData(SendKind.Poke)]
+    [InlineData(SendKind.Watch)]
+    public Task EveryExpiredInboxItemSaysItIsTooLate(SendKind kind) => Run((svc, _, step, _) =>
+    {
+        var oldSays = FriendsLanding.EmiSays;
+        var says = new List<(string, string)>();
+        FriendsLanding.EmiSays = (line, face) => says.Add((line, face));
+        try
+        {
+            CoreSettings.Current.FriendNotificationsEnabled = false;
+            var item = kind switch
+            {
+                SendKind.Invite => Invite("00000000000000e1"),
+                SendKind.Poke => new InboxItem("00000000000000e2", kind, "u_mia", "Mia", null, "hi", null, null, null, T0, T0.AddHours(1)),
+                _ => WatchItem("00000000000000e3", new WatchRef(WatchKind.Ht, "123", null)),
+            };
+            svc.Deliver(item);
+            var row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "friends:" + item.Id);
+            step(item.ExpiresAt);
+            StartupLadder.Inbox.Open(row);
+            Assert.Equal((ConditioningControlPanel.Localization.Loc.Get("friends_land_too_late"), ";_;"), Assert.Single(says));
+            Assert.Empty(KnockCard.Up);
+            Assert.Null(FriendNotices.Current);
+        }
+        finally { FriendsLanding.EmiSays = oldSays; }
+    });
+
+    // WPF FriendsLanding.cs:673-691 and 694-705: a failed action stays contained.
+    [Fact]
+    public Task FlavourWatchContainsApplyFailures() => Run((_, _, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var oldSource = s.MediaSource;
+        var calls = 0;
+        System.ComponentModel.PropertyChangedEventHandler fail = (_, e) =>
+        {
+            if (e.PropertyName == nameof(s.MediaSource)) { calls++; throw new InvalidOperationException("apply failed"); }
+        };
+        try
+        {
+            s.PropertyChanged += fail;
+            Assert.Null(Record.Exception(() => FriendsLanding.Watch(new WatchRef(WatchKind.Flavour, "pink", null))));
+            Assert.Equal(1, calls);
+        }
+        finally { s.PropertyChanged -= fail; s.MediaSource = oldSource; }
+    });
+
+    [Fact]
+    public Task HtWatchContainsBrowserFailures() => Run((_, _, _, _) =>
+    {
+        var oldUrl = FriendsLanding.OpenWatchUrl;
+        var calls = 0;
+        FriendsLanding.OpenWatchUrl = _ => { calls++; throw new InvalidOperationException("browser failed"); };
+        try
+        {
+            Assert.Null(Record.Exception(() => FriendsLanding.Watch(new WatchRef(WatchKind.Ht, "123", null))));
+            Assert.Equal(1, calls);
+        }
+        finally { FriendsLanding.OpenWatchUrl = oldUrl; }
+    });
+
     // WPF FriendsLanding.cs:272-280: body opens sender, and leaving files only unexpired watches.
     [Fact]
     public Task WatchBodyOpensSenderAndExpiredNoticeDoesNotActOrFile() => Run((svc, _, step, _) =>
@@ -238,57 +302,76 @@ public sealed class KnockCardTests
 
     // WPF FriendsLanding.cs:632-687: catalogue resolves local files or opens Deeper; flavour never grants consent.
     [Fact]
-    public Task WatchDispatchResolvesCatalogueAndKeepsMediaConsent() => Run((_, host, _, _) =>
+    public async Task WatchDispatchResolvesCatalogueAndKeepsMediaConsent()
     {
-        var oldPlay = FriendsLanding.PlayWatchCatalogue;
-        var oldTab = FriendsLanding.OpenPanelTab;
-        var oldGame = FriendsLanding.ActiveGameWindow;
-        var oldWord = FriendsLanding.ShowWatchWord;
-        var words = new List<(Window, string)>();
-        FriendsLanding.ActiveGameWindow = () => null;
-        FriendsLanding.ShowWatchWord = (owner, text) => words.Add((owner, text));
-        var played = new List<string>();
-        var tabs = new List<string>();
-        FriendsLanding.PlayWatchCatalogue = played.Add;
-        FriendsLanding.OpenPanelTab = tabs.Add;
-        var s = CoreSettings.Current;
-        var entries = s.DeeperSubmissions.ToDictionary(e => e.Key, e => e.Value);
-        try
+        var settings = CoreSettings.Current;
+        var before = (settings.MediaSource, settings.RemoteMediaConsented, settings.FypOnlineConsented,
+            settings.BackRoomMediaSource, settings.RemoteMediaRatio, settings.FypOnlineNiches,
+            settings.BackRoomMediaSubs, settings.BackRoomMediaSubsOff);
+        await Run((_, host, _, _) =>
         {
-            s.DeeperSubmissions.Clear();
-            var path = typeof(KnockCardTests).Assembly.Location;
-            s.DeeperSubmissions[path] = new DeeperSubmissionRecord { CatalogueId = "known" };
-            FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "known", null));
-            FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "missing", null));
-            FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "../bad", null));
-            Assert.Equal(new[] { path }, played);
-            Assert.Equal(new[] { "deeper" }, tabs);
-            FriendsLanding.PlayWatchCatalogue = _ => throw new InvalidOperationException();
-            FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "known", null));
-            Assert.Equal(new[] { "deeper", "deeper" }, tabs);
+            var oldPlay = FriendsLanding.PlayWatchCatalogue;
+            var oldTab = FriendsLanding.OpenPanelTab;
+            var oldGame = FriendsLanding.ActiveGameWindow;
+            var oldWord = FriendsLanding.ShowWatchWord;
+            var words = new List<(Window, string)>();
+            FriendsLanding.ActiveGameWindow = () => null;
+            FriendsLanding.ShowWatchWord = (owner, text) => words.Add((owner, text));
+            var played = new List<string>();
+            var tabs = new List<string>();
+            FriendsLanding.PlayWatchCatalogue = played.Add;
+            FriendsLanding.OpenPanelTab = tabs.Add;
+            var s = CoreSettings.Current;
+            var entries = s.DeeperSubmissions.ToDictionary(e => e.Key, e => e.Value);
+            var original = (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, s.BackRoomMediaSource,
+                s.RemoteMediaRatio, s.FypOnlineNiches, s.BackRoomMediaSubs, s.BackRoomMediaSubsOff);
+            try
+            {
+                s.DeeperSubmissions.Clear();
+                var path = typeof(KnockCardTests).Assembly.Location;
+                s.DeeperSubmissions[path] = new DeeperSubmissionRecord { CatalogueId = "known" };
+                FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "known", null));
+                FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "missing", null));
+                FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "../bad", null));
+                Assert.Equal(new[] { path }, played);
+                Assert.Equal(new[] { "deeper" }, tabs);
+                FriendsLanding.PlayWatchCatalogue = _ => throw new InvalidOperationException();
+                FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "known", null));
+                Assert.Equal(new[] { "deeper", "deeper" }, tabs);
 
-            s.MediaSource = "local";
-            s.RemoteMediaConsented = false;
-            s.FypOnlineConsented = false;
-            s.BackRoomMediaSource = "online";
-            FriendsLanding.Watch(new WatchRef(WatchKind.Flavour, "pink", null));
-            Assert.Equal("local", s.MediaSource);
-            Assert.Contains("bimbo", s.FypOnlineNiches);
-            Assert.Equal("auto", s.BackRoomMediaSource);
-            s.RemoteMediaConsented = true;
-            FriendsLanding.Watch(new WatchRef(WatchKind.Flavour, "trance", null));
-            Assert.Equal("mixed", s.MediaSource);
-            Assert.Contains("hypno", s.FypOnlineNiches);
-            Assert.Equal((host, ConditioningControlPanel.Localization.Loc.Get("friends_land_flavour_on")), words[0]);
-            Assert.Equal(2, words.Count);
-        }
-        finally
-        {
-            s.DeeperSubmissions.Clear();
-            foreach (var entry in entries) s.DeeperSubmissions[entry.Key] = entry.Value;
-            FriendsLanding.PlayWatchCatalogue = oldPlay; FriendsLanding.OpenPanelTab = oldTab; FriendsLanding.ActiveGameWindow = oldGame; FriendsLanding.ShowWatchWord = oldWord;
-        }
-    });
+                s.MediaSource = "local";
+                s.RemoteMediaConsented = false;
+                s.FypOnlineConsented = false;
+                s.BackRoomMediaSource = "online";
+                FriendsLanding.Watch(new WatchRef(WatchKind.Flavour, "pink", null));
+                Assert.Equal("local", s.MediaSource);
+                Assert.Contains("bimbo", s.FypOnlineNiches);
+                Assert.Equal("auto", s.BackRoomMediaSource);
+                s.RemoteMediaConsented = true;
+                FriendsLanding.Watch(new WatchRef(WatchKind.Flavour, "trance", null));
+                Assert.Equal("mixed", s.MediaSource);
+                Assert.Contains("hypno", s.FypOnlineNiches);
+                Assert.Equal((host, ConditioningControlPanel.Localization.Loc.Get("friends_land_flavour_on")), words[0]);
+                Assert.Equal(2, words.Count);
+            }
+            finally
+            {
+                s.DeeperSubmissions.Clear();
+                foreach (var entry in entries) s.DeeperSubmissions[entry.Key] = entry.Value;
+                (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, s.BackRoomMediaSource,
+                    s.RemoteMediaRatio, s.FypOnlineNiches, s.BackRoomMediaSubs, s.BackRoomMediaSubsOff) = original;
+                FriendsLanding.PlayWatchCatalogue = oldPlay; FriendsLanding.OpenPanelTab = oldTab; FriendsLanding.ActiveGameWindow = oldGame; FriendsLanding.ShowWatchWord = oldWord;
+            }
+        });
+        Assert.Equal(before.MediaSource, settings.MediaSource);
+        Assert.Equal(before.RemoteMediaConsented, settings.RemoteMediaConsented);
+        Assert.Equal(before.FypOnlineConsented, settings.FypOnlineConsented);
+        Assert.Equal(before.BackRoomMediaSource, settings.BackRoomMediaSource);
+        Assert.Equal(before.RemoteMediaRatio, settings.RemoteMediaRatio);
+        Assert.Same(before.FypOnlineNiches, settings.FypOnlineNiches);
+        Assert.Same(before.BackRoomMediaSubs, settings.BackRoomMediaSubs);
+        Assert.Same(before.BackRoomMediaSubsOff, settings.BackRoomMediaSubsOff);
+    }
 
     private static global::Avalonia.Media.IBrush FriendsDrawerGold => ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer.Gold;
 
