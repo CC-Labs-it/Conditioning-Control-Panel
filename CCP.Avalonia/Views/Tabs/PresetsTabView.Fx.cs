@@ -90,7 +90,12 @@ public partial class PresetsTabView
         if (IsVisible && SessionRackPanel != null)
         {
             SyncCustomSessionsFromDisk();
-            RepaintSessionRack();
+            if (_presetsModDirty && IsEffectivelyVisible)
+            {
+                _presetsModDirty = false;
+                RefreshPresetsModVisuals(refreshRack: true);
+            }
+            else RepaintSessionRack();
             SeedTakeaway();
         }
         if (IsVisible && _fxWindow != null) StaggerZones();
