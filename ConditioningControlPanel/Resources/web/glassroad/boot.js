@@ -961,7 +961,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const reactiveOptions = { paused: false, gentle: false, muted: false };
   // the boost speed rim's view (render/boostRim.js via post.js), one object refilled every frame (no per-frame allocation)
   const rimView = { enabled: false, off: true, boostKind: 0, motion: 'full', gentle: false, photosafe: false, riseMs: 300, fadeMs: 600,
-    palette: () => world.musicColours(), speedFeel: 0, speedLines: 0, force: RIM_FORCE };
+    palette: () => world.musicColours(), speedFeel: 0, speedLines: 0, force: RIM_FORCE, tunnel: 0, speedPct: 0 };
   const feelNum = (k, d) => { try { const v = feel.get(k); return Number.isFinite(+v) ? +v : d; } catch { return d; } };
   /** The Steer assist mode: the Options pick; online it is off on a no lane keeper table and Strong while paused
    *  (only Strong drives a hands-off kart: the paused coast needs its autopilot and cruise). */
@@ -1944,7 +1944,7 @@ async function boot(course, options, lifetime, isCurrent) {
     // frame and the hit cam ease it out; it reads the same settled fs.speedFeel as the boost fov widen
     rimView.enabled = state === 'race';
     rimView.off = race.phase !== 'racing' || !!P.finished || (fs.renderRate ?? 1) < 1 || !!(hitCam && hitCam.focus >= 0);
-    rimView.boostKind = P.st[S.boostKind] | 0; rimView.motion = opts?.motion || 'full';
+    rimView.boostKind = P.st[S.boostKind] | 0; rimView.speedPct = P.st[S.speedPct]; rimView.motion = opts?.motion || 'full';
     rimView.gentle = !!feel.get('gentle.on'); rimView.photosafe = feelNum('photosafe.on', 0) > 0;
     rimView.riseMs = feelNum('gentle.riseMs', 300); rimView.fadeMs = feelNum('gentle.fadeMs', 600);
     if (!garageScene) renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt,

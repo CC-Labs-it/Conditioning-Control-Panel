@@ -13,6 +13,8 @@
  * Safety: Motion off = no rim at all (the widen is off too), Motion less = half the flow speed, Gentle = half the
  * level, half the flow, rise at least gentle.riseMs (>= 300 ms) and fall at least gentle.fadeMs, a strict photosafe
  * host halves the level again. The flow's per-pixel temporal rate stays under FLOW_HZ_MAX (no 3 Hz+ flicker).
+ * Tunnel Vision: `ride` (BOOST_RIM.ride) is a second level that follows the ride's live speed, so the ride reads as a
+ * boost and more: a bigger, denser, more saturated rim. Same safety rules, and it settles the same way.
  */
 import { clamp, smoothstep } from '../core/math.js';
 import { SPEED_FEEL, speedFeelMul } from './cameraMath.js';
@@ -41,7 +43,35 @@ export const BOOST_RIM = Object.freeze({
   hueSpread: 1,             // rainbow span (turns) before the palette skew pulls it in
   paletteSkew: 0.62,        // 0 = a plain rainbow, 1 = only the two course hues
   satMin: 0.72, lightMix: 0.45, lightMin: 0.5, lightMax: 0.8,
+  // Tunnel Vision's ride (owner 2026-11-01, "like the boost but more"): the same rim pushed past anything a boost can
+  // reach, by a second level `ride` 0..1 that follows the live speed. ride 0 is the boost's look exactly.
+  ride: Object.freeze({
+    pctFrom: 1,             // speed.topMps share where a ride sits at `floor` (a ride starts about here)
+    pctTop: 3,              // the share where the colour is full (99 m/s, an 800 m gap in the 8 s limit)
+    floor: 0.3,             // the least a ride shows, however slow
+    curve: 0.8,             // under 1 lifts ordinary rides: today's 1.6 x top reads 0.57, 2.2 x top 0.77
+    gentleMul: 0.45,        // Gentle's cap on ride (the base level is halved as well)
+    clearBox: 0.42,         // at ride 1 the clear centre box (boost 0.6): road ahead, target kart and player stay clean
+    cornerBias: 0.15,       // at ride 1 the whole frame takes colour, not just the corners (boost 0.55)
+    washAlpha: 0.72,        // at ride 1 the coloured wash (boost 0.14)
+    maxAlpha: 0.92,         // at ride 1 the streaks (boost 0.5)
+    saturate: 1.1,          // at ride 1 hue pushed this much further from grey (a pastel course stays saturated)
+    flowExtra: 0.18,        // at ride 1 the flow runs this much faster (off under Gentle); stays under FLOW_HZ_MAX
+  }),
 });
+
+/** How coloured a ride is at this speed share, 0..1: the floor at pctFrom, full at pctTop. */
+export function rideHeat(pct, L = BOOST_RIM) {
+  const R = L.ride, t = clamp(((+pct || 0) - R.pctFrom) / (R.pctTop - R.pctFrom), 0, 1);
+  return R.floor + (1 - R.floor) * Math.pow(t, R.curve);
+}
+
+/** The ride level's target before the settle: the fx tunnel envelope (0 outside a ride) times the speed's heat. */
+export function rideTarget(v = {}, L = BOOST_RIM) {
+  if ((v.motion || 'full') === 'off') return 0;
+  const k = clamp(+v.tunnel || 0, 0, 1);
+  return k > 0 ? k * rideHeat(v.speedPct, L) : 0;
+}
 
 /** Highest per-pixel temporal frequency (Hz) of the dash flow: the fastest streak (dashFreqVar[1] of the faster layer) passing a fixed pixel. */
 export const FLOW_HZ_MAX = 3;
@@ -68,7 +98,8 @@ export function rimTarget(v = {}, L = BOOST_RIM, F = SPEED_FEEL) {
   const over = overTop(v.speedFeel, motion, !!v.gentle, F);
   const live = (v.boostKind | 0) > 0 || over > 0.02;
   const env = live ? smoothstep(L.envFrom, L.envTo, clamp(+v.speedLines || 0, 0, 1)) : 0;
-  return clamp(Math.max(over * L.overW + env * L.envW, +v.force || 0), 0, 1);   // force: the ?boostRim= dev look
+  // force: the ?boostRim= dev look; tunnel: a ride holds the rim from its first frame (it starts below top speed)
+  return clamp(Math.max(over * L.overW + env * L.envW, +v.force || 0, +v.tunnel || 0), 0, 1);
 }
 
 /** Flow speed multiplier: Motion less and Gentle each slow it, off stops it. */
@@ -91,25 +122,32 @@ export function rimTimes({ gentle = false, riseMs = 300, fadeMs = 600, off = fal
  * ever built up in a race, so a cut there never shows. off (hit cam, finish slow frame) eases out.
  */
 export function createRimState(L = BOOST_RIM, F = SPEED_FEEL) {
-  const s = { x: 0, v: 0 }, out = { level: 0, raw: 0, flowS: 0, flowMul: 1 };
+  const s = { x: 0, v: 0 }, r = { x: 0, v: 0 }, out = { level: 0, raw: 0, ride: 0, flowS: 0, flowMul: 1 };
+  const settle = (e, target, t, dt) => {
+    const w = 4.744 / Math.max(0.02, target > e.x ? t.rise : t.fall), n = Math.min(24, Math.ceil(dt * 120)), h = Math.min(dt, 0.2) / n;
+    for (let k = 0; k < n; k++) { e.v += (w * w * (target - e.x) - 2 * w * e.v) * h; e.x += e.v * h; }
+    if (e.x < 0) { e.x = 0; e.v = Math.max(0, e.v); }
+    if (e.x > 1) { e.x = 1; e.v = Math.min(0, e.v); }
+    if (Math.abs(e.x - target) < 1e-4 && Math.abs(e.v) < 1e-3) { e.x = target; e.v = 0; }
+  };
+  const clear = () => { s.x = 0; s.v = 0; r.x = 0; r.v = 0; out.level = 0; out.raw = 0; out.ride = 0; };
   function update(view = {}, dt = 0) {
-    if (view.enabled === false) { s.x = 0; s.v = 0; out.level = 0; out.raw = 0; return out; }
+    if (view.enabled === false) { clear(); return out; }
     if (!(dt > 0)) return out;
     const gentle = !!view.gentle, target = view.off ? 0 : rimTarget(view, L, F);
     const t = rimTimes({ gentle, riseMs: view.riseMs, fadeMs: view.fadeMs, off: !!view.off }, L);
-    const w = 4.744 / Math.max(0.02, target > s.x ? t.rise : t.fall), n = Math.min(24, Math.ceil(dt * 120)), h = Math.min(dt, 0.2) / n;
-    for (let k = 0; k < n; k++) { s.v += (w * w * (target - s.x) - 2 * w * s.v) * h; s.x += s.v * h; }
-    if (s.x < 0) { s.x = 0; s.v = Math.max(0, s.v); }
-    if (s.x > 1) { s.x = 1; s.v = Math.min(0, s.v); }
-    if (Math.abs(s.x - target) < 1e-4 && Math.abs(s.v) < 1e-3) { s.x = target; s.v = 0; }
+    settle(s, target, t, dt);
+    settle(r, view.off ? 0 : rideTarget(view, L), t, dt);
     out.raw = s.x;
-    out.level = s.x * (gentle ? L.gentleMul : 1) * (view.photosafe ? L.photosafeMul : 1);
-    out.flowMul = rimFlowMul(view.motion || 'full', gentle, L);
+    const safe = view.photosafe ? L.photosafeMul : 1;
+    out.level = s.x * (gentle ? L.gentleMul : 1) * safe;
+    out.ride = r.x * (gentle ? L.ride.gentleMul : 1) * safe;
+    out.flowMul = rimFlowMul(view.motion || 'full', gentle, L) * (gentle ? 1 : 1 + L.ride.flowExtra * out.ride);
     // the flow clock restarts whenever the rim is fully out, so its float phase never grows large or wraps mid-boost
     out.flowS = s.x > 0 ? (out.flowS + Math.min(dt, 0.2) * out.flowMul) % 1000 : 0;
     return out;
   }
-  return { update, frame: out, reset() { s.x = 0; s.v = 0; out.level = 0; out.raw = 0; out.flowS = 0; } };
+  return { update, frame: out, reset() { clear(); out.flowS = 0; } };
 }
 
 // ---- colour: a rainbow skewed toward the course palette ----
@@ -151,10 +189,11 @@ export function rimHues(primaryHex, accentHex, out = new Float32Array(BOOST_RIM.
 }
 
 /** The rim mask at a screen point (uv 0..1, top-left origin) for the JS mirror of the shader (tests). */
-export function rimMask(u, v, L = BOOST_RIM) {
+export function rimMask(u, v, L = BOOST_RIM, ride = 0) {
   const x = Math.abs(u - 0.5) * 2, y = Math.abs(v - 0.5) * 2;
   const box = Math.max(x, y), corner = Math.min(1, Math.hypot(x, y) / Math.SQRT2);
-  const d = box + (corner - box) * L.cornerBias;
-  if (box <= L.clearBox) return 0;
-  return smoothstep(L.clearBox, 1, d) * smoothstep(L.clearBox, L.clearBox + 0.08, box);
+  const clearBox = L.clearBox + (L.ride.clearBox - L.clearBox) * ride, bias = L.cornerBias + (L.ride.cornerBias - L.cornerBias) * ride;
+  const d = box + (corner - box) * bias;
+  if (box <= clearBox) return 0;
+  return smoothstep(clearBox, 1, d) * smoothstep(clearBox, clearBox + 0.08, box);
 }

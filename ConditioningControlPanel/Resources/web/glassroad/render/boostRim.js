@@ -7,17 +7,18 @@
  * frame. The phone tier draws one streak layer instead of two. Screen-space only: the camera never sees it.
  */
 import { Color, SRGBColorSpace } from 'three/webgpu';
-import { Fn, If, uniform, screenUV, vec2, vec3, float, abs, max, min, mix, clamp, smoothstep, length, atan, floor, fract, sin } from 'three/tsl';
+import { Fn, If, uniform, screenUV, vec2, vec3, float, abs, max, min, mix, clamp, smoothstep, length, atan, floor, fract, sin, luminance } from 'three/tsl';
 import { Q } from './quality.js';
 import { BOOST_RIM as L, createRimState, rimHues } from './boostRimMath.js';
 
 const TAU = Math.PI * 2, OFF = Object.freeze({ enabled: false });
+const R = L.ride;
 const hash1 = (x, salt) => fract(sin(x.mul(12.9898).add(salt)).mul(43758.5453));
 
 export function createBoostRim() {
   const n = L.hueStops, target = rimHues('#ff4fa3', '#9be7ff'), shown = Float32Array.from(target);
   const cols = Array.from({ length: n }, (_, i) => uniform(new Color().setRGB(shown[i * 3], shown[i * 3 + 1], shown[i * 3 + 2], SRGBColorSpace)));
-  const u = { level: uniform(0), flow: uniform(0), aspect: uniform(16 / 9), layers: uniform(2) };
+  const u = { level: uniform(0), ride: uniform(0), flow: uniform(0), aspect: uniform(16 / 9), layers: uniform(2) };
   const state = createRimState();
   let primary = '', accent = '', pollS = 0, warm = false;
 
@@ -49,17 +50,21 @@ export function createBoostRim() {
       If(u.level.greaterThan(0.001), () => {
         const p = screenUV.sub(0.5).mul(2), ax = abs(p.x), ay = abs(p.y);
         const box = max(ax, ay), corner = min(length(p).div(Math.SQRT2), 1);
-        const d = mix(box, corner, L.cornerBias);
-        const mask = smoothstep(L.clearBox, 1, d).mul(smoothstep(L.clearBox, L.clearBox + 0.08, box));
+        // Tunnel Vision's ride widens the rim, evens it round the frame, deepens it and saturates it (ride 0 = a boost)
+        const clearBox = mix(float(L.clearBox), float(R.clearBox), u.ride);
+        const d = mix(box, corner, mix(float(L.cornerBias), float(R.cornerBias), u.ride));
+        const mask = smoothstep(clearBox, 1, d).mul(smoothstep(clearBox, clearBox.add(0.08), box));
         If(mask.greaterThan(0), () => {
           const ang01 = atan(p.y, p.x.mul(u.aspect)).div(TAU).add(0.5), r = length(p);
           const k = mask.mul(u.level);
-          o.assign(mix(o, ramp(ang01), k.mul(L.washAlpha)));
+          const deep = (c) => clamp(mix(vec3(luminance(c)), c, u.ride.mul(R.saturate).add(1)), 0, 1);
+          const streakA = mix(float(L.maxAlpha), float(R.maxAlpha), u.ride);
+          o.assign(mix(o, deep(ramp(ang01)), k.mul(mix(float(L.washAlpha), float(R.washAlpha), u.ride))));
           const s0 = layer(ang01, r, 0, u.level);
-          o.assign(mix(o, s0.c, clamp(s0.a.mul(k).mul(L.maxAlpha), 0, 1)));
+          o.assign(mix(o, deep(s0.c), clamp(s0.a.mul(k).mul(streakA), 0, 1)));
           If(u.layers.greaterThan(1.5), () => {
             const s1 = layer(ang01, r, 1, u.level);
-            o.assign(mix(o, s1.c, clamp(s1.a.mul(k).mul(L.maxAlpha * 0.8), 0, 1)));
+            o.assign(mix(o, deep(s1.c), clamp(s1.a.mul(k).mul(streakA).mul(0.8), 0, 1)));
           });
         });
       });
@@ -81,10 +86,11 @@ export function createBoostRim() {
   function update(fx, dt, aspect, rim) {
     u.aspect.value = aspect > 0 ? aspect : 16 / 9;
     u.layers.value = L.streaks[Q.name] || 1;
-    if (!rim || !fx) { state.update(OFF, dt); u.level.value = 0; return; }
-    rim.speedFeel = fx.speedFeel; rim.speedLines = fx.speedLines;
+    if (!rim || !fx) { state.update(OFF, dt); u.level.value = 0; u.ride.value = 0; return; }
+    rim.speedFeel = fx.speedFeel; rim.speedLines = fx.speedLines; rim.tunnel = fx.tunnel;
     const f = state.update(rim, dt);
     u.level.value = f.level;
+    u.ride.value = f.ride;
     u.flow.value = f.flowS * L.flowUps;
     if (!(f.level > 0.001) || !(dt > 0)) return;
     pollS -= dt;
@@ -99,5 +105,5 @@ export function createBoostRim() {
     }
   }
 
-  return { apply, update, uniforms: u, get stats() { return { ...state.frame, primary, accent }; }, reset() { state.reset(); u.level.value = 0; } };
+  return { apply, update, uniforms: u, get stats() { return { ...state.frame, primary, accent }; }, reset() { state.reset(); u.level.value = 0; u.ride.value = 0; } };
 }

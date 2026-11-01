@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { BOOST_RIM as L, FLOW_HZ_MAX, flowHz, overTop, rimTarget, rimFlowMul, rimTimes, createRimState, rimHues, hexToHsl, hueDelta, rimMask } from '../render/boostRimMath.js';
+import { BOOST_RIM as L, FLOW_HZ_MAX, flowHz, overTop, rimTarget, rimFlowMul, rimTimes, createRimState, rimHues, hexToHsl, hueDelta, rimMask, rideHeat, rideTarget } from '../render/boostRimMath.js';
 import { SPEED_FEEL, speedShare, speedFeelMul } from '../render/cameraMath.js';
 
 const src = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
@@ -120,6 +120,74 @@ test('boost rim: the centre 60% stays clear, the corners carry the most', () => 
   const edge = rimMask(1, 0.5), corner = rimMask(1, 1), top = rimMask(0.5, 0);
   assert.ok(edge > 0.2 && top > 0.2, 'edges show');
   assert.ok(corner > edge && corner > 0.95, 'densest in the corners');
+});
+
+const R = L.ride;
+const riding = (pct, more = {}) => ({ enabled: true, speedFeel: cap, speedLines: 1, boostKind: 0, tunnel: 1, speedPct: pct, ...more });
+const settled = (view, s = 2) => { const st = createRimState(); for (let t = 0; t < s; t += 1 / 60) st.update(view, 1 / 60); return st; };
+
+test('tunnel look: a boost never reaches ride level; every ride does, and a faster ride shows more', () => {
+  assert.equal(settled({ enabled: true, speedFeel: cap, speedLines: 1, boostKind: 4, speedPct: 1.3 }).frame.ride, 0, 'a full pad boost is ride 0');
+  assert.ok(rideHeat(0.2) >= R.floor && rideHeat(0.2) < 0.31, 'a ride under top speed still shows the floor');
+  assert.ok(rideHeat(1.6) > 0.5, 'an ordinary ride is clearly above a boost: ' + rideHeat(1.6));
+  assert.ok(rideHeat(2.2) > rideHeat(1.6) + 0.1, 'and climbs');
+  assert.equal(rideHeat(R.pctTop), 1);
+  assert.equal(rideHeat(R.pctTop * 2), 1, 'clamped');
+  let last = -1;
+  for (let p = 0.8; p < 3.4; p += 0.1) { const h = rideHeat(p); assert.ok(h >= last, 'monotonic at ' + p); last = h; }
+  assert.equal(rideTarget({ tunnel: 0, speedPct: 3 }), 0, 'no ride, no ride level');
+  assert.ok(Math.abs(rideTarget({ tunnel: 0.5, speedPct: 3 }) - 0.5) < 1e-9, 'follows the envelope');
+});
+
+test('tunnel look: the rim is held from the first frame of a ride, and its full look passes every boost number', () => {
+  assert.equal(rimTarget({ speedFeel: 0, speedLines: 0, boostKind: 0, tunnel: 1 }), 1, 'a ride starting under top speed still lights');
+  assert.ok(R.washAlpha > L.washAlpha * 3 && R.maxAlpha > L.maxAlpha && R.clearBox < L.clearBox && R.cornerBias < L.cornerBias);
+});
+
+test('tunnel look: the centre stays clear at full ride; the frame takes colour', () => {
+  for (const [u, v] of [[0.5, 0.5], [0.5, 0.6], [0.5, 0.7], [0.3, 0.5], [0.7, 0.6], [0.5, 0.3]]) assert.equal(rimMask(u, v, L, 1), 0, u + ',' + v);
+  assert.ok(rimMask(1, 0.5, L, 1) > rimMask(1, 0.5) + 0.1, 'edge middles carry more than a boost');
+  assert.ok(rimMask(0.5, 0, L, 1) > rimMask(0.5, 0) + 0.1);
+  assert.ok(rimMask(0.2, 0.5, L, 1) > 0 && rimMask(0.2, 0.5) === 0, 'and reach further in');
+  assert.equal(rimMask(1, 1, L, 0), rimMask(1, 1), 'ride 0 is the boost mask exactly');
+});
+
+test('tunnel look: IN rises, OUT fades, neither pops; off and leaving the race clear it', () => {
+  const st = createRimState(), up = [];
+  for (let i = 0; i < 90; i++) up.push(st.update(riding(3), 1 / 60).ride);
+  for (let i = 1; i < up.length; i++) assert.ok(up[i] - up[i - 1] < 0.12, 'in step ' + i);
+  assert.ok(up[0] < 0.05 && up[up.length - 1] > 0.98);
+  const down = [];
+  for (let i = 0; i < 60; i++) down.push(st.update({ ...riding(1), tunnel: 0 }, 1 / 60).ride);
+  for (let i = 1; i < down.length; i++) assert.ok(down[i - 1] - down[i] < 0.1, 'out step ' + i);
+  assert.ok(down[down.length - 1] < 0.1);
+  for (let i = 0; i < 30; i++) st.update({ ...riding(3), off: true }, 1 / 60);
+  assert.ok(st.frame.ride < 0.05, 'hit cam / finish eases out');
+  st.update(riding(3), 1 / 60); st.update({ enabled: false }, 1 / 60);
+  assert.equal(st.frame.ride, 0);
+});
+
+test('tunnel look: Motion off shows nothing, Gentle caps it and slows it, photosafe lowers it, the flow stays under 3 Hz', () => {
+  const off = settled(riding(3, { motion: 'off' })).frame;
+  assert.equal(off.level, 0); assert.equal(off.ride, 0);
+  const g = settled(riding(3, { gentle: true, riseMs: 300, fadeMs: 600 })).frame;
+  assert.ok(Math.abs(g.ride - R.gentleMul) < 0.01, 'Gentle cap ' + g.ride);
+  assert.ok(Math.abs(g.level - L.gentleMul) < 0.01);
+  assert.equal(g.flowMul, L.gentleFlowMul, 'no extra flow under Gentle');
+  assert.ok(settled(riding(3, { photosafe: true })).frame.ride < 0.61);
+  const fast = settled(riding(3)).frame;
+  assert.ok(fast.flowMul > 1, 'the ride flows faster');
+  assert.ok(flowHz(fast.flowMul) < FLOW_HZ_MAX, 'still no 3 Hz flicker: ' + flowHz(fast.flowMul));
+  const st = createRimState(); const held = (st.update(riding(3), 0.3), st.frame.ride);
+  st.update(riding(3), 0); assert.equal(st.frame.ride, held, 'pause freezes it');
+});
+
+test('tunnel look: fed from the fx state and the kart state, no sim or feel number', () => {
+  const boot = src('boot.js'), rim = src('render/boostRim.js'), math = src('render/boostRimMath.js');
+  assert.match(boot, /rimView\.speedPct = P\.st\[S\.speedPct\]/);
+  assert.match(rim, /rim\.tunnel = fx\.tunnel/);
+  assert.match(rim, /u\.ride\.value = f\.ride/);
+  assert.doesNotMatch(math, /feel\.get|from '\.\.\/sim/);
 });
 
 test('boost rim: wired into the post composite and boot, screen-space only', () => {
