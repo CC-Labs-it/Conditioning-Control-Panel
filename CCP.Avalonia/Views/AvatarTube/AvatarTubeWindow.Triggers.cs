@@ -1,8 +1,12 @@
 using System;
 using System.Text.RegularExpressions;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Safety;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
@@ -13,7 +17,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private DispatcherTimer? _triggerLeadTimer;
         private string? _pendingTrigger;
         private DispatcherTimer? _triggerTypewriter;
-        private string _triggerText = "";
+        private static readonly Regex TriggerLinks = new(@"\[([^\]]+)\]\((https?://[^\)]+)\)", RegexOptions.IgnoreCase);
+        private string _triggerText = "", _triggerOriginalText = "";
         private int _triggerTextIndex;
 
         // WPF Speech.cs:1631-1671: enabled at construction, repeat at the configured
@@ -92,7 +97,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void StartTriggerTypewriter(string text)
         {
             StopTriggerTypewriter();
-            _triggerText = Regex.Replace(text, @"\[([^\]]+)\]\((https?://[^\)]+)\)", "$1", RegexOptions.IgnoreCase);
+            _triggerOriginalText = text;
+            _triggerText = TriggerLinks.Replace(text, "$1");
             _triggerTextIndex = 0;
             _txtSpeech.Text = "";
             if (_triggerText.Length == 0) return;
@@ -106,9 +112,36 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (_triggerTypewriter == null) return;
             _triggerTextIndex = Math.Min(_triggerText.Length, _triggerTextIndex + Math.Max(1, _triggerText.Length / 100));
             _txtSpeech.Text = _triggerText.Substring(0, _triggerTextIndex);
-            if (_triggerTextIndex == _triggerText.Length) StopTriggerTypewriter();
+            if (_triggerTextIndex != _triggerText.Length) return;
+            StopTriggerTypewriter();
+            RenderTriggerLinks();
         }
 
+        // WPF Speech.cs:1277-1293,1446-1455,3027-3033 restores links after typing.
+        private void RenderTriggerLinks()
+        {
+            var matches = TriggerLinks.Matches(_triggerOriginalText);
+            if (matches.Count == 0) return;
+            _txtSpeech.Text = null;
+            var inlines = _txtSpeech.Inlines!;
+            inlines.Clear(); var end = 0;
+            foreach (Match match in matches)
+            {
+                inlines.Add(new Run(_triggerOriginalText.Substring(end, match.Index - end)));
+                if (Uri.TryCreate(match.Groups[2].Value, UriKind.Absolute, out var uri))
+                {
+                    var label = new TextBlock { Text = match.Groups[1].Value, FontSize = _txtSpeech.FontSize,
+                        FontWeight = _txtSpeech.FontWeight, TextDecorations = TextDecorations.Underline,
+                        Foreground = new SolidColorBrush(Color.FromRgb(255, 176, 224)) };
+                    var link = new Button { Content = label, Padding = new Thickness(0), BorderThickness = new Thickness(0),
+                        Background = Brushes.Transparent, MinHeight = 0, MinWidth = 0, Command = CompanionLinkLauncher.CommandFor(uri.AbsoluteUri) };
+                    inlines.Add(new InlineUIContainer(link) { BaselineAlignment = BaselineAlignment.Baseline });
+                }
+                else inlines.Add(new Run(match.Groups[1].Value));
+                end = match.Index + match.Length;
+            }
+            inlines.Add(new Run(_triggerOriginalText.Substring(end)));
+        }
         private void StopTriggerTypewriter()
         {
             _triggerTypewriter?.Stop();

@@ -1276,8 +1276,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _stopSpoken();   // WPF ShowGiggle StopSpokenAudio (Speech.cs:474): every new line cuts the last
                     _stopSpoken = static () => { };
 
-                    // The chat log owns the bubble while it is up - take it back before rendering.
-                    if (_isShowingChatHistory)
+                    // WPF Speech.cs:2179-2186 keeps an open history view during a trigger.
+                    if (_isShowingChatHistory && !trigger)
                     {
                         _isShowingChatHistory = false;
                         _chatHistoryView.IsVisible = false;
@@ -1296,7 +1296,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     SyncAskButtonsFor(text);
                     if (trigger) StartTriggerTypewriter(text);
                     else _txtSpeech.Text = text;
-                    _speechBubble.MaxWidth = 380;
+                    if (!_isShowingChatHistory) _speechBubble.MaxWidth = 380;
                     ApplySpeechBubblePlacement();
                     _speechBubble.IsVisible = true;
                     _isGiggling = true;

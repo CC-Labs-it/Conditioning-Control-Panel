@@ -1,14 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Safety;
@@ -64,6 +67,58 @@ public sealed class CompanionTriggerTimerTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task TriggerWhileHistoryIsOpenKeepsHistoryAndItsWidth() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var s = CoreSettings.Current;
+        s.AvatarEnabled = true; s.AvatarMuted = false; s.TriggerModeEnabled = true;
+        s.SubAudioEnabled = true; s.SubAudioMuted = false; s.CustomTriggers = new List<string> { "Reset" };
+        var whispers = 0; var haptics = 0;
+        CoreAudio.PlayStoppableProvider = (_, _, tag, _, _) => { if (tag == "whisper") whispers++; return () => { }; };
+        var parent = new Window(); var tube = new AvatarTubeWindow(parent) { TriggerHaptic = _ => haptics++ };
+        try
+        {
+            parent.Show(); tube.Show(); tube.ShowChatHistory();
+            tube.OnTriggerTick(); tube.FinishTriggerLead();
+            var history = tube.FindControl<Grid>("ChatHistoryView")!; var bubble = tube.FindControl<Border>("SpeechBubble")!;
+            var scroller = tube.FindControl<ScrollViewer>("SpeechScroller")!;
+            Assert.Equal((true, true, false, 600d, 1, 1),
+                (history.IsVisible, bubble.IsVisible, scroller.IsVisible, bubble.MaxWidth, whispers, haptics));
+        }
+        finally { tube.Close(); parent.Close(); PanicAftermath.EndQuiet(); }
+        return Task.CompletedTask;
+    });
+    [Fact]
+    public Task TriggerLinksBecomeClickableAfterTyping() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var s = CoreSettings.Current;
+        s.AvatarEnabled = true; s.AvatarMuted = false; s.TriggerModeEnabled = true; s.SubAudioEnabled = false;
+        s.CustomTriggers = new List<string> { "Go [A](https://example.test/a) and [B](https://example.test/b)." };
+        var previous = CompanionLinkLauncher.Navigate; var navigated = new List<string>();
+        CompanionLinkLauncher.Navigate = url => { navigated.Add(url); return true; };
+        var parent = new Window(); var tube = new AvatarTubeWindow(parent) { TriggerHaptic = _ => { } };
+        try
+        {
+            parent.Show(); tube.Show(); tube.OnTriggerTick(); tube.FinishTriggerLead();
+            var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+            tube.AdvanceTriggerTypewriter(); tube.AdvanceTriggerTypewriter();
+            Assert.Equal("Go", text.Text);
+            for (var i = 0; i < 40; i++) tube.AdvanceTriggerTypewriter();
+            var links = text.Inlines!.OfType<InlineUIContainer>().Select(i => Assert.IsType<Button>(i.Child)).ToArray();
+            Assert.Equal(new[] { "Go ", " and ", "." }, text.Inlines!.OfType<Run>().Select(r => r.Text));
+            Assert.Equal(new[] { "A", "B" }, links.Select(b => Assert.IsType<TextBlock>(b.Content).Text));
+            foreach (var link in links)
+                ((global::Avalonia.Automation.Provider.IInvokeProvider)global::Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(link)).Invoke();
+            Assert.Equal(new[] { "https://example.test/a", "https://example.test/b" }, navigated);
+            tube.ShowListeningBubble("listening");
+            Assert.Equal("listening", text.Text);
+            Assert.Empty(text.Inlines!.OfType<InlineUIContainer>());
+        }
+        finally { CompanionLinkLauncher.Navigate = previous; tube.Close(); parent.Close(); PanicAftermath.EndQuiet(); }
+        return Task.CompletedTask;
+    });
     [Fact]
     public Task EnabledAtConstructionFiresTheFirstTick() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
