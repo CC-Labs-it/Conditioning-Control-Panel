@@ -16,8 +16,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// in step with <see cref="Models.AppSettings"/>. The Avalonia counterpart of
     /// <c>OverlayService</c>'s Pink region (StartPinkFilter / StopPinkFilter /
     /// UpdatePinkFilterOpacity / RefreshFilterColor), minus everything that belongs to the session
-    /// engine - the timed and sustained holds, the Deeper ramp override and the 500ms poll all
-    /// live in <c>OverlayService</c> and have nothing on this head to drive them.
+    /// engine. Voice sustained holds and session opacity are reconciled here; timed Deeper holds
+    /// and the 500ms poll are not yet ported.
     ///
     /// <para><b>Static, and not a service, deliberately.</b> There is exactly one desktop and one
     /// tint on it; an instance would need an owner, and the only candidate owner is the shell
@@ -37,7 +37,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// OverlayService, #1180). MainShellWindow.Autonomy.cs sets and releases it.</summary>
         internal static bool PulseHold;
 
+        // Headless tests exercise the same window lifecycle without an X11 display.
+        internal static bool SkipPlatformChecksForTests;
         private static bool _refused;
+        private static double? _sustainedOpacity;
+
+        // WPF OverlayService.cs:1109-1153: voice holds the tint independently of the saved flag.
+        internal static void ShowSustained(Visual host, double opacity)
+        {
+            _sustainedOpacity = Math.Clamp(opacity, 0, 1);
+            Refresh(host);
+            if (!IsShowing) _sustainedOpacity = null;
+        }
+
+        // WPF OverlayService.cs:1192: release only this hold, leaving a running base tint.
+        internal static void HideSustained(Visual host)
+        {
+            _sustainedOpacity = null;
+            Refresh(host);
+        }
+
+        // WPF SessionEngine.cs:799 updates the current opacity hold on each session tick.
+        internal static void RefreshForSession(Visual host)
+        {
+            if (_sustainedOpacity != null && CoreSettings.Current.PinkFilterEnabled
+                && App.Sessions is { IsPaused: false, PinkOpacity: double opacity })
+                _sustainedOpacity = Math.Clamp(opacity / 100.0, 0, 1);
+            Refresh(host);
+        }
 
         /// <summary>Whether a tint can actually reach the screen: X11 with click-through, a
         /// compositing manager, and no earlier refusal by <see cref="Accept"/>. Takeover picks its
@@ -55,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>The tint is on screen now.</summary>
         internal static bool IsShowing => Windows.Count > 0;
+        internal static IReadOnlyList<TintOverlayWindow> Shown => Windows;
         private static int[] _shownOn = Array.Empty<int>();
         private static Window? _hookedOwner;
 
@@ -75,7 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (!s.PinkFilterEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (_sustainedOpacity == null && (!s.PinkFilterEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -83,7 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var (r, g, b) = EffectiveColor();
-            var opacity = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;   // a session ramps it without writing it (#471)
+            var opacity = _sustainedOpacity ?? (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.
@@ -93,16 +121,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
 
-            CloseAll();
+            CloseWindows();
 
             // Checked BEFORE anything is created, not only inside Accept: without this, a slider
             // drag on a platform that cannot do click-through flashes a topmost full-screen window
             // once per tick and logs a warning each time. Accept still runs - IsAvailable being
             // true does not promise THIS window is an X11 one, nor that the compositor granted
             // transparency.
-            if (!X11Overlay.IsAvailable)
+            if (!SkipPlatformChecksForTests && !X11Overlay.IsAvailable)
             {
                 Log.Debug("Pink filter: no X11 display, so no tint on this platform");
+                _sustainedOpacity = null; // No displayed window means no hold (WPF :1153).
                 return;
             }
 
@@ -117,15 +146,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                                                 // BubbleCountWindow uses; there is no XID before Show
                 // A refusal is about the platform, not about this monitor, so drop the whole set
                 // rather than tinting some screens and not others.
-                if (!Accept(w)) { CloseAll(); return; }
+                if (!SkipPlatformChecksForTests && !Accept(w)) { CloseAll(); return; }
                 Windows.Add(w);
             }
             _shownOn = want;
+            if (Windows.Count == 0) _sustainedOpacity = null;
             QuestMinutes.Follow(Windows.Count > 0);
             Log.Debug("Pink filter showing on {Count} screen(s) at {Opacity}%", Windows.Count, s.PinkFilterOpacity);
         }
 
         public static void CloseAll()
+        {
+            _sustainedOpacity = null; // WPF OverlayService.cs:1519: stop/panic drops the hold.
+            CloseWindows();
+        }
+
+        private static void CloseWindows()
         {
             foreach (var w in Windows)
             {
