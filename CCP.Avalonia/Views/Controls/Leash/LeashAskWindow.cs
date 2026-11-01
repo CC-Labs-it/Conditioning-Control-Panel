@@ -1,7 +1,5 @@
 // WPF Controls/Leash/LeashSurfaces.cs:203-219 (ask and seen), :230-255 (replace/close), :287-310 (window and Escape).
-// ponytail: the accepted snap (LeashSnapCard), LeashFx thud/ask sound and the app-wide pop-up of a newly
-// arrived offer (LeashSurfaces.OnSnapshot/TryShowWaitingAsk) are wire-views-tab-leash-b-next; here the
-// offer row's Look opens it.
+// Missing: the accepted snap (LeashSnapCard) and LeashFx thud/ask sound.
 using System;
 using Avalonia;
 using Avalonia.Controls;
@@ -16,6 +14,7 @@ public sealed class LeashAskWindow : Window
 {
     /// <summary>The ask on screen, if any. One at a time: a second Look replaces it (WPF Open closes the overlay first).</summary>
     internal static LeashAskWindow? Current { get; private set; }
+    internal static event Action? CurrentClosed;
     internal LeashAskCard Card { get; }
     // RenderProof: a sample ask.
     internal LeashAskWindow() : this(new LeashAskCard()) { }
@@ -46,7 +45,12 @@ public sealed class LeashAskWindow : Window
         var w = new LeashAskWindow(new LeashAskCard(offer, service));
         w.Card.Answered += (_, _, _) => w.Close();
         w.Card.Dismissed += w.Close;
-        w.Closed += (_, _) => { if (ReferenceEquals(Current, w)) Current = null; };
+        w.Closed += (_, _) =>
+        {
+            if (!ReferenceEquals(Current, w)) return;
+            Current = null;
+            CurrentClosed?.Invoke();
+        };
         try
         {
             if (owner is { IsVisible: true }) w.Show(owner);
@@ -66,7 +70,6 @@ public sealed class LeashAskWindow : Window
     internal static void CloseCurrent()
     {
         var w = Current;
-        Current = null;
-        try { w?.Close(); } catch { }
+        try { w?.Close(); } catch { Current = null; }
     }
 }
