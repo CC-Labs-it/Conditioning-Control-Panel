@@ -328,4 +328,39 @@ public sealed class FlashAnimationTests
         if (bits > 0) output.Add((byte)acc);
         return output.ToArray();
     }
+    [Theory, InlineData(true), InlineData(false)]
+    public async Task BurstShowsBeforeLengthAndUsesLateOrBoundedFallback(bool reportLength)
+    {
+        await OnUi(() => { });
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var path = Path.GetTempFileName(); var clock = new Clock(); var shown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var later = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var (present, oldClock, play, duck, unduck, delay, voice, busy) = (FlashOverlay.Present, FlashOverlay.Clock, CoreAudio.PlayStoppableProvider,
+                CoreAudio.DuckProvider, CoreAudio.UnduckProvider, FlashOverlay.UnduckDelay, FlashOverlay.ShowVoice, FlashOverlay.WhisperBusyUntil);
+            Action<TimeSpan>? report = null; var releases = 0; var shows = 0;
+            try
+            {
+                FlashOverlay.Clock = clock; FlashOverlay.ShowVoice = _ => { }; FlashOverlay.Present = (_, _, _) => { if (++shows == 1) shown.TrySetResult(); else later.TrySetResult(); return true; };
+                CoreAudio.PlayStoppableProvider = (_, _, _, started, _) => { report = started; started!(TimeSpan.Zero); return () => { }; };
+                CoreAudio.DuckProvider = _ => { }; CoreAudio.UnduckProvider = _ => releases++; FlashOverlay.UnduckDelay = _ => Task.CompletedTask;
+                var picture = new Bitmap(global::Avalonia.Platform.AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/flash.png"))); var picture2 = new Bitmap(global::Avalonia.Platform.AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/flash.png")));
+                var screen = new Window().Screens.All[0]; var settings = new AppSettings { FlashAudioEnabled = true, MasterVolume = 50, AudioDuckingEnabled = true };
+                var pending = FlashOverlay.ShowBurst(new() { (new List<Bitmap> { picture }, TimeSpan.Zero, new PixelRect(10, 10, 100, 100), path, screen), (new List<Bitmap> { picture2 }, TimeSpan.Zero, new PixelRect(120, 10, 100, 100), path, screen) }, settings, FlashOverlay.Generation, null, false, path);
+                await shown.Task.WaitAsync(TimeSpan.FromSeconds(2)); var window = Assert.Single(FlashOverlay.Active).Window;
+                Assert.False(pending.IsCompleted); Assert.Equal(TimeSpan.FromSeconds(6), window.Lifetime); var born = window.ExpiresAt - 6 * TimeSpan.TicksPerSecond; clock.Advance(2000);
+                if (reportLength) report!(TimeSpan.FromSeconds(8));
+                await pending.WaitAsync(TimeSpan.FromSeconds(5)); await later.Task.WaitAsync(TimeSpan.FromSeconds(2));
+                Assert.Equal(2, FlashOverlay.Active.Count); Assert.All(FlashOverlay.Active, x => Assert.Equal(TimeSpan.FromSeconds(reportLength ? 9 : 6), x.Window.Lifetime));
+                Assert.Equal(born + (reportLength ? 9 : 6) * TimeSpan.TicksPerSecond, window.ExpiresAt);
+                Assert.Equal(1, releases);
+            }
+            finally
+            {
+                FlashOverlay.CloseAll(false); (FlashOverlay.Present, FlashOverlay.Clock, CoreAudio.PlayStoppableProvider, CoreAudio.DuckProvider,
+                    CoreAudio.UnduckProvider, FlashOverlay.UnduckDelay, FlashOverlay.ShowVoice, FlashOverlay.WhisperBusyUntil) = (present, oldClock, play, duck, unduck, delay, voice, busy);
+                File.Delete(path);
+            }
+        });
+    }
+
 }

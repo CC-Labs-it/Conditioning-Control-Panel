@@ -74,7 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private double _alpha = 1;
         private DispatcherTimer? _lifetimeTimer;
         private TimeSpan _fade;
-        private long _expiresAt;
+        private long _expiresAt, _baseExpiry;
         internal long ExpiresAt => _expiresAt;
         internal bool IsFadingOut { get; private set; }
         internal double DwellScale => (_card.RenderTransform as ScaleTransform)?.ScaleX ?? 1;
@@ -92,6 +92,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (deadline <= _expiresAt) return; // WPF: never shorten a stay-until-popped lifetime
             _expiresAt = deadline;
             ScheduleExpiry();
+        }
+        // A late sound length changes the original expiry, but cannot undo a gaze extension.
+        internal void UpdateLifetime(TimeSpan lifetime)
+        {
+            if (_lifetimeTimer == null || IsFadingOut || Exit != null || Shatter != null) return;
+            var boosted = _expiresAt > _baseExpiry ? _expiresAt : 0;
+            _baseExpiry += (long)((lifetime - Lifetime).TotalSeconds * FlashOverlay.Clock.TimestampFrequency);
+            Lifetime = lifetime; _expiresAt = Math.Max(_baseExpiry, boosted); ScheduleExpiry();
         }
         private void ScheduleExpiry()
         {
@@ -397,7 +405,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             _alpha = alpha;
             _fade = fade;
-            _expiresAt = FlashOverlay.Clock.GetTimestamp() + (long)(lifetime.TotalSeconds * FlashOverlay.Clock.TimestampFrequency);
+            _baseExpiry = _expiresAt = FlashOverlay.Clock.GetTimestamp() + (long)(lifetime.TotalSeconds * FlashOverlay.Clock.TimestampFrequency);
             Fade(0, alpha, fade);
             ScheduleExpiry();
         }

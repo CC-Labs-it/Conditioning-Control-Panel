@@ -113,6 +113,11 @@ public sealed class FlashVoiceTests
         var stops = 0; var ducks = 0;
         try
         {
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => () => { };
+            typeof(FlashOverlay).GetField("_busy", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.SetValue(null, true);
+            var silent = FlashOverlay.StartVoice(new AppSettings { FlashAudioEnabled = true, MasterVolume = 50 }, path, FlashOverlay.Generation);
+            FlashOverlay.CloseAll(false); Assert.False(FlashOverlay.IsBusy);
+            Assert.Null(await silent.WaitAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
             CoreAudio.PlayStoppableProvider = (_, _, _, onStarted, _) => { started = onStarted; return () => stops++; };
             CoreAudio.DuckProvider = _ => ducks++;
             var s = new AppSettings { FlashAudioEnabled = true, MasterVolume = 50, AudioDuckingEnabled = true };
@@ -224,5 +229,6 @@ public sealed class FlashVoiceTests
             File.Delete(path);
         }
     }
+
 
 }

@@ -57,6 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static int _generation;
         private static Action? _stopSound;
         private static TaskCompletionSource<TimeSpan?>? _voiceLength;
+        private static TaskCompletionSource<bool>? _voiceStart;
         private static bool _soundPlayingForCurrentFlash;
         private static readonly ShuffleBag<string> VoiceBag = new(p => p, Rng);
         internal static Func<TimeSpan, Task> UnduckDelay = Task.Delay;
@@ -64,7 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static TimeProvider VoiceClock = TimeProvider.System;
         internal static long WhisperBusyUntil;
         private static int _voiceAwaitingLength;
-        internal static bool IsWhisperPlaying => Volatile.Read(ref _voiceAwaitingLength) != 0 ||
+        internal static bool IsWhisperPlaying => Volatile.Read(ref _voiceAwaitingLength) > 0 ||
             VoiceClock.GetUtcNow().UtcTicks < Interlocked.Read(ref WhisperBusyUntil);
 
         /// <summary>Bumped by every CloseAll; a burst scheduled under an older one never spawns.</summary>
@@ -113,21 +114,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 DispatcherTimer.RunOnce(() => announcementDelay.TrySetResult(), TimeSpan.FromSeconds(1));
                 await announcementDelay.Task;
                 if (_closed || generation != _generation) { foreach (var f in flashes) DisposeFrames(f.Frames); return; }
-                var soundLength = await StartVoice(s, NextVoice(s), generation);
-                if (_closed || generation != _generation) { foreach (var f in flashes) DisposeFrames(f.Frames); return; }
-                var clickable = s.FlashClickable;
-                var lifetime = Lifetime(s, ambient, soundLength.HasValue ? (int)soundLength.Value.TotalMilliseconds : durationMs);
-                var cap = Cap(s, ambient);
-                var fade = TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent);
-                var alpha = Math.Clamp(s.FlashOpacity / 100.0, 0, 1);
-
-                // The announcement delay has elapsed; stagger the pictures by 300 ms.
-                Schedule(flashes, 0, StaggerMs, generation, cap, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
-                    done: () => _busy = false);
-                scheduled = true;
+                scheduled = true; await ShowBurst(flashes, s, generation, durationMs, ambient, NextVoice(s));
             }
             catch (Exception ex) { Log.Error(ex, "Flash: burst failed"); }
-            finally { if (!scheduled) _busy = false; }
+            finally { if (!scheduled && generation == _generation) _busy = false; }
+        }
+
+        // WPF ShowImages starts the first image with the sound, before staggered images.
+        // A bounded provisional lifetime is corrected for both shown and queued windows.
+        internal static async Task ShowBurst(List<(List<Bitmap> Frames, TimeSpan Delay, PixelRect Rect, string Path, Screen Screen)> flashes,
+            AppSettings s, int generation, int? durationMs, bool ambient, string? voicePath)
+        {
+            var windows = new List<FlashOverlayWindow>(); var life = Lifetime(s, ambient, durationMs); var scheduled = false;
+            void Start() { Schedule(flashes, 0, StaggerMs, generation, Cap(s, ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
+                    TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), life, s.FlashClickable,
+                    ambient, 0, () => { if (generation == _generation) _busy = false; },
+                    lifetimeNow: () => life, spawned: w => windows.Add(w)); scheduled = true; }
+            try {
+                var length = await StartVoice(s, voicePath, generation,
+                    () => { life = Lifetime(s, ambient, 5000); Start(); },
+                    duration => { life = Lifetime(s, ambient, (int)duration.TotalMilliseconds); foreach (var w in windows) w.UpdateLifetime(life); });
+                if (_closed || generation != _generation) { if (!scheduled) foreach (var f in flashes) DisposeFrames(f.Frames); return; }
+                if (!scheduled) { life = Lifetime(s, ambient, length.HasValue ? (int)length.Value.TotalMilliseconds : durationMs); Start(); }
+            } finally { if (!scheduled && generation == _generation) _busy = false; }
         }
 
         // WPF BuildVoiceLinePool / GetNextSound (FlashService.cs:4410-4465). The shared
@@ -164,12 +173,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         // WPF FlashService.cs:1535-1557, 4679-4717. Audio starts once per burst, never
         // for hydra children. Stop and panic stop playback, but must not cancel the unduck.
-        internal static async Task<TimeSpan?> StartVoice(AppSettings s, string? path, int generation)
+        internal static async Task<TimeSpan?> StartVoice(AppSettings s, string? path, int generation,
+            Action? onReady = null, Action<TimeSpan>? onLength = null)
         {
             if (!s.FlashAudioEnabled || s.MasterVolume <= 0 || s.AvatarMuted || s.CompanionVoiceLinesMuted
                 || string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
-            _stopSound?.Invoke();
-            var began = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _voiceStart?.TrySetResult(false); _voiceLength?.TrySetResult(null); _stopSound?.Invoke();
+            var began = _voiceStart = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var lengthKnown = _voiceLength = new TaskCompletionSource<TimeSpan?>(TaskCreationOptions.RunContinuationsAsynchronously);
             var master = s.MasterVolume / 100f;
             var gain = CompanionVoiceGain.ApplyLevel(Math.Max(0.05f, (float)Math.Pow(master, 1.5)) * CompanionVoiceGain.BarkTrim, s.CompanionVoiceLevel);
@@ -180,30 +190,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             bool playing;
             try { playing = await began.Task.WaitAsync(TimeSpan.FromSeconds(3)); }
             catch (TimeoutException) { _stopSound?.Invoke(); _stopSound = null; playing = false; }
-            if (generation != _generation || _closed) { _voiceLength = null; return null; }
+            if (ReferenceEquals(_voiceStart, began)) _voiceStart = null;
+            if (generation != _generation || _closed) { if (ReferenceEquals(_voiceLength, lengthKnown)) _voiceLength = null; return null; }
 
             // WPF PlaySound returns 5 seconds even on failure, then still marks the whisper,
             // shows the filename, ducks and pays sound XP (FlashService.cs:1537-1557, 4719-4726).
             var beganAt = VoiceClock.GetUtcNow();
-            Volatile.Write(ref _voiceAwaitingLength, 1);
+            Interlocked.Increment(ref _voiceAwaitingLength);
             _soundPlayingForCurrentFlash = true;
             ShowVoice(path);
             long duckGeneration = 0;
             var ducked = s.AudioDuckingEnabled;
             if (ducked) { CoreAudio.Duck(s.DuckingLevel); duckGeneration = CoreAudio.DuckGeneration; }
-            var duration = playing ? await lengthKnown.Task : null;
-            _voiceLength = null;
-            duration ??= TimeSpan.FromSeconds(5);
+            onReady?.Invoke(); TimeSpan? duration = null;
+            try { if (playing) duration = await lengthKnown.Task.WaitAsync(TimeSpan.FromSeconds(3)); } catch (TimeoutException) { }
+            if (ReferenceEquals(_voiceLength, lengthKnown)) _voiceLength = null;
+            duration ??= TimeSpan.FromSeconds(5); onLength?.Invoke(duration.Value);
             var remaining = duration.Value - (VoiceClock.GetUtcNow() - beganAt);
             if (remaining < TimeSpan.Zero) remaining = TimeSpan.Zero;
             var until = (VoiceClock.GetUtcNow() + remaining + TimeSpan.FromMilliseconds(250)).UtcTicks;
             long previous;
             do { previous = Interlocked.Read(ref WhisperBusyUntil); }
             while (until > previous && Interlocked.CompareExchange(ref WhisperBusyUntil, until, previous) != previous);
-            Volatile.Write(ref _voiceAwaitingLength, 0);
+            Interlocked.Decrement(ref _voiceAwaitingLength);
             if (ducked) _ = ReleaseVoiceDuck(remaining + TimeSpan.FromMilliseconds(1500), duckGeneration);
-            // The picture starts only once metadata is known. Subtract time already played
-            // so its +1 second lifetime still ends on WPF's original sound timeline.
+            // Return the remaining sound time for callers; ShowBurst already displayed the
+            // pictures and corrected their individual lifetimes from the full sound length.
             return generation == _generation && !_closed ? (playing ? remaining : duration.Value) : null;
         }
 
@@ -218,7 +230,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
         internal static void Schedule(List<(List<Bitmap> Frames, TimeSpan Delay, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
             int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
-            FlashMotionStyle? inheritMotion = null)
+            FlashMotionStyle? inheritMotion = null, Func<TimeSpan>? lifetimeNow = null, Action<FlashOverlayWindow>? spawned = null)
         {
             var refused = false;
             for (var i = 0; i < flashes.Count; i++)
@@ -230,7 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     try
                     {
                         if (refused || _closed || generation != _generation || Active.Count >= cap) { DisposeFrames(frames); return; }
-                        refused = !Show(frames[0], rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion, frames, delay);
+                        refused = !Show(frames[0], rect, path, screen, alpha, fade, lifetimeNow?.Invoke() ?? lifetime, clickable, ambient, hydraGeneration, inheritMotion, frames, delay); if (!refused) spawned?.Invoke(Active[^1].Window);
                     }
                     catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
                     finally { if (last) done?.Invoke(); }
@@ -467,7 +479,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             _generation++;
             _closed |= final;
-            _stopSound?.Invoke();
+            _busy = false;
+            _voiceStart?.TrySetResult(false); _stopSound?.Invoke();
             _stopSound = null;
             _voiceLength?.TrySetResult(null);
             _soundPlayingForCurrentFlash = false;
