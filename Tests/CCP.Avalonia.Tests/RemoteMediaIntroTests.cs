@@ -25,7 +25,7 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class RemoteMediaIntroTests
 {
-    private static Task Run(bool filtered, string source, Action<List<Window>> check, bool startupModal = false, bool updateModal = false, string? language = null) => AvaloniaTestDispatcher.RunAsync(() =>
+    private static Task Run(bool filtered, string source, Action<List<Window>> check, bool startupModal = false, bool updateModal = false, string? language = null, bool makeOffer = true, bool quiet = true) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -44,7 +44,7 @@ public sealed class RemoteMediaIntroTests
             StartupLadder.ResetForTests();
             FeatureIntroPopup.ResetForTests();
             HeadApp.ResetRemoteMediaOfferForTests();
-            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+            if (quiet) StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
             s.MediaSource = source;
             if (language != null) LocalizationManager.Instance.Initialize(language);
             (s.VideoMinDurationSeconds, s.VideoMaxDurationSeconds) = (filtered ? 500 : 0, 0);
@@ -72,6 +72,16 @@ public sealed class RemoteMediaIntroTests
             Assert.Empty(opened.OfType<FeatureIntroPopup>());
             message.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
+            // Empty video guidance must not advertise online video until this head can play it.
+            Assert.False(StartupLadder.Inbox.Contains("intro:remote-media"));
+            Assert.Empty(opened.OfType<FeatureIntroPopup>());
+            Assert.DoesNotContain("remotemedia", s.SeenFeatureIntros);
+            // Exercise the retained offer service separately for a future supported producer.
+            if (makeOffer && !filtered)
+            {
+                HeadApp.OfferRemoteMediaSource(owner);
+                Dispatcher.UIThread.RunJobs();
+            }
             check(opened);
         }
         finally
@@ -94,6 +104,17 @@ public sealed class RemoteMediaIntroTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task EmptyVideoGuidanceDoesNotOfferUnsupportedOnlineMedia(bool quiet) => Run(false, "local", opened =>
+    {
+        Assert.False(StartupLadder.Inbox.Contains("intro:remote-media"));
+        Assert.Empty(opened.OfType<FeatureIntroPopup>());
+        Assert.DoesNotContain("remotemedia", CoreSettings.Current.SeenFeatureIntros);
+    }, makeOffer: false, quiet: quiet);
+
+    // The offer is invoked explicitly by Run until a producer can play remote videos.
     [Fact]
     public Task EmptyLocalLibraryOffersAfterDialogAndClaimsOnlyOnOpen() => Run(false, "local", opened =>
     {

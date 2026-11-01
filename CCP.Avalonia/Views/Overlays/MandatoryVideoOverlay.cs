@@ -862,18 +862,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // Headless tests supply an owner; production resolves the desktop shell.
         internal Window? NoVideosOwnerForTests { get; set; }
 
-        /// <summary>WPF VideoService.cs:2448-2469: offer online media after the guidance closes,
-        /// except when the duration filter removed the available clips.</summary>
+        /// <summary>WPF VideoService.cs:2448-2469: show guidance when no video can be picked.
+        /// Its remote-media offer is deferred until online clips can play (WPF :7973-8005).</summary>
         private void ShowNoVideos() => Dispatcher.UIThread.Post(async () =>
         {
             var owner = NoVideosOwnerForTests ?? (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             if (owner == null) return;
             var scheduler = Scheduler;
-            var filtered = NoVideosReason.LengthFilterEmptied(scheduler.LastFunnelEnabled, scheduler.LastFunnelDuration);
             try
             {
                 await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(scheduler));
-                if (!filtered) App.OfferRemoteMediaSource(owner);
             }
             catch (Exception ex) { Log.Debug(ex, "VideoService: no-videos dialog failed"); }
         });
