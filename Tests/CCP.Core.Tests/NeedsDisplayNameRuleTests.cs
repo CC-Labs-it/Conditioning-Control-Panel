@@ -110,7 +110,7 @@ public class NeedsDisplayNameRuleTests
         "login_device_copy_code", "login_device_open_again", "login_device_waiting", "login_device_generating",
         "login_device_failed", "login_device_retrying", "login_device_lost", "login_device_expired",
         "login_device_copied", "name_ask_body", "name_ask_bad_chars", "name_ask_close_tip",
-        "account_name_not_set", "banner_signed_in_no_name",
+        "name_ask_close_later_tip", "account_name_not_set", "banner_signed_in_no_name",
     };
 
     [Fact]

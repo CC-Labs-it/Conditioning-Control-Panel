@@ -3274,6 +3274,7 @@
   "name_ask_body": "Amigos, salas y la clasificación muestran este nombre. De 3 a 20 caracteres, puedes cambiarlo después.",
   "name_ask_bad_chars": "Solo letras, números, espacios, puntos, guiones y guiones bajos.",
   "name_ask_close_tip": "Cerrar. La app volverá a preguntar en el próximo inicio.",
+  "name_ask_close_later_tip": "Cerrar. Podrás elegir tu nombre después en tu perfil.",
   "account_name_not_set": "Aún sin nombre",
   "banner_signed_in_no_name": "Sesión iniciada. Aún sin nombre para mostrar.",
   "login_error_checking_name": "Error al verificar nombre",

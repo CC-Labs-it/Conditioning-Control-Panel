@@ -4058,6 +4058,7 @@
   "name_ask_body": "好友、大厅和排行榜会显示这个名称。3 到 20 个字符，之后可以修改。",
   "name_ask_bad_chars": "只能用文字、数字、空格、句点、连字符和下划线。",
   "name_ask_close_tip": "关闭。下次启动时会再次询问。",
+  "name_ask_close_later_tip": "关闭。你可以稍后在个人资料中设置名称。",
   "account_name_not_set": "还没有名称",
   "banner_signed_in_no_name": "已登录。还没有显示名称。",
   "login_error_checking_name": "检查名称出错",

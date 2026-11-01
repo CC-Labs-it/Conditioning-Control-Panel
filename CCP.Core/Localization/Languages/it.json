@@ -4261,6 +4261,7 @@
   "name_ask_body": "Amici, lobby e classifica mostrano questo nome. Da 3 a 20 caratteri, puoi cambiarlo dopo.",
   "name_ask_bad_chars": "Solo lettere, numeri, spazi, punti, trattini e trattini bassi.",
   "name_ask_close_tip": "Chiudi. L'app lo chiede di nuovo al prossimo avvio.",
+  "name_ask_close_later_tip": "Chiudi. Potrai scegliere il nome più tardi nel tuo profilo.",
   "account_name_not_set": "Ancora nessun nome",
   "banner_signed_in_no_name": "Accesso effettuato. Nessun nome da mostrare per ora.",
   "login_error_checking_name": "Impossibile verificare il nome",

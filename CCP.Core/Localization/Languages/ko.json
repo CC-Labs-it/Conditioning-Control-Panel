@@ -3274,6 +3274,7 @@
   "name_ask_body": "친구, 로비, 리더보드에 이 이름이 보여요. 3~20자이고, 나중에 바꿀 수 있어요.",
   "name_ask_bad_chars": "문자, 숫자, 공백, 마침표, 하이픈, 밑줄만 쓸 수 있어요.",
   "name_ask_close_tip": "닫기. 다음 실행 때 다시 물어봐요.",
+  "name_ask_close_later_tip": "닫기. 이름은 나중에 프로필에서 설정할 수 있어요.",
   "account_name_not_set": "아직 이름 없음",
   "banner_signed_in_no_name": "로그인됨. 아직 표시 이름이 없어요.",
   "login_error_checking_name": "이름 확인 중 오류",

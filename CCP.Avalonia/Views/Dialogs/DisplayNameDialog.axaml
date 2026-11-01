@@ -1,8 +1,8 @@
 <!-- PORTED from ConditioningControlPanel/Dialogs/DisplayNameDialog.xaml. Deviations, all forced:
        ResizeMode="NoResize" / WindowStyle="None" -> CanResize="False" / SystemDecorations="None"
        AllowsTransparency="False"                 -> dropped (Avalonia default)
-       Height="240"                               -> 260: the star row holding the 0/20 counter
-                                                     collapsed to nothing under Linux font metrics
+       Height="240"                               -> 300: room for the prompt and inline status
+                                                     under Linux font metrics
        KeyDown="..." / Click="..."                -> wired in the constructor
        Window.Resources PinkBrush/DarkPinkBrush   -> dropped. PinkBrush re-declared the global
                                                      brush with the same colour; DarkPinkBrush was
@@ -38,7 +38,8 @@
             </Grid.RowDefinitions>
 
             <Button x:Name="BtnClose" Grid.Row="0" HorizontalAlignment="Right" IsVisible="False"
-                    Background="Transparent" AutomationProperties.Name="{loc:Str btn_close}">
+                    Background="Transparent" ToolTip.Tip="{loc:Str name_ask_close_later_tip}"
+                    AutomationProperties.Name="{loc:StrBare name_ask_close_later_tip}">
                 <fx:IconGlyph Kind="Dismiss" Size="14"/>
             </Button>
             <!-- Title -->
@@ -70,7 +71,7 @@
                      MaxLength="20"/>
 
             <TextBlock x:Name="TxtStatus" Grid.Row="4" IsVisible="False" TextWrapping="Wrap"
-                       Foreground="#FF8888" Margin="0,20,0,0" FontSize="11"/>
+                       Foreground="{StaticResource WarningBrush}" Margin="0,20,0,0" FontSize="11"/>
             <!-- Character count -->
             <TextBlock x:Name="TxtCharCount" Grid.Row="4" Text="{loc:Str label_0_20_characters}"
                        Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Margin="0,5,0,0"

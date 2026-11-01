@@ -3274,6 +3274,7 @@
   "name_ask_body": "Amigos, salas e o placar mostram este nome. De 3 a 20 caracteres, dá para mudar depois.",
   "name_ask_bad_chars": "Só letras, números, espaços, pontos, hífens e sublinhados.",
   "name_ask_close_tip": "Fechar. O app pergunta de novo na próxima abertura.",
+  "name_ask_close_later_tip": "Fechar. Escolha seu nome depois no perfil.",
   "account_name_not_set": "Ainda sem nome",
   "banner_signed_in_no_name": "Sessão iniciada. Ainda sem nome de exibição.",
   "login_error_checking_name": "Erro ao verificar nome",

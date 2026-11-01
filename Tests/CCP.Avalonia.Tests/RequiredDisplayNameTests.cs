@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Media;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
@@ -28,6 +30,26 @@ public sealed class RequiredDisplayNameTests
                 .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task Required_close_hint_and_status_colour(int check) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var dialog = new DisplayNameDialog(null, _ => Task.FromResult<string?>(null));
+        dialog.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var close = dialog.FindControl<Button>("BtnClose")!;
+            if (check == 0) Assert.Equal(Loc.Get("name_ask_close_later_tip"), ToolTip.GetTip(close));
+            else if (check == 1) Assert.Equal(Loc.Get("name_ask_close_later_tip"), AutomationProperties.GetName(close));
+            else Assert.Equal(Color.Parse("#FFB347"), ((ISolidColorBrush)dialog.FindControl<TextBlock>("TxtStatus")!.Foreground!).Color);
+        }
+        finally { dialog.Close(); }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public async Task Required_name_validates_retries_inline_and_saves_before_closing()

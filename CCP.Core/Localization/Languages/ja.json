@@ -3274,6 +3274,7 @@
   "name_ask_body": "この名前はフレンド、ロビー、リーダーボードに表示されます。3〜20文字で、あとから変更できます。",
   "name_ask_bad_chars": "文字、数字、スペース、ピリオド、ハイフン、アンダースコアのみ使えます。",
   "name_ask_close_tip": "閉じる。次回の起動時にもう一度表示されます。",
+  "name_ask_close_later_tip": "閉じる。名前は後でプロフィールから設定できます。",
   "account_name_not_set": "名前はまだありません",
   "banner_signed_in_no_name": "サインイン済み。表示名はまだありません。",
   "login_error_checking_name": "名前の確認中にエラー",

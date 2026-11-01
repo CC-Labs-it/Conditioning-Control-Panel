@@ -4439,6 +4439,7 @@
   "name_ask_body": "Friends, lobbies and the leaderboard show this name. 3 to 20 characters, and you can change it later.",
   "name_ask_bad_chars": "Letters, numbers, spaces, dots, hyphens and underscores only.",
   "name_ask_close_tip": "Close. The app asks again next launch.",
+  "name_ask_close_later_tip": "Close. Set your name later in your profile.",
   "account_name_not_set": "No name yet",
   "banner_signed_in_no_name": "Signed in. No display name yet.",
   "login_error_checking_name": "Error checking name",
