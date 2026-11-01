@@ -18,6 +18,7 @@ public partial class EmiDeskWindow
     private int _presentationEpoch;
     internal void BeginPresentation(Action stop)
     {
+        _summonEpoch++;
         _beforePresentation = Position;
         PresentationActive = true; _presentationEpoch++; _presentationFace = _presentationPose = null;
         _stopPresentation = stop;
@@ -57,6 +58,7 @@ public partial class EmiDeskWindow
     internal void EndPresentation()
     {
         if (!PresentationActive) return;
+        _summonEpoch++;
         PresentationActive = PresentationArriving = false; _presentationEpoch++; _stopPresentation = null;
         try { FinishSummon(); CancelChain(); SweepFx(all: true); }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] presentation teardown step failed"); }
