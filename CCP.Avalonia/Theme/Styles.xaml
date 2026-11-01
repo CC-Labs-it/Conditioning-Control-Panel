@@ -307,12 +307,9 @@
              that an animation setter targeting ScaleTransform.ScaleX compiles and then throws
              InvalidCastException.
 
-         Storyboard EnterActions/ExitActions  ->  Transitions (the knob slide, the track fade and
-             the spark's growth) plus one keyframe Animation (the spark's opacity decay, which is
-             a one-shot and runs when :checked starts matching, exactly like the WPF
-             EnterActions storyboard). A Transition is inherently two-way, which is what the first
-             three want. RenderTransform HAS to be a transition rather than a keyframe: Avalonia
-             registers no keyframe animator for it - see the note on the spark below.
+         Storyboard EnterActions/ExitActions  ->  Transitions for knob, track and spark growth,
+             plus a keyframe Animation for spark opacity. RenderTransform uses a transition because
+             Avalonia registers no keyframe animator for it.
 
          BackEase Amplitude="0.6" / "0.35"    ->  BackEaseOut. Avalonia's easings take no
              amplitude, so the overshoot is whatever BackEaseOut gives. The 43.4-of-44 sum in the
@@ -322,8 +319,8 @@
              0.30 out on the knob and 0.28 both ways on the track; a Transition has a single
              duration, so the knob keeps the 0.34 enter value.
 
-         Spark opacity uses ToggleSpark to snapshot the visible value when unchecked and
-             replace the ON decay with WPF's 80ms exit fade (Controls.xaml:272-277,308-314). -->
+         ToggleSpark owns the spark opacity and growth: OFF replaces only opacity, while
+             every ON restarts growth from 0.4 (Controls.xaml:272-290,295-314). -->
   <ControlTheme x:Key="ToggleStyle" TargetType="CheckBox">
     <Setter Property="Template">
       <ControlTemplate TargetType="CheckBox">
@@ -385,15 +382,6 @@
     <Style Selector="^:checked /template/ Border#thumb">
       <Setter Property="RenderTransform" Value="translateX(22px)"/>
     </Style>
-    <Style Selector="^:checked /template/ Ellipse#spark">
-      <!-- The 0.4 -> 3 growth is a Setter + the transition above, NOT a keyframe: Avalonia ships
-           no keyframe animator for RenderTransform, and an <Animation> touching it dies at
-           TEMPLATE APPLY time with "No animator registered for the property RenderTransform" -
-           i.e. the toggle takes the whole window down before it ever draws. Found by rendering.
-           ToggleSpark owns the opacity keyframes and snapshots the current value on exit. -->
-      <Setter Property="RenderTransform" Value="scale(3)"/>
-    </Style>
-
     <!-- A locked toggle used to be pixel-identical to a live one (users read the two as "a bit
          lost graphically"), because nothing here reacted to IsEnabled. Dim the whole template
          root rather than the individual parts: trackOn's Opacity is driven by the :checked state

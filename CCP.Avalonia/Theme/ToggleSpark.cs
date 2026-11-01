@@ -3,6 +3,7 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls.Shapes;
+using Avalonia.Media.Transformation;
 using Avalonia.Styling;
 
 namespace ConditioningControlPanel.Avalonia.Theme;
@@ -28,6 +29,16 @@ public sealed class ToggleSpark : AvaloniaObject
         var run = new CancellationTokenSource();
         target.SetValue(RunProperty, run);
         bool on = GetIsOn(target) == true;
+        if (on)
+        {
+            // WPF always starts this independent clock at 0.4, even on a quick re-check.
+            // Temporarily remove the transition so resetting it does not animate backwards.
+            var transitions = target.Transitions;
+            target.Transitions = null;
+            target.RenderTransform = TransformOperations.Parse("scale(0.4)");
+            target.Transitions = transitions;
+            target.RenderTransform = TransformOperations.Parse("scale(3)");
+        }
         var animation = new Animation { Duration = TimeSpan.FromMilliseconds(on ? 450 : 80) };
         animation.Children.Add(Frame(0, on ? 0 : visible));
         if (on) animation.Children.Add(Frame(60.0 / 450, 0.9));
