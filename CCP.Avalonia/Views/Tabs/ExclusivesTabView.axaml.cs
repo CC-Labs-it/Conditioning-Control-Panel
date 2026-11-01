@@ -55,7 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             // PLAYBOOK P01: the shell hides tabs with IsVisible, so the motion clock follows it too.
-            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty || e.Property.Name == "IsEffectivelyVisible") UpdateMotion(); };
+            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) UpdateMotion(); };
             // Main bf57cecdf: columns follow the width, cards stretch to fill the row (Core ExclusiveShelfFit).
             this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, e) => { if (e.WidthChanged) FitShelf(); };
         }
@@ -104,8 +104,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void SetPlansActive(bool active)
         {
             _plansActive = active;
-            if (active) { RefreshVault(); StartAmbient(); }
-            else _ambientFx.Stop();
+            if (active) { RefreshVault(); _ambientFx.Resume(); }
+            else _ambientFx.Pause();
             UpdateMotion();
         }
 
@@ -134,7 +134,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged += UpdateMotion;
-            if (!PlansMode || _plansActive) StartAmbient();
+            StartAmbient();
+            if (PlansMode && !_plansActive) _ambientFx.Pause();
             UpdateMotion();
         }
 

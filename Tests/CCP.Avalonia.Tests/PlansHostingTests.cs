@@ -36,6 +36,10 @@ public sealed class PlansHostingTests
         Setup();
         var account = new AccountSettingsSection();
         var plans = account.PlansView;
+        var tier = account.FindControl<Border>("AccountTierCard")!;
+        var cards = ((StackPanel)tier.Parent!).Children;
+        Assert.True(cards.IndexOf(tier) < cards.IndexOf(plans));
+        Assert.True(cards.IndexOf(plans) < cards.IndexOf(account.FindControl<Border>("PatreonLoginCard")!));
         Assert.True(plans.PlansMode);
         Assert.False(plans.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible);
         Assert.Empty(plans.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource!.Cast<object>());
@@ -72,6 +76,40 @@ public sealed class PlansHostingTests
             Assert.Equal(Loc.Get("premium_page_sub"), full.FindControl<TextBlock>("TxtVaultSub")!.Text);
         }
         finally { LocalizationManager.Instance.SetLanguage(language); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PlansAmbientSurvivesBeforeAndAfterVisitingAccount(bool visitAccount) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = false;
+        var shell = new MainShellWindow { Width = 1400, Height = 900 };
+        try
+        {
+            shell.Show();
+            shell.Activate();
+            Dispatcher.UIThread.RunJobs();
+            if (visitAccount) shell.OpenAppSettingsSection("account");
+            shell.OpenAppSettingsSection("emidesk");
+            Dispatcher.UIThread.RunJobs();
+            var plans = shell.PlansVaultView!;
+            var fx = plans.FindControl<AmbientFxCanvas>("ExclusivesAmbientFx")!;
+            Assert.NotEqual(AmbientFxLayers.None, fx.Layers);
+            Assert.False(plans.MotionRunning);
+            Assert.False(fx.IsRunning);
+            // A paused scene resumes without being rebuilt. Stop would discard that state.
+            fx.Resume();
+            Assert.True(fx.IsRunning);
+            fx.Pause();
+            shell.OpenAppSettingsSection("account");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(fx.IsRunning);
+        }
+        finally { shell.Close(); }
         return Task.CompletedTask;
     });
 

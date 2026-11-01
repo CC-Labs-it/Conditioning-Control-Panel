@@ -21,8 +21,6 @@
 
         <TextBlock Text="{loc:Str set2_section_account}" Theme="{StaticResource SectionHeader}"/>
 
-        <tabs:ExclusivesTabView x:Name="HostedPlansView" PlansMode="True" Margin="0,0,0,12"/>
-
         <!-- Net-new: who you are, and which bar you clear. Painted by RefreshTierBadge(). -->
         <Border x:Name="AccountTierCard" CornerRadius="12" Padding="0" Margin="0,0,0,12"
                 Background="{DynamicResource ElevatedSurfaceBrush}"
@@ -62,6 +60,8 @@
                 </Grid>
             </Grid>
         </Border>
+
+        <tabs:ExclusivesTabView x:Name="HostedPlansView" PlansMode="True" Margin="0,0,0,12"/>
 
         <!-- Brand card: keeps Patreon red, takes the shared edge-bar pattern in that colour. -->
         <Border x:Name="PatreonLoginCard" CornerRadius="12" Padding="0" Margin="0,0,0,12"

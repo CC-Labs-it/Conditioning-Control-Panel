@@ -70,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             SectionChecked += SyncPlansMotion;
             PropertyChanged += (_, e) =>
             {
-                if (e.Property == IsVisibleProperty || e.Property.Name == "IsEffectivelyVisible") SyncPlansMotion();
+                if (e.Property == IsVisibleProperty) SyncPlansMotion();
             };
             AttachedToVisualTree += (_, _) =>
             {
