@@ -1176,6 +1176,34 @@ namespace ConditioningControlPanel.Avalonia
             catch (Exception ex) { Serilog.Log.Error(ex, "Failed to show achievement popup for: {Name}", a.Name); }
         }
 
+        // WPF App.xaml.cs:891-940: one empty-library offer per launch, claimed only when opened.
+        private static int _remoteMediaOfferClaimed;
+
+        internal static void OfferRemoteMediaSource(global::Avalonia.Controls.Window owner)
+        {
+            try
+            {
+                if (!string.Equals(CoreSettings.Current.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return;
+                // WPF parks this during startup; this video path can retry on a later launch.
+                if (Platform.AppUpdater.IsUpdateDialogActive || Views.Windows.MainShellWindow.IsStartupDialogShowing) return;
+                Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "intro:remote-media",
+                    Glyph = "🌐",
+                    Title = "Media without the download",
+                    Summary = "Your folders are empty - she can stream from the online pool instead.",
+                    Open = () =>
+                    {
+                        if (Interlocked.CompareExchange(ref _remoteMediaOfferClaimed, 1, 0) != 0) return;
+                        Views.Windows.FeatureIntroPopup.ShowIfFirstTime("remotemedia", owner);
+                    },
+                });
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Remote media offer failed"); }
+        }
+
+        internal static void ResetRemoteMediaOfferForTests() => _remoteMediaOfferClaimed = 0;
+
         private string ResolveEffectiveAssetsPath()
         {
             var customPath = Settings?.Current.CustomAssetsPath;

@@ -37,7 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// are paused by the Core scheduler.
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
-    /// attention input, no-activate z-order, and the remote-media offer after the "no videos" dialog.
+    /// attention input and no-activate z-order.
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
@@ -859,12 +859,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }, TimeSpan.FromMilliseconds(ms));
         });
 
-        /// <summary>WPF's guidance dialog when the library is empty (once per launch).</summary>
-        private void ShowNoVideos() => Dispatcher.UIThread.Post(() =>
+        // Headless tests supply an owner; production resolves the desktop shell.
+        internal Window? NoVideosOwnerForTests { get; set; }
+
+        /// <summary>WPF VideoService.cs:2448-2469: offer online media after the guidance closes,
+        /// except when the duration filter removed the available clips.</summary>
+        private void ShowNoVideos() => Dispatcher.UIThread.Post(async () =>
         {
-            var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+            var owner = NoVideosOwnerForTests ?? (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             if (owner == null) return;
-            _ = Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(Scheduler));
+            var scheduler = Scheduler;
+            var filtered = NoVideosReason.LengthFilterEmptied(scheduler.LastFunnelEnabled, scheduler.LastFunnelDuration);
+            try
+            {
+                await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(scheduler));
+                if (!filtered) App.OfferRemoteMediaSource(owner);
+            }
+            catch (Exception ex) { Log.Debug(ex, "VideoService: no-videos dialog failed"); }
         });
 
         /// <summary>WPF TriggerVideo's guidance text: #1352 names the length filter when it emptied a
