@@ -400,6 +400,123 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
+    [Theory]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, false)]
+    public Task RunningLegacyWithoutClipDucksAndReleases(bool requested, bool enabled, bool missingPath) => RunAsync(async (engine, s, played) =>
+    {
+        var trigger = s.KeywordTriggers[0];
+        var file = ((PlayAudioAction)trigger.Actions[0]).FilePath!;
+        trigger.Actions.Clear();
+        trigger.AudioFilePath = missingPath ? file + ".missing" : null;
+        trigger.DuckAudio = requested;
+        var old = (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
+            s.AudioDuckingEnabled, s.DuckingLevel);
+        var release = new TaskCompletionSource();
+        var unducked = new TaskCompletionSource<long>();
+        var delays = new List<int>();
+        var ducks = new List<int>();
+        try
+        {
+            s.AudioDuckingEnabled = enabled;
+            s.DuckingLevel = 67;
+            CoreAudio.DuckProvider = level => ducks.Add(level);
+            CoreAudio.DuckGenerationProvider = () => 42;
+            CoreAudio.UnduckProvider = generation => unducked.TrySetResult(generation);
+            engine.Delay = (ms, token) => { Assert.Equal(System.Threading.CancellationToken.None, token); delays.Add(ms); return release.Task; };
+            Type(engine, "sit");
+            Assert.Empty(played);
+            Assert.Equal(engine.Now(), trigger.LastTriggeredAt);
+            Assert.Equal(requested && enabled ? new[] { 67 } : Array.Empty<int>(), ducks);
+            Assert.Equal(requested ? new[] { 500 } : Array.Empty<int>(), delays);
+            Assert.False(unducked.Task.IsCompleted);
+            engine.StopAudio();
+            Assert.False(unducked.Task.IsCompleted);
+            if (requested)
+            {
+                release.SetResult();
+                Assert.Equal(enabled ? 42 : -1, await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            }
+        }
+        finally
+        {
+            release.TrySetResult();
+            if (delays.Count > 0 && !unducked.Task.IsCompleted)
+                try { await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5)); } catch (TimeoutException) { }
+            (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
+                s.AudioDuckingEnabled, s.DuckingLevel) = old;
+        }
+    });
+
+    [Fact]
+    public void LegacyUsesTheStoredPathWhileActionsResolveResources() => Run((engine, s, played) =>
+    {
+        var name = "keyword-" + Guid.NewGuid().ToString("N") + ".wav";
+        var raw = Path.Combine(Environment.CurrentDirectory, name);
+        var resourceDir = Path.Combine(AppContext.BaseDirectory, "Resources");
+        var resource = Path.Combine(resourceDir, name);
+        var trigger = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)trigger.Actions[0];
+        var now = engine.Now();
+        engine.Now = () => now;
+        s.AwarenessLoopProtectionEnabled = false;
+        try
+        {
+            Directory.CreateDirectory(resourceDir);
+            File.WriteAllText(resource, "resource");
+            audio.FilePath = name;
+            trigger.AudioFilePath = name;
+            trigger.DuckAudio = false;
+            trigger.Actions.Clear();
+            File.WriteAllText(raw, "raw");
+            Type(engine, "sit");
+            Assert.Equal(name, Assert.Single(played).Path);
+            engine.StopAudio();
+            played.Clear();
+            File.Delete(raw);
+            now = now.AddSeconds(2);
+            Type(engine, "sit"); // A resource with that name is not the stored legacy path.
+            Assert.Empty(played);
+            trigger.Actions.Add(audio);
+            now = now.AddSeconds(2);
+            Type(engine, "sit");
+            Assert.Equal(resource, Assert.Single(played).Path);
+        }
+        finally { File.Delete(raw); File.Delete(resource); }
+    });
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void HighlightOnlyReturnsEarlyOnlyForLegacy(bool running, bool actions) => Run((engine, s, played) =>
+    {
+        var trigger = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)trigger.Actions[0];
+        trigger.VisualEffect = KeywordVisualEffect.HighlightOnly;
+        trigger.AudioFilePath = audio.FilePath;
+        trigger.DuckAudio = true;
+        if (!actions) trigger.Actions.Clear();
+        CoreSession.IsEngineRunningProvider = () => running;
+        CoreSession.IsSessionRunningProvider = () => false;
+        var oldDuck = CoreAudio.DuckProvider;
+        var oldEnabled = s.AudioDuckingEnabled;
+        var ducks = 0;
+        try
+        {
+            s.AudioDuckingEnabled = true;
+            CoreAudio.DuckProvider = _ => ducks++;
+            Type(engine, "sit");
+            Assert.Equal(actions && running ? 1 : 0, played.Count);
+            Assert.Equal(0, ducks);
+            Assert.Equal(engine.Now(), trigger.LastTriggeredAt);
+        }
+        finally { CoreAudio.DuckProvider = oldDuck; s.AudioDuckingEnabled = oldEnabled; }
+    });
+
     [Fact]
     public void SavedOnSwitchArmsTheRuntimeWhenTheShellStarts() => Run((_, s, _) =>
     {
