@@ -8,8 +8,7 @@ using ConditioningControlPanel.Models;
 namespace ConditioningControlPanel.Avalonia.Platform;
 // WPF Services/LockCard/BrainDrainService.cs:138-149,155-207,210-290,297-309,325-411.
 // Reuses the head's stoppable LibVLC voice. No decoder work runs on the UI thread.
-internal sealed class BrainDrainPlayer
-{
+internal sealed class BrainDrainPlayer {
     internal static BrainDrainPlayer? Instance;
     private readonly Func<string, double, bool, Action, MindWipePlayer.IVoice?> _create;
     private readonly TimeProvider _time;
@@ -23,6 +22,7 @@ internal sealed class BrainDrainPlayer
     private bool _running, _building;
     private int _generation;
     private AppSettings? _settings;
+    private ConditioningControlPanel.Services.SettingsService? _service;
     internal bool IsRunning { get { lock (_gate) return _running; } }
     internal int ClipCount { get { lock (_gate) return _clips.Length; } }
     internal static string Folder => Path.Combine(CorePaths.EffectiveAssets, "braindrain");
@@ -30,33 +30,38 @@ internal sealed class BrainDrainPlayer
     internal static string EnsureFolder() { Directory.CreateDirectory(Folder); return Folder; }
     internal BrainDrainPlayer(Func<string, double, bool, Action, MindWipePlayer.IVoice?> create,
         TimeProvider? time = null, Func<double>? roll = null) {
-        _create = create; _time = time ?? TimeProvider.System; _roll = roll ?? _random.NextDouble;
-    }
+        _create = create; _time = time ?? TimeProvider.System; _roll = roll ?? _random.NextDouble; }
     internal void Seed() {
         Instance = this;
         CoreEngine.StartBrainDrain = Start;
-        CoreEngine.StopBrainDrain = Stop;
-    }
+        CoreEngine.StopBrainDrain = Stop; }
     private static IEnumerable<string> Clips(string folder) {
         try { return Directory.GetFiles(folder).Where(p => new[] { ".mp3", ".wav", ".ogg" }
             .Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase)).ToArray(); }
-        catch { return []; }
-    }
+        catch { return []; } }
     internal void Reload() {
         try { EnsureFolder(); } catch { }
         var files = Clips(Folder).Concat(Clips(LegacyFolder))
             .DistinctBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase).ToArray();
-        lock (_gate) _clips = files;
-    }
+        lock (_gate) _clips = files; }
     internal void Start() {
         lock (_gate) {
             if (_running || !CoreSettings.Current.BrainDrainEnabled) return;
-            Reload(); _settings = CoreSettings.Current;
-            _settings.PropertyChanged += SettingsChanged;
-            _running = true;
+            Reload(); _running = true;
+            _service = CoreSettings.Service;
+            if (_service != null) _service.CurrentReplaced += RebindSettings;
+            RebindSettings();
             _interval = TimeSpan.FromMilliseconds(CoreSettings.Current.BrainDrainHighRefresh ? 500 : 5000);
             _timer = _time.CreateTimer(_ => Tick(), null, _interval, _interval);
             App.DiscordRpc?.SetBrainDrainActivity(); // WPF BrainDrainService.cs:240
+        }
+    }
+    private void RebindSettings() {
+        lock (_gate) {
+            if (!_running) return;
+            if (_settings != null) _settings.PropertyChanged -= SettingsChanged;
+            _settings = CoreSettings.Current; _settings.PropertyChanged += SettingsChanged;
+            if (_voice != null) _voice.Volume = Volume; // WPF MainWindow.UiUpdates.cs:1007
         }
     }
     private static double Volume => Math.Clamp(CoreSettings.Current.MasterVolume, 0, 100) / 100.0
@@ -78,7 +83,8 @@ internal sealed class BrainDrainPlayer
             timer = _timer; _timer = null;
             if (_settings != null) _settings.PropertyChanged -= SettingsChanged;
             _settings = null;
-        }
+            if (_service != null) _service.CurrentReplaced -= RebindSettings;
+            _service = null; }
         timer?.Dispose();
         voice?.Dispose();
         if (wasRunning) App.DiscordRpc?.SetIdleActivity(); // WPF BrainDrainService.cs:250-270, audio first
@@ -91,31 +97,24 @@ internal sealed class BrainDrainPlayer
                 / (60 / _interval.TotalSeconds); // WPF BrainDrainService.cs:285
             if (_roll() >= probability) return;
             path = _clips[_random.Next(_clips.Length)];
-            generation = _generation; _building = true;
-        }
+            generation = _generation; _building = true; }
         MindWipePlayer.IVoice? voice = null;
         bool ended = false, published = false;
-        try
-        {
-            voice = _create(path, Volume, false, () =>
-            {
+        try {
+            voice = _create(path, Volume, false, () => {
                 lock (_gate) {
                     ended = true;
-                    if (ReferenceEquals(_voice, voice)) _voice = null;
-                }
+                    if (ReferenceEquals(_voice, voice)) _voice = null; }
             });
             lock (_gate) {
                 // WPF BrainDrainService.cs:383-397: Stop and the actual start share this lock.
-                if (_running && generation == _generation && !ended && voice != null)
-                {
+                if (_running && generation == _generation && !ended && voice != null) {
                     voice.Volume = Volume;
-                    if (voice.Play() && !ended) { _voice = voice; published = true; }
-                }
+                    if (voice.Play() && !ended) { _voice = voice; published = true; } }
             }
         }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Brain Drain playback failed"); }
-        finally
-        {
+        finally {
             lock (_gate) _building = false;
             if (!published) voice?.Dispose(); // A stop during decoder creation cannot publish a late voice.
         }
