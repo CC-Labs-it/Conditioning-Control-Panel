@@ -103,7 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         // WPF GlassroadHostService.cs:187-192: a counter snapshot lifts owned garage karts.
         private void OnGlassroadOwnershipChanged()
         {
-            void Send() { if (_grOpen && !_closing) Post(GlassroadHostRules.OwnedFrame(PrizeOwnership.Grants())); }
+            void Send() { if (_grOpen && !_closing) Post(GlassroadHostRules.OwnedFrame(PrizeOwnership.Grants() ?? Array.Empty<string>())); }
             if (Dispatcher.UIThread.CheckAccess()) Send();
             else Dispatcher.UIThread.Post(Send);
         }

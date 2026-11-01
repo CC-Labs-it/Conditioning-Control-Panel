@@ -34,6 +34,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             bool gentleOn, double gentleFadeSeconds, double gentleSpeed, IEnumerable<string>? grants = null)
         {
             bool signedIn = !string.IsNullOrWhiteSpace(unifiedId);
+            JObject? identity = signedIn ? new JObject
+            {
+                ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
+                ["displayName"] = string.IsNullOrWhiteSpace(displayName) ? "Player" : displayName,
+            } : null;
+            if (identity != null && grants != null) identity["grants"] = KartGrants(grants);
             return new JObject
             {
                 ["type"] = "init",
@@ -46,14 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
                     ["friendInvite"] = true, // WPF GlassroadRules.cs:42-43
                 },
-                ["identity"] = signedIn
-                    ? new JObject
-                    {
-                        ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
-                        ["displayName"] = string.IsNullOrWhiteSpace(displayName) ? "Player" : displayName,
-                        ["grants"] = KartGrants(grants),
-                    }
-                    : JValue.CreateNull(),
+                ["identity"] = (JToken?)identity ?? JValue.CreateNull(),
             };
         }
 

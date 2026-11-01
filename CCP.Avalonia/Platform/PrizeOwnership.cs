@@ -33,6 +33,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static event Action? Changed;
 
+        static PrizeOwnership() => CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
+
         private static readonly object Gate = new();
         private static string? _heldAccount;
         private static long _revision;
@@ -47,11 +49,22 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>WPF OwnershipService.Grants: current account server grants, without debug overrides.</summary>
-        internal static string[] Grants()
+        internal static string[]? Grants()
         {
-            var current = FriendsHead.Identity()?.UnifiedId;
-            lock (Gate) return current != null && current == CoreAccount.UnifiedUserId && current == _heldAccount
-                ? _grants.ToArray() : Array.Empty<string>();
+            lock (Gate) return _heldAccount != null && _heldAccount == CoreAccount.UnifiedUserId
+                ? _grants.ToArray() : null; // unknown is not an authoritative empty snapshot
+        }
+
+        // WPF ProfileSyncService.cs:660,697 clears ownership on logout and account change.
+        private static void OnIdentityChanged(object? sender, EventArgs e)
+        {
+            lock (Gate) (_heldAccount, _revision, _grants) = (null, 0, new(StringComparer.Ordinal));
+            NotifyChanged(); // the page may have remembered grants even without a host snapshot
+        }
+
+        private static void NotifyChanged()
+        {
+            try { Changed?.Invoke(); } catch (Exception ex) { Serilog.Log.Debug("[Prizes] change handler failed: {Error}", ex.Message); }
         }
 
         /// <summary>WPF OwnershipService.ApplySnapshot: another account's snapshot and a lower
@@ -65,11 +78,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 if (_heldAccount == accountId && revision < _revision) return;
                 var next = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
-                changed = _heldAccount != accountId ? next.Count != 0 : !_grants.SetEquals(next);
+                changed = _heldAccount != accountId || !_grants.SetEquals(next);
                 (_heldAccount, _revision, _grants) = (accountId, revision, next);
             }
-            if (changed)
-                try { Changed?.Invoke(); } catch (Exception ex) { Serilog.Log.Debug("[Prizes] change handler failed: {Error}", ex.Message); }
+            if (changed) NotifyChanged();
         }
 
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
