@@ -262,6 +262,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _leashSnoozeUntilUtc = DateTime.UtcNow + LeashUiRules.PanicSnooze;
             HideLeashGate();
+            WelcomeShow.FirstShowService.Stop(); // WPF MainWindow.Leash.cs:302-307 -> MainWindow.xaml.cs:1614-1620
+            EmiDesk.EmiDeskService.Instance.FireHold("panicPressed");
             PanicSurfaces.StopAll("leash gate", this);
         }
 

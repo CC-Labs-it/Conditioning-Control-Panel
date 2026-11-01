@@ -11,6 +11,9 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
+using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Leash;
@@ -39,10 +42,7 @@ public sealed class LeashGateCardTests
 
     internal static void Run(bool punished, Action<MainShellWindow, LauncherWindow, LeashService> body) => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         var s = CoreSettings.Current;
@@ -130,6 +130,43 @@ public sealed class LeashGateCardTests
             Assert.True(shell.LeashGate.IsUp);
         }
         finally { PanicSurfaces.All = oldSurfaces; s.PanicKeyEnabled = oldKey; }
+    });
+
+    // WPF MainWindow.Leash.cs:302-307 -> MainWindow.xaml.cs:1602-1620.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PanicButtonArmsEmiHoldEvenWhenTheKeyIsDisabled(bool show) => Run(punished: true, (shell, launcher, _) =>
+    {
+        var engine = EmiLineEngine.Instance;
+        var oldSurfaces = PanicSurfaces.All;
+        try
+        {
+            CoreSettings.Current.PanicKeyEnabled = false;
+            CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+            CoreSettings.Current.MasterVolume = 0;
+            FirstShowService.RequireClickThrough = false;
+            PressTile(launcher);
+            if (show)
+            {
+                Assert.True(FirstShowService.Open(shell));
+                Assert.True(EmiDeskService.Instance.Window!.PresentationActive);
+            }
+            Assert.False(engine.HoldActive);
+            bool heldAtStop = false;
+            PanicSurfaces.All = new[] { new PanicSurfaces.Surface("probe", _ => heldAtStop = engine.HoldActive) };
+            Click(Find(shell, "leash-gate-panic"));
+            Assert.False(FirstShowService.IsActive);
+            Assert.False(shell.LeashGate!.IsUp);
+            Assert.True(heldAtStop);
+            Assert.True(engine.HoldActive);
+        }
+        finally
+        {
+            PanicSurfaces.All = oldSurfaces;
+            FirstShowService.Stop(); FirstShowService.RequireClickThrough = true;
+            EmiDeskService.Instance.Window?.ShutDown(); engine.ResetForTests();
+        }
     });
 
     [Fact]

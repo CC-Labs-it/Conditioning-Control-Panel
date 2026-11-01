@@ -8,6 +8,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 using ConditioningControlPanel.Services.EmiDesk;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -16,13 +17,7 @@ namespace CCP.Avalonia.Tests;
 
 public class EmiDeskSafetyHoldTests
 {
-    private static void Setup()
-    {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-    }
+    private static void Setup() => AmbientBeatLoopsTests.Setup();
 
     private static async Task SettleSummon(EmiDeskWindow desk)
     {
@@ -146,6 +141,41 @@ public class EmiDeskSafetyHoldTests
             Assert.False(engine.HoldActive);
         }
         finally { svc.Window?.ShutDown(); engine.ResetForTests(); }
+    });
+
+    // WPF MainWindow.xaml.cs:1613-1620 stops the show before arming the five-minute hold.
+    [Fact]
+    public Task PanicKeyStopsTheWelcomeShowBeforeArmingTheHold() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var engine = EmiLineEngine.Instance;
+        var shell = new MainShellWindow();
+        var surfaces = PanicSurfaces.All;
+        try
+        {
+            CoreSettings.Current.PanicKeyEnabled = true;
+            CoreSettings.Current.PanicKey = "F8";
+            CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+            CoreSettings.Current.MasterVolume = 0;
+            FirstShowService.RequireClickThrough = false;
+            shell.Show();
+            Assert.True(FirstShowService.Open(shell));
+            Assert.True(EmiDeskService.Instance.Window!.PresentationActive);
+            Assert.False(engine.HoldActive);
+            // No later stop-pass cleanup can mask a missing early stop.
+            PanicSurfaces.All = Array.Empty<PanicSurfaces.Surface>();
+            shell.HandlePanicKeyPress(DateTime.Now);
+            Assert.False(FirstShowService.IsActive);
+            Assert.False(EmiDeskService.Instance.Window!.PresentationActive);
+            Assert.True(engine.HoldActive);
+        }
+        finally
+        {
+            PanicSurfaces.All = surfaces;
+            FirstShowService.Stop(); FirstShowService.RequireClickThrough = true;
+            EmiDeskService.Instance.Window?.ShutDown(); shell.Close(); engine.ResetForTests();
+        }
+        return Task.CompletedTask;
     });
 
     // WPF MainWindow.xaml.cs:1617-1620 and MainWindow.RemoteControl.cs:1475-1479: both panic routes arm five minutes.

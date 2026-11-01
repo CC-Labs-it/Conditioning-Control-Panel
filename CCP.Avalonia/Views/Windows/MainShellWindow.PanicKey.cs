@@ -79,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.
             if (TryGamePauseOnEscape(now)) return;
+            WelcomeShow.FirstShowService.Stop(); // WPF MainWindow.xaml.cs:1613-1620, before the EMI hold
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
             EmiDesk.EmiDeskService.Instance.FireHold("panicPressed"); // WPF MainWindow.xaml.cs:1617-1620
