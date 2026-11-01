@@ -41,7 +41,7 @@ public sealed class EngineAudioLifecycleTests
             var oldAudio = LibVlcAudio.Instance;
             var oldHook = CoreEngine.StoppedHook;
             var opened = new List<Player>();
-            var layers = LayeredAudio.Instance = new LayeredAudio(_ => { var p = new Player(); opened.Add(p); return p; });
+            var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => { var p = new Player(); opened.Add(p); return p; });
             var audio = LibVlcAudio.Instance = new LibVlcAudio(_ => "[]");
             MainShellWindow? shell = null;
             try
@@ -97,7 +97,7 @@ public sealed class EngineAudioLifecycleTests
             var oldHook = CoreEngine.StoppedHook;
             var oldRunner = AvApp.Sessions;
             var opened = new List<Player>();
-            var layers = LayeredAudio.Instance = new LayeredAudio(_ => { var p = new Player(); opened.Add(p); return p; });
+            var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => { var p = new Player(); opened.Add(p); return p; });
             var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
             MainShellWindow? shell = null;
             try
@@ -153,7 +153,7 @@ public sealed class EngineAudioLifecycleTests
             var oldAudio = LibVlcAudio.Instance;
             var oldHook = CoreEngine.StoppedHook;
             var player = new Player();
-            var layers = LayeredAudio.Instance = new LayeredAudio(_ => player);
+            var layers = LayeredAudio.Instance = new LayeredAudio((_, _) => player);
             var audio = LibVlcAudio.Instance = new LibVlcAudio(_ => "[]");
             MainShellWindow? shell = null;
             try

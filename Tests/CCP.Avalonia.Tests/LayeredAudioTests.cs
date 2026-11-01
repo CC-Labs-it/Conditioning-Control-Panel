@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using ConditioningControlPanel;
@@ -40,7 +41,7 @@ public sealed class LayeredAudioTests
             s.AudioLayersEnabled = false;
 
             var opened = new List<FakePlayer>();
-            var layers = new LayeredAudio(p => { var f = new FakePlayer { Path = p }; opened.Add(f); return f; });
+            var layers = new LayeredAudio((p, volume) => { var f = new FakePlayer { Path = p, Volume = volume }; opened.Add(f); return f; });
 
             layers.Start();                                      // master toggle off: nothing
             Assert.Empty(opened);
@@ -50,13 +51,17 @@ public sealed class LayeredAudioTests
             Assert.Equal(79, opened[1].Volume);                  // cbrt(0.5): linear gain on LibVLC's cubic scale
 
             layers.SetTrackVolumeLive(b, 0);
+            Assert.True(layers.VolumeUpdates.Wait(TimeSpan.FromSeconds(5)));
             Assert.Equal(0, opened[1].Volume);
             s.AudioLayersMasterVolume = 50;
             layers.SetMasterVolumeLive();
+            Assert.True(layers.VolumeUpdates.Wait(TimeSpan.FromSeconds(5)));
             Assert.Equal(79, opened[0].Volume);
-            layers.ApplyDuck(0.8f);                              // 0.5 x 0.2 = 0.1
+            layers.ApplyDuck(0.8f);
+            Assert.True(layers.VolumeUpdates.Wait(TimeSpan.FromSeconds(5)));                              // 0.5 x 0.2 = 0.1
             Assert.Equal(46, opened[0].Volume);
             layers.ReleaseDuck();
+            Assert.True(layers.VolumeUpdates.Wait(TimeSpan.FromSeconds(5)));
             Assert.Equal(79, opened[0].Volume);
 
             s.AudioLayersEnabled = true;

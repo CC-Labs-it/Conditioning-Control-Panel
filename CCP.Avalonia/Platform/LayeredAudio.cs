@@ -24,15 +24,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>One looping track. The seam exists so the state machine is testable without libvlc.</summary>
         internal interface ILayerPlayer : IDisposable { int Volume { set; } }
 
-        private readonly Func<string, ILayerPlayer> _open;
+        private readonly Func<string, int, ILayerPlayer> _open;
         private readonly object _lock = new();
         private readonly Dictionary<AudioLayerTrack, ILayerPlayer> _players = new();
         private float _duckFactor = 1f;
         private bool _disposed;
+        private Task _volumeWork = Task.CompletedTask;
+        private readonly Dictionary<AudioLayerTrack, long> _volumeVersions = new();
+        private long _volumeVersion;
 
         internal static LayeredAudio? Instance { get; set; }
 
-        public LayeredAudio(Func<string, ILayerPlayer> open) => _open = open;
+        public LayeredAudio(Func<string, int, ILayerPlayer> open) => _open = open;
 
         public bool IsPlaying { get { lock (_lock) return _players.Count > 0; } }
 
@@ -54,8 +57,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     }
                     try
                     {
-                        var p = _open(track.Path);
-                        p.Volume = VolumeFor(track.Volume, s);
+                        // WPF LayeredAudioService.cs:89-121 sets both gains before playback.
+                        var p = _open(track.Path, VolumeFor(track.Volume, s));
                         _players[track] = p;
                     }
                     catch (Exception ex) { Log.Warning("LayeredAudio: could not load '{Path}': {Error}", track.Path, ex.Message); }
@@ -80,13 +83,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public void SetTrackVolumeLive(AudioLayerTrack track, int volumePercent)
         {
             lock (_lock)
-                if (_players.TryGetValue(track, out var p)) p.Volume = VolumeFor(volumePercent, CoreSettings.Current);
+                if (_players.TryGetValue(track, out var p))
+                    QueueVolumes(new[] { (track, p, VolumeFor(volumePercent, CoreSettings.Current)) });
         }
 
         public void SetMasterVolumeLive()
         {
             lock (_lock)
-                foreach (var (track, p) in _players) p.Volume = VolumeFor(track.Volume, CoreSettings.Current);
+                QueueVolumes(_players.Select(pair => (pair.Key, pair.Value, VolumeFor(pair.Key.Volume, CoreSettings.Current))).ToArray());
         }
 
         public void ApplyDuck(float amount)
@@ -98,6 +102,27 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             lock (_lock) { _duckFactor = 1f; SetMasterVolumeLive(); }
         }
+
+        // Native volume retries can take 500 ms per copy. Keep them off the caller (including
+        // panic teardown), but serialize every gain change so a later duck wins over an unduck.
+        private void QueueVolumes((AudioLayerTrack Track, ILayerPlayer Player, int Volume)[] updates)
+        {
+            var pending = updates.Select(update => (update.Track, update.Player, update.Volume, Version: ++_volumeVersion)).ToArray();
+            foreach (var item in pending) _volumeVersions[item.Track] = item.Version;
+            _volumeWork = _volumeWork.ContinueWith(_ =>
+            {
+                foreach (var (track, player, volume, version) in pending)
+                {
+                    lock (_lock)
+                        if (!_players.TryGetValue(track, out var current) || !ReferenceEquals(current, player)
+                            || !_volumeVersions.TryGetValue(track, out var latest) || latest != version) continue;
+                    try { player.Volume = volume; }
+                    catch (Exception ex) { Log.Debug(ex, "LayeredAudio: volume update"); }
+                }
+            }, TaskScheduler.Default);
+        }
+
+        internal Task VolumeUpdates { get { lock (_lock) return _volumeWork; } }
 
         /// <summary>LibVLC volume 0-100 for a track, from WPF's linear gain chain.</summary>
         private int VolumeFor(int trackPercent, AppSettings s)
@@ -113,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             foreach (var p in _players.Values) { try { p.Dispose(); } catch { } }
             _players.Clear();
+            _volumeVersions.Clear();
         }
 
         public void Dispose()
@@ -149,7 +175,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
             private readonly LibVLC _vlc;
             private readonly string _path;
-            private readonly bool _startMuted;
             private readonly object _gate = new();
             private readonly List<Copy> _live = new();
             private readonly TaskCompletionSource _closed = new();
@@ -157,22 +182,36 @@ namespace ConditioningControlPanel.Avalonia.Platform
             private readonly TimeProvider _time;
             private ITimer? _next;
             private volatile int _volume;
-            private bool _disposed;
+            private bool _volumeConfigured;
+            private volatile bool _disposed;
 
             public Task Closing => _closed.Task;
             /// <summary>Copies started so far, and how many of them started with nothing else sounding (a gap).</summary>
             internal int Copies, GapStarts;
+            internal bool FirstCopyStartedMuted;
+            internal (bool Playing, bool Muted, int Volume)? CurrentPlayback
+            {
+                get
+                {
+                    lock (_gate)
+                    {
+                        if (_newest is not { } copy) return null;
+                        lock (copy) return copy.Disposed ? null : (copy.Playing, copy.Player.Mute, copy.Player.Volume);
+                    }
+                }
+            }
             /// <summary>The next pass is armed on the clock (it starts before this one ends, not at EOF).</summary>
             internal bool Armed { get { lock (_gate) return _timerFor != null && _timerFor == _newest; } }
 
-            /// <param name="startMuted">Mute until the first volume sticks, so the stream never opens at
-            /// full volume for the moment before Playing (the mantra drone).</param>
-            public VlcLayerPlayer(LibVLC vlc, string path, bool startMuted = false, TimeProvider? time = null)
+            /// <param name="initialVolume">Known before playback for layers; null leaves a drone muted
+            /// until its first volume is supplied.</param>
+            public VlcLayerPlayer(LibVLC vlc, string path, int? initialVolume = null, TimeProvider? time = null)
             {
                 _time = time ?? TimeProvider.System;
                 _vlc = vlc;
                 _path = path;
-                _startMuted = startMuted;
+                _volume = initialVolume.GetValueOrDefault();
+                _volumeConfigured = initialVolume.HasValue;
                 StartCopy(after: null);
             }
 
@@ -191,7 +230,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     c.Player.TimeChanged += (_, e) => { var t = e.Time; ThreadPool.QueueUserWorkItem(_ => Schedule(c, t)); };
                     c.Player.EndReached += (_, _) => ThreadPool.QueueUserWorkItem(_ => Retire(c, failed: false));
                     c.Player.EncounteredError += (_, _) => ThreadPool.QueueUserWorkItem(_ => Retire(c, failed: true));
-                    if (_startMuted || Copies > 0) c.Player.Mute = true;
+                    c.Player.Mute = true;   // every pass stays muted until its configured gain sticks
+                    if (Copies == 0) FirstCopyStartedMuted = c.Player.Mute;
                     if (Copies > 0 && _live.Count == 0) GapStarts++;
                     Copies++;
                     _live.Add(c);
@@ -210,7 +250,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 Schedule(c, 0);
                 lock (c) { if (c.Disposed) return; LibVlcAudio.ApplyPreferredDevice(c.Player); }
-                ApplyVolume(c);
+                bool configured;
+                lock (_gate) configured = !_disposed && _volumeConfigured;
+                if (configured) ApplyVolume(c);
             }
 
             /// <summary>Start the next pass <see cref="OverlapMs"/> before this one ends, measured from its
@@ -267,6 +309,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     {
                         if (_disposed) return;
                         _volume = value;
+                        _volumeConfigured = true;
                         playing = _live.Where(c => c.Playing).ToArray();
                     }
                     foreach (var c in playing) ApplyVolume(c);
@@ -282,20 +325,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     lock (c)
                     {
-                        if (c.Disposed) return;
+                        if (_disposed || c.Disposed) return;
                         var v = _volume;
                         c.Player.Volume = v;
-                        if (c.Player.Volume == v) { c.Player.Mute = false; return; }
+                        if (c.Player.Volume == v && _volume == v) { c.Player.Mute = false; return; }
+                        c.Player.Mute = true;
                     }
                     Thread.Sleep(25);
                 }
                 Log.Debug("LayeredAudio: volume {V} did not stick", _volume);
-                lock (c) if (!c.Disposed) c.Player.Mute = false;
             }
 
             public void Dispose()
             {
-                // Off the caller's thread: Stop blocks until libvlc tears the output down.
+                // Retire immediately; native Stop itself can block and runs off the caller.
+                _disposed = true;
                 ThreadPool.QueueUserWorkItem(_ =>
                 {
                     try
