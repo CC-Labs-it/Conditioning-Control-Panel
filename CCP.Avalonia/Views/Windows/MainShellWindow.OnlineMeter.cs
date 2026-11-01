@@ -29,8 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DispatcherTimer? _onlineMeterHoverLeave, _onlineSpentWait;
         private readonly OnlineSpentNoticeQueue _onlineSpentQueue = new();
         internal Popup? OnlineMeterHover => _onlineMeterHover;
-        private static readonly IBrush OnlineText = Brushes.White;
-        private static readonly IBrush OnlineText2 = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xE0));
+        private static readonly IBrush OnlineText = Brushes.White, OnlineText2 = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xE0));
         private static readonly IBrush OnlineLilac = new SolidColorBrush(Color.FromRgb(0xE0, 0xB0, 0xFF));
 
         private void WireOnlineMeterPill()

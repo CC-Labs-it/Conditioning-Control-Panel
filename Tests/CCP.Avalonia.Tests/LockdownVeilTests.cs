@@ -35,7 +35,7 @@ public sealed class LockdownVeilTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -500,6 +500,7 @@ public sealed class LockdownVeilTests
         var card = shell.Named<LockdownTabView>("LockdownTab")!.LockdownCardBorder;
         var root = shell.Named<Grid>("RootGrid")!;
         Assert.Null(shell.LockdownFlash);
+        var clock = new SteppedTime(); shell.LockdownFlashClock = clock;
 
         ld.Activate(TimeSpan.FromMinutes(30));
         Frame();
@@ -513,9 +514,9 @@ public sealed class LockdownVeilTests
         var flash = shell.LockdownFlash!;
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        clock.Advance(TimeSpan.FromMilliseconds(300)); shell.TickLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Advance(TimeSpan.FromMilliseconds(300)); shell.TickLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 

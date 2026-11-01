@@ -20,8 +20,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class OnlineMeterTests
 {
     private static readonly DateTime SixPm = new(2026, 10, 20, 18, 0, 0);
-    private static readonly LandingWorld Quiet = new(false, false, false, true, false, false);
-    private static readonly LandingWorld Session = new(false, false, false, true, false, false, SessionRunning: true);
+    private static readonly LandingWorld Quiet = new(false, false, false, true, false, false), Session = new(false, false, false, true, false, false, SessionRunning: true);
     [Fact]
     public void PillAndCardFollowSourceConsentAndTheDaysShare() => Run((shell, s) =>
     {
@@ -51,8 +50,7 @@ public sealed class OnlineMeterTests
         Refresh();
         Assert.False(pill.IsVisible);
         Assert.False(tab.OnlineMeterCard.IsVisible);
-        s.RemoteMediaConsented = true;
-        s.MediaSource = "local";
+        (s.RemoteMediaConsented, s.MediaSource) = (true, "local");
         Refresh();
         Assert.False(pill.IsVisible);
         s.MediaSource = "mixed";
@@ -96,8 +94,7 @@ public sealed class OnlineMeterTests
         ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes);   // SpentReached, on the real event path
         Dispatcher.UIThread.RunJobs();
         Assert.False(Toast());
-        FriendsLanding.World = () => Quiet;
-        shell.ReleaseOnlineSpentNotice();   // what the 3 s wait timer runs
+        FriendsLanding.World = () => Quiet; shell.ReleaseOnlineSpentNotice(); // what the 3 s wait timer runs
         Dispatcher.UIThread.RunJobs();
         Assert.True(Toast());
         var count = host.Children.Count;
@@ -124,10 +121,8 @@ public sealed class OnlineMeterTests
             finally { pin.Free(); }
             return pixels;
         }
-        var empty = Frame(0, OnlineMeterTone.Pink);
-        var pink = Frame(42, OnlineMeterTone.Pink);
-        var amber = Frame(82, OnlineMeterTone.Amber);
-        var spent = Frame(100, OnlineMeterTone.Spent);
+        var (empty, pink) = (Frame(0, OnlineMeterTone.Pink), Frame(42, OnlineMeterTone.Pink));
+        var (amber, spent) = (Frame(82, OnlineMeterTone.Amber), Frame(100, OnlineMeterTone.Spent));
         Assert.False(empty.SequenceEqual(pink));
         Assert.False(pink.SequenceEqual(amber));
         Assert.False(amber.SequenceEqual(spent));
@@ -184,8 +179,7 @@ public sealed class OnlineMeterTests
         FriendsLanding.World = () => Quiet;
         ScrolllerAllowance.Charge(ScrolllerAllowance.LimitBytes);
         Dispatcher.UIThread.RunJobs();
-        var original = host.Children.Last();
-        var beats = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running;
+        var (original, beats) = (host.Children.Last(), global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running);
         var beat = beats.Single(b => ReferenceEquals(b.Owner, original));
         Assert.True(shell.OnlineSpentPolling);
         shell.WindowState = WindowState.Minimized;
@@ -213,8 +207,7 @@ public sealed class OnlineMeterTests
     });
     private static void Platform()
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+        if (Application.Current is null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
     private static void Run(Action<MainShellWindow, AppSettings> body, bool stepBeatTime = false) => AvaloniaTestDispatcher.Run(() =>
@@ -229,9 +222,7 @@ public sealed class OnlineMeterTests
         (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented) = ("online", true, false);
         var saved = (ScrolllerAllowance.PlanProvider, ScrolllerAllowance.Now, ScrolllerAllowance.AccountProvider,
             ScrolllerAllowance.LedgerPath, ScrolllerAllowance.LegacyLedgerPath, FriendsLanding.World);
-        ScrolllerAllowance.ResetForTests();
-        ScrolllerAllowance.PlanProvider = () => ScrolllerPlan.Free;
-        ScrolllerAllowance.Now = () => SixPm;
+        ScrolllerAllowance.ResetForTests(); (ScrolllerAllowance.PlanProvider, ScrolllerAllowance.Now) = (() => ScrolllerPlan.Free, () => SixPm);
         (ScrolllerAllowance.AccountProvider, ScrolllerAllowance.LedgerPath, ScrolllerAllowance.LegacyLedgerPath) = (() => null, () => null, () => null);
         MainShellWindow? shell = null;
         try
