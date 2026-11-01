@@ -48,10 +48,10 @@ namespace ConditioningControlPanel.Services
     /// ponytail: remote clips, the duration filter
     /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/DND/browser-media defers and the
     /// interaction queue are WPF-head services; add each here when it reaches Core.
-    /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
-    /// schedule. WPF returns from ContinueTriggerVideo (:2424) without ScheduleNext, so its schedule
-    /// silently dies until the engine restarts; here a video added mid-session still plays
-    /// (docs/avalonia-decisions.html).</para>
+    /// <para><b>Deliberate deviation:</b> a scheduled tick or feed replay that finds an empty library,
+    /// or a feed defer that expires, re-arms the normal interval. WPF returns from ContinueTriggerVideo
+    /// (:2424) or expires the defer (:2063) without ScheduleNext; here future videos remain scheduled
+    /// (docs/avalonia-decisions.html). The expired request itself is dropped.</para>
     /// </summary>
     public sealed class MandatoryVideoScheduler
     {
@@ -309,7 +309,7 @@ namespace ConditioningControlPanel.Services
                 }
                 else if (!_playing && !Trigger())
                 {
-                    // WPF VideoService.cs:2940,2982,2063: deferred work owns its wait; expiry drops it.
+                    // WPF VideoService.cs:2940,2982: a defer owns its wait; PollFeed resumes future scheduling.
                     if (_feedDefer == null) ScheduleNext();
                 }
             }
@@ -396,12 +396,21 @@ namespace ConditioningControlPanel.Services
                 if (_host.FeedOwnsTheScreen)
                 {
                     if (_time.GetUtcNow() < _feedDeadline) PollFeed(strictOverride, path);
-                    else _feedDeadline = null;
+                    else
+                    {
+                        _feedDeadline = null;
+                        // Deviation from WPF :2063: drop this request, keep future intervals alive.
+                        if (_running && _scheduler == null && !_playing) ScheduleNext();
+                    }
                     return;
                 }
                 _feedDeadline = null;
                 // WPF :2047: a deferred test press also requires a running, enabled scheduler.
-                if (_running && CoreSettings.Current.MandatoryVideosEnabled) Trigger(strictOverride, path);
+                if (_running && CoreSettings.Current.MandatoryVideosEnabled && !Trigger(strictOverride, path))
+                {
+                    // Empty replay: the same keep-scheduling decision as an empty scheduled pick.
+                    if (_scheduler == null && !_playing && _feedDefer == null) ScheduleNext();
+                }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _feedDefer = created;
             created.Change(TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);

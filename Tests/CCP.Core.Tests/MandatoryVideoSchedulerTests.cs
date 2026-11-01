@@ -104,28 +104,85 @@ public sealed class MandatoryVideoSchedulerTests
         v.Stop();
     });
 
-    [Fact]
-    public void Scheduled_feed_defer_expires_without_rearming_or_playing_when_feed_later_closes() => With(20, false, () =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Feed_expiry_drops_old_request_but_next_interval_plays_after_feed_closes(bool testPress) => With(20, false, () =>
     {
         var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true }; var picks = 0;
         var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Clips; });
         try
         {
             v.Start();
-            // At 20/hour, the actual scheduled tick fires between 144 and 216 seconds.
-            clock.Advance(TimeSpan.FromSeconds(216));
+            // At 20/hour the real tick is due at 144..216 s. A test press can own its wait too.
+            clock.Advance(TimeSpan.FromSeconds(143));
+            if (testPress) Assert.False(v.Trigger(userInitiated: true));
+            clock.Advance(TimeSpan.FromSeconds(73));
             Assert.False(v.IsPlaying);
             Assert.Equal(0, picks);
-            // Even the latest possible first tick's 90-second defer has now expired.
+            // Every possible first defer has expired. The old request must not play on close.
             clock.Advance(TimeSpan.FromSeconds(90));
             host.FeedOwnsTheScreen = false;
-            clock.Advance(TimeSpan.FromHours(1));
-            Assert.True(v.IsRunning);
+            clock.Advance(TimeSpan.FromMilliseconds(500));
             Assert.False(v.IsPlaying);
             Assert.Empty(host.Shown);
             Assert.Equal(0, picks);
+            Assert.True(v.IsRunning);
+            Assert.Equal(testPress ? 1 : 0, host.FeedNotices);
+            // A fresh normal interval, rather than the expired request, keeps the session alive.
+            clock.Advance(TimeSpan.FromSeconds(217.3));
+            Assert.True(v.IsPlaying);
+            Assert.Single(host.Shown);
+            Assert.Equal(1, picks);
         }
         finally { v.Stop(); }
+    });
+
+    [Fact]
+    public void Empty_feed_replay_rearms_so_a_clip_added_mid_session_can_play() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var available = false; var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return available ? Clips : Array.Empty<string>(); });
+        try
+        {
+            v.Start();
+            clock.Advance(TimeSpan.FromSeconds(216));
+            host.FeedOwnsTheScreen = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.Equal(1, picks);
+            Assert.False(v.IsPlaying);
+            Assert.Empty(host.Shown);
+            available = true;
+            clock.Advance(TimeSpan.FromSeconds(217.3));
+            Assert.True(v.IsPlaying);
+            Assert.Single(host.Shown);
+            Assert.Equal(2, picks);
+        }
+        finally { v.Stop(); }
+    });
+
+    [Fact]
+    public void Remote_video_acknowledges_feed_defer_and_refuses_only_an_actually_playing_video() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true };
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        var oldVideo = CoreEngine.Video;
+        try
+        {
+            CoreEngine.Video = v;
+            v.Start();
+            Assert.Null(RemoteCommands.Execute("trigger_video", null));
+            Assert.False(v.IsPlaying);
+            Assert.Equal(0, host.FeedNotices);
+            host.FeedOwnsTheScreen = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.True(v.IsPlaying);
+            Assert.Equal("a video is already playing", RemoteCommands.Execute("trigger_video", null));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Single(host.Shown);
+        }
+        finally { v.Stop(); CoreEngine.Video = oldVideo; }
     });
 
     [Fact]

@@ -145,6 +145,13 @@ mandatory videos stop for the rest of the engine run. Keep that?</li>
 test <code>Empty_library_starts_nothing_and_keeps_the_schedule_alive</code>.</li>
 <li>Advisor: reviewer (video-playback-core).</li>
 </ul>
+<h2 id="2026-11-01-fyp-defer-keeps-future-video-intervals">2026-11-01: feed deferral keeps future video intervals</h2>
+<ul>
+<li>Finding: WPF stops its tick before TriggerVideo (ConditioningControlPanel/Services/Video/VideoService.cs:2940,2982); expiry at :2063 and an empty replay at :2055 never re-arm it (:2987).</li>
+<li>Choice: extend the empty-library decision above. Drop the expired request, then re-arm a fresh normal interval. An empty replay also re-arms. Preserve an existing timer; do not schedule while stopped, disabled or playing, or while a replay has deferred again. No backlog or renewed defer ceiling.</li>
+<li>Evidence: MandatoryVideoSchedulerTests covers scheduled and Test-press expiry, an empty replay followed by a newly available clip, and the existing failed-pick retry rule. Stop, panic and settings guards remain in force.</li>
+<li>Advisor: user-requested local second-gate review of PR #3776.</li>
+</ul>
 <h2 id="2026-09-30-strict-mandatory-video-falls-open-without-a-live-panic-listener">2026-09-30: strict mandatory video falls open without a live panic listener</h2>
 <ul>
 <li>Question: strict mode swallows the panic key in the video window because WPF's global hook stops the video. On this head the
