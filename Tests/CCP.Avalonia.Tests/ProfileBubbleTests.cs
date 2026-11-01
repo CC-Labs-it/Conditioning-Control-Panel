@@ -160,14 +160,17 @@ public sealed class ProfileBubbleTests
         s.PerformanceMode = false;
         var time = new SteppedTime();
         global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
-        var shell = new MainShellWindow();
+        var shell = new MainShellWindow { TabClock = time };
+        var page = shell.ProfilePage!;
+        var stack = page.FindControl<StackPanel>("ProfileColumnStack")!;
+        var animationClock = new SharedDeeperThemeTests.StepClock();
+        stack.SetValue(SharedDeeperThemeTests.StepClock.Property, animationClock.Instance);
         try
         {
             shell.Show();
             shell.Activate();
             shell.ShowTab("discord");
             Dispatcher.UIThread.RunJobs();
-            var page = shell.ProfilePage!;
             var og = page.FindControl<Border>("OgBorderContainer")!;
             page.FindControl<Grid>("ProfileCardWrapper")!.IsVisible = true;
             og.IsVisible = true;                                // an OG card came up
@@ -187,17 +190,21 @@ public sealed class ProfileBubbleTests
             shell.ShowTab("settings");                          // the tab hides: the loop stops (P01)
             Dispatcher.UIThread.RunJobs();
             Assert.False(shell.OgBorderLoopRunning);
-            // Freshen the shared animation clock first: a transition still running on it (the
-            // section wash/edge crossfade of an earlier navigation) would hand the stagger the
-            // whole real-time gap since its last tick as one frame.
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            // Finish the old entrance, then step the new one independently of render timing.
+            animationClock.Step(0);
+            animationClock.Step(1000);
             shell.ShowTab("discord");
             Dispatcher.UIThread.RunJobs();
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Assert.True(shell.OgBorderLoopRunning);
-            var cards = page.FindControl<StackPanel>("ProfileColumnStack")!.Children.Where(c => c.IsVisible).ToList();
+            var cards = stack.Children.Where(c => c.IsVisible).ToList();
             Assert.True(cards.Count > 1);
+            animationClock.Step(1000);
             Assert.True(cards[^1].Opacity < 1, "the entrance stagger did not hold the last card back");
+            animationClock.Step(1100);
+            Assert.InRange(cards[0].Opacity, 0.01, 0.99);
+            Assert.True(cards[^1].Opacity < cards[0].Opacity, "the last card did not start later than the first");
+            animationClock.Step(1600);
+            Assert.All(cards, card => Assert.Equal(1, card.Opacity, 3));
             page.FindControl<Grid>("ProfileCardWrapper")!.IsVisible = false;   // a search found no one
             Dispatcher.UIThread.RunJobs();
             Assert.False(shell.OgBorderLoopRunning);
