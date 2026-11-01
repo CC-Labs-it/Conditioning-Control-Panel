@@ -307,7 +307,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 foreach (var b in decoded.Frames) b.Dispose();   // the clip already fell out
                 return;
             }
-            if (decoded.Frames.Count <= 1) f.Animated = false;
+            // A local GIF keeps its reserved slot until despawn, even after a still or empty decode.
             if (decoded.Frames.Count == 0) return;
             clip.Frames = decoded.Frames;
             clip.Delay = decoded.Delay;
