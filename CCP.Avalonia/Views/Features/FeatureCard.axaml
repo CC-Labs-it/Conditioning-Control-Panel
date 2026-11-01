@@ -35,9 +35,12 @@
              reachable through FindControl. -->
 
         <Grid x:Name="ContentRoot">
-            <!-- Full-bleed background image via ImageBrush (respects parent CornerRadius) -->
+            <!-- The grey twin shares the art host's zoom and tease blur. -->
             <Border x:Name="ImgIconHost" CornerRadius="11"
-                    RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                    RenderOptions.BitmapInterpolationMode="HighQuality">
+                <Border x:Name="ImgIconMute" CornerRadius="11" Opacity="0"
+                        RenderOptions.BitmapInterpolationMode="HighQuality" IsHitTestVisible="False"/>
+            </Border>
 
             <!-- Glyph fallback (for cards without an image) -->
             <Border x:Name="GlyphHost"
