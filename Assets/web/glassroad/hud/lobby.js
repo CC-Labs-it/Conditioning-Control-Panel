@@ -609,6 +609,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     if (el.dataset.act === 'lb-hstep') { st.host = stepHost(st.host, key, dir); paint(); return; }
     st.look = fitLook(cycleLook(st.look, key, dir, st.choices), st.choices);
     saveLook(storage(), st.look);
+    deps().lookChanged?.(st.look, storage());   // a real player change: the logbook's garage block (72 contract C1)
     // the whole look, extras and skin too: the room keeps them bound to the ticket, a bare change would drop them
     if (st.room && st.phase === 'lobby') send({ t: 'look', ...roomLook(st.look) });
     paint();

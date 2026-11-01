@@ -75,9 +75,15 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.ServerPaidUntil),
             // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
             nameof(AppSettings.RainPackHash),
+            // Frame and avatar equip state: what THIS PC owes the server and last saw of it.
+            nameof(AppSettings.ProfileEquipAccount),
+            nameof(AppSettings.ProfileEquipUpdatedMs),
+            nameof(AppSettings.ProfileEquipPushOwed),
             // Rain look sync state: what THIS PC owes the server and last agreed with it (WPF ProfileSyncService).
             nameof(AppSettings.RainLookPushOwed),
             nameof(AppSettings.RainLookAgreedUtc),
+            // What THIS PC last saw of each account's wallet net: on another PC it would invent or hide a spend.
+            nameof(AppSettings.WalletNetSeen),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
             // ---- not in WPF (no WPF reader): which privacy switches this install owns (SyncPush) ----
@@ -140,8 +146,12 @@ namespace ConditioningControlPanel.Services
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             restored.RainPackHash = current.RainPackHash;
+            restored.ProfileEquipAccount = current.ProfileEquipAccount;
+            restored.ProfileEquipUpdatedMs = current.ProfileEquipUpdatedMs;
+            restored.ProfileEquipPushOwed = current.ProfileEquipPushOwed;
             restored.RainLookPushOwed = current.RainLookPushOwed;
             restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
+            restored.WalletNetSeen = current.WalletNetSeen;
             restored.ConsentOwnedAccount = current.ConsentOwnedAccount;
             restored.ConsentOwnedFields = current.ConsentOwnedFields;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
