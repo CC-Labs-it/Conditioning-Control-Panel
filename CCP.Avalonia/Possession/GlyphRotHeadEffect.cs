@@ -33,6 +33,7 @@ internal sealed class GlyphRotHeadEffect : HeadEffect
     public override double Weight => 2;
     public override TimeSpan HoldFor => TimeSpan.FromMilliseconds(3500);
     public override IReadOnlyList<PossessionRole> Roles => TargetRoles;
+    internal override bool UsesTransform => false;
     internal override double UndoMs => 0;
 
     internal override bool CanApply(Control target)
@@ -43,7 +44,7 @@ internal sealed class GlyphRotHeadEffect : HeadEffect
 
     protected override void Start()
     {
-        _text = TypoHeadEffect.FindText(Lease.Element)!;
+        _text = TypoHeadEffect.FindText(Element)!;
         _original = _written = _text.Text!;
         var words = Words(_original);
         var (start, end) = words[Rng.Next(words.Count)];

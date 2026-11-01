@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Data;
 using Avalonia.Headless;
+using Avalonia.Media.Transformation;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -76,6 +77,42 @@ public class PossessionGlyphRotTests
             frames.At(1060 + healAt); Assert.Equal(first, label.Text);
             frames.At(1120 + healAt); Assert.Equal("Cat", label.Text);
             frames.At(4500); Assert.Equal(0, runtime.LiveCount);
+        });
+    });
+
+    // WPF GlyphRotEffect.cs:83-103, TypoEffect.cs:50-74 and RewriteEffect.cs:63-98 only write text.
+    [Theory]
+    [InlineData("glyphrot", false)]
+    [InlineData("glyphrot", true)]
+    [InlineData("typo", false)]
+    [InlineData("typo", true)]
+    [InlineData("rewrite", false)]
+    [InlineData("rewrite", true)]
+    public void TextEffectsLeaveExistingAndNewTransformsAlone(string id, bool panic) => Run(() =>
+    {
+        var prior = TransformOperations.Parse("scale(2)");
+        var newer = TransformOperations.Parse("scale(3)");
+        var label = new TextBlock { Text = "Pause", RenderTransform = prior };
+        Host(label, (frames, runtime) =>
+        {
+            var effect = Assert.Single(PossessionRuntime.CreateAll().Where(e => e.Id == id));
+            Assert.True(runtime.TryApply(effect, new(label, PossessionRole.Label, "label")));
+            Assert.Equal(2, label.RenderTransform!.Value.M11);
+            Assert.Same(prior, label.RenderTransform);
+            Assert.False(PossessionLease.IsLeased(label));
+            frames.At(0); frames.At(60);
+            Assert.NotEqual("Pause", label.Text);
+            Assert.Same(prior, label.RenderTransform);
+
+            label.RenderTransform = newer;
+            var origin = new RelativePoint(0.2, 0.3, RelativeUnit.Relative);
+            label.RenderTransformOrigin = origin;
+            if (panic) PossessionRuntime.UndoAllLive(); else frames.At(effect.HoldFor.TotalMilliseconds);
+            Assert.Equal("Pause", label.Text);
+            Assert.Same(newer, label.RenderTransform);
+            Assert.Equal(3, label.RenderTransform!.Value.M11);
+            Assert.Equal(origin, label.RenderTransformOrigin);
+            Assert.Equal(0, runtime.LiveCount);
         });
     });
 

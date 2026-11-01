@@ -46,7 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         private sealed class Ghost
         {
             public required HeadEffect Effect;
-            public required PossessionLease Lease;
+            public PossessionLease? Lease;
             public required PossessionHeadTarget Target;
             public TimeSpan? Start;
             public double Tx, Ty, Rot, Sx = 1, Sy = 1;   // snapshot when the return begins
@@ -93,9 +93,9 @@ namespace ConditioningControlPanel.Avalonia.Possession
             foreach (var g in _ghosts)
                 if (ReferenceEquals(g.Effect, effect) || ReferenceEquals(g.Target.Element, el)) return false;
             if (!effect.CanApply(el)) return false;
-            var lease = PossessionLease.Take(el);
-            if (lease == null) return false;
-            effect.Begin(lease, _rng, Photosafe);
+            var lease = effect.UsesTransform ? PossessionLease.Take(el) : null;
+            if (effect.UsesTransform && lease == null) return false;
+            effect.Begin(el, lease, _rng, Photosafe);
             _ghosts.Add(new Ghost { Effect = effect, Lease = lease, Target = target });
             _lastKey = target.Key;
             if (!_subscribed) { _subscribed = true; _frames.Subscribe(_onFrame); }
@@ -135,8 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 double hold = g.Effect.HoldFor.TotalMilliseconds;
                 if (ms < hold) { g.Effect.Frame(ms); continue; }
                 // WPF TypoEffect.UndoCoreAsync ignores duration: text returns at the hold boundary.
-                if (g.Effect.UndoMs <= 0) { Finish(g); continue; }
-                var l = g.Lease;
+                if (g.Effect.UndoMs <= 0 || g.Lease is not { } l) { Finish(g); continue; }
                 if (!g.Returning)
                 {
                     g.Returning = true;
@@ -158,7 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             try
             {
                 try { g.Effect.Release(); }
-                finally { g.Lease.ReleaseImmediate(); }
+                finally { g.Lease?.ReleaseImmediate(); }
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Possession {Id} release failed", g.Effect.Id); }
             _cooldownUntil[g.Target.Key] = _time.GetTimestamp() + (long)(PossessionDeck.TargetCooldown.TotalSeconds * _time.TimestampFrequency);
