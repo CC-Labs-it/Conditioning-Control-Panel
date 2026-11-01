@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services.Video.Floating;
 
@@ -103,7 +104,7 @@ internal sealed class FloatingVideoFrame
         var p = Pointer(e);
         var now = _nowMs();
         _motion.Move(p.X, p.Y, now);
-        _motion.Release(now, CoreSettings.Current.MotionLevel);
+        _motion.Release(now, AmbientFxCanvas.Env.Level);
         e.Pointer.Capture(null);
         Place();
         if (!_motion.Active) _beat.Stop();

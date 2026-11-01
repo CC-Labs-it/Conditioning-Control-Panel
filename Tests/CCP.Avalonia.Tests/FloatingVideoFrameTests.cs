@@ -10,6 +10,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Video.Floating;
@@ -184,6 +185,55 @@ public sealed class FloatingVideoFrameTests
             Assert.Equal(area.X, w.Position.X);
         }
         finally { w.MouseUp(new Point(20, 20), MouseButton.Left); w.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(true, true, MotionLevel.Full, 0.5)]
+    [InlineData(false, false, MotionLevel.Full, 0.5)]
+    [InlineData(false, true, MotionLevel.Full, 1.0)]
+    [InlineData(true, false, MotionLevel.Off, 0.0)]
+    public Task Throw_respects_gentle_visuals_and_OS_animation_preference(
+        bool gentle, bool osAnimations, MotionLevel setting, double scale) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var saved = (s.MotionLevel, s.GentleVisuals, s.MandatoryVideoFloatingSpeedPercent);
+        var oldProbe = UiMotionPreference.OsProbe;
+        var oldStamp = UiMotionPreference.CacheStamp;
+        var cached = typeof(UiMotionPreference).GetField("_cached", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var oldCached = cached.GetValue(null);
+        var w = new Window { Width = 300, Height = 180, Content = new Border { Background = global::Avalonia.Media.Brushes.Black } };
+        try
+        {
+            s.MotionLevel = setting;
+            s.GentleVisuals = gentle;
+            s.MandatoryVideoFloatingSpeedPercent = 50;
+            UiMotionPreference.OsProbe = () => osAnimations;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            w.Show();
+            w.Position = new PixelPoint(100, 100);
+            double now = 0;
+            var frame = new FloatingVideoFrame(w, () => now);
+            w.MouseDown(new Point(20, 20), MouseButton.Left);
+            now = 20; w.MouseMove(new Point(420, 20));
+            now = 40; w.MouseUp(new Point(820, 20), MouseButton.Left);
+            var motion = Assert.IsType<FloatingVideoMotion>(typeof(FloatingVideoFrame)
+                .GetField("_motion", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(frame));
+            Assert.Equal(FloatingVideoMotion.TopSpeedPxPerSec * motion.Speed * scale, motion.Vx, 6);
+            Assert.Equal(0, motion.Vy);
+            Assert.Equal(setting, s.MotionLevel);
+        }
+        finally
+        {
+            w.Close();
+            (s.MotionLevel, s.GentleVisuals, s.MandatoryVideoFloatingSpeedPercent) = saved;
+            UiMotionPreference.OsProbe = oldProbe;
+            cached.SetValue(null, oldCached);
+            UiMotionPreference.CacheStamp = oldStamp;
+        }
         return Task.CompletedTask;
     });
 
