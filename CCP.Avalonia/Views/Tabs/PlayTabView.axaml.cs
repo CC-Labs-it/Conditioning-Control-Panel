@@ -104,6 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill),
             ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill),
+            ("PlayDtrhHeroPlate",     "features/dtrh.png",              Stretch.UniformToFill),
             ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill),
             ("PlayGazeHeroPlate",     "features/lab_gaze_hero.png",     Stretch.UniformToFill),
             ("PlayFocusHeroPlate",    "features/lab_focusgaze_hero.png",Stretch.UniformToFill),
@@ -181,6 +182,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 // BreakoutAccess.FullAllowed (WPF Services/BackRoom/BreakoutAccess.cs:9).
                 PlayLockBreakout.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+                PlayLockDtrh.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), "dtrh").Allowed;
                 PlayLockGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_gaze_minigame")).Allowed;
                 PlayLockFocusGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_focus_gaze")).Allowed;
                 PlayLockRemote.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed;
@@ -190,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 // FREE TODAY (WPF :145): only on a door that is otherwise shut - an owner gets no gift.
                 bool premium = CoreEntitlement.HasPremium;
+                PlayBadgeDtrh.FreeToday = !CoreEntitlement.HasLab && CoreEntitlement.IsFreeToday("dtrh");
                 PlayBadgeRemote.FreeToday = !premium && CoreEntitlement.IsFreeToday("remote");
                 PlayBadgeFyp.FreeToday = !premium && CoreEntitlement.IsFreeToday("fyp");
 
@@ -236,6 +239,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF LaunchPlayChess (PieceByPieceHostService.Launch): free for everyone.</summary>
         private void BtnPlayChess_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.PbpId);
+
+        // WPF PlayTabView.Cards.cs:59 and MainWindow.Exclusives.cs:217: ask for an account,
+        // then let the game host enforce the Lab / daily-free gate.
+        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e)
+        {
+            if (Owner is not { } owner) return;
+            if (!CoreAccount.IsLoggedIn) { _ = owner.OpenUnifiedLoginDialog(); return; }
+            LaunchGame("dtrh");
+        }
 
         // ---- TOGETHER --------------------------------------------------------------------
 

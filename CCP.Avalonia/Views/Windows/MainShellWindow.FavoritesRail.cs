@@ -41,6 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ("BtnPlayRemoteControl", "tab.remotecontrol"), ("BtnPlayBlinkTrainer", "tab.blinktrainer"),
             ("BtnPlayGradedIntake", "tab.gradedintake"), ("BtnPlayFyp", "tab.fyp"),
             ("BtnPlayLockdown", "tab.lockdown"),
+            ("BtnPlayDtrh", "game.dtrh"),
         };
 
         /// <summary>WPF InitFavoritesRail (MainWindow.xaml.cs:3501): pin menus, first paint, and a
