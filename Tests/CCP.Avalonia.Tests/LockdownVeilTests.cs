@@ -36,6 +36,9 @@ public sealed class LockdownVeilTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<AvApp>()
+                    .WithInterFont()
+                    .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                    .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -77,6 +80,13 @@ public sealed class LockdownVeilTests
                 CoreSettings.ServiceProvider = null;
             }
         });
+    }
+
+    private sealed class SteppedFlashClock : TimeProvider
+    {
+        public long Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Now;
     }
 
     private static void Frame()
@@ -491,6 +501,9 @@ public sealed class LockdownVeilTests
     [Fact]
     public void Activation_TurnsTheShellBloodRed_FlashesOnce_AndExitRestoresIt() => Run((shell, ld) =>
     {
+        Assert.Same(TimeProvider.System, shell.LockdownFlashClock);
+        var clock = new SteppedFlashClock { Now = TimeSpan.FromSeconds(10).Ticks };
+        shell.LockdownFlashClock = clock;
         var res = Application.Current!.Resources;
         Assert.True(res.TryGetResource("PinkBrush", null, out var pb));
         var pinkBefore = Hex(pb);
@@ -510,14 +523,24 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        Assert.Equal("b4dc143c", Hex(flash.Background));
+        Assert.Equal(1, flash.Opacity, 3);
+        Assert.True(shell.LockdownFlashTimerRunning);
+        clock.Now += TimeSpan.FromMilliseconds(300).Ticks;
+        shell.TickLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Now += TimeSpan.FromMilliseconds(299).Ticks;
+        shell.TickLockdownFlash();
+        Assert.Same(root, flash.Parent);
+        Assert.True(flash.Opacity > 0);
+        clock.Now += TimeSpan.FromMilliseconds(1).Ticks;
+        shell.TickLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
+        Assert.False(shell.LockdownFlashTimerRunning);
 
         ld.Deactivate();
         Frame();
