@@ -23,6 +23,35 @@ namespace CCP.Avalonia.Tests;
 /// close-time cleanup (no voice, no singleton hook left behind).</summary>
 public sealed class TubeQuickMenuTests
 {
+    // A pure tube helper can initialize its static palette on an xUnit/worker thread before
+    // a window exists. These constant colours must also be readable by a different dispatcher.
+    [Theory]
+    [InlineData("MenuRed", "#FFFF6347")]
+    [InlineData("MenuGreen", "#FF90EE90")]
+    [InlineData("MenuPatreon", "#FF9B59B6")]
+    [InlineData("MenuLocked", "#FF606070")]
+    public void SharedMenuColoursCanBeReadOnAnotherThread(string field, string expected)
+    {
+        global::Avalonia.Media.ISolidColorBrush? brush = null;
+        AvaloniaTestDispatcher.Run(() => brush = Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(
+            typeof(AvatarTubeWindow).GetField(field,
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)));
+        Exception? failure = null;
+        var reader = new System.Threading.Thread(() =>
+        {
+            try
+            {
+                Assert.Equal(global::Avalonia.Media.Color.Parse(expected), brush!.Color);
+                Assert.Equal(1, brush.Opacity);
+                Assert.Null(brush.Transform);
+            }
+            catch (Exception ex) { failure = ex; }
+        });
+        reader.Start();
+        Assert.True(reader.Join(TimeSpan.FromSeconds(10)), "Palette reader did not finish");
+        if (failure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+
     private static void Click(AvatarTubeWindow tube, string name) =>
         tube.FindControl<MenuItem>(name)!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 

@@ -79,6 +79,14 @@ public sealed class LockdownVeilTests
         });
     }
 
+    private sealed class FlashClock : TimeProvider
+    {
+        public long Timestamp = TimeSpan.FromSeconds(5).Ticks;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Timestamp;
+        public void Advance(int milliseconds) => Timestamp += TimeSpan.FromMilliseconds(milliseconds).Ticks;
+    }
+
     private static void Frame()
     {
         Dispatcher.UIThread.RunJobs();
@@ -500,6 +508,8 @@ public sealed class LockdownVeilTests
         var card = shell.Named<LockdownTabView>("LockdownTab")!.LockdownCardBorder;
         var root = shell.Named<Grid>("RootGrid")!;
         Assert.Null(shell.LockdownFlash);
+        var clock = new FlashClock();
+        shell.LockdownFlashTime = clock;
 
         ld.Activate(TimeSpan.FromMinutes(30));
         Frame();
@@ -510,12 +520,19 @@ public sealed class LockdownVeilTests
         Assert.Equal("ffdc143c", Hex(card.BorderBrush));
         Assert.Equal("ffdc143c", Hex(shell.Named<TextBlock>("TxtPlayerTitle")!.Foreground));
 
-        var flash = shell.LockdownFlash!;
+        var flash = Assert.IsType<Border>(shell.LockdownFlash);
         Assert.Same(root, flash.Parent);
         Assert.False(flash.IsHitTestVisible);
-        shell.PaintLockdownFlash(300);
+        shell.StepLockdownFlash();
+        Assert.Equal(1, flash.Opacity);
+        clock.Advance(300);
+        shell.StepLockdownFlash();
         Assert.Equal(0.25, flash.Opacity, 3);
-        shell.PaintLockdownFlash(600);
+        clock.Advance(299);
+        shell.StepLockdownFlash();
+        Assert.Contains(flash, root.Children);
+        clock.Advance(1);
+        shell.StepLockdownFlash();
         Assert.DoesNotContain(flash, root.Children);
         Assert.Null(shell.LockdownFlash);
 
