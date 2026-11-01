@@ -95,6 +95,58 @@ public sealed class TakeoverTests
         });
     }
 
+    // WPF MainWindow.Autonomy.cs:129-185,199-212 and MainWindow.TakeoverUi.cs:58-83:
+    // panic stops the service, but the button still represents the saved switch.
+    [Fact]
+    public Task PanicKeepsButtonConsistentWithTheSavedSwitch() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        s.AutonomyModeEnabled = false;
+        s.AutonomyConsentGiven = true;
+        s.AutonomyResumeOnStartup = false;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("bambitakeover");
+            var tab = shell.GetLogicalDescendants().OfType<global::ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>().Single();
+            var button = tab.FindControl<Button>("BtnAutonomyStartStop")!;
+            string? Label() => (button.Content as TextBlock)?.Text;
+            button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.Autonomy.IsEnabled);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_stop_2"), Label());
+
+            shell.StopAutonomyForPanic();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.Autonomy.IsEnabled);
+            Assert.True(s.AutonomyModeEnabled);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_stop_2"), Label());
+            Assert.Equal("○ DORMANT", tab.FindControl<TextBlock>("TxtTakeoverStatus")!.Text);
+
+            button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(s.AutonomyModeEnabled);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_start_2"), Label());
+            button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.Autonomy.IsEnabled);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_stop_2"), Label());
+        }
+        finally
+        {
+            shell.Autonomy.Stop();
+            shell.RequestExit();
+        }
+        return Task.CompletedTask;
+    });
+
     private sealed class FakeBubbleCountHost : IBubbleCountHost
     {
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) { }
