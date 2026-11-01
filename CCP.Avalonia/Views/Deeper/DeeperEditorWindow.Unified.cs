@@ -33,8 +33,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///   Cursors.Hand / SizeAll / SizeWE       -> new Cursor(StandardCursorType.*)
     ///   Panel.SetZIndex(v, n)                 -> v.ZIndex = n
     ///   Visibility                            -> IsVisible
-    ///   TutorialEventBus.Emit                 -> a named no-op; Core carries no event bus by
-    ///                                            design, see EmitTutorialEvent at the foot
     ///   App.Logger                            -> Serilog.Log
     /// </summary>
     public partial class DeeperEditorWindow
@@ -534,6 +532,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void UpdateSelectedSidePanelForEffect()
         {
             HideAllEditors();
+            ResetInspectorSession();
             if (_selectedEffect == null)
             {
                 if (SelectedPlaceholder != null) SelectedPlaceholder.IsVisible = true;
@@ -1083,20 +1082,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private static bool TryParseDouble(string s, out double v)
             => double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v);
 
-        /// <summary>
-        /// ponytail: the editor emitted "EffectAdded" / "RuleAdded" so the interactive tutorial
-        /// could advance a step. Kept as named no-ops rather than deleted, because the call SITES
-        /// are the portable half and finding them again later is the expensive part.
-        ///
-        /// <para>Blocked on <c>TutorialEventBus</c>
-        /// (<c>ConditioningControlPanel/Services/TutorialEventBus.cs</c>), and note what that is
-        /// NOT: the overlay is ported
-        /// (<c>CCP.Avalonia/Views/Windows/TutorialOverlay.axaml.cs</c>) and <c>CoreTutorial</c> is
-        /// the seam, so "wired when the tutorial moves to Core" is no longer the story.
-        /// <c>CoreTutorial</c> carries no event bus ON PURPOSE - the OnEvent advance trigger crosses
-        /// as an enum and the subscription hooks a real control on a real head - so a seam to emit
-        /// into would have to be added to Core first, not merely used.</para>
-        /// </summary>
-        private static void EmitTutorialEvent(string name) { _ = name; }
+        private static void EmitTutorialEvent(string name) => CoreTutorialEvents.Emit(name);
+
     }
 }

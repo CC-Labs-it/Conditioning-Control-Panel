@@ -231,6 +231,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
             Loaded += DeeperEditorWindow_Loaded;
             KeyDown += DeeperEditorWindow_KeyDown;
+            SidebarRoot.AddHandler(PointerPressedEvent, (_, _) => ArmInspectorSnapshot(true), RoutingStrategies.Tunnel);
+            SidebarRoot.AddHandler(KeyDownEvent, (_, _) => ArmInspectorSnapshot(false), RoutingStrategies.Tunnel);
+            SidebarRoot.AddHandler(GotFocusEvent, (_, _) => _inspectorSessionSnapshotted = false, RoutingStrategies.Bubble, true);
             Closing += Window_Closing;
 
             _validationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
@@ -551,6 +554,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             ApplyPersistedSidebarWidth();
 
             _ = InitializePreviewAsync();
+            CoreTutorialEvents.Emit("WindowLoaded:DeeperEditorWindow");
 
         }
 
@@ -1738,6 +1742,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
             // Always reset the unified-editor groups; the unified path repopulates if needed.
             HideAllEditors();
+            ResetInspectorSession();
 
             if (_selectedEffect != null)
             {
@@ -2279,7 +2284,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void MarkDirty()
         {
             if (_suppressDirty) return;
-            _isDirty = true;
+            CommitPendingInspectorSnapshot();
+            if (!_isDirty)
+            {
+                _isDirty = true;
+                ApplyWindowTitle();
+            }
             TxtDirty.IsVisible = true;
             // Lane counts piggyback here (cheap) so the chrome stays in sync with any
             // add/remove/edit that touches the data model.
@@ -2564,14 +2574,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // Avalonia's deferred TextChanged handlers fire and the flag stays clear.
                 UpdateTitle();
 
-                // ponytail: WPF also set TutorialEventBus.LastSavedEnhancementPath and emitted
-                // "FileSaved" so the HT walkthrough could advance to its follow-up card. Still
-                // blocked, and the blocker is NOT "the tutorial has not been ported" - the overlay
-                // has been (CCP.Avalonia/Views/Windows/TutorialOverlay.axaml.cs) and CoreTutorial is
-                // the seam. It is that CoreTutorial deliberately carries NO event bus: the
-                // OnEvent advance trigger crosses as an enum only, and the publisher side stays in
-                // ConditioningControlPanel/Services/TutorialEventBus.cs. Nothing here can emit, and
-                // with the seam unseeded on this head nothing would be listening either.
+                CoreTutorialEvents.LastSavedEnhancementPath = path;
+                CoreTutorialEvents.Emit("FileSaved");
             }
             catch (Exception ex)
             {
@@ -2683,11 +2687,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             var name = string.IsNullOrEmpty(_enhancement.Metadata.Name)
                 ? Loc.Get("deeper_editor_untitled") : _enhancement.Metadata.Name;
             TxtTitle.Text = name;
-            Title = $"Deeper — {name}";
+            ApplyWindowTitle();
             // Linked-files strip shows the file path; keep it in sync.
             RefreshLinkedFilesUi();
             // Metadata drawer subtitle ("Metadata · {name}") shown when collapsed.
             UpdateMetadataDrawerSubtitle();
+        }
+
+        private void ApplyWindowTitle()
+        {
+            var name = string.IsNullOrEmpty(_enhancement.Metadata.Name)
+                ? Loc.Get("deeper_editor_untitled") : _enhancement.Metadata.Name;
+            Title = $"Deeper - {name}{(_isDirty ? "*" : "")}";
         }
 
         // ---------------------------------------------------------------------------------
