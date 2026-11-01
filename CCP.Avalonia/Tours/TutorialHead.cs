@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using Window = global::Avalonia.Controls.Window;
@@ -74,14 +75,14 @@ namespace ConditioningControlPanel.Avalonia.Tours
         {
             if (!Enum.TryParse<TutorialType>(name, ignoreCase: false, out var type) || !Enum.IsDefined(type)) return;
             if (HostedElsewhere.Contains(type)) { Service.Start(type); return; }
-            StartOnShell(type);
+            _ = StartOnShell(type);
         }
 
         /// <summary>WPF MainWindow.StartTutorial: one tour at a time, tab callbacks bound to the
         /// shell the overlay sits on, then the overlay.</summary>
-        internal static void StartOnShell(TutorialType type)
+        internal static async Task StartOnShell(TutorialType type)
         {
-            if (_shellOverlay != null) return;
+            if (_shellOverlay != null || Service.IsActive) return;
             var shell = TutorialHeadHooks.Shell;
             if (shell == null) return;
 
@@ -98,21 +99,30 @@ namespace ConditioningControlPanel.Avalonia.Tours
                 showDeeper: () => shell.ShowTab("deeper"),
                 showTab: key => shell.ShowTab(key));
 
-            // WPF MainWindow.Settings.cs:565-573 attaches before Start; EmiTourNarrator.cs:119-140
-            // summons enabled, away EMI from TutorialStarted, before the first StepChanged.
-            void SummonForTour(object? sender, EventArgs e)
+            // WPF EmiTourNarrator.cs:119-140 completes the summon before the first card.
+            Task SummonForTour()
             {
-                try
-                {
-                    var desk = EmiDeskService.Instance;
-                    if (!desk.IsOut && CoreSettings.Current.EmiDeskEnabled) _ = desk.Summon("tour");
-                }
-                catch (Exception ex) { Serilog.Log.Debug(ex, "Tutorial: EMI summon failed"); }
+                var desk = EmiDeskService.Instance;
+                if (desk.PendingSummon is { IsCompleted: false } pending) return pending;
+                return !desk.IsOut && CoreSettings.Current.EmiDeskEnabled
+                    ? desk.Summon("tour") : Task.CompletedTask;
             }
-            Service.TutorialStarted += SummonForTour;
-            try { Service.Start(type); }
-            finally { Service.TutorialStarted -= SummonForTour; }
-            if (!Service.IsActive) return;
+
+            // A canceled start must not resume when the prompt eventually closes.
+            void Unhook()
+            {
+                shell.Closed -= OnShellClosed;
+                Service.TutorialFinished -= OnFinished;
+            }
+            void OnShellClosed(object? sender, EventArgs e) => Service.Skip();
+            void OnFinished(object? sender, TutorialFinishedEventArgs e) => Unhook();
+            shell.Closed += OnShellClosed;
+            Service.TutorialFinished += OnFinished;
+            try
+            {
+                if (!await Service.StartAsync(type, SummonForTour) || !Service.IsActive || !shell.IsVisible) return;
+            }
+            finally { Unhook(); }
 
             var browser = shell.Named<Views.Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer;
             if (browser != null) browser.IsVisible = false;

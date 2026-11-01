@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using global::Avalonia.Controls.ApplicationLifetimes;
 using global::Avalonia.VisualTree;
 using ConditioningControlPanel.Localization;
@@ -236,6 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
     {
         private List<TutorialStep> _currentSteps;
         private int _currentStepIndex = 0;
+        private int _startVersion;
         private TutorialType _currentTutorialType = TutorialType.FullTour;
 
         // Callbacks for tab navigation
@@ -412,26 +414,41 @@ namespace ConditioningControlPanel.Avalonia.Tours
         /// </summary>
         public void Start(TutorialType type = TutorialType.FullTour)
         {
-            // A tutorial is nothing but spotlight cut-outs positioned over MainWindow's controls.
-            // If the window is minimized, or tucked in the tray by Settings > "Start hidden", every
-            // step resolves a target with no on-screen rectangle and the tour draws its boxes over
-            // the bare desktop, pointing at nothing (ccp-bugs #999). Restore the window first -
-            // before TutorialStarted fires, so the overlay measures against a real window.
-            EnsureMainWindowVisible();
+            ActivateFirstStep(BeginStart(type));
+        }
 
+        // WPF TutorialService.cs:354-361: its synchronous narrator finishes before the first step.
+        internal async Task<bool> StartAsync(TutorialType type, Func<Task> beforeFirstStep)
+        {
+            int version = BeginStart(type);
+            try { await beforeFirstStep(); }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Tutorial: EMI summon failed"); }
+            return ActivateFirstStep(version);
+        }
+
+        private int BeginStart(TutorialType type)
+        {
+            // Restore a hidden or minimized shell before measuring its tutorial targets (ccp-bugs #999).
+            EnsureMainWindowVisible();
+            int version = ++_startVersion;
             _currentTutorialType = type;
             _currentSteps = GetStepsForTutorial(type);
             ApplyCallbacksToSteps();
-
             _currentStepIndex = 0;
             IsActive = true;
             TutorialStarted?.Invoke(this, EventArgs.Empty);
+            return version;
+        }
 
+        private bool ActivateFirstStep(int version)
+        {
+            if (!IsActive || version != _startVersion) return false;
             if (CurrentStep != null)
             {
                 CurrentStep.OnActivate?.Invoke();
                 StepChanged?.Invoke(this, CurrentStep);
             }
+            return true;
         }
 
         /// <summary>

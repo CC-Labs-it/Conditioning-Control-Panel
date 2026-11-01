@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -105,4 +106,113 @@ public sealed class TutorialEmiSummonTests
             Dispatcher.UIThread.RunJobs();
         }
     });
+
+    // WPF TutorialService.cs:354-361 and EmiDeskService.cs:286-313.
+    [Theory]
+    [InlineData("answer")]
+    [InlineData("existing")]
+    [InlineData("failure")]
+    [InlineData("panic")]
+    [InlineData("restart")]
+    [InlineData("close")]
+    public Task PendingMutePromptPrecedesTheFirstCard(string outcome) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current == null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldStore = TutorialService.CompletionStore;
+        var oldShell = TutorialHeadHooks.ShellProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        TutorialService.CompletionStore = new Store();
+        TutorialHead.Seed();
+        TutorialHead.ResetForTests();
+        var desk = EmiDeskService.Instance;
+        var oldAsk = desk.AskMute;
+        var answer = new TaskCompletionSource<EmiMuteChoice>();
+        var summoned = new TaskCompletionSource<bool>();
+        var stepped = new TaskCompletionSource<bool>();
+        int stepCount = 0;
+        void OnOut(object? sender, bool isOut) { if (isOut) summoned.TrySetResult(true); }
+        void OnStep(object? sender, TutorialStep step)
+        {
+            stepCount++;
+            stepped.TrySetResult(desk.Window?.IsVisible == true);
+        }
+        desk.ResetMutePrompt();
+        desk.AskMute = () => answer.Task;
+        desk.OutChanged += OnOut;
+        TutorialHead.Service.StepChanged += OnStep;
+        var shell = new MainShellWindow();
+        try
+        {
+            settings.Current.PerformanceMode = true;
+            settings.Current.EmiDeskEnabled = true;
+            settings.Current.EmiDeskMuteAvatar = true;
+            settings.Current.EmiDeskMuteDontAsk = false;
+            settings.Current.AiChatEnabled = true;
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            TutorialHeadHooks.ShellProvider = () => shell;
+            if (outcome == "existing") _ = desk.Summon("dock");
+            shell.Named<Button>("BtnMainHelp")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            shell.Named<Button>("BtnTutorialGettingStarted")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(CoreTutorial.IsActive);
+            Assert.True(desk.IsOut);
+            var pendingSummon = desk.PendingSummon!;
+            Assert.False(pendingSummon.IsCompleted);
+            Assert.False(desk.Window!.IsVisible);
+            Assert.False(stepped.Task.IsCompleted);
+            Assert.Null(TutorialHead.ShellOverlay);
+            CoreTutorial.Start("Settings");
+            Assert.Equal("GettingStarted", CoreTutorial.CurrentTourName);
+
+            if (outcome is "panic" or "restart") TutorialHead.OnPanic();
+            if (outcome == "restart")
+            {
+                CoreTutorial.Start("Settings");
+                Assert.Equal("Settings", CoreTutorial.CurrentTourName);
+                Assert.False(stepped.Task.IsCompleted);
+            }
+            if (outcome == "close") shell.Close();
+            if (outcome == "failure") answer.SetException(new InvalidOperationException("prompt failed"));
+            else answer.SetResult(EmiMuteChoice.Keep);
+            await summoned.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await pendingSummon.WaitAsync(TimeSpan.FromSeconds(10));
+            Dispatcher.UIThread.RunJobs();
+            if (outcome is "answer" or "existing" or "failure" or "restart")
+            {
+                Assert.True(await stepped.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(1, stepCount);
+                Assert.NotNull(TutorialHead.ShellOverlay);
+            }
+            else
+            {
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(CoreTutorial.IsActive);
+                Assert.False(stepped.Task.IsCompleted);
+                Assert.Null(TutorialHead.ShellOverlay);
+            }
+        }
+        finally
+        {
+            answer.TrySetResult(EmiMuteChoice.Keep);
+            TutorialHead.Service.StepChanged -= OnStep;
+            desk.OutChanged -= OnOut;
+            TutorialHead.ResetForTests();
+            desk.Window?.ShutDown();
+            desk.AskMute = oldAsk;
+            desk.ResetMutePrompt();
+            shell.Close();
+            settings.SaveImmediate();
+            CoreSettings.ServiceProvider = oldSettings;
+            TutorialService.CompletionStore = oldStore;
+            TutorialHeadHooks.ShellProvider = oldShell;
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
 }
