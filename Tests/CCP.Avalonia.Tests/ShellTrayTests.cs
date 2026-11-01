@@ -137,19 +137,28 @@ public sealed class ShellTrayTests
         });
     }
 
-    [Fact]
-    public void OnlyDeniedTrayNamesMatchTheFilter()
+    // Synthetic origin frame, not a captured Flatpak refusal. SetRemoteStackTrace survives the
+    // dispatcher rethrow, exercising the same Exception.StackTrace contract as an async tray failure.
+    private static Tmds.DBus.Protocol.DBusErrorReplyException TrayFailure(
+        string name = "org.freedesktop.DBus.Error.AccessDenied", string message = "org.freedesktop.DBus.Error.AccessDenied")
     {
-        var denied = new Tmds.DBus.Protocol.DBusErrorReplyException(
-            "org.freedesktop.DBus.Error.AccessDenied", "Not allowed to own org.kde.StatusNotifierItem-2-4");
+        var error = new Tmds.DBus.Protocol.DBusErrorReplyException(name, message);
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo.SetRemoteStackTrace(error,
+            "   at Avalonia.X11.DBusTrayIconImpl.CreateTrayIcon()\n");
+        return error;
+    }
+
+    [Fact]
+    public void OnlyDeniedTrayOriginsMatchTheFilter()
+    {
+        var denied = TrayFailure(); // Generic proxy body, no bus name.
         Assert.True(MainShellWindow.IsDeniedBusName(denied));
         Assert.True(MainShellWindow.IsDeniedBusName(new InvalidOperationException("wrapped", denied)));
         Assert.False(MainShellWindow.IsDeniedBusName(null));
-        Assert.False(MainShellWindow.IsDeniedBusName(new InvalidOperationException("org.kde.StatusNotifierItem-2-4")));
+        Assert.False(MainShellWindow.IsDeniedBusName(new InvalidOperationException("DBusTrayIconImpl")));
+        Assert.False(MainShellWindow.IsDeniedBusName(TrayFailure("org.freedesktop.DBus.Error.Failed")));
         Assert.False(MainShellWindow.IsDeniedBusName(new Tmds.DBus.Protocol.DBusErrorReplyException(
-            "org.freedesktop.DBus.Error.Failed", "org.kde.StatusNotifierItem-2-4")));
-        Assert.False(MainShellWindow.IsDeniedBusName(new Tmds.DBus.Protocol.DBusErrorReplyException(
-            "org.freedesktop.DBus.Error.AccessDenied", "Unrelated service refused access")));
+            "org.freedesktop.DBus.Error.AccessDenied", "Not allowed to own org.kde.StatusNotifierItem-2-4")));
     }
 
     [Fact]
@@ -165,8 +174,7 @@ public sealed class ShellTrayTests
             try
             {
                 shell.CreateTray();
-                var denied = new Tmds.DBus.Protocol.DBusErrorReplyException(
-                    "org.freedesktop.DBus.Error.AccessDenied", "Not allowed to own org.kde.StatusNotifierItem-2-4");
+                var denied = TrayFailure();
                 Dispatcher.UIThread.Post(() => throw denied);
                 Dispatcher.UIThread.RunJobs();
                 Dispatcher.UIThread.Post(() => throw new InvalidOperationException("wrapped", denied));
@@ -193,10 +201,12 @@ public sealed class ShellTrayTests
 
     // WPF TrayIconService.ShowWindow and MainWindow.WindowChrome.OnClosing: keep the panel reachable.
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task DeniedTrayWithWatcherKeepsTheShellReachable(bool alreadyHidden)
+    [InlineData(0)] // Denial before the pending startup hide.
+    [InlineData(1)] // X-to-tray hide.
+    [InlineData(2)] // Completed startup hide.
+    public async Task DeniedTrayWithWatcherKeepsTheShellReachable(int hidePath)
     {
+        var alreadyHidden = hidePath != 0;
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
@@ -211,13 +221,13 @@ public sealed class ShellTrayTests
                 Assert.True(shell.CanHideToTray);
                 if (alreadyHidden)
                 {
+                    if (hidePath == 2) shell.StartMinimizedToTray();
                     shell.Show();
-                    shell.Hide();
+                    if (hidePath == 1) shell.Close(); // Real X-to-tray path records the hide reason.
                     Assert.False(shell.IsVisible);
                 }
                 else shell.StartMinimizedToTray(); // Denial races the pending Opened callback.
-                Dispatcher.UIThread.Post(() => throw new Tmds.DBus.Protocol.DBusErrorReplyException(
-                    "org.freedesktop.DBus.Error.AccessDenied", "Not allowed to own org.kde.StatusNotifierItem-2-4"));
+                Dispatcher.UIThread.Post(() => throw TrayFailure());
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(shell.CanHideToTray); // Watcher presence alone cannot make an icon usable.
                 if (!alreadyHidden)
@@ -240,4 +250,47 @@ public sealed class ShellTrayTests
             return Task.CompletedTask;
         });
     }
+    [Fact]
+    public async Task DeniedTrayDoesNotRaisePanelOverLauncherBoot()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            var boot = LauncherWindow.Boot;
+            try
+            {
+                shell.CreateTray();
+                shell.TrayHostPresent = () => true;
+                shell.Show();
+                shell.Close();
+                Assert.False(shell.IsVisible);
+                shell.ShowFromTray(); // Clear an earlier tray hide before launcher routing takes over.
+                Assert.True(shell.IsVisible);
+                LauncherWindow.Boot = global::ConditioningControlPanel.Services.Launcher.BootDecision.LauncherFirst;
+                LauncherWindow.RouteBoot(shell);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(shell.IsVisible);
+                Assert.True(LauncherWindow.Instance!.IsVisible);
+                Dispatcher.UIThread.Post(() => throw TrayFailure());
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(shell.CanHideToTray); // Denial was handled, rather than missed.
+                Assert.False(shell.IsVisible);
+                Assert.True(LauncherWindow.Instance.IsVisible);
+            }
+            finally
+            {
+                LauncherWindow.Instance?.Close();
+                LauncherWindow.Boot = boot;
+                shell.Tray?.Dispose();
+                shell.MarkExitRequestedForTest();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
 }

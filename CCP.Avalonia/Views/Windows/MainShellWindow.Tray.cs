@@ -42,24 +42,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // WPF TrayIconService.cs:145-148 keeps tray initialization failure from ending the app.
         // Avalonia requests SNI names asynchronously; Flatpak can refuse one after watcher restarts.
+        // Proxy error text is not an API. Scope AccessDenied to the tray implementation's stack.
         internal static bool IsDeniedBusName(Exception? error)
         {
             for (; error is not null; error = error.InnerException)
                 if (error is DBusErrorReplyException { ErrorName: "org.freedesktop.DBus.Error.AccessDenied" }
-                    && error.Message.Contains("org.kde.StatusNotifierItem-", StringComparison.Ordinal)) return true;
+                    && error.StackTrace?.Contains("DBusTrayIconImpl", StringComparison.Ordinal) == true) return true;
             return false;
         }
 
         private bool _trayRegistrationDenied;
-        private bool _trayShellWasOpened;
+        private bool _hiddenToTray;
         internal bool CanHideToTray => Tray is not null && !_trayRegistrationDenied && TrayHostPresent();
-
-        private void OnTrayShellOpened(object? sender, EventArgs e) => _trayShellWasOpened = true;
 
         private void DetachTrayHandlers(object? sender, EventArgs e)
         {
             global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException -= SwallowDeniedBusName;
-            Opened -= OnTrayShellOpened;
         }
 
         // WPF MainWindow.xaml.cs:3779-3784 hides only through the tray. Recheck at Opened:
@@ -69,7 +67,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             void ToTray(object? sender, EventArgs e)
             {
                 Opened -= ToTray;
-                if (CanHideToTray) Hide();
+                if (CanHideToTray)
+                {
+                    _hiddenToTray = true;
+                    Hide();
+                }
             }
             Opened += ToTray;
         }
@@ -81,8 +83,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             e.Handled = true;
             _trayRegistrationDenied = true;
             // WPF TrayIconService.cs:195-218 restores access through ShowWindow. With no icon,
-            // restore here instead, but do not show a shell that startup has not opened yet.
-            if (_trayShellWasOpened && !IsVisible && !_windowClosed && !_exitRequested) ShowFromTray();
+            // restore only a tray hide. Launcher/game routing has its own way back to the panel
+            // (WPF LauncherHost.cs:304-328, App.xaml.cs:4286). Do not activate over that surface.
+            if (_hiddenToTray && !IsVisible && !_windowClosed && !_exitRequested) ShowFromTray();
         }
 
         internal TrayIcon CreateTray()
@@ -92,9 +95,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException += SwallowDeniedBusName;
             Closed -= DetachTrayHandlers;
             Closed += DetachTrayHandlers;
-            Opened -= OnTrayShellOpened;
-            Opened += OnTrayShellOpened;
-            _trayShellWasOpened |= IsVisible;
             Tray?.Dispose();
             Tray = new TrayIcon
             {
@@ -180,6 +180,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public void ShowFromTray()
         {
             if (_windowClosed) return;
+            _hiddenToTray = false;
             RestoreLauncherPanelOpacity();
             Show();
             WindowState = WindowState.Normal;
@@ -225,6 +226,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF WindowChrome.cs:345: quizzes are unowned topmost windows that would stay on screen.
                 PopQuizWindow.ForceCloseAll();
                 QuizWindow.CloseAll();
+                _hiddenToTray = true;
                 Hide();
                 HideAvatarTube();
                 // ponytail: WPF fires App.EmiDesk "minimizedToTray" here (WindowChrome.cs:362); this head has no EmiDesk Fire moment bus yet.
