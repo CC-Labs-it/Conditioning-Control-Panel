@@ -25,7 +25,7 @@
        WindowStyle="None" + WindowChrome   -> SystemDecorations="None" (the bar is drawn in XAML)
        ResizeMode=CanResizeWithGrip        -> CanResize="True"; the grip itself is lost
        Window.CommandBindings              -> dropped; Avalonia has no RoutedCommand/CommandBinding
-       poss:Possession.* attached props    -> dropped (Services/Possession stays in the WPF head)
+       poss:Possession.* attached props    -> PossessionTree.Exclude on LockdownBadge; Role/Name tags pending
        x:Name on a non-Control              -> dropped. Avalonia only names Controls, so the 20
                                               named ScaleTransform / RotateTransform /
                                               TranslateTransform / GradientStop / DropShadowEffect
@@ -51,6 +51,7 @@
      real ":pointerover /template/" selectors instead. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:poss="clr-namespace:ConditioningControlPanel.Avalonia.Possession"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         xmlns:views="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
         xmlns:cmp="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls"
@@ -392,7 +393,7 @@
                          Exclude inherits, so the badge and everything in it stays out of the Wave 2
                          auto-tagger's deck. Visibility, the clock and the click are all owned by
                          MainWindow.Lab.cs (OnLockdownActivated / OnLockdownTick / LockdownBadge_Click). -->
-                    <Border x:Name="LockdownBadge"
+                    <Border x:Name="LockdownBadge" poss:PossessionTree.Exclude="True"
                             IsVisible="False"
                             VerticalAlignment="Center"
                             Background="#DC143C" CornerRadius="12" Padding="11,4"

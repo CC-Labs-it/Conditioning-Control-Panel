@@ -36,13 +36,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void EnsurePossessionLayers()
         {
             if (Content is not Grid root) return;
-            if (_possessionGhostLayer == null || !root.Children.Contains(_possessionGhostLayer))
-            {
+            if (_possessionGhostLayer == null || !root.Children.Contains(_possessionGhostLayer)) {
                 _possessionGhostLayer = new Canvas { IsHitTestVisible = false, ClipToBounds = false, ZIndex = 9000 };
                 root.Children.Add(_possessionGhostLayer);
             }
-            if (_possessionRubbleFloor == null || !root.Children.Contains(_possessionRubbleFloor))
-            {
+            if (_possessionRubbleFloor == null || !root.Children.Contains(_possessionRubbleFloor)) {
                 _possessionRubbleFloor = new Canvas { Height = 28, IsHitTestVisible = false,
                     ClipToBounds = false, VerticalAlignment = VerticalAlignment.Bottom, ZIndex = 8999 };
                 root.Children.Add(_possessionRubbleFloor);
@@ -82,8 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _possessionCacheDirty = true;
                 return _possessionTargetCache ?? (IReadOnlyList<PossessionTarget>)Array.Empty<PossessionTarget>();
             }
-            try
-            {
+            try {
                 var now = PossessionNow();
                 var age = now - _possessionCacheAt;
                 var stale = _possessionTargetCache == null
@@ -112,14 +109,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
         private void TrimLabels(List<PossessionTarget> labels)
         {
-            try
-            {
+            try {
                 var origin = _possessionPointer;
                 bool haveCursor = origin.X > 0 || origin.Y > 0;
                 double Score(PossessionTarget t)
                 {
-                    try
-                    {
+                    try {
                         if (!TryWindowBounds((Control)t.Visual, out var r)) return double.MaxValue;
                         if (!haveCursor) return -(r.Width * r.Height);         // biggest first
                         double dx = r.X + r.Width / 2 - origin.X, dy = r.Y + r.Height / 2 - origin.Y;
@@ -141,8 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return default;
             Control? fe = node as Control;
             var handRole = PossessionRole.None;
-            if (fe != null)
-            {
+            if (fe != null) {
                 if (!fe.IsEffectivelyVisible) return default;
                 if (PossessionTree.GetExclude(fe)) return default;
                 handRole = PossessionTree.GetRole(fe);
@@ -183,8 +177,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
         private PossessionTarget? TargetFor(Control fe, PossessionRole role, int pathHash)
         {
-            try
-            {
+            try {
                 if (_possessionTargets.TryGetValue(fe, out var existing)) return existing;
                 var target = new PossessionTarget
                 {
@@ -206,16 +199,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (fe is ComboBox) return PossessionRole.Combo;
             if (fe is TextBox) return PossessionRole.TextBox;
             if (fe is ProgressBar) return PossessionRole.Progress;
-            if (fe is ScrollViewer sv)
-            {
+            if (fe is ScrollViewer sv) {
                 double scrollable;
                 try { scrollable = sv.Extent.Height - sv.Viewport.Height; } catch { scrollable = 0; }
                 return scrollable > 0 ? PossessionRole.Scroll : PossessionRole.None;
             }
             if (fe is Image img)
                 return (img.Bounds.Width >= 48 && img.Bounds.Height >= 48) ? PossessionRole.Image : PossessionRole.None;
-            if (fe is TextBlock tb)
-            {
+            if (fe is TextBlock tb) {
                 double size;
                 try { size = tb.FontSize; } catch { size = 0; }
                 if (size >= 18) return PossessionRole.Title;
@@ -227,8 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
         private static bool IsInsideScrollBar(Visual? node)
         {
-            try
-            {
+            try {
                 for (int i = 0; node != null && i < 6; i++)
                 {
                     if (node is ScrollBar) return true;
@@ -242,8 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             or PossessionRole.Toggle or PossessionRole.Slider or PossessionRole.Combo or PossessionRole.TextBox;
         private static bool IsCardBorder(Control fe)
         {
-            try
-            {
+            try {
                 if (fe is not Border b || b.Background == null) return false;
                 var cr = b.CornerRadius;
                 if (cr.TopLeft <= 0 && cr.TopRight <= 0 && cr.BottomLeft <= 0 && cr.BottomRight <= 0) return false;
@@ -253,8 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
         private bool PassesSizeAndPlacement(Control fe)
         {
-            try
-            {
+            try {
                 if (!fe.IsEffectivelyEnabled || !fe.IsHitTestVisible) return false;
                 for (Visual? ancestor = fe.GetVisualParent(); ancestor != null; ancestor = ancestor.GetVisualParent())
                     if (ancestor is global::Avalonia.Input.InputElement { IsHitTestVisible: false }) return false;
@@ -269,8 +257,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal bool TryWindowBounds(Control fe, out Rect bounds)
         {
             bounds = default;
-            try
-            {
+            try {
                 var t = fe.TransformToVisual(this);
                 if (t == null) return false;
                 bounds = new Rect(fe.Bounds.Size).TransformToAABB(t.Value);
@@ -280,8 +267,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
         private static string DisplayNameFor(Control fe, PossessionRole role)
         {
-            try
-            {
+            try {
                 var hand = PossessionTree.GetName(fe);
                 if (!string.IsNullOrWhiteSpace(hand)) return hand;
                 var text = Tidy(fe is ContentControl cc ? cc.Content as string : null)
