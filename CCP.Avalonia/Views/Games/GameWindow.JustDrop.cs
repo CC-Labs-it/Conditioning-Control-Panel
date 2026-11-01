@@ -21,7 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// page message goes to Core <see cref="JustDropService"/>; a panic closes it with every other game
     /// window (PanicSurfaces "games", WPF GameSurfaces.cs:57).
     /// <para>Takeaway replay uses the bare player, fullscreen and panel duck/restore. Remaining:
-    /// Page fullscreen confinement, native ownership and Chromium no-throttle flags remain missing.</para>
+    /// Native ownership and Chromium no-throttle flags remain missing.</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void BuildJustDropChrome()
         {
             Web.CarrierExtension = JustDropEscapeScript;
+            Web.ConfinePageFullscreen = true; // WPF ChaosWebViewHost.cs:1652-1659
             var bar = new DockPanel();
             _justDropFullscreen = new Button { Name = "JustDropFullscreen", Margin = new Thickness(8, 5, 10, 5), MinWidth = 120 };
             if (this.TryFindResource("SmallPinkButton", out var theme) && theme is ControlTheme buttonTheme)

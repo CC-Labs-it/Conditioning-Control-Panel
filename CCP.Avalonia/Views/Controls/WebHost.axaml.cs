@@ -193,6 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         // Optional host input alongside the carrier, installed before the first page script.
         internal string? CarrierExtension { get; set; }
+        internal bool ConfinePageFullscreen { get; set; }
         private string DocumentStartScript => CarrierShim + (CarrierExtension ?? "");
 
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post): the page's string push, else a message
@@ -495,7 +496,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             try
             {
                 return await (NativeCarrierInvoker?.Invoke(DocumentStartScript)
-                    ?? Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), DocumentStartScript));
+                    ?? Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), DocumentStartScript, ConfinePageFullscreen));
             }
             catch (Exception ex) { Log.Debug("WebHost: carrier install failed: {E}", ex.Message); return false; }
         }

@@ -160,8 +160,18 @@ jobs:
         with:
           dotnet-version: |
             10.0.x
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb xauth libvlc-dev vlc-plugin-base
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb xauth libvlc-dev vlc-plugin-base libwebkit2gtk-4.1-0 libxtst6 gstreamer1.0-plugins-good xfwm4
       - run: dotnet build CCP.Avalonia/CCP.Avalonia.csproj -c Release
+      - name: Test native Just Drop web view
+        run: |
+          xvfb-run -a -s '-screen 0 1280x900x24' sh -c '
+            xfwm4 --compositor=off &
+            wm=$!
+            trap "kill $wm 2>/dev/null || true" EXIT
+            dotnet test Tests/CCP.Avalonia.NativeTests/CCP.Avalonia.NativeTests.csproj -c Release
+          '
+        env:
+          WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
       - name: perf-bench (report-only)
         continue-on-error: true
         run: |

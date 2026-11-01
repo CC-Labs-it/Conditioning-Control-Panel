@@ -17,12 +17,18 @@ internal static class WebViewCarrier
     private delegate IntPtr GetManager(IntPtr view);
     private delegate IntPtr NewScript([MarshalAs(UnmanagedType.LPUTF8Str)] string source, int frames, int time, IntPtr allow, IntPtr block);
     private delegate void AddScript(IntPtr manager, IntPtr script);
+    private delegate int Fullscreen(IntPtr view, IntPtr data);
+    private delegate nuint Connect(IntPtr view, [MarshalAs(UnmanagedType.LPUTF8Str)] string signal,
+        Fullscreen callback, IntPtr data, IntPtr destroy, int flags);
+    private delegate void Disconnect(IntPtr view, nuint id);
     private static readonly Idle Apply = OnIdle;
+    private static readonly Fullscreen KeepInView = (_, _) => 1; // stop GTK's default window fullscreen handler
+
 
     private sealed record Request(IntPtr View, string Script, GetManager Manager, NewScript New, AddScript Add,
-        Unref ScriptUnref, Unref ViewUnref, TaskCompletionSource<bool> Done);
+        Unref ScriptUnref, Unref ViewUnref, Connect? Connect, Disconnect? Disconnect, TaskCompletionSource<bool> Done);
 
-    internal static Task<bool> InstallAsync(IPlatformHandle? handle, string script)
+    internal static Task<bool> InstallAsync(IPlatformHandle? handle, string script, bool confineFullscreen = false)
     {
         try
         {
@@ -45,7 +51,9 @@ internal static class WebViewCarrier
                 Get<GetManager>(webkit, "webkit_web_view_get_user_content_manager"),
                 Get<NewScript>(webkit, "webkit_user_script_new"),
                 Get<AddScript>(webkit, "webkit_user_content_manager_add_script"),
-                Get<Unref>(webkit, "webkit_user_script_unref"), release, done);
+                Get<Unref>(webkit, "webkit_user_script_unref"), release,
+                confineFullscreen ? Get<Connect>(objects, "g_signal_connect_data") : null,
+                confineFullscreen ? Get<Disconnect>(objects, "g_signal_handler_disconnect") : null, done);
             var enqueue = Get<IdleAdd>(glib, "g_idle_add");
             Get<Ref>(objects, "g_object_ref")(request.View);
             var state = GCHandle.Alloc(request);
@@ -77,6 +85,19 @@ internal static class WebViewCarrier
         var ok = false;
         try
         {
+            // WPF ChaosWebViewHost.cs:1645-1659: the element fills the view, not its host window.
+            // Handle both transitions: GTK's default leave handler would also change the host window.
+            if (request.Connect is { } connect)
+            {
+                var enter = connect(request.View, "enter-fullscreen", KeepInView, IntPtr.Zero, IntPtr.Zero, 0);
+                var leave = connect(request.View, "leave-fullscreen", KeepInView, IntPtr.Zero, IntPtr.Zero, 0);
+                if (enter == 0 || leave == 0)
+                {
+                    if (enter != 0) request.Disconnect!(request.View, enter);
+                    if (leave != 0) request.Disconnect!(request.View, leave);
+                    throw new InvalidOperationException("fullscreen signal connection failed");
+                }
+            }
             var manager = request.Manager(request.View);
             // TOP_FRAME and START: the page sees the carrier before its own scripts.
             var script = manager == IntPtr.Zero ? IntPtr.Zero : request.New(request.Script, 1, 0, IntPtr.Zero, IntPtr.Zero);
