@@ -277,7 +277,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             AddHandler(KeyDownEvent, (_, e) =>
             {
-                if (e.Key != global::Avalonia.Input.Key.K || e.KeyModifiers != global::Avalonia.Input.KeyModifiers.Control) return;
+                if (e.Handled || e.Key != global::Avalonia.Input.Key.K || e.KeyModifiers != global::Avalonia.Input.KeyModifiers.Control) return;
                 e.Handled = true;
                 if (SettingsPaletteWindow.FirstChordPress()) SettingsPaletteWindow.Toggle(this);
             }, RoutingStrategies.Tunnel, handledEventsToo: true);

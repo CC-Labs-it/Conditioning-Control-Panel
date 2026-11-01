@@ -45,13 +45,8 @@
 //   offers "Add to Asset Library"/Cancel only, and an enhancement drop says the library is not
 //   ready, WPF's own string (docs/avalonia-decisions.html, 2026-10-09 window-wide drop).
 //
-//   The two global hotkeys - ApplyGlobalChatHotkey, ApplyGlobalCameraHotkey, ApplyCameraShortcutTo,
-//   ParseModifiers, FormatCameraShortcut, RefreshChatShortcutLabel, RefreshCameraShortcutLabel,
-//   BtnChatShortcut_Click, BtnCameraShortcut_Click, ToggleCameraCommand, OpenAvatarChat_Executed,
-//   BringToForegroundAndOpenChat, _cameraCommandBound. RoutedUICommand and ModifierKeys are WPF
-//   types, and a DESKTOP-WIDE hotkey is a Win32 RegisterHotKey - the bucket-E problem CLAUDE.md
-//   describes, not a port. ToggleCameraCommand is additionally a camera control: see the refusal
-//   already recorded for the two device pills in MainShellWindow.LabTab.cs.
+//   The chat global hotkey and BringToForegroundAndOpenChat are still missing. The camera
+//   shortcut lives in MainShellWindow.CameraShortcut.cs, with the tracker in BlinkTrainerTabView.
 //
 //   RefreshImagesList / RefreshVideosList - the assets tab's lists, blocked with the asset tree in
 //   MainShellWindow.Assets.cs.
