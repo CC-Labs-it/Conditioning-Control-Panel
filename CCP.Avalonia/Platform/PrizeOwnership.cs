@@ -44,6 +44,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (Gate) return current != null && current == _heldAccount && _grants.Contains(id);
         }
 
+        internal static bool HasSnapshot(string? account)
+        {
+            lock (Gate) return account != null && FriendsHead.Identity()?.UnifiedId == account && account == _heldAccount;
+        }
+
         /// <summary>WPF OwnershipService.ApplySnapshot: another account's snapshot and a lower
         /// revision for the held account are ignored; blank ids skipped, ids trimmed.</summary>
         internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
@@ -56,6 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 (_heldAccount, _revision) = (accountId, revision);
                 _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
             }
+            RainLookSyncHead.AccountReady(accountId, deferred: true);
         }
 
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>

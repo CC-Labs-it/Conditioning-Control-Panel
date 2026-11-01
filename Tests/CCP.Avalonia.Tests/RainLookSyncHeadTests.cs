@@ -14,66 +14,90 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-public sealed class RainLookSyncHeadTests
+public sealed class RainLookSyncHeadTests : IDisposable
 {
     private sealed class Fake : HttpMessageHandler
     {
         internal int Calls;
         internal HttpMethod? LastMethod;
+        internal Func<Task<HttpResponseMessage>>? Reply;
+        internal bool WasCancelled;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             Calls++;
             LastMethod = r.Method;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+            WasCancelled = ct.IsCancellationRequested;
+            return Reply?.Invoke() ?? Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
         }
+    }
+
+    private readonly AppSettings s = CoreSettings.Current;
+    private readonly RainLookSync _previous = RainLookSyncHead.Client;
+    private readonly (string? Id, bool Offline, Func<string, string?>? Get, Action<string, string?>? Set, Func<string, bool> Grants) _saved =
+        (CoreSettings.Current.UnifiedId, CoreSettings.Current.OfflineMode, CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted);
+    private readonly (string Look, DateTime? Agreed, bool Owed, string Pack) _look =
+        (CoreSettings.Current.RainLook, CoreSettings.Current.RainLookAgreedUtc, CoreSettings.Current.RainLookPushOwed, CoreSettings.Current.RainPackHash);
+    private bool _resetOwnership;
+
+    public RainLookSyncHeadTests()
+    {
+        CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? "dummy" : null;
+        CoreSecrets.StoreProvider = (_, _) => { };
+        s.UnifiedId = "rain-test"; s.OfflineMode = false;
+        RainLookSyncHead.Stop();
+    }
+
+    public void Dispose()
+    {
+        if (_resetOwnership) { PrizeOwnership.IsGranted = _saved.Grants; PrizeOwnership.ResetHeld(); }
+        RainLookSyncHead.Stop(); RainLookSyncHead.Client = _previous;
+        (s.UnifiedId, s.OfflineMode) = (_saved.Id, _saved.Offline);
+        (s.RainLook, s.RainLookAgreedUtc, s.RainLookPushOwed, s.RainPackHash) = _look;
+        CoreSecrets.RetrieveProvider = _saved.Get; CoreSecrets.StoreProvider = _saved.Set;
     }
 
     [Fact]
     public async Task Only_current_account_pulls_once_and_panic_stops_the_client()
     {
-        var s = CoreSettings.Current;
-        var (id, offline) = (s.UnifiedId, s.OfflineMode);
-        var oldGet = CoreSecrets.RetrieveProvider;
-        var oldSet = CoreSecrets.StoreProvider;
-        CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? "dummy" : null;
-        CoreSecrets.StoreProvider = (_, _) => { };
-        var old = RainLookSyncHead.Client;
         using var http = new Fake();
-        try
+        s.AuthToken = "dummy";
+        RainLookSyncHead.Client = new RainLookSync(new HttpClient(http), new RainLookSync.Hooks
         {
-            s.UnifiedId = "rain-test";
-            s.AuthToken = "dummy";
-            s.OfflineMode = false;
+            Identity = () => ("rain-test", "dummy"), Local = () => ("", false, null),
+            Agreed = (_, _) => throw new Exception("404 must not agree"),
+            Adopt = (_, _) => throw new Exception("404 must not adopt"),
+            BaseUrl = "https://rain.test",
+        });
+        await RainLookSyncHead.PullAsync("other", default);
+        using var stale = new CancellationTokenSource();
+        await RainLookSyncHead.PullAsync("rain-test", stale.Token);
+        await RainLookSyncHead.PullAsync("rain-test", new CancellationToken(canceled: true));
+        Assert.Equal(0, http.Calls);
+        await RainLookSyncHead.PullAsync("rain-test", default);
+        await RainLookSyncHead.PullAsync("rain-test", default);
+        Assert.Equal(1, http.Calls);
+        Assert.Contains(PanicSurfaces.All, s => s.Id == "rain-look-sync");
+        foreach (var surface in PanicSurfaces.All)
+            if (surface.Id == "rain-look-sync") surface.Stop(null);
+        await RainLookSyncHead.PullAsync("rain-test", default);
+        Assert.Equal(2, http.Calls);
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
             RainLookSyncHead.Stop();
-            RainLookSyncHead.Client = new RainLookSync(new HttpClient(http), new RainLookSync.Hooks
-            {
-                Identity = () => ("rain-test", "dummy"), Local = () => ("", false, null),
-                Agreed = (_, _) => throw new Exception("404 must not agree"),
-                Adopt = (_, _) => throw new Exception("404 must not adopt"),
-                BaseUrl = "https://rain.test",
-            });
-            await RainLookSyncHead.PullAsync("other", default);
-            using var cancelled = new CancellationTokenSource();
-            cancelled.Cancel();
-            await RainLookSyncHead.PullAsync("rain-test", cancelled.Token);
-            Assert.Equal(0, http.Calls);
-            await RainLookSyncHead.PullAsync("rain-test", default);
-            await RainLookSyncHead.PullAsync("rain-test", default);
+            http.Calls = 0;
+            var first = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+            http.Reply = () => http.Calls == 1 ? first.Task : Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+            RainLookSyncHead.AccountReady("rain-test");
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
             Assert.Equal(1, http.Calls);
-            Assert.Contains(PanicSurfaces.All, s => s.Id == "rain-look-sync");
-            foreach (var surface in PanicSurfaces.All)
-                if (surface.Id == "rain-look-sync") surface.Stop(null);
-            await RainLookSyncHead.PullAsync("rain-test", default);
-            Assert.Equal(2, http.Calls);
-        }
-        finally
-        {
             RainLookSyncHead.Stop();
-            RainLookSyncHead.Client = old;
-            (s.UnifiedId, s.OfflineMode) = (id, offline);
-            CoreSecrets.RetrieveProvider = oldGet;
-            CoreSecrets.StoreProvider = oldSet;
-        }
+            RainLookSyncHead.AccountReady("rain-test");
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            var callsWhileUnwinding = http.Calls;
+            first.SetResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+            Assert.Equal(2, callsWhileUnwinding);
+            Assert.False(http.WasCancelled);
+        });
     }
 
     [Theory]
@@ -84,46 +108,49 @@ public sealed class RainLookSyncHeadTests
     public Task Matching_validate_without_prizes_or_grants_still_syncs(bool emptyBlock, bool pushOwed)
         => AvaloniaTestDispatcher.RunAsync(async () =>
         {
-            var s = CoreSettings.Current;
-            var (id, offline) = (s.UnifiedId, s.OfflineMode);
-            var oldGet = CoreSecrets.RetrieveProvider;
-            var oldSet = CoreSecrets.StoreProvider;
-            var old = RainLookSyncHead.Client;
-            CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? "dummy" : null;
-            CoreSecrets.StoreProvider = (_, _) => { };
             using var http = new Fake();
-            try
+            _resetOwnership = true;
+            var owed = pushOwed;
+            RainLookSyncHead.Client = new RainLookSync(new HttpClient(http), new RainLookSync.Hooks
             {
-                s.UnifiedId = "rain-test";
-                s.OfflineMode = false;
+                Identity = () => ("rain-test", "dummy"), Local = () => ("", owed, null),
+                Agreed = (_, _) => owed = false, Adopt = (_, _) => owed = false,
+                BaseUrl = "https://rain.test",
+            });
+            var prizes = emptyBlock ? new PrizesBlock() : null;
+            async Task Drain() => await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            RainLookSyncHead.ApplyPrizes("rain-test", "other", prizes, "test");
+            RainLookSyncHead.ApplyPrizes("other", "other", prizes, "test");
+            RainLookSyncHead.ApplyPrizes(null, null, prizes, "test");
+            RainLookSyncHead.ApplySyncPrizes("rain-test", null);
+            await Drain();
+            Assert.Equal(0, http.Calls);
+            RainLookSyncHead.ApplyPrizes("rain-test", "rain-test", prizes, "test");
+            await Drain();
+            Assert.Equal(1, http.Calls);
+            Assert.Equal(pushOwed ? HttpMethod.Put : HttpMethod.Get, http.LastMethod);
+            Assert.Equal(pushOwed, owed); // A 404 must leave an owed push intact.
+            if (!emptyBlock && !pushOwed)
+            {
+                PrizeOwnership.ResetHeld();
+                PrizeOwnership.IsGranted = PrizeOwnership.Held;
+                s.RainLook = ""; s.RainLookAgreedUtc = null; s.RainLookPushOwed = false;
+                var hooks = (RainLookSync.Hooks)typeof(RainLookSync).GetField("_h", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(_previous)!;
                 RainLookSyncHead.Stop();
-                var owed = pushOwed;
-                RainLookSyncHead.Client = new RainLookSync(new HttpClient(http), new RainLookSync.Hooks
-                {
-                    Identity = () => ("rain-test", "dummy"), Local = () => ("", owed, null),
-                    Agreed = (_, _) => owed = false, Adopt = (_, _) => owed = false,
-                    BaseUrl = "https://rain.test",
-                });
-                var prizes = emptyBlock ? new PrizesBlock() : null;
-                async Task Drain() => await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
-                RainLookSyncHead.ApplyPrizes("rain-test", "other", prizes, "test");
-                RainLookSyncHead.ApplyPrizes("other", "other", prizes, "test");
-                RainLookSyncHead.ApplyPrizes(null, null, prizes, "test");
-                await Drain();
-                Assert.Equal(0, http.Calls);
-                RainLookSyncHead.ApplyPrizes("rain-test", "rain-test", prizes, "test");
+                RainLookSyncHead.Client = new RainLookSync(new HttpClient(http), hooks);
+                const string dress = """{"rev":1,"items":{"dress":"rose-flare"},"colors":{}}""";
+                http.Reply = () => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"ok":true,"equip":{"rain":  """ + dress + """, "updatedAt":"2026-10-30T11:00:00Z"}}""") });
+                http.Calls = 0;
+                RainLookSyncHead.ApplyPrizes("rain-test", "rain-test", null, "test");
                 await Drain();
                 Assert.Equal(1, http.Calls);
-                Assert.Equal(pushOwed ? HttpMethod.Put : HttpMethod.Get, http.LastMethod);
-                Assert.Equal(pushOwed, owed); // A 404 must leave an owed push intact.
-            }
-            finally
-            {
-                RainLookSyncHead.Stop();
-                RainLookSyncHead.Client = old;
-                (s.UnifiedId, s.OfflineMode) = (id, offline);
-                CoreSecrets.RetrieveProvider = oldGet;
-                CoreSecrets.StoreProvider = oldSet;
+                Assert.Equal("", s.RainLook);
+                Assert.Null(s.RainLookAgreedUtc);
+                RainLookSyncHead.ApplySyncPrizes("rain-test", new PrizesBlock { Revision = 3, Grants = new() { "cos.rain.dress.rose-flare" } });
+                await Drain();
+                Assert.Equal(2, http.Calls);
+                Assert.Equal(RainLookCodec.Normalize(dress), s.RainLook);
+                Assert.Equal(new DateTime(2026, 10, 30, 11, 0, 0, DateTimeKind.Utc), s.RainLookAgreedUtc);
             }
         });
 
