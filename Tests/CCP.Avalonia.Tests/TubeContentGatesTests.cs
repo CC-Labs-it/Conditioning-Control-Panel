@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -43,25 +45,84 @@ public sealed class TubeContentGatesTests
         return owner.OwnedWindows.OfType<T>().Single();
     }
 
-    // Pure tube helpers may initialize the window type off the UI thread before a menu is shown.
+    // Run this one case alone: another test can initialize AvatarTubeWindow before our worker does.
     [Fact]
-    public Task MenuRendersAfterTubeTypeInitializesOnAnotherThread() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public async Task MenuRendersAfterTubeTypeInitializesOnAnotherThread()
     {
-        await Task.Run(() => System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(AvatarTubeWindow).TypeHandle));
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var tube = new AvatarTubeWindow(null);
+        const string probeFileVariable = "CCP_TEST_TUBE_MENU_PROBE_FILE";
+        var probeFile = Environment.GetEnvironmentVariable(probeFileVariable);
+        if (!string.IsNullOrEmpty(probeFile))
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                await Task.Run(() =>
+                {
+                    Assert.False(Dispatcher.UIThread.CheckAccess());
+                    System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(AvatarTubeWindow).TypeHandle);
+                    // If a mutable brush was already created on another thread, RunClassConstructor did
+                    // nothing. Fail here instead of silently passing a test that never exercised the race.
+                    foreach (var name in new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" })
+                    {
+                        var field = typeof(AvatarTubeWindow).GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+                        var brush = Assert.IsAssignableFrom<global::Avalonia.Media.IBrush>(field.GetValue(null));
+                        if (brush is AvaloniaObject mutable)
+                            Assert.True(mutable.CheckAccess(), $"{name} was initialized before the worker");
+                    }
+                });
+                Setup();
+                var tube = new AvatarTubeWindow(null);
+                try
+                {
+                    tube.Show();
+                    var menu = tube.FindControl<ContextMenu>("AvatarContextMenu")!;
+                    menu.Open(tube.FindControl<Border>("AvatarBorder") ?? (Control)tube);
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.NotEmpty(tube.FindControl<MenuItem>("MenuItemPersonality")!.Items);
+                }
+                finally { tube.Close(); }
+            });
+            File.WriteAllText(probeFile, Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+            return;
+        }
+
+        // Deliberately initialize the parent first, as TubeMotesTests can do in the full suite.
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(AvatarTubeWindow).TypeHandle);
+            return Task.CompletedTask;
+        });
+        var marker = Path.Combine(Path.GetTempPath(), "ccp-tube-menu-" + Guid.NewGuid().ToString("N"));
+        var assembly = typeof(TubeContentGatesTests).Assembly;
+        var executable = Path.Combine(AppContext.BaseDirectory, assembly.GetName().Name + (OperatingSystem.IsWindows() ? ".exe" : ""));
+        var start = new ProcessStartInfo { FileName = File.Exists(executable) ? executable : Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet",
+            UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+        if (!File.Exists(executable)) start.ArgumentList.Add(assembly.Location);
+        start.ArgumentList.Add("-noAutoReporters");
+        start.ArgumentList.Add("-noColor");
+        start.ArgumentList.Add("-method");
+        start.ArgumentList.Add(typeof(TubeContentGatesTests).FullName + "." + nameof(MenuRendersAfterTubeTypeInitializesOnAnotherThread));
+        start.Environment[probeFileVariable] = marker;
         try
         {
-            tube.Show();
-            var menu = tube.FindControl<ContextMenu>("AvatarContextMenu")!;
-            menu.Open(tube.FindControl<Border>("AvatarBorder") ?? (Control)tube);
-            Dispatcher.UIThread.RunJobs();
-            Assert.NotEmpty(tube.FindControl<MenuItem>("MenuItemPersonality")!.Items);
+            using var child = Process.Start(start) ?? throw new InvalidOperationException("Could not start the menu test process");
+            var stdout = child.StandardOutput.ReadToEndAsync();
+            var stderr = child.StandardError.ReadToEndAsync();
+            using var timeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(90));
+            try { await child.WaitForExitAsync(timeout.Token); }
+            catch (OperationCanceledException)
+            {
+                child.Kill(entireProcessTree: true);
+                await child.WaitForExitAsync();
+                throw new TimeoutException("The menu test process did not exit");
+            }
+            var output = await stdout + await stderr;
+            Assert.True(child.ExitCode == 0, $"Menu test process exited {child.ExitCode}: {output}");
+            Assert.True(File.Exists(marker), $"Menu test process did not complete the render: {output}");
+            Assert.Equal(child.Id.ToString(CultureInfo.InvariantCulture), File.ReadAllText(marker));
+            Assert.NotEqual(Environment.ProcessId, child.Id);
         }
-        finally { tube.Close(); }
-    });
+        finally { File.Delete(marker); }
+    }
 
     [Fact]
     public Task ExplicitPresetFromTheMenuWaitsOnTheAcknowledgement() => AvaloniaTestDispatcher.RunAsync(async () =>
