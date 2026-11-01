@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// availability, lock probe and opener this mirrors door for door.
     ///
     /// <para>ponytail: HIDDEN, not faked, until this head has their surface: arcademy, dtrh,
-    /// intake, spiral (overlay), goon, backroom and justdrop. Each is a host window or overlay no
+    /// spiral (overlay), goon, backroom and justdrop. Each is a host window or overlay no
     /// Avalonia code launches yet; a null from <see cref="Door"/> keeps the card out of the ring the
     /// same way an unavailable door does. Also missing: the moments WPF's Pick fires
     /// (<c>ringPick</c>, <c>lockedCardTapped</c>) - there is no <c>App.EmiDesk.Fire</c> on this head.</para>
@@ -71,6 +71,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             "flashes" => Free(() => Rack("flash")),
             "codex" => Free(() => EmiDeskService.Instance.Window?.OpenBook()),
             "videos" => Free(() => Rack("video")),
+            // WPF EmiTargets.cs:180-182: the weekly pass or a paid tier opens the host directly.
+            "intake" => (Always, () => !App.IntakePass.CanStartIntake,
+                () => Views.Tabs.GradedIntakeTabView.OpenIntake(Shell, duckMain: true)),
             "subliminals" => Free(() => Rack("subliminal")),
             "bubbles" => Free(() => Rack("bubbles")),
             "pinkfilter" => Free(() => Rack("pinkfilter")),
@@ -122,7 +125,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 {
                     var name = Loc.Get("emi_desk_target_" + id);
                     string? daily = id is "awareness" or "remote" or "takeover" ? id : null;
-                    if (daily == null) TierGate.DemandPremium(name); else TierGate.DemandPremium(name, daily);
+                    if (id == "intake") TierGate.DemandLab(name);   // WPF EmiTargets.cs:289-297
+                    else if (daily == null) TierGate.DemandPremium(name); else TierGate.DemandPremium(name, daily);
                     return;
                 }
                 open();

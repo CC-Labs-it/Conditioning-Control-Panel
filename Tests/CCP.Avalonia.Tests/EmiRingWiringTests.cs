@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
@@ -44,12 +45,20 @@ public sealed class EmiRingWiringTests
     {
         var ids = EmiTargets.All.Select(t => t.Id).ToList();
         // Table order, minus exactly the doors this head cannot open.
-        var hidden = new[] { "arcademy", "dtrh", "intake", "spiral", "goon", "backroom", "justdrop" };
+        var hidden = new[] { "arcademy", "dtrh", "spiral", "goon", "backroom", "justdrop" };
         Assert.Equal(EmiDoors.All.Select(d => d.Id).Except(hidden), ids);
 
         // A brand new user: no pins, no usage, so the first six available doors in order.
-        var ring = EmiSuggester.Compose(EmiTargets.All).Select(s => s.Target.Id);
-        Assert.Equal(new[] { "loom", "sessions", "flashes", "codex", "videos", "subliminals" }, ring);
+        var login = CoreAccount.IsLoggedInProvider;
+        var premium = CoreAccount.HasPremiumAccessProvider;
+        try
+        {
+            CoreAccount.IsLoggedInProvider = () => false;
+            CoreAccount.HasPremiumAccessProvider = () => false;
+            var ring = EmiSuggester.Compose(EmiTargets.All).Select(s => s.Target.Id);
+            Assert.Equal(new[] { "loom", "sessions", "flashes", "codex", "videos", "subliminals" }, ring);
+        }
+        finally { CoreAccount.IsLoggedInProvider = login; CoreAccount.HasPremiumAccessProvider = premium; }
 
         // A pick scores the door (WPF Pick -> NoteOpen), and a pin takes slot one.
         EmiTargets.Find("vault")!.Open();
