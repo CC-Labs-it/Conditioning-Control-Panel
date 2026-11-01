@@ -40,12 +40,8 @@ internal sealed partial class GameWindow
                 break;
             case "loom-reveal":
                 var path = DtrhLoomStore.GifPathFor((string?)message["slug"]);
-                // WPF DtrhHostService.cs:423-432 selects the file; the portable seam falls back to its folder.
-                if (path != null)
-                {
-                    if (IsDtrh) ExternalOpener.Reveal(path);
-                    else ExternalOpener.Open(Path.GetDirectoryName(path));
-                }
+                // WPF DtrhHostService.cs:423-432 and LoomHostService.cs:111-121 select the file.
+                if (path != null) ExternalOpener.Reveal(path);
                 break;
             case "sfx":
                 var cue = (string?)message["name"];
