@@ -133,6 +133,9 @@ namespace ConditioningControlPanel.Services
             if (string.IsNullOrWhiteSpace(process)) return true;
             try
             {
+                // Browser identity may resolve to the site, so check the process itself as well.
+                if (!Awareness.AwarenessPrivacyRules.Evaluate(
+                        new Awareness.AwarenessSightRequest(process, process, null, title)).Allowed) return false;
                 var (id, cluster, _, name) = Awareness.AwarenessObserverPolicy.ResolveIdentity(title, process);
                 return Awareness.AwarenessPrivacyRules.Evaluate(
                     new Awareness.AwarenessSightRequest(id, name, cluster, title)).Allowed;

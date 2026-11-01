@@ -88,6 +88,29 @@ public sealed class WindowAwarenessServiceTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData("YouTube", "chrome", "CHROME")]
+    [InlineData("Wikipedia", "firefox", "FIREFOX")]
+    [InlineData("YouTube", "google-chrome", "chrome")]
+    public void DeniedBrowserIsBlockedWhenTitleNamesOnlyTheSite(string title, string process, string deny)
+    {
+        CoreSettings.Current.AwarenessDenySeeded = true;
+        CoreSettings.Current.AwarenessDenyList = new List<string> { deny };
+        Assert.False(WindowAwarenessService.PassesPrivacyRules(title, process));
+    }
+
+    [Fact]
+    public void BrowserAndSiteRulesAreIndependentAndMissingProcessUsesTitle()
+    {
+        var settings = CoreSettings.Current;
+        settings.AwarenessDenySeeded = true;
+        settings.AwarenessDenyList = new List<string> { "chrome" };
+        Assert.True(WindowAwarenessService.PassesPrivacyRules("YouTube", "firefox"));
+        Assert.True(WindowAwarenessService.PassesPrivacyRules("YouTube", null));
+        settings.AwarenessDenyList = new List<string> { "youtube" };
+        Assert.False(WindowAwarenessService.PassesPrivacyRules("YouTube", "firefox"));
+    }
+
     [Fact]
     public void WithoutAFilterTheSameTitleIsObserved()
     {

@@ -74,6 +74,65 @@ public class AwarenessForegroundPrivacyTests
     });
 
     [Fact]
+    public Task BrowserSavedInPickerBlocksSiteTitlesUntilRemoved() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var s = settings.Current;
+        s.AwarenessDenySeeded = true;
+        s.AwarenessDenyList = new();
+        s.AwarenessModeEnabled = true;
+        s.AwarenessConsentGiven = true;
+        WindowAwarenessService.V2Lifecycle = null;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        CoreEntitlement.IsFreeTodayProvider = _ => false;
+        AwarenessPause.Resume();
+        var sample = (Title: "YouTube", Process: "chrome");
+        using var observer = AvApp.CreateWindowAwareness(() => sample);
+        var events = 0;
+        observer.ActivityChanged += (_, _) => events++;
+        observer.Start();
+        observer.PollOnce();
+        Assert.Equal(1, events);
+
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            var vm = new AwarenessPrivacyViewModel(() => shell);
+            vm.AddDenyCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            var picker = Assert.Single(shell.OwnedWindows.OfType<AwarenessAppPickerDialog>());
+            picker.FindControl<TextBox>("TxtNewItem")!.Text = "chrome";
+            picker.FindControl<Button>("BtnAdd")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            picker.FindControl<Button>("BtnSave")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            for (var i = 0; i < 100 && !s.AwarenessDenyList.Contains("chrome"); i++)
+            { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+            Assert.Contains("chrome", s.AwarenessDenyList);
+
+            observer.PollOnce();
+            Assert.Equal(1, events);
+            Assert.Equal(ActivityCategory.Unknown, observer.CurrentActivity);
+            Assert.Equal("", observer.CurrentServiceName);
+            Assert.Equal("", observer.CurrentPageTitle);
+            sample.Process = "firefox";
+            observer.PollOnce();
+            Assert.Equal(2, events);
+            sample.Process = "chrome";
+            observer.PollOnce();
+            Assert.Equal(2, events);
+            Assert.Equal(ActivityCategory.Unknown, observer.CurrentActivity);
+
+            vm.Sync();
+            Assert.Single(vm.DenyList, c => c.Label == "chrome").RemoveCommand.Execute(null);
+            observer.PollOnce();
+            Assert.Equal(3, events);
+            Assert.Equal("YouTube", observer.CurrentServiceName);
+        }
+        finally { shell.Close(); AwarenessPause.Resume(); }
+    });
+
+    [Fact]
     public void ProcessIdentityAppliesSeededGroupsAndUnknownProcessRetainsTitleFilter()
     {
         var settings = new SettingsService();
