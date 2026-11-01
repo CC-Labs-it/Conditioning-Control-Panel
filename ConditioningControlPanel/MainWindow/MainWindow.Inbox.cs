@@ -182,7 +182,7 @@ namespace ConditioningControlPanel
             if (reading.Row == Services.Startup.Conversion.LapseRow.None || LiveCovers(reading.Tier)) return false;
             var stamps = settings.InboxStamps;
 
-            if (App.Patreon?.GrantLooksDead == true || Services.TierGate.ReconnectIsTheAnswer())
+            if (settings.GraceClosedTier == null && (App.Patreon?.GrantLooksDead == true || Services.TierGate.ReconnectIsTheAnswer()))
             {
                 var today = Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now);
                 const string reconnectKey = Services.Startup.Conversion.ConversionRules.KeyLapseReconnect;

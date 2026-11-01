@@ -146,6 +146,8 @@ namespace ConditioningControlPanel.Services
         {
             try
             {
+                // The server already said this tier ended: reconnecting a cancelled pledge cannot help.
+                if (App.Settings?.Current?.GraceClosedTier != null) return false;
                 return PatreonReconnectRule.Decide(
                     hasUnifiedId: !string.IsNullOrEmpty(App.Settings?.Current?.UnifiedId),
                     linkedServerSide: App.Settings?.Current?.HasLinkedPatreon == true,

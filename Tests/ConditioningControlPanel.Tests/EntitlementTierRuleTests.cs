@@ -176,114 +176,175 @@ public class EntitlementTierRuleTests
     }
 
     private static readonly DateTime Live = Now.AddDays(9);
+    private static readonly TimeSpan Gap = EntitlementTierRule.GraceConfirmGap;
 
-    private static GraceStep Step(int? server, DateTime? premium, DateTime? lab, int? closed = null, bool linked = true,
-        bool held = false, int? pending = null, DateTime? since = null, DateTime? at = null)
-        => EntitlementTierRule.StepGrace(server, premium, lab, closed, linked, held, pending, since, at ?? Now);
+    /// <summary>The whole reading, as EntitlementTierSync.ApplyOnUi runs it.</summary>
+    private static GraceOutcome Read(AppSettings s, int? server, GracePending? pending = null, bool held = false, DateTime? at = null)
+        => EntitlementTierRule.ApplyReading(s, EntitlementTierRule.Decide(s.PatreonTier, server), server, pending, () => held, at ?? Now);
+
+    private static AppSettings Prime() => new() { PatreonTier = 2, PatreonPremiumValidUntil = Live, PatreonLabValidUntil = Live };
 
     [Fact]
-    public void StepGrace_ClosesOnALaunchZeroedInstallToo()
+    public void ApplyReading_OneLowerReadingChangesNothing()
     {
-        // No stored tier in the signature: a tokenless launch zeroes it, and the stamps still close.
-        var first = Step(0, Live, Live);
-        Assert.False(first.Close);
-        Assert.Equal(0, first.PendingTier);
-        var second = Step(0, Live, Live, pending: first.PendingTier, since: first.PendingSinceUtc, at: Now.AddMinutes(2));
-        Assert.True(second.Close);
-        Assert.Equal(2, second.ClosedTier);
+        var s = Prime();
+        var out1 = Read(s, 0);
+        Assert.False(out1.Closed);
+        Assert.False(out1.Dirty);
+        Assert.Equal(new GracePending(0, Now), out1.Pending);
+        Assert.Equal(Live, s.PatreonLabValidUntil);
+        Assert.Equal(2, s.PatreonTier);
     }
 
     [Fact]
-    public void StepGrace_TheSecondReadingMustBeTheGapLater()
+    public void ApplyReading_TheSameReadingAfterTheGapCloses()
     {
-        var near = Step(0, Live, Live, pending: 0, since: Now, at: Now + EntitlementTierRule.GraceConfirmGap - TimeSpan.FromSeconds(1));
-        Assert.False(near.Close);
-        Assert.Equal(Now, near.PendingSinceUtc);    // the first reading's time stands
-        Assert.True(Step(0, Live, Live, pending: 0, since: Now, at: Now + EntitlementTierRule.GraceConfirmGap).Close);
+        var s = Prime();
+        var first = Read(s, 0);
+        var second = Read(s, 0, first.Pending, at: Now + Gap);
+        Assert.True(second.Closed);
+        Assert.True(second.Dirty);
+        Assert.Null(second.Pending);
+        Assert.Equal(Now + Gap, s.PatreonPremiumValidUntil);
+        Assert.Equal(Now + Gap, s.PatreonLabValidUntil);
+        Assert.Equal(0, s.PatreonTier);
+        Assert.Equal(2, s.GraceClosedTier);
     }
 
     [Fact]
-    public void StepGrace_ADifferentReadingStartsOver()
+    public void ApplyReading_TwoReadingsInsideTheGapAreNotConfirmation()
     {
-        var moved = Step(0, Live, Live, pending: 1, since: Now.AddHours(-1));
-        Assert.False(moved.Close);
-        Assert.Equal(0, moved.PendingTier);
-        Assert.Equal(Now, moved.PendingSinceUtc);
+        var s = Prime();
+        var first = Read(s, 0);
+        var near = Read(s, 0, first.Pending, at: Now + Gap - TimeSpan.FromSeconds(1));
+        Assert.False(near.Closed);
+        Assert.Equal(Now, near.Pending!.SinceUtc);   // the first reading's time stands
     }
 
     [Fact]
-    public void StepGrace_AnAgreeingReadingForgetsTheDrop()
+    public void ApplyReading_ADifferentReadingStartsOver()
     {
-        var back = Step(2, Live, Live, pending: 0, since: Now.AddHours(-1));
-        Assert.False(back.Close);
-        Assert.Null(back.PendingTier);
-        Assert.Null(back.PendingSinceUtc);
+        var s = Prime();
+        var moved = Read(s, 0, new GracePending(1, Now.AddHours(-1)));
+        Assert.False(moved.Closed);
+        Assert.Equal(new GracePending(0, Now), moved.Pending);
     }
 
     [Fact]
-    public void StepGrace_ABlankTwinNeverCloses()
-        => Assert.False(Step(0, Live, Live, linked: false, pending: 0, since: Now.AddHours(-1)).Close);
-
-    [Fact]
-    public void StepGrace_ASessionOrGameHoldsTheCloseAndKeepsThePending()
+    public void ApplyReading_AnAgreeingReadingForgetsALateOne()
     {
-        var held = Step(0, Live, Live, held: true, pending: 0, since: Now.AddHours(-1));
-        Assert.False(held.Close);
-        Assert.Equal(0, held.PendingTier);
-        Assert.True(Step(0, Live, Live, pending: held.PendingTier, since: held.PendingSinceUtc).Close);
+        var s = Prime();
+        var back = Read(s, 2, new GracePending(0, Now.AddHours(-1)));
+        Assert.False(back.Closed);
+        Assert.Null(back.Pending);
+        Assert.Equal(2, s.PatreonTier);
+        Assert.True(s.PatreonLabValidUntil >= Live);   // never shortened, and a paying reading renews
     }
 
     [Fact]
-    public void StepGrace_BasicClosesOnlyAPrimeWindow()
+    public void ApplyReading_ASessionOrGameHoldsTheClose()
     {
-        var step = Step(1, Live, Live, pending: 1, since: Now.AddHours(-1));
-        Assert.True(step.Close);
-        Assert.Equal(2, step.ClosedTier);
-        Assert.False(Step(1, Live, null, pending: 1, since: Now.AddHours(-1)).Close);
+        var s = Prime();
+        var waiting = new GracePending(0, Now.AddHours(-1));
+        var held = Read(s, 0, waiting, held: true);
+        Assert.False(held.Closed);
+        Assert.Equal(waiting, held.Pending);
+        Assert.Equal(Live, s.PatreonLabValidUntil);
+        Assert.True(Read(s, 0, held.Pending).Closed);
     }
 
     [Fact]
-    public void StepGrace_ClosedTierNamesThePlanThatWasLive()
-        => Assert.Equal(1, Step(0, Live, null, pending: 0, since: Now.AddHours(-1)).ClosedTier);
+    public void ApplyReading_ABlankTwinAfterASignInNeverCloses()
+    {
+        // ApplyUserDataToSettings already lowered the stored tier: Same, whatever the stamps say.
+        var s = new AppSettings { PatreonTier = 0, PatreonPremiumValidUntil = Live, PatreonLabValidUntil = Live };
+        var r = Read(s, 0, new GracePending(0, Now.AddHours(-1)));
+        Assert.False(r.Closed);
+        Assert.Equal(Live, s.PatreonLabValidUntil);
+        Assert.Null(s.GraceClosedTier);
+    }
+
+    [Fact]
+    public void ApplyReading_PrimeToBasicClosesOnlyPrimeAndKeepsBasicRenewing()
+    {
+        var s = Prime();
+        var r = Read(s, 1, new GracePending(1, Now.AddHours(-1)));
+        Assert.True(r.Closed);
+        Assert.Equal(Live, s.PatreonPremiumValidUntil);
+        Assert.Equal(Now, s.PatreonLabValidUntil);
+        Assert.Equal(1, s.PatreonTier);
+        Assert.Equal(2, s.GraceClosedTier);
+
+        // Fourteen days on, still Basic: renewed quietly, a Same verdict with no rise to announce.
+        var later = Now.AddDays(13);
+        var renewed = Read(s, 1, at: later);
+        Assert.Equal(EntitlementVerdict.Same, EntitlementTierRule.Decide(s.PatreonTier, 1));
+        Assert.True(renewed.Dirty);
+        Assert.Equal(later.AddDays(EntitlementTierRule.GraceDays), s.PatreonPremiumValidUntil);
+        Assert.Equal(2, s.GraceClosedTier);
+    }
+
+    [Fact]
+    public void ApplyReading_PayingAgainIsAnOrdinaryRise()
+    {
+        var s = Prime();
+        Read(s, 0, new GracePending(0, Now.AddHours(-1)));
+        Assert.Equal(EntitlementVerdict.Rise, EntitlementTierRule.Decide(s.PatreonTier, 2));
+        var back = Read(s, 2);
+        Assert.True(back.Dirty);
+        Assert.Null(s.GraceClosedTier);
+    }
+
+    [Fact]
+    public void ApplyReading_APayerWithAKeptStoredTierStaysRenewed()
+    {
+        // A signed-in launch no longer zeroes the tier: Same verdict, and the stamps must still move.
+        var s = new AppSettings { PatreonTier = 2, PatreonPremiumValidUntil = Now.AddDays(2), PatreonLabValidUntil = Now.AddDays(2) };
+        Assert.True(Read(s, 2).Dirty);
+        Assert.Equal(Now.AddDays(EntitlementTierRule.GraceDays), s.PatreonPremiumValidUntil);
+        Assert.Equal(Now.AddDays(EntitlementTierRule.GraceDays), s.PatreonLabValidUntil);
+    }
+
+    [Fact]
+    public void RenewGrace_DoesNotSaveEveryHeartbeat()
+    {
+        var s = new AppSettings { PatreonTier = 2 };
+        Assert.True(EntitlementTierRule.RenewGrace(s, 2, Now));
+        Assert.False(EntitlementTierRule.RenewGrace(s, 2, Now.AddMinutes(2)));
+        Assert.False(EntitlementTierRule.RenewGrace(s, 2, Now.AddHours(23)));
+        Assert.True(EntitlementTierRule.RenewGrace(s, 2, Now.AddHours(25)));
+    }
+
+    [Fact]
+    public void RenewGrace_TierZeroRenewsNothing()
+    {
+        var s = new AppSettings();
+        Assert.False(EntitlementTierRule.RenewGrace(s, 0, Now));
+        Assert.Null(s.PatreonPremiumValidUntil);
+    }
 
     [Theory]
     [InlineData(null)]
     [InlineData(3)]
     [InlineData(-1)]
-    public void StepGrace_NoReadingKeepsThePending(int? server)
+    public void ApplyReading_NoReadingKeepsEverything(int? server)
     {
-        var step = Step(server, Live, Live, pending: 0, since: Now);
-        Assert.False(step.Close);
-        Assert.Equal(0, step.PendingTier);
-        Assert.Equal(Now, step.PendingSinceUtc);
+        var s = Prime();
+        var waiting = new GracePending(0, Now);
+        var r = Read(s, server, waiting);
+        Assert.False(r.Closed);
+        Assert.False(r.Dirty);
+        Assert.Equal(waiting, r.Pending);
+        Assert.Equal(Live, s.PatreonLabValidUntil);
     }
 
     [Fact]
-    public void StepGrace_AnExpiredStampHasNothingToClose()
+    public void ApplyReading_AHeldSessionNeverRunsTheProbeOnAnOrdinaryReading()
     {
-        var past = Now.AddDays(-1);
-        Assert.False(Step(0, past, past, pending: 0, since: Now.AddHours(-1)).Close);
-    }
-
-    [Fact]
-    public void StepGrace_ReopensOnlyAWindowThatClosed()
-    {
-        var past = Now.AddDays(-1);
-        Assert.True(Step(2, past, past, closed: 2).Reopen);      // PayPal or Stripe paid again
-        Assert.True(Step(1, past, past, closed: 1).Reopen);
-        Assert.False(Step(2, past, past).Reopen);                // no fanfare for one that never closed
-        Assert.False(Step(0, past, past, closed: 2).Reopen);
-        Assert.False(Step(2, Live, Live, closed: 2).Reopen);     // already covered
-        Assert.False(Step(1, Live, past, closed: 2).Reopen);     // Prime to Basic: Basic was never shut
-    }
-
-    [Fact]
-    public void StepGrace_ClearsTheClosedTierOnlyAtThatTier()
-    {
-        Assert.True(Step(2, Live, Live, closed: 2).ClearClosedTier);
-        Assert.True(Step(1, Live, null, closed: 1).ClearClosedTier);
-        Assert.False(Step(1, Live, null, closed: 2).ClearClosedTier);
-        Assert.False(Step(0, null, null, closed: 1).ClearClosedTier);
+        var asked = false;
+        EntitlementTierRule.ApplyReading(Prime(), EntitlementVerdict.Same, 2, null, () => { asked = true; return true; }, Now);
+        EntitlementTierRule.ApplyReading(Prime(), EntitlementVerdict.Lower, 0, null, () => { asked = true; return true; }, Now);
+        Assert.False(asked);
     }
 
     [Fact]

@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Services
     /// sign-in, a linked Patreon). The server stamps <c>patreon_confirmed_at</c> whenever it sees an
     /// ACTIVE Patreon reading (webhook, hourly reconcile, validate); a fresh stamp re-stamps the
     /// grace from that moment. A stale one never does: the grace then runs out on its own, or ends
-    /// sooner on a confirmed lower reading (<see cref="EntitlementTierRule.StepGrace"/>).
+    /// sooner on a confirmed lower reading (<see cref="EntitlementTierRule.ApplyReading"/>).
     /// </summary>
     public static class PatreonActiveRule
     {

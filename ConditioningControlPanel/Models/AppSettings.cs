@@ -3412,9 +3412,9 @@ namespace ConditioningControlPanel.Models
 
         private int? _graceClosedTier = null;
         /// <summary>
-        /// The tier whose grace a confirmed server reading ended (EntitlementTierRule.StepGrace), until
-        /// the server gives it back. A launch zeroes <see cref="PatreonTier"/> on a tokenless install,
-        /// so this is what keeps the closed lapse row owed. Machine-local.
+        /// The tier whose grace a confirmed server reading ended (EntitlementTierRule.ApplyReading), until
+        /// the server gives it back. The close moves <see cref="PatreonTier"/> down, so this is what keeps
+        /// the closed lapse row owed, and what says "subscribe" rather than "reconnect". Machine-local.
         /// </summary>
         [JsonProperty("grace_closed_tier")]
         public int? GraceClosedTier

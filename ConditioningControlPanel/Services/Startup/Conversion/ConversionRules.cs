@@ -87,7 +87,7 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
         /// <summary>
         /// <see cref="DecideLapse"/> for this install. A window a confirmed reading closed
         /// (<see cref="Models.AppSettings.GraceClosedTier"/>) is a close the server already reported,
-        /// whatever a launch did to the stored tier.
+        /// after the stored tier moved down with it.
         /// </summary>
         public static LapseReading DecideLapseFor(Models.AppSettings s, DateTime nowUtc, bool liveCoversIt)
             => s.GraceClosedTier is int closed
