@@ -50,13 +50,51 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             };
             RefreshClipCount();
 
-            // Playback and visual controls stay inert until their hosts land.
+            // WPF .xaml.cs:88-106,221-263,291-319,346-380. These edit saved
+            // preferences; the audio and visual hosts are still missing on this head.
+            LoadEditors();
+            this.FindControl<CheckBox>("ChkEnable")!.IsCheckedChanged += (_, _) =>
+            {
+                if (_loadingEditors) return;
+                CoreSettings.Current.BrainDrainEnabled = this.FindControl<CheckBox>("ChkEnable")!.IsChecked ?? false;
+                CoreSettings.Save();
+            };
+            this.FindControl<Slider>("SliderIntensity")!.ValueChanged += (_, e) =>
+            {
+                if (_loadingEditors) return;
+                CoreSettings.Current.BrainDrainIntensity = (int)e.NewValue;
+                CoreSettings.Save();
+            };
+            this.FindControl<Slider>("SliderBlurStrength")!.ValueChanged += (_, e) =>
+            {
+                if (_loadingEditors) return;
+                CoreSettings.Current.BrainDrainBlurStrength = (int)e.NewValue;
+                CoreSettings.Save();
+            };
+            this.FindControl<CheckBox>("ChkMelt")!.IsCheckedChanged += (_, _) =>
+            {
+                if (_loadingEditors) return;
+                CoreSettings.Current.BrainDrainMeltEnabled = this.FindControl<CheckBox>("ChkMelt")!.IsChecked ?? false;
+                CoreSettings.Save();
+            };
+            this.FindControl<CheckBox>("ChkHighRefresh")!.IsCheckedChanged += (_, _) =>
+            {
+                if (_loadingEditors) return;
+                CoreSettings.Current.BrainDrainHighRefresh = this.FindControl<CheckBox>("ChkHighRefresh")!.IsChecked ?? false;
+                CoreSettings.Save();
+            };
+            this.FindControl<CheckBox>("ChkAllowCapture")!.IsCheckedChanged += (_, _) =>
+            {
+                if (_loadingEditors) return;
+                CoreSettings.Current.AllowOverlayCapture = this.FindControl<CheckBox>("ChkAllowCapture")!.IsChecked ?? false;
+                CoreSettings.Save();
+            };
             this.FindControl<Button>("BtnRefreshAudio")!.Click += (_, _) => RefreshClipCount();
 
-            // Keep pictures clear is a pure preference (WPF ChkKeepClear_Changed writes and saves;
-            // OverlayService re-sorts on the settings hook), so unlike the rows above it shows no
-            // false "running" state and is wired now. This head has no Brain Drain blur overlay
-            // yet, so the z-order rule (Core BrainDrainKeepClear) has nothing to act on here.
+            // WPF .xaml.cs:326-335 saves this preference; OverlayService re-sorts
+            // the windows in response. The Avalonia visual consumer has not landed,
+            // so the existing Core BrainDrainKeepClear rule cannot act here yet.
+            // Keep this preference available for when that consumer is ported.
             _keepClear = this.FindControl<CheckBox>("ChkKeepClear")!;
             LoadKeepClear();
             _keepClear.IsCheckedChanged += (_, _) =>
@@ -70,25 +108,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 
         private readonly CheckBox _keepClear;
         private bool _loadingVolume;
-        private SettingsModel? _volumeSettings;
-        private SettingsService? _volumeService;
+        private bool _loadingEditors;
+        private SettingsModel? _settings;
+        private SettingsService? _settingsService;
 
         // WPF .xaml.cs:68-110,207-218: follow both instance replacement and live edits.
-        private void RebindVolume()
+        private void RebindSettings()
         {
-            if (_volumeSettings != null) _volumeSettings.PropertyChanged -= OnVolumeChanged;
-            _volumeSettings = CoreSettings.Current;
-            _volumeSettings.PropertyChanged += OnVolumeChanged;
+            if (_settings != null) _settings.PropertyChanged -= OnSettingsChanged;
+            _settings = CoreSettings.Current;
+            _settings.PropertyChanged += OnSettingsChanged;
             LoadVolume();
+            LoadEditors();
         }
 
-        private void OnVolumeChanged(object? sender, PropertyChangedEventArgs e)
+        private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(SettingsModel.BrainDrainVolume))
+            if (e.PropertyName is nameof(SettingsModel.BrainDrainVolume)
+                or nameof(SettingsModel.BrainDrainEnabled) or nameof(SettingsModel.BrainDrainIntensity)
+                or nameof(SettingsModel.BrainDrainBlurStrength) or nameof(SettingsModel.BrainDrainMeltEnabled)
+                or nameof(SettingsModel.BrainDrainHighRefresh) or nameof(SettingsModel.AllowOverlayCapture))
                 Dispatcher.UIThread.Post(() =>
                 {
-                    if (_volumeSettings != null && ReferenceEquals(sender, _volumeSettings)) LoadVolume();
+                    if (_settings != null && ReferenceEquals(sender, _settings))
+                    {
+                        LoadVolume();
+                        LoadEditors();
+                    }
                 });
+        }
+
+        private void LoadEditors()
+        {
+            _loadingEditors = true;
+            try
+            {
+                var s = CoreSettings.Current;
+                this.FindControl<CheckBox>("ChkEnable")!.IsChecked = s.BrainDrainEnabled;
+                this.FindControl<Slider>("SliderIntensity")!.Value = s.BrainDrainIntensity;
+                this.FindControl<TextBlock>("TxtIntensity")!.Text = $"{s.BrainDrainIntensity}%";
+                this.FindControl<Slider>("SliderBlurStrength")!.Value = s.BrainDrainBlurStrength;
+                this.FindControl<TextBlock>("TxtBlurStrength")!.Text = $"{s.BrainDrainBlurStrength}%";
+                this.FindControl<CheckBox>("ChkMelt")!.IsChecked = s.BrainDrainMeltEnabled;
+                this.FindControl<CheckBox>("ChkHighRefresh")!.IsChecked = s.BrainDrainHighRefresh;
+                this.FindControl<CheckBox>("ChkAllowCapture")!.IsChecked = s.AllowOverlayCapture;
+            }
+            finally { _loadingEditors = false; }
         }
 
         private void LoadVolume()
@@ -111,9 +176,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += LoadKeepClear;
-            _volumeService = CoreSettings.Service;
-            if (_volumeService != null) _volumeService.CurrentReplaced += RebindVolume;
-            RebindVolume();
+            _settingsService = CoreSettings.Service;
+            if (_settingsService != null) _settingsService.CurrentReplaced += RebindSettings;
+            RebindSettings();
             LoadKeepClear();
             RefreshClipCount(); // WPF .xaml.cs:40-43: re-scan whenever the rack is shown.
         }
@@ -121,10 +186,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= LoadKeepClear;
-            if (_volumeService != null) _volumeService.CurrentReplaced -= RebindVolume;
-            _volumeService = null;
-            if (_volumeSettings != null) _volumeSettings.PropertyChanged -= OnVolumeChanged;
-            _volumeSettings = null;
+            if (_settingsService != null) _settingsService.CurrentReplaced -= RebindSettings;
+            _settingsService = null;
+            if (_settings != null) _settings.PropertyChanged -= OnSettingsChanged;
+            _settings = null;
             base.OnDetachedFromVisualTree(e);
         }
 
