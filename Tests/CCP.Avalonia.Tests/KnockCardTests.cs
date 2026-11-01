@@ -290,6 +290,36 @@ public sealed class KnockCardTests
         }
     });
 
+    // WPF FriendsLanding.cs:667-685: accepting a flavour discards already dealt media.
+    [Fact]
+    public Task AcceptingAFlavourRefreshesBothDealtMediaQueues() => Run((svc, _, _, _) =>
+    {
+        var video = MandatoryVideoOverlay.Instance;
+        var bubbles = BubbleCountHost.Instance;
+        var (oldVideo, oldBubbles, oldWord) = (video.Scheduler, bubbles.Scheduler, FriendsLanding.ShowWatchWord);
+        IReadOnlyList<string> library = new[] { "old-a.mp4", "old-b.mp4" };
+        video.Scheduler = new MandatoryVideoScheduler(video, library: () => library);
+        bubbles.Scheduler = new BubbleCountScheduler(bubbles, library: () => library);
+        FriendsLanding.ShowWatchWord = (_, _) => { };
+        try
+        {
+            Assert.StartsWith("old-", video.Scheduler.PickNext());
+            Assert.StartsWith("old-", bubbles.Scheduler.PickNext());
+            library = new[] { "new.mp4" };
+            svc.Deliver(WatchItem("00000000000000d6", new WatchRef(WatchKind.Flavour, "pink", null)));
+            var notice = FriendNotices.Current!;
+            notice.Dismiss(Assert.Single(notice.Stack.All), acted: true);
+            Assert.Equal("new.mp4", video.Scheduler.PickNext());
+            Assert.Equal("new.mp4", bubbles.Scheduler.PickNext());
+        }
+        finally
+        {
+            video.Scheduler = oldVideo;
+            bubbles.Scheduler = oldBubbles;
+            FriendsLanding.ShowWatchWord = oldWord;
+        }
+    });
+
     private static global::Avalonia.Media.IBrush FriendsDrawerGold => ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer.Gold;
 
     [Fact]

@@ -323,7 +323,9 @@ internal static partial class FriendsLanding
                 if (source == LauncherMediaSettings.SourceLocal && s.HasRemoteMediaConsent) source = LauncherMediaSettings.SourceMixed;
                 LauncherMediaSettings.Apply(s, source, s.RemoteMediaRatio, niches.ToList());
                 FypOnlineCoordinator.ResetAllChannels();
-                CoreSettings.Save();
+                // WPF FriendsLanding.cs:683-685: discard the dealt pools and save.
+                // These schedulers belong to the head, so they can be reset even without a shell.
+                Views.Tabs.AssetsTabView.InvalidateAssetPoolsAfterSelectionChange();
                 var anchor = ActiveGameWindow() ?? Anchor();
                 if (anchor != null) ShowWatchWord(anchor, Str("friends_land_flavour_on", "flavour on"));
                 return;

@@ -12,6 +12,7 @@ using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
+using MotionLevel = ConditioningControlPanel.Models.MotionLevel;
 using ConditioningControlPanel.Services.Friends;
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 internal sealed class NoticeLook
@@ -33,6 +34,11 @@ internal sealed class FriendNotices : Window
     private readonly BeatLoop _beat;
     private Window? _anchor;
     private double _lastT;
+    private Border? _enterCard;
+    private TranslateTransform? _enterShift;
+    private MotionLevel _enterLevel;
+    private bool _enterFolded;
+    private double _enterMs;
     internal FriendNotices()
     {
         WindowDecorations = WindowDecorations.None;
@@ -64,10 +70,10 @@ internal sealed class FriendNotices : Window
         {
             var w = Current ??= new FriendNotices();
             w._anchor = anchor ?? w._anchor;
-            var (up, _) = w.Stack.Add(notice);
+            var (up, folded) = w.Stack.Add(notice);
             foreach (var evicted in w.Stack.TakeEvicted()) w.Leave(evicted, false, true);
             w._looks[up] = look;
-            w.Rebuild();
+            w.Rebuild(up, folded);
             if (!w.IsVisible) { w.Show(); w._beat.Start(); }
             w.Place();
         }
@@ -83,6 +89,7 @@ internal sealed class FriendNotices : Window
     }
     internal void Advance(double ms)
     {
+        StepEnter(ms);
         var gone = Stack.Tick(ms);
         foreach (var n in Stack.Visible)
             if (_drawn.TryGetValue(n, out var d)) { d.Bar.ScaleX = n.Fraction; d.Ago.Text = Ago(n); }
@@ -125,8 +132,10 @@ internal sealed class FriendNotices : Window
         var (key, arg) = FriendNoticeRules.Ago(n.At, DateTimeOffset.UtcNow);
         return string.Format(Loc.Get(key), arg);
     }
-    private void Rebuild()
+    private void Rebuild(FriendNotice? fresh = null, bool folded = false)
     {
+        _enterCard = null;
+        _enterShift = null;
         _column.Children.Clear();
         _drawn.Clear();
         foreach (var n in Stack.Visible)
@@ -184,19 +193,49 @@ internal sealed class FriendNotices : Window
                 Background = FriendsDrawer.Pink, RenderTransform = bar,
                 RenderTransformOrigin = new RelativePoint(0, 0.5, RelativeUnit.Relative) });
             var card = new Border { Width = 300, Padding = new Thickness(11, 10, 9, 8),
-                Margin = new Thickness(0, 0, 0, 8), Background = new SolidColorBrush(Color.Parse("#F2221641")),
+                Margin = new Thickness(16, 0, 0, 8), Background = new SolidColorBrush(Color.Parse("#F2221641")),
                 BorderBrush = FriendsDrawer.Line2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12),
-                Child = body };
+                Child = body, RenderTransform = new TranslateTransform() };
             // WPF card.MouseLeftButtonUp (FriendNotices.cs:386): left button only.
             card.PointerReleased += (_, e) =>
             {
                 if (!e.Handled && e.InitialPressMouseButton == MouseButton.Left) Dismiss(n, false, true);
             };
             _column.Children.Add(card);
+            if (ReferenceEquals(n, fresh)) Enter(card, folded);
             _drawn[n] = (bar, ago);
         }
         if (Stack.Hidden > 0) _column.Children.Add(new TextBlock {
             Text = string.Format(Loc.Get("friends_notice_more"), Stack.Hidden), Foreground = FriendsDrawer.Muted,
             HorizontalAlignment = HorizontalAlignment.Right });
     }
+    // WPF FriendNotices.cs:395-411: a new card fades and slides; a repeat only nudges.
+    private void Enter(Border card, bool folded)
+    {
+        var level = AmbientFxCanvas.Env.Level;
+        if (level == MotionLevel.Off || (folded && level != MotionLevel.Full)) return;
+        _enterCard = card;
+        _enterShift = (TranslateTransform)card.RenderTransform!;
+        _enterLevel = level;
+        _enterFolded = folded;
+        _enterMs = 0;
+        StepEnter(0);
+    }
+
+    private void StepEnter(double elapsedMs)
+    {
+        if (_enterCard == null || _enterShift == null) return;
+        _enterMs += Math.Max(0, elapsedMs);
+        var full = _enterLevel == MotionLevel.Full;
+        var slideMs = _enterFolded ? 220.0 : 260.0;
+        if (full)
+        {
+            var start = _enterFolded ? -6.0 : 28.0;
+            var ease = FloatingWord.BackOut(Math.Min(1, _enterMs / slideMs), _enterFolded ? 0.6 : 0.4);
+            _enterShift.X = start * (1 - ease);
+        }
+        if (!_enterFolded) _enterCard.Opacity = Math.Min(1, _enterMs / (full ? 200.0 : 140.0));
+        if (_enterMs >= (full ? slideMs : 140)) { _enterCard = null; _enterShift = null; }
+    }
+
 }

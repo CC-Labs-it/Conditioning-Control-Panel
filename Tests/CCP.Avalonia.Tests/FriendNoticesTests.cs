@@ -55,6 +55,64 @@ public sealed class FriendNoticesTests
         finally { FriendNotices.CloseAll(); }
         return Task.CompletedTask;
     });
+    // WPF FriendNotices.cs:101-108,234-245,395-411. Only the fresh card moves.
+    [Theory]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Full)]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Reduced)]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Off)]
+    public Task ArrivalAndRepeatFollowTheMotionSetting(global::ConditioningControlPanel.Models.MotionLevel level) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var oldLevel = settings.MotionLevel;
+        var oldGentle = settings.GentleVisuals;
+        var oldProbe = UiMotionPreference.OsProbe;
+        try
+        {
+            UiMotionPreference.OsProbe = () => true;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = level;
+            settings.GentleVisuals = false;
+            var at = DateTimeOffset.UtcNow;
+            FriendNotice Notice(string id) => new(NoticeKind.Poke, id, "Friend", at, 6000);
+            FriendNotices.Present(null, Notice("a"), new NoticeLook());
+            var w = FriendNotices.Current!;
+            Border Card() => ((StackPanel)w.Content!).Children.OfType<Border>().Last();
+            var card = Card();
+            Assert.Equal(new Thickness(16, 0, 0, 8), card.Margin); // WPF :376 leaves room for the nudge
+            var shift = (TranslateTransform)card.RenderTransform!;
+            Assert.Equal(level == global::ConditioningControlPanel.Models.MotionLevel.Full ? 28 : 0, shift.X);
+            Assert.Equal(level == global::ConditioningControlPanel.Models.MotionLevel.Off ? 1 : 0, card.Opacity);
+            w.Advance(140);
+            if (level == global::ConditioningControlPanel.Models.MotionLevel.Reduced) Assert.Equal(1, card.Opacity);
+            if (level == global::ConditioningControlPanel.Models.MotionLevel.Full)
+            {
+                Assert.Equal(0.7, card.Opacity, 5);
+                Assert.NotEqual(0, shift.X);
+            }
+            w.Advance(120);
+            Assert.Equal(0, shift.X, 5);
+            Assert.Equal(1, card.Opacity);
+
+            FriendNotices.Present(null, Notice("a"), new NoticeLook());
+            card = Card();
+            shift = (TranslateTransform)card.RenderTransform!;
+            Assert.Equal(level == global::ConditioningControlPanel.Models.MotionLevel.Full ? -6 : 0, shift.X, 5);
+            Assert.Equal(1, card.Opacity);
+            w.Advance(110);
+            if (level == global::ConditioningControlPanel.Models.MotionLevel.Full) Assert.NotEqual(0, shift.X);
+            w.Advance(110);
+            Assert.Equal(0, shift.X, 5);
+        }
+        finally
+        {
+            FriendNotices.CloseAll();
+            settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
