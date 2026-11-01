@@ -235,6 +235,8 @@
                                     <TextBlock Text="{loc:Str btn_refresh_2}"/>
                                 </Button>
                             </Grid>
+                            <TextBlock x:Name="TxtAudioUnavailable" Text="{loc:Str st4_braindrain_audio_unavailable}"
+                                       Foreground="#FFA500" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"/>
                             <TextBlock Text="{loc:Str st4_braindrain_folder_hint}"
                                        Foreground="{DynamicResource TextMutedBrush}"
                                        FontSize="11" TextWrapping="Wrap"/>

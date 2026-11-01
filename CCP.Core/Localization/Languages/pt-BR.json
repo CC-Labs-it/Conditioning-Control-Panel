@@ -5902,6 +5902,7 @@
   "st4_braindrain_no_audio_hint": "Nenhuma faixa de drenagem cerebral está instalada, então nada vai tocar. Clica em Abrir Pasta e joga áudio completo de hipnose ou subliminar lá (.mp3 / .wav / .ogg).",
   "st4_braindrain_clip_library": "BIBLIOTECA DE CLIPES",
   "st4_braindrain_clips_loaded_0": "{0} clipes carregados",
+  "st4_braindrain_audio_unavailable": "A reprodução de áudio ainda não está disponível.",
   "st4_braindrain_folder_hint": "O Brain Drain toca clipes aleatórios da pasta braindrain dentro da sua pasta de assets, bem do lado de images e videos. Ela é criada pra você e começa vazia. Joga arquivos .mp3 / .wav / .ogg lá dentro e clica em Atualizar: tudo que estiver ali é reconhecido na hora, sem reiniciar.",
   "st4_braindrain_legacy_folder_note": "Atenção: alguns clipes ainda estão vindo da pasta antiga do app, a de baixo. Eles continuam tocando, mas essa pasta é apagada numa reinstalação e não vai junto numa cópia portátil: move eles pra pasta de cima pra não perder.",
   "st4_braindrain_folder_contents": "O que vai aqui: faixas completas de hipnose ou subliminares, do tipo que você ouve inteiras. O Brain Drain escolhe uma ao acaso enquanto a sessão roda e toca até o fim, então faixas inteiras funcionam melhor que efeitos de um segundo.",

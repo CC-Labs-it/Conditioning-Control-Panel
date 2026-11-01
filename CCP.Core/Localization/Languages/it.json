@@ -6165,6 +6165,7 @@
   "st4_braindrain_no_audio_hint": "Non ci sono tracce Brain Drain installate, quindi non suonerà niente. Premi Apri cartella e aggiungi tracce hypno o subliminali complete (.mp3 / .wav / .ogg).",
   "st4_braindrain_clip_library": "LIBRERIA CLIP",
   "st4_braindrain_clips_loaded_0": "{0} clip caricate",
+  "st4_braindrain_audio_unavailable": "La riproduzione audio non è ancora disponibile.",
   "st4_braindrain_folder_hint": "Brain Drain riproduce clip a caso dalla cartella braindrain, dentro la tua cartella degli asset, accanto a immagini e video. Viene creata in automatico ed è vuota all'inizio. Aggiungi file .mp3 / .wav / .ogg, poi premi Aggiorna: vengono rilevati subito, senza riavviare.",
   "st4_braindrain_legacy_folder_note": "Attenzione: alcune clip arrivano ancora dalla vecchia cartella dell'app qui sotto. Continuano a funzionare, ma quella cartella viene cancellata se reinstalli e non segue una copia portatile - spostale nella cartella qui sopra per non perderle.",
   "st4_braindrain_folder_contents": "Cosa metterci: tracce hypno o subliminali complete, di quelle che si ascoltano dall'inizio alla fine. Durante una sessione Brain Drain ne sceglie una a caso e la riproduce tutta, quindi vanno meglio tracce intere che stacchetti da un secondo.",
