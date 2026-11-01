@@ -7,7 +7,12 @@ using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaster;
@@ -16,6 +21,70 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
     public partial class ChasterTabView
     {
+        private bool _nudgingKeys;
+        private BeatLoop? _keysBreath;
+        private IDisposable? _keysVisibility;
+
+        // WPF ChasterTabView.xaml.cs:283-303 and Fx.cs:206-248: the empty menu points to the keys.
+        private void NudgeInit()
+        {
+            AttachedToVisualTree += (_, _) =>
+            {
+                _keysVisibility = EffectiveVisibility.Watch(this, () => Dispatcher.UIThread.Post(RefreshKeysNudge, DispatcherPriority.Loaded));
+                AmbientFxCanvas.Env.MotionGateChanged += RefreshKeysNudge;
+                Dispatcher.UIThread.Post(RefreshKeysNudge, DispatcherPriority.Loaded);
+            };
+            DetachedFromVisualTree += (_, _) =>
+            {
+                _keysVisibility?.Dispose(); _keysVisibility = null;
+                AmbientFxCanvas.Env.MotionGateChanged -= RefreshKeysNudge;
+                _keysBreath?.Stop();
+            };
+        }
+
+        private void SetupHint_PointerReleased(object? sender, PointerReleasedEventArgs e)
+        {
+            if (!_nudgingKeys || e.InitialPressMouseButton != MouseButton.Left) return;
+            PresetRow.BringIntoView();
+            e.Handled = true;
+        }
+
+        private void NudgeKeys(bool on)
+        {
+            _nudgingKeys = on;
+            SetupHint.Cursor = on ? new Cursor(StandardCursorType.Hand) : null;
+            SetupHint.Foreground = on ? new SolidColorBrush(Color.FromRgb(0xE0, 0xB0, 0x52)) : Brushes.White;
+            RefreshKeysNudge();
+        }
+
+        private void RefreshKeysNudge()
+        {
+            _keysBreath?.Stop();
+            PresetRow.Opacity = 1;
+            KeysGlow.IsVisible = false;
+            if (!_nudgingKeys || !IsEffectivelyVisible || VisualRoot == null) return;
+            var tier = AmbientFxCanvas.Env.CurrentTier;
+            var glow = AmbientFxCanvas.Env.AllowGlow(tier);
+            if (glow)
+            {
+                KeysGlow.BoxShadow = new BoxShadows(new BoxShadow
+                {
+                    Blur = Math.Min(26, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)),
+                    Color = Color.FromRgb(0xE0, 0xB0, 0x52),
+                });
+                KeysGlow.Opacity = 0.8;
+                KeysGlow.IsVisible = true;
+            }
+            if (!AmbientFxCanvas.Env.AllowAmbientLoops) return;
+            _keysBreath ??= new BeatLoop(this, t =>
+            {
+                var breath = BeatLoop.Breath(t, 1.1);
+                if (KeysGlow.IsVisible) KeysGlow.Opacity = 0.35 + 0.6 * breath;
+                else PresetRow.Opacity = 0.7 + 0.3 * breath;
+            });
+            _keysBreath.Start();
+        }
+
         private void KeysInit()
         {
             foreach (var key in new[] { BtnPresetGentle, BtnPresetStrict, BtnPresetCirce, BtnPresetCustom })
