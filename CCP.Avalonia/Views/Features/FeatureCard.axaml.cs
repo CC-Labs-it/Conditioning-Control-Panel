@@ -64,6 +64,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             AvaloniaProperty.Register<FeatureCard, string?>(nameof(HelpSectionId));
         public static readonly StyledProperty<string?> TierBadgeProperty =
             AvaloniaProperty.Register<FeatureCard, string?>(nameof(TierBadge));
+        public static readonly StyledProperty<bool> ShowV2BadgeProperty =
+            AvaloniaProperty.Register<FeatureCard, bool>(nameof(ShowV2Badge));
         public static readonly StyledProperty<int> TeaseTierProperty =
             AvaloniaProperty.Register<FeatureCard, int>(nameof(TeaseTier));
 
@@ -86,12 +88,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         public string? TierBadge { get => GetValue(TierBadgeProperty); set => SetValue(TierBadgeProperty, value); }
         /// <summary>0 = normal card, 1 = gold tease livery, 2+ = diamond. Blurs the art, veils it, wears a "?".</summary>
         public int TeaseTier { get => GetValue(TeaseTierProperty); set => SetValue(TeaseTierProperty, value); }
+        public bool ShowV2Badge { get => GetValue(ShowV2BadgeProperty); set => SetValue(ShowV2BadgeProperty, value); }
 
         public event EventHandler<RoutedEventArgs> Click { add => AddHandler(ClickEvent, value); remove => RemoveHandler(ClickEvent, value); }
         /// <summary>Raised by the toggle gesture (right-click by default; inverted on dashboard toggle tiles).</summary>
         public event EventHandler<RoutedEventArgs> ToggleRequested { add => AddHandler(ToggleRequestedEvent, value); remove => RemoveHandler(ToggleRequestedEvent, value); }
 
-        private readonly Border _rootBorder, _imgIconHost, _imgIconMute, _glyphHost, _rimLight, _activeBorder, _lockedOverlay, _tierBadgeHost;
+        private readonly Border _rootBorder, _imgIconHost, _imgIconMute, _glyphHost, _rimLight, _activeBorder, _lockedOverlay, _tierBadgeHost, _v2BadgeHost;
         private readonly Grid _contentRoot, _teaseHost;
         private readonly TextBlock _txtTitle, _txtGlyph, _txtTeaseGlyph, _txtLockLabel, _txtTierBadge;
         private readonly Button _btnHelp;
@@ -116,6 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _activeBorder = this.FindControl<Border>("ActiveBorder")!;
             _lockedOverlay = this.FindControl<Border>("LockedOverlay")!;
             _tierBadgeHost = this.FindControl<Border>("TierBadgeHost")!;
+            _v2BadgeHost = this.FindControl<Border>("V2BadgeHost")!;
             _contentRoot = this.FindControl<Grid>("ContentRoot")!;
             _teaseHost = this.FindControl<Grid>("TeaseHost")!;
             _txtTitle = this.FindControl<TextBlock>("TxtTitle")!;
@@ -176,6 +180,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             else if (change.Property == IsActiveProperty || change.Property == DimWhenInactiveProperty) ApplyActiveState();
             else if (change.Property == HelpSectionIdProperty) RefreshHelpTooltip();
             else if (change.Property == TierBadgeProperty) ApplyTierBadge();
+            else if (change.Property == ShowV2BadgeProperty) _v2BadgeHost.IsVisible = ShowV2Badge;
             else if (change.Property == TeaseTierProperty) { ApplyTeaseState(); ApplyMute(0); }
         }
 
