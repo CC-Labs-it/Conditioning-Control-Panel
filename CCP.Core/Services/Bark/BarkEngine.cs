@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
     /// ponytail: DispatchIdle, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
-    /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
+    /// the Chaos-narrator gate with a source; tier latches key on "None" until a tier reaches Core.
     /// </summary>
     public sealed class BarkEngine
     {
@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Services.Bark
 
         // Head seams; unseeded = WPF's answer for a missing service. No mouth = nothing said, nothing spent.
         public Action<BarkSpeech>? Speak;
+        public Func<bool>? IsWhisperPlaying;           // App.Audio.IsWhisperAudioPlaying
         public Func<bool>? IsSpeaking;                 // App.AvatarWindow.IsSpeaking
         public Func<int, bool>? IsCompanionBusy;       // App.AvatarWindow.IsCompanionBusy(windowMs)
         public Func<bool>? EmiDeskAvatarMuted;         // App.EmiDesk.AvatarMuted
@@ -253,6 +254,16 @@ namespace ConditioningControlPanel.Services.Bark
 
         private static bool Safe(Func<bool>? f) { try { return f?.Invoke() == true; } catch { return false; } }
 
+        private static bool WhisperExempt(string trigger) => trigger.Equals("PossessionEffect", StringComparison.OrdinalIgnoreCase)
+            || trigger.Equals("PossessionTripwire", StringComparison.OrdinalIgnoreCase)
+            || trigger.Equals("PossessionWarden", StringComparison.OrdinalIgnoreCase)
+            || trigger.Equals("PossessionRungChanged", StringComparison.OrdinalIgnoreCase)
+            || trigger.Equals("PossessionTimerRestarted", StringComparison.OrdinalIgnoreCase)
+            || trigger.Equals("PossessionRemember", StringComparison.OrdinalIgnoreCase)
+            || trigger.Equals("LockdownConscript", StringComparison.OrdinalIgnoreCase)
+            || trigger.Equals("EmergencyExitOpened", StringComparison.OrdinalIgnoreCase)
+            || trigger.Equals("EmergencyExitVerdict", StringComparison.OrdinalIgnoreCase);
+
         /// <summary>WPF EvaluateGate (:1645). Caller holds the lock.</summary>
         private (bool Fire, int Index, string Reason) EvaluateGate(BarkRule rule, List<BarkVariant> pool, bool guaranteed)
         {
@@ -268,6 +279,9 @@ namespace ConditioningControlPanel.Services.Bark
             {
                 var now = Now;
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
+                // BarkService.cs:1664-1670: text-only attribution is exempt, as are
+                // safety and guaranteed lines (the enclosing gate).
+                if (Safe(IsWhisperPlaying) && !WhisperExempt(rule.Trigger)) return (false, -1, "whisper-active");
                 int window = s.BarkChatSuppressionMs;
                 if (Safe(() => IsCompanionBusy?.Invoke(window) == true)
                     || (window > 0 && (now - _lastUserMessageUtc).TotalMilliseconds < window))

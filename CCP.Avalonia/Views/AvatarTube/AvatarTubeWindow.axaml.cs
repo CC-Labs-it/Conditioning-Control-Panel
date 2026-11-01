@@ -1216,6 +1216,22 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             });
         }
 
+        // WPF Reactions.cs:440-464: do not replace a live bubble or play the clip twice.
+        internal void ShowFlashVoice(string path)
+        {
+            var text = System.IO.Path.GetFileNameWithoutExtension(path);
+            if (IsMuted || _isGiggling || string.IsNullOrWhiteSpace(text)) return;
+            RunOnAvatar(() =>
+            {
+                // WPF ShowGiggle / IsAvatarVisibleOnScreen: a dismissed avatar or an
+                // attached tube whose parent is hidden or minimized does not show text.
+                if (IsMuted || _isGiggling || _isPlayingUninterruptibleClip || !CoreSettings.Current.AvatarEnabled
+                    || (_isAttached && (_parentWindow == null || !_parentWindow.IsVisible || _parentWindow.WindowState == WindowState.Minimized))) return;
+                ClearSpeechQueue();
+                ShowSpeech(text, playSound: false, aiGenerated: false, null, false, preset: true);
+            });
+        }
+
         private int _presetGiggleCounter;
 
         /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in

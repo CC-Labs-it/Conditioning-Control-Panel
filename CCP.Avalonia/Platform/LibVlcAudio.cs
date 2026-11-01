@@ -178,12 +178,38 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     Fire(onFinished);
                 });
             }
+            // A local flash clip can start before LibVLC knows its length. Report the start
+            // immediately, then report the first positive length when metadata arrives.
+            var flashVoice = tag == "flash-voice" && onStarted != null;
+            var flashPlaying = 0;
+            var flashLengthReported = 0;
+            long flashLength = 0;
+            void ReportFlashLength(long length)
+            {
+                if (length <= 0 || Volatile.Read(ref flashPlaying) == 0 ||
+                    Interlocked.Exchange(ref flashLengthReported, 1) != 0) return;
+                try { onStarted?.Invoke(TimeSpan.FromMilliseconds(length)); }
+                catch (Exception ex) { Log.Debug(ex, "[Audio] {Tag}: length callback threw", tag); }
+            }
+            if (flashVoice) player.LengthChanged += (_, e) =>
+            {
+                Interlocked.Exchange(ref flashLength, e.Length);
+                ReportFlashLength(e.Length);
+            };
             player.Playing += (_, _) =>
             {
                 // Setting volume before Play, or inside this libvlc event, is lost: the pulse
                 // output only takes it once it exists, from a thread that is not libvlc's own.
                 ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { ApplyPreferredDevice(player); player.Volume = vol; } });
                 if (onStarted is null) return;
+                if (flashVoice)
+                {
+                    try { onStarted(TimeSpan.Zero); }
+                    catch (Exception ex) { Log.Debug(ex, "[Audio] {Tag}: onStarted threw", tag); }
+                    Volatile.Write(ref flashPlaying, 1);
+                    ReportFlashLength(Math.Max(player.Length, Interlocked.Read(ref flashLength)));
+                    return;
+                }
                 try { onStarted(TimeSpan.FromMilliseconds(Math.Max(0, player.Length))); }
                 catch (Exception ex) { Log.Debug(ex, "[Audio] {Tag}: onStarted threw", tag); }
             };

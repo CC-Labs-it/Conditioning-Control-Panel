@@ -110,6 +110,23 @@ public sealed class CompanionBarkHeadTests
         }
     });
 
+    [Fact]
+    public void BarkHeadReadsTheFlashWhisperState() => WithSeamsRestored(_ =>
+    {
+        var (clock, busy) = (FlashOverlay.VoiceClock, FlashOverlay.WhisperBusyUntil);
+        try
+        {
+            FlashOverlay.VoiceClock = System.TimeProvider.System;
+            var engine = new BarkEngine();
+            BarkHead.Seed(engine);
+            FlashOverlay.WhisperBusyUntil = System.DateTimeOffset.UtcNow.AddMinutes(1).UtcTicks;
+            Assert.True(engine.IsWhisperPlaying!());
+            FlashOverlay.WhisperBusyUntil = 0;
+            Assert.False(engine.IsWhisperPlaying!());
+        }
+        finally { (FlashOverlay.VoiceClock, FlashOverlay.WhisperBusyUntil) = (clock, busy); }
+    });
+
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()
     {
         Id = "t_" + trigger, Trigger = trigger, VariantPool = new() { new BarkVariant(line) },
@@ -131,8 +148,10 @@ public sealed class CompanionBarkHeadTests
     private static void WithSeamsRestored(System.Action<ConditioningControlPanel.Models.AppSettings> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var hooks = (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion, CoreModsHooks.ReloadBarkRules,
             CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked);

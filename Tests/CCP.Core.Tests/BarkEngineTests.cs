@@ -131,4 +131,27 @@ public sealed class BarkEngineTests : IDisposable
         Assert.True(rule.Conditions!.ContainsKey("level_gte"));
         Directory.Delete(dir, true);
     }
+    [Fact]
+    public void WhisperBlocksOrdinaryBarksButNotSafetyGuaranteedOrAttribution()
+    {
+        var normal = Rule("Ordinary", "normal");
+        var safety = Rule("Panic", "safety"); safety.ClassRaw = "safety";
+        var triggers = new[] { "PossessionEffect", "PossessionTripwire", "PossessionWarden", "PossessionRungChanged",
+            "PossessionTimerRestarted", "PossessionRemember", "LockdownConscript", "EmergencyExitOpened", "EmergencyExitVerdict" };
+        var rules = triggers.Select(t => Rule(t, t)).Concat(new[] { normal, safety }).ToArray();
+        var e = Engine(rules);
+        e.IsWhisperPlaying = () => true;
+        Assert.False(e.Raise("Ordinary"));
+        Assert.True(e.Raise("Ordinary", guaranteed: true));
+        foreach (var trigger in triggers)
+        {
+            var exempt = Engine(rules); exempt.IsWhisperPlaying = () => true;
+            Assert.True(exempt.Raise(trigger));
+        }
+        var panic = Engine(rules); panic.IsWhisperPlaying = () => true;
+        Assert.True(panic.Raise("Panic"));
+        var resumed = Engine(normal); resumed.IsWhisperPlaying = () => false;
+        Assert.True(resumed.Raise("Ordinary"));
+    }
+
 }
