@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
+using System.Text.Json;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
@@ -12,6 +14,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -109,12 +112,25 @@ public sealed class AwarenessRecentAppsTests
     }
 
     [Fact]
+    public void RecentAppTooltipFormatExistsInEveryLanguage()
+    {
+        foreach (var lang in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" })
+        {
+            using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", lang + ".json")));
+            var format = json.RootElement.GetProperty("awareness_add_seen_app").GetString()!;
+            Assert.Contains("{0}", format);
+            Assert.Contains("Discord", string.Format(format, "Discord"));
+        }
+    }
+
+    [Fact]
     public Task RecentChipsRefreshAndAddToThePersistedScopeList() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previous = CoreSettings.ServiceProvider;
+        var language = LocalizationManager.Instance.CurrentLanguage;
         var premium = CoreEntitlement.HasPremiumProvider;
         var free = CoreEntitlement.IsFreeTodayProvider;
         var engine = KeywordTriggerHead.Engine;
@@ -134,6 +150,7 @@ public sealed class AwarenessRecentAppsTests
             engine.Start();
             engine.ObserveForeground("chrome", false);
             engine.ObserveForeground("Discord", false);
+            LocalizationManager.Instance.SetLanguage("de");
             var view = new AwarenessTabView();
             var scope = view.FindControl<ComboBox>("CmbAwarenessAppScope")!;
             scope.SelectedItem = scope.Items.OfType<ComboBoxItem>().Single(i => (string?)i.Tag == "OnlyListed");
@@ -143,6 +160,11 @@ public sealed class AwarenessRecentAppsTests
             service.SaveImmediate(); // isolate the chip save from the earlier scope change
             var chip = Assert.IsType<Button>(Assert.Single(panel.Children));
             Assert.Equal("+ Discord", chip.Content);
+            Assert.Equal("„Discord“ zur Liste hinzufügen", ToolTip.GetTip(chip));
+            LocalizationManager.Instance.SetLanguage("en");
+            view.SyncAwarenessTabUi();
+            chip = Assert.IsType<Button>(Assert.Single(panel.Children));
+            Assert.Equal("Add 'Discord' to the list", ToolTip.GetTip(chip));
             chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(new[] { "Chrome.exe", "Discord" }, service.Current.KeywordTriggerApps);
             Assert.Equal("Chrome.exe, Discord", view.FindControl<TextBox>("TxtAwarenessAppList")!.Text);
@@ -162,6 +184,7 @@ public sealed class AwarenessRecentAppsTests
             history.Clear();
             foreach (var app in oldHistory) history.AddLast(app);
             CoreSettings.ServiceProvider = previous;
+            LocalizationManager.Instance.SetLanguage(language);
             CoreEntitlement.HasPremiumProvider = premium;
             CoreEntitlement.IsFreeTodayProvider = free;
             if (wasActive) engine.Start();

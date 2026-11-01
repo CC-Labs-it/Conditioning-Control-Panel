@@ -383,7 +383,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x5A)),
                     BorderThickness = new Thickness(1),
                 };
-                ToolTip.SetTip(chip, $"Add '{app}' to the list");
+                ToolTip.SetTip(chip, ConditioningControlPanel.Localization.Loc.GetF("awareness_add_seen_app", app));
                 chip.Click += (_, _) =>
                 {
                     var settings = CoreSettings.Current;
