@@ -2,6 +2,9 @@
 // half of the Glassroad host. Kept in the head under its own name so the WPF copy (which sees Core internals) never
 // meets a twin when feat/glassroad-a lands on port/7.2. The window glue is GameWindow.Glassroad.cs.
 using System;
+using System.Collections.Generic;
+using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
 
@@ -41,6 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     ["platform"] = "desktop", ["net"] = true, ["relayBase"] = null, ["texturableRemote"] = false,
                     ["gamepad"] = true, ["touch"] = false, ["forceRenderer"] = null, ["hostSfx"] = false,
                     ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
+                    ["friendInvite"] = true, // WPF GlassroadRules.cs:42-43
                 },
                 ["identity"] = signedIn
                     ? new JObject
@@ -51,6 +55,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     : JValue.CreateNull(),
             };
         }
+
+        // WPF GlassroadRules.cs:71-95: only online, named friends, and the fixed invite result copy.
+        public static JArray FriendRows(IEnumerable<Friend>? friends)
+        {
+            var rows = new JArray();
+            if (friends == null) return rows;
+            foreach (var f in friends)
+            {
+                if (rows.Count >= 50) break;
+                if (f == null || !f.Online || string.IsNullOrEmpty(f.Id) || string.IsNullOrWhiteSpace(f.Name)) continue;
+                rows.Add(new JObject { ["uid"] = f.Id, ["name"] = f.Name });
+            }
+            return rows;
+        }
+
+        public static string InviteNoteKey(SendOutcome outcome) =>
+            outcome.Reason != null && InviteDestination.RaceReasons.Contains(outcome.Reason)
+                ? "friends_race_" + outcome.Reason : FriendsDrawerRules.SendResultKey(outcome.Result);
+
+        public static string Sentence(string text) =>
+            string.IsNullOrEmpty(text) ? "" : char.ToUpperInvariant(text[0]) + text.Substring(1);
 
         /// <summary>The <c>gentle</c> block: the player's fade (off = the page's own 600 ms), the 300 ms rise
         /// floor, the playback speed.</summary>

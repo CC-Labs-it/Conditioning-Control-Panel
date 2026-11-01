@@ -9,6 +9,9 @@
 // Not here yet: MergedAccountRecovery on a merged-account answer (the board host lacks it too).
 using System;
 using System.Net.Http;
+using System.Linq;
+using ConditioningControlPanel.Controls.Friends;
+using ConditioningControlPanel.Localization;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -52,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>Test seam: the last net relay; done once its reply is queued on the UI thread.</summary>
         internal Task GlassroadPending { get; private set; } = Task.CompletedTask;
+        internal Task GlassroadInvitePending { get; private set; } = Task.CompletedTask;
 
         /// <summary>WPF Launch after the window exists: watchdog, presence, the load-time init.</summary>
         private void OpenGlassroad()
@@ -131,6 +135,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "net":
                         OnGlassroadNet(o);
                         return true;
+                    case "friends-list": // WPF GlassroadHostService.cs:225-229
+                        Post(new { type = "friends-list-reply", id = (string?)o["id"] ?? "",
+                            friends = GlassroadHostRules.FriendRows(FriendsHead.Service?.Snapshot.Friends) });
+                        return true;
+                    case "invite-friend": // WPF GlassroadHostService.cs:230-232,314-343
+                        GlassroadInvitePending = InviteGlassroadFriend(o);
+                        return true;
                     case "exit":
                     case "menu-back":
                         // The page's own Leave / the menu's Back link. Escape never sends these.
@@ -144,6 +155,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 return true;
             }
             return false;
+        }
+
+        private async Task InviteGlassroadFriend(JObject o)
+        {
+            var id = (string?)o["id"] ?? "";
+            var uid = (string?)o["friendUid"];
+            var room = (string?)o["roomId"];
+            var outcome = new SendOutcome(SendResult.Refused, null);
+            try
+            {
+                var svc = FriendsHead.Service;
+                bool known = svc != null && !string.IsNullOrEmpty(uid) && svc.Snapshot.Friends.Any(f => f.Id == uid);
+                if (svc != null && known && InviteDestination.IsRoomId(room))
+                    outcome = await svc.InviteToRaceAsync(uid!, room!).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                outcome = new SendOutcome(SendResult.TryLater, null);
+                Log.Debug("Glassroad: race invite failed: {E}", ex.Message);
+            }
+            bool sent = FriendsDrawerRules.IsGood(outcome.Result);
+            var note = GlassroadHostRules.Sentence(Loc.Get(GlassroadHostRules.InviteNoteKey(outcome)));
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_grOpen && !_closing) Post(new { type = "invite-friend-reply", id, sent, note });
+            });
         }
 
         /// <summary><c>net { id, method, path, body }</c> -&gt; <c>net-reply { id, status, body }</c>. A refusal or
