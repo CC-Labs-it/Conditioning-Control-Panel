@@ -20,9 +20,8 @@ namespace ConditioningControlPanel.Avalonia
     /// <summary>
     /// CompanionBrain's CommandExecutor and ActivitiesProvider on this head (WPF App.xaml.cs:2767-2781).
     /// The gate is Core's AiCommandService - the same master switch + Lab entitlement, per-effect
-    /// toggles, video-feature gate and 3-per-reply cap WPF runs. Only the drawing is here. A command
-    /// whose surface this head lacks (spiral: no spiral overlay port) stays unseeded, so Core refuses
-    /// it as "didn't fire" - never a pretend success. An overlay surface also refuses where
+    /// toggles, video-feature gate and 3-per-reply cap WPF runs. Only the drawing is here.
+    /// An overlay surface also refuses where
     /// click-through windows are impossible (X11Overlay unavailable), as the overlays themselves do.
     /// </summary>
     internal static class CompanionEffects
@@ -97,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia
                     voiceMode: CoreSettings.Current.LockCardVoiceMode);
                 return LockCardWindow.IsAnyOpen();
             });
+            SpiralCommand.Surface = (on, opacity) => ApplySpiral(Host, on, opacity);
             // Without WPF's BypassLevelCheck the tint shows only while the engine does; refused otherwise.
             // Null opacity for "off" (and an "on" with no intensity): the saved opacity is the user's.
             PinkCommand.Surface = (on, opacity) => Start(() =>
@@ -124,6 +124,20 @@ namespace ConditioningControlPanel.Avalonia
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() =>
                     Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, playSound: true, aiGenerated: aiGenerated));
         }
+
+        /// <summary>WPF App.AiEffects.cs:63,128-150: set, start the overlay even with the engine off,
+        /// refresh and save. Refuse an unsafe or absent host before changing the user's settings.</summary>
+        internal static bool ApplySpiral(Window? host, bool on, int? opacity) => Start(() =>
+        {
+            if (host is null || (on && !SpiralOverlay.CanStartForAi)) return false;
+            var s = CoreSettings.Current;
+            if (opacity is int value) s.SpiralOpacity = value;
+            s.SpiralEnabled = on;
+            if (on) SpiralOverlay.StartForAi(host);
+            else SpiralOverlay.Refresh(host);
+            CoreSettings.Save();
+            return true;   // the GIF may still be decoding, as for a deferred portal start
+        });
 
         /// <summary>True once the clip is really playing, false when refused or it never starts.</summary>
         internal static async Task<bool> PlayAudio(string path)

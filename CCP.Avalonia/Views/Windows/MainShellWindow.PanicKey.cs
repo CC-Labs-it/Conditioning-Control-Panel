@@ -231,7 +231,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static bool AnyEffectRunning =>
             CoreEngine.IsRunning || CoreFlash.IsRunning || CoreSubliminal.IsRunning || BouncingTextOverlay.IsRunning
-            || Views.Overlays.BlinkTrainerSession.IsRunning;
+            || Views.Overlays.BlinkTrainerSession.IsRunning || SpiralOverlay.AiRunning;
 
         /// <summary>Every desktop-effect start goes through here. <paramref name="start"/> must re-check
         /// that the effect is still wanted: it can run up to 30 s later, after a panic or an untick.</summary>
