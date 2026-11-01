@@ -18,9 +18,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         public void PanicSilence() => RunOnAvatar(() =>
         {
             try { _stopSpoken(); } catch { }
+            // Trigger whispers can play while the subliminal scheduler is stopped.
+            try { Views.Overlays.SubliminalWhisperShow.StopAll(); } catch { }
             _stopSpoken = static () => { };
             try { StopThinkingAnimation(); } catch { }
             try { _speechTimer?.Stop(); } catch { }
+            try { CancelTriggerLead(); } catch { }
+            try { StopTriggerTypewriter(); } catch { }
             try { ClearSpeechQueue(); } catch { }   // WPF Speech.cs:1850-1851: nothing queued speaks after
             try { _listeningDotsTimer?.Stop(); _listeningDotsTimer = null; } catch { }
             _isWaitingForAi = false;

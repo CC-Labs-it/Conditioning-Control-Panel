@@ -11,14 +11,14 @@
 // ponytail: not ported - Pause browser (WPF mutes CoreWebView2 + pauses its media; this head's
 // browser has no mute/script channel, so the item is hidden rather than promising a pause), the
 // remote-controller emote swap (RefreshEmoteMenuItemsForRemoteState :878; the five items are greyed
-// as UpdateQuickMenuState does, the emote items stay hidden), and the tube's trigger-phrase timer
-// (Speech.cs:1594 StartTriggerTimer): Trigger mode flips and saves the setting WPF's timer reads.
+// as UpdateQuickMenuState does, the emote items stay hidden).
 
 using System;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -33,10 +33,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
     public partial class AvatarTubeWindow
     {
-        private static readonly IBrush MenuRed = new SolidColorBrush(Color.FromRgb(255, 99, 71));
-        private static readonly IBrush MenuGreen = new SolidColorBrush(Color.FromRgb(144, 238, 144));
-        private static readonly IBrush MenuPatreon = new SolidColorBrush(Color.FromRgb(155, 89, 182));
-        private static readonly IBrush MenuLocked = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x70));
+        private static readonly IBrush MenuRed = new ImmutableSolidColorBrush(Color.FromRgb(255, 99, 71));
+        private static readonly IBrush MenuGreen = new ImmutableSolidColorBrush(Color.FromRgb(144, 238, 144));
+        private static readonly IBrush MenuPatreon = new ImmutableSolidColorBrush(Color.FromRgb(155, 89, 182));
+        private static readonly IBrush MenuLocked = new ImmutableSolidColorBrush(Color.FromRgb(0x60, 0x60, 0x70));
 
         private MenuItem? QuickItem(string name) => this.FindControl<MenuItem>(name);
 
@@ -106,14 +106,15 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             UpdateQuickMenuState();
         }
 
-        /// <summary>WPF MenuItemTriggerMode_Click (SyncTriggerModeUI = the shell's hero sync).</summary>
+        /// <summary>WPF MenuItemTriggerMode_Click: restart and sync the Companion controls.</summary>
         internal void OnMenuTriggerMode()
         {
             var on = !CoreSettings.Current.TriggerModeEnabled;
             CoreSettings.Current.TriggerModeEnabled = on;
             CoreSettings.Save();
+            RestartTriggerTimer();
             UpdateQuickMenuState();
-            QuickShell?.SyncHero();
+            QuickShell?.SyncTriggerModeUI();
             Giggle(on ? "Trigger mode ON~" : "Trigger mode off~");
         }
 

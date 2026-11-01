@@ -108,12 +108,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// there is no clip or whispers are muted: the caller then draws the card straight away.</summary>
         internal static bool Whisper(string text)
         {
+            if (!PlayTriggerAudio(text, out var entry)) return false;
+            Later(SubliminalWhisper.HapticLeadMs, () =>
+            {
+                _ = CoreHaptics.Service?.TriggerSubliminalPatternAsync(text);
+                Later(SubliminalWhisper.VisualAfterHapticMs, () => Draw(text), entry);
+            }, entry);
+            return true;
+        }
+
+        // WPF SubliminalService.cs:465: trigger bubbles use the same whisper without a flash.
+        internal static bool PlayTriggerAudio(string text) => PlayTriggerAudio(text, out _);
+
+        private static bool PlayTriggerAudio(string text, out int entry)
+        {
+            entry = Volatile.Read(ref _gen);
             var s = CoreSettings.Current;
             var path = SubliminalWhisper.FindLinkedAudio(text, SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath),
                 SubAudioDir, App.Mods?.ActiveModId);
             if (path == null || !s.SubAudioAudible) return false;
 
-            var entry = Volatile.Read(ref _gen);   // a Stop after this drops this whisper and its card
             if (s.AudioDuckingEnabled) CoreAudio.Duck(s.DuckingLevel);
             var gen = CoreAudio.DuckGeneration;
             Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();   // WPF PlayWhisperAudio: StopAudio first
@@ -121,11 +135,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 onFinished: () => After(SubliminalWhisper.UnduckDelayMs, () => CoreAudio.Unduck(gen)));
             if (Volatile.Read(ref _gen) != entry) Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();   // Stop raced the start
             Log.Debug("Playing subliminal audio: {Path}", Path.GetFileName(path));
-            Later(SubliminalWhisper.HapticLeadMs, () =>
-            {
-                _ = CoreHaptics.Service?.TriggerSubliminalPatternAsync(text);
-                Later(SubliminalWhisper.VisualAfterHapticMs, () => Draw(text), entry);
-            }, entry);
             return true;
         }
 

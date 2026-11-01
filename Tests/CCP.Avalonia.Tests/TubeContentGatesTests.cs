@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -41,6 +42,49 @@ public sealed class TubeContentGatesTests
     {
         Dispatcher.UIThread.RunJobs();
         return owner.OwnedWindows.OfType<T>().Single();
+    }
+
+    [Fact]
+    public async Task MenuRendersAfterAvatarGeometryIsReadOnAWorker()
+    {
+        const string probe = "CCP_AVATAR_BRUSH_PROBE";
+        if (Environment.GetEnvironmentVariable(probe) != "1")
+        {
+            // Even if an earlier UI test initialized the type, the child must start on a clean testhost.
+            await AvaloniaTestDispatcher.RunAsync(() => { AvatarTubeWindow.TubeMotesBox(false); return Task.CompletedTask; });
+            var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+            foreach (var arg in new[] { "test", typeof(TubeContentGatesTests).Assembly.Location, "--filter",
+                "FullyQualifiedName=CCP.Avalonia.Tests.TubeContentGatesTests.MenuRendersAfterAvatarGeometryIsReadOnAWorker", "--nologo", "-v:n" }) start.ArgumentList.Add(arg);
+            start.Environment[probe] = "1";
+            start.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en";
+            using var process = Process.Start(start)!;
+            var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
+            try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromMinutes(2)); }
+            catch { if (!process.HasExited) process.Kill(entireProcessTree: true); throw; }
+            var result = await output + await error;
+            Assert.True(process.ExitCode == 0, result);
+            Assert.Matches(@"Total tests:\s+1\s+Passed:\s+1\b", result);
+            return;
+        }
+        // Geometry is used by pure callers too; touching it first must not bind menu brushes to that thread.
+        await Task.Run(() => AvatarTubeWindow.TubeMotesBox(false));
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var tube = new AvatarTubeWindow(null);
+            var menu = tube.FindControl<ContextMenu>("AvatarContextMenu")!;
+            try
+            {
+                tube.Show();
+                menu.Open(tube.FindControl<Border>("AvatarBorder") ?? (Control)tube);
+                Dispatcher.UIThread.RunJobs(); // render the actual icon headers and their foregrounds
+                Assert.True(menu.IsOpen);
+            }
+            finally { menu.Close(); tube.Close(); }
+            return Task.CompletedTask;
+        });
     }
 
     [Fact]

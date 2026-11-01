@@ -15,6 +15,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        // WPF MainWindow.Patreon.cs:1501,1525 and 1509-1513.
+        internal void RestartAvatarTriggerTimer() => _avatarTubeWindow?.RestartTriggerTimer();
+        internal void SyncTriggerModeUI() => RoomView()?.WorkshopParts?.Triggers.SyncFromSettings();
+
         /// <summary>WPF MainWindow.CompanionTab.cs CompanionCard_Click: free switching through
         /// the shared engine, then refresh the actual room controls.</summary>
         internal void SwitchCompanionFromRoster(int index, CompanionRoomView room)
