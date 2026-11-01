@@ -11,8 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     ///
     /// WPF forwards the controls to MainWindow. This head saves trigger edits here,
     /// and hoists phrase-preset selection/save/delete to the Workshop host.
-    /// Manage Phrases forwards to the owning shell. Edit Phrases and the live avatar trigger timer
-    /// still await their runtime.
+    /// Manage Phrases forwards to the owning shell. Edit Phrases still awaits its runtime.
     /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
@@ -54,13 +53,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             var intervalText = this.FindControl<TextBlock>("TxtTriggerIntervalCompanion")!;
 
             // WPF wired Checked/Unchecked separately; Avalonia has one event for both.
-            // WPF MainWindow.Patreon.cs:1489-1501,1515-1525. Timer restart remains unported.
+            // WPF MainWindow.Patreon.cs:1489-1501,1515-1525.
             toggle.IsCheckedChanged += (_, _) =>
             {
                 panel.IsVisible = toggle.IsChecked == true;
                 if (_isLoading) return;
                 CoreSettings.Current.TriggerModeEnabled = toggle.IsChecked == true;
                 CoreSettings.Save();
+                this.FindAncestorOfType<MainShellWindow>()?.RestartAvatarTriggerTimer();
             };
             slider.ValueChanged += (_, _) =>
             {
@@ -68,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 if (_isLoading) return;
                 CoreSettings.Current.TriggerIntervalSeconds = (int)slider.Value;
                 CoreSettings.Save();
+                this.FindAncestorOfType<MainShellWindow>()?.RestartAvatarTriggerTimer();
             };
         }
     }

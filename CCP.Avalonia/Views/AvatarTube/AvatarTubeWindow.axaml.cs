@@ -268,10 +268,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // ponytail: GIF/emote/portrait playback and non-awareness service reactions remain
             // in the WPF reference. Look selection and ModChanged repaint use AvatarSets.cs.
 
-            // ponytail: the WPF ctor also started four timers here - a 2s greeting, the idle-giggle,
-            // the trigger and the random-bubble loops. Deliberately NOT started: every one of them
-            // calls into a partial this layer does not have, and --render-all constructs ~180 windows
-            // in one process, where a stray timer firing at a closed window is a flaky failure.
+            // WPF xaml.cs:358-359 starts Trigger Mode at construction.
+            RestartTriggerTimer();
+            // Greeting, idle giggle and random bubble timers remain unported.
 
             // WPF did this from Loaded on this window; same here. See ApplyChatShortcutTo for why
             // the binding on THIS window is the lesser half.
@@ -336,6 +335,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // failure the constructor's note refuses to risk.
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
             _poseTimer.Stop();
+            StopTriggerTimer();
+            CancelTriggerLead();
+            StopTriggerTypewriter();
             _speechTimer?.Stop();
             ClearSpeechQueue();
             _cooldownTickTimer?.Stop();
@@ -1243,7 +1245,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool NextPresetGiggleSound() => ++_presetGiggleCounter % 5 == 0;
 
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
-                                bool barkVoice, bool preset, Action? onSpoken = null)
+                                bool barkVoice, bool preset, Action? onSpoken = null, bool trigger = false)
         {
                 var spokenHandled = false;
                 var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1254,11 +1256,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     // bark output passes aiGenerated:false and must not suppress the next bark.
                     if (aiGenerated) _lastAiBubbleUtc = DateTime.UtcNow;
 
+                    CancelTriggerLead();
+                    StopTriggerTypewriter();
                     StopThinkingAnimation();   // the reply pre-empts the thinking bubble (WPF Speech.cs:335)
                     _speechTimer?.Stop();
                     if (!preset) AddToChatHistory(text, isUser: false);   // WPF Giggle logs nothing
 
-                    var source = preset ? SpeechSource.Preset : SpeechSource.AI;
+                    var source = trigger ? SpeechSource.Trigger : preset ? SpeechSource.Preset : SpeechSource.AI;
                     if (Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
                     {
                         _isGiggling = false;   // WPF Speech.cs:452-460: skipped, but it still spaces the next
@@ -1285,10 +1289,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
-                    if (!IsMuted) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken); spokenHandled = true; }
+                    if (trigger) Views.Overlays.SubliminalWhisperShow.PlayTriggerAudio(text);
+                    else if (!IsMuted) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken); spokenHandled = true; }
 
                     SyncAskButtonsFor(text);
-                    _txtSpeech.Text = text;
+                    if (trigger) StartTriggerTypewriter(text);
+                    else _txtSpeech.Text = text;
                     _speechBubble.MaxWidth = 380;
                     ApplySpeechBubblePlacement();
                     _speechBubble.IsVisible = true;
@@ -1297,7 +1303,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _currentSpeechSource = source;
                     _currentSpeechLength = text.Length;
 
-                    StartBubbleHideTimer(text);
+                    StartBubbleHideTimer(text, trigger);
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
                 }
                 catch (Exception ex) { Log.Warning(ex, "AvatarTube GigglePriority failed"); }
@@ -1317,6 +1323,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 if (_isPlayingUninterruptibleClip) return;
                 ClearSpeechQueue();   // WPF Speech.cs:719-721: nothing queued talks over the open mic
+                CancelTriggerLead();
+                StopTriggerTypewriter();
                 _speechTimer?.Stop();
                 _isGiggling = false;
                 _isShowingAiBubble = false;
@@ -1391,10 +1399,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// seconds (bug #193). Hovering the bubble holds it open, re-checked every second, for at
         /// most two minutes (WPF SpeechLatchRule.HoldForHover, Speech.cs:579).
         /// </summary>
-        private void StartBubbleHideTimer(string text)
+        private void StartBubbleHideTimer(string text, bool trigger = false)
         {
-            double seconds = Math.Clamp(CoreSettings.Current.BubbleDurationSeconds, 1.0, 10.0);
-            seconds = Math.Max(seconds, Math.Min(30.0, text.Length / 12.0));
+            double seconds = trigger
+                ? Math.Clamp(5.0 + text.Length * 0.05, 5.0, 14.0) + TriggerTypewriterSeconds(text.Length)
+                : Math.Max(Math.Clamp(CoreSettings.Current.BubbleDurationSeconds, 1.0, 10.0), Math.Min(30.0, text.Length / 12.0));
 
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
             DateTime? hoverHoldSince = null;

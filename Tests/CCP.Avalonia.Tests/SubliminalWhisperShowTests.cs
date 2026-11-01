@@ -53,6 +53,23 @@ public sealed class SubliminalWhisperShowTests
     }
 
     [Fact]
+    public void TriggerAudioPlaysWithoutSchedulingAFlashAndHonorsWhisperMute()
+    {
+        With(audible: true, roll: 0.9, run =>
+        {
+            Assert.True(SubliminalWhisperShow.PlayTriggerAudio("Freeze"));
+            Assert.Equal(new[] { "duck 70", "play freeze.mp3 whisper" }, run.Log);
+            Assert.DoesNotContain(run.Timers, t => t.Ms == 50 || t.Ms == 250);
+        });
+        With(audible: false, roll: 0.9, run =>
+        {
+            Assert.False(SubliminalWhisperShow.PlayTriggerAudio("Freeze"));
+            Assert.Empty(run.Log);
+            Assert.Empty(run.Timers);
+        });
+    }
+
+    [Fact]
     public void Freeze_whispers_then_card_then_reset() => With(audible: true, roll: 0.9, run =>
     {
         CoreSubliminal.TriggerBambiFreeze();

@@ -11,8 +11,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     public partial class AvatarTubeWindow
     {
         /// <summary>Where a line came from: decides the gap after it (WPF Speech.cs:71). WPF's Trigger
-        /// source has no producer on this head (no trigger loop), so it is not here.</summary>
-        internal enum SpeechSource { Preset, AI }
+        /// source has its own trigger-mode producer.</summary>
+        internal enum SpeechSource { Preset, AI, Trigger }
 
         // WPF Speech.cs:35: a QUEUED line carries text only - its clip is dropped, as WPF ("audio is
         // still text-only on this delayed path", Speech.cs:283).
@@ -110,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal void EndSpeechBubble()
         {
             _speechTimer?.Stop();
+            StopTriggerTypewriter();
             _speechBubble.IsVisible = false;
             _isShowingAiBubble = false;
             NoteSpeechEnded(_currentSpeechSource, _currentSpeechLength);

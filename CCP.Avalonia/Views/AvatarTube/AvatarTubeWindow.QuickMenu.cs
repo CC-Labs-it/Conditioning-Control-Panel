@@ -11,8 +11,7 @@
 // ponytail: not ported - Pause browser (WPF mutes CoreWebView2 + pauses its media; this head's
 // browser has no mute/script channel, so the item is hidden rather than promising a pause), the
 // remote-controller emote swap (RefreshEmoteMenuItemsForRemoteState :878; the five items are greyed
-// as UpdateQuickMenuState does, the emote items stay hidden), and the tube's trigger-phrase timer
-// (Speech.cs:1594 StartTriggerTimer): Trigger mode flips and saves the setting WPF's timer reads.
+// as UpdateQuickMenuState does, the emote items stay hidden).
 
 using System;
 using Avalonia.Controls;
@@ -106,14 +105,15 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             UpdateQuickMenuState();
         }
 
-        /// <summary>WPF MenuItemTriggerMode_Click (SyncTriggerModeUI = the shell's hero sync).</summary>
+        /// <summary>WPF MenuItemTriggerMode_Click: restart and sync the Companion controls.</summary>
         internal void OnMenuTriggerMode()
         {
             var on = !CoreSettings.Current.TriggerModeEnabled;
             CoreSettings.Current.TriggerModeEnabled = on;
             CoreSettings.Save();
+            RestartTriggerTimer();
             UpdateQuickMenuState();
-            QuickShell?.SyncHero();
+            QuickShell?.SyncTriggerModeUI();
             Giggle(on ? "Trigger mode ON~" : "Trigger mode off~");
         }
 
