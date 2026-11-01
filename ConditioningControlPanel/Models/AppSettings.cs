@@ -7502,7 +7502,7 @@ namespace ConditioningControlPanel.Models
         private WallpaperMode _collageMode = WallpaperMode.Static;
         /// <summary>
         /// Which wallpaper runs (see <see cref="WallpaperMode"/>): the still collage (default), the moving
-        /// one (<see cref="Services.DynamicWallpaperService"/> — not available in <see cref="PerformanceMode"/>),
+        /// one (<see cref="Services.DynamicWallpaperService"/>, not available in <see cref="PerformanceMode"/>),
         /// or the user's own picture (<see cref="CollageOwnImagePath"/>). Only one at a time.
         /// </summary>
         [JsonProperty]
@@ -7525,7 +7525,7 @@ namespace ConditioningControlPanel.Models
         private int _collageWallpaperIntervalSeconds = 60;
         /// <summary>
         /// How often the collage wallpaper recomposes into a brand-new layout, in seconds. The
-        /// slider spans 10s–5min; the text field can go past that, clamped to 10s–24h.
+        /// slider spans 10 s to 5 min; the text field can go past that, clamped to 10 s to 24 h.
         /// Only used while <see cref="CollageWallpaperRotate"/> is on.
         /// </summary>
         [JsonProperty]
