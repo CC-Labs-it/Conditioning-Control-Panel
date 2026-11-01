@@ -9,8 +9,8 @@ namespace ConditioningControlPanel.Tests;
 
 /// <summary>
 /// Instant unlock for a tier bought on the site: the server's folded <c>effective_tier</c> is
-/// read off the heartbeat and the profile, a rise is applied at once, a drop never revokes, and
-/// each tier gets its own celebration card.
+/// read off the heartbeat and the profile, a rise is applied at once, a drop ends the grace it no
+/// longer backs, and each tier gets its own celebration card.
 /// </summary>
 public class EntitlementTierRuleTests
 {
@@ -128,6 +128,72 @@ public class EntitlementTierRuleTests
     [InlineData(new[] { "premium-celebration-t2" }, 2, true, false)]
     public void Celebration_IsOwed(string[] seen, int tier, bool onRise, bool expected)
         => Assert.Equal(expected, TierCelebration.IsOwed(new List<string>(seen), tier, onRise));
+
+    [Fact]
+    public void CloseGrace_TierZeroEndsBothStamps()
+    {
+        var s = new AppSettings { PatreonPremiumValidUntil = Now.AddDays(9), PatreonLabValidUntil = Now.AddDays(9) };
+        Assert.True(EntitlementTierRule.CloseGrace(s, 0, Now));
+        Assert.Equal(Now, s.PatreonPremiumValidUntil);
+        Assert.Equal(Now, s.PatreonLabValidUntil);
+    }
+
+    [Fact]
+    public void CloseGrace_BasicKeepsPremiumEndsLab()
+    {
+        var s = new AppSettings { PatreonPremiumValidUntil = Now.AddDays(9), PatreonLabValidUntil = Now.AddDays(9) };
+        Assert.True(EntitlementTierRule.CloseGrace(s, 1, Now));
+        Assert.Equal(Now.AddDays(9), s.PatreonPremiumValidUntil);
+        Assert.Equal(Now, s.PatreonLabValidUntil);
+    }
+
+    [Fact]
+    public void CloseGrace_PrimeIncludingWhitelistEndsNothing()
+    {
+        var s = new AppSettings { PatreonPremiumValidUntil = Now.AddHours(25), PatreonLabValidUntil = Now.AddDays(9) };
+        Assert.False(EntitlementTierRule.CloseGrace(s, 2, Now));
+        Assert.Equal(Now.AddHours(25), s.PatreonPremiumValidUntil);
+        Assert.Equal(Now.AddDays(9), s.PatreonLabValidUntil);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(3)]
+    [InlineData(-1)]
+    public void CloseGrace_NoReadingKeepsTheOfflineWindow(int? server)
+    {
+        var s = new AppSettings { PatreonPremiumValidUntil = Now.AddDays(9), PatreonLabValidUntil = Now.AddDays(9) };
+        Assert.False(EntitlementTierRule.CloseGrace(s, server, Now));
+        Assert.Equal(Now.AddDays(9), s.PatreonPremiumValidUntil);
+    }
+
+    [Fact]
+    public void CloseGrace_AnEndedStampKeepsItsDay()
+    {
+        var s = new AppSettings { PatreonPremiumValidUntil = Now.AddDays(-3) };
+        Assert.False(EntitlementTierRule.CloseGrace(s, 0, Now));
+        Assert.Equal(Now.AddDays(-3), s.PatreonPremiumValidUntil);
+    }
+
+    [Fact]
+    public void CloseGrace_ThenTheClosedLapseRowOwes()
+    {
+        var s = new AppSettings { PatreonPremiumValidUntil = Now.AddDays(9), PatreonLabValidUntil = Now.AddDays(9) };
+        EntitlementTierRule.CloseGrace(s, 0, Now);
+        var reading = ConditioningControlPanel.Services.Startup.Conversion.ConversionRules.DecideLapse(
+            2, 0, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, Now, liveCoversIt: false);
+        Assert.Equal(ConditioningControlPanel.Services.Startup.Conversion.LapseRow.Closed, reading.Row);
+    }
+
+    [Fact]
+    public void CloseGrace_PayingAgainReopens()
+    {
+        var s = new AppSettings { PatreonPremiumValidUntil = Now.AddDays(9), PatreonLabValidUntil = Now.AddDays(9) };
+        EntitlementTierRule.CloseGrace(s, 0, Now);
+        Assert.True(PatreonActiveRule.Restamp(s, new PatreonActiveReading(true, Now, 2), Now));
+        Assert.Equal(Now.AddDays(EntitlementTierRule.GraceDays), s.PatreonPremiumValidUntil);
+        Assert.Equal(Now.AddDays(EntitlementTierRule.GraceDays), s.PatreonLabValidUntil);
+    }
 
     [Fact]
     public void Celebration_EveryKeyHasACard()

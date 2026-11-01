@@ -18,9 +18,8 @@ namespace ConditioningControlPanel.Services
         Rise,
 
         /// <summary>
-        /// The server says less. Recorded, never applied: the 14-day grace stamps run out on
-        /// their own (owner-approved default), and a live read must never yank a feature out
-        /// from under someone mid-session.
+        /// The server says less. Remembered for the lapse rows, and whatever grace the reading
+        /// no longer backs ends at once (<see cref="EntitlementTierRule.CloseGrace"/>).
         /// </summary>
         Lower
     }
@@ -93,6 +92,29 @@ namespace ConditioningControlPanel.Services
                 settings.PatreonPremiumValidUntil = until;
             if (tier >= 2 && (settings.PatreonLabValidUntil == null || settings.PatreonLabValidUntil < until))
                 settings.PatreonLabValidUntil = until;
+        }
+
+        /// <summary>
+        /// A server reading is the answer the grace stands in for, so a stamp it no longer backs
+        /// ends now (owner, 2026-11-01). The stamp is what a Discord sign-in patron's access rides
+        /// on, so it stays: an offline PC has no reading and keeps its window. Set to now rather
+        /// than cleared, so the lapse row can name the day. True when a stamp moved.
+        /// </summary>
+        public static bool CloseGrace(AppSettings settings, int? serverTier, DateTime nowUtc)
+        {
+            if (settings == null || serverTier is not int tier || tier < 0 || tier > MaxTier) return false;
+            var moved = false;
+            if (tier < 1 && settings.PatreonPremiumValidUntil > nowUtc)
+            {
+                settings.PatreonPremiumValidUntil = nowUtc;
+                moved = true;
+            }
+            if (tier < 2 && settings.PatreonLabValidUntil > nowUtc)
+            {
+                settings.PatreonLabValidUntil = nowUtc;
+                moved = true;
+            }
+            return moved;
         }
     }
 

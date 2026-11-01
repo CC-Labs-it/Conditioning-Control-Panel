@@ -67,6 +67,14 @@ namespace ConditioningControlPanel.Services
 
                 var verdict = EntitlementTierRule.Decide(settings!.PatreonTier, serverTier);
 
+                // Before the lapse rows read the stamps. No TierChanged: a running session is not
+                // repainted or torn down, the gates simply answer no at their next use.
+                if (EntitlementTierRule.CloseGrace(settings, serverTier, DateTime.UtcNow))
+                {
+                    App.Logger?.Information("[Entitlement] {Source}: server tier {Server} closed the grace window", source, serverTier);
+                    App.Settings?.Save();
+                }
+
                 // The lapse rows' only input from here (ConversionRules.DecideLapse): a lower
                 // reading is remembered, an agreeing or higher one forgets it. Never an access input.
                 var seen = EntitlementTierRule.ServerTierSeenAfter(verdict, serverTier, settings.ServerTierSeen);
@@ -95,11 +103,11 @@ namespace ConditioningControlPanel.Services
                         break;
 
                     case EntitlementVerdict.Lower:
-                        // Recorded, never applied (see EntitlementVerdict.Lower). Logged once per value.
+                        // The stored tier stays for the lapse rows (see EntitlementVerdict.Lower). Logged once per value.
                         if (_lastLowerLogged != serverTier)
                         {
                             _lastLowerLogged = serverTier;
-                            App.Logger?.Information("[Entitlement] {Source}: server tier {Server} below stored {Local}; keeping the grace window",
+                            App.Logger?.Information("[Entitlement] {Source}: server tier {Server} below stored {Local}",
                                 source, serverTier, settings.PatreonTier);
                         }
                         break;
