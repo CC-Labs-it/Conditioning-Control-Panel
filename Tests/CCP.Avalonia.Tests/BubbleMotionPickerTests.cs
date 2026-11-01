@@ -33,10 +33,11 @@ public sealed class BubbleMotionPickerTests
         Window? host = null;
         try
         {
-            // Nothing owned: WPF collapses the whole box.
+            // Nothing owned: WPF hides the picker but keeps the purchase offer.
             PrizeOwnership.IsGranted = _ => false;
             var bare = new BubblePopFeatureControl();
-            Assert.False(bare.FindControl<Border>("V2Box")!.IsVisible);
+            Assert.True(bare.FindControl<Border>("V2Box")!.IsVisible);
+            Assert.False(bare.FindControl<Control>("MotionRow")!.IsVisible);
 
             CoreSettings.Current.BubbleMotionStyle = BubbleMotionStyle.FloatUp;
             PrizeOwnership.IsGranted = id => id == PrizeOwnership.BubbleSpiralIn;
@@ -103,7 +104,8 @@ public sealed class BubbleMotionPickerTests
             var box = panel.FindControl<Border>("V2Box")!;
             host = new Window { Content = panel };
             host.Show();
-            Assert.False(box.IsVisible);
+            Assert.True(box.IsVisible);
+            Assert.False(panel.FindControl<Control>("MotionRow")!.IsVisible);
             // The same accepted snapshot a purchase reply supplies, arriving off the UI thread.
             Task.Run(() => PrizeOwnership.ApplySnapshot("bubble-owner", 1, new[] { PrizeOwnership.BubbleRain })).GetAwaiter().GetResult();
             Dispatcher.UIThread.RunJobs();
@@ -118,7 +120,8 @@ public sealed class BubbleMotionPickerTests
             settings.UnifiedId = "other-owner";
             CoreAccount.UnifiedUserId = "other-owner";
             Dispatcher.UIThread.RunJobs();
-            Assert.False(box.IsVisible);
+            Assert.True(box.IsVisible);
+            Assert.False(panel.FindControl<Control>("MotionRow")!.IsVisible);
             settings.UnifiedId = "bubble-owner";
             CoreAccount.UnifiedUserId = "bubble-owner";
             Dispatcher.UIThread.RunJobs();
@@ -132,7 +135,8 @@ public sealed class BubbleMotionPickerTests
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
             Assert.DoesNotContain(changed?.GetInvocationList() ?? System.Array.Empty<System.Delegate>(), d => ReferenceEquals(d.Target, panel));
             host.Content = panel;
-            Assert.False(box.IsVisible); // reload catches the snapshot missed while detached
+            Assert.True(box.IsVisible); // the purchase offer returns after the grant is removed
+            Assert.False(panel.FindControl<Control>("MotionRow")!.IsVisible); // reload catches the snapshot missed while detached
             Assert.Single(picker.Items);
         }
         finally
@@ -156,7 +160,7 @@ public sealed class BubbleMotionPickerTests
             CoreSecrets.RetrieveProvider, PrizeOwnership.IsGranted, s.BubbleMotionStyle));
     }
 
-    private static void Setup()
+    internal static void Setup()
     {
         if (Application.Current is null)
         {

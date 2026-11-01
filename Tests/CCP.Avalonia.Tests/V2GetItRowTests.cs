@@ -108,6 +108,55 @@ public sealed class V2GetItRowTests
         });
     }
 
+    [Fact]
+    public Task BubbleCardOffersSignInAndSwitchesToTheOwnedPicker() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var settings = CoreSettings.Current;
+        var old = (settings.UnifiedId, settings.OfflineMode, CoreAccount.UnifiedUserId,
+            CoreSecrets.RetrieveProvider, PrizeOwnership.IsGranted);
+        Window? host = null;
+        try
+        {
+            settings.UnifiedId = null;
+            settings.OfflineMode = false;
+            CoreAccount.UnifiedUserId = null;
+            CoreSecrets.RetrieveProvider = _ => null;
+            PrizeOwnership.IsGranted = _ => false;
+            var panel = new BubblePopFeatureControl();
+            host = new Window { Content = panel };
+            host.Show();
+            var row = panel.FindControl<V2GetItRow>("RowGetBubblesV2")!;
+            var box = panel.FindControl<Border>("V2Box")!;
+            var motion = panel.FindControl<Control>("MotionRow")!;
+            Assert.True(box.IsVisible);
+            Assert.True(row.IsVisible);
+            Assert.False(motion.IsVisible);
+            Assert.Equal(Loc.Get("v2_get_bubble_blurb"), row.FindControl<TextBlock>("TxtBlurb")!.Text);
+            Assert.Equal(V2PurchaseRowState.SignIn, row.Row.State);
+            var opened = 0;
+            row.OpenLogin = () => { opened++; return Task.CompletedTask; };
+            row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, opened);
+
+            PrizeOwnership.IsGranted = id => id == PrizeOwnership.BubbleRain;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(row.IsVisible);
+            Assert.True(box.IsVisible);
+            Assert.True(motion.IsVisible);
+            Assert.Contains(panel.FindControl<ComboBox>("CmbMotion")!.Items.OfType<ComboBoxItem>(),
+                item => item.Tag is ConditioningControlPanel.Models.BubbleMotionStyle.Rain);
+        }
+        finally
+        {
+            host?.Close();
+            (settings.UnifiedId, settings.OfflineMode, CoreAccount.UnifiedUserId,
+                CoreSecrets.RetrieveProvider, PrizeOwnership.IsGranted) = old;
+        }
+        return Task.CompletedTask;
+    });
+
     /// <summary>Row feat-backroom-counter-buy: the startup-built service over a fake proxy. The row reads
     /// the counter when shown, Get it confirms at the shown price, buys, toasts, adopts the receipt's
     /// SP and hides once the reply's grants land; a refusal shows WPF's key. Never reaches a server.</summary>

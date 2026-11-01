@@ -95,6 +95,43 @@ public sealed class SessionIoTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task VideoReplaySettingRoundTripsAndLocksInTheStudioRack() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var saved = settings.MandatoryVideoReplayAfterFailedCheck;
+        var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        shell.Show();
+        try
+        {
+            var panel = shell.StudioRack!.HostedFeaturePanels
+                .OfType<ConditioningControlPanel.Avalonia.Views.Features.VideoFeatureControl>().Single();
+            var toggle = panel.FindControl<CheckBox>("ChkReplayFailedCheck")!;
+            settings.MandatoryVideoReplayAfterFailedCheck = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(toggle.IsChecked);
+            toggle.IsChecked = false;
+            Assert.False(settings.MandatoryVideoReplayAfterFailedCheck);
+            ToolTip.SetTip(toggle, "original");
+            ConditioningControlPanel.CoreSession.IsSessionRunningProvider = () => true;
+            shell.RefreshSessionFeatureLock();
+            Assert.False(toggle.IsEnabled);
+            Assert.NotEqual("original", ToolTip.GetTip(toggle));
+            ConditioningControlPanel.CoreSession.IsSessionRunningProvider = () => false;
+            shell.RefreshSessionFeatureLock();
+            Assert.True(toggle.IsEnabled);
+            Assert.Equal("original", ToolTip.GetTip(toggle));
+        }
+        finally
+        {
+            ConditioningControlPanel.CoreSession.IsSessionRunningProvider = null;
+            settings.MandatoryVideoReplayAfterFailedCheck = saved;
+            shell.Close();
+        }
+        return Task.CompletedTask;
+    });
+
     /// <summary>WPF PulseSessionLockRibbon (SessionFeatureLock.cs:503): a refused dose change
     /// strobes the visible ribbon 1 - 0.25 - 1 - 0.25 - 1 over 560 ms with no fill, and a hidden
     /// ribbon is not pulsed. Asserts the animation started, not its frames: Avalonia 12's

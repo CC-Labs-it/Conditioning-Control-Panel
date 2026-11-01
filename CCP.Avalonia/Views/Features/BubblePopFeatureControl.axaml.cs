@@ -48,6 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderTriggerChance.ValueChanged += SliderTriggerChance_Changed;
             foreach (var box in TriggerTypeBoxes()) box.IsCheckedChanged += TriggerType_Changed;
             CmbMotion.SelectionChanged += CmbMotion_Changed;
+            RowGetBubblesV2.RowChanged += (_, _) => RebuildMotionPicker();
+            RowGetBubblesV2.Configure(Services.Prizes.V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
 
             LoadFromSettings();
 
@@ -173,18 +175,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
         private void OnGrantsChanged() => Dispatcher.UIThread.Post(() =>
         {
-            if (_ownershipAttached) RebuildMotionPicker();
+            if (_ownershipAttached) RowGetBubblesV2.Apply();
         });
 
         /// <summary>Float up always; Rain / Spiral In only when owned (each with its v2 pill); Mix once
-        /// any v2 style is owned. With nothing owned the box stays hidden.</summary>
+        /// any v2 style is owned. The purchase row can also keep the box visible.</summary>
         private void RebuildMotionPicker()
         {
             bool rain = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleRain);
             bool spiral = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleSpiralIn);
-            // ponytail: WPF also keeps the box up for the V2GetItRow (RowGetBubblesV2) and shows
-            // ChkBrainDrainBubble with the same grants; neither is ported (feat-bubble-pop).
-            V2Box.IsVisible = MotionRow.IsVisible = rain || spiral;
+            MotionRow.IsVisible = rain || spiral;
+            V2Box.IsVisible = rain || spiral || !RowGetBubblesV2.IsRowHidden;
             var wasLoading = _isLoading;
             _isLoading = true;
             try

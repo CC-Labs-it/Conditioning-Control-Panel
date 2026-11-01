@@ -207,6 +207,58 @@ public sealed class MandatoryVideoSchedulerTests
         }
     });
 
+    [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(true, false, false, true)]
+    [InlineData(false, true, false, true)]
+    [InlineData(false, false, true, true)]
+    public void Failed_check_honors_replay_setting_and_strict_or_lockdown(bool replay, bool strict, bool lockdown, bool repeats) => With(60, false, () =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck,
+            s.LockdownForceStrictLock, s.LockdownDisablePanicKey);
+        var oldLockdown = LockdownService.Current;
+        using var ld = new LockdownService();
+        var checks = new List<bool>();
+        try
+        {
+            (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck,
+                s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = (true, replay, false, false);
+            LockdownService.Current = ld;
+            if (lockdown) ld.Activate(TimeSpan.FromMinutes(30));
+            CoreProgression.TrackAttentionCheckProvider = checks.Add;
+            var clock = new FakeClock(); var host = new Host();
+            var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+            Assert.True(video.Trigger(strict));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            video.NoteSpawn();
+            video.Ended();
+            Assert.Equal(new[] { false }, checks);
+            Assert.False(video.IsPlaying);
+            Assert.Equal(repeats ? 1 : 0, video.Penalties);
+            Assert.Equal(repeats ? 1 : 0, host.Messages.Count);
+            if (repeats)
+            {
+                Assert.Equal(AttentionVerdict.Fail, host.Messages[0]);
+                host.Then!();
+                clock.Advance(MandatoryVideoScheduler.PreRoll);
+                Assert.Equal(2, host.Shown.Count);
+                Assert.Equal(strict, host.Shown[1].Strict);
+            }
+            else Assert.Single(host.Shown);
+            video.Stop();
+        }
+        finally
+        {
+            ld.Deactivate();
+            LockdownService.Current = oldLockdown;
+            (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck,
+                s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = saved;
+            CoreProgression.TrackAttentionCheckProvider = null;
+            CoreBubbles.PauseAction = CoreBubbles.ResumeAction = null;
+        }
+    });
+
     /// <summary>#1145: the Mercy picker moves the threshold (here 2 misses).</summary>
     [Fact]
     public void Mercy_comes_after_the_picked_number_of_misses() => With(60, true, () =>

@@ -254,6 +254,17 @@
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
+                            <Grid Height="34" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_video_replay_failed_check}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_video_replay_failed_check}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkReplayFailedCheck" sessionLock:SessionLock.Owned="True"
+                                          Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
+                            </Grid>
+
                             <!-- Phase 3 placeholder copy — voice-pass at ship. -->
                             <Grid Height="34" Background="Transparent" ToolTip.Tip="Look at a target for ~1s instead of clicking. Same hit, same reward.">
                                 <Grid.ColumnDefinitions>
