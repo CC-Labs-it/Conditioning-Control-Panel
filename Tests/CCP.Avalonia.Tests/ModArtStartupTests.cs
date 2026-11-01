@@ -24,10 +24,11 @@ public sealed class ModArtStartupTests
     public void StartupEvictsCachedArtOnSwitchOrPackInstall(bool packInstall, bool existingArt) =>
         AvaloniaTestDispatcher.Run(() =>
         {
+            var builder = global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp();
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>().UseSkia()
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
+            else builder.AfterSetupCallback(builder);
 
             using var mods = new CoreModsSnapshot();
             var settings = new SettingsService();

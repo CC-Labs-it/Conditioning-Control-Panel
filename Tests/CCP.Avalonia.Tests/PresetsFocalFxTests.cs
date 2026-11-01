@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -86,6 +87,29 @@ public sealed class PresetsFocalFxTests
         Assert.Equal(0.97, press.ScaleX);
         host.MouseMove(new Point(1, 1)); host.MouseUp(new Point(1, 1), MouseButton.Left, RawInputModifiers.None); Settle();
         Assert.Equal(1, press.ScaleX);
+    });
+
+    [Fact]
+    public Task TurningMotionOffCancelsAnActiveEntranceBeforeHover() => WithPresets((host, view) =>
+    {
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        var clock = new StepClock();
+        row.SetValue(StepClock.Property, clock.Instance);
+        // Start the real arrival with a stepped clock, so it stays in flight even on a slow runner.
+        typeof(PresetsTabView).GetMethod("StaggerZones", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(view, null);
+        clock.Step(0); clock.Step(100);
+        Assert.True(row.Opacity < 1, "the entrance must be running before motion is disabled");
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Settle();
+        Assert.Equal(1, row.Opacity);
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        Assert.Equal(0, slide.Y);
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, slide.Y);
+        host.MouseMove(new Point(1, 1)); Settle();
+        Assert.Equal(0, slide.Y);
     });
 
     [Fact]
@@ -205,10 +229,28 @@ public sealed class PresetsFocalFxTests
         finally { host?.Close(); Settle(); (settings.MotionLevel, settings.PerformanceMode) = old; }
         return Task.CompletedTask;
     });
-    private static void Setup() { if (Application.Current is null) ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting(); }
+    private static void Setup()
+    {
+        var builder = ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp();
+        if (Application.Current is null)
+            builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        else builder.AfterSetupCallback(builder);
+    }
     private static CardSheenAdorner[] Sheens(Window host) => host.GetVisualDescendants().OfType<CardSheenAdorner>().ToArray();
     private static Point Center(Window host, Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), host)!.Value;
     private static void Click(Window host, Control c) { var p = Center(host, c); host.MouseDown(p, MouseButton.Left, RawInputModifiers.None); host.MouseUp(p, MouseButton.Left, RawInputModifiers.None); }
     private static void Settle() { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); }
     private sealed class Clock : TimeProvider { public long Now; public override long TimestampFrequency => TimeSpan.TicksPerSecond; public override long GetTimestamp() => Now; }
+
+    // Avalonia 12 keeps its animation clock internal (see SharedDeeperThemeTests.StepClock).
+    private sealed class StepClock
+    {
+        private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", throwOnError: true)!;
+        private static readonly System.Reflection.MethodInfo Pulse = Base.GetMethod("Pulse", Any | System.Reflection.BindingFlags.Instance)!;
+        internal static readonly AvaloniaProperty Property =
+            (AvaloniaProperty)typeof(Animatable).GetField("ClockProperty", Any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        internal readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        internal void Step(double ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
+    }
 }
