@@ -15,8 +15,8 @@
 // ponytail: not yet here (lane sync6-nav-polish-c): the edge lift's lap round the frame at Full
 // motion (it sits at the top centre, WPF's Reduced), the fog and ember strips the band thins for
 // (EdgeParticles, AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
-// (PaintDepthRail/Hud/Home/Quests), the "Moved" redirects and their note, and the "Cloud sync
-// issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
+// (Home and banner depth), the "Moved" redirects and their note, and the "Cloud sync
+// issue" title suffix (SetSyncIssueTitle: sync health is not reported here).
 
 using System;
 using System.Linq;
@@ -89,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _washSection = section;
                 var hue = NavStripRules.Accent(section);
                 PaintSectionInk(section);
+                PaintSectionDepth(hue);
                 Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.QuestsTabView>("QuestsTab")?.PaintDepthQuests(hue);
                 var level = CoreSettings.Current.MotionLevel;
                 int ms = level switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => SectionWashMs / 2, _ => SectionWashMs };
@@ -97,6 +98,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PaintSectionEdge(hue, level, ms);
             }
             catch (Exception ex) { Serilog.Log.Debug("PaintSectionWash failed: {E}", ex.Message); }
+        }
+
+        /// <summary>WPF MainWindow.NavRail.cs:486 and MainWindow.HudDepth.cs:47:
+        /// the rail shadow and the HUD well follow each section's hue.</summary>
+        private void PaintSectionDepth(global::Avalonia.Media.Color hue)
+        {
+            PaintShadow(Named<Border>("NavRailShadow"), 0xBF / 255.0, horizontal: true);
+            PaintShadow(Named<Border>("HudBandWellTop"), DepthLaw.WellTopAlpha, horizontal: false);
+            PaintShadow(Named<Border>("XPGrooveTop"), DepthLaw.WellTopAlpha, horizontal: false);
+            PaintShadow(Named<Border>("XPGrooveLeft"), DepthLaw.WellLeftAlpha, horizontal: true);
+
+            void PaintShadow(Border? target, double alpha, bool horizontal)
+            {
+                if (target == null) return;
+                var ink = global::Avalonia.Media.Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), alpha));
+                target.Background = new global::Avalonia.Media.LinearGradientBrush
+                {
+                    StartPoint = new global::Avalonia.RelativePoint(0, 0, global::Avalonia.RelativeUnit.Relative),
+                    EndPoint = new global::Avalonia.RelativePoint(horizontal ? 1 : 0, horizontal ? 0 : 1, global::Avalonia.RelativeUnit.Relative),
+                    GradientStops = new global::Avalonia.Media.GradientStops
+                    {
+                        new global::Avalonia.Media.GradientStop(ink, 0),
+                        new global::Avalonia.Media.GradientStop(global::Avalonia.Media.Color.FromArgb(0, ink.R, ink.G, ink.B), 1),
+                    },
+                };
+            }
         }
 
         /// <summary>
