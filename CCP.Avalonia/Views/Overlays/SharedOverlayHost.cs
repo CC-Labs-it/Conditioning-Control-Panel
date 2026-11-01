@@ -25,7 +25,12 @@ internal static class SharedOverlayHost
         internal Grid Canvas { get; }
         internal bool IsOpen => _window?.IsVisible == true;
         internal Lease(PixelRect bounds, Window window, Grid canvas) => (_bounds, _window, Canvas) = (bounds, window, canvas);
-        internal void Raise() { if (IsOpen) SharedOverlayHost.Raise(_window!); }
+        // A shared compositor keeps its existing native order when a layer changes.
+        internal void Raise()
+        {
+            if (IsOpen && Stages.TryGetValue(_bounds, out var stage) && stage.Window == _window && stage.Owners == 1)
+                SharedOverlayHost.Raise(_window!);
+        }
         public void Dispose()
         {
             var window = _window;

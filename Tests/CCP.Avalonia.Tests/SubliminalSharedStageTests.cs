@@ -8,6 +8,7 @@ using Avalonia.Platform;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Features;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Compositor;
@@ -148,6 +149,53 @@ public sealed class SubliminalSharedStageTests
         {
             try { (settings.PinkFilterEnabled, settings.PinkFilterColor, settings.PinkFilterOpacity, settings.PinkFilterTargetMonitor) = before; }
             finally { CoreSettings.ServiceProvider = provider; }
+        }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Shared_stage_stays_below_an_open_chaos_hud(bool tintFirst) => AvaloniaTestDispatcher.Run(() =>
+    {
+        SubliminalSilentHintTests.EnsureAvalonia();
+        var configure = SharedOverlayHost.Configure;
+        var transparency = SharedOverlayHost.IsTransparent;
+        var raise = SharedOverlayHost.Raise;
+        var schedule = SubliminalOverlay.Schedule;
+        var stack = new List<Window>();
+        var timers = new List<(Action Run, TimeSpan At)>();
+        Window? stage = null;
+        ChaosHudWindow? hud = null;
+        SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; stack.Add(w); return true; };
+        SharedOverlayHost.IsTransparent = _ => true;
+        SharedOverlayHost.Raise = w => { stack.Remove(w); stack.Add(w); return true; };
+        SubliminalOverlay.Schedule = (run, at) => timers.Add((run, at));
+        try
+        {
+            if (tintFirst) Assert.True(PinkFilterOverlay.ShowHosted(Bounds, 1, 2, 3, 0.4));
+            else Assert.True(SubliminalOverlay.ShowHosted(Bounds, "FIRST", 0.8, TimeSpan.FromMilliseconds(100)));
+            hud = new ChaosHudWindow { Topmost = true };
+            hud.Show();
+            stack.Add(hud);
+            if (tintFirst) Assert.True(SubliminalOverlay.ShowHosted(Bounds, "TEST", 0.8, TimeSpan.FromMilliseconds(100)));
+            else Assert.True(PinkFilterOverlay.ShowHosted(Bounds, 1, 2, 3, 0.4));
+            Assert.Equal(new Window[] { stage!, hud }, stack);
+            foreach (var (run, _) in timers.OrderBy(t => t.At).ToArray()) run();
+            Assert.True(stage!.IsVisible);
+            Assert.True(hud.IsVisible);
+            Assert.Single(Assert.IsType<Grid>(stage.Content).Children);
+            Assert.Equal(new Window[] { stage, hud }, stack);
+        }
+        finally
+        {
+            try { PinkFilterOverlay.CloseAll(); SubliminalOverlay.CloseAll(); hud?.Close(); }
+            finally
+            {
+                SharedOverlayHost.Configure = configure;
+                SharedOverlayHost.IsTransparent = transparency;
+                SharedOverlayHost.Raise = raise;
+                SubliminalOverlay.Schedule = schedule;
+            }
         }
     });
 
