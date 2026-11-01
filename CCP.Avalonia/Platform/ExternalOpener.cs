@@ -29,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static Func<bool> IsWindows = OperatingSystem.IsWindows;
         internal static Func<ProcessStartInfo, bool> StartBrowserFallback = info =>
         {
+            if (SandboxNet.Active) return false; // Never launch a browser from a sandboxed test or render.
             using var p = Process.Start(info);
             return true;
         };

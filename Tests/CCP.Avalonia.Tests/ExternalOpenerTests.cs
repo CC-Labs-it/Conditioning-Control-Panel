@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -67,6 +68,15 @@ public sealed class ExternalOpenerTests
     [InlineData("relative/notes.txt", true, false)]
     public void SandboxRefusesSharesAndProductionKeepsTheShell(string target, bool sandboxed, bool allowed) =>
         Assert.Equal(allowed, ExternalOpener.Allowed(target, sandboxed));
+
+    /// <summary>The real fallback must not launch even a loopback URL from a test sandbox.
+    /// An empty FileName would throw if it reached Process.Start, without starting a process.</summary>
+    [Fact]
+    public void NativeBrowserFallbackDoesNotStartInSandbox()
+    {
+        Assert.True(SandboxNet.Active);
+        Assert.False(ExternalOpener.StartBrowserFallback(new ProcessStartInfo()));
+    }
 
     /// <summary>WPF BrowserLauncher.cs:33-51: the banner's web URL tries the Windows handlers in
     /// order after the association fails, stopping at the first success. No process starts in this test.</summary>
