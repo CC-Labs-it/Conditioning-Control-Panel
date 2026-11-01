@@ -83,6 +83,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 return false;
             }
         };
+        // Snapshot before provider authentication can change the live identity (WPF MainWindow.Login.cs:84-112).
+        private readonly string? _previousUnifiedId = CoreAccount.UnifiedUserId ?? AccountSeed.LastKnownUnifiedId
+            ?? AccountSeed.StartupUnifiedId ?? CoreSettings.Current.UnifiedId;
         private bool _closed;
         private string? _firstProviderToken;
 
@@ -786,9 +789,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             Close(true);
         }
 
-        private static bool ClearIfOtherAccount(string? newId)
+        private bool ClearIfOtherAccount(string? newId)
         {
-            var previousId = CoreSettings.Current.UnifiedId;
+            var previousId = _previousUnifiedId;
             if (!string.IsNullOrEmpty(previousId) && !string.IsNullOrEmpty(newId) && previousId != newId)
             {
                 ProgressionClear.Apply(CoreSettings.Current);
