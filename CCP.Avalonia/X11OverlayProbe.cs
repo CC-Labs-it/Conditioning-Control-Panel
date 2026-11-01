@@ -6,6 +6,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 
 namespace ConditioningControlPanel.Avalonia
 {
@@ -48,6 +49,13 @@ namespace ConditioningControlPanel.Avalonia
         [DllImport(LibX11)] private static extern int XCloseDisplay(IntPtr display);
         [DllImport(LibX11)] private static extern int XSync(IntPtr display, bool discard);
         [DllImport(LibX11)] private static extern int XFree(IntPtr data);
+        [DllImport(LibX11)] private static extern int XGetWindowAttributes(IntPtr display, IntPtr window, IntPtr attributes);
+        [DllImport(LibX11)] private static extern bool XTranslateCoordinates(IntPtr display, IntPtr src, IntPtr dest,
+            int srcX, int srcY, out int destX, out int destY, out IntPtr child);
+        [DllImport(LibX11)] private static extern int XWarpPointer(IntPtr display, IntPtr src, IntPtr dest,
+            int srcX, int srcY, uint srcWidth, uint srcHeight, int destX, int destY);
+        [DllImport(LibX11)] private static extern bool XQueryPointer(IntPtr display, IntPtr window, out IntPtr root,
+            out IntPtr child, out int rootX, out int rootY, out int winX, out int winY, out uint mask);
         [DllImport(LibX11)] private static extern int XGetGeometry(IntPtr display, IntPtr drawable,
             out IntPtr root, out int x, out int y, out uint width, out uint height, out uint borderWidth, out uint depth);
 
@@ -66,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         [DllImport(LibX11)] private static extern int XConfigureWindow(IntPtr display, IntPtr window, uint mask, ref XWindowChanges changes);
+        [DllImport("libXtst.so.6")] private static extern int XTestFakeButtonEvent(IntPtr display, uint button, bool press, ulong delay);
         [DllImport(LibXext)] private static extern IntPtr XShapeGetRectangles(IntPtr display, IntPtr window,
             int kind, out int count, out int ordering);
 
@@ -115,6 +124,133 @@ namespace ConditioningControlPanel.Avalonia
             overlay.Show();
             lifetime.Start(Array.Empty<string>());
             return exit;
+        }
+
+        /// <summary>Real Chaos Skia window on a composited X11 desktop. Proves the unpinned window
+        /// is managed, click-through even above another window, and can be covered; pinned retains
+        /// override-redirect. Run only on an isolated test display, since it moves the pointer.</summary>
+        public static int RunChaosSkiaStack()
+        {
+            var lifetime = new ClassicDesktopStyleApplicationLifetime { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            AppBuilder.Configure<Application>().UsePlatformDetect().UseX11().SetupWithLifetime(lifetime);
+            if (!X11Overlay.IsAvailable || !X11Overlay.IsCompositing)
+            {
+                Console.Error.WriteLine("FAIL: a composited X11 desktop is required");
+                return 1;
+            }
+            var display = XOpenDisplay(IntPtr.Zero);
+            if (display == IntPtr.Zero) { Console.Error.WriteLine("FAIL: no X display"); return 1; }
+            var settings = CoreSettings.Current;
+            settings.ChaosSkiaFxEnabled = true;
+            settings.ChaosPinOnTop = false;
+            var other = new Window
+            {
+                Title = "chaos-skia-stack-target", Width = 320, Height = 240,
+                Position = new PixelPoint(100, 100), WindowStartupLocation = WindowStartupLocation.Manual,
+                WindowDecorations = WindowDecorations.None, Background = Brushes.DarkGreen,
+                Topmost = false, ShowInTaskbar = false
+            };
+            other.Show();
+            ChaosSkiaFxOverlay.ArmCursorGlow();
+            int fails = 0;
+            void Check(bool ok, string label) { Console.WriteLine($"{(ok ? "PASS" : "FAIL")} {label}"); if (!ok) fails++; }
+            DispatcherTimer.RunOnce(() =>
+            {
+                try
+                {
+                    var fx = ChaosSkiaFxOverlay.Active;
+                    var xid = fx == null ? IntPtr.Zero : Xid(fx);
+                    var otherId = Xid(other);
+                    if (xid == IntPtr.Zero || otherId == IntPtr.Zero) { Check(false, "real overlay and target opened"); return; }
+                    var root = XDefaultRootWindow(display);
+                    Check(!OverrideRedirect(display, xid), "unpinned overlay is managed");
+                    Check(InputRects(display, xid).Length == 0, "unpinned client input shape is empty");
+                    var primary = fx!.Screens.Primary ?? throw new InvalidOperationException("no primary screen");
+                    var stage = primary.Bounds;
+                    if (settings.DualMonitorEnabled)
+                        foreach (var screen in fx.Screens.All) stage = stage.Union(screen.Bounds);
+                    XGetGeometry(display, xid, out _, out _, out _, out var width, out var height, out _, out _);
+                    XTranslateCoordinates(display, xid, root, 0, 0, out var left, out var top, out _);
+                    Check(left == stage.X && top == stage.Y && width == stage.Width && height == stage.Height,
+                        $"managed stage geometry {width}x{height}+{left}+{top} matches {stage}");
+                    Check(X11Overlay.RestackAbove(fx, other), "request overlay above target");
+                    System.Threading.Thread.Sleep(350); // allow the separate WM to process the raise
+                    int overlayOrder = IndexOf(display, root, xid), targetOrder = IndexOf(display, root, otherId);
+                    Check(targetOrder >= 0 && overlayOrder > targetOrder, "overlay raised above target for input test");
+                    if (!XTranslateCoordinates(display, otherId, root, 50, 50, out var x, out var y, out _))
+                        throw new InvalidOperationException("target coordinates unavailable");
+                    XWarpPointer(display, IntPtr.Zero, root, 0, 0, 0, 0, x, y);
+                    XSync(display, false);
+                    XQueryPointer(display, root, out _, out var child, out _, out _, out _, out _, out _);
+                    Check(child == RootChild(display, root, otherId), "pointer passes through the managed overlay to target");
+                    XTestFakeButtonEvent(display, 1, true, 0);
+                    XTestFakeButtonEvent(display, 1, false, 0);
+                    XSync(display, false);
+                    System.Threading.Thread.Sleep(500); // WM click-to-raise is asynchronous
+                    overlayOrder = IndexOf(display, root, xid); targetOrder = IndexOf(display, root, otherId);
+                    Check(overlayOrder >= 0 && targetOrder > overlayOrder, "ordinary target can cover unpinned overlay");
+
+                    ChaosSkiaFxOverlay.DisarmCursorGlow();
+                    var time = TimeSpan.FromHours(1);
+                    for (int i = 0; i < 200; i++) { time += TimeSpan.FromMilliseconds(16); fx.OnFrame(time); }
+                    fx.HideTick();
+                    Check(!fx.IsVisible, "idle overlay hides");
+                    ChaosSkiaFxOverlay.ArmCursorGlow();
+                    Check(ReferenceEquals(fx, ChaosSkiaFxOverlay.Active) && fx.IsVisible, "activity re-shows the same window");
+                    Check(X11Overlay.RestackAbove(fx, other), "request re-shown overlay above target");
+                    System.Threading.Thread.Sleep(350);
+                    overlayOrder = IndexOf(display, root, xid); targetOrder = IndexOf(display, root, otherId);
+                    Check(targetOrder >= 0 && overlayOrder > targetOrder, "re-shown overlay is above target for input test");
+                    XWarpPointer(display, IntPtr.Zero, root, 0, 0, 0, 0, x, y);
+                    XSync(display, false);
+                    XQueryPointer(display, root, out _, out child, out _, out _, out _, out _, out _);
+                    Check(child == RootChild(display, root, otherId), "re-shown managed overlay still passes input");
+                    ChaosSkiaFxOverlay.CloseActive();
+                    settings.ChaosPinOnTop = true;
+                    ChaosSkiaFxOverlay.ArmCursorGlow();
+                    var pinned = ChaosSkiaFxOverlay.Active;
+                    var pinnedId = pinned == null ? IntPtr.Zero : Xid(pinned);
+                    if (pinnedId == IntPtr.Zero) { Check(false, "pinned overlay opened"); return; }
+                    XSync(display, false);
+                    Check(OverrideRedirect(display, pinnedId), "pinned overlay retains override-redirect");
+                    Check(InputRects(display, pinnedId).Length == 0, "pinned client input shape is empty");
+                }
+                catch (Exception ex) { Console.Error.WriteLine(ex); fails++; }
+                finally
+                {
+                    ChaosSkiaFxOverlay.CloseActive();
+                    other.Close();
+                    XCloseDisplay(display);
+                    lifetime.Shutdown();
+                }
+            }, TimeSpan.FromMilliseconds(1000));
+            lifetime.Start(Array.Empty<string>());
+            Console.WriteLine(fails == 0 ? "PASS: native Chaos Skia stacking" : $"FAIL: {fails} native check(s)");
+            return fails == 0 ? 0 : 1;
+        }
+
+        private static bool OverrideRedirect(IntPtr display, IntPtr window)
+        {
+            var p = Marshal.AllocHGlobal(136); // XWindowAttributes on LP64
+            try
+            {
+                if (XGetWindowAttributes(display, window, p) == 0) throw new InvalidOperationException("XGetWindowAttributes failed");
+                return Marshal.ReadInt32(p, 120) != 0;
+            }
+            finally { Marshal.FreeHGlobal(p); }
+        }
+
+        private static IntPtr RootChild(IntPtr display, IntPtr root, IntPtr window)
+        {
+            for (int hop = 0; hop < 8; hop++)
+            {
+                if (XQueryTree(display, window, out _, out var parent, out var kids, out _) == 0) return IntPtr.Zero;
+                if (kids != IntPtr.Zero) XFree(kids);
+                if (parent == root) return window;
+                if (parent == IntPtr.Zero) return IntPtr.Zero;
+                window = parent;
+            }
+            return IntPtr.Zero;
         }
 
         private static int Score(Window overlay, Window other)

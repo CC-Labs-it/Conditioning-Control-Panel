@@ -128,6 +128,10 @@ namespace ConditioningControlPanel.Avalonia
             if (Array.IndexOf(args, "--x11-probe") >= 0)
                 return X11OverlayProbe.Run();
 
+            // Native Chaos Skia pin, stacking and click-through check. Run only on an isolated X11 desktop.
+            if (Array.IndexOf(args, "--x11-skia-stack-check") >= 0)
+                return X11OverlayProbe.RunChaosSkiaStack();
+
             // --overlay-check opens one click-through override-redirect overlay per screen and
             // reads map state, override_redirect, depth, input shape and geometry back from the
             // X server. Non-zero on any mismatch. Safe on a live session (transparent, no input).

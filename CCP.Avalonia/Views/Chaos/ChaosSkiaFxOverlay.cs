@@ -48,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static IFrameSource? FramesForTests;
         internal static Func<bool> VideoPlaying = () => MandatoryVideoOverlay.Instance.Scheduler.IsPlaying;
         internal static Action<Window> Raise = w => X11Overlay.Raise(w);
+        internal static Func<Window, bool> ManagedClickThrough = w => SkipPlatformChecksForTests || X11Overlay.SetManagedClickThrough(w);
         internal static ChaosSkiaFxOverlay? Active { get; private set; }
         private static bool _refused;
 
@@ -107,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     if (Active == null) return;
                     act(Active);
                     // WPF StartActivity raises only during video, and never pins an opted-out run.
-                    if (Active.IsVisible && VideoPlaying() && Active.Topmost) Raise(Active);
+                    if (Active is { IsVisible: true, Topmost: true } current && VideoPlaying()) Raise(current);
                 }
                 catch (Exception ex) { Log.Debug("ChaosSkiaFx: {E}", ex.Message); }
             });
@@ -216,7 +217,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _hideTimer.Stop();
             if (!IsVisible)
             {
-                try { Show(); } catch (Exception ex) { Log.Debug("ChaosSkiaFx show: {E}", ex.Message); }
+                try
+                {
+                    Show();
+                    if (!Topmost && !ManagedClickThrough(this))
+                    {
+                        Log.Warning("ChaosSkiaFx: managed window could not be made click-through");
+                        _refused = true;
+                        CloseActive();
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug("ChaosSkiaFx show: {E}", ex.Message);
+                    _refused = true;
+                    CloseActive();
+                    return;
+                }
             }
             _idleFrames = 0;
             if (_frames != null) return;

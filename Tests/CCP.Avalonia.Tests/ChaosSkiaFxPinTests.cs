@@ -66,4 +66,54 @@ public sealed class ChaosSkiaFxPinTests
         }
         return Task.CompletedTask;
     });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RefusedManagedFrameClosesTheSurface(bool throws) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        bool enabled = settings.ChaosSkiaFxEnabled, pin = settings.ChaosPinOnTop;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var managed = ChaosSkiaFxOverlay.ManagedClickThrough;
+        var refused = typeof(ChaosSkiaFxOverlay).GetField("_refused", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var oldRefused = refused.GetValue(null);
+        global::Avalonia.Controls.Window? attempted = null;
+        try
+        {
+            refused.SetValue(null, false);
+            settings.ChaosSkiaFxEnabled = true;
+            settings.ChaosPinOnTop = false;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.ManagedClickThrough = w =>
+            {
+                attempted = w;
+                if (throws) throw new InvalidOperationException("native failure");
+                return false;
+            };
+            ChaosSkiaFxOverlay.ArmCursorGlow();
+            Assert.NotNull(attempted);
+            Assert.False(attempted.IsVisible);
+            Assert.Null(ChaosSkiaFxOverlay.Active);
+            attempted = null;
+            ChaosSkiaFxOverlay.ArmCursorGlow();
+            Assert.Null(attempted); // do not retry a refused full-screen surface
+        }
+        finally
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            refused.SetValue(null, oldRefused);
+            ChaosSkiaFxOverlay.ManagedClickThrough = managed;
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+            settings.ChaosSkiaFxEnabled = enabled;
+            settings.ChaosPinOnTop = pin;
+        }
+        return Task.CompletedTask;
+    });
+
 }
