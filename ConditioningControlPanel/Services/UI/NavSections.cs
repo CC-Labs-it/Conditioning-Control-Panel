@@ -126,9 +126,6 @@ namespace ConditioningControlPanel.Services.UI
                 Z("audio", "set2_section_audio"),
                 Z("devices", "set2_section_devices"),
                 Z("monitors", "settings_section_monitors"),
-                // Owned (breadcrumb, title, palette glow) but no strip pill: the page's own mini-rail has it,
-                // and the strip stays within its 10-pill cap.
-                new NavTab("wallpaper", "set2_section_wallpaper", NavTabKind.Zone, Hidden: true),
                 Z("emidesk", "set2_section_emidesk"),
                 Z("notifications", "set2_section_notifications"),
                 Z("performance", "set2_section_performance"),

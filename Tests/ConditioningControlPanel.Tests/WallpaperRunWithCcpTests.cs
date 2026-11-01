@@ -9,7 +9,7 @@ using Xunit;
 namespace ConditioningControlPanel.Tests;
 
 /// <summary>
-/// Settings > Wallpaper: when it is up, what panic does to it, and how the user's own desktop comes back.
+/// Studio > Wallpaper: when it is up, what panic does to it, and how the user's own desktop comes back.
 /// </summary>
 public class WallpaperRunWithCcpTests
 {

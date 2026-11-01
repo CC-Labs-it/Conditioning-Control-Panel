@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace ConditioningControlPanel.Services
 {
     /// <summary>
-    /// Settings > Wallpaper: a collage composed from the user's own images (or one picture they picked),
+    /// Studio > Wallpaper: a collage composed from the user's own images (or one picture they picked),
     /// up while a session runs, or the whole time CCP is open with "Run with CCP". Panic always takes it
     /// down (App.KillAllAudio); a plain Stop leaves it only under "Run with CCP". Independent of the
     /// Takeover shuffle in the other half of this class, but it shares the write queue and the #692

@@ -131,7 +131,7 @@ namespace ConditioningControlPanel.Models
     }
 
     /// <summary>
-    /// Settings › Wallpaper mode. Static = the composed still-image collage; Dynamic = the same collage
+    /// Studio › Wallpaper mode. Static = the composed still-image collage; Dynamic = the same collage
     /// with its gifs moving, live behind the desktop icons (not in performance mode); OwnImage = one
     /// picture the user picked. Only one runs.
     /// </summary>

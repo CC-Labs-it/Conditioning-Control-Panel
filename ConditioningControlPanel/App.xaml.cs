@@ -2799,7 +2799,7 @@ namespace ConditioningControlPanel
             // Initialize wallpaper override service
             Wallpaper = new WallpaperService();
 
-            // Dynamic (moving) wallpaper: inert until Settings > Wallpaper > Dynamic has something to run.
+            // Dynamic (moving) wallpaper: inert until Studio > Wallpaper > Dynamic has something to run.
             DynamicWallpaper = new DynamicWallpaperService();
 
             // Initialize Patreon (validate subscription in background)

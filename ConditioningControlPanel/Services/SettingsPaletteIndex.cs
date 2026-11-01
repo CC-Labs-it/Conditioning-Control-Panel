@@ -627,8 +627,6 @@ namespace ConditioningControlPanel.Services
             Section("general", "set2_section_general", "🧭", "general language startup tray");
             Section("audio", "set2_section_audio", "🔊", "audio sound volume ducking");
             Section("devices", "set2_section_devices", "🎛️", "devices webcam camera microphone mic panic hotkeys");
-            Section("wallpaper", "set2_section_wallpaper", "🖼️",
-                    "wallpaper desktop background collage dynamic animated live wallpaper engine moving gif webp own image picture");
             Section("performance", "set2_section_performance", "⚡", "performance motion gpu rendering");
             Section("notifications", "set2_section_notifications", "🔔", "notifications reminders nudge");
             Section("emidesk", "set2_section_emidesk", "📺", "emi desk widget companion mascot summon hotkey mute avatar spice glass offers");
@@ -705,19 +703,6 @@ namespace ConditioningControlPanel.Services
             Setting("enable_deeper", "setting_deeper_enable", "🌊", "general",
                     new[] { "ChkEnableDeeper" }, "set2_section_general", "deeper enable tab");
 
-            // Wallpaper
-            Setting("wallpaper_mode", "set2_palette_wallpaper_mode", "🖼️", "wallpaper",
-                    new[] { "BtnWpStatic", "BtnWpDynamic", "BtnWpOwn" }, "set2_section_wallpaper",
-                    "wallpaper mode static dynamic moving animated gif own image collage");
-            Setting("wallpaper_rotate", "set2_palette_wallpaper_rotate", "🔁", "wallpaper",
-                    new[] { "ChkWpRotate", "SliderWpInterval" }, "set2_section_wallpaper",
-                    "rotate new wallpaper every interval seconds change wallpaper");
-            Setting("wallpaper_own_image", "set2_palette_wallpaper_own_image", "📁", "wallpaper",
-                    new[] { "BtnWpOwnBrowse" }, "set2_section_wallpaper",
-                    "own image pick my own wallpaper picture browse file");
-            Setting("wallpaper_run_with_ccp", "set2_palette_wallpaper_run_with_ccp", "⚠️", "wallpaper",
-                    new[] { "ChkWpRunWithCcp" }, "set2_section_wallpaper",
-                    "run with ccp always on wallpaper all the time while open keep wallpaper panic");
 
             // Devices - webcam
             Setting("webcam_device", "set2_palette_webcam_device", "📷", "devices",
@@ -917,6 +902,10 @@ namespace ConditioningControlPanel.Services
             Rack("subliminal", "section_subliminals_2", "💭", "subliminal subliminals words");
             Rack("spiral", "label_spiral_overlay", "🌀", "spiral overlay");
             Rack("pinkfilter", "label_pink_filter", "💗", "pink filter tint");
+            Rack("wallpaper", "set2_section_wallpaper", "🖼️",
+                 "wallpaper desktop background collage live wallpaper engine static dynamic moving animated gif webp " +
+                 "own image pick my own picture browse file rotate new wallpaper every interval seconds " +
+                 "run with ccp always on all the time while open keep");
             Rack("visuals", "section_visuals", "👁", "visuals");
             Rack("bubbles", "label_bubble_pop", "🫧", "bubbles bubble pop");
             Rack("bubblecount", "label_bubble_count", "🔢", "bubble count counting");

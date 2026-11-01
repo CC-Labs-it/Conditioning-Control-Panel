@@ -4,10 +4,10 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 
-namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
+namespace ConditioningControlPanel.Views.Controls.Studio
 {
     /// <summary>
-    /// SETTINGS · WALLPAPER. Master toggle + a mutually-exclusive Static / Dynamic / Own image mode (three
+    /// STUDIO RACK · WALLPAPER. Master toggle + a mutually-exclusive Static / Dynamic / Own image mode (three
     /// buttons, the selected one filled), plus Rotate and the 10-300s interval - those two apply to Static
     /// and Dynamic only, and the collage layout always rolls at random. Static drives the composed
     /// collage; Dynamic the moving one (<c>App.DynamicWallpaper</c>); Own image the one picture the user
@@ -16,33 +16,81 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
     /// routes to the chosen mode. Dynamic is not available in performance mode. Same settings keys as the
     /// old Monitors collage block, plus <c>CollageMode</c> / <c>CollageOwnImagePath</c>.
     /// </summary>
-    public partial class WallpaperSettingsSection : UserControl
+    public partial class WallpaperFeatureControl : UserControl, Features.ISettingsRebindable
     {
+        private const string FeatureArtPath = "features/wallpaper.png";
+
         private bool _isLoading = true;
         private bool _syncingInterval;
         private Models.WallpaperMode _mode;
 
-        public WallpaperSettingsSection()
+        // Tracks WHICH AppSettings instance the hook is attached to: the rack hosts this panel for
+        // good, and a cloud restore swaps the instance. See ISettingsRebindable.
+        private Features.SettingsHook? _settingsHook;
+
+        public WallpaperFeatureControl()
         {
             InitializeComponent();
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
+            // The rack keeps this mounted, so "too few images" can go stale while it sits hidden.
+            IsVisibleChanged += (_, e) => { if (e.NewValue is true) RefreshHint(); };
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
-            LoadFromSettings();
-            if (App.Settings?.Current is INotifyPropertyChanged inpc)
-            {
-                inpc.PropertyChanged -= OnSettingsPropertyChanged;
-                inpc.PropertyChanged += OnSettingsPropertyChanged;
-            }
+            RebindToCurrentSettings();
+            ApplyFeatureArt();
+            if (App.Mods != null) App.Mods.ModChanged += OnModChanged;
         }
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
-            if (App.Settings?.Current is INotifyPropertyChanged inpc)
-                inpc.PropertyChanged -= OnSettingsPropertyChanged;
+            _settingsHook?.Unhook();
+            if (App.Mods != null) App.Mods.ModChanged -= OnModChanged;
+        }
+
+        private void OnModChanged(object? sender, Models.ModPackage mod) =>
+            Dispatcher.BeginInvoke(new Action(ApplyFeatureArt));
+
+        /// <inheritdoc/>
+        public void RebindToCurrentSettings()
+        {
+            (_settingsHook ??= new Features.SettingsHook(OnSettingsPropertyChanged)).Rebind();
+            LoadFromSettings();
+        }
+
+        /// <summary>A mod that ships features/wallpaper.png repaints both plates, in place.</summary>
+        private void ApplyFeatureArt()
+        {
+            try
+            {
+                var hero = Services.ModResourceResolver.ResolveImageDecoded(FeatureArtPath, 480);
+                if (hero != null && HeroArtBrush is { IsFrozen: false }) HeroArtBrush.ImageSource = hero;
+
+                var side = Services.ModResourceResolver.ResolveImageDecoded(FeatureArtPath, 800);
+                if (side != null && SideArtBrush is { IsFrozen: false }) SideArtBrush.ImageSource = side;
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("WallpaperFeatureControl.ApplyFeatureArt: {E}", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// The rack's right-click: OFF ONLY. Switching this on can put pictures on the desktop at once
+        /// (Run with CCP, or a running session), so on is the panel's own toggle and nothing else.
+        /// Writes the setting rather than flipping the box: a panel never shown has not loaded yet, and
+        /// its handler would swallow the flip. A box greyed by the session lock refuses here too.
+        /// </summary>
+        internal void SwitchOffFromRack()
+        {
+            var s = App.Settings?.Current;
+            if (s == null || !s.CollageWallpaperEnabled || !ChkEnable.IsEnabled) return;
+            s.CollageWallpaperEnabled = false;
+            App.Settings?.Save();
+            LoadFromSettings();
+            ApplyWallpaperEngine();
         }
 
         internal void LoadFromSettings()
@@ -52,7 +100,7 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             _isLoading = true;
             try
             {
-                ChkWpEnabled.IsChecked = s.CollageWallpaperEnabled;
+                ChkEnable.IsChecked = s.CollageWallpaperEnabled;
                 _mode = s.CollageMode;
                 UpdateModeButtons();
                 UpdateOwnImageLabel(s);
@@ -114,12 +162,12 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             }
         }
 
-        private void ChkWpEnabled_Changed(object sender, RoutedEventArgs e)
+        private void ChkEnable_Changed(object sender, RoutedEventArgs e)
         {
             if (_isLoading) return;
             var s = App.Settings?.Current;
             if (s == null) return;
-            s.CollageWallpaperEnabled = ChkWpEnabled.IsChecked ?? false;
+            s.CollageWallpaperEnabled = ChkEnable.IsChecked ?? false;
             App.Settings?.Save();
             UpdateVisibility();
             ApplyWallpaperEngine();
@@ -319,16 +367,13 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
 
         private void UpdateVisibility()
         {
-            bool master = ChkWpEnabled.IsChecked == true;
             bool own = _mode == Models.WallpaperMode.OwnImage;
             bool rotate = ChkWpRotate.IsChecked == true;
 
-            RowWpMode.Visibility = master ? Visibility.Visible : Visibility.Collapsed;
             // Own image: just the picked file + Browse - no collage, so none of the collage rows.
-            RowWpOwnImage.Visibility = (master && own) ? Visibility.Visible : Visibility.Collapsed;
-            RowWpRunWithCcp.Visibility = master ? Visibility.Visible : Visibility.Collapsed;   // all three modes
-            RowWpRotate.Visibility = (master && !own) ? Visibility.Visible : Visibility.Collapsed;
-            RowWpInterval.Visibility = (master && !own && rotate) ? Visibility.Visible : Visibility.Collapsed;
+            RowWpOwnImage.Visibility = own ? Visibility.Visible : Visibility.Collapsed;
+            RowWpRotate.Visibility = !own ? Visibility.Visible : Visibility.Collapsed;
+            RowWpInterval.Visibility = (!own && rotate) ? Visibility.Visible : Visibility.Collapsed;
         }
 
         /// <summary>Apply an on/off or mode change. Outside a session nothing runs; the next session start
