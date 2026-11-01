@@ -53,6 +53,8 @@ public sealed class RemoteControlShellTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var (oldRelay, oldTime, oldProvider) = (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider);
@@ -78,14 +80,22 @@ public sealed class RemoteControlShellTests
             var start = shell.Named<Button>("BtnStart")!;
             Assert.False(overlay.IsVisible);
 
+            var flashes = 0;
+            shell.RemoteJoinFlash = () => flashes++;
+            shell.WindowState = WindowState.Minimized;
             Assert.Equal("ABC123", await relay.StartAsync("light"));
             f.Poll = "{\"controller_connected\":true}";
             await relay.PollOnceAsync();
-            Dispatcher.UIThread.RunJobs();
+            Assert.True(relay.ControllerConnected);
+            await WaitFor(() => { lock (notified) return notified.Count > 0; });
 
             // WPF NotifyRemoteControllerJoined (:1481): the join raises the OS notification (via the seam, never D-Bus).
             lock (notified)
                 Assert.Equal(new[] { $"{Loc.Get("title_remote_controller_joined")}|{Loc.Get("msg_remote_controller_joined")}" }, notified);
+
+            Assert.Equal(1, flashes); // the real relay join alerts a minimized shell without restoring it
+            Assert.Equal(WindowState.Minimized, shell.WindowState);
+            shell.WindowState = WindowState.Normal;
 
             // Overlay up with code + PIN; Start disabled, green, "REMOTE CONNECTED" (WPF StartStop.cs:992).
             Assert.True(overlay.IsVisible);
@@ -166,6 +176,47 @@ public sealed class RemoteControlShellTests
             (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider) = (oldRelay, oldTime, oldProvider);
             global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = oldSink;
         }
+    });
+
+    [Fact]
+    public Task Join_flashes_only_when_minimized_or_hidden() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldSink = global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink;
+        var notices = 0;
+        global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => notices++;
+        var shell = new MainShellWindow();
+        try
+        {
+            var flashes = 0;
+            shell.RemoteJoinFlash = () => flashes++;
+            shell.Show();
+            shell.NotifyRemoteControllerJoined();
+            Assert.Equal(0, flashes);
+            shell.WindowState = WindowState.Minimized;
+            shell.NotifyRemoteControllerJoined();
+            Assert.Equal(1, flashes);
+            Assert.Equal(WindowState.Minimized, shell.WindowState);
+            shell.WindowState = WindowState.Normal;
+            shell.Hide();
+            shell.NotifyRemoteControllerJoined();
+            Assert.Equal(2, flashes);
+            Assert.False(shell.IsVisible);
+            Assert.Equal(3, notices); // always notify, including when the shell is visible
+            shell.RemoteJoinFlash = () => throw new InvalidOperationException();
+            shell.NotifyRemoteControllerJoined(); // a native failure must not break the join
+        }
+        finally
+        {
+            shell.Close();
+            global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = oldSink;
+        }
+        return Task.CompletedTask;
     });
 
     /// <summary>The opacity the fade is heading to (the transition animates the visible value).</summary>

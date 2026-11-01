@@ -6,7 +6,7 @@
 // button lock while a controller drives.
 // ponytail: still missing here - remote-driven session verbs (StartSessionFromRemote & co; Core
 // RemoteCommands refuses them "not on this build"), the directory opt-in chain, tray minimise/restore
-// for remote, the taskbar flash on join (no Avalonia API), the RemoteHud pill and the browser
+// for remote, the RemoteHud pill and the browser
 // blindfold (no embedded browser under the overlay on this head).
 
 using System;
@@ -186,11 +186,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SetRemoteOverlayCadence();
         }
 
-        /// <summary>WPF NotifyRemoteControllerJoined (:1481): the tray balloon (here the OS notification).</summary>
-        private static void NotifyRemoteControllerJoined()
+        // Test seam for the native alert, scoped to this window.
+        internal Action? RemoteJoinFlash;
+
+        /// <summary>WPF RemoteControl.cs:1552-1571: notify always, flash only when minimized or hidden.</summary>
+        internal void NotifyRemoteControllerJoined()
         {
             try { Platform.OsNotifications.Show(Loc.Get("title_remote_controller_joined"), Loc.Get("msg_remote_controller_joined")); }
             catch (Exception ex) { Serilog.Log.Debug("Remote controller notice failed: {Error}", ex.Message); }
+            if (WindowState == WindowState.Minimized || !IsVisible)
+            {
+                try { if (RemoteJoinFlash is { } flash) flash(); else Platform.Win32Overlay.FlashTaskbar(this); }
+                catch { }
+            }
         }
 
         /// <summary>WPF UpdateStartButtonForRemoteControl (StartStop.cs:992): disabled, green, 🎮 REMOTE CONNECTED.</summary>

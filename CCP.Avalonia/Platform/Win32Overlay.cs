@@ -41,6 +41,32 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
+    // WPF Helpers/FlashWindowHelper.cs:14-49: flash the caption and taskbar until foreground.
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct FlashInfo
+    {
+        public uint Size;
+        public IntPtr Hwnd;
+        public uint Flags, Count, Timeout;
+    }
+
+    [DllImport("user32.dll")] private static extern bool FlashWindowEx(ref FlashInfo info);
+
+    internal static FlashInfo RemoteJoinFlashInfo(IntPtr hwnd) => new()
+    {
+        Size = (uint)Marshal.SizeOf<FlashInfo>(), Hwnd = hwnd,
+        Flags = 3 | 12, Count = 5, Timeout = 0
+    };
+
+    internal static void FlashTaskbar(Window window)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var handle = window.TryGetPlatformHandle();
+        if (X11Overlay.BackendOf(handle) != OverlayBackend.Win32) return;
+        var info = RemoteJoinFlashInfo(handle!.Handle);
+        FlashWindowEx(ref info);
+    }
+
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
 

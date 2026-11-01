@@ -25,6 +25,18 @@ public sealed class OverlayBackendDispatchTests
     public void NoHandle_IsNoBackend() => Assert.Equal(OverlayBackend.None, X11Overlay.BackendOf(null));
 
     [Fact]
+    public void RemoteJoinFlashMatchesWpfWin32Request()
+    {
+        var hwnd = new IntPtr(42);
+        var info = Win32Overlay.RemoteJoinFlashInfo(hwnd);
+        Assert.Equal((uint)System.Runtime.InteropServices.Marshal.SizeOf<Win32Overlay.FlashInfo>(), info.Size);
+        Assert.Equal(hwnd, info.Hwnd);
+        Assert.Equal(15u, info.Flags); // caption and taskbar, repeat until foreground
+        Assert.Equal(5u, info.Count);
+        Assert.Equal(0u, info.Timeout);
+    }
+
+    [Fact]
     public void Win32Style_AddsOverlayBits_AndTogglesTransparentWithNoActivate()
     {
         const uint avaloniaRebuild = 0x00000100 | 0x00200000;  // WS_EX_WINDOWEDGE | WS_EX_NOREDIRECTIONBITMAP
