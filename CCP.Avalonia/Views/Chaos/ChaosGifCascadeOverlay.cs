@@ -238,7 +238,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 c.Grow.ScaleX = s;
                 c.Grow.ScaleY = s;
                 c.Move.Y = f.Y;
-                if (ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level != MotionLevel.Off && c.Frames is { Count: > 1 } frames)
+                if (c.Frames is { Count: > 1 } frames)
                 {
                     c.FrameAcc += dt;
                     double delay = Math.Max(0.02, c.Delay.TotalSeconds);

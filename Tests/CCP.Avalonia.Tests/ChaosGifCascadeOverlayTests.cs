@@ -51,6 +51,7 @@ public sealed class ChaosGifCascadeOverlayTests
             {
                 ChaosGifCascadeOverlay.CloseActive();
                 ChaosGifCascadeOverlay.Clock = clock;
+                CoreSettings.Current.MotionLevel = MotionLevel.Off;
                 Show(gif);                                   // headless: no X11 compositor -> refuse, no window
                 Assert.Null(ChaosGifCascadeOverlay.Active);
                 Assert.True(ChaosGifCascadeOverlay.Refused);
@@ -73,11 +74,10 @@ public sealed class ChaosGifCascadeOverlayTests
                 Assert.True(w.Cascade.Fallers[0].Animated);   // a small gif inside the animated budget
 
                 var src = first.Source;
-                CoreSettings.Current.MotionLevel = MotionLevel.Off;
+                // WPF keeps local GIFs animating at Motion Off; only remote clips freeze.
                 clock.Advance(0.1);
                 w.Frame();
-                Assert.Same(src, first.Source);
-                CoreSettings.Current.MotionLevel = MotionLevel.Full;
+                Assert.NotSame(src, first.Source);
                 clock.Advance(0.6);                          // past the 598.8 ms spawn interval
                 w.Frame();
                 Assert.Equal(2, w.Surface.Children.Count);
