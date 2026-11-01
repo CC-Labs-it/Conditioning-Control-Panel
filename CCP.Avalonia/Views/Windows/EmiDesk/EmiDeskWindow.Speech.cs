@@ -25,30 +25,25 @@ public partial class EmiDeskWindow
 
     private void StartSpeech(string? line, string face, Action? done)
     {
-        CancelChain();
-        CancelHold();
+        CancelChain(); CancelHold();
         if (PresentationActive) return;
         _speechFrames = EmiChains.MakeSay(line, face, EmiChains.SayHoldMs(line)).Seq;
-        _speechIndex = 0;
-        _speechDone = done;
+        _speechIndex = 0; _speechDone = done;
         StopIdleBeats();
         _speechTimer ??= new DispatcherTimer(DispatcherPriority.Normal);
-        _speechTimer.Tick -= AdvanceSpeech;
-        _speechTimer.Tick += AdvanceSpeech;
+        _speechTimer.Tick -= AdvanceSpeech; _speechTimer.Tick += AdvanceSpeech;
         HookSpeechLifetime();
         AdvanceSpeech(null, EventArgs.Empty);
     }
 
     private void HookSpeechLifetime()
     {
-        if (!_speechHooked)
-        {
-            _speechHooked = true;
-            Closed += (_, _) => { CancelSpeech(); CancelHold(); };
-            PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) { CancelSpeech(); CancelHold(); } };
-            Resized += (_, _) => PlaceSpeechBubble();
-            Moved += (_, _) => PlaceSpeechBubble();
-        }
+        if (_speechHooked) return;
+        _speechHooked = true;
+        Closed += (_, _) => { CancelSpeech(); CancelHold(); };
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) { CancelSpeech(); CancelHold(); } };
+        Resized += (_, _) => PlaceSpeechBubble();
+        Moved += (_, _) => PlaceSpeechBubble();
     }
 
     private void AdvanceSpeech(object? sender, EventArgs args)
@@ -56,10 +51,8 @@ public partial class EmiDeskWindow
         _speechTimer?.Stop();
         if (_speechIndex >= _speechFrames.Count)
         {
-            var done = _speechDone;
-            _speechDone = null;
-            RestartIdleBeats();
-            done?.Invoke();
+            var done = _speechDone; _speechDone = null;
+            RestartIdleBeats(); done?.Invoke();
             return;
         }
         var frame = _speechFrames[_speechIndex++];
@@ -82,10 +75,8 @@ public partial class EmiDeskWindow
 
     private void CancelSpeech()
     {
-        _speechTimer?.Stop();
-        _speechDone = null;
-        _speechFrames = Array.Empty<EmiFrame>();
-        HideSpeechBubble();
+        _speechTimer?.Stop(); _speechDone = null;
+        _speechFrames = Array.Empty<EmiFrame>(); HideSpeechBubble();
     }
 
     // WPF Bubble.cs:573: a chain cancellation must not steal the hold's return to rest.
@@ -108,6 +99,7 @@ public partial class EmiDeskWindow
             return false;
         }
         engine.Ack(line.Id);
+        if (!EmiDeskService.Instance.AvatarMuted) Platform.BarkHead.Engine?.NotifyExternalLineSpoken(); // WPF Bubble.cs:522, EmiDeskService.cs:782-787
         if (string.IsNullOrWhiteSpace(line.Text)) DrawFace(line.Face);
         else Say(line.Text, string.IsNullOrEmpty(line.Face) ? "^_^" : line.Face);
         return true;
@@ -136,8 +128,7 @@ public partial class EmiDeskWindow
             _speechBubble.SizeChanged += (_, _) => PlaceSpeechBubble();
         }
         _speechText!.Text = text;
-        _speechBubble.IsVisible = true;
-        _speechTail!.IsVisible = true;
+        _speechBubble.IsVisible = true; _speechTail!.IsVisible = true;
         PlaceSpeechBubble();
     }
 
@@ -152,8 +143,7 @@ public partial class EmiDeskWindow
         if (_speechBubble?.IsVisible != true || _speechText == null) return;
         var bw = BodyWidth;
         var fs = Math.Max(10, Math.Round(11 * bw / 220));
-        _speechText.FontSize = fs;
-        _speechText.LineHeight = Math.Round(fs * 1.4);
+        _speechText.FontSize = fs; _speechText.LineHeight = Math.Round(fs * 1.4);
         _speechBubble.MaxWidth = Math.Clamp(bw * 1.5, 220, 380);
         _speechBubble.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var w = Math.Max(_speechBubble.DesiredSize.Width, _speechBubble.Bounds.Width);
@@ -162,15 +152,13 @@ public partial class EmiDeskWindow
         if (Screens.ScreenFromWindow(this) is { } screen)
         {
             var area = screen.WorkingArea;
-            workLeft = this.PointToClient(new PixelPoint(area.X, area.Y)).X;
-            workRight = this.PointToClient(new PixelPoint(area.Right, area.Y)).X;
+            workLeft = this.PointToClient(new PixelPoint(area.X, area.Y)).X; workRight = this.PointToClient(new PixelPoint(area.Right, area.Y)).X;
         }
         // WPF Bubble.cs:356: prefer the side opposite the book; screen edges still win.
         var (left, flip) = EmiBubblePlacement.Resolve(OverlayPadX + bw * .58,
             OverlayPadX + bw * .42 - w, w, _book?.SideOfHer == 1, Width, workLeft, workRight);
         var top = Math.Max(2, OverlayPad + bw * BodyAspect * .04 - h);
-        Canvas.SetLeft(_speechBubble, Math.Round(left));
-        Canvas.SetTop(_speechBubble, Math.Round(top));
+        Canvas.SetLeft(_speechBubble, Math.Round(left)); Canvas.SetTop(_speechBubble, Math.Round(top));
         _speechTail!.Points = new List<Point>(flip
             ? new[] { new Point(left + w - 22, top + h - 1), new Point(left + w - 12, top + h + 9), new Point(left + w - 12, top + h - 1) }
             : new[] { new Point(left + 12, top + h - 1), new Point(left + 12, top + h + 9), new Point(left + 22, top + h - 1) });

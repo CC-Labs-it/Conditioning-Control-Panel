@@ -29,11 +29,10 @@ namespace CCP.Avalonia.Tests;
 public sealed class FirstShowStageTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false), InlineData(true)]
     public Task PanicDuringPresentationArmsSilence(bool key) => Run(stage =>
     {
-        var service = EmiDeskService.Instance; var old = service.LineEngine;
+        var service = EmiDeskService.Instance; var old = service.LineEngine; var oldPanic = (CoreSettings.Current.PanicKeyEnabled, CoreSettings.Current.PanicKey);
         var shell = new MainShellWindow();
         try
         {
@@ -49,7 +48,7 @@ public sealed class FirstShowStageTests
             else PanicSurfaces.StopAll("test");
             Assert.False(FirstShowService.IsActive); Assert.True(service.LineEngine.HoldActive);
         }
-        finally { LockCardWindow.ForceCloseAll(); shell.Close(); service.LineEngine = old; }
+        finally { LockCardWindow.ForceCloseAll(); shell.Close(); service.LineEngine = old; (CoreSettings.Current.PanicKeyEnabled, CoreSettings.Current.PanicKey) = oldPanic; }
         return Task.CompletedTask;
     });
     [Fact]

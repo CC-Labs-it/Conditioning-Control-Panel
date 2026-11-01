@@ -9,6 +9,8 @@ using Avalonia.LogicalTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Bark;
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
 
@@ -115,13 +117,41 @@ public sealed class EmiRingSpeechTests
         desk.EndHold(); Assert.Equal(EmiChains.RestFace, desk.Face);
     });
 
+    private sealed class BarkClock : TimeProvider { public DateTimeOffset Now = DateTimeOffset.UtcNow; public override DateTimeOffset GetUtcNow() => Now; }
+    [Theory, InlineData(false, false), InlineData(true, false), InlineData(false, true)]
+    public Task RingSpeechStaggersAvatarUnlessMutedOrHolding(bool muted, bool hold) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup(); var service = EmiDeskService.Instance; service.Window?.ShutDown();
+        var s = CoreSettings.Current; var state = EmiState.Current; var saved = (BarkHead.Engine, s.AvatarEnabled, s.EmiDeskEnabled, s.EmiDeskMuteAvatar, s.EmiDeskMuteDontAsk, state.SummonCount, state.FirstBootSeen);
+        var clock = new BarkClock(); var rule = new BarkRule { Id = "emi-gap", Trigger = "emi-gap", Priority = 100, VariantPool = new() { new BarkVariant("bark") } };
+        var hadRotation = s.BarkVariantRotation.TryGetValue(rule.Id, out var oldRotation);
+        var bark = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Clock = clock, Speak = _ => { }, IsSpeaking = () => true };
+        try
+        {
+            (s.AvatarEnabled, s.EmiDeskEnabled, s.EmiDeskMuteAvatar, s.EmiDeskMuteDontAsk) = (true, true, muted, true);
+            BarkHead.Engine = bark; bark.Start(); await service.Summon("test");
+            var desk = Assert.IsType<EmiDeskWindow>(service.Window); Assert.Equal(muted, service.AvatarMuted);
+            var engine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}"); Assert.Equal(!hold, desk.SpeakRingLine(new LineDraw("test", "test", "hello", "^_^", null, 3, hold, 100), engine));
+            s.EmiDeskMuteAvatar = false;
+            Assert.Equal(muted || hold, bark.Raise("emi-gap"));
+            clock.Now = clock.Now.AddSeconds(59); Assert.False(bark.Raise("emi-gap"));
+            clock.Now = clock.Now.AddSeconds(1); Assert.True(bark.Raise("emi-gap"));
+        }
+        finally
+        {
+            service.Window?.ShutDown(); service.ResetMutePrompt();
+            if (hadRotation) s.BarkVariantRotation[rule.Id] = oldRotation!; else s.BarkVariantRotation.Remove(rule.Id);
+            (BarkHead.Engine, s.AvatarEnabled, s.EmiDeskEnabled, s.EmiDeskMuteAvatar, s.EmiDeskMuteDontAsk, state.SummonCount, state.FirstBootSeen) = saved;
+        }
+    });
     [Fact]
     public Task RealRingFiresOpenDismissAndThirdIgnoreAndPanicCutsSpeech() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup(); var service = EmiDeskService.Instance; service.Window?.ShutDown();
-        CoreSettings.Current.EmiDeskEnabled = true; CoreSettings.Current.EmiDeskMuteAvatar = false;
+        var oldSettings = (CoreSettings.Current.EmiDeskEnabled, CoreSettings.Current.EmiDeskMuteAvatar); var oldEngine = service.LineEngine;
+        (CoreSettings.Current.EmiDeskEnabled, CoreSettings.Current.EmiDeskMuteAvatar) = (true, false);
         EmiState.Current.RingIgnoreStreak = 0;
-        var oldEngine = service.LineEngine; service.LineEngine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}");
+        service.LineEngine = EmiLineEngine.FromJson("{\"moments\":{},\"pools\":{}}");
         var moments = new List<string>(); EventHandler<EmiMoment> observer = (_, m) => moments.Add(m.Id);
         service.MomentFired += observer;
         try
@@ -156,15 +186,13 @@ public sealed class EmiRingSpeechTests
             Assert.Contains("panicPressed", moments);
             Assert.True(service.LineEngine.HoldActive);
             service.Window?.ShutDown();
-            var away = new EmiDeskService { LineEngine = EmiLineEngine.FromJson("""
-                {"moments":{"panicPressed":{"hold":true,"tailMs":300000}},"pools":{}}
-                """) };
+            var away = new EmiDeskService { LineEngine = EmiLineEngine.FromJson("{\"moments\":{\"panicPressed\":{\"hold\":true,\"tailMs\":300000}},\"pools\":{}}") };
             away.Fire("panicPressed");
             Assert.True(away.LineEngine.HoldActive);
         }
         finally
         {
-            service.MomentFired -= observer; service.Window?.ShutDown(); service.LineEngine = oldEngine;
+            service.MomentFired -= observer; service.Window?.ShutDown(); service.LineEngine = oldEngine; (CoreSettings.Current.EmiDeskEnabled, CoreSettings.Current.EmiDeskMuteAvatar) = oldSettings;
         }
     });
 }

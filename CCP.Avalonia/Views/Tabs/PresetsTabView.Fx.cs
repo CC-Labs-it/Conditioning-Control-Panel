@@ -66,11 +66,7 @@ public partial class PresetsTabView
         DetachRowSweep();
     }
 
-    private void OnFxMotionGateChanged()
-    {
-        if (!Env.AllowTransitions) CancelEntrances();
-        RefreshCardSheen();
-    }
+    private void OnFxMotionGateChanged() { if (!Env.AllowTransitions) CancelEntrances(); RefreshCardSheen(); }
 
     private void OnFxWindowChanged(object? sender, EventArgs e) => RefreshCardSheen();
     private void OnFxClosed(object? sender, EventArgs e) => DetachFocalFx();

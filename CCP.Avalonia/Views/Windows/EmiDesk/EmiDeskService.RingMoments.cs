@@ -17,14 +17,9 @@ internal sealed partial class EmiDeskService
     public void Fire(string id, object? context = null)
     {
         if (string.IsNullOrWhiteSpace(id)) return;
-        try { MomentFired?.Invoke(this, new EmiMoment(id, context)); }
-        catch (Exception ex) { Log.Debug(ex, "[EmiDesk] moment observer failed"); }
+        try { MomentFired?.Invoke(this, new EmiMoment(id, context)); } catch (Exception ex) { Log.Debug(ex, "[EmiDesk] moment observer failed"); }
         if (!IsOut && !LineEngine.IsHoldMoment(id)) return;
-        if (!Dispatcher.UIThread.CheckAccess())
-        {
-            Dispatcher.UIThread.Post(() => DrawRingMoment(id, context));
-            return;
-        }
+        if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => DrawRingMoment(id, context)); return; }
         DrawRingMoment(id, context);
     }
 
@@ -41,9 +36,5 @@ internal sealed partial class EmiDeskService
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring moment {Moment} failed", id); }
     }
 
-    public void StopRingSpeechForPanic()
-    {
-        _window?.CancelChain();
-        Fire("panicPressed");
-    }
+    public void StopRingSpeechForPanic() { _window?.CancelChain(); Fire("panicPressed"); }
 }

@@ -26,9 +26,7 @@ public sealed class PanicKeyChasterHoldTests
                 .SetupWithoutStarting();
         var emi = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
         var oldEngine = emi.LineEngine;
-        emi.LineEngine = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.FromJson("""
-            {"moments":{"panicPressed":{"hold":true,"tailMs":300000}},"pools":{}}
-            """);
+        emi.LineEngine = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.FromJson("{\"moments\":{\"panicPressed\":{\"hold\":true,\"tailMs\":300000}},\"pools\":{}}");
         Assert.False(emi.LineEngine.HoldActive);
         var s = CoreSettings.Current;
         var old = (s.PanicKeyEnabled, s.PanicKey);
