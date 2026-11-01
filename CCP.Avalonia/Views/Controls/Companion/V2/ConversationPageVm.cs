@@ -220,8 +220,8 @@ internal sealed class ConversationPageVm : CompanionObservable
                 _ => Mode.Cloud
             };
         Refresh();
-        // EngineRoomVm.LoginCommand is null on this head; account sign-in is ShowTab("patreon") like the room's other sign-in doors.
-        if (NeedsSignIn) { if (_engine()?.LoginCommand is { } login) login.Execute(null); else Hero?.Shell?.ShowTab("patreon"); }
+        // WPF ConversationPageVm.cs:251: the drawer may not yet be attached to a visual root.
+        if (NeedsSignIn) Hero?.Shell?.ShowTab("patreon");
     }
     public void Stop() => _send?.Cancel();
     public async Task SendAsync()
