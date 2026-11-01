@@ -479,7 +479,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (message.TryGetProperty("key", out var key))
                     {
                         var name = key.GetString();
-                        if (Enum.TryParse<Key>(name == " " ? "Space" : name, ignoreCase: true, out var parsed))
+                        if (HotkeyNames.TryParse(name == " " ? "Space" : name, out var parsed))
                         {
                             var modifiers = message.TryGetProperty("alt", out var alt) && alt.ValueKind == JsonValueKind.True ? KeyModifiers.Alt : KeyModifiers.None;
                             Dispatcher.UIThread.Post(() => { if (!_closed) OnKeyDown(this, new KeyEventArgs { Key = parsed, KeyModifiers = modifiers }); });

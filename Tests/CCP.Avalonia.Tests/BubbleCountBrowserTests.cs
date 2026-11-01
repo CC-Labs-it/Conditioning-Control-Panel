@@ -132,20 +132,23 @@ public sealed class BubbleCountBrowserTests {
         Assert.Equal(!nativeClose, BrowserVideoSurface.StoodDown);
     });
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public Task BrowserEscapeUsesTheStrictPolicy(bool strict) => AvaloniaTestDispatcher.RunAsync(() => {
+    [InlineData(false, "Escape", true, true)]
+    [InlineData(true, "Escape", true, false)]
+    [InlineData(false, "7", false, false)]
+    [InlineData(true, "7", false, false)]
+    public Task BrowserKeysUseStrictAndPanicPolicies(bool strict, string key, bool listener, bool dismiss) => AvaloniaTestDispatcher.RunAsync(() => {
         EnsureApp();
         using var game = new BrowserGame();
         game.Settings.Current.PanicKeyEnabled = true;
-        BubbleCountWindow.PanicListenerLive = () => true;
+        game.Settings.Current.PanicKey = "Pause";
+        BubbleCountWindow.PanicListenerLive = () => listener;
         BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, strict, _ => game.Completed++);
         var browser = Assert.Single(BubbleCountWindow.OpenWindows).Browser!;
         browser.View.OnNavigationCompleted(new Uri("about:blank"));
-        browser.View.OnWebMessage(JsonSerializer.Serialize(new { session = browser.SessionId, type = "key", key = "Escape" }));
+        browser.View.OnWebMessage(JsonSerializer.Serialize(new { session = browser.SessionId, type = "key", key }));
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        Assert.Equal(strict ? 0 : 1, game.Completed);
-        Assert.Equal(strict, BubbleCountWindow.IsAnyOpen());
+        Assert.Equal(dismiss ? 1 : 0, game.Completed);
+        Assert.Equal(!dismiss, BubbleCountWindow.IsAnyOpen());
         return Task.CompletedTask;
     });
     [Fact]

@@ -65,8 +65,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         _startup.Start();
         View.Navigate(new Uri("about:blank"));
     }
-    private async void Navigated(Uri uri)
-    {
+    private async void Navigated(Uri uri) {
         if (_closed || _loaded || uri.ToString() != "about:blank") return;
         _loaded = true;
         try {
@@ -76,8 +75,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         }
         catch { if (!_closed) Fail(); }
     }
-    internal void Receive(string body)
-    {
+    internal void Receive(string body) {
         if (_closed || !_loaded) return;
         try {
             using var json = JsonDocument.Parse(body);
@@ -96,8 +94,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         catch (System.Collections.Generic.KeyNotFoundException) { }
     }
     internal string SessionId => _id;
-    private void Fail(bool mediaFailure = false)
-    {
+    private void Fail(bool mediaFailure = false) {
         if (_closed) return;
         _startup?.Stop();
         Failed?.Invoke(mediaFailure);
