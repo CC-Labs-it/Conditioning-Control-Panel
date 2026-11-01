@@ -10,6 +10,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Friends;
 
 namespace ConditioningControlPanel.Avalonia
 {
@@ -418,6 +419,10 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         private AvaloniaCoreDispatch? _desktopDispatch;
+        private IUiTimer? _achievementAutosaveTimer;
+        private EventHandler? _achievementAutosaveTick;
+        private AchievementEngine? _achievementAutosaveEngine;
+        internal Task AchievementAutosavePending { get; private set; } = Task.CompletedTask;
         private int _exitHandled;
         private int _warnedMissingCustomAssetsPath;
 
@@ -895,6 +900,7 @@ namespace ConditioningControlPanel.Avalonia
                 BackfillCompanionChatCount(Achievements, Brain);   // WPF GamificationBridge.Start:132
                 DeferEmptyBackfillSave(Achievements, dirtyBeforeChatBackfill);
                 SaveNonEmptyChatBackfill(Achievements, chatBackfillWasComplete);
+                StartAchievementAutosave(Achievements);
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
                 // Its loss must not cost the launch.
@@ -1305,12 +1311,54 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         /// <summary>WPF AchievementService.cs:98-105 autosaves dirty progress every 30 seconds.
-        /// This head saves a non-empty backfill now; a failed write remains dirty for exit retry.</summary>
+        /// This head saves a non-empty backfill now; a failed write remains dirty for timer and exit retries.</summary>
         internal static void SaveNonEmptyChatBackfill(AchievementEngine engine, bool wasBackfilled)
         {
             if (!wasBackfilled && engine.Progress.CompanionChatBackfilled
                 && engine.Progress.CompanionMessages > 0 && engine.IsDirty)
                 engine.Save();
+        }
+
+        /// <summary>WPF AchievementService.cs:98-105: retry dirty achievement saves every 30 seconds
+        /// off the UI thread. The existing timer seam lets tests step the same desktop callback.</summary>
+        internal void StartAchievementAutosave(AchievementEngine engine, IUiTimer? timer = null)
+        {
+            if (_achievementAutosaveTimer != null) return;
+            var clock = timer ?? new Platform.FriendsHead.Timer();
+            _achievementAutosaveTimer = clock;
+            _achievementAutosaveEngine = engine;
+            clock.Interval = TimeSpan.FromSeconds(30);
+            _achievementAutosaveTick = (_, _) =>
+            {
+                if (Volatile.Read(ref _exitHandled) != 0 || !ReferenceEquals(_achievementAutosaveTimer, clock)
+                    || !AchievementAutosavePending.IsCompleted) return;
+                if (AchievementAutosavePending.IsFaulted || AchievementAutosavePending.IsCanceled) engine.IsDirty = true;
+                AchievementAutosavePending = engine.SaveIfDirtyAsync();
+            };
+            clock.Tick += _achievementAutosaveTick;
+            clock.Start();
+        }
+
+        /// <summary>WPF AchievementService.cs:947-954: stop the timer and wait for its writer before exit.</summary>
+        internal void StopAchievementAutosave()
+        {
+            var clock = _achievementAutosaveTimer;
+            _achievementAutosaveTimer = null;
+            try
+            {
+                clock?.Stop();
+                if (clock != null && _achievementAutosaveTick != null) clock.Tick -= _achievementAutosaveTick;
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Achievement autosave timer stop failed"); }
+            _achievementAutosaveTick = null;
+            try { AchievementAutosavePending.GetAwaiter().GetResult(); }
+            catch (Exception ex)
+            {
+                if (_achievementAutosaveEngine != null) _achievementAutosaveEngine.IsDirty = true;
+                Serilog.Log.Warning(ex, "Achievement autosave failed");
+            }
+            _achievementAutosaveEngine = null;
+            AchievementAutosavePending = Task.CompletedTask;
         }
 
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
@@ -1346,6 +1394,8 @@ namespace ConditioningControlPanel.Avalonia
             var shell = (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as Views.Windows.MainShellWindow;
             SaveSettingsOnExit(shell, () => Settings?.SaveImmediate());
 
+            // Drain an in-flight autosave before testing dirty: it may still fail and re-arm the flag.
+            StopAchievementAutosave();
             // WPF AchievementService.Dispose saves synchronously; only when dirty here, so an idle exit
             // never rewrites the file (or rotates its .bak) - it may be shared with the WPF head.
             try { if (Achievements is { IsDirty: true } a) a.Save(); } catch { /* the store logs write failures */ }

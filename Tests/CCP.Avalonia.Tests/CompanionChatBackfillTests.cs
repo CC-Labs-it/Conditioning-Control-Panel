@@ -2,9 +2,12 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Companion.Brain;
+using ConditioningControlPanel.Services.Friends;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
@@ -234,6 +237,112 @@ public sealed class CompanionChatBackfillTests
     }
 
     [Fact]
+    public async Task FailedBackfillRetriesOnTheThirtySecondTickBeforeExit()
+    {
+        using var f = new Fixture();
+        f.SaveTurns(TurnKind.UserChat);
+        using var brain = f.OpenBrain();
+        var blocker = f.PathInProfile("retry-blocked");
+        File.WriteAllText(blocker, "block directory creation");
+        var path = Path.Combine(blocker, "achievements.json");
+        var engine = new AchievementEngine(new AchievementStore(path));
+        engine.Progress.Unlock("pleased_to_meet_you");
+        var app = new AvApp();
+        var timer = new TestTimer();
+        try
+        {
+            AvApp.BackfillCompanionChatCount(engine, brain);
+            AvApp.SaveNonEmptyChatBackfill(engine, wasBackfilled: false);
+            Assert.True(engine.IsDirty); // the immediate write failed
+            app.StartAchievementAutosave(engine, timer);
+            Assert.Equal(TimeSpan.FromSeconds(30), timer.Interval);
+            Assert.True(timer.Running);
+
+            timer.Fire(); // still blocked: the failed retry must stay dirty
+            await app.AchievementAutosavePending.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            Assert.True(engine.IsDirty);
+            File.Delete(blocker);
+            brain.Session.Clear();
+            f.ForgetSavedTurns();
+            timer.Fire(); // storage recovered, with no chat history to reconstruct from
+            await app.AchievementAutosavePending.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+            Assert.False(engine.IsDirty);
+            var saved = new AchievementStore(path).Load(); // before exit
+            Assert.Equal(1, saved.CompanionMessages);
+            Assert.True(saved.CompanionChatBackfilled);
+        }
+        finally { app.StopAchievementAutosave(); }
+        Assert.False(timer.Running);
+        Assert.Equal(0, timer.Handlers);
+    }
+
+    [Fact]
+    public async Task CleanAutosaveTickDoesNotCreateAnAchievementFile()
+    {
+        using var f = new Fixture();
+        using var brain = f.OpenBrain();
+        var engine = f.Engine();
+        AvApp.BackfillCompanionChatCount(engine, brain);
+        AvApp.DeferEmptyBackfillSave(engine, dirtyBeforeBackfill: false);
+        var app = new AvApp();
+        var timer = new TestTimer();
+        try
+        {
+            app.StartAchievementAutosave(engine, timer);
+            timer.Fire();
+            await app.AchievementAutosavePending.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            Assert.False(f.HasAchievementFile);
+        }
+        finally { app.StopAchievementAutosave(); }
+    }
+
+    [Fact]
+    public async Task StoppingAutosaveWaitsForTheInFlightWrite()
+    {
+        using var f = new Fixture();
+        var path = f.PathInProfile("pending-achievements.json");
+        var store = new AchievementStore(path);
+        var engine = new AchievementEngine(store);
+        var app = new AvApp();
+        var timer = new TestTimer();
+        Task? pending = null, stopping = null;
+        using var held = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var stopStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var holder = new Thread(() => { lock (store._saveLock) { held.Set(); release.Wait(); } }) { IsBackground = true };
+        holder.Start();
+        try
+        {
+            Assert.True(held.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+            app.StartAchievementAutosave(engine, timer);
+            engine.TrackFlashImage();
+            timer.Fire();
+            pending = app.AchievementAutosavePending;
+            Assert.False(pending.IsCompleted);
+            stopping = Task.Run(() => { stopStarted.SetResult(); app.StopAchievementAutosave(); }, TestContext.Current.CancellationToken);
+            await stopStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            Assert.NotSame(stopping, await Task.WhenAny(stopping, Task.Delay(200, TestContext.Current.CancellationToken)));
+            release.Set();
+            await stopping.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            Assert.False(timer.Running);
+            Assert.Equal(0, timer.Handlers);
+            Assert.Equal(1, new AchievementStore(path).Load().TotalFlashImages);
+        }
+        finally
+        {
+            release.Set();
+            // Cleanup must drain the writer even if the test cancellation token is signaled.
+#pragma warning disable xUnit1051
+            if (pending != null) await pending.WaitAsync(TimeSpan.FromSeconds(5));
+            if (stopping != null) await stopping.WaitAsync(TimeSpan.FromSeconds(5));
+#pragma warning restore xUnit1051
+            holder.Join(TimeSpan.FromSeconds(5));
+            app.StopAchievementAutosave();
+        }
+    }
+
+    [Fact]
     public void DesktopStartupCallsBackfillAfterBrainAndAchievementsAreReady()
     {
         var root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Here())!, "..", ".."));
@@ -242,8 +351,24 @@ public sealed class CompanionChatBackfillTests
         var engine = source.IndexOf("Achievements = new AchievementEngine(", StringComparison.Ordinal);
         var call = source.IndexOf("BackfillCompanionChatCount(Achievements, Brain);", StringComparison.Ordinal);
         var save = source.IndexOf("SaveNonEmptyChatBackfill(Achievements, chatBackfillWasComplete);", StringComparison.Ordinal);
+        var autosave = source.IndexOf("StartAchievementAutosave(Achievements);", StringComparison.Ordinal);
+        var stop = source.IndexOf("StopAchievementAutosave();", StringComparison.Ordinal);
+        var flush = source.IndexOf("if (Achievements is { IsDirty: true } a) a.Save();", StringComparison.Ordinal);
         Assert.True(brain >= 0 && engine > brain && call > engine);
         Assert.True(save > call);
+        Assert.True(autosave > save && stop > autosave && flush > stop);
+    }
+
+    private sealed class TestTimer : IUiTimer
+    {
+        public TimeSpan Interval { get; set; }
+        public event EventHandler? Tick;
+        public bool Running { get; private set; }
+        public int Handlers => Tick?.GetInvocationList().Length ?? 0;
+        public void Start() => Running = true;
+        public void Stop() => Running = false;
+        public void OnUiThread(Action action) => action();
+        public void Fire() { if (Running) Tick?.Invoke(this, EventArgs.Empty); }
     }
 
     private static string Here([CallerFilePath] string path = "") => path;
