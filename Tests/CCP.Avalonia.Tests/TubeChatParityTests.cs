@@ -293,8 +293,12 @@ public sealed class TubeChatParityTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        CoreSettings.Current.AvatarEnabled = true;
-        CoreSettings.Current.CompanionAsksEnabled = true;
+        var settings = CoreSettings.Current;
+        var previousAvatar = settings.AvatarEnabled;
+        var previousAsks = settings.CompanionAsksEnabled;
+        var previousTutorial = CoreTutorial.IsActiveProvider;
+        settings.AvatarEnabled = true;
+        settings.CompanionAsksEnabled = true;
         CoreTutorial.IsActiveProvider = () => false;
         var relay = ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay;
         using var remote = new ConditioningControlPanel.Services.RemoteRelay(
@@ -338,10 +342,38 @@ public sealed class TubeChatParityTests
         {
             AvApp.Mantra.EndSession();
             restore();
+            CoreTutorial.IsActiveProvider = previousTutorial;
+            settings.AvatarEnabled = previousAvatar;
+            settings.CompanionAsksEnabled = previousAsks;
             AvApp.Brain = previousBrain;
             ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay = relay;
             brain.Dispose();
             Directory.Delete(dir, true);
+        }
+    });
+
+    [Theory]
+    [InlineData("tutorial")]
+    [InlineData("avatar")]
+    [InlineData("asks")]
+    public void AskCardOwnerCaseRestoresItsOriginalState(string state) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var settings = CoreSettings.Current;
+        var previous = (CoreTutorial.IsActiveProvider, settings.AvatarEnabled, settings.CompanionAsksEnabled);
+        Func<bool> tutorial = () => true;
+        try
+        {
+            CoreTutorial.IsActiveProvider = tutorial;
+            settings.AvatarEnabled = false;
+            settings.CompanionAsksEnabled = false;
+            AskCardsWaitForTheUserToBeFree("mantra");
+            if (state == "tutorial") Assert.Same(tutorial, CoreTutorial.IsActiveProvider);
+            if (state == "avatar") Assert.False(settings.AvatarEnabled);
+            if (state == "asks") Assert.False(settings.CompanionAsksEnabled);
+        }
+        finally
+        {
+            (CoreTutorial.IsActiveProvider, settings.AvatarEnabled, settings.CompanionAsksEnabled) = previous;
         }
     });
 
