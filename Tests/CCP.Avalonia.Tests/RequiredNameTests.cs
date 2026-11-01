@@ -8,6 +8,9 @@ using Avalonia;
 using Avalonia.Headless;
 using ConditioningControlPanel.Avalonia;
 using Avalonia.Controls;
+using Avalonia.Automation;
+using IconGlyph = ConditioningControlPanel.Avalonia.Controls.IconGlyph;
+using IconKind = FluentIcons.Common.Symbol;
 using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -82,10 +85,16 @@ public sealed class RequiredNameTests
         var shown = d.ShowDialog<bool>(owner);
         var input = d.FindControl<TextBox>("TxtDisplayName")!;
         var confirm = d.FindControl<Button>("BtnConfirm")!;
+        var close = d.FindControl<Button>("BtnClose")!;
         void Click() => confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.False(d.FindControl<Button>("BtnCancel")!.IsVisible);
-        Assert.True(d.FindControl<Button>("BtnClose")!.IsVisible);
-        Assert.Equal(Loc.Get("name_ask_close_tip"), Assert.IsType<string>(ToolTip.GetTip(d.FindControl<Button>("BtnClose")!)));
+        Assert.True(close.IsVisible);
+        Assert.Equal(IconKind.Dismiss, Assert.IsType<IconGlyph>(close.Content).Kind);
+        Assert.Equal(Loc.Get("name_ask_close_tip"), AutomationProperties.GetName(close));
+        Assert.Equal(Loc.Get("name_ask_close_tip"), Assert.IsType<string>(ToolTip.GetTip(close)));
+        ToolTip.SetTip(close, "temporary tip"); // the explicit name must beat the app's tooltip fallback
+        Assert.Equal(Loc.Get("name_ask_close_tip"), AutomationProperties.GetName(close));
+        ToolTip.SetTip(close, Loc.Get("name_ask_close_tip"));
         input.Text = "ab";
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Assert.False(confirm.IsEnabled);
@@ -117,8 +126,11 @@ public sealed class RequiredNameTests
     });
 
     // WPF MainWindow.DisplayNameAsk.cs:25-30,58-59,78-108.
-    [Fact]
-    public Task SignInGateAndOwnNameSaveChangeBeforeAnyAvailabilityCheck() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public Task SignInGateAndOwnNameSaveChangeBeforeAnyAvailabilityCheck(string? missingName) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var s = CoreSettings.Current;
@@ -132,7 +144,14 @@ public sealed class RequiredNameTests
         {
             AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
             s.UnifiedId = "u1";
-            s.UserDisplayName = null;
+            s.UserDisplayName = missingName;
+            var card = shell.ProfilePage!;
+            s.UnifiedId = null;
+            card.DisplayOwnProfile();
+            Assert.Equal("You", card.FindControl<TextBlock>("TxtProfileViewerName")!.Text);
+            s.UnifiedId = "u1";
+            card.DisplayOwnProfile();
+            Assert.Equal(Loc.Get("account_name_not_set"), card.FindControl<TextBlock>("TxtProfileViewerName")!.Text);
             await shell.AskDisplayNameAfterSignIn(shell, null, false);
             Assert.Empty(shell.OwnedWindows);
             var ask = shell.AskDisplayNameAfterSignIn(shell, null, true);
@@ -143,11 +162,13 @@ public sealed class RequiredNameTests
             d.FindControl<Button>("BtnConfirm")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await ask.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal("Own Name", s.UserDisplayName);
+            Assert.Equal("Own Name", card.FindControl<TextBlock>("TxtProfileViewerName")!.Text);
             Assert.Equal(0, wire.Checks);
             CoreAccount.ChangeDisplayNameProvider = _ => Task.FromResult((false, (string?)"refused", (string?)null));
             Assert.Equal(Loc.GetF("login_name_already_taken", "Other"), await shell.SaveRequiredDisplayNameAsync("Other"));
             Assert.Equal(1, wire.Checks);
             Assert.Equal("Own Name", s.UserDisplayName);
+            Assert.Equal("Own Name", card.FindControl<TextBlock>("TxtProfileViewerName")!.Text);
         }
         finally
         {

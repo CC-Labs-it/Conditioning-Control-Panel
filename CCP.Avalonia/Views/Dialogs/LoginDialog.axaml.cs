@@ -987,6 +987,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 ShouldShowOgWelcome = false,
                 UnifiedId = result.UnifiedId,
                 DisplayName = s.UserDisplayName,
+                ServerNeedsDisplayName = result.NeedsDisplayName, // WPF LoginDialog.xaml.cs:915
                 Provider = "device_code",
             };
             Close(true);

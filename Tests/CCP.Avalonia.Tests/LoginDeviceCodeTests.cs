@@ -98,8 +98,8 @@ public sealed class LoginDeviceCodeTests
     private static async Task Run(Wire wire, Func<LoginDialog, Clock, AppSettings, Task> body)
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var (oldGet, oldSet) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
         var secrets = new Dictionary<string, string?>(); // memory only: never the keyring
@@ -143,14 +143,23 @@ public sealed class LoginDeviceCodeTests
         }
     }
 
-    [Fact]
-    public Task TheBrowserConfirmationSignsInAfterPollingEveryThreeSeconds()
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    public Task TheBrowserConfirmationSignsInAfterPollingEveryThreeSeconds(bool bare, bool? needsName)
     {
+        var confirmed = bare
+            ? $$"""{"auth_token":"tok-dev","unified_id":"u_dev","needs_display_name":{{(needsName == true ? "true" : "false")}}}"""
+            : """{"auth_token":"tok-dev","unified_id":"u_dev","user":{"unified_id":"u_dev","display_name":"Bambi Dev"}}""";
         var wire = new Wire(T0.AddMinutes(10),
             (HttpStatusCode.Accepted, "{}"),
-            (HttpStatusCode.OK, """{"auth_token":"tok-dev","unified_id":"u_dev","user":{"unified_id":"u_dev","display_name":"Bambi Dev"}}"""));
+            (HttpStatusCode.OK, confirmed));
         return AvaloniaTestDispatcher.RunAsync(() => Run(wire, async (dialog, clock, s) =>
             {
+                var shell = Assert.IsType<MainShellWindow>(dialog.Owner);
+                // Oppose the server flag: its answer must win for either local name state.
+                s.UserDisplayName = needsName == true ? "Old name" : null;
                 clock.Advance(TimeSpan.FromSeconds(2.9));
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(0, wire.Polls); // WPF waits 3 s before the first poll
@@ -165,6 +174,9 @@ public sealed class LoginDeviceCodeTests
                 await dialog.DevicePoll;
                 Assert.Equal(2, wire.Polls);
                 Assert.Equal("device_code", dialog.Result?.Provider);
+                Assert.Equal(needsName, dialog.Result?.ServerNeedsDisplayName);
+                if (needsName == true) await Until(() => shell.OwnedWindows.OfType<DisplayNameDialog>().Any());
+                else { Dispatcher.UIThread.RunJobs(); Assert.Empty(shell.OwnedWindows.OfType<DisplayNameDialog>()); }
                 Assert.Equal("u_dev", s.UnifiedId);
                 Assert.Equal("tok-dev", s.AuthToken);
                 Assert.Equal("u_dev", CoreAccount.UnifiedUserId);
@@ -203,8 +215,8 @@ public sealed class LoginDeviceCodeTests
     public Task AnUnopenableSignInLinkIsCopiedAndExplained() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var oldShell = ExternalOpener.Shell;
         ExternalOpener.Shell = _ => false; // nothing handles the link
