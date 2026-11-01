@@ -1,0 +1,100 @@
+/* Fuzz: the plain base. The page starts grey on purpose (Stimulation Clicker
+ * lesson 1): colour, glow and motion are things the player buys. Widgets add
+ * their own rules in ui/widgets; this file holds the skeleton and the tokens. */
+
+@font-face { font-family: 'Press Start 2P'; src: url('assets/fonts/press-start-2p.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Fredoka'; src: url('assets/fonts/fredoka-latin.woff2') format('woff2'); font-display: swap; }
+
+:root {
+  color-scheme: dark;
+  --ground: #121220;
+  --panel: #1c1c35;
+  --raised: #28284c;
+  --ink: #f0f0f5;
+  --muted: #a7a7c1;
+  --pink: #ff69b4;
+  --pink-deep: #d4488f;
+  --violet: #7b5cff;
+  --gold: #f0c24b;
+  --paper: #f4ecd8;
+  --paper-ink: #2a2420;
+  --stamp: #a3232b;
+  --grey: #3a3a4a;              /* the bubble and tiles before Pink */
+  --font-display: 'Press Start 2P', 'Noto Sans Mono', ui-monospace, Consolas, 'Courier New', monospace;
+  --font-body: 'Fredoka', 'Segoe UI', system-ui, sans-serif;
+  --tile: 78px;
+}
+
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-body);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+.spiral { position: fixed; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 1.2s ease; pointer-events: none; }
+.spiral.on { opacity: 0.55; }
+.pinkwash { position: fixed; inset: 0; background: var(--pink); opacity: 0; mix-blend-mode: multiply; transition: opacity 1.5s ease; pointer-events: none; }
+body.pink .pinkwash { opacity: 0.18; }
+
+.top { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 10px max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); z-index: 40; pointer-events: none; }
+.wake { pointer-events: auto; font: 600 14px var(--font-body); color: var(--ink); background: var(--panel); border: 1px solid var(--raised); border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+.wake:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
+.ticker { position: absolute; left: 0; right: 0; top: 0; height: 28px; line-height: 28px; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; pointer-events: none; }
+
+.stage { position: relative; z-index: 10; height: 100%; display: grid; grid-template-rows: auto auto 1fr; justify-items: center; align-content: start; gap: 18px; padding-top: 12vh; }
+.counter { text-align: center; }
+.fuzz { font: 20px/1.4 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+.fps { font-size: 14px; color: var(--muted); margin-top: 6px; }
+.meters { display: flex; gap: 10px; justify-content: center; margin-top: 8px; font-size: 12px; color: var(--muted); }
+
+.bubble { background: none; border: 0; padding: 0; width: min(38vw, 220px); aspect-ratio: 1; cursor: pointer; transition: transform 120ms ease-out; touch-action: manipulation; filter: grayscale(1) brightness(0.8); }
+body.pink .bubble { filter: none; }
+.bubble img { width: 100%; height: 100%; display: block; pointer-events: none; }
+.bubble.pressed { transform: scale(0.92); transition-duration: 40ms; }
+.bubble:focus-visible { outline: 2px solid var(--pink); outline-offset: 6px; border-radius: 50%; }
+
+.shop { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: 100%; }
+.tile { position: relative; width: var(--tile); height: var(--tile); border-radius: 12px; border: 1px solid var(--raised); background: var(--panel) center/cover no-repeat; cursor: pointer; padding: 0; transition: transform 250ms ease, opacity 250ms ease; }
+.tile.enter { transform: translateY(20px); opacity: 0; }
+.tile.short { opacity: 0.55; filter: grayscale(0.6); }
+.tile .cost { position: absolute; left: 4px; right: 4px; bottom: 4px; font: 10px/1 var(--font-display); color: var(--ink); background: rgba(18, 18, 32, 0.8); border-radius: 6px; padding: 4px 0; text-align: center; }
+.tile.short .cost { color: #ff7a7a; }
+.tip { position: absolute; z-index: 30; max-width: 240px; background: var(--paper); color: var(--paper-ink); border-radius: 6px; padding: 8px 10px; font-size: 13px; line-height: 1.35; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4); pointer-events: none; }
+.tip b { display: block; font-size: 14px; }
+.tip .short { color: var(--stamp); }
+
+.widgets { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+.widgets > * { pointer-events: auto; contain: layout paint; }
+.fx { position: fixed; inset: 0; z-index: 25; pointer-events: none; overflow: hidden; }
+.floater { position: absolute; font: 14px var(--font-display); color: var(--ink); transform: translate(-50%, -50%); animation: rise 700ms ease-out forwards; }
+.floater.crit { color: #ff7a7a; font-size: 20px; }
+@keyframes rise { from { opacity: 1; } to { opacity: 0; transform: translate(-50%, calc(-50% - 60px)); } }
+
+.pause { position: fixed; inset: 0; z-index: 60; background: rgba(18, 18, 32, 0.82); display: grid; place-items: center; }
+.card { background: var(--paper); color: var(--paper-ink); border-radius: 8px; padding: 18px 20px; width: min(92vw, 360px); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5); }
+.card-title { margin: 0 0 12px; font-weight: 600; }
+.card-rows { display: grid; gap: 10px; }
+.card button { font: 600 14px var(--font-body); background: var(--paper-ink); color: var(--paper); border: 0; border-radius: 6px; padding: 10px 14px; cursor: pointer; }
+.card label { font-size: 14px; display: flex; gap: 8px; align-items: center; }
+#exportbox { width: 100%; margin-top: 10px; font: 11px ui-monospace, Consolas, 'Courier New', monospace; }
+
+.ending { position: fixed; inset: 0; z-index: 70; background: #fff0f7; color: var(--pink-deep); display: grid; place-items: center; opacity: 0; transition: opacity 1.5s ease; }
+.ending.on { opacity: 1; }
+
+@media (max-width: 700px) {
+  .stage { padding-top: 10vh; gap: 14px; }
+  .fuzz { font-size: 15px; }
+  :root { --tile: 64px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spiral, .tile, .bubble, .floater { transition: none; animation: none; }
+}
+body.photosafe .spiral { opacity: 0 !important; }
