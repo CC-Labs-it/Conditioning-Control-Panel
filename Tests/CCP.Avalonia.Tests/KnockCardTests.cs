@@ -157,6 +157,139 @@ public sealed class KnockCardTests
         Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key.StartsWith("friends:"));
     });
 
+    private static InboxItem WatchItem(string id, WatchRef watch) =>
+        new(id, SendKind.Watch, "u_mia", "Mia", null, null, null, null, watch, T0, T0.AddDays(1));
+
+    // WPF FriendsLanding.cs:262-280,475-490,511-533: notice, Inbox and action.
+    [Fact]
+    public Task WatchNoticeCanBeFiledReopenedAndPlayed() => Run((svc, _, step, _) =>
+    {
+        var oldUrl = FriendsLanding.OpenWatchUrl;
+        var oldSays = FriendsLanding.EmiSays;
+        var urls = new List<string>();
+        var says = new List<(string, string)>();
+        FriendsLanding.OpenWatchUrl = urls.Add;
+        FriendsLanding.EmiSays = (line, face) => says.Add((line, face));
+        try
+        {
+            var item = WatchItem("00000000000000d1", new WatchRef(WatchKind.Ht, "12345", null));
+            svc.Deliver(item);
+            var notice = Assert.IsType<FriendNotices>(FriendNotices.Current);
+            Assert.Contains(svc.Receipts, r => r.State == ReceiptState.Seen);
+            Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("friends_land_watch"), Text(notice));
+            Assert.Contains(says, x => x.Item1 == ConditioningControlPanel.Localization.Loc.Get("friends_land_emi_present") && x.Item2 == "^_~");
+            notice.Advance(100000);
+            var row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "friends:" + item.Id);
+            StartupLadder.Inbox.Open(row);
+            notice = Assert.IsType<FriendNotices>(FriendNotices.Current);
+            Press(global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(notice)
+                .OfType<Button>().Single(b => Equals(b.Tag, "friend-notice-action")));
+            Assert.Equal(new[] { "https://hypnotube.com/video/video-12345.html" }, urls);
+            Assert.False(StartupLadder.Inbox.Contains("friends:" + item.Id));
+            Assert.DoesNotContain(svc.Receipts, r => r.State == ReceiptState.Joined);
+
+            CoreSettings.Current.FriendNotificationsEnabled = false;
+            var other = WatchItem("00000000000000d2", new WatchRef(WatchKind.Ht, "222", null));
+            svc.Deliver(other);
+            Assert.Null(FriendNotices.Current);
+            row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "friends:" + other.Id);
+            step(T0.AddDays(1));
+            StartupLadder.Inbox.Open(row);
+            Assert.Contains(says, x => x.Item1 == ConditioningControlPanel.Localization.Loc.Get("friends_land_too_late") && x.Item2 == ";_;");
+            Assert.Single(urls);
+        }
+        finally { FriendsLanding.OpenWatchUrl = oldUrl; FriendsLanding.EmiSays = oldSays; }
+    });
+
+    // WPF FriendsLanding.cs:272-280: body opens sender, and leaving files only unexpired watches.
+    [Fact]
+    public Task WatchBodyOpensSenderAndExpiredNoticeDoesNotActOrFile() => Run((svc, _, step, _) =>
+    {
+        var oldDrawer = FriendsLanding.OpenDrawer;
+        var oldUrl = FriendsLanding.OpenWatchUrl;
+        var opened = new List<string?>();
+        var urls = new List<string>();
+        FriendsLanding.OpenDrawer = opened.Add;
+        FriendsLanding.OpenWatchUrl = urls.Add;
+        try
+        {
+            var item = WatchItem("00000000000000d3", new WatchRef(WatchKind.Ht, "123", null));
+            svc.Deliver(item);
+            var notice = FriendNotices.Current!;
+            notice.Dismiss(Assert.Single(notice.Stack.All), acted: false, open: true);
+            Assert.Equal(new[] { "u_mia" }, opened);
+            Assert.True(StartupLadder.Inbox.Contains("friends:" + item.Id));
+            StartupLadder.Inbox.Remove("friends:" + item.Id);
+            svc.Deliver(item with { Id = "00000000000000d4" });
+            notice = FriendNotices.Current!;
+            step(T0.AddDays(1));
+            notice.Dismiss(Assert.Single(notice.Stack.All), acted: true);
+            Assert.Empty(urls);
+            Assert.False(StartupLadder.Inbox.Contains("friends:00000000000000d4"));
+            step(T0);
+            svc.Deliver(item with { Id = "00000000000000d5" });
+            notice = FriendNotices.Current!;
+            step(T0.AddDays(1));
+            notice.Dismiss(Assert.Single(notice.Stack.All), acted: false);
+            Assert.False(StartupLadder.Inbox.Contains("friends:00000000000000d5"));
+        }
+        finally { FriendsLanding.OpenDrawer = oldDrawer; FriendsLanding.OpenWatchUrl = oldUrl; }
+    });
+
+    // WPF FriendsLanding.cs:632-687: catalogue resolves local files or opens Deeper; flavour never grants consent.
+    [Fact]
+    public Task WatchDispatchResolvesCatalogueAndKeepsMediaConsent() => Run((_, host, _, _) =>
+    {
+        var oldPlay = FriendsLanding.PlayWatchCatalogue;
+        var oldTab = FriendsLanding.OpenPanelTab;
+        var oldGame = FriendsLanding.ActiveGameWindow;
+        var oldWord = FriendsLanding.ShowWatchWord;
+        var words = new List<(Window, string)>();
+        FriendsLanding.ActiveGameWindow = () => null;
+        FriendsLanding.ShowWatchWord = (owner, text) => words.Add((owner, text));
+        var played = new List<string>();
+        var tabs = new List<string>();
+        FriendsLanding.PlayWatchCatalogue = played.Add;
+        FriendsLanding.OpenPanelTab = tabs.Add;
+        var s = CoreSettings.Current;
+        var entries = s.DeeperSubmissions.ToDictionary(e => e.Key, e => e.Value);
+        try
+        {
+            s.DeeperSubmissions.Clear();
+            var path = typeof(KnockCardTests).Assembly.Location;
+            s.DeeperSubmissions[path] = new DeeperSubmissionRecord { CatalogueId = "known" };
+            FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "known", null));
+            FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "missing", null));
+            FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "../bad", null));
+            Assert.Equal(new[] { path }, played);
+            Assert.Equal(new[] { "deeper" }, tabs);
+            FriendsLanding.PlayWatchCatalogue = _ => throw new InvalidOperationException();
+            FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "known", null));
+            Assert.Equal(new[] { "deeper", "deeper" }, tabs);
+
+            s.MediaSource = "local";
+            s.RemoteMediaConsented = false;
+            s.FypOnlineConsented = false;
+            s.BackRoomMediaSource = "online";
+            FriendsLanding.Watch(new WatchRef(WatchKind.Flavour, "pink", null));
+            Assert.Equal("local", s.MediaSource);
+            Assert.Contains("bimbo", s.FypOnlineNiches);
+            Assert.Equal("auto", s.BackRoomMediaSource);
+            s.RemoteMediaConsented = true;
+            FriendsLanding.Watch(new WatchRef(WatchKind.Flavour, "trance", null));
+            Assert.Equal("mixed", s.MediaSource);
+            Assert.Contains("hypno", s.FypOnlineNiches);
+            Assert.Equal((host, ConditioningControlPanel.Localization.Loc.Get("friends_land_flavour_on")), words[0]);
+            Assert.Equal(2, words.Count);
+        }
+        finally
+        {
+            s.DeeperSubmissions.Clear();
+            foreach (var entry in entries) s.DeeperSubmissions[entry.Key] = entry.Value;
+            FriendsLanding.PlayWatchCatalogue = oldPlay; FriendsLanding.OpenPanelTab = oldTab; FriendsLanding.ActiveGameWindow = oldGame; FriendsLanding.ShowWatchWord = oldWord;
+        }
+    });
+
     private static global::Avalonia.Media.IBrush FriendsDrawerGold => ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer.Gold;
 
     [Fact]
