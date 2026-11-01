@@ -1,4 +1,6 @@
 {
+  "chaos_freeze_banner": "Gel",
+  "chaos_freeze_trigger": "❄ tout reste immobile",
   "chaos_snap_live": "✋ relâchées. toutes les bulles actives",
   "chaos_snap_all": "✋ relâchées. toutes",
   "chaos_estim_charge": "⚡ chargé. les {0} prochaines bulles conduisent",

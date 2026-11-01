@@ -1,4 +1,6 @@
 {
+  "chaos_freeze_banner": "凍結",
+  "chaos_freeze_trigger": "❄ すべてが静止する",
   "chaos_snap_live": "✋ 弾けた。生きたバブルはすべて解放",
   "chaos_snap_all": "✋ 弾けた。すべて",
   "chaos_estim_charge": "⚡ 充電済み。次の{0}回は電流が流れる",

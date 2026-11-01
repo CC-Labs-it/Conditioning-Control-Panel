@@ -1,4 +1,6 @@
 {
+  "chaos_freeze_banner": "Заморозка",
+  "chaos_freeze_trigger": "❄ всё замирает",
   "chaos_snap_live": "✋ лопнули. все активные пузыри освобождены",
   "chaos_snap_all": "✋ лопнули. все",
   "chaos_estim_charge": "⚡ заряжено. следующие {0} хлопка проводят ток",

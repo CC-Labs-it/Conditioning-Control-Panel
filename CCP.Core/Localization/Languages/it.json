@@ -1,4 +1,6 @@
 {
+  "chaos_freeze_banner": "Congelamento",
+  "chaos_freeze_trigger": "❄ tutto si ferma",
   "chaos_snap_live": "✋ scattate. tutte le bolle attive sono libere",
   "chaos_snap_all": "✋ scattate. tutte",
   "chaos_estim_charge": "⚡ carico. le prossime {0} bolle conducono",

@@ -1,4 +1,6 @@
 {
+  "chaos_freeze_banner": "冻结",
+  "chaos_freeze_trigger": "❄ 一切静止",
   "chaos_snap_live": "✋ 已弹开。所有活跃气泡都已释放",
   "chaos_snap_all": "✋ 已弹开。全部",
   "chaos_estim_charge": "⚡ 已充电。接下来 {0} 次击破会导电",

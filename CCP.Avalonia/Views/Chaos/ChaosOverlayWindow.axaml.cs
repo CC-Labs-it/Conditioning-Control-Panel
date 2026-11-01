@@ -1076,11 +1076,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private void BtnAdjust_Click(object? sender, RoutedEventArgs e) => OpenHubAt("run");
 
         /// <summary>
-        /// PORTED with two things missing, both because their owners are not on this head:
-        /// <c>App.Chaos.IsRunning</c> (the guard that stops the hub opening mid-run) and
-        /// <c>ChaosHubWindow.Current</c> plus <c>App.MainWindowRef</c> (the single-instance
-        /// registry and the owner). ponytail: needs ChaosService + the window registry, wired when
-        /// they move to Core - until then this opens a fresh hub every time.
+        /// WPF ChaosOverlayWindow.xaml.cs:866-885: reuse the open hub when present.
+        /// The Avalonia hub has no native owner yet.
         /// </summary>
         private void OpenHubAt(string? tab)
         {
@@ -1089,8 +1086,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 try
                 {
-                    var hub = new ChaosHubWindow();
-                    hub.Show();
+                    var hub = ChaosHubWindow.Current;
+                    if (hub == null) { hub = new ChaosHubWindow(); hub.Show(); }
+                    else hub.Activate();
                     if (tab != null) hub.NavigateTo(tab);
                 }
                 catch (Exception ex) { Log.Warning("Recap dollhouse door failed ({E})", ex.Message); }

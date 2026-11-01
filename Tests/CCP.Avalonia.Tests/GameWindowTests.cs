@@ -12,6 +12,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -992,6 +993,49 @@ public sealed partial class GameWindowTests
             Assert.Equal(2, xp.Count);
             Assert.Equal(250.0 * 95 / 60, xp[1], 6);
             Assert.Equal(new[] { true, true }, runs);
+        });
+    }
+
+    /// <summary>WPF DtrhHostService.cs:920-953 and ChaosHubWindow.xaml.cs:1718-1730.</summary>
+    [Fact]
+    public void Dtrh_boot_error_opens_classic_first_run_or_hub_with_toys()
+    {
+        RunDtrh(lab: true, (_, _, _, _) =>
+        {
+            try
+            {
+                ChaosMeta.State.RunsCompleted = 0;
+                ChaosMeta.Save();
+                var first = GameWindow.Launch("dtrh")!;
+                first.HandleMessage("{\"type\":\"boot-error\"}");
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(GameWindow.IsAnyOpen());
+                Assert.True(ChaosRunHost.IsActive);
+                Assert.True(ChaosRunHost.State!.Config.ScriptedFirstRun);
+                ChaosRunHost.ForceShutdown();
+
+                ChaosMeta.State.RunsCompleted = 1;
+                ChaosMeta.State.ToyPockets = 1;
+                ChaosMeta.State.ActiveLifetimeBoons.Add("snap_field");
+                ChaosMeta.State.LifetimeBoonLevels["snap_field"] = 1;
+                ChaosMeta.Save();
+                var next = GameWindow.Launch("dtrh")!;
+                next.HandleMessage("{\"type\":\"boot-error\"}");
+                next.HandleMessage("{\"type\":\"boot-error\"}");
+                Dispatcher.UIThread.RunJobs();
+                var hub = Assert.IsType<ChaosHubWindow>(ChaosHubWindow.Current);
+                Assert.True(hub.IsVisible);
+                var again = GameWindow.Launch("dtrh")!;
+                again.HandleMessage("{\"type\":\"boot-error\"}");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(hub, ChaosHubWindow.Current);
+                hub.FallIn();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(ChaosHubWindow.Current);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.Equal("snap_field", Assert.Single(ChaosRunHost.ToyButtons).Toy.Id);
+            }
+            finally { ChaosHubWindow.Current?.Close(); ChaosRunHost.ForceShutdown(); }
         });
     }
 

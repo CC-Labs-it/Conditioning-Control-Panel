@@ -1,4 +1,6 @@
 {
+  "chaos_freeze_banner": "Congelar",
+  "chaos_freeze_trigger": "❄ tudo fica imóvel",
   "chaos_snap_live": "✋ estouradas. todas as bolhas ativas foram soltas",
   "chaos_snap_all": "✋ estouradas. todas",
   "chaos_estim_charge": "⚡ carregado. os próximos {0} estouros conduzem",
