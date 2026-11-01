@@ -164,7 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (_soundGate)
             {
                 var old = _stopSound; _stopSound = null; old?.Invoke();
-                _stopSound = StartSound(create ?? (ended => NewVoice(path, ended)), volume, started, finished);
+                _stopSound = StartSound(create ?? (ended => NewVoice(path, ended, route: true)), volume, started, finished);
             }
         }
 
@@ -253,16 +253,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return voice.Play() ? voice : null;
         }
 
-        private Voice NewVoice(string path, Action onEnded)
+        internal Voice NewVoice(string path, Action onEnded, bool route = false)
         {
             var media = new Media(_vlc, path, FromType.FromPath);
             media.AddOption(NoVideo);
-            return new Voice(new MediaPlayer(media), media, onEnded);
+            return new Voice(new MediaPlayer(media), media, onEnded, route);
         }
 
-        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : ISoundVoice
+        internal sealed class Voice(MediaPlayer player, Media media, Action onEnded, bool route) : ISoundVoice
         {
+            internal MediaPlayer Player => player;
             private int _vol, _done;
+            private volatile bool _routePending = route;
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
             public Action<long>? Started { get; set; }
             internal volatile bool Failed;
@@ -271,8 +273,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 // Cubic like PlayOneShot; applied off libvlc's thread once the output exists.
                 set { _vol = (int)Math.Round(Math.Cbrt(Math.Clamp(value, 0, 1)) * 100); Apply(); }
             }
-            public void ApplyPreferredDevice() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) { LibVlcAudio.ApplyPreferredDevice(player); player.Volume = _vol; } });
-            private void Apply() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) player.Volume = _vol; });
+            public void ApplyPreferredDevice() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) { LibVlcAudio.ApplyPreferredDevice(player); _routePending = false; Set(); } });
+            private void Apply() => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (_done == 0 && player.IsPlaying) Set(); });
+            // Muted from Play until gain (and a routed sound's device) lands: WPF configures both before Play.
+            private void Set() { player.Volume = _vol; if (!_routePending) player.Mute = false; }
             public bool Play()
             {
                 var started = 0;
@@ -283,6 +287,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 };
                 player.EndReached += (_, _) => Dispose();
                 player.EncounteredError += (_, _) => { Failed = true; Dispose(); };
+                player.Mute = true;
                 if (player.Play()) return true;
                 Failed = true;
                 Dispose();

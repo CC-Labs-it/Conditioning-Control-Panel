@@ -29,9 +29,7 @@ public sealed class MasterSoundTests
     {
         var audio = new LibVlcAudio(_ => "");
         Voice? first = null, second = null;
-        using var creating = new ManualResetEventSlim();
-        using var release = new ManualResetEventSlim();
-        using var attempting = new ManualResetEventSlim();
+        using ManualResetEventSlim creating = new(), release = new(), attempting = new();
         var start = Task.Run(() => audio.PlaySound("first", 50, null, null, done =>
         { first = new Voice(done); creating.Set(); release.Wait(); return first; }));
         Task? other = null;
@@ -102,5 +100,37 @@ public sealed class MasterSoundTests
             Assert.Equal(0, voice.Gain);
         }
         finally { if (voice?.Disposed == false) stop?.Invoke(); (settings.MasterVolume, settings.AudioOutputDeviceId) = before; }
+    }
+    [Fact]
+    public void Native_sound_stays_muted_until_a_delayed_setup_lands()
+    {
+        if (!OperatingSystem.IsLinux()) Assert.Skip("ALSA null output is Linux-only");
+        LibVlcAudio audio;
+        // ALSA's null PCM: a real output with soft mute that discards every sample, so nothing reaches the desktop.
+        try { audio = new LibVlcAudio("--aout=alsa", "--alsa-audio-device=null"); }
+        catch (Exception e) when (Environment.GetEnvironmentVariable("CI") != "true") { Assert.Skip("libvlc not installed: " + e.Message); return; }
+        var wav = System.IO.Path.Combine(System.IO.Directory.CreateTempSubdirectory("ccp-sound-").FullName, "a.wav");
+        LayeredAudioLoopTests.WriteSilentWav(wav, ms: 3000);
+        LibVlcAudio.Voice? voice = null;
+        bool? mutedAtStart = null;
+        using ManualResetEventSlim started = new(), held = new(), release = new();
+        Task? holder = null;
+        try
+        {
+            audio.PlaySound(wav, 50, _ => { mutedAtStart = voice!.Player.Mute; started.Set(); }, null, ended =>
+            {
+                voice = audio.NewVoice(wav, ended, route: true);
+                // A busy pool: the setup work item cannot take the player until released.
+                holder = Task.Run(() => { lock (voice.Player) { held.Set(); release.Wait(); } });
+                held.Wait();
+                return voice;
+            });
+            Assert.True(started.Wait(TimeSpan.FromSeconds(10)));
+            Thread.Sleep(200);
+            Assert.True(mutedAtStart == true && voice!.Player.Mute, "audible before device and gain were applied");
+            release.Set();
+            Assert.True(SpinWait.SpinUntil(() => { lock (voice!.Player) return !voice.Player.Mute; }, 5000), "setup never unmuted");
+        }
+        finally { release.Set(); holder?.Wait(); audio.StopSound(); }
     }
 }

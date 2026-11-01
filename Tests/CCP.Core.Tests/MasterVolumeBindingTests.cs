@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Audio;
@@ -49,5 +52,54 @@ public sealed class MasterVolumeBindingTests
             Assert.Equal(count, levels.Count);
         }
         finally { service.RestoreFrom(original); }
+    }
+    [Fact]
+    public void Replacement_racing_construction_is_never_missed()
+    {
+        var service = new SettingsService();
+        var original = service.Current;
+        var go = 0;
+        var worker = new Thread(() => { while (Volatile.Read(ref go) >= 0) if (Interlocked.CompareExchange(ref go, 2, 1) == 1) { service.Reset(); go = 0; } });
+        worker.Start();
+        try
+        {
+            for (var i = 0; i < 4000; i++)   // the delay sweep walks construction across the instant Reset swaps Current
+            {
+                service.Current.MasterVolume = 0;
+                Volatile.Write(ref go, 1);
+                Thread.SpinWait(i % 400 * 10);
+                using var watch = new MasterVolumeBinding(_ => { }, service);
+                SpinWait.SpinUntil(() => Volatile.Read(ref go) == 0);
+                Assert.Equal(service.Current.MasterVolume, watch.Level);
+            }
+        }
+        finally { Volatile.Write(ref go, -1); worker.Join(); service.RestoreFrom(original); }
+    }
+    [Fact]
+    public void Replacement_in_flight_at_disposal_does_not_reattach()
+    {
+        var service = new SettingsService();
+        var original = service.Current;
+        using ManualResetEventSlim entered = new(), release = new();
+        void Hold() { entered.Set(); release.Wait(); }
+        service.CurrentReplaced += Hold;   // runs first; the binding's handler is already in the snapshot
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        WeakReference DisposeMidReplacement()
+        {
+            var watch = new MasterVolumeBinding(_ => { }, service);
+            var reset = Task.Run(service.Reset);
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+            watch.Dispose();
+            release.Set();
+            reset.Wait();
+            return new WeakReference(watch);
+        }
+        try
+        {
+            var weak = DisposeMidReplacement();
+            GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+            Assert.False(weak.IsAlive);
+        }
+        finally { service.CurrentReplaced -= Hold; release.Set(); service.RestoreFrom(original); }
     }
 }

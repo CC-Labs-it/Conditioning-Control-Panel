@@ -36,7 +36,9 @@ public sealed class ContentHitTestTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var w = new MainShellWindow();
+            var motion = ConditioningControlPanel.CoreSettings.Current.MotionLevel;
             w.TabClock = new FrozenClock(); ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            try {
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -82,6 +84,7 @@ public sealed class ContentHitTestTests
             }
             w.Close();
             Assert.True(misses.Count == 0, string.Join("\n", misses));
+            } finally { ConditioningControlPanel.CoreSettings.Current.MotionLevel = motion; }
             return Task.CompletedTask;
         });
     }

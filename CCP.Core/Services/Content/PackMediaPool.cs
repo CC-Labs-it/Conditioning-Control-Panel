@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using ConditioningControlPanel.Services.Flash;
-using ConditioningControlPanel.Services.MediaFiles;
 using Serilog;
 
 namespace ConditioningControlPanel.Services
@@ -27,24 +26,19 @@ namespace ConditioningControlPanel.Services
         private readonly Random _rng;
         private readonly object _lock = new();
         private readonly ShuffleBag<(string PackId, PackFileEntry File)> _bag;
-        private readonly MediaTempFileLedger _temps;
+        private readonly List<string> _temps = new();
 
         /// <param name="type"><see cref="ContentPackStore.ImageType"/> or <see cref="ContentPackStore.VideoType"/>.</param>
         public PackMediaPool(string type, Random? rng = null, Func<ContentPackStore?>? store = null)
         {
-            _store = store ?? (() => ContentPackStore.Current);
-            _temps = new MediaTempFileLedger(TempCap, path =>
-            {
-                var owner = _store();
-                return owner != null ? owner.TryDeleteTempFile(path) : MediaTempFileLedger.TryDeleteFile(path);
-            });
             _type = type;
             _rng = rng ?? new Random();
+            _store = store ?? (() => ContentPackStore.Current);
             _bag = new ShuffleBag<(string PackId, PackFileEntry File)>(e => ContentPackStore.SourceKey(e.PackId, e.File), _rng);
         }
 
         /// <summary>Decrypts on record (tests, diagnostics).</summary>
-        public int TempCount => _temps.LiveCount + _temps.HeldCount;
+        public int TempCount { get { lock (_lock) return _temps.Count; } }
 
         /// <summary>
         /// WPF GetNextImages (FlashService.cs:3555-3563), GetNextVideo (VideoService.cs:8017-8026) and
@@ -82,12 +76,24 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>
         /// WPF GetPackFileTempPath + <c>_tempPackFiles.Add</c>: decrypt to a FRESH temp file and keep it on
-        /// record. Past <see cref="TempCap"/> the oldest are swept; refused deletes stay on record.
+        /// record. Past <see cref="TempCap"/> the oldest half is deleted first (WPF deletes them all; the
+        /// newest stay so a clip still playing keeps its file).
         /// </summary>
         private string? Decrypt((string PackId, PackFileEntry File) entry)
         {
             var store = _store();
             if (store == null || entry.File == null) return null;
+            List<string>? stale = null;
+            lock (_lock)
+            {
+                if (_temps.Count > TempCap)
+                {
+                    var drop = _temps.Count / 2;
+                    stale = _temps.GetRange(0, drop);
+                    _temps.RemoveRange(0, drop);
+                }
+            }
+            if (stale != null) foreach (var p in stale) store.DeleteTempFile(p);
             var temp = store.GetPackFileTempPath(entry.PackId, entry.File);
             if (string.IsNullOrEmpty(temp))
             {
@@ -95,12 +101,22 @@ namespace ConditioningControlPanel.Services
                 Log.Information("ContentPacks: '{Name}' from pack {PackId} could not be decrypted", entry.File.OriginalName, entry.PackId);
                 return null;
             }
-            _temps.Track(temp);
+            lock (_lock) _temps.Add(temp);
             return temp;
         }
 
         /// <summary>WPF CleanupTempPackFiles: delete every decrypt this pool has on record.</summary>
-        public void CleanupTemps() => _temps.SweepAll();
+        public void CleanupTemps()
+        {
+            List<string> all;
+            lock (_lock) { all = new List<string>(_temps); _temps.Clear(); }
+            var store = _store();
+            foreach (var p in all)
+            {
+                if (store != null) store.DeleteTempFile(p);
+                else try { System.IO.File.Delete(p); } catch { }
+            }
+        }
 
         // Caller holds _lock.
         private List<(string PackId, PackFileEntry File)> Entries()
