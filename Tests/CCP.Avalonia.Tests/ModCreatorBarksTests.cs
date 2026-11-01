@@ -311,4 +311,74 @@ public sealed class ModCreatorBarksTests
         finally { manager.SetLanguage(previous); }
     });
 
+    [Theory]
+    [InlineData("priority")]
+    [InlineData("cooldown_ms")]
+    [InlineData("chance")]
+    public void NullNumericFieldsLoadWithoutAbortingAndPreserveOverrides(string key) => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), $"[{{id:'overlay',{key}:null,variant_pool:['line']}},{{id:'new',trigger:'Event',{key}:null,variant_pool:['line']}}]");
+        typeof(ModCreatorWindow).GetMethod("LoadSideFilesFrom", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, new object[] { root });
+        Assert.Equal(2, Cards(w).Children.Count);
+        var rules = Export(w, Path.Combine(root, "out"));
+        Assert.Equal(JTokenType.Null, rules[0][key]!.Type);
+        Assert.Null(rules[1][key]);
+    });
+
+    [Theory]
+    [InlineData("priority", "'bad'")]
+    [InlineData("priority", "2147483648")]
+    [InlineData("cooldown_ms", "[]")]
+    [InlineData("chance", "'bad'")]
+    public void MalformedNumericFieldsStopBarkLoadLocallyAndKeepPriorCards(string key, string value) => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), $"[{{id:'good',trigger:'Event',variant_pool:['line']}},{{id:'bad',trigger:'Event',{key}:{value},variant_pool:['line']}},{{id:'later',trigger:'Event',variant_pool:['line']}}]");
+        typeof(ModCreatorWindow).GetMethod("LoadSideFilesFrom", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, new object[] { root });
+        Assert.Equal(2, Cards(w).Children.Count);
+        Assert.Equal("good", Card(w).GetLogicalDescendants().OfType<TextBox>().First().Text);
+        Assert.Equal(Loc.Get("mod_barks_load_error"), w.FindControl<TextBlock>("TxtStatus")!.Text);
+    });
+
+    [Theory]
+    [InlineData("priority", "0", false)]
+    [InlineData("cooldown_ms", "0", false)]
+    [InlineData("chance", "1.0", false)]
+    [InlineData("priority", " 0 ", true)]
+    [InlineData("cooldown_ms", " 0 ", true)]
+    [InlineData("chance", " 1.0 ", true)]
+    [InlineData("chance", "1", true)]
+    public void NumericPlaceholderTextIsOmittedBeforeTrimming(string key, string value, bool present) => Run((w, root) =>
+    {
+        Click(w, "mod_barks_add");
+        var card = Card(w);
+        var boxes = card.GetLogicalDescendants().OfType<TextBox>().ToList();
+        boxes[0].Text = "rule"; boxes[1].Text = "Event";
+        Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = "line";
+        var tag = key == "cooldown_ms" ? "mod_barks_cooldown" : "mod_barks_" + key;
+        boxes.Single(b => Equals(b.Tag, tag)).Text = value;
+        var rule = (JObject)Assert.Single(Export(w, root));
+        if (present) Assert.NotNull(rule[key]); else Assert.Null(rule[key]);
+    });
+
+    [Fact]
+    public void LoadedZeroFieldsMatchWpfPlaceholderAndChanceFormatting() => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), "[{id:'loaded',trigger:'Event',priority:0,cooldown_ms:0,chance:1.0,variant_pool:['line']}]");
+        w.LoadBarksFrom(root);
+        var rule = (JObject)Assert.Single(Export(w, Path.Combine(root, "out")));
+        Assert.Null(rule["priority"]); Assert.Null(rule["cooldown_ms"]);
+        Assert.Equal(1.0, rule.Value<double>("chance"));
+    });
+
+    [Fact]
+    public void ConditionsEditorWrapsLongJson() => Run((w, root) =>
+    {
+        Click(w, "mod_barks_add");
+        var conditions = Card(w).GetLogicalDescendants().OfType<TextBox>().Single(b => Equals(b.Tag, "conditions"));
+        Assert.Equal(TextWrapping.Wrap, conditions.TextWrapping);
+    });
+
 }

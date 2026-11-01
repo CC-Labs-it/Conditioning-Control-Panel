@@ -98,12 +98,9 @@ public partial class ModCreatorWindow
         settings.Child = fields;
         card.Panel.Children.Add(settings);
         var numeric = new StackPanel { Orientation = Orientation.Horizontal };
-        AddBarkField(numeric, card.Priority, "mod_barks_priority", "0", 60,
-            loaded?["priority"] == null ? null : loaded.Value<int>("priority").ToString(CultureInfo.InvariantCulture));
-        AddBarkField(numeric, card.Cooldown, "mod_barks_cooldown", "0", 80,
-            loaded?["cooldown_ms"] == null ? null : loaded.Value<int>("cooldown_ms").ToString(CultureInfo.InvariantCulture));
-        AddBarkField(numeric, card.Chance, "mod_barks_chance", "1.0", 60,
-            loaded?["chance"] == null ? null : loaded.Value<double>("chance").ToString(CultureInfo.InvariantCulture));
+        AddBarkField(numeric, card.Priority, "mod_barks_priority", "0", 60, null);
+        AddBarkField(numeric, card.Cooldown, "mod_barks_cooldown", "0", 80, null);
+        AddBarkField(numeric, card.Chance, "mod_barks_chance", "1.0", 60, null);
         fields.Children.Add(numeric);
         var options = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
         card.Repeatable.Content = Loc.Get("mod_barks_repeatable");
@@ -120,6 +117,7 @@ public partial class ModCreatorWindow
         fields.Children.Add(CreateFieldLabel(Loc.Get("mod_barks_conditions")));
         card.Conditions.Tag = "conditions"; card.Conditions.Width = 400; card.Conditions.Height = 56;
         card.Conditions.HorizontalAlignment = HorizontalAlignment.Left; card.Conditions.AcceptsReturn = true;
+        card.Conditions.TextWrapping = TextWrapping.Wrap;
         card.Conditions.Watermark = "{ \"level_gte\": 10 }";
         card.Conditions.Text = loaded?["conditions"] is JObject conditions ? conditions.ToString(Formatting.Indented) : "";
         fields.Children.Add(card.Conditions);
@@ -127,17 +125,21 @@ public partial class ModCreatorWindow
         card.Panel.Children.Add(CreateSubHeader(Loc.Get("mod_barks_line")));
         card.Panel.Children.Add(card.Variants);
         card.Panel.Children.Add(BarkButton("mod_barks_variant", () => AddBarkLine(card, new JValue(""))));
+        // WPF registers the card before populating loaded values (Barks.cs:281-284).
+        _barkCards.Add(card);
+        _barkCardsPanel?.Children.Add(card.Frame);
+        card.Priority.Text = loaded?.Value<int?>("priority")?.ToString(CultureInfo.InvariantCulture) ?? "";
+        card.Cooldown.Text = loaded?.Value<int?>("cooldown_ms")?.ToString(CultureInfo.InvariantCulture) ?? "";
+        card.Chance.Text = loaded?.Value<double?>("chance")?.ToString(CultureInfo.InvariantCulture) ?? "";
         if (loaded?["variant_pool"] is JArray pool)
             foreach (var line in pool) AddBarkLine(card, line);
         else if (loaded == null) AddBarkLine(card, new JValue(""));
-        _barkCards.Add(card);
-        _barkCardsPanel?.Children.Add(card.Frame);
     }
 
     private static void AddBarkField(StackPanel row, TextBox box, string key, string watermark, double width, string? value)
     {
         row.Children.Add(new TextBlock { Text = Loc.Get(key), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) });
-        box.Tag = key; box.Watermark = watermark; box.Text = value ?? ""; box.Width = width;
+        box.Tag = key; box.PlaceholderText = watermark; box.Text = value ?? ""; box.Width = width;
         box.Margin = new Thickness(6, 0, 0, 0);
         row.Children.Add(box);
     }
@@ -152,7 +154,7 @@ public partial class ModCreatorWindow
 
     private static void SetBarkIntField(JObject rule, string key, TextBox box)
     {
-        if (int.TryParse(box.Text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)) rule[key] = value;
+        if (box.Text != box.PlaceholderText && int.TryParse(box.Text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)) rule[key] = value;
         else rule.Remove(key);
     }
 
@@ -226,7 +228,7 @@ public partial class ModCreatorWindow
                 // WPF ModCreatorWindow.Barks.cs:513-540: invalid conditions retain the backing value.
                 SetBarkIntField(rule, "priority", card.Priority);
                 SetBarkIntField(rule, "cooldown_ms", card.Cooldown);
-                if (double.TryParse(card.Chance.Text?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var chance))
+                if (card.Chance.Text != card.Chance.PlaceholderText && double.TryParse(card.Chance.Text?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var chance))
                     rule["chance"] = Math.Clamp(chance, 0.0, 1.0);
                 else rule.Remove("chance");
                 rule["repeatable"] = card.Repeatable.IsChecked == true;
@@ -280,9 +282,9 @@ public partial class ModCreatorWindow
             var rules = JArray.Parse(File.ReadAllText(path));
             foreach (var rule in rules.OfType<JObject>()) AddBarkCard(rule);
         }
-        catch (Exception ex) when (ex is JsonException || ex is IOException || ex is UnauthorizedAccessException)
+        catch (Exception ex) when (ex is JsonException || ex is IOException || ex is UnauthorizedAccessException
+                                   || ex is FormatException || ex is InvalidCastException || ex is OverflowException || ex is ArgumentException)
         {
-            ClearBarksSection();
             _txtStatus.Text = Loc.Get("mod_barks_load_error");
         }
     }
