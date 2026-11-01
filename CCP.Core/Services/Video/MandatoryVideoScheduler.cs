@@ -65,7 +65,7 @@ namespace ConditioningControlPanel.Services
         private readonly IMandatoryVideoHost _host;
         private readonly TimeProvider _time;
         private readonly Func<IReadOnlyList<string>> _library;
-        private readonly Random _random = new();
+        private readonly Random _random;
         private Queue<string> _queue = new();
         private ITimer? _scheduler, _preroll, _feedDefer;
         private DateTimeOffset? _feedDeadline;
@@ -99,11 +99,16 @@ namespace ConditioningControlPanel.Services
             CoreProgression.AddXP(AttentionHitXp, "Video");
         }
 
-        public MandatoryVideoScheduler(IMandatoryVideoHost host, TimeProvider? time = null, Func<IReadOnlyList<string>>? library = null)
+        public MandatoryVideoScheduler(IMandatoryVideoHost host, TimeProvider? time = null,
+            Func<IReadOnlyList<string>>? library = null) : this(host, time, library, new Random()) { }
+
+        internal MandatoryVideoScheduler(IMandatoryVideoHost host, TimeProvider? time,
+            Func<IReadOnlyList<string>>? library, Random random)
         {
             _host = host;
             _time = time ?? TimeProvider.System;
             _library = library ?? LocalLibrary;
+            _random = random;
         }
 
         public bool IsRunning => _running;
@@ -325,7 +330,15 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
         /// pre-roll. False when nothing was started (deferred for the feed, no clip, or already playing).
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
-        public bool Trigger(bool? strictOverride = null, string? path = null, bool userEarned = false, bool userInitiated = false)
+        public bool Trigger(bool? strictOverride = null, string? path = null, bool userEarned = false, bool userInitiated = false) =>
+            Trigger(strictOverride, path, userEarned, userInitiated, countDeferredAsAccepted: false);
+
+        /// <summary>WPF App.AiEffects.cs:66: a companion request is accepted when started or deferred.
+        /// A defer can still expire or be cancelled before playback.</summary>
+        internal bool TriggerAccepted(bool? strictOverride, string? path) =>
+            Trigger(strictOverride, path, userEarned: false, userInitiated: false, countDeferredAsAccepted: true);
+
+        private bool Trigger(bool? strictOverride, string? path, bool userEarned, bool userInitiated, bool countDeferredAsAccepted)
         {
             if (_playing) return false;
             // WPF VideoService.cs:2270, :2630: earned and explicit-path videos bypass the ambient feed gate.
@@ -337,7 +350,7 @@ namespace ConditioningControlPanel.Services
                     _feedDeadline = _time.GetUtcNow() + TimeSpan.FromSeconds(90);
                     PollFeed(strictOverride, path);
                 }
-                return false;
+                return countDeferredAsAccepted;
             }
             return PlayVideo(strictOverride, path);
         }

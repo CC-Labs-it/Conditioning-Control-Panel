@@ -17,6 +17,10 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Commands;
+using ConditioningControlPanel.Services.Companion.Brain;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Models.CommandData;
 using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Newtonsoft.Json.Linq;
@@ -101,6 +105,86 @@ public sealed class GameWindowFypTests
         finally { CoreEngine.Video = oldVideo; video.Stop(); } // also cancels the pending poll
         GameWindow.CloseAllForPanic();
         Assert.False(host.FeedOwnsTheScreen);
+    });
+
+    private sealed class CompanionVideoHost : IMandatoryVideoHost
+    {
+        public bool FeedOwnsTheScreen => GameWindow.IsForYouOnScreen();
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();
+    }
+
+    [Fact]
+    public void Companion_random_video_reports_defer_as_accepted_and_real_refusals_as_failures() => Run((shell, _) =>
+    {
+        var s = CoreSettings.Current;
+        s.AiChatEnabled = true;
+        s.MandatoryVideosEnabled = true;
+        s.CompanionPrompt.AllowAiToControlEffects = true;
+        s.CompanionPrompt.AllowAiVideo = true;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var oldLab = CoreAccount.HasLabAccessProvider;
+        var oldVideo = CoreEngine.Video;
+        var oldSurface = MediaCommand.VideoSurface;
+        var oldSink = AiCommandService.LiveActionSink;
+        var oldQuiet = AiCommandService.PanicQuietProvider;
+        var oldStart = global::ConditioningControlPanel.Avalonia.CompanionEffects.StartEffect;
+        var oldBrain = (CompanionBrain.CommandExecutor, CompanionBrain.EffectScheduler, CompanionBrain.ActivitiesProvider);
+        var oldSurfaces = (FlashImageCommand.Surface, BubbleCommand.Surface, SubliminalCommand.Surface,
+            BounceCommand.Surface, MantraLockScreenCommand.Surface, PinkCommand.Surface, MediaCommand.AudioSurface,
+            GetBackToMeCommand.AiProvider, GetBackToMeCommand.SaySurface);
+        var video = new MandatoryVideoScheduler(new CompanionVideoHost(), library: () => Array.Empty<string>());
+        var lines = new List<string>();
+        try
+        {
+            CoreAccount.HasLabAccessProvider = () => true;
+            AiCommandService.PanicQuietProvider = () => false;
+            global::ConditioningControlPanel.Avalonia.CompanionEffects.Seed();
+            global::ConditioningControlPanel.Avalonia.CompanionEffects.StartEffect = action => action();
+            AiCommandService.LiveActionSink = lines.Add;
+            CoreEngine.Video = video;
+            video.Start();
+            shell.ShowTab("fyp");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(GameWindow.IsForYouOnScreen());
+
+            var command = new AiCommandService();
+            var request = new AiCommandData { Command = AICommandType.video, Data = new Media("", "", Random: true) };
+            command.ExecuteCommand(request);
+            Assert.Single(lines);
+            Assert.DoesNotContain(lines, line => line.Contains("didn't play"));
+            command.ExecuteCommand(request); // Coalesced requests are accepted too.
+            Assert.Equal(2, lines.Count);
+            Assert.False(video.IsPlaying);
+
+            Assert.True(video.Trigger(path: "/v/clip.mp4")); // A real refusal remains a failure.
+            command.ExecuteCommand(request);
+            Assert.Equal(4, lines.Count);
+            Assert.Contains("didn't play", lines[3]);
+
+            video.Stop();
+            GameWindow.CloseAllForPanic();
+            command.BeginBatch();
+            lines.Clear();
+            command.ExecuteCommand(request); // An empty library is not an accepted defer.
+            Assert.Equal(2, lines.Count);
+            Assert.Contains("didn't play", lines[1]);
+        }
+        finally
+        {
+            video.Stop();
+            CoreEngine.Video = oldVideo;
+            CoreAccount.HasLabAccessProvider = oldLab;
+            MediaCommand.VideoSurface = oldSurface;
+            AiCommandService.LiveActionSink = oldSink;
+            AiCommandService.PanicQuietProvider = oldQuiet;
+            global::ConditioningControlPanel.Avalonia.CompanionEffects.StartEffect = oldStart;
+            (CompanionBrain.CommandExecutor, CompanionBrain.EffectScheduler, CompanionBrain.ActivitiesProvider) = oldBrain;
+            (FlashImageCommand.Surface, BubbleCommand.Surface, SubliminalCommand.Surface,
+                BounceCommand.Surface, MantraLockScreenCommand.Surface, PinkCommand.Surface, MediaCommand.AudioSurface,
+                GetBackToMeCommand.AiProvider, GetBackToMeCommand.SaySurface) = oldSurfaces;
+        }
     });
 
     /// <summary>WPF ShowTab("fyp") -> OpenFypFeed (MainWindow.Lab.cs:234), refused out loud; panic closes it (GameSurfaces.cs:56).</summary>

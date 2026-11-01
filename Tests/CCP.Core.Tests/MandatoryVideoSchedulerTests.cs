@@ -39,6 +39,11 @@ public sealed class MandatoryVideoSchedulerTests
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
+    private sealed class MinimumRandom : Random
+    {
+        public override double NextDouble() => 0;
+    }
+
     [Fact]
     public void Feed_coalesces_without_picking_or_playing_then_replays_first_request() => With(6, false, () =>
     {
@@ -64,6 +69,36 @@ public sealed class MandatoryVideoSchedulerTests
         clock.Advance(TimeSpan.FromSeconds(5));
         Assert.Single(host.Shown);
         v.Stop();
+    });
+
+    [Fact]
+    public void Opt_in_accepts_and_coalesces_feed_deferrals_but_not_failed_picks_or_playing() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true }; var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Clips; });
+        try
+        {
+            v.Start();
+            Assert.True(v.TriggerAccepted(null, null));
+            Assert.True(v.TriggerAccepted(null, null));
+            Assert.False(v.IsPlaying);
+            Assert.Equal(0, picks);
+            host.FeedOwnsTheScreen = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Assert.True(v.IsPlaying);
+            Assert.False(v.TriggerAccepted(null, null));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Single(host.Shown);
+            Assert.Equal(1, picks);
+            var empty = new MandatoryVideoScheduler(host, clock, () => Array.Empty<string>());
+            host.FeedOwnsTheScreen = true;
+            empty.Start();
+            Assert.True(empty.TriggerAccepted(null, null));
+            host.FeedOwnsTheScreen = false; // The old defer is still pending until the next poll.
+            Assert.False(empty.TriggerAccepted(null, null)); // This new pick failed.
+            empty.Stop();
+        }
+        finally { v.Stop(); }
     });
 
     [Theory]
@@ -110,18 +145,18 @@ public sealed class MandatoryVideoSchedulerTests
     public void Feed_expiry_drops_old_request_but_next_interval_plays_after_feed_closes(bool testPress) => With(20, false, () =>
     {
         var clock = new FakeClock(); var host = new Host { FeedOwnsTheScreen = true }; var picks = 0;
-        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Clips; });
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Clips; }, new MinimumRandom());
         try
         {
             v.Start();
-            // At 20/hour the real tick is due at 144..216 s. A test press can own its wait too.
+            // The controlled roll makes every normal interval exactly 144 s at 20/hour.
             clock.Advance(TimeSpan.FromSeconds(143));
             if (testPress) Assert.False(v.Trigger(userInitiated: true));
-            clock.Advance(TimeSpan.FromSeconds(73));
+            clock.Advance(TimeSpan.FromSeconds(1)); // the real scheduled tick
             Assert.False(v.IsPlaying);
             Assert.Equal(0, picks);
-            // Every possible first defer has expired. The old request must not play on close.
-            clock.Advance(TimeSpan.FromSeconds(90));
+            // The Test press began one second before the scheduled tick.
+            clock.Advance(TimeSpan.FromSeconds(testPress ? 89 : 90));
             host.FeedOwnsTheScreen = false;
             clock.Advance(TimeSpan.FromMilliseconds(500));
             Assert.False(v.IsPlaying);
@@ -129,9 +164,14 @@ public sealed class MandatoryVideoSchedulerTests
             Assert.Equal(0, picks);
             Assert.True(v.IsRunning);
             Assert.Equal(testPress ? 1 : 0, host.FeedNotices);
-            // A fresh normal interval, rather than the expired request, keeps the session alive.
-            clock.Advance(TimeSpan.FromSeconds(217.3));
+            // No playback up to 500 ms before the next interval measured from expiry.
+            clock.Advance(TimeSpan.FromSeconds(143));
+            Assert.False(v.IsPlaying);
+            Assert.Empty(host.Shown);
+            Assert.Equal(0, picks);
+            clock.Advance(TimeSpan.FromMilliseconds(500));
             Assert.True(v.IsPlaying);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
             Assert.Single(host.Shown);
             Assert.Equal(1, picks);
         }

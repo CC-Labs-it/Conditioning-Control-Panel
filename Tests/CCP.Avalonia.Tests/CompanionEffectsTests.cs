@@ -98,7 +98,7 @@ public sealed class CompanionEffectsTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (global::Avalonia.Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
