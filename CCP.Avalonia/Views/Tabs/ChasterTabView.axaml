@@ -34,6 +34,18 @@
                 </ControlTemplate>
             </Setter>
         </ControlTheme>
+        <!-- WPF ChasterTabView.xaml:444-491: plain paper with no hover or pressed fill. -->
+        <ControlTheme x:Key="CircePaperTag" TargetType="Button">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
         <ControlTheme x:Key="CirceFact" TargetType="Border">
             <Setter Property="Background" Value="#14FFFFFF"/>
             <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
@@ -209,18 +221,19 @@
                     BorderThickness="1" CornerRadius="18" MinHeight="368" Margin="0,0,0,10">
                 <Panel>
                 <!-- WPF ChasterTabView.xaml:444-491: the balance tag opens the run receipt. -->
-                <Button x:Name="PaperTag" IsVisible="False" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                <Button x:Name="PaperTag" Theme="{StaticResource CircePaperTag}" Cursor="Hand" IsVisible="False" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                         Margin="0,0,204,14" Width="164" Padding="12,10" Background="#F3EAD9" CornerRadius="4"
                         RenderTransform="rotate(-6deg)" RenderTransformOrigin="50%,0%" ZIndex="7"
                         Click="PaperTag_Click">
                     <StackPanel>
-                        <TextBlock Text="{loc:Str chaster_tag_eyebrow}" FontFamily="Consolas, Courier New" FontSize="10" Foreground="#241A2E"/>
+                        <TextBlock Text="{loc:Str chaster_tag_eyebrow}" FontFamily="Consolas, Courier New, monospace" FontSize="10" FontWeight="Bold" Foreground="#241A2E" Opacity="0.7" VerticalAlignment="Center"/>
                         <TextBlock x:Name="TxtTagAmount" FontFamily="Fredoka, Segoe UI" FontSize="30" FontWeight="Bold"/>
                         <Grid ColumnDefinitions="*,Auto" Margin="0,2,0,0">
-                            <TextBlock x:Name="TxtTagLands" FontSize="9.5" Foreground="#241A2E" TextWrapping="Wrap" VerticalAlignment="Center"/>
-                            <Border x:Name="TagStamp" Grid.Column="1" Margin="6,5,-6,-2" BorderThickness="2" CornerRadius="3" Padding="5,1"
+                            <TextBlock x:Name="TxtTagLands" FontFamily="Consolas, Courier New, monospace" FontSize="9.5" Foreground="#241A2E"
+                                       Opacity="0.75" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                            <Border x:Name="TagStamp" Grid.Column="1" Opacity="0.85" VerticalAlignment="Bottom" Margin="6,5,-6,-2" BorderThickness="2" CornerRadius="3" Padding="5,1"
                                     RenderTransform="rotate(-14deg)">
-                                <TextBlock x:Name="TxtTagStamp" FontFamily="Consolas, Courier New" FontSize="12" FontWeight="Bold"/>
+                                <TextBlock x:Name="TxtTagStamp" FontFamily="Consolas, Courier New, monospace" FontSize="12" FontWeight="Bold"/>
                             </Border>
                         </Grid>
                     </StackPanel>
@@ -253,7 +266,7 @@
                         <Border x:Name="CalendarTag" IsVisible="False" HorizontalAlignment="Left" VerticalAlignment="Top"
                                 ZIndex="5" Background="#E6120C1F" BorderBrush="#FF6B8A" BorderThickness="1" CornerRadius="5" Padding="5,1"
                                 ToolTip.Tip="{loc:Str chaster_chain_tonight}">
-                            <TextBlock x:Name="TxtCalendarTag" FontFamily="Consolas, Courier New" FontSize="11" FontWeight="Bold" Foreground="#FF6B8A"/>
+                            <TextBlock x:Name="TxtCalendarTag" FontFamily="Consolas, Courier New, monospace" FontSize="11" FontWeight="Bold" Foreground="#FF6B8A"/>
                         </Border>
                     </Panel>
                     <StackPanel Grid.Column="1" VerticalAlignment="Top">

@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Presenters;
+using Avalonia.Layout;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
@@ -102,6 +104,61 @@ public sealed class ChasterMenuLimitsTests
             try { Directory.Delete(directory, true); } catch { }
         }
     }
+
+    // WPF ChasterTabView.xaml:444-491: the clickable tag remains cream at rest, hover and press.
+    [Fact]
+    public Task PaperTagKeepsItsPaperAndInkOnHoverAndPress() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, tab, w) =>
+    {
+        await chaster.RefreshLockAsync();
+        tab.Refresh();
+        var paper = tab.FindControl<Button>("PaperTag")!;
+        w.UpdateLayout();
+        var presenter = paper.GetVisualDescendants().OfType<ContentPresenter>().Single(p => p.Name == "PART_ContentPresenter");
+        void AssertPaper()
+        {
+            // A transparent presenter lets its template Border paint the surface. Fluent paints the presenter itself.
+            var fill = presenter.Background ?? (presenter.GetVisualParent() as Border)?.Background;
+            Assert.Equal(Color.Parse("#F3EAD9"), Assert.IsAssignableFrom<ISolidColorBrush>(fill).Color);
+            Assert.Equal(Color.Parse("#241A2E"), Assert.IsAssignableFrom<ISolidColorBrush>(tab.FindControl<TextBlock>("TxtTagLands")!.Foreground).Color);
+        }
+        Assert.Equal(new Cursor(StandardCursorType.Hand).ToString(), paper.Cursor?.ToString());
+        w.MouseMove(default);
+        Dispatcher.UIThread.RunJobs();
+        AssertPaper();
+        var point = paper.TranslatePoint(new Point(paper.Bounds.Width / 2, paper.Bounds.Height / 2), w)!.Value;
+        w.MouseMove(point);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(paper.IsPointerOver);
+        AssertPaper();
+        w.MouseDown(point, MouseButton.Left);
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(paper.IsPressed);
+            AssertPaper();
+        }
+        finally { w.MouseUp(point, MouseButton.Left); Dispatcher.UIThread.RunJobs(); }
+    }));
+
+    // WPF ChasterTabView.xaml:465,477-487,565; CalMono supplies the Linux fallback.
+    [Fact]
+    public Task BalanceTagTypographyMatchesThePaperSpec() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, tab, _) =>
+    {
+        var paper = tab.FindControl<Button>("PaperTag")!;
+        var eyebrow = paper.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == Loc.Get("chaster_tag_eyebrow"));
+        var lands = tab.FindControl<TextBlock>("TxtTagLands")!;
+        var stamp = tab.FindControl<Border>("TagStamp")!;
+        var mono = new FontFamily("Consolas, Courier New, monospace");
+        foreach (var text in new[] { eyebrow, lands, tab.FindControl<TextBlock>("TxtTagStamp")!, tab.FindControl<TextBlock>("TxtCalendarTag")! })
+            Assert.Equal(mono, text.FontFamily);
+        Assert.Equal(FontWeight.Bold, eyebrow.FontWeight);
+        Assert.Equal(0.7, eyebrow.Opacity);
+        Assert.Equal(VerticalAlignment.Center, eyebrow.VerticalAlignment);
+        Assert.Equal(0.75, lands.Opacity);
+        Assert.Equal(0.85, stamp.Opacity);
+        Assert.Equal(VerticalAlignment.Bottom, stamp.VerticalAlignment);
+        await Task.CompletedTask;
+    }));
 
     // WPF ChasterTabView.xaml:503 spans both columns at 26,14,26,14;
     // MainWindow/MainWindow.xaml:17 defines the minimum shell size.
