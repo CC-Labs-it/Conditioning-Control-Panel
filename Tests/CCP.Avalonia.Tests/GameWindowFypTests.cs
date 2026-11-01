@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -236,6 +237,7 @@ public sealed class GameWindowFypTests
             }
             items[0].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             items[1].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Wait(w.FypLastReveal!);
             Assert.Equal(new[] { path, video }, targets);
             File.Delete(path);
             items[0].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
@@ -279,20 +281,61 @@ public sealed class GameWindowFypTests
             var menu = Assert.IsType<ContextMenu>(w.FypFileMenu);
             var reveal = menu.Items.Cast<MenuItem>().Last();
             reveal.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Wait(w.FypLastReveal!);
             Assert.Equal(new[] { path }, selected);
             Assert.Empty(opened);
 
             selects = false; // FileManager1 is unavailable
             reveal.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Wait(w.FypLastReveal!);
             Assert.Equal(new[] { path, path }, selected);
             Assert.Equal(new[] { dir }, opened);
 
             File.Delete(path); // it disappeared after the menu opened, as in WPF's fallback
             reveal.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Wait(w.FypLastReveal!);
             Assert.Equal(new[] { path, path }, selected);
             Assert.Equal(new[] { dir, dir }, opened);
         }
         finally { (ExternalOpener.Shell, ExternalOpener.SelectInFileManager) = (oldShell, oldSelect); }
+    });
+
+    [Fact]
+    public void FileMenu_PanicClosesFeedWhileRevealIsPending() => Run((shell, lib) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var dir = Directory.CreateDirectory(Path.Combine(lib, "videos")).FullName;
+        var path = Path.Combine(dir, "clip.mp4");
+        File.WriteAllBytes(path, new byte[] { 1 });
+        var w = GameWindow.Launch(GameWindow.FypId)!;
+        using var started = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var oldSelect = ExternalOpener.SelectInFileManager;
+        ExternalOpener.SelectInFileManager = _ =>
+        {
+            started.Set();
+            release.Wait(TimeSpan.FromSeconds(15)); // A broken synchronous click must still fail rather than hang.
+            return true;
+        };
+        try
+        {
+            w.HandleMessage("{\"type\":\"file-menu\",\"id\":\"videos/clip.mp4\"}");
+            var menu = Assert.IsType<ContextMenu>(w.FypFileMenu);
+            menu.Items.Cast<MenuItem>().Last().RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            var reveal = Assert.IsAssignableFrom<Task>(w.FypLastReveal);
+            Assert.True(started.Wait(TimeSpan.FromSeconds(10)));
+            Assert.False(reveal.IsCompleted); // the file manager is still waiting
+            PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.False(menu.IsOpen);
+            Assert.False(reveal.IsCompleted); // panic did not wait for selection
+        }
+        finally
+        {
+            release.Set();
+            try { if (w.FypLastReveal is { } reveal) Wait(reveal); }
+            finally { ExternalOpener.SelectInFileManager = oldSelect; }
+        }
     });
 
     private static void Wait(Task t)

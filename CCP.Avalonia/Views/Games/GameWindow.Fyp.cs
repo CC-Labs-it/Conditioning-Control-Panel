@@ -170,7 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             open.Click += (_, _) => { if (File.Exists(path)) ExternalOpener.Open(path); };
             var reveal = new MenuItem { Header = Loc.Get("fyp_menu_show_in_folder") };
             // WPF FypFileMenu.cs:28: select the file, or open its folder if it has gone.
-            reveal.Click += (_, _) => ExternalOpener.Reveal(path);
+            reveal.Click += (_, _) => FypLastReveal = Task.Run(() => ExternalOpener.Reveal(path));
             var menu = new ContextMenu { Placement = PlacementMode.Pointer, ItemsSource = new[] { open, reveal } };
             FypFileMenu = menu;
             menu.Open(Web);
@@ -181,6 +181,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Closed += (_, _) => { FypFileMenu?.Close(); FypFileMenu = null; };
             }
         }
+
+        /// <summary>The last file reveal started (tests await it).</summary>
+        internal Task? FypLastReveal { get; private set; }
 
         private void ApplyFypSetting(string? key, JToken? value)
         {
