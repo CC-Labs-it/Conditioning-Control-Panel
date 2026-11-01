@@ -18,6 +18,7 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -140,6 +141,8 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             _ctaMotion?.Stop();
+            _ctaPressed = false;
+            _ctaTravel.Y = 0;
             _visibilityWatch?.Dispose();
             _visibilityWatch = null;
             (_current?.Tag as IBillboardArtView)?.Hold();
@@ -403,7 +406,14 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
                 Template = Bare(), Content = _ctaFace, Cursor = new Cursor(StandardCursorType.Hand),
                 HorizontalAlignment = HorizontalAlignment.Left, Focusable = true, Margin = new Thickness(0, 12, 0, 0),
             };
-            button.PropertyChanged += (_, e) => { if (e.Property == Button.IsPressedProperty) UpdateCtaPress(); };
+            button.AddHandler(PointerPressedEvent, (_, e) =>
+            {
+                if (e.Pointer.Type == PointerType.Mouse && e.GetCurrentPoint(button).Properties.IsLeftButtonPressed) UpdateCtaPress(true);
+            }, RoutingStrategies.Tunnel);
+            button.AddHandler(PointerReleasedEvent, (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) UpdateCtaPress(false); }, RoutingStrategies.Tunnel);
+            void ReleaseOutside(PointerEventArgs e) { if (_ctaPressed && !new Rect(button.Bounds.Size).Contains(e.GetPosition(button))) UpdateCtaPress(false); }
+            button.PointerExited += (_, e) => ReleaseOutside(e);
+            button.AddHandler(PointerMovedEvent, (_, e) => ReleaseOutside(e), RoutingStrategies.Tunnel, handledEventsToo: true);
             button.Click += (_, _) => { if (_card != null && !_folding) Press(); };
             button.GotFocus += (_, _) => _ctaFace.BorderBrush = Brushes.White;
             button.LostFocus += (_, _) => _ctaFace.BorderBrush = new SolidColorBrush(Colors.White, 0.35);
@@ -411,9 +421,9 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
         }
 
         // WPF BillboardCardHost.Fx PressDown/PressUp, using the same shared depth law.
-        private void UpdateCtaPress()
+        private void UpdateCtaPress(bool? pointerPressed = null)
         {
-            bool pressed = _cta.IsPressed, changed = pressed != _ctaPressed;
+            bool pressed = pointerPressed ?? _ctaPressed, changed = pressed != _ctaPressed;
             _ctaPressed = pressed;
             int ms = DepthLaw.Ms(pressed ? DepthLaw.PressMs : DepthLaw.ReleaseMs, Env.Level);
             if (!changed && ms > 0) return;

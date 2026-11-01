@@ -49,6 +49,7 @@ public class BillboardCtaPressTests
             // Press travel is independent of the Windows font families on the card.
             foreach (var text in host.GetLogicalDescendants().OfType<TextBlock>()) text.FontFamily = new FontFamily("DejaVu Sans");
             window.Show(); Dispatcher.UIThread.RunJobs();
+            ContentHitTestTests.RenderLiveTree(window);
             var face = (Border)host.Cta.Content!;
             var point = host.Cta.TranslatePoint(new Point(20, 10), window)!.Value;
             double Y() => Assert.IsType<TranslateTransform>(face.RenderTransform).Y;
@@ -77,6 +78,23 @@ public class BillboardCtaPressTests
             Assert.Equal(DepthLaw.PressTravelPx, Y(), 5);
             window.MouseUp(point, MouseButton.Left);
             Assert.Equal(0, Y(), 5);
+            host.Cta.Focus();
+            window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+            Assert.True(host.Cta.IsPressed);
+            Assert.Equal(0, Y(), 5); // WPF animates mouse presses only.
+            window.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+            window.MouseDown(point, MouseButton.Left);
+            Assert.Equal(DepthLaw.PressTravelPx, Y(), 5);
+            window.MouseMove(new Point(-20, -20));
+            Assert.Equal(0, Y(), 5); // Captured mouse leaving the button releases the face.
+            window.MouseUp(new Point(-20, -20), MouseButton.Left);
+            service.Current.MotionLevel = MotionLevel.Full;
+            window.MouseDown(point, MouseButton.Left);
+            Step(DepthLaw.PressMs / 2.0);
+            Assert.Equal(DepthLaw.PressTravelPx / 2, Y(), 5);
+            window.Content = null;
+            Assert.Equal(0, Y(), 5);
+            Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == face);
         }
         finally { window.Close(); host.ReleaseArt(); BeatLoop.Time = oldTime; }
         return Task.CompletedTask;
