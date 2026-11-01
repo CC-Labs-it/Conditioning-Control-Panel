@@ -56,8 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _errorPanel = this.FindControl<Border>("ErrorPanel")!;
 
             // ponytail: the full localized hint also teaches the camera start/stop chord, which
-            // is not ported. Keep it hidden until both shortcuts work on this head; Windows Quick
-            // Recal is now armed by MainShellWindow.QuickRecal, but Linux/Wayland still need a lane.
+            // is not ported. Keep it hidden until both shortcuts work on this head.
             _txtHotkeyHint.IsVisible = false;
             // WPF openers call App.ApplyCalibrationScreenPlacement: the dot must sit on the calibrated monitor.
             WebcamCalibrationWindow.PlaceOnCalibratedScreen(this);
