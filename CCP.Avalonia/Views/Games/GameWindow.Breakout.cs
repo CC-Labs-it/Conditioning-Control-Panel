@@ -8,6 +8,8 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.BackRoom;
+using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Avalonia.Views.Games;
 
@@ -58,7 +60,9 @@ internal sealed partial class GameWindow
 
     private void OnBreakoutSettingChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(AppSettings.MotionLevel)) Dispatcher.UIThread.Post(PushBreakoutSettings);
+        if (e.PropertyName is nameof(AppSettings.MotionLevel) or nameof(AppSettings.BreakoutSubVolume)
+            or nameof(AppSettings.BreakoutSfxVolume) or nameof(AppSettings.BreakoutMusicVolume))
+            Dispatcher.UIThread.Post(PushBreakoutSettings);
     }
 
     private void PushBreakoutSettings()
@@ -67,7 +71,37 @@ internal sealed partial class GameWindow
         // WPF BackRoomHostService.cs:620-632; play.html merges partial settings frames.
         var motion = CoreSettings.Current.MotionLevel;
         Post(new { type = "settings", motion = motion.ToString().ToLowerInvariant(),
-            reduced = motion != MotionLevel.Full, breakout = BreakoutEntitlementFor(Spec.Id), breakoutStandalone = true });
+            reduced = motion != MotionLevel.Full, breakout = BreakoutEntitlementFor(Spec.Id), breakoutStandalone = true,
+            audio = BreakoutAudio() });
+    }
+
+    // WPF BackRoomHostService.cs:179-190: standalone sliders use their own 0..100 settings.
+    private static object BreakoutAudio() => new
+    {
+        sub = CoreSettings.Current.BreakoutSubVolume / 100.0,
+        sfx = CoreSettings.Current.BreakoutSfxVolume / 100.0,
+        music = CoreSettings.Current.BreakoutMusicVolume / 100.0,
+    };
+
+    // WPF BackRoomBridge.cs:240-243,292-315 and BackRoomHostService.cs:64-73,437-442.
+    private void HandleBreakoutOption(JObject message)
+    {
+        if (_closing || _shellExiting || message["key"]?.Type != JTokenType.String) return;
+        try
+        {
+            var option = BackRoomBridge.ReadRoomOption(message);
+            if (option?.Level is not int level) return;
+            var settings = CoreSettings.Current;
+            switch (option.Key)
+            {
+                case BackRoomBridge.OptionSubVolume: settings.BreakoutSubVolume = level; break;
+                case BackRoomBridge.OptionSfxVolume: settings.BreakoutSfxVolume = level; break;
+                case BackRoomBridge.OptionMusicVolume: settings.BreakoutMusicVolume = level; break;
+                default: return;
+            }
+            CoreSettings.Service?.Save();
+        }
+        catch (Exception ex) { Log.Debug("[Breakout] option dropped: {E}", ex.Message); }
     }
 
     // WPF BreakoutHostService.cs:14-17 and BreakoutAccess.cs:9-16.

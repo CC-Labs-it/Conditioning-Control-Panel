@@ -161,6 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (IsRace && HandleRace(o)) return;
             if (IsDtrh && HandleDtrh(o)) return;
             if (IsGlassroad && HandleGlassroad(o)) return;
+            if (IsBreakout && (string?)o["type"] == "room-option") { HandleBreakoutOption(o); return; }
             switch ((string?)o["type"])
             {
                 case "ready":
@@ -251,6 +252,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var motion = CoreSettings.Current.MotionLevel;
             frame["motion"] = motion.ToString().ToLowerInvariant();
             frame["reduced"] = motion != ConditioningControlPanel.Models.MotionLevel.Full;
+            frame["audio"] = JObject.FromObject(BreakoutAudio());
+            // WPF BackRoomHostService.cs:32-38,589-609: English keys, resolved in the active language.
+            var loc = LocalizationManager.Instance;
+            frame["lex"] = JObject.FromObject(loc.KeysWithPrefix("br_").ToDictionary(k => k, loc.Get));
             return frame;
         }
 
