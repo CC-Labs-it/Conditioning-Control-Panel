@@ -959,7 +959,7 @@ public sealed partial class GameWindowTests
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
             w.HandleMessage("{\"type\":\"ready\"}");
-            Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
             Assert.Equal("reduced", (string?)sent[0]["motionLevel"]);
             Assert.Equal("Normal", (string?)sent[0]["runSetup"]!["difficulty"]);
             Assert.EndsWith("/ccp.assets/images/pic.png", (string?)sent[1]["images"]!.Single()["url"]);
@@ -998,6 +998,100 @@ public sealed partial class GameWindowTests
             Assert.Equal(new[] { true, true }, runs);
         });
     }
+
+    /// <summary>WPF DtrhHostService.cs:309,405-433,462-479: seed the saved spiral pool,
+    /// answer Loom commands and refresh only after successful changes.</summary>
+    [Fact]
+    public void Dtrh_Loom_SeedsPoolAndHandlesCommands() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        const string gif = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+        var slug = "test-" + Guid.NewGuid().ToString("N")[..12];
+        var oldReveal = ExternalOpener.SelectInFileManager;
+        var oldShell = ExternalOpener.Shell;
+        string? revealed = null;
+        try
+        {
+            Assert.True(DtrhLoomStore.Save(slug, gif, JObject.Parse("{\"arms\":3}"), false).Ok);
+            ExternalOpener.SelectInFileManager = path => { revealed = path; return true; };
+            ExternalOpener.Shell = _ => true;
+            var w = GameWindow.Launch("dtrh")!;
+            var server = GameWindow.Server();
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.Web.OnNavigationCompleted(w.PageUrl!);
+            void Send(object frame) => w.Web.OnWebMessage(Newtonsoft.Json.JsonConvert.SerializeObject(frame));
+            Send(new { type = "ready" });
+            Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
+            var entry = sent[2]["spirals"]!.Single(s => (string?)s["slug"] == slug);
+            var path = DtrhLoomStore.GifPathFor(slug)!;
+            Assert.Equal(3, (int)entry["params"]!["arms"]!);
+            Assert.Equal(path, server.ResolveFile(new Uri((string)entry["url"]!).AbsolutePath));
+
+            sent.Clear();
+            Send(new { type = "loom-save", name = slug, gifBase64 = gif });
+            var failed = Assert.Single(sent);
+            Assert.Equal(("loom-result", "save", false, "exists"), ((string?)failed["type"], (string?)failed["op"], (bool)failed["ok"]!, (string?)failed["error"]));
+            sent.Clear();
+            Send(new { type = "loom-save", name = slug, gifBase64 = gif, overwrite = true, @params = new { arms = 5 } });
+            Assert.Equal(new[] { "loom-result", "loom-list" }, sent.Select(o => (string?)o["type"]));
+            Assert.True((bool)sent[0]["ok"]!);
+            Assert.Equal(5, (int)sent[1]["spirals"]!.Single(s => (string?)s["slug"] == slug)["params"]!["arms"]!);
+            sent.Clear();
+            Send(new { type = "loom-reveal", slug = "../outside" });
+            Assert.Null(revealed);
+            Send(new { type = "loom-reveal", slug });
+            Assert.Equal(path, revealed);
+            Assert.Empty(sent);
+            Send(new { type = "loom-delete", slug });
+            Assert.Equal(new[] { "loom-result", "loom-list" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal(("delete", true, slug), ((string?)sent[0]["op"], (bool)sent[0]["ok"]!, (string?)sent[0]["slug"]));
+            Assert.DoesNotContain(sent[1]["spirals"]!, s => (string?)s["slug"] == slug);
+            sent.Clear();
+            Send(new { type = "loom-delete", slug });
+            var deleted = Assert.Single(sent);
+            Assert.Equal(("delete", false, "io-failed"), ((string?)deleted["op"], (bool)deleted["ok"]!, (string?)deleted["error"]));
+            w.Close();
+        }
+        finally
+        {
+            ExternalOpener.SelectInFileManager = oldReveal;
+            ExternalOpener.Shell = oldShell;
+            DtrhLoomStore.Delete(slug);
+        }
+    });
+
+    /// <summary>WPF DtrhHostService.cs:464-479: a failed list post must not stop ready.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Dtrh_LoomListFailure_DoesNotBlockFavorites(bool failOnReady) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        const string gif = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+        var slug = "test-" + Guid.NewGuid().ToString("N")[..12];
+        try
+        {
+            GameWindow.DtrhFavorites = _ => new List<string> { "favorite.gif" };
+            var w = GameWindow.Launch("dtrh")!;
+            var sent = new List<JObject>();
+            var failList = failOnReady;
+            w.Posted += json =>
+            {
+                var message = JObject.Parse(json);
+                if (failList && (string?)message["type"] == "loom-list") throw new IOException("list post failed");
+                sent.Add(message);
+            };
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.True(w.DtrhReady);
+            Assert.Equal(failOnReady ? new[] { "init", "manifest", "favorites" } : new[] { "init", "manifest", "loom-list", "favorites" },
+                sent.Select(o => (string?)o["type"]));
+            failList = true;
+            w.HandleMessage(Newtonsoft.Json.JsonConvert.SerializeObject(new { type = "loom-save", name = slug, gifBase64 = gif }));
+            Assert.True((bool)sent.Last()["ok"]!);
+            Assert.NotNull(DtrhLoomStore.GifPathFor(slug));
+            w.Close();
+        }
+        finally { DtrhLoomStore.Delete(slug); }
+    });
 
     /// <summary>WPF DtrhHostService.cs:309-318,400-404: page deltas reach the store;
     /// the next ready seeds the page with twelve ranked names, only when history exists.</summary>
@@ -1039,7 +1133,7 @@ public sealed partial class GameWindowTests
         w.HandleMessage("{\"type\":\"asset-stats\",\"stats\":[]}");
         w.HandleMessage("{\"type\":\"request-run\"}");
         Assert.True(w.DtrhReady);
-        Assert.Equal(new[] { "init", "manifest", "run-config" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "init", "manifest", "loom-list", "run-config" }, sent.Select(o => (string?)o["type"]));
         w.Close();
     });
 

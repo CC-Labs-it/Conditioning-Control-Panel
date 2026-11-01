@@ -40,8 +40,12 @@ internal sealed partial class GameWindow
                 break;
             case "loom-reveal":
                 var path = DtrhLoomStore.GifPathFor((string?)message["slug"]);
-                // ponytail: the portable launcher opens the containing folder (Windows Explorer selects the file).
-                if (path != null) ExternalOpener.Open(Path.GetDirectoryName(path));
+                // WPF DtrhHostService.cs:423-432 selects the file; the portable seam falls back to its folder.
+                if (path != null)
+                {
+                    if (IsDtrh) ExternalOpener.Reveal(path);
+                    else ExternalOpener.Open(Path.GetDirectoryName(path));
+                }
                 break;
             case "sfx":
                 var cue = (string?)message["name"];
@@ -59,16 +63,24 @@ internal sealed partial class GameWindow
         }
     }
 
-    private void PostLoomList() => Post(new
+    // WPF DtrhHostService.cs:464-479 and LoomHostService.cs:134-149: a failed list post is best effort.
+    private void PostLoomList()
     {
-        type = "loom-list",
-        spirals = DtrhLoomStore.List().Select(s => new
+        try
         {
-            slug = s.Slug,
-            url = _server!.Url("__spirals__/loom_" + s.Slug + ".gif"),
-            @params = LoomParams(s.ParamsJson),
-        }),
-    });
+            Post(new
+            {
+                type = "loom-list",
+                spirals = DtrhLoomStore.List().Select(s => new
+                {
+                    slug = s.Slug,
+                    url = _server!.Url("__spirals__/loom_" + s.Slug + ".gif"),
+                    @params = LoomParams(s.ParamsJson),
+                }),
+            });
+        }
+        catch (Exception ex) { Log.Debug("LoomHost: list failed: {E}", ex.Message); }
+    }
 
     private static JObject? LoomParams(string? json)
     {
