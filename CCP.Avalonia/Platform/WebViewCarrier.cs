@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Avalonia.Platform;
 using Serilog;
@@ -23,10 +24,12 @@ internal static class WebViewCarrier
 
     internal static Task<bool> InstallAsync(IPlatformHandle? handle, string script)
     {
-        if (!OperatingSystem.IsLinux() || handle is not IGtkWebViewPlatformHandle gtk || gtk.WebKitWebView == IntPtr.Zero)
-            return Task.FromResult(false);
         try
         {
+            if (OperatingSystem.IsWindows() && handle is IWindowsWebView2PlatformHandle windows && windows.CoreWebView2 != IntPtr.Zero)
+                return InstallWindowsAsync(windows.CoreWebView2, script);
+            if (!OperatingSystem.IsLinux() || handle is not IGtkWebViewPlatformHandle gtk || gtk.WebKitWebView == IntPtr.Zero)
+                return Task.FromResult(false);
             // Only use the WebKit already loaded by Avalonia, to avoid loading a second libsoup.
             IntPtr webkit = IntPtr.Zero;
             foreach (var name in ScrolllerWebKitFilter.Libraries)
@@ -53,6 +56,18 @@ internal static class WebViewCarrier
         }
         catch (Exception ex) { Log.Debug("WebViewCarrier: install unavailable: {E}", ex.Message); }
         return Task.FromResult(false);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static async Task<bool> InstallWindowsAsync(IntPtr core, string script)
+    {
+        try
+        {
+            await Microsoft.Web.WebView2.Core.CoreWebView2.CreateFromComICoreWebView2(core)
+                .AddScriptToExecuteOnDocumentCreatedAsync(script);
+            return true;
+        }
+        catch (Exception ex) { Log.Debug("WebViewCarrier: install failed: {E}", ex.Message); return false; }
     }
 
     private static int OnIdle(IntPtr data)

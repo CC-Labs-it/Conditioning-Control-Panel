@@ -1,4 +1,11 @@
 using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Styling;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.JustDrop;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -14,11 +21,85 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// page message goes to Core <see cref="JustDropService"/>; a panic closes it with every other game
     /// window (PanicSurfaces "games", WPF GameSurfaces.cs:57).
     /// <para>Takeaway replay uses the bare player, fullscreen and panel duck/restore. Remaining:
-    /// HostOwnedFullscreen's persistent strip and Chromium no-throttle flags (WebKitGTK has no equivalent).</para>
+    /// Page fullscreen confinement, native ownership and Chromium no-throttle flags remain missing.</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
         internal const string JustDropId = "justdrop";
+
+        // WPF ChaosWebViewHost.cs:1222-1231, :1567-1572: hear Escape in the focused page.
+        // The flag makes the completed-navigation fallback safe after a native install.
+        internal const string JustDropEscapeScript = "(function(){try{if(window.__ccpHostEscape)return;"
+            + "window.__ccpHostEscape=true;window.addEventListener('keydown',function(e){"
+            + "if(e.key!=='Escape'&&e.keyCode!==27)return;"
+            + "try{window.chrome.webview.postMessage({type:'ccp-host-escape'});}catch(_){}"
+            + "},true);}catch(_){}})();";
+
+        private Button? _justDropFullscreen;
+        private WindowState _justDropPreviousState = WindowState.Normal;
+
+        // WPF ChaosWebViewHost.cs:257-269, :620-653: the strip remains above the native page in both modes.
+        private void BuildJustDropChrome()
+        {
+            Web.CarrierExtension = JustDropEscapeScript;
+            var bar = new DockPanel();
+            _justDropFullscreen = new Button { Name = "JustDropFullscreen", Margin = new Thickness(8, 5, 10, 5), MinWidth = 120 };
+            if (this.TryFindResource("SmallPinkButton", out var theme) && theme is ControlTheme buttonTheme)
+                _justDropFullscreen.Theme = buttonTheme;
+            _justDropFullscreen.Click += (_, _) => SetJustDropFullscreen(WindowState != WindowState.FullScreen);
+            DockPanel.SetDock(_justDropFullscreen, Dock.Right);
+            bar.Children.Add(_justDropFullscreen);
+            var pink = this.TryFindResource("PinkBrush", out var accent) ? accent as IBrush ?? Brushes.HotPink : Brushes.HotPink;
+            var panel = this.TryFindResource("PanelBgBrush", out var background) ? background as IBrush ?? Brushes.Black : Brushes.Black;
+            bar.Children.Add(new TextBlock { Text = Title, Margin = new Thickness(12, 0, 8, 0),
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center, FontSize = 12, FontWeight = FontWeight.SemiBold,
+                Foreground = pink, TextTrimming = TextTrimming.CharacterEllipsis });
+            var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), Background = Brushes.Black };
+            grid.Children.Add(new Border { Background = panel, BorderBrush = pink,
+                BorderThickness = new Thickness(0, 0, 0, 1), Child = bar });
+            Grid.SetRow(Web, 1);
+            grid.Children.Add(Web);
+            Content = grid;
+            PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) UpdateJustDropFullscreenButton(); };
+            AddHandler(KeyDownEvent, (_, e) =>
+            {
+                if (e.Key == Key.Escape && WindowState == WindowState.FullScreen)
+                {
+                    LeaveJustDropFullscreen();
+                    e.Handled = true;
+                }
+            }, RoutingStrategies.Tunnel);
+            UpdateJustDropFullscreenButton();
+        }
+
+        private void UpdateJustDropFullscreenButton()
+        {
+            if (_justDropFullscreen == null) return;
+            _justDropFullscreen.Content = Loc.Get(WindowState == WindowState.FullScreen ? "btn_exit_fullscreen" : "btn_fullscreen");
+            ToolTip.SetTip(_justDropFullscreen, Loc.Get("tooltip_fill_the_screen_esc_brings_the_window_back"));
+        }
+
+        private void SetJustDropFullscreen(bool fullscreen)
+        {
+            if (fullscreen)
+            {
+                if (WindowState == WindowState.FullScreen) return;
+                _justDropPreviousState = WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+                WindowState = WindowState.FullScreen;
+            }
+            else LeaveJustDropFullscreen();
+        }
+
+        private void LeaveJustDropFullscreen()
+        {
+            if (WindowState == WindowState.FullScreen) WindowState = _justDropPreviousState;
+        }
+
+        private static bool IsJustDropEscape(string json)
+        {
+            try { return (string?)JObject.Parse(Unwrap(json))["type"] == "ccp-host-escape"; }
+            catch { return false; }
+        }
 
         /// <summary>WPF ShowTab("justdrop"): a door the account cannot see is a no-op, never a redirect.</summary>
         private static bool JustDropDoorOpen()
@@ -60,9 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             window.LoadJustDrop();
             var state = shell.WindowState;
             bool duck = shell.IsVisible && state != global::Avalonia.Controls.WindowState.Minimized;
-            window.WindowState = global::Avalonia.Controls.WindowState.FullScreen;
-            // ponytail: WPF's persistent host-owned fullscreen strip still needs its own lane.
-            window.KeyDown += (_, e) => { if (e.Key == global::Avalonia.Input.Key.Escape) window.WindowState = global::Avalonia.Controls.WindowState.Normal; };
+            window.SetJustDropFullscreen(true);
             window.Closed += (_, _) =>
             {
                 if (duck && shell.IsVisible && shell.WindowState == global::Avalonia.Controls.WindowState.Minimized)

@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             if (url is null) return;
             CurrentUrl = url;
-            if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
+            if (InjectCarrier) _ = InvokeScriptAsync(DocumentStartScript);
             NavigationCompleted?.Invoke(url);
             NavigationFinished?.Invoke(url, success);
         }
@@ -190,6 +190,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Install the carrier before navigation where supported, with a completed-navigation fallback.
         /// Set before attaching the host or navigating.</summary>
         public bool InjectCarrier { get; set; }
+
+        // Optional host input alongside the carrier, installed before the first page script.
+        internal string? CarrierExtension { get; set; }
+        private string DocumentStartScript => CarrierShim + (CarrierExtension ?? "");
 
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post): the page's string push, else a message
         /// event on <c>chrome.webview</c>. Every hosted page shares this one carrier script.</summary>
@@ -490,8 +494,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             try
             {
-                return await (NativeCarrierInvoker?.Invoke(CarrierShim)
-                    ?? Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), CarrierShim));
+                return await (NativeCarrierInvoker?.Invoke(DocumentStartScript)
+                    ?? Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), DocumentStartScript));
             }
             catch (Exception ex) { Log.Debug("WebHost: carrier install failed: {E}", ex.Message); return false; }
         }
