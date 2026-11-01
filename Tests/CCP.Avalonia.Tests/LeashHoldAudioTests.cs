@@ -10,6 +10,12 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class LeashHoldAudioTests
 {
+    private sealed class Clock : TimeProvider
+    {
+        public DateTimeOffset Now = new(2040, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     [Fact]
     public void Tick_UsesModCueAndMasterGain_AndStaysSilentWhenMutedOrSuppressed()
     {
@@ -48,4 +54,49 @@ public sealed class LeashHoldAudioTests
             File.Delete(cue);
         }
     }
+    // WPF LeashFx.cs:227-228, 235-249: the cut cue uses the same gate as ticks.
+    [Fact]
+    public void Cut_UsesSnapCueAndGain_OnceAndOnlyWhenAudible()
+    {
+        var (oldAudio, oldArt, oldSuppressed, oldSettings) = (CoreAudio.PlayOneShotProvider,
+            CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, CoreSettings.ServiceProvider);
+        var cue = Path.GetTempFileName();
+        var played = new List<(string Path, float Gain, string Tag)>();
+        try
+        {
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            CoreModArt.AudioOverridePathProvider = rel => { Assert.Equal("chaos/snap.mp3", rel); return cue; };
+            CoreAudio.PlayOneShotProvider = (path, gain, tag, _, _) => played.Add((path, gain, tag));
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreSettings.Current.MasterVolume = 50;
+            var clock = new Clock();
+            LeashSound.Time = clock;
+            LeashSound.Cut();
+            Assert.Equal((cue, 0.11f, "leash-cut"), Assert.Single(played));
+            clock.Now = new DateTimeOffset(2040, 1, 1, 0, 0, 1, TimeSpan.Zero);
+            LeashSound.Cut();
+            Assert.Single(played);
+            CoreSettings.Current.MasterVolume = 0;
+            clock.Now = new DateTimeOffset(2040, 1, 1, 0, 0, 4, TimeSpan.Zero);
+            LeashSound.Cut();
+            CoreSettings.Current.MasterVolume = 100;
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            clock.Now = new DateTimeOffset(2040, 1, 1, 0, 0, 5, TimeSpan.Zero);
+            LeashSound.Cut();
+            Assert.Single(played);
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            clock.Now = new DateTimeOffset(2040, 1, 1, 0, 0, 6, TimeSpan.Zero);
+            LeashSound.Cut();
+            Assert.Equal(2, played.Count);
+            Assert.Equal((cue, 0.22f, "leash-cut"), played[1]);
+        }
+        finally
+        {
+            (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, CoreSettings.ServiceProvider)
+                = (oldAudio, oldArt, oldSuppressed, oldSettings);
+            File.Delete(cue);
+        }
+    }
+
 }
