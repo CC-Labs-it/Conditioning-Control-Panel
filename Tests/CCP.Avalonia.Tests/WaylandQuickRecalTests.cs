@@ -41,6 +41,20 @@ public sealed class WaylandQuickRecalTests
         Assert.Equal(expected, PortalQuickRecalHotkey.IsSafeTrigger(trigger));
 
     [Fact]
+    public async Task SandboxDoesNotOpenThePortalConnection()
+    {
+        Assert.True(SandboxNet.Active);
+        var original = PortalQuickRecalHotkey.OpenConnection; int attempts = 0;
+        try
+        {
+            PortalQuickRecalHotkey.OpenConnection = () => { attempts++; throw new InvalidOperationException("Unexpected portal connection"); };
+            Assert.Null(await PortalQuickRecalHotkey.BindAsync(() => { }, () => { }, CancellationToken.None));
+            Assert.Equal(0, attempts);
+        }
+        finally { PortalQuickRecalHotkey.OpenConnection = original; }
+    }
+
+    [Fact]
     public void PortalSignalsAreScopedAndHeldRepeatsAreSuppressed()
     {
         int presses = 0, closed = 0;

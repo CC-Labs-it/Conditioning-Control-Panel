@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Input;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 using Serilog;
 using Tmds.DBus.Protocol;
 using static ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut;
@@ -23,6 +24,7 @@ internal sealed class PortalQuickRecalHotkey : IDisposable
     private IDisposable? _activated, _deactivated, _changed, _sessionClosed;
     private string? _session;
     private bool _ready, _disposed, _lost;
+    internal static Func<DBusConnection> OpenConnection = () => new(DBusAddress.Session!);
 
     internal PortalQuickRecalHotkey(Action pressed, Action closed) => (_pressed, _closed) = (pressed, closed);
 
@@ -41,10 +43,11 @@ internal sealed class PortalQuickRecalHotkey : IDisposable
 
     internal static async Task<IDisposable?> BindAsync(Action pressed, Action closed, CancellationToken cancellation)
     {
+        if (SandboxNet.Active) return null;
         var binding = new PortalQuickRecalHotkey(pressed, closed);
         try
         {
-            var bus = binding._bus = new DBusConnection(DBusAddress.Session!);
+            var bus = binding._bus = OpenConnection();
             using var cancel = cancellation.Register(bus.Dispose);
             await bus.ConnectAsync().AsTask().WaitAsync(cancellation);
             await RegisterAsync(bus).WaitAsync(cancellation);
