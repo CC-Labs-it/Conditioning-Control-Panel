@@ -4,9 +4,13 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Haptics;
+using ConditioningControlPanel.Services.Haptics.Core;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Fyp.Online;
 using Xunit;
@@ -42,14 +46,42 @@ public sealed class MandatoryVideoRemoteTests
 
     private sealed class StillTime : TimeProvider
     {
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period) => new Never();
-        private sealed class Never : ITimer
+        private Never? _timer;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period) => _timer = new Never(callback, state);
+        public void Fire() => _timer!.Fire();
+        private sealed class Never(TimerCallback callback, object? state) : ITimer
         {
+            public void Fire() => callback(state);
             public bool Change(TimeSpan due, TimeSpan period) => true;
             public void Dispose() { }
             public ValueTask DisposeAsync() => default;
         }
     }
+
+    [Fact]
+    public void EvictedClipNeverAnnouncesOrStartsHapticsAfterPreRoll() => AvaloniaTestDispatcher.Run(() =>
+    {
+        using var h = new HapticService(new HapticSettings { VideoEnabled = true, VideoIntensity = 0.8, FunScriptEnabled = true });
+        var oldHaptics = CoreHaptics.Service; var oldPost = CoreDispatch.PostProvider;
+        CoreHaptics.Service = h; CoreDispatch.PostProvider = action => action();
+        var o = (MandatoryVideoOverlay)Activator.CreateInstance(typeof(MandatoryVideoOverlay), nonPublic: true)!;
+        var clock = new StillTime(); var v = new MandatoryVideoScheduler(o, clock, Array.Empty<string>); o.Scheduler = v;
+        var started = 0; v.VideoStarted += () => started++;
+        try
+        {
+            h.StartVideoBackgroundVibeAsync().GetAwaiter().GetResult();
+            Assert.True(h.GetLayer(HapticLayer.Video) > 0); // positive control
+            h.StopVideoBackgroundVibeAsync().GetAwaiter().GetResult();
+            var seq = typeof(FunScriptService).GetField("_loadSeq", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var before = (long)seq.GetValue(h.FunScript)!;
+            Assert.True(v.Trigger(path: $"https://v.scrolller.com/evicted-{Guid.NewGuid():N}.mp4"));
+            clock.Fire(); Dispatcher.UIThread.RunJobs();
+            Assert.False(v.IsPlaying); Assert.Equal(0, h.GetLayer(HapticLayer.Video));
+            Assert.Null(v.LastVideoPath); Assert.Equal(0, started); Assert.False(h.FunScript.IsActive);
+            Assert.Equal(before + 1, (long)seq.GetValue(h.FunScript)!); // stop only, no pending script load
+        }
+        finally { v.ForceCleanup(); CoreHaptics.Service = oldHaptics; CoreDispatch.PostProvider = oldPost; }
+    });
 
     // No native player is needed to exercise GuardTick: the scheduler's frozen pre-roll never fires.
     // The source path is the URL selected by the scheduler, even when playback resolves to a cache file.

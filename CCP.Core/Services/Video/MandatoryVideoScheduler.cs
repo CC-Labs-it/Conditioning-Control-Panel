@@ -348,13 +348,17 @@ namespace ConditioningControlPanel.Services
                 Dispose(ref _preroll);
                 CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
+                var generation = _retryGeneration;
                 try { _host.Show(path, strict); }
-                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
+                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); if (_playing && generation == _retryGeneration) End(); return; }
+                // WPF VideoService.cs:3218-3225,3404-3410: a refused or replaced clip never starts its hooks.
+                if (!_playing || generation != _retryGeneration) return;
                 LastVideoPath = path;
                 try { VideoStarted?.Invoke(); }
                 catch (Exception ex) { Log.Debug("VideoStarted handler failed: {Error}", ex.Message); }
-                // WPF VideoService.cs:3372: background vibe and the clip's funscript, once on screen.
+                if (!_playing || generation != _retryGeneration) return;
                 _ = CoreHaptics.Service?.StartVideoBackgroundVibeAsync();
+                if (!_playing || generation != _retryGeneration) return;
                 try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
                 catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);

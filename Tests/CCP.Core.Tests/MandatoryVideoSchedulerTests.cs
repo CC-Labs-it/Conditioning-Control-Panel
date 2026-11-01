@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Haptics.Core;
 using Xunit;
 using FakeClock = CCP.Core.Tests.PopQuizSchedulerTests.FakeClock;
 
@@ -18,7 +19,8 @@ public sealed class MandatoryVideoSchedulerTests
         public readonly List<(string Path, bool Strict)> Shown = new();
         public int Closes;
         public double Watched;
-        public void Show(string path, bool strict) => Shown.Add((path, strict));
+        public Action<string>? OnShow;
+        public void Show(string path, bool strict) { Shown.Add((path, strict)); OnShow?.Invoke(path); }
         public double CloseAll() { Closes++; return Watched; }
         public readonly List<AttentionVerdict> Messages = new();
         public Action? Then;
@@ -80,6 +82,47 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.Equal(1, started);
         Assert.Equal(host.Shown[0].Path, announced);        // what the media log records (WPF LastVideoPath)
         v.ForceCleanup();
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReplacedClipDoesNotAnnounceOrStartBeforeTheReplacementPreRoll(bool throwAfterReplace) => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips); var started = new List<string?>();
+        v.VideoStarted += () => started.Add(v.LastVideoPath);
+        host.OnShow = path =>
+        {
+            if (path != "/old.mp4") return;
+            v.End(); Assert.True(v.Trigger(path: "/new.mp4"));
+            if (throwAfterReplace) throw new InvalidOperationException("old host failed");
+        };
+        Assert.True(v.Trigger(path: "/old.mp4")); clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.True(v.IsPlaying); Assert.Null(v.LastVideoPath); Assert.Empty(started);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(new[] { "/new.mp4" }, started); v.ForceCleanup();
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void StopDuringStartCallbacksDoesNotLeaveVideoHapticsOrStartAScript(bool stopOnVideoStarted) => With(20, false, () =>
+    {
+        using var h = new HapticService(new ConditioningControlPanel.Models.HapticSettings { VideoEnabled = true, VideoIntensity = 0.8, FunScriptEnabled = true });
+        var old = CoreHaptics.Service; CoreHaptics.Service = h;
+        try
+        {
+            var seq = typeof(ConditioningControlPanel.Services.Haptics.FunScriptService).GetField("_loadSeq", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var before = (long)seq.GetValue(h.FunScript)!;
+            var clock = new FakeClock(); var v = new MandatoryVideoScheduler(new Host(), clock, () => Clips);
+            if (stopOnVideoStarted) v.VideoStarted += v.End;
+            else h.HapticTriggered += (_, m) => { if (m.StartsWith("Video Background")) v.End(); };
+            Assert.True(v.Trigger()); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.False(v.IsPlaying); Assert.Equal(0, h.GetLayer(HapticLayer.Video));
+            Assert.Equal(before + 1, (long)seq.GetValue(h.FunScript)!); // stop only, no asynchronous script load
+        }
+        finally { CoreHaptics.Service = old; }
     });
 
     [Fact]
