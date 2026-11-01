@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Video.Browser;
 using Avalonia;
 using Avalonia.Controls;
@@ -61,9 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// <c>CoreSettings</c>, screens from <c>ScreenList.Enumerate</c>) and the result window, so a
     /// finished game asks for the count and resolves on the answer instead of being written off.</para>
     ///
-    /// <para><b>Stubbed:</b> the VideoService lease/wedge watchdog/native poison cooldown (HwndHost
-    /// teardown safety with no counterpart here), the metadata-cache duration (LengthChanged corrects
-    /// the 30 s fallback within a second) and VideoDiag.</para>
+    /// <para><b>Stubbed:</b> the shared LibVLC retire/rebuild and startup wedge watchdog, the
+    /// metadata-cache duration (LengthChanged corrects the 30 s fallback) and VideoDiag.</para>
     ///
     /// <para><c>Loaded</c> became <c>Opened</c>: WPF's Loaded fires synchronously inside Show(),
     /// which ShowOnAllMonitors' completion de-duplication leans on, and Avalonia's Opened is the
@@ -79,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly Difficulty _difficulty;
         private readonly bool _strictMode;
         private readonly Action<bool> _onComplete;
+        private readonly Action _onSkipped;
         private readonly Screen? _screen;
         private readonly bool _isPrimary;
 
@@ -147,7 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         public BubbleCountWindow(string videoPath, Difficulty difficulty,
             bool strictMode, Action<bool> onComplete,
-            Screen? screen = null, bool isPrimary = true)
+            Screen? screen = null, bool isPrimary = true, Action? onSkipped = null)
         {
             AvaloniaXamlLoader.Load(this);
 
@@ -160,6 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _difficulty = difficulty;
             _strictMode = strictMode;
             _onComplete = onComplete;
+            _onSkipped = onSkipped ?? (() => onComplete(false));
             // Screens can be empty under a headless platform, so this stays nullable and every
             // read of it is guarded. WPF's Screen.PrimaryScreen! could not be null.
             _screen = screen ?? Screens?.Primary ?? Screens?.All.FirstOrDefault();
@@ -246,6 +248,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 onComplete?.Invoke(ok);
             };
 
+            Action skip = () =>
+            {
+                if (System.Threading.Interlocked.Exchange(ref completionDelivered, 1) != 0) return;
+                if (onSkipped != null) onSkipped(); else onComplete(false);
+            };
+
             // Reset shared state
             lock (_cleanupLock)
             {
@@ -279,7 +287,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // NOT WPF's onComplete(false): here empty means "no topology reported", not "no display".
             try
             {
-                var primaryWindow = new BubbleCountWindow(videoPath, difficulty, strictMode, complete, null, true);
+                var primaryWindow = new BubbleCountWindow(videoPath, difficulty, strictMode, complete, null, true, skip);
                 primaryWindow._useBrowser = BrowserVideoSurface.TryAcquire(primaryWindow, videoPath);
                 if (primaryWindow._useBrowser) _browserOwner = primaryWindow;
                 primaryWindow.Show();
@@ -388,6 +396,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     BrowserVideoSurface.Release(this);
                     _browserOwner = null;
                     _useBrowser = false;
+                }
+                // WPF :308-319 skips a poisoned native start, including browser fallback.
+                if (_isPrimary && NativeUnavailable)
+                {
+                    ForceCloseAll();
+                    _onSkipped();
+                    return;
                 }
                 if (!_isPrimary)
                 {
@@ -503,19 +518,53 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var player = new MediaPlayer(vlc) { EnableHardwareDecoding = true };
             player.Volume = Math.Clamp(CoreSettings.Current.MasterVolume, 0, 100);
             _player = player;
-            _sink = new VlcFrameSink(player, () => _media,
-                bmp => { foreach (var w in _allWindows) w._videoImage.Source = bmp; },
-                () => { foreach (var w in _allWindows) w._videoImage.InvalidateVisual(); });
+            var media = new Media(vlc, _videoPath, FromType.FromPath);
+            _media = media;
+            _sink = new VlcFrameSink(player, () => media,
+                bmp => { if (ReferenceEquals(player, _player)) foreach (var w in _allWindows) w._videoImage.Source = bmp; },
+                () => { if (ReferenceEquals(player, _player)) foreach (var w in _allWindows) w._videoImage.InvalidateVisual(); });
             // LibVLC raises these on its own thread; the game is torn down only on the UI thread.
             player.LengthChanged += (_, a) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) AdoptRealDuration(a.Length / 1000.0); });
             player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
             player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
-            _media = new Media(vlc, _videoPath, FromType.FromPath);
-            player.Play(_media);
+            player.Play(media);
             return true;
         }
 
-        /// <summary>Stop joins the decoder thread, so after it no callback touches the frame buffer.</summary>
+        // WPF BubbleCountWindow.xaml.cs:1435-1469, 1509-1548: never hold the UI
+        // indefinitely on native Stop. Keep the complete graph alive if it does not settle.
+        private static readonly List<object> _quarantinedNative = new();
+        internal static volatile bool NativeUnavailable;
+
+        internal static bool StopNative(Action stop, Action dispose, Action freeSink, object resources, int budgetMs)
+        {
+            var task = Task.Run(stop);
+            try
+            {
+                if (!task.Wait(budgetMs))
+                {
+                    _ = task.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                }
+                else
+                {
+                    // Never dispose a player whose Stop returned after the deadline.
+                    var disposal = Task.Run(dispose);
+                    if (disposal.Wait(budgetMs))
+                    {
+                        freeSink();
+                        return true;
+                    }
+                    _ = disposal.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                }
+            }
+            catch { /* A failed Stop or dispose is just as unsafe as a timeout. */ }
+            // WPF retires the shared instance; this head cannot rebuild it yet.
+            _quarantinedNative.Add(resources);
+            NativeUnavailable = true;
+            Serilog.Log.Warning("Bubble count native teardown did not settle; player quarantined");
+            return false;
+        }
+
         private static void StopPlayer()
         {
             foreach (var window in _allWindows)
@@ -526,17 +575,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_browserOwner != null) BrowserVideoSurface.Release(_browserOwner);
             _browserOwner = null;
             var player = _player;
+            var media = _media;
+            var sink = _sink;
             _player = null;
-            if (player != null)
-            {
-                try { player.Stop(); } catch { }
-                try { player.Dispose(); } catch { }
-            }
-            try { _media?.Dispose(); } catch { }
             _media = null;
-            foreach (var w in _allWindows) w._videoImage.Source = null;
-            _sink?.Free();
             _sink = null;
+            foreach (var w in _allWindows) w._videoImage.Source = null;
+            if (player == null && media == null && sink == null) return;
+            StopNative(() => player?.Stop(), () =>
+            {
+                player?.Dispose();
+                media?.Dispose();
+            }, () => sink?.Free(), (player, media, sink), 500);
         }
 
         private void CalculateTargetBubbles() =>
