@@ -156,7 +156,7 @@ export function createItemStatus(root, feel, { photosafe = null, cap = 1100, tra
       if (TOYS.has(s.kind)) continue;
       V.set(st[S.posX], st[S.posY], st[S.posZ]);
       Q.set(st[S.quatX], st[S.quatY], st[S.quatZ], st[S.quatW]);
-      const self = i === 0, sc = self ? L.selfScale : 1, al = self ? L.selfAlpha : 1;
+      const self = i === 0, sc = self ? L.selfScale : 1, al = self ? (L.kinds[s.kind]?.selfAlpha ?? L.selfAlpha) : 1;
       if (s.fresh && dt > 0) { HERE[0] = V.x; HERE[1] = V.y + 1; HERE[2] = V.z; hitBurst(HERE, s.kind, soft, self); }
       if (al <= 0) continue;
       ctx.sc = sc; ctx.al = al; ctx.col = s.kind === 'pink' ? fogColours[0] : colOf(s.kind);

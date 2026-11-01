@@ -27,12 +27,15 @@ export const RATES = Object.freeze({
 
 /** Item ids in wire order (must equal sim/itemTable.js ITEM_IDS; a test checks). The first 8 are the hit kinds. */
 export const WIRE_ITEMS = Object.freeze(['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter',
-  'surge', 'glass', 'echo', 'golden', 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral']);
+  'surge', 'glass', 'echo', 'golden', 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral', 'tunnel']);
 export const EFFECT_COUNT = 8;
-/** Effect kinds a record carries (byte 35, 4 bits): the 8 old hit kinds, then the toys kit's. */
-export const EFFECTS = Object.freeze([...WIRE_ITEMS.slice(0, EFFECT_COUNT), 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral']);
+/** Preset reactions in a race (sim/social.js REACTIONS; no free text). Append only. */
+export const REACTIONS = Object.freeze(['laugh', 'kiss', 'wink', 'pout']);
+/** Effect kinds a record carries (byte 35, 4 bits): the 8 old hit kinds, then the toys kit's, then 'tunnel' (14: the seat
+ * rides Tunnel Vision, immune and fast; the room widens its speed check for it). */
+export const EFFECTS = Object.freeze([...WIRE_ITEMS.slice(0, EFFECT_COUNT), 'pendulum', 'disc', 'tether', 'snap', 'bigSpiral', 'tunnel']);
 export const SHIELDS = Object.freeze([null, 'glass', 'golden', 'echo']);
-export const MODES = Object.freeze(['throw', 'lob', 'wide', 'drop', 'self', 'bounce', 'tether']);
+export const MODES = Object.freeze(['throw', 'lob', 'wide', 'drop', 'self', 'bounce', 'tether', 'ride']);
 export const VERDICTS = Object.freeze(['hit', 'glass', 'golden', 'mercy', 'decoy', 'snapped']);
 export const PHASES = Object.freeze(['lobby', 'countdown', 'racing', 'done']);
 export const ERRORS = Object.freeze(['bad', 'phase', 'seat', 'item', 'host', 'rate']);
@@ -238,6 +241,7 @@ export const TYPES = Object.freeze({
   str: (v) => typeof v === 'string' && v.length >= 1 && v.length <= 1024,
   item: (v) => WIRE_ITEMS.includes(v),
   mode: (v) => MODES.includes(v),
+  react: (v) => REACTIONS.includes(v),
   code: (v) => typeof v === 'string' && /^[a-z0-9-]{1,24}$/.test(v),
   lookId: (v) => v === null || (typeof v === 'string' && LOOK_ID.test(v)),
   skin: (v) => typeof v === 'string' && /^[0-9a-f]{36}[0-3]$/.test(v),
@@ -273,11 +277,14 @@ export const C2R = Object.freeze({
   start: {},
   look: { outfit: 'lookId', vehicle: 'lookId', skin: 'skin?', paint: 'lookId?', umbrella: 'lookId?', trail: 'lookId?' },
   pickup: { box: 'u16', tick: 'u32', seat: 'seat?' },
-  fire: { id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', seat: 'seat?' },
+  fire: { id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', seat: 'seat?', prefer: 'seat?' },
   cp: { idx: 'u8', lap: 'u8', tick: 'u32', seat: 'seat?' },
   finish: { tick: 'u32', frac: 'unit', seat: 'seat?' },
   drop: { tick: 'u32', s: 'num', seat: 'seat?' },
   emote: { code: 'code' },
+  react: { id: 'react', seat: 'seat?' },
+  knock: { by: 'seat', dv: 'num', tick: 'u32', seat: 'seat?' },
+  take: { lid: 'u16', tick: 'u32', seat: 'seat?' },
   leave: {},
 });
 
@@ -295,9 +302,12 @@ export const R2C = Object.freeze({
   fired: { sid: 'u32', seat: 'seat', id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', target: 'seatOrNull', fork: 'u8?', targetFork: 'u8?', vx: 'num?' },
   hit: { sid: 'u32', victim: 'seat', by: 'seat', item: 'item', verdict: 'verdict', durationS: 'num', tick: 'u32' },
   fizzle: { sid: 'u32', tick: 'u32' },
+  loose: { lid: 'u16', item: 'item', s: 'num', x: 'num', from: 'seat', by: 'seat', fork: 'u8?' },
+  took: { lid: 'u16', seat: 'seat', item: 'item' },
   standings: { tick: 'u32', rows: 'standRows' },
   finish: { rows: 'finishRows' },
   emote: { seat: 'seat', code: 'code' },
+  react: { seat: 'seat', id: 'react' },
   error: { code: 'err', re: 'code?' },
   abort: { reason: 'abort' },
 });

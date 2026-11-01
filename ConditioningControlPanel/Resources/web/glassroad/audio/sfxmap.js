@@ -148,6 +148,7 @@ export function sfxPlan(name, p = {}, o = {}) {
       if (k === 'launch' || k === 'pad') return [];          // launch-boost and pad play their own
       if (k === 'slip') return [one('boost', 0.7, 1.06)];
       if (k === 'bubble') return [one('boost', 0.35, 1.12)];
+      if (k === 'bump') return [one('boost', 0.3, 1.16)];   // a hard bump winner's small kick
       if (k === 'surge') return [one('boost', 0.85, 0.94)];
       return [one('boost')];
     }
@@ -167,7 +168,9 @@ export function sfxPlan(name, p = {}, o = {}) {
     case 'bump': {
       const dv = Number(p.dv) || 0;
       if (!(dv >= fg(feel, 'contact.cueMinDvMps', 1.5))) return [];
-      return [one('bump', 0.4 + 0.6 * Math.min(1, dv / mixGet(feel, 'bumpFullDvMps')))];
+      // interaction wave: a hard bump (contact.hardBumpDvMps) plays a touch louder and lower
+      const hard = dv >= fg(feel, 'contact.hardBumpDvMps', 6);
+      return [one('bump', (0.4 + 0.6 * Math.min(1, dv / mixGet(feel, 'bumpFullDvMps'))) * (hard ? 1.25 : 1), hard ? 0.94 : 1)];
     }
     case 'pad': return [one('pad')];
     case 'lap': {

@@ -21,7 +21,8 @@ import { speedShare, speedFeelMul, createSpeedSettle, SPEED_FEEL } from '../rend
 
 const CHANNELS = ['bloom', 'band', 'lines', 'bandSpeed', 'burst', 'squash', 'stretch',
   'dust', 'edge', 'duck', 'tendril', 'rescue', 'white', 'flash', 'orbit', 'rumble', 'thud', 'pad',
-  'wake'];   // B1: slipstream charge (speed lines at LOOK-free half strength)
+  'wake',    // B1: slipstream charge (speed lines at LOOK-free half strength)
+  'tunnel'];   // Tunnel Vision: the ride's look (speed field tint, low-pass), held while the player rides
 
 /** Item cues beside the FX_CUES registry (render/items/look.js HIT_LOOK numbers). */
 export const ITEM_CUES = {
@@ -31,6 +32,22 @@ export const ITEM_CUES = {
       fx.fire('thud', fx.gentle.kick(fx.feel.get('itemFeel.confirmRumble')), 0, 0, fx.feel.get('itemFeel.confirmRumbleOutS'));
       return;
     }
+  },
+  // Tunnel Vision (lane B): the player's ride holds the speed field and the tunnel look (IN at the rise floor, OUT on
+  // the exit); a ram pulses the one trauma value, firmer for the kart that was launched
+  'tunnel-start'(fx, { racer = -1 }) {
+    if (racer !== 0) return;
+    fx.hold('lines', 1, fx.feel.get('juice.riseS'));
+    fx.hold('tunnel', 1, 0.3);
+  },
+  'tunnel-end'(fx, { racer = -1 }) {
+    if (racer !== 0) return;
+    fx.release('lines', 0.6);
+    fx.release('tunnel', 0.6);
+  },
+  'tunnel-ram'(fx, { attacker = -1, victim = -1 }) {
+    if (victim === 0) fx.shock(0.35);
+    else if (attacker === 0) fx.shock(0.12);
   },
   // item feel: your own use ticks the pad (Gentle: none) and a throw flicks the speed lines forward
   'item-fire'(fx, { racer = -1, mode }) {
@@ -57,6 +74,7 @@ export function restState() {
     whiteFade: 0, flashLevel: 0, orbit: 0, duck: 0,
     rumble: 0, // added: gamepad rumble 0..1 for boot (zero under Gentle)
     slipWake: 0, // B1: 0..1 while the player charges a slipstream (feeds speedLines at half)
+    tunnel: 0,   // Tunnel Vision: 0..1 while the player rides (speed field tint, the song's low-pass)
     // speed wave: the settled speed share (0 at cruise, 1 at top, up to boostDeg/topDeg under boost, times the motion /
     // Gentle share) for the drawn-only camera widen, and the post edge blur strength 0..1 it feeds
     speedFeel: 0, speedBlur: 0,
@@ -169,6 +187,7 @@ export function createFx(bus, feel, { gentle, photosafe }) {
     // the one variable: speed past top speed draws the speed lines
     const pct = kart ? kart[S.speedPct] : 0, maxPct = feel.get('speed.maxPct');
     state.slipWake = clamp(ch.wake.v, 0, 1);
+    state.tunnel = clamp(ch.tunnel.v, 0, 1);
     state.speedLines = Math.max(ch.lines.v, state.slipWake * 0.5, clamp((pct - 1) / Math.max(maxPct - 1, 1e-3), 0, 1));
     // speed wave: the settled share behind the camera widen and the edge blur (Motion less / Gentle half, off none)
     state.speedFeel = speedSettle.update(speedShare(pct, maxPct, SPEED_FEEL) * speedFeelMul(motion(), gentle.on, SPEED_FEEL), dt);

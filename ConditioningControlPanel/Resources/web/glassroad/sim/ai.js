@@ -712,6 +712,8 @@ export function createAi(track, feel, { seed = 1, forkChoice = null } = {}) {
     } else if (def.use === 'lob') press = leaderAhead || behind;   // at the leader; leading, at place 2 once close
     else if (def.use === 'wide') press = wideAhead;
     else if (def.use === 'trap') press = behind;
+    // Tunnel Vision: whenever someone is ahead, never on a fork (the ride keeps the main road)
+    else if (def.use === 'ride') press = leaderAhead && !track.forkAtSeg?.(r.st[S.seg] | 0);
     if (press && it.id === 'shatter' && ctx.items && typeof ctx.items.nearOpenEdge === 'function' &&
       ctx.items.nearOpenEdge(r.st[S.s], feel.get('items.shatterEdgeSafeM'))) press = false;
     if (!press) return;

@@ -93,6 +93,23 @@ const FIRE = {
 export const BOT_ECHO = ['hop', 'land', 'wall', 'drift-start', 'boost-start', 'pad'];
 
 export const B1_CUES = {
+  // Tunnel Vision (lane B): a long rising whoosh in, a falling whoosh out (the song's low-pass is boot.js submerged),
+  // a soft thump for a ram you are in
+  'tunnel-start'(syn, { racer = -1 } = {}) {
+    if (racer !== 0) return;
+    syn.noise({ dur: 0.9, vol: 0.1, freq: 400, q: 0.7, sweep: 5200 });
+    syn.tone(syn.semis(-12), { type: 'sine', dur: 0.5, vol: 0.06, glide: syn.semis(0) });
+  },
+  'tunnel-end'(syn, { racer = -1 } = {}) {
+    if (racer !== 0) return;
+    syn.noise({ dur: 0.7, vol: 0.09, freq: 4200, q: 0.6, sweep: 500 });
+    syn.tone(syn.semis(12), { dur: 0.3, vol: 0.04, glide: syn.semis(-5) });
+  },
+  'tunnel-ram'(syn, { attacker = -1, victim = -1 } = {}) {
+    if (attacker !== 0 && victim !== 0) return;
+    syn.tone(syn.semis(-17), { type: 'sine', dur: 0.18, vol: 0.09, attack: 0.004, glide: syn.semis(-24) });
+    syn.noise({ dur: 0.2, vol: 0.05, freq: 900, sweep: 300 });
+  },
   'item-box'(syn, { racer }) {
     syn.noise({ dur: 0.12, vol: 0.06, freq: 2400, sweep: 900, q: 1.5 });    // the card flips open
     if (racer !== 0) return;
@@ -117,6 +134,21 @@ export const B1_CUES = {
     const f = (mode === 'self' ? FIRE[id] : FIRE[mode]) || FIRE.throw;
     if (playToyLaunch(syn, id)) return;
     f(syn);
+  },
+  // knock-loose (social lane): the held bubble pops out with a bright falling pluck; taking a loose one is a short rise
+  'item-knocked'(syn) {
+    syn.noise({ dur: 0.08, vol: 0.06, freq: 1800, sweep: 600, q: 1.2 });
+    syn.tone(syn.semis(19), { type: 'triangle', dur: 0.16, vol: 0.06, glide: syn.semis(12) });
+  },
+  'item-loose-take'(syn, { racer }) {
+    if (racer !== 0) return;
+    syn.tone(syn.semis(12), { type: 'sine', dur: 0.1, vol: 0.06 });
+    syn.tone(syn.semis(24), { type: 'sine', dur: 0.14, vol: 0.05, at: 0.06 });
+  },
+  // reactions (social lane): a short figure per preset, by distance like any B1 event
+  'kart-react'(syn, { id }) {
+    const fig = { laugh: [12, 16, 19], kiss: [19, 24], wink: [16, 23], pout: [7, 3] }[id] || [12, 19];   // an unknown id (a newer client) gets a plain blip
+    fig.forEach((s, k) => syn.tone(syn.semis(s), { type: 'sine', dur: 0.09, vol: 0.05, at: k * 0.07, ...(id === 'pout' ? { glide: syn.semis(s - 2) } : {}) }));
   },
   'item-refused'(syn, { racer }) {
     if (racer !== 0) return;

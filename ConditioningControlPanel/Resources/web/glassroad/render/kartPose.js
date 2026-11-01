@@ -115,6 +115,15 @@ export function bumpCount(dv, L) {
   return Math.round(L.bumpSparks[0] + (L.bumpSparks[1] - L.bumpSparks[0]) * clamp(dv / 8, 0, 1));
 }
 
+/**
+ * Interaction wave: a hard bump's extra burst on top of the bump's own. k = 0 at contact.hardBumpDvMps (minDv) .. 1 at
+ * twice it; count from half to all of bumpSparks[1], sparks flying 1.3x .. 1.8x the bump speed.
+ */
+export function hardBumpBurst(dv, minDv, L) {
+  const min = Math.max(Number(minDv) || 0, 1e-3), k = clamp(((Number(dv) || 0) - min) / min, 0, 1);
+  return { k, count: Math.round(L.bumpSparks[1] * (0.5 + 0.5 * k)), speedMul: 1.3 + 0.5 * k };
+}
+
 // ---- rivals (wave 2 art): colourways from art/palettes.json `karts`, pushed apart, one accessory each ----
 
 /** Rival look numbers; LOOK.rival (render/look.js, integrator) overrides any of them. */
@@ -312,6 +321,7 @@ const BUS = {
     : p.verdict === 'hit' ? [[p.victim, 'itemHit', { kind: p.kind || null, durationS: p.durationS || 0 }]] : []),
   'item-fire': (p) => [[p.racer, 'fire', { id: p.id || null, mode: p.mode || null }]],
   'item-roll': (p) => [[p.racer, 'armed', { id: p.id || null }]],
+  'kart-react': (p) => [[p.racer, 'react', { id: p.id || null }]],
   'race-result': (p) => (p.rows || []).map((row) => [row.i, 'finish', { place: row.place, count: p.rows.length }]),
 };
 const FROM_BOTS = new Set(['wall', 'finish']);
@@ -354,6 +364,13 @@ const knock = (r, roll, pitch, R, g) => {
   r.hr.v -= roll * g * R.bumpHeadKnock * TAU * R.headHz; r.hp.v -= pitch * g * R.bumpHeadKnock * TAU * R.headHz;
 };
 const SELF_FACE = { golden: 'heart', surge: 'determined', glass: 'smug', echo: 'wink' };
+/** Preset reactions (sim/social.js REACTIONS): EMI's face, head mark and rig clip, all from the bindings atlas. */
+export const REACT_LOOK = Object.freeze({
+  laugh: { face: 'happy', mark: 'spark', clip: 'cheer' },
+  kiss: { face: 'heart', mark: 'heart', clip: 'wave' },
+  wink: { face: 'wink', mark: 'spark', clip: 'wave' },
+  pout: { face: 'sad', mark: 'anger', clip: 'sulk' },
+});
 
 const REACT = {
   hop(r, a, R) { if (r.rig) { r.trick = false; return; } r.hopT = 0; r.twT = 0; r.twS = R.hopTwistS; r.twFull = false; r.twRad = R.hopTwistRad * (r.twSign = -r.twSign); r.trick = false; },
@@ -418,6 +435,7 @@ const REACT = {
     else timed(r, a.kind === BOOST.LAUNCH ? 'cheer' : 'grin', a.kind === BOOST.LAUNCH ? R.faceHoldS : R.faceShortS);
   },
   overtake(r, a, R) { timed(r, 'smug', R.faceHoldS); if (!r.rig) r.liftT = 0; r.liftM = R.overtakeHopM; r.liftS = R.overtakeHopS; marked(r, 'spark', R.markS); },
+  react(r, a, R) { const k = REACT_LOOK[a.id]; if (k) { timed(r, k.face, R.faceHoldS); marked(r, k.mark, R.markS); } },
   overtaken(r, a, R) { timed(r, 'sad', R.faceHoldS); marked(r, 'sweat', R.markS); },
   // a countdown opens a new race: last race's cheer or sulk, daze and hops never carry over
   countdown(r, a, R) { r.finish = 0; r.dizT = -1; r.mark = null; r.wigT = -1; r.liftT = -1; r.glT = 0; r.hitT = -1; r.stunUntil = 0; r.shockUntil = 0; r.fireT = -1; r.surgeAt = -1; r.glYaw = 0; r.glUp = 1; timed(r, a.n === 1 ? 'determined' : 'neutral', R.glanceS); },
@@ -705,6 +723,7 @@ export function directorEvent(d, kind, a, T, N, sep = 0) {
   else if (kind === 'armed') d.armed = true;
   else if (kind === 'boost') c = 'boost_recoil';
   else if (kind === 'overtake') c = 'wave';
+  else if (kind === 'react') c = REACT_LOOK[a.id]?.clip || null;
   else if (kind === 'countdown') { d.countdown = a.n === 1; d.finish = 0; d.armed = false; }
   else if (kind === 'go') d.countdown = false;
   else if (kind === 'finish') { if (a.place && a.count) d.finish = a.place <= 3 ? 1 : a.place >= a.count && a.count >= 4 ? -1 : 0; }

@@ -7,7 +7,8 @@ import { itemUseMode } from '../sim/itemUse.js';
 import { createItems } from '../sim/items.js';
 import { createNetItems } from '../net/items.js';
 
-const offensive = Object.keys(ITEMS).filter(id => ITEMS[id].use !== 'self');
+// Tunnel Vision ('ride') rides even from a rear press (tests/sim-tunnel.test.mjs)
+const offensive = Object.keys(ITEMS).filter(id => ITEMS[id].use !== 'self' && ITEMS[id].use !== 'ride');
 const race = { phase: 'racing' };
 function setup({ online = false, flags = () => ['rail'] } = {}) {
   const track = fakeTrack({ flags }), feel = makeFeel(), events = recorder(), sent = [];

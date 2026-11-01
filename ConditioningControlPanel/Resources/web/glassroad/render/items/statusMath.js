@@ -59,6 +59,12 @@ export const STATUS_LOOK = Object.freeze({
       { shape: SHAPE.star, n: 4, r: 1.0, hz: 0.6, up: 1.4, size: 0.32, bob: 0.2, alpha: 0.85 } ] },
     bigSpiral: { col: rgb(190, 120, 255), alt: rgb(255, 150, 220), parts: [
       { shape: SHAPE.spiral, n: 1, r: 0, hz: 0, up: 2.8, size: 2.4, spin: -1.0, alpha: 1 } ] },
+    // Tunnel Vision: a placeholder glass comet shell round the riding kart (Astra's GLB replaces it later, as the
+    // toys' models do); selfAlpha lets the rider see a faint shell of its own, small enough to keep the road readable
+    tunnel: { col: rgb(140, 230, 255), alt: rgb(255, 130, 220), selfAlpha: 0.5, parts: [
+      { shape: SHAPE.puff, n: 1, r: 0, hz: 0, up: 0.8, size: 3.0, alpha: 0.22 },
+      { shape: SHAPE.ring, n: 1, r: 0, hz: 0, up: 0.8, size: 2.7, spin: 0.7, alpha: 0.7 },
+      { shape: SHAPE.star, n: 6, r: 1.45, hz: 1.4, up: 0.9, size: 0.3, bob: 0.12, alpha: 0.9 } ] },
   },
 });
 

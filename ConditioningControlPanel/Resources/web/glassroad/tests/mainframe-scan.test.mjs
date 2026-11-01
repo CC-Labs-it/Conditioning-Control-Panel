@@ -51,6 +51,10 @@ test('scan phases forecast the sweep and keep an outside bypass for the whole cy
     assert.ok(width / 2 - Math.abs(p.x) - hazard.width / 2 >= 2.99, 'each bank keeps a permanent bypass');
   }
 });
+test('a Tunnel Vision rider (immune) never takes a wall contact', () => {
+  const { scan, r, events } = setup();
+  scan.update([r], .74, 120, { immune: () => true }); assert.equal(events.length, 0); assert.equal(r.st[S.stalled], 0);
+});
 test('one wall contact costs 0.5 seconds once until the kart leaves it', () => {
   const { scan, r, events } = setup();
   scan.update([r], .74); assert.equal(events.length, 1); assert.ok(Math.abs(r.st[S.stalled] - 0.5) < 1e-6);

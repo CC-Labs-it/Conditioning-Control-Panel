@@ -65,7 +65,7 @@ export function createBoudoirPerfume(track, events, { zones } = {}) {
   const api = { rows, ready: true, hits: 0, update, reset,
     inspect(timeS = lastT ?? 0) { return { ready: api.ready, hits: api.hits, timeS, zones: rows.map(z => ({ ...z, ...perfumePhase(z, timeS, {}, machineryBeatAt(track, timeS)) })) }; } };
   function reset() { previous = new WeakMap(); lastT = null; safeUntil = -Infinity; api.ready = true; api.hits = 0; }
-  function update(racers, timeS, dt = 1 / 60, { paused = false } = {}) {
+  function update(racers, timeS, dt = 1 / 60, { paused = false, immune } = {}) {
     if (paused || !rows.length || !Number.isFinite(timeS) || !Number.isFinite(dt) || dt <= 0) return;
     // Seeks/loops clear swept paths and give two full seconds of warning before contact returns.
     if (lastT !== null && (timeS < lastT - .02 || timeS - lastT > .5)) {
@@ -77,7 +77,7 @@ export function createBoudoirPerfume(track, events, { zones } = {}) {
       const st = racer.st, now = { s: st[S.s], x: st[S.lateral], h: st[S.height], t: timeS, inside: null };
       const prev = previous.get(racer) || now;
       previous.set(racer, now);
-      if (!api.ready || racer.finished || racer.kind === 'remote' || st[S.respawnPhase] !== RESPAWN.NONE || Math.abs(now.s - prev.s) > 25) continue;
+      if (!api.ready || racer.finished || racer.kind === 'remote' || st[S.respawnPhase] !== RESPAWN.NONE || Math.abs(now.s - prev.s) > 25 || immune?.(racer)) continue;
       let exposure = 0, hit = null;
       for (const zone of rows) {
         bounds[0] = 0; bounds[1] = 1;

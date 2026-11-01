@@ -58,7 +58,7 @@ test('table: every id has a use, an icon and a duration; buckets from place and 
 test('roll weights restore the repelling shield and fog beside the toys; front gets Snap, the back Tether and Big Spiral', () => {
   const f = makeFeel();
   const ids = (b) => weightsFor(f, b).map(([id]) => id);
-  const kit = ['pendulum', 'disc', 'tether', 'melt', 'snap', 'surge', 'bigSpiral', 'glass', 'pink'];
+  const kit = ['pendulum', 'disc', 'tether', 'melt', 'snap', 'surge', 'bigSpiral', 'glass', 'pink', 'tunnel'];
   for (const b of ['front', 'middle', 'back']) for (const id of ids(b)) assert.ok(kit.includes(id), id + ' still draws in ' + b);
   for (const big of ['tether', 'bigSpiral']) {
     assert.ok(!ids('front').includes(big), big + ' in front');

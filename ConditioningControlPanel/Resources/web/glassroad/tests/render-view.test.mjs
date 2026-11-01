@@ -6,8 +6,8 @@ import { loadTrack } from '../track/load.js';
 import { KART_VIEW, scaledRadius, chaseFraming, nearCuePlan, basisMatrix, NEAR_LOOK } from '../render/viewMath.js';
 import { onLoop } from '../render/colossiMath.js';
 import { RACER_FRAMING, RACER_GROWTH } from '../render/framing.js';
-import { gap } from '../sim/gaps.js';
 import { CHASE_NEUTRAL_PITCH_DEG } from '../core/chaseView.js';
+import { gap } from '../sim/gaps.js';
 import { createCamRig } from '../render/cameraMath.js';
 import { S, createState } from '../sim/state.js';
 

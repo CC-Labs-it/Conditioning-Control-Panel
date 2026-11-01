@@ -133,11 +133,11 @@ test('the Prize Counter row: only a host with caps.prizeCounter, contract messag
 test('looks never reach the online course hash: all five courses still match the room cards', async () => {
   // CCP-Server rooms/src/tracks.js courseHash after the kart stats table; a change here means a room regenerate + redeploy
   const ROOM = {
-    threshold: '894e0085d0b36af20187c20f98fb05ef25fb6a94f6c642a41c58b208873e1d9b',
-    mainframe: '109aa2c6f452b1d78e2e3b4a558352c6eb9d9bf704d22cc36518d010edce204a',
-    keep: '32b4530731a1f7e6a94d2ca608b8c4fd3982a458cffde3c1c7e38b7021824de3',
-    boudoir: '0fcaed781726a90a8e744c23a70b01e15dee519b290b8e32940e677bc7666027',
-    goonworks: '1f5193b1db396cec11e41d61febd93dbdf8c17dbda46d822f9c1c4dce3699a71',
+    threshold: '29e6e287eb578847230e86de778bd4746c7bd95a9ddbc5ff24f9d5360f83b3dd',
+    mainframe: '1955477e226de6049ec18ed4771da0e64b56b7b95dfa29acd5c14f86872cc3be',
+    keep: '1292c327c2fe012aba479654f9a0edd014ab2dbaab59a77530b06c365021dac5',
+    boudoir: 'c65a84b163c63dc2631300eefeb7bc8f8f3bd34ac58860c600281ebc3b1086ca',
+    goonworks: 'a667c527f387cd3c8c0452268b9cf8e0f4fc9c6f7fd140bb73437f6ccb027c6c',
   };
   const feel = read('../feel.json');
   for (const [id, hash] of Object.entries(ROOM)) {

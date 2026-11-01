@@ -68,7 +68,7 @@ test('sample plans: laps, drift tiers, landings, bumps, items, bot echoes', () =
   assert.deepEqual(sfxPlan('land', { tier: 0 }), []);
   assert.deepEqual(ids(sfxPlan('land', { tier: 3 })), ['land-heavy']);
   assert.deepEqual(sfxPlan('bump', { dv: 0.5 }, { feel }), [], 'below contact.cueMinDvMps');
-  assert.equal(sfxPlan('bump', { dv: 40 }, { feel })[0].vol, 1);
+  assert.equal(sfxPlan('bump', { dv: 40 }, { feel })[0].vol, 1.25, 'a hard bump (contact.hardBumpDvMps) plays 25% louder');
   assert.deepEqual(sfxPlan('boost-start', { kind: 'pad' }), [], 'the pad event plays its own');
   assert.equal(sfxPlan('item-fire', { racer: 3, target: 0, mode: 'throw' }), null, 'incoming warning stays synth');
   assert.equal(sfxPlan('item-hit', { victim: 0, verdict: 'glass' }), null);

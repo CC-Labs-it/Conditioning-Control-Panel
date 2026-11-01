@@ -41,7 +41,7 @@ const fly = (t, who, sec) => t.tick(sec);
 
 test('the toys never cover the screen and keep wire order after the first twelve', () => {
   for (const id of ['pendulum', 'disc', 'tether', 'snap', 'bigSpiral', 'melt']) assert.ok(ITEMS[id].view === 'none' || ITEMS[id].view === null, id);
-  assert.deepEqual(WIRE_ITEMS.slice(12), ['pendulum', 'disc', 'tether', 'snap', 'bigSpiral']);
+  assert.deepEqual(WIRE_ITEMS.slice(12), ['pendulum', 'disc', 'tether', 'snap', 'bigSpiral', 'tunnel']);
 });
 
 test('Pendulum homes on the kart ahead and swings its steering, no stall', () => {

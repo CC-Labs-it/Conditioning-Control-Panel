@@ -433,6 +433,18 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.tetherWeights` [0, 2, 3]: Tether draw weights (never in front).
 - `items.snapWeights` [3, 1, 0]: Snap draw weights (front and middle).
 - `items.bigSpiralWeights` [0, 0, 2]: Big Spiral draw weights (back only).
+- `items.tunnelWeights` [7, 5.7, 5.3]: Tunnel Vision draw weights, read only for the last places (about 1 box in 4 in every bucket, whatever the gap).
+- `items.tunnelLastPlaces` 2: a box offers Tunnel Vision to this many places from the back, never the leader (`tunnelOffered`).
+- `items.tunnelTargetPlaces` 4: the ride aims for the nearest kart ahead in places 1 to this.
+- `items.tunnelMaxS` 8: Tunnel Vision: most seconds to reach the target and land (sim/tunnel.js), longer only while it waits for safe road beside the target.
+- `items.tunnelBrakeMps2` 60: Tunnel Vision: the least braking into the target; a bigger gap brakes harder.
+- `items.tunnelLandDvMps` 4: Tunnel Vision: the sideways closing speed handed over beside the target, for a normal bump (under `contact.hardBumpDvMps`).
+- `items.tunnelSpeedMul` 1.6: Tunnel Vision ride pace floor, share of top speed (at least the leader's speed plus tunnelLeadMps); a bigger gap rides faster.
+- `items.tunnelLeadMps` 6: Tunnel Vision: the ride runs at least this much faster than the leader.
+- `items.tunnelHoverM` 0.6: Tunnel Vision: the riding kart hovers this high over the road.
+- `items.tunnelStopPlace` 2: Tunnel Vision safety: a ride from behind this place ends at this place or better; one that starts here or better ends only at the lead. It never takes the lead.
+- `items.tunnelGuardS` 1.0: Tunnel Vision: guard after the ride (throws, lobs and traps pop, as Snap's guard).
+- `items.tunnelRamRadiusM` 2.0: Tunnel Vision: a kart this close to the ride is launched (tunnel-ram).
 - `items.pendulumS` 1.5: Pendulum hit: the kart swings left and right this long. No screen cover.
 - `items.pendulumSteerAmp` 0.5: Pendulum swing, stick share added at the peak.
 - `items.pendulumSteerHz` 1.1: Pendulum swing rate.
@@ -456,6 +468,12 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.snapShoveSteer` 0.9: Snap shove, stick share pushing away, fading over snapS.
 - `items.bigSpiralS` 2.0: Big Spiral: the leader is slowed this long.
 - `items.bigSpiralCapMul` 0.7: Big Spiral top speed multiplier.
+- `items.knockDvMps` 9: a `hard-bump` this hard (or any Tunnel Vision ram) knocks the loser's held item onto the road (`sim/social.js`).
+- `items.knockLifeS` 12: a knocked-loose item nobody takes pops after this.
+- `items.knockBehindM` 3: it lands this far behind the loser, in the loser's lane.
+- `items.knockOwnerS` 1: the loser cannot take it back for this long; anyone else with an empty slot takes it at once.
+- `items.knockMax` 6: the oldest loose item pops when one more is knocked out.
+- `items.paybackS` 20: whoever last hit you (item hit, hard bump lost, tunnel ram) stays your mark this long; your next throw prefers the mark when it is ahead in throw range. The mark shows on your screen only.
 
 ## payoff (toys kit 2026-10-25: subliminal words and flashes for the local player, `fx/payoff.js`; Gentle and photosafe still rule)
 
@@ -532,12 +550,18 @@ pose). Gentle and OS reduced motion drop the edge flash and keep fades only; the
 - `ai.audibleKarts` 3: the nearest this many bot engines are heard.
 - `ai.cornerMargin` 0.9: share of the kart's calmed full-lock grip yaw a bot plans a bend with (was a feel gap in sim/ai.js).
 
+## react (interaction wave 2026-10-30: preset race reactions, `sim/social.js`; Q / pad LB / touch heart)
+
+- `react.gapS` 2: one reaction per racer per this long (the room keeps the same gap online).
+- `react.botChance` 0.35: a bot reacts to a hard bump, a landed hit, a knock, being passed or the finish this often.
+- `react.botDelayS` 0.5: a bot's reaction waits about this long (0.6x to 1.4x).
+
 ## contact (B1 kart contact and slipstream, sim/contact.js)
-- `contact.radiusM` 0.54 (retained from polish 6 when visual scale rose to 0.78): kart contact radius (two karts touch under 2x this).
-- `contact.maxHeightM` 1.05 (polish 6, was 1.5): karts further apart than this along the road normal never touch.
-- `contact.pushMps` 3.5: least sideways speed a touch gives.
+- `contact.radiusM` 0.58 (interaction wave 2026-10-30: 0.54 x 1.08 with the racers 8% larger, look scale 0.8424): kart contact radius (two karts touch under 2x this).
+- `contact.maxHeightM` 1.13 (interaction wave: 1.05 x 1.08; polish 6 was 1.5): karts further apart than this along the road normal never touch.
+- `contact.pushMps` 4.2 (interaction wave, was 3.5): least sideways speed a touch gives.
 - `contact.pushPerDv` 0.5: extra sideways speed per m/s of closing speed.
-- `contact.maxPushMps` 7: cap on the sideways speed of one bump.
+- `contact.maxPushMps` 8.4 (interaction wave, was 7): cap on the sideways speed of one bump.
 - `contact.speedRefMps` 12: weight = 1 + speed / this (the faster kart moves less).
 - `contact.boostShoveMul` 1.6: a boosting kart weighs this much more.
 - `contact.stalledShoveMul` 1.6: a stalled kart weighs this much less (divides).
@@ -553,6 +577,10 @@ pose). Gentle and OS reduced motion drop the edge flash and keep fades only; the
 - `contact.slipAmount` 0.1: slingshot boost size, share of top speed.
 - `contact.slipHoldS` 0.6: slingshot boost hold.
 - `contact.slipCooldownS` 2.5: no second slingshot for this.
+- `contact.hardBumpDvMps` 6 (interaction wave): a kart-vs-kart contact closing at least this fast also emits `hard-bump` { winner (heavier kart), loser, dv, p }: extra sparks, a trauma pulse, a louder bump.
+- `contact.bumpBoostAmount` 0.06: the hard-bump winner's small boost (share of top over top, sim/grant.js kind 'bump'); never on an open stretch or a court / stones hold, never cutting a bigger boost.
+- `contact.bumpBoostHoldS` 0.4: that boost's hold.
+- `contact.bumpBoostCooldownS` 3: per racer, no second bump boost for this.
 
 ## karts (kart bodies, owner 2026-10-31; `sim/kartStats.js`, read from `r.feel.kart` by sim/kart.js, sim/drift.js, sim/contact.js)
 The table is global, the row is the racer's: `createRacers` puts one on `r.feel.kart`. Lovebomb is all ones and stays exactly the old kart. Solo takes the garage pick (`racers.setBody`, boot.js), online the seat's look; bots always drive the default (ai.paceMul and every course test were tuned on it). A missing or unknown body reads as the default. Editing a row applies from the next race start. Any edit here moves every course hash: regenerate the room cards and deploy the room in the same rollout.

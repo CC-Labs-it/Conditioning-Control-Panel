@@ -137,7 +137,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) /* -> Items 
 
 **Item rules (sim/items.js).** Boxes and bubbles come from `track.items` (`{ kind: 'box'|'bubble', node, x, ds, s }`).
 - Pickup: grounded or below `pickHeightM`, within `boxRadiusM` along and across of a live box, slot empty and not rolling:
-  box gone for `boxRespawnS`; draw now with a seeded rand from `bucketOf(place, gapToLeader)`; slot rolls `rollS`
+  box gone for `boxRespawnS`; draw now with a seeded rand from `bucketOf(place, gapToLeader)` (`tunnel` joins the draw only for `tunnelOffered(place, field)`); slot rolls `rollS`
   (`item-box`), then shows (`item-roll`). Bubbles: within `bubbleRadiusM`: `grantBoost(bubbleAmount, bubbleHoldS, 'bubble')`, gone `bubbleRespawnS` (`bubble-pop`).
 - Use (`input.item` edge, item shown): `back` held drops any throw or lob item as a trap `dropBehindM` behind (same kind);
   melt is always a trap behind; otherwise by `use`:
@@ -260,6 +260,9 @@ Queue = emitted in sim steps, flushed once per frame. Bus = emitted synchronousl
 | `item-box` | `{ racer, box, p }` | items | hud (slot spins, racer 0), audio, render |
 | `item-roll` | `{ racer, id }` | items | hud, audio |
 | `item-fire` | `{ racer, id, mode: 'throw'\|'lob'\|'wide'\|'drop'\|'self', target, p }` | items | audio, hud, fx |
+| `tunnel-start` | `{ racer }` (Tunnel Vision: the ride took the kart, sim/tunnel.js; online also when a remote record shows effect `tunnel`) | sim/items.js, net/items.js | fx (speed field held, tunnel tint, low-pass via submerged), payoff words, audio (rising whoosh); the player only |
+| `tunnel-ram` | `{ attacker, victim, p }` (a kart the ride passed through was launched with the BUBBLE_RAM fling, no spin, no stall) | sim/tunnel.js (online: the victim's client) | fx (trauma pulse), audio (thump) when the player is in it; lane C treats it as a hard-bump |
+reason: 'target'|'time'|| `tunnel-end` | `{ racer, reason: 'time'\|'place'\|'cancel' }` (target: handed back beside it at its speed, for a bump; otherwise on solid railed road at full speed; a guard of items.tunnelGuardS follows) | sim/tunnel.js | fx (field and tint OUT), audio (falling whoosh) |
 | `item-refused` | `{ racer, id, reason: 'edge' }` | items | hud (racer 0), audio |
 | `item-hit` | `{ victim, by, kind, verdict: 'hit'\|'glass'\|'golden'\|'mercy'\|'decoy', durationS, p }` | items | effects (victim 0), fx, audio, hud (name tag) |
 | `bubble-pop` | `{ racer, i, p }` | items | audio, fx |
@@ -269,11 +272,15 @@ Queue = emitted in sim steps, flushed once per frame. Bus = emitted synchronousl
 | `effect-end` | `{ kind, replaced }` | effects (bus) | audio, hud |
 | `bump` | `{ a, b, dv, p }` | contact | fx (shake when a or b is 0), audio |
 | `slipstream` | `{ racer, state: 'in'\|'fire'\|'out' }` | contact | hud (toast on fire, racer 0), audio, fx |
+| `hard-bump` | `{ winner, loser, dv, p }` (closing >= contact.hardBumpDvMps; winner = heavier kart; after its `bump`) | contact | fx (trauma, winner or loser 0), render (sparks), items (knock-loose, payback) |
 | `place-change` | `{ racer, from, to }` | standings | hud, audio (racer 0) |
 | `overtake` | `{ racer, passed }` (racer 0 is one of them) | standings | audio, fx |
 | `race-standings` | `{ order }` (on a change) | standings | hud |
 | `race-result` | `Result` (once) | standings | boot (results card, host message), audio, hud |
-| `boost-start` | adds kinds `'slip'\|'surge'\|'bubble'` (tier 0) | grant.js | fx, audio |
+| `boost-start` | adds kinds `'slip'\|'surge'\|'bubble'\|'bump'` (tier 0) | grant.js | fx, audio |
+| `item-knocked` | `{ from, by, id, p }` (a hard bump or tunnel ram knocked `from`'s held item loose) | items (via sim/social.js) | audio, fx |
+| `kart-react` | `{ racer, id, remote? }` (id: `laugh`\|`kiss`\|`wink`\|`pout`; remote = relayed by the room) | sim/social.js, net/room.js | karts (face, mark, clip), audio, boot (uplink) |
+| `item-loose-take` | `{ racer, id, from, p }` (a knocked-loose item taken; `item-roll` follows) | items | audio |
 
 Phase A events stay racer-0 only. Host message (integrator): `{ type: 'race-result', v: 1, track, laps, place, of,
 timeS, bestLapS, finished, items: true, xp: null, mode, fullLaps, roomId, medal }` (the desktop adds XP later);

@@ -126,7 +126,7 @@ export const AUDIO_CUES = {
     if (kind === 'slip') {                         // a slipstream fire: airy, a lift of a fifth
       syn.noise({ dur: 0.4, vol: 0.07, freq: 1400, q: 0.6, sweep: 4200 });
       syn.tone(syn.semis(7), { dur: 0.18, vol: 0.05, glide: syn.semis(14) });
-    } else if (kind === 'bubble') {                // a popped track bubble: a small sparkle
+    } else if (kind === 'bubble' || kind === 'bump') {   // a popped track bubble or a bump boost: a small sparkle
       syn.noise({ dur: 0.18, vol: 0.04, freq: 3000, q: 2, sweep: 5000 });
     } else if (kind === 'surge') {                 // Surge: the big whoosh plays on item-fire; this is its tail
       syn.noise({ dur: 0.6, vol: 0.08, freq: 500, sweep: 3600 });

@@ -13,7 +13,7 @@
  */
 
 export const ITEM_IDS = ['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter', 'surge', 'glass', 'echo', 'golden',
-  'pendulum', 'disc', 'tether', 'snap', 'bigSpiral'];
+  'pendulum', 'disc', 'tether', 'snap', 'bigSpiral', 'tunnel'];
 
 /** Kinds whose hit stalls and spins the kart (sim/items.js land()). */
 export const SPIN_KINDS = Object.freeze(['shatter', 'disc', 'tether']);
@@ -38,6 +38,8 @@ export const ITEMS = Object.freeze({
   tether: { use: 'tether', view: 'none', bot: 'spin', icon: fx('tether.png') },
   snap: { use: 'self', view: null, bot: 'steer', icon: fx('snap.png') },
   bigSpiral: { use: 'lob', view: 'none', bot: 'steer', icon: fx('bigspiral.png') },
+  // Tunnel Vision (lane B 2026-10-30): the catch-up ride for the last places (sim/tunnel.js); placeholder icon
+  tunnel: { use: 'ride', view: null, bot: null, icon: fx('tunnel.png') },
 });
 
 export const BUCKETS = ['front', 'middle', 'back'];
@@ -49,11 +51,17 @@ export function bucketOf(feel, place, gapToLeaderM) {
   return 'middle';
 }
 
-/** @returns {Array<[string, number]>} ids with a weight above 0 in this bucket, table order */
-export function weightsFor(feel, bucket) {
+/** Tunnel Vision goes to the last items.tunnelLastPlaces places whatever the gap, never the leader: a field of 2 offers it only to last. */
+export function tunnelOffered(feel, place, fieldSize) {
+  return place > 1 && place > fieldSize - feel.get('items.tunnelLastPlaces');
+}
+
+/** @returns {Array<[string, number]>} ids with a weight above 0 in this bucket, table order; tunnel only when offered */
+export function weightsFor(feel, bucket, offerTunnel = false) {
   const b = Math.max(0, BUCKETS.indexOf(bucket));
   const out = [];
   for (const id of ITEM_IDS) {
+    if (id === 'tunnel' && !offerTunnel) continue;
     const w = feel.get('items.' + id + 'Weights')[b] || 0;
     if (w > 0) out.push([id, w]);
   }
@@ -61,8 +69,8 @@ export function weightsFor(feel, bucket) {
 }
 
 /** One weighted draw. rand() returns 0..1. */
-export function rollItem(feel, bucket, rand) {
-  const list = weightsFor(feel, bucket);
+export function rollItem(feel, bucket, rand, offerTunnel = false) {
+  const list = weightsFor(feel, bucket, offerTunnel);
   if (!list.length) return 'surge';
   let total = 0;
   for (const [, w] of list) total += w;
@@ -73,7 +81,7 @@ export function rollItem(feel, bucket, rand) {
 
 /** Seconds an item lasts once used or once it lands: items.<id>S; glass -> items.glassMaxS. */
 export function durationOf(feel, id) {
-  return id === 'glass' ? feel.get('items.glassMaxS') : feel.get('items.' + id + 'S');
+  return id === 'glass' ? feel.get('items.glassMaxS') : id === 'tunnel' ? feel.get('items.tunnelMaxS') : feel.get('items.' + id + 'S');
 }
 
 /** Seeded 0..1 generator (mulberry32). */

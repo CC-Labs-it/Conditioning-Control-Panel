@@ -19,6 +19,7 @@
  *              fire control are one thing under the thumb. JUMP is a painted ring above it, not a button:
  *              a press falls through to this layer and is the same right half hop, so the ring only
  *              shows where to hold, lights while held and says Hold ahead of a held gap (setHoldCue).
+ *   REACT      a small round button left of Throw: the next of four preset reactions (`react`).
  * The WebKit lessons from the old race stay: touchstart's default is prevented over the road, only
  * the wheel pointer is captured, lifts are also heard on the window, and a touchend reconciles held
  * ids with the fingers still down so a swallowed pointerup never strands a drift.
@@ -35,6 +36,9 @@ export const THROW_CSS = 'position:absolute;right:max(16px,env(safe-area-inset-r
 export const DROP_CSS = 'position:absolute;right:max(16px,env(safe-area-inset-right));bottom:calc(max(14px,env(safe-area-inset-bottom)) + 72px);' +
   'width:64px;height:52px;border:2px solid #fff;border-radius:18px;background:#201b29;color:#fff;font:700 13px sans-serif;touch-action:none';
 
+/** The react button: left of Throw, same baseline, smaller so the thumb finds Throw first. */
+export const REACT_CSS = 'position:absolute;right:calc(max(16px,env(safe-area-inset-right)) + 76px);bottom:calc(max(14px,env(safe-area-inset-bottom)) + 8px);' +
+  'width:48px;height:48px;border:2px solid #fff;border-radius:50%;background:#201b29;color:#fff;font:700 18px sans-serif;touch-action:none';
 export const JUMP_LABEL = 'Jump', JUMP_CUE_LABEL = 'Hold';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -93,10 +97,15 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   dropBtn.setAttribute('aria-label', 'Drop item behind');
   dropBtn.style.cssText = DROP_CSS;
   layer.appendChild(dropBtn);
+  const reactBtn = d.createElement('button');
+  reactBtn.type = 'button'; reactBtn.className = 'gr-touch-btn gr-touch-react'; reactBtn.textContent = '\u2665';
+  reactBtn.setAttribute('aria-label', 'React');
+  reactBtn.style.cssText = REACT_CSS;
+  layer.appendChild(reactBtn);
   root.classList?.add('gr-touch-on');
 
   let steerId = -1, steerX0 = 0, steer = 0, actId = -1, touched = false, disposed = false;
-  let hopEdge = false, pauseEdge = false, cameraEdge = false, itemEdge = false, itemBack = false, rearId = -1;
+  let hopEdge = false, pauseEdge = false, cameraEdge = false, itemEdge = false, itemBack = false, rearId = -1, reactEdge = false;
   let jumpLit = false, jumpCue = false;
   const fingers = new Map();                     // Touch.identifier -> the side that finger landed on
   const onBtn = (t) => !!(t && typeof t.closest === 'function' && t.closest('.gr-touch-btn, .hud-item'));
@@ -123,6 +132,10 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   const onItemClick = (e) => { if (e.detail === 0) onItem(e); };
   const onDrop = (e) => onItem(e, true);
   const onDropClick = (e) => { if (e.detail === 0) onDrop(e); };
+  const onReact = (e) => { if (e.cancelable) e.preventDefault(); e.stopPropagation(); reactEdge = true; devices.use('touch'); };
+  const onReactClick = (e) => { if (e.detail === 0) onReact(e); };
+  reactBtn.addEventListener('pointerdown', onReact);
+  reactBtn.addEventListener('click', onReactClick);
   itemBtn.addEventListener('pointerdown', onItem);
   itemBtn.addEventListener('click', onItemClick);
   dropBtn.addEventListener('pointerdown', onDrop);
@@ -135,7 +148,7 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   function endSteer() { steerId = -1; steer = 0; pad.style.display = 'none'; }
   function onBlur() {
     const id = steerId, rear = rearId;
-    endSteer(); actId = rearId = -1; hopEdge = pauseEdge = cameraEdge = itemEdge = itemBack = false;
+    endSteer(); actId = rearId = -1; hopEdge = pauseEdge = cameraEdge = itemEdge = itemBack = reactEdge = false;
     fingers.clear();
     try { if (id >= 0) layer.releasePointerCapture(id); } catch (err) { /* already gone */ }
     try { if (rear >= 0) rearBtn.releasePointerCapture(rear); } catch (err) { /* already gone */ }
@@ -226,7 +239,8 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     into.rearView = rearId >= 0;
     into.item = itemEdge;
     into.back = itemBack;
-    hopEdge = false; pauseEdge = false; cameraEdge = false; itemEdge = false; itemBack = false;
+    into.react = reactEdge;
+    hopEdge = false; pauseEdge = false; cameraEdge = false; itemEdge = false; itemBack = false; reactEdge = false;
     const lit = actId >= 0;
     if (lit !== jumpLit) { jumpLit = lit; if (lit) jump.classList?.add('on'); else jump.classList?.remove('on'); }
   }
@@ -246,6 +260,8 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     viewBtn.removeEventListener('click', onViewClick);
     rearBtn.removeEventListener('pointerdown', onRear);
     rearBtn.removeEventListener('lostpointercapture', onUp);
+    reactBtn.removeEventListener('pointerdown', onReact);
+    reactBtn.removeEventListener('click', onReactClick);
     itemBtn.removeEventListener('pointerdown', onItem);
     itemBtn.removeEventListener('click', onItemClick);
     dropBtn.removeEventListener('pointerdown', onDrop);

@@ -118,11 +118,14 @@ Client -> room:
 | `start` | | host only, lobby phase, at least one human |
 | `look` | `outfit: lookId, vehicle: lookId, skin?: skinCode` | lobby phase; unknown ids become the default look |
 | `pickup` | `box: u16, tick: u32, seat?` | touched item box `track.items[box]`; the room rolls or refuses |
-| `fire` | `id: u16, item, mode, tick: u32, s: num, x: num, seat?` | use the held item; `id` = sender's shot id |
+| `fire` | `id: u16, item, mode, tick: u32, s: num, x: num, seat?, prefer?` | use the held item; `id` = sender's shot id; `prefer` = the payback mark's seat on a throw (sim/social.js), the room homes on it when that kart is free, ahead on the same road and within throwRangeM, else on the nearest ahead; `mode: ride` (Tunnel Vision) only outside the top two and off a fork, the room then excuses the ride speed while the records show effect `tunnel` |
 | `cp` | `idx: u8, lap: u8, tick: u32, seat?` | checkpoint crossed (idx 0 with lap = laps completed) |
 | `finish` | `tick: u32, frac: unit, seat?` | crossed the line on the final lap, `frac` within the tick |
 | `drop` | `tick: u32, s: num, seat?` | fell off (rescue starts); progress may go back |
 | `emote` | `code` | preset id (`hud/presets.js`), at most 1 per 2 s, never free text |
+| `react` | `id, seat?` | race reaction (`laugh kiss wink pout`, `net/protocol.js` REACTIONS), countdown or racing phase, at most 1 per 2 s per seat, never free text; `seat` = a kept bot's |
+| `knock` | `by: seat, dv: num, tick: u32, seat?` | the loser's client: a hard bump (dv >= items.knockDvMps) or a tunnel ram knocked its held item loose; the room checks `by` is close in its records |
+| `take` | `lid: u16, tick: u32, seat?` | drive through a loose item with an empty slot (the loser after items.knockOwnerS) |
 | `leave` | | leaving on purpose |
 
 Room -> client:
@@ -142,6 +145,9 @@ Room -> client:
 | `standings` | `tick, rows: [{ seat, place, lap, progM, pops, finished, timeMs }]` (every 500 ms racing + on a place change) |
 | `finish` | `rows: [{ seat, place, name, bot, finished, timeMs, bestLapMs, pops }]` (final, by place) |
 | `emote` | `seat, code` |
+| `react` | `seat, id` (to every seat; the sender's own clients ignore their own seats) |
+| `loose` | `lid, item, s, x, from, by, fork?` (a knocked item on the road, the loser's slot is empty; clients fade it after items.knockLifeS and keep at most items.knockMax, oldest first) |
+| `took` | `lid, seat, item` (that seat holds it now, no roll) |
 | `error` | `code, re?` (`code`: bad phase seat item host rate; `re` = the refused `t`) |
 | `abort` | `reason`, then the socket closes |
 
