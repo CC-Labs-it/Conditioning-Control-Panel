@@ -1,7 +1,10 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -24,7 +27,7 @@ public sealed class MandatoryVideoFloatingTests
     private static void EnsureApp()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
@@ -94,8 +97,15 @@ public sealed class MandatoryVideoFloatingTests
         try { _ = new LibVlcAudio("--aout=dummy"); }
         catch (Exception e) { Assert.Skip("libvlc not available: " + e.Message); }
         var s = CoreSettings.Current;
-        var saved = (s.MandatoryVideoFloating, s.AttentionChecksEnabled, s.AudioDuckingEnabled, s.MandatoryVideoFloatingSizePercent);
+        var saved = (s.MandatoryVideoFloating, s.AttentionChecksEnabled, s.AudioDuckingEnabled, s.MandatoryVideoFloatingSizePercent,
+            s.PanicOverridesAll, s.MasterVolume, s.VideoVolume);
         var o = MandatoryVideoOverlay.Instance;
+        var previous = (o.Scheduler, o.Time);
+        var graceStamp = typeof(MandatoryVideoOverlay).GetField("_lastGraceUtc",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var previousStamp = graceStamp.GetValue(o);
+        var clock = new HeldPreroll();
+        var graceScheduler = new ConditioningControlPanel.Services.MandatoryVideoScheduler(o, clock);
         var clip = Path.Combine(Path.GetTempPath(), "ccp-missing-" + Guid.NewGuid().ToString("N") + ".mp4");
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -128,6 +138,31 @@ public sealed class MandatoryVideoFloatingTests
                 o.CloseAll();
                 Assert.Empty(o.Windows);
 
+                // A panic during the veil must leave a visible, usable Resume card (WPF ShowGraceOverlays).
+                (o.Scheduler, o.Time) = (graceScheduler, clock);
+                (s.PanicOverridesAll, s.MasterVolume, s.VideoVolume) = (false, 80, 50);
+                Assert.True(graceScheduler.Trigger(strictOverride: false, path: clip));
+                o.Show(clip, strict: false);
+                var paused = Assert.Single(o.Surfaces);
+                Assert.Equal(-1, o.FirstFrameMs);
+                Assert.InRange(paused.Window.Opacity, double.Epsilon, 0.001);
+                Assert.False(paused.Window.IsHitTestVisible);
+                Assert.True(o.TryGracePause(fromPanicKey: true));
+                Assert.True(o.GracePaused && paused.Grace.IsVisible);
+                Assert.Equal(1, paused.Window.Opacity);
+                Assert.True(paused.Window.IsHitTestVisible);
+                var resume = Assert.Single(paused.Grace.GetVisualDescendants().OfType<Button>());
+                Assert.True(resume.IsEffectivelyVisible && resume.IsEffectivelyEnabled);
+                resume.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.False(o.GracePaused || paused.Grace.IsVisible);
+                Assert.True(paused.Window.IsHitTestVisible);
+                Assert.Equal(1, paused.Window.Opacity);
+                Assert.Equal(40, o.PlayerVolume);
+                o.UpdateVolume();
+                Assert.Equal(40, o.PlayerVolume); // the veil must not leave the resumed clip muted
+                graceScheduler.ForceCleanup();
+                (o.Scheduler, o.Time) = previous;
+
                 // Strict always covers the screen, and keeps its attention checks.
                 o.Show(clip, strict: true);
                 w = Assert.Single(o.Windows);
@@ -144,10 +179,27 @@ public sealed class MandatoryVideoFloatingTests
             }
             finally
             {
+                graceScheduler.ForceCleanup();
+                (o.Scheduler, o.Time) = previous;
+                graceStamp.SetValue(o, previousStamp);
                 o.CloseAll();
-                (s.MandatoryVideoFloating, s.AttentionChecksEnabled, s.AudioDuckingEnabled, s.MandatoryVideoFloatingSizePercent) = saved;
+                (s.MandatoryVideoFloating, s.AttentionChecksEnabled, s.AudioDuckingEnabled, s.MandatoryVideoFloatingSizePercent,
+                    s.PanicOverridesAll, s.MasterVolume, s.VideoVolume) = saved;
             }
             return Task.CompletedTask;
         });
+    }
+
+    // Trigger marks the scheduler live, but Show is driven synchronously before any frame can reveal it.
+    private sealed class HeldPreroll : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => new(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) => new HeldTimer();
+        private sealed class HeldTimer : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => default;
+        }
     }
 }

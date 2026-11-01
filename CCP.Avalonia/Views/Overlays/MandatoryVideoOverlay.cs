@@ -472,6 +472,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _sinceShow.Stop();
             _sinceFrame.Stop();   // freezes the attention clock and the clip guards (WPF re-phases both)
             foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; }
+            if (Floating && !_floatingRevealed) RevealFloating();
             SetCountdown(MandatoryVideoScheduler.GraceWindowSeconds);
             _graceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _graceTimer.Tick += (_, _) => GraceTick();
@@ -548,10 +549,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _firstPlayedMs < 0 || FirstFrameMs < 0 ? 0 : at - _firstPlayedMs, _sinceShow.ElapsedMilliseconds);
             if (verdict == FloatingRevealGate.Verdict.Skip) { Scheduler.End(); return false; }
             if (verdict != FloatingRevealGate.Verdict.Reveal) return true;
+            RevealFloating();
+            return true;
+        }
+
+        private void RevealFloating()
+        {
             _floatingRevealed = true;
             foreach (var x in _surfaces) { x.Window.Opacity = 1; x.Window.IsHitTestVisible = true; }
             UpdateVolume();
-            return true;
         }
 
         private static void Place(Window w, global::Avalonia.Platform.Screen? screen)
