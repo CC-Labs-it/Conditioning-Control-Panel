@@ -22,6 +22,8 @@ public partial class AvailableSubjectsTabView : UserControl
     internal int SelectedColumn { get; private set; }
     internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
+    // ponytail: no live feed yet. WPF hooks App.Lobby.Changed and leases its poll (MainWindow.Lobby.cs:83);
+    // this head has no LobbyService, so rows (and their host looks) only appear through PaintSnapshot.
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
 
     public AvailableSubjectsTabView()
