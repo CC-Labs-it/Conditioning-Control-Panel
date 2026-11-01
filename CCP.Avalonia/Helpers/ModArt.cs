@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
 {
     /// <summary>
     /// The head's half of <see cref="CoreModArt"/>: turn a Resources-relative logical name into a
-    /// decoded bitmap, mod override first, this head's shipped <c>avares://</c> copy second.
+    /// decoded bitmap, override first, then a per-mod nav twin, then the shipped copy.
     ///
     /// <para>This is the Avalonia twin of the WPF head's
     /// <c>Services.ModResourceResolver.ResolveImage</c>, split the way the seam requires - Core
@@ -49,16 +49,17 @@ namespace ConditioningControlPanel.Avalonia.Helpers
     internal static class ModArt
     {
         /// <summary>
-        /// The mod's override, else this head's shipped copy, else null.
+        /// The mod's override, then its embedded nav twin, then the shipped copy, or null.
         /// </summary>
         /// <param name="resourceName">
         /// Forward-slash path relative to <c>Resources/</c>, e.g. "bubble.png",
-        /// "features/flash.png", "achievements/lv_10.png". Traversal is rejected inside
-        /// <see cref="CoreModArt.OverridePath"/>.
+        /// "features/flash.png", "achievements/lv_10.png". Traversal is rejected before resolution.
         /// </param>
         internal static Bitmap? TryLoad(string? resourceName, int? decodeWidth = null)
         {
             if (string.IsNullOrWhiteSpace(resourceName)) return null;
+            resourceName = resourceName.Replace('\\', '/');
+            if (resourceName.Contains("..") || Path.IsPathRooted(resourceName)) return null;
 
             var overridePath = CoreModArt.OverridePath(resourceName);
             if (overridePath != null)
@@ -67,6 +68,22 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 catch (Exception ex) { Log.Warning(ex, "[ModArt] mod override {Path} would not load", overridePath); }
             }
 
+            // WPF ModResourceResolver.EmbeddedModTwin / EmbeddedPathFor: the pack override
+            // wins, then a compiled nav/mods/<id>/ twin when present, then the default art.
+            var modId = CoreMods.ActiveModId;
+            if (resourceName.StartsWith("nav/", StringComparison.Ordinal)
+                && !resourceName.StartsWith("nav/mods/", StringComparison.Ordinal)
+                && !string.IsNullOrEmpty(modId) && !modId.Contains("..")
+                && !modId.Contains('/') && !modId.Contains('\\') && !Path.IsPathRooted(modId))
+            {
+                var twin = "nav/mods/" + modId + "/" + resourceName.Substring(4);
+                try
+                {
+                    if (AssetLoader.Exists(new Uri($"avares://CCP.Avalonia/Resources/{twin}")))
+                        return TryLoadBuiltIn(twin, decodeWidth);
+                }
+                catch (Exception) { } // WPF EmbeddedExists treats an invalid resource as a miss.
+            }
             return TryLoadBuiltIn(resourceName, decodeWidth);
         }
 
