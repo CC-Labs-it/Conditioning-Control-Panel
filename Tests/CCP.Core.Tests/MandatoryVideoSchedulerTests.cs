@@ -18,8 +18,9 @@ public sealed class MandatoryVideoSchedulerTests
         public readonly List<(string Path, bool Strict)> Shown = new();
         public int Closes;
         public double Watched;
+        public bool ThrowOnClose;
         public void Show(string path, bool strict) => Shown.Add((path, strict));
-        public double CloseAll() { Closes++; return Watched; }
+        public double CloseAll() { Closes++; if (ThrowOnClose) throw new InvalidOperationException(); return Watched; }
         public readonly List<AttentionVerdict> Messages = new();
         public Action? Then;
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { Messages.Add(verdict); Then = then; }
@@ -35,6 +36,15 @@ public sealed class MandatoryVideoSchedulerTests
     }
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
+
+    [Fact]
+    public void Idle_panic_contains_a_host_close_failure()
+    {
+        var host = new Host { ThrowOnClose = true };
+        var v = new MandatoryVideoScheduler(host, new FakeClock(), () => Clips);
+        Assert.Null(Record.Exception(v.ForceCleanup));
+        Assert.Equal(1, host.Closes);
+    }
 
     [Fact]
     public void Panic_after_natural_end_still_drops_the_hosts_fading_curtain() => With(6, false, () =>

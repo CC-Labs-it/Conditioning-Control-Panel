@@ -15,7 +15,7 @@ internal sealed partial class MandatoryVideoOverlay
     private readonly List<Border> _entranceCurtains = new();
     private readonly List<Window> _exitCurtains = new();
     private IDisposable? _gentleBackstop;
-    private bool _naturalEnd;
+    internal Func<Action, TimeSpan, IDisposable> ArmGentleBackstop { get; set; } = (fire, delay) => DispatcherTimer.RunOnce(fire, delay);
 
     // WPF GentleBeforePlay: black until the first picture, with a three-second backstop.
     internal void CoverGentleEntrance(Panel panel)
@@ -24,7 +24,7 @@ internal sealed partial class MandatoryVideoOverlay
         var cover = new Border { Background = Brushes.Black, IsHitTestVisible = false };
         panel.Children.Add(cover);
         _entranceCurtains.Add(cover);
-        _gentleBackstop ??= DispatcherTimer.RunOnce(RevealGentleEntrance, TimeSpan.FromSeconds(3));
+        _gentleBackstop ??= ArmGentleBackstop(RevealGentleEntrance, TimeSpan.FromSeconds(3));
     }
 
     internal void RevealGentleEntrance()
@@ -79,18 +79,17 @@ internal sealed partial class MandatoryVideoOverlay
         }, TimeSpan.FromSeconds(GentleVisuals.FadeSeconds));
     }
 
-    internal void OnNaturalVideoEnd()
-    {
-        _naturalEnd = true;
-        try { Scheduler.Ended(); }
-        finally { _naturalEnd = false; }
-    }
+    internal void OnNaturalVideoEnd() => Scheduler.Ended(renderedFrame: FirstFrameMs >= 0);
 
-    internal void DropGentleCurtains()
+    private void DropEntrance()
     {
         _gentleBackstop?.Dispose();
         _gentleBackstop = null;
         _entranceCurtains.Clear();
+    }
+
+    private void DropExitCurtains()
+    {
         foreach (var window in _exitCurtains) window.Close();
         _exitCurtains.Clear();
     }

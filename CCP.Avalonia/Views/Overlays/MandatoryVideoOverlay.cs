@@ -110,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>This clip arms the attention checks (never on a floating window).</summary>
         internal bool AttentionArmed => _attention;
         /// <summary>Milliseconds from Show to the first frame on screen; -1 until then.</summary>
-        internal long FirstFrameMs { get; private set; } = -1;
+        internal long FirstFrameMs { get; set; } = -1;
         /// <summary>Total ms spent downscaling blur fills, and how many (CCP perf check).</summary>
         internal double FillMs { get; private set; }
         internal int FillCount { get; private set; }
@@ -889,7 +889,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
             _closing = true;
-            if (!_naturalEnd) DropGentleCurtains();
+            DropEntrance();
+            if (!Scheduler.SoftExit) DropExitCurtains();
             try
             {
                 _attention = _gracePaused = false;
@@ -911,7 +912,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _player = null;
                 try { _media?.Dispose(); } catch { }
                 _media = null;
-                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; CloseGentleSurface(x.Window, _naturalEnd); }
+                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; CloseGentleSurface(x.Window, Scheduler.SoftExit); }
                 _surfaces.Clear();
                 _sink?.Free();
                 _sink = null;

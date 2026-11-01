@@ -106,6 +106,7 @@ public sealed class MandatoryVideoGentleTests
                 Assert.True(o.Scheduler.Trigger(strict, "/test/first.mp4"));
                 var first = o.Build(null, strict);
                 ((List<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(first);
+                o.FirstFrameMs = 0;
                 o.OnNaturalVideoEnd();
                 Assert.False(o.Scheduler.IsPlaying);
                 var curtain = Assert.Single(o.ExitCurtains);
@@ -165,6 +166,105 @@ public sealed class MandatoryVideoGentleTests
             finally { o.CloseAll(); video.Close(); o.MakeGentleClickThrough = previous; }
             return Task.CompletedTask;
         });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Every_end_cancels_its_entrance_and_the_next_clip_gets_a_fresh_backstop(bool rendered)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            settings.Current.GentleVisuals = true;
+            settings.Current.AttentionChecksEnabled = false;
+            var o = MandatoryVideoOverlay.Instance;
+            var old = (o.Scheduler, o.MakeGentleClickThrough, o.ArmGentleBackstop);
+            var timers = new List<Backstop>();
+            o.ArmGentleBackstop = (fire, delay) => { var t = new Backstop(fire, delay); timers.Add(t); return t; };
+            o.MakeGentleClickThrough = _ => true;
+            o.Scheduler = new MandatoryVideoScheduler(o, new StillTime(), () => Array.Empty<string>());
+            try
+            {
+                Assert.True(o.Scheduler.Trigger(path: "/test/first.mp4"));
+                var first = o.Build(null, false);
+                ((List<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(first);
+                o.FirstFrameMs = rendered ? 0 : -1;
+                o.OnNaturalVideoEnd();
+                Assert.Equal(rendered ? 1 : 0, o.ExitCurtains.Count);
+                Assert.True(Assert.Single(timers).Disposed);
+                var panel = new Panel();
+                o.CoverGentleEntrance(panel);
+                Assert.Equal(2, timers.Count);
+                Assert.All(timers, t => Assert.Equal(TimeSpan.FromSeconds(3), t.Delay));
+                timers[0].Fire();
+                Assert.Equal(1, Assert.Single(panel.Children).Opacity);
+                timers[1].Fire();
+                Assert.Equal(0, Assert.Single(panel.Children).Opacity);
+            }
+            finally
+            {
+                o.Scheduler.ForceCleanup(); o.CloseAll();
+                (o.Scheduler, o.MakeGentleClickThrough, o.ArmGentleBackstop) = old;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Attention_fail_and_mercy_close_without_a_soft_exit()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            settings.Current.GentleVisuals = settings.Current.AttentionChecksEnabled = true;
+            settings.Current.MercySystemEnabled = true;
+            settings.Current.MercyAfterFails = 2;
+            var o = MandatoryVideoOverlay.Instance;
+            var old = (o.Scheduler, o.MakeGentleClickThrough);
+            var host = new VerdictHost(o);
+            var covers = 0;
+            o.MakeGentleClickThrough = _ => { covers++; return true; };
+            o.Scheduler = new MandatoryVideoScheduler(host, new StillTime(), () => Array.Empty<string>());
+            try
+            {
+                for (var i = 0; i < 2; i++)
+                {
+                    Assert.True(o.Scheduler.Trigger(path: "/test/fail.mp4"));
+                    var surface = o.Build(null, false);
+                    ((List<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(surface);
+                    o.FirstFrameMs = 0;
+                    o.Scheduler.NoteSpawn();
+                    o.OnNaturalVideoEnd();
+                    Assert.False(surface.Window.IsVisible);
+                    Assert.Empty(o.ExitCurtains);
+                }
+                Assert.Equal(new[] { AttentionVerdict.Fail, AttentionVerdict.Mercy }, host.Verdicts);
+                Assert.Equal(0, covers);
+            }
+            finally { o.Scheduler.ForceCleanup(); o.CloseAll(); (o.Scheduler, o.MakeGentleClickThrough) = old; }
+            return Task.CompletedTask;
+        });
+    }
+
+    private sealed class Backstop(Action fire, TimeSpan delay) : IDisposable
+    {
+        public bool Disposed;
+        public TimeSpan Delay => delay;
+        public void Fire() { if (!Disposed) fire(); }
+        public void Dispose() => Disposed = true;
+    }
+
+    private sealed class VerdictHost(MandatoryVideoOverlay overlay) : IMandatoryVideoHost
+    {
+        public readonly List<AttentionVerdict> Verdicts = new();
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => overlay.CloseAll();
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => Verdicts.Add(verdict);
     }
 
     private static void EnsureApp()
