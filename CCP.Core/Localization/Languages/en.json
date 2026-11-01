@@ -1,4 +1,6 @@
 {
+  "chaos_draft_resistance_announce": "+1 resistance",
+  "chaos_draft_resisted": "resisted. +1 resistance",
   "chaos_welcome_shower_event": "welcome shower: treats from above",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
