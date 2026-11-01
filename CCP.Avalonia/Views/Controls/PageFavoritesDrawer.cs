@@ -35,7 +35,8 @@ public sealed class PageFavoritesDrawer : Grid
     public PageFavoritesDrawer()
     {
         ColumnDefinitions = new ColumnDefinitions("22,Auto");
-        _chevron = new IconGlyph { Kind = IconKind.ChevronLeft, Size = 16, HorizontalAlignment = HorizontalAlignment.Center };
+        // WPF PageFavoritesDrawer.cs:60,65: keep icons clear of the rounded handle ends.
+        _chevron = new IconGlyph { Kind = IconKind.ChevronLeft, Size = 16, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 7) };
         // WPF PageFavoritesDrawer.cs:66-72: the handle word inherits its mod ink.
         var word = new TextBlock { FontSize = 12, FontWeight = FontWeight.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center };
@@ -43,7 +44,7 @@ public sealed class PageFavoritesDrawer : Grid
         var rotated = new LayoutTransformControl { LayoutTransform = new RotateTransform(-90), Child = word,
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         var face = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
-        face.Children.Add(new IconGlyph { Kind = IconKind.Star, Variant = IconVariant.Filled, Size = 13, HorizontalAlignment = HorizontalAlignment.Center });
+        face.Children.Add(new IconGlyph { Kind = IconKind.Star, Variant = IconVariant.Filled, Size = 13, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 7, 0, 0) });
         SetRow(rotated, 1); SetRow(_chevron, 2);
         face.Children.Add(rotated); face.Children.Add(_chevron);
         _face = new Border { CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1.5), Child = face };

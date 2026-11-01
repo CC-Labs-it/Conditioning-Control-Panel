@@ -123,6 +123,9 @@ public class FavoritesRailParityTests
             var face = Assert.IsType<Grid>(Assert.IsType<Border>(drawer.Handle.Content).Child);
             var star = Assert.Single(face.Children.OfType<IconGlyph>(), g => Grid.GetRow(g) == 0);
             var chevron = Assert.Single(face.Children.OfType<IconGlyph>(), g => Grid.GetRow(g) == 2);
+            // WPF PageFavoritesDrawer.cs:60,65: keep icons clear of the rounded ends.
+            Assert.Equal(new Thickness(0, 7, 0, 0), star.Margin);
+            Assert.Equal(new Thickness(0, 0, 0, 7), chevron.Margin);
             Assert.Equal(IconKind.Star, star.Kind);
             Assert.Equal(IconVariant.Filled, star.Variant);
             Assert.False(star.IsFallback);
