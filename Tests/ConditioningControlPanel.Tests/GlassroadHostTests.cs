@@ -135,6 +135,7 @@ public class GlassroadHostTests
         Assert.False((bool)f["caps"]!["scrolller"]!["consent"]!);
         Assert.Equal("device", (string?)f["caps"]!["scrolller"]!["origin"]);
         Assert.Equal(GlassroadRules.PicturesMediaOrigin, (string?)f["caps"]!["scrolller"]!["mediaOrigin"]);
+        Assert.True((bool?)f["caps"]!["scrolller"]!["clips"]);
         Assert.Equal("init", (string?)f["type"]);
         Assert.Equal(2, (int)f["v"]!);
         Assert.Equal("desktop", (string?)f["caps"]!["platform"]);

@@ -37,6 +37,23 @@ public class GlassroadPicturesTests
     }
 
     [Fact]
+    public void Clips_take_half_the_window_first_and_stills_fill_the_rest()
+    {
+        var stills = Enumerable.Range(0, 20).Select(i => $"https://ccp.assets/.temp/{i}.jpg").ToList();
+        var clips = Enumerable.Range(0, 12).Select(i => $"https://ccp.assets/.temp/{i}.mp4").ToList();
+        var rows = (JArray)GlassroadRules.PicturesFeed(stills, 6, new (string, string)[0], clips)["rows"]!;
+        Assert.Equal(GlassroadRules.PicturesRows, rows.Count);
+        Assert.Equal(GlassroadRules.PicturesRows / 2, rows.Count(r => (string?)r["kind"] == "video"));
+        Assert.Equal("https://ccp.assets/.temp/3.mp4", (string?)rows[0]["url"]);
+        Assert.Equal(rows.Count, rows.Select(r => (string?)r["url"]).Distinct().Count());
+        var few = (JArray)GlassroadRules.PicturesFeed(stills, 0, new (string, string)[0], new[] { "c" })["rows"]!;
+        Assert.Equal(GlassroadRules.PicturesRows, few.Count);
+        Assert.Single(few, r => (string?)r["kind"] == "video");
+        var only = (JArray)GlassroadRules.PicturesFeed(new string[0], 0, new (string, string)[0], clips)["rows"]!;
+        Assert.Equal(GlassroadRules.PicturesRows, only.Count);
+    }
+
+    [Fact]
     public void A_short_or_empty_pool_is_only_what_it_holds()
     {
         var two = (JArray)GlassroadRules.PicturesFeed(new[] { "a", "b" }, 7, new (string, string)[0])["rows"]!;

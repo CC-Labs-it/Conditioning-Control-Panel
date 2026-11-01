@@ -46,7 +46,7 @@ internal static class GlassroadRules
                 // the race sends its toy plan here (host/raceToys.js); the Options row shows only with a toy connected
                 ["toys"] = true, ["toysConnected"] = toysConnected,
                 // Scrolller stills as real textures, cached here and served from the media host (host/devicePictures.js)
-                ["scrolller"] = new JObject { ["consent"] = picturesOn, ["origin"] = "device", ["mediaOrigin"] = PicturesMediaOrigin },
+                ["scrolller"] = new JObject { ["consent"] = picturesOn, ["origin"] = "device", ["clips"] = true, ["mediaOrigin"] = PicturesMediaOrigin },
             },
             ["identity"] = signedIn
                 ? new JObject { ["unifiedId"] = unifiedId, ["tier"] = Math.Clamp(tier, 0, 2),
@@ -70,11 +70,17 @@ internal static class GlassroadRules
         => consent && !offline && (own == true
             || (own == null && !string.Equals(mediaSource ?? "local", "local", StringComparison.OrdinalIgnoreCase)));
 
-    /// <summary>Host -> page <c>scrolller-feed</c>: a window of the pool's stills, wrapping, with no repeats.</summary>
-    public static JObject PicturesFeed(IReadOnlyList<string> urls, int offset, IEnumerable<(string Id, string Label)> catalog)
+    /// <summary>Host -> page <c>scrolller-feed</c>: a window of the pool, wrapping, with no repeats. Clips take up to half
+    /// of it, first; stills fill the rest, so the page always has both when the pool does.</summary>
+    public static JObject PicturesFeed(IReadOnlyList<string> urls, int offset, IEnumerable<(string Id, string Label)> catalog, IReadOnlyList<string>? clips = null)
     {
         var rows = new JArray();
-        int n = Math.Min(urls.Count, PicturesRows), start = urls.Count == 0 ? 0 : ((offset % urls.Count) + urls.Count) % urls.Count;
+        clips ??= Array.Empty<string>();
+        int clipRows = Math.Min(clips.Count, urls.Count == 0 ? PicturesRows : PicturesRows / 2);
+        int clipStart = clips.Count == 0 ? 0 : (((offset / 2) % clips.Count) + clips.Count) % clips.Count;   // half the clips stay through a turn
+        for (int i = 0; i < clipRows; i++)
+            rows.Add(new JObject { ["url"] = clips[(clipStart + i) % clips.Count], ["kind"] = "video" });
+        int n = Math.Min(urls.Count, PicturesRows - clipRows), start = urls.Count == 0 ? 0 : ((offset % urls.Count) + urls.Count) % urls.Count;
         for (int i = 0; i < n; i++)
             rows.Add(new JObject { ["url"] = urls[(start + i) % urls.Count], ["kind"] = "image" });
         var list = new JArray();
