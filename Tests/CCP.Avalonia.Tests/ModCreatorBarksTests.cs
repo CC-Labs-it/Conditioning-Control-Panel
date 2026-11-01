@@ -220,4 +220,42 @@ public sealed class ModCreatorBarksTests
         Assert.Empty(w.WriteBarksTo(Path.Combine(root, "override")));
     });
 
+    [Fact]
+    public void FreshRuleExportedThenChangedToOverrideExportsOnlyOverlayFields() => Run((w, root) =>
+    {
+        Click(w, "mod_barks_add");
+        var card = Card(w);
+        var boxes = card.GetLogicalDescendants().OfType<TextBox>().ToList();
+        boxes[0].Text = "my_rule"; boxes[1].Text = "Event";
+        boxes.Single(b => Equals(b.Tag, "mod_barks_priority")).Text = "9";
+        boxes.Single(b => Equals(b.Tag, "conditions")).Text = "{level_gte:10}";
+        Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = "hello";
+        var original = (JObject)Assert.Single(Export(w, Path.Combine(root, "new")));
+        Assert.Equal("Event", original.Value<string>("trigger"));
+        Assert.Equal(9, original.Value<int>("priority"));
+        Assert.Equal(10, original["conditions"]!.Value<int>("level_gte"));
+
+        card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
+        boxes[0].Text = "Base.Id";
+        var result = (JObject)Assert.Single(Export(w, Path.Combine(root, "override")));
+        Assert.Equal(new[] { "id", "variant_pool" }, result.Properties().Select(p => p.Name));
+        Assert.Equal("Base.Id", result.Value<string>("id"));
+        Assert.Equal("hello", Assert.Single((JArray)result["variant_pool"]!).Value<string>());
+    });
+
+    [Fact]
+    public void LoadedRuleChangedToOverrideKeepsBackingFields() => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), "[{id:'loaded',trigger:'Event',conditions:{level_gte:10},future:42,variant_pool:['line']}]");
+        w.LoadBarksFrom(root);
+        var card = Card(w);
+        card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
+        var result = (JObject)Assert.Single(Export(w, Path.Combine(root, "override")));
+        Assert.Equal("Event", result.Value<string>("trigger"));
+        Assert.Equal(10, result["conditions"]!.Value<int>("level_gte"));
+        Assert.Equal(42, result.Value<int>("future"));
+        Assert.Equal("line", Assert.Single((JArray)result["variant_pool"]!).Value<string>());
+    });
+
 }

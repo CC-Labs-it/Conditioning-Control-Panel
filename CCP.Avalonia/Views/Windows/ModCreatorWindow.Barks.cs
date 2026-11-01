@@ -24,6 +24,7 @@ public partial class ModCreatorWindow
     private sealed class BarkCard
     {
         public JObject Json = new();
+        public bool LoadedFromFile;
         public StackPanel Panel = new(), Variants = new();
         public Border Frame = new();
         public TextBox Id = new(), Trigger = new();
@@ -53,7 +54,7 @@ public partial class ModCreatorWindow
 
     private void AddBarkCard(JObject? loaded)
     {
-        var card = new BarkCard { Json = loaded == null ? new JObject() : (JObject)loaded.DeepClone() };
+        var card = new BarkCard { Json = loaded == null ? new JObject() : (JObject)loaded.DeepClone(), LoadedFromFile = loaded != null };
         card.Id.Text = loaded?.Value<string>("id") ?? "";
         card.Trigger.Text = loaded?.Value<string>("trigger") ?? "";
         card.Override.Content = Loc.Get("mod_barks_override");
@@ -212,7 +213,7 @@ public partial class ModCreatorWindow
             {
                 if (pool.Count == 0) continue;
                 // Fresh overrides emit only overlay fields. Loaded rules retain their backing fields.
-                if (card.Json.Count == 0) rule.RemoveAll();
+                if (!card.LoadedFromFile) rule.RemoveAll();
             }
             else
             {
