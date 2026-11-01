@@ -143,6 +143,7 @@ public sealed partial class FriendsDrawer
     private Control LinkNote()
     {
         var note = Tagged(Wrap(Label(_linkNoteText!, 10.5, _linkNoteGood ? Mint : Gold)), "friends-link-note");
+        note.Margin = new Thickness(8, 0, 2, 4);
         SetNoteTransition(note, GentleVisuals.RiseMs(180));
         if (_noteFresh)
         {
@@ -155,16 +156,20 @@ public sealed partial class FriendsDrawer
 
     private static void AddPlatformMarks(StackPanel line, Friend friend)
     {
-        foreach (var (platform, _, tip) in global::ConditioningControlPanel.Controls.Friends.FriendsDrawerRules.PlatformMarks(friend))
+        var marks = global::ConditioningControlPanel.Controls.Friends.FriendsDrawerRules.PlatformMarks(friend);
+        if (marks.Count == 0) return;
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Tag = "friends-platforms" };
+        foreach (var (platform, _, tip) in marks)
         {
             var mark = new IconGlyph { Kind = platform switch
             {
                 FriendPlatform.Phone => IconKind.Phone,
                 FriendPlatform.Web => IconKind.Globe,
                 _ => IconKind.Desktop,
-            }, Size = 11, Foreground = Dim, Margin = new Thickness(4, 0, 0, 0), Tag = "friends-platform:" + platform };
+            }, Size = 11, Foreground = Dim, Margin = new Thickness(0, 1, 4, 0), Tag = "friends-platform:" + platform };
             ToolTip.SetTip(mark, Loc.Get(tip));
-            line.Children.Add(mark);
+            strip.Children.Add(mark);
         }
+        line.Children.Add(strip);
     }
 }

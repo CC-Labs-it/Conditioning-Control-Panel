@@ -54,6 +54,15 @@ public sealed partial class FriendsDrawerTests
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.Equal("ABCDEFGHJKLM", box.Text);
             Assert.True(Tagged<Button>(d, "friends-add-go")!.IsEnabled);
+            box.Text = ""; global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            foreach (var c in "ccpabcde") { box.Text += c; global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }
+            Assert.Equal("CCPABCDE", box.Text);
+            Assert.False(((Grid)box.Parent!).Children.OfType<TextBlock>().Single().IsVisible);
+            Assert.False(Tagged<Button>(d, "friends-add-go")!.IsEnabled);
+            foreach (var c in "fghj") { box.Text += c; global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }
+            Assert.Equal("CCPABCDEFGHJ", box.Text);
+            Assert.True(Tagged<Button>(d, "friends-add-go")!.IsEnabled);
+            Assert.Equal(new Thickness(8, 0, 2, 4), Tagged<TextBlock>(d, "friends-link-note")!.Margin);
             wire.HoldLinks = new TaskCompletionSource();
             var slow = d.CopyLinkAsync();
             Assert.False(await d.NewLinkAsync());
@@ -81,7 +90,7 @@ public sealed partial class FriendsDrawerTests
         var (svc, wire) = Service();
         using (svc)
         {
-            wire.StateBody = wire.StateBody.Replace("\"name\":\"Mia\"", "\"name\":\"Mia\",\"platforms\":[\"web\",\"phone\",\"desktop\"]");
+            wire.StateBody = wire.StateBody.Replace("\"name\":\"Mia\"", "\"name\":\"Mia\",\"platforms\":[\"web\",\"phone\",\"desktop\"]").Replace("\"squelched\":false", "\"squelched\":true");
             await svc.RefreshAsync();
             var d = new FriendsDrawer(svc);
             foreach (var platform in new[] { "desktop", "phone", "web" })
@@ -90,6 +99,11 @@ public sealed partial class FriendsDrawerTests
                 Assert.NotNull(mark);
                 Assert.Equal(Loc.Get("friends_platform_" + platform), ToolTip.GetTip(mark!));
             }
+            var strip = Tagged<StackPanel>(d, "friends-platforms");
+            Assert.NotNull(strip);
+            var nameLine = (StackPanel)strip.Parent!;
+            Assert.True(nameLine.Children.IndexOf(Tagged<TextBlock>(d, "friends-squelched")!) < nameLine.Children.IndexOf(strip));
+            Assert.Equal(new Thickness(6, 0, 0, 0), strip.Margin);
         }
     });
     [Theory]

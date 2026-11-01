@@ -109,6 +109,7 @@ public sealed partial class FriendsDrawer : Border
         _codeBox.TextChanged += (_, _) =>
         {
             var raw = _codeBox.Text ?? "";
+            if (raw == boxBefore) return;
             var (n, isToken) = FriendsLinkRules.BoxText(raw, raw.Length == boxBefore.Length + 1);
             boxBefore = n;
             prefix.IsVisible = !isToken;
@@ -344,13 +345,13 @@ public sealed partial class FriendsDrawer : Border
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
         nameLine.Children.Add(Label(f.Name, 14, f.Online ? Text : Muted, Display, FontWeight.Medium));
-        AddPlatformMarks(nameLine, f);
         if (f.Squelched)
         {
             var sq = Tagged(Label(Loc.Get("friends_squelched_tag"), 9, Dim, Mono), "friends-squelched");
             sq.Margin = new Thickness(6, 1, 0, 0);
             nameLine.Children.Add(sq);
         }
+        AddPlatformMarks(nameLine, f);
         mid.Children.Add(nameLine);
         mid.Children.Add(table != null ? HostingLine() : ActivityLine(f));
         // What you last sent them and how far it got (sent, arrived, seen, answered).
