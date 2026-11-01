@@ -7,13 +7,10 @@ using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Avalonia.Views.Games
 {
-    /// <summary>The hidden door, the host init frame (protocol v2) and the relay's signing rule. No I/O, no
-    /// statics beyond the env read, so every rule is tested without a window.</summary>
+    /// <summary>The host init frame (protocol v2) and the relay's signing rule. No I/O, no
+    /// mutable statics, so every rule is tested without a window.</summary>
     internal static class GlassroadHostRules
     {
-        /// <summary>The env switch that turns the Racing Thoughts door into the Glassroad door. Preview only.</summary>
-        public const string DoorEnv = "CCP_GLASSROAD";
-
         /// <summary>The only prefix the relay forwards (the race lobby), judged on the built Uri by
         /// <see cref="HostNetPathRule"/>. WPF reads it as HostNetPathRule.RacePrefix.</summary>
         public const string AllowedPathPrefix = "/v2/race/";
@@ -21,8 +18,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The web courier's body cap, kept the same here.</summary>
         public const int MaxBodyBytes = 16 * 1024;
 
-        /// <summary>True when the env value opens the door: exactly "1".</summary>
-        public static bool DoorOpen(string? envValue) => string.Equals(envValue?.Trim(), "1", StringComparison.Ordinal);
+        /// <summary>A validated race room on the local asset server, or no join query.</summary>
+        public static string? JoinQuery(string? roomId) =>
+            ConditioningControlPanel.Services.Lobby.RaceJoinLink.For(roomId)?.Query.TrimStart('?');
+
+        /// <summary>The live page's join message. Invalid ids never reach the bridge.</summary>
+        public static JObject? JoinFrame(string? roomId) => JoinQuery(roomId) == null ? null
+            : new JObject { ["type"] = "join-room", ["roomId"] = roomId };
 
         /// <summary>The host init frame (glassroad CONTRACT.md section 7). <c>caps.net</c> is always true on the
         /// desktop: a signed-out player gets <c>identity: null</c> and the lobby asks them to sign in. <c>songs</c>

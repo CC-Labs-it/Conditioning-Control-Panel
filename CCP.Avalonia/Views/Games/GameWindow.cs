@@ -49,12 +49,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             [JustDropId] = new(JustDropId, "jd_door_title", "", JustDropDoorOpen),
             // WPF PieceByPieceHostService.cs:221 StartUrl; free for everyone since 2026-09-27 (:188), no gate.
             [PbpId] = new(PbpId, "launcher_game_piecebypiece_title", "piecebypiece/index.html"),
-            // WPF CaucusHostService.Launch: dtrh/race.html behind the racing-purchase door (GameWindow.Race.cs).
+            // Retired 2D race engine stays for protocol tests; ResolveDoor keeps public launches on Glassroad.
             ["loom"] = new("loom", "billboard_loom_title", "dtrh/loom.html"), // WPF LoomHostService: free
             ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
             // WPF DtrhHostService.cs:196 StartUrl behind the Lab door (GameWindow.Dtrh.cs).
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
-            // WPF GlassroadHostService (feat/glassroad-a): the 3D race behind CCP_GLASSROAD=1 (GameWindow.Glassroad.cs).
+            // WPF 7.2: Racing Thoughts 3D requires Prime (GameWindow.Glassroad.cs).
             [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
         };
 
@@ -71,15 +71,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
-        internal static GameWindow? Launch(string id)
+        internal static GameWindow? Launch(string id, string? joinRoomId = null)
         {
-            id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
+            if (joinRoomId != null && GlassroadHostRules.JoinQuery(joinRoomId) == null) return null;
+            id = ResolveDoor(id);   // 7.2: public race doors always open the 3D race
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
-            if (live != null) { live.Activate(); return live; }
+            if (live != null)
+            {
+                // WPF checks Prime before refocusing too: entitlement can change while the race is open.
+                if (spec.Id == GlassroadId && !GlassroadGate()) return null;
+                if (spec.Id == GlassroadId && joinRoomId != null)
+                    live.JoinGlassroadRoom(joinRoomId);
+                live.Activate();
+                return live;
+            }
             try { if (spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
+            if (spec.Id == GlassroadId && joinRoomId != null) spec = spec with { Query = GlassroadHostRules.JoinQuery(joinRoomId) };
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();
