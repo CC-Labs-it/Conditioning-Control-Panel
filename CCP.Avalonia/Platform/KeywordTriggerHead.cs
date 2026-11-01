@@ -10,6 +10,8 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Content;
+using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.Safety;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -162,6 +164,25 @@ internal sealed class KeywordAudioRuntime
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
         }
+        // WPF KeywordTriggerService.cs:1257-1267: record the match, but do not dispatch
+        // effects or audio during the five-minute post-panic quiet.
+        if (PanicAftermath.TriggersSilenced()) return;
+
+        // WPF :1250-1255,1283-1294,1393-1403,1805-1808: a single trigger
+        // runs each enabled action; a merged match runs each visual kind once.
+        if (fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
+        {
+            if (fired[0].VisualEffect == KeywordVisualEffect.BrainDrain)
+                new BrainDrainMeltPayload().Fire();
+        }
+        else
+        {
+            var drains = fired.SelectMany(t => t.Actions ?? new()).OfType<VisualEffectAction>()
+                .Count(a => a.Enabled && a.Effect == KeywordVisualEffect.BrainDrain);
+            if (fired.Count > 1) drains = Math.Min(drains, 1);
+            for (var i = 0; i < drains; i++) new BrainDrainMeltPayload().Fire();
+        }
+
         // WPF merge: preset first, and only the first enabled PlayAudio action wins.
         var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
         if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))

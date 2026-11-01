@@ -177,4 +177,77 @@ public sealed class KeywordAudioRuntimeTests
         _ = new MainShellWindow();   // WPF MainWindow.xaml.cs:341 starts the service at boot
         Assert.True(KeywordTriggerHead.Engine.IsActive);
     });
+    [Fact] // WPF KeywordTriggerService.cs:1257-1267,1805-1808
+    public void BrainDrainKeywordRoutesEnabledActionsAndLegacyButDeduplicatesMergedMatches() => Run((engine, s, _) =>
+    {
+        var previous = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+        var payloads = new List<ConditioningControlPanel.Services.Chaos.EffectPayload>();
+        ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = payloads.Add;
+        try
+        {
+            var now = new DateTime(2026, 10, 14, 12, 0, 0);
+            engine.Now = () => now;
+            s.AwarenessLoopProtectionEnabled = false;
+            s.KeywordTriggers[0].Actions = new List<KeywordAction> {
+                new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain },
+                new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain },
+                new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain, Enabled = false },
+                new VisualEffectAction { Effect = KeywordVisualEffect.Bubbles } };
+            now = now.AddSeconds(2);
+            Type(engine, "sit");
+            Assert.Equal(2, payloads.Count);
+            Assert.All(payloads, p => Assert.IsType<ConditioningControlPanel.Services.Chaos.BrainDrainMeltPayload>(p));
+            payloads.Clear();
+            s.KeywordTriggers.Add(new KeywordTrigger { Id = "preset:drain", Keyword = "sit", CooldownSeconds = 0,
+                Actions = new List<KeywordAction> { new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain } } });
+            now = now.AddSeconds(2);
+            Type(engine, "sit");
+            Assert.Single(payloads);
+            payloads.Clear();
+            s.KeywordTriggers.RemoveAt(1);
+            s.KeywordTriggers[0].Actions.Clear();
+            s.KeywordTriggers[0].VisualEffect = KeywordVisualEffect.BrainDrain;
+            now = now.AddSeconds(2);
+            Type(engine, "sit");
+            Assert.Single(payloads);
+            payloads.Clear();
+            s.KeywordTriggers[0].VisualEffect = KeywordVisualEffect.None;
+            now = now.AddSeconds(2);
+            Type(engine, "sit");
+            Assert.Empty(payloads);
+        }
+        finally { ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = previous; }
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1187-1200,1257-1267
+    public void PanicQuietSuppressesKeywordAudioAndBrainDrainUntilUserEndsQuiet() => Run((engine, s, played) =>
+    {
+        var previous = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+        var payloads = new List<ConditioningControlPanel.Services.Chaos.EffectPayload>();
+        ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = payloads.Add;
+        ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+        try
+        {
+            var now = new DateTime(2026, 10, 14, 12, 0, 0);
+            engine.Now = () => now;
+            s.AwarenessLoopProtectionEnabled = false;
+            s.KeywordTriggers[0].Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain });
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            now = now.AddSeconds(2);
+            Type(engine, "sit");
+            Assert.Empty(payloads);
+            Assert.Empty(played);
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            now = now.AddSeconds(2);
+            Type(engine, "sit");
+            Assert.Single(payloads);
+            Assert.Single(played);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = previous;
+        }
+    });
+
 }
