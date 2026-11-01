@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             {
                 if (_loading || e.Property != Slider.ValueProperty) return;
                 CoreSettings.Current.BrainDrainIntensity = (int)intensity.Value;
+                if (CoreEngine.IsRunning) CoreEngine.SetBrainDrainIntensity?.Invoke(CoreSettings.Current.BrainDrainIntensity); // WPF BrainDrainFeatureControl.xaml.cs:254-258
                 CoreSettings.Save();
             };
             refresh.IsCheckedChanged += (_, _) =>

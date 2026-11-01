@@ -157,6 +157,46 @@ public class BrainDrainTests {
         finally { runner.Stop(); CoreEngine.Stop(); }
     });
     [Fact]
+    public void Immediate_constant_session_keeps_already_running_global_intensity_until_restart() => Run(_ => {
+        // WPF BrainDrainService.cs:223,232,275-285; SessionEngine.cs:1484-1490,848-856,529,579.
+        var s = CoreSettings.Current; s.BrainDrainIntensity = 60; s.BrainDrainHighRefresh = false;
+        var voices = new List<Voice>();
+        var player = new BrainDrainPlayer((_, _, _, end) => { var v = new Voice { End = end }; voices.Add(v); return v; }, new Clock(), () => .04);
+        player.Seed(); var runner = new SessionRunner(new SessionLogService());
+        var session = new ConditioningControlPanel.Models.Session { Name = "Constant brain", DurationMinutes = 4 };
+        session.Settings.BrainDrainEnabled = true; session.Settings.BrainDrainStartIntensity = 20;
+        session.Settings.BrainDrainEndIntensity = 20;
+        try {
+            CoreEngine.Start(); Assert.True(player.IsRunning);
+            runner.Start(session); Assert.Equal(20, s.BrainDrainIntensity);
+            player.Tick(); Assert.Single(voices); // global 60 / 12, not session 20 / 12
+            voices[0].End(); runner.Tick(TimeSpan.FromMinutes(2)); player.Tick();
+            Assert.Equal(2, voices.Count); // a constant session never sends a ramp
+            runner.Pause(); runner.Resume(); player.Tick(); Assert.Equal(2, voices.Count); // restart reads 20
+        }
+        finally { runner.Stop(); CoreEngine.Stop(); }
+    });
+    [Fact]
+    public async Task Studio_intensity_slider_updates_the_running_player_explicitly() =>
+        await AvaloniaTestDispatcher.RunAsync(() => { Run(_ => {
+            // WPF BrainDrainFeatureControl.xaml.cs:246-262; BrainDrainService.cs:223,275-285.
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var s = CoreSettings.Current; s.BrainDrainIntensity = 60; s.BrainDrainHighRefresh = false;
+            var voices = new List<Voice>();
+            var player = new BrainDrainPlayer((_, _, _, end) => { var v = new Voice { End = end }; voices.Add(v); return v; }, new Clock(), () => .04);
+            player.Seed(); CoreEngine.Start();
+            try {
+                var card = new BrainDrainFeatureControl(); var slider = card.FindControl<Slider>("SliderIntensity")!;
+                player.Tick(); Assert.Single(voices); voices[0].End();
+                s.BrainDrainIntensity = 20; player.Tick(); Assert.Equal(2, voices.Count); // a settings write alone is not UpdateSettings
+                voices[1].End(); slider.Value = 20; player.Tick(); Assert.Equal(2, voices.Count);
+                slider.Value = 80; player.Tick(); Assert.Equal(3, voices.Count);
+            }
+            finally { CoreEngine.Stop(); }
+        }); return Task.CompletedTask; });
+    [Fact]
     public void Session_ramp_changes_real_player_probability_without_writing_settings() => Run(_ => {
         var s = CoreSettings.Current; s.BrainDrainIntensity = 20;
         var voices = new List<Voice>(); double roll = .04;
@@ -164,7 +204,8 @@ public class BrainDrainTests {
         player.Seed(); player.Start(); player.Tick(); Assert.Empty(voices); // 20 / 100 / 12
         CoreEngine.SetBrainDrainIntensity!(60); player.Tick(); Assert.Single(voices); // 60 / 100 / 12
         Assert.Equal(20, s.BrainDrainIntensity);
-        voices[0].End(); s.BrainDrainIntensity = 30; player.Tick(); Assert.Single(voices); // live slider resets ramp
+        voices[0].End(); s.BrainDrainIntensity = 30; CoreEngine.SetBrainDrainIntensity!(s.BrainDrainIntensity);
+        player.Tick(); Assert.Single(voices); // the slider's explicit update resets the ramp
         CoreEngine.SetBrainDrainIntensity!(80); player.Stop(); player.Start(); player.Tick();
         Assert.Single(voices); // restart reads the saved intensity, not the prior ramp
     });
