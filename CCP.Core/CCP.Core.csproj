@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Compile only EmiVox's pure score/PCM branch. No head instance enters Core. -->
+  <ItemGroup>
+    <Compile Include="../ConditioningControlPanel/Services/EmiDesk/EmiVox.cs" Link="Services/FirstShow/FirstShowVoice.cs" />
+  </ItemGroup>
   <Import Project="..\Version.props" />
 
   <!--
@@ -15,6 +19,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <DefineConstants>$(DefineConstants);FIRST_SHOW_SYNTHESIS</DefineConstants>
     <!-- Match the app: it does not use implicit usings. -->
     <ImplicitUsings>disable</ImplicitUsings>
     <!-- Must stay ConditioningControlPanel: it is the prefix of every generated resource
