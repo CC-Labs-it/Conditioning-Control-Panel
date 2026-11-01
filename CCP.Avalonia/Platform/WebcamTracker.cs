@@ -57,22 +57,24 @@ namespace ConditioningControlPanel.Avalonia.Platform
     internal sealed class OpenCvFrameSource : IFrameSource
     {
         private IFrameSource? _capture;
-        private readonly Func<VideoCaptureAPIs, bool, IFrameSource> _attempt;
+        private readonly Func<int, VideoCaptureAPIs, bool, IFrameSource> _attempt;
         private readonly int _warmupMs, _intervalMs;
         internal Func<bool> Cancelled = () => false;
         internal Action<int, int>? Retrying;
         internal bool AnyOpened { get; private set; }
 
-        internal OpenCvFrameSource(Func<VideoCaptureAPIs, bool, IFrameSource>? attempt = null,
+        internal OpenCvFrameSource(Func<int, VideoCaptureAPIs, bool, IFrameSource>? attempt = null,
             int warmupMs = 3000, int intervalMs = 200)
         {
-            _attempt = attempt ?? ((api, mjpg) => new CaptureAttempt(api, mjpg));
+            _attempt = attempt ?? ((index, api, mjpg) => new CaptureAttempt(index, api, mjpg));
             _warmupMs = warmupMs;
             _intervalMs = intervalMs;
         }
 
         public bool Open()
         {
+            int index = int.TryParse(Environment.GetEnvironmentVariable("CCP_WEBCAM_DEVICE"), out var i)
+                ? Math.Max(0, i) : ResolveSavedIndex(); // WPF WebcamTrackingService.cs:1236-1237,1296
             var apis = OperatingSystem.IsWindows()
                 ? new[] { VideoCaptureAPIs.DSHOW, VideoCaptureAPIs.MSMF }
                 : new[] { OperatingSystem.IsLinux() ? VideoCaptureAPIs.V4L2 : VideoCaptureAPIs.ANY };
@@ -85,7 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     IFrameSource? source = null;
                     try
                     {
-                        source = _attempt(api, mjpg);
+                        source = _attempt(index, api, mjpg);
                         if (!source.Open()) continue;
                         if (Cancelled()) return false;
                         AnyOpened = true;
@@ -139,13 +141,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public bool Read(Mat bgr) => _capture?.Read(bgr) == true;
         public void Dispose() { _capture?.Dispose(); _capture = null; }
 
-        private sealed class CaptureAttempt(VideoCaptureAPIs api, bool mjpg) : IFrameSource
+        private sealed class CaptureAttempt(int index, VideoCaptureAPIs api, bool mjpg) : IFrameSource
         {
             private VideoCapture? _cap;
             public bool Open()
             {
-                int index = int.TryParse(Environment.GetEnvironmentVariable("CCP_WEBCAM_DEVICE"), out var i)
-                    ? Math.Max(0, i) : ResolveSavedIndex();
                 _cap = new VideoCapture(index, api);
                 if (!_cap.IsOpened()) return false;
                 if (mjpg) _cap.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC('M', 'J', 'P', 'G'));

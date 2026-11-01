@@ -45,7 +45,7 @@ public sealed class WebcamCaptureProbeTests
             if (read >= 3) Cv2.Rectangle(frame, new Rect(0, 0, 10, 20), Scalar.All(100), -1);
         }};
         var attempts = new List<bool>();
-        using var source = new OpenCvFrameSource((_, mjpg) => { attempts.Add(mjpg); return mjpg ? next : first; }, 40, 1);
+        using var source = new OpenCvFrameSource((_, _, mjpg) => { attempts.Add(mjpg); return mjpg ? next : first; }, 40, 1);
         Assert.True(source.Open());
         Assert.Equal(new[] { false, true }, attempts);
         Assert.True(first.Disposed);
@@ -62,11 +62,11 @@ public sealed class WebcamCaptureProbeTests
     public void TemporalChangeAcceptsADimFeedAndAStaticFeedFails()
     {
         var moving = new Frames { Paint = (frame, read) => frame.SetTo(Scalar.All(read == 1 ? 10 : 12)) };
-        using (var source = new OpenCvFrameSource((_, _) => moving, 40, 1))
+        using (var source = new OpenCvFrameSource((_, _, _) => moving, 40, 1))
             Assert.True(source.Open());
         Assert.True(moving.Reads >= 2);
         var flat = new List<Frames>();
-        using var failed = new OpenCvFrameSource((_, _) => { var f = new Frames(); flat.Add(f); return f; }, 20, 1);
+        using var failed = new OpenCvFrameSource((_, _, _) => { var f = new Frames(); flat.Add(f); return f; }, 20, 1);
         Assert.False(failed.Open());
         Assert.True(failed.AnyOpened);
         Assert.All(flat, f => Assert.True(f.Disposed));
@@ -82,11 +82,11 @@ public sealed class WebcamCaptureProbeTests
         {
             settings.WebcamConsentGiven = true;
             settings.WebcamConsentVersion = WebcamConsent.ConsentVersion;
-            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _) => new Frames(), 20, 1);
+            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _, _) => new Frames(), 20, 1);
             Assert.False(tracker.Start());
             Assert.Equal(WebcamTrackingState.CameraInUse, tracker.State);
             Assert.StartsWith("Camera unavailable", tracker.LastError);
-            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _) => new Frames { Opens = false }, 20, 1);
+            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _, _) => new Frames { Opens = false }, 20, 1);
             Assert.False(tracker.Start());
             Assert.Equal(WebcamTrackingState.CameraDenied, tracker.State);
         }
@@ -102,7 +102,7 @@ public sealed class WebcamCaptureProbeTests
     {
         var frames = new Frames();
         int attempts = 0;
-        using var source = new OpenCvFrameSource((_, _) => { attempts++; return frames; }, 100, 1);
+        using var source = new OpenCvFrameSource((_, _, _) => { attempts++; return frames; }, 100, 1);
         source.Cancelled = () => frames.Reads > 0;
         Assert.False(source.Open());
         Assert.Equal(1, attempts);
@@ -120,7 +120,7 @@ public sealed class WebcamCaptureProbeTests
         {
             settings.WebcamConsentGiven = true;
             settings.WebcamConsentVersion = WebcamConsent.ConsentVersion;
-            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _) => { attempts++; return frames; }, 100, 1);
+            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _, _) => { attempts++; return frames; }, 100, 1);
             Assert.False(tracker.Start());
             Assert.True(tracker.StartWasStopped);
             Assert.Equal(WebcamTrackingState.Stopped, tracker.State);
@@ -201,7 +201,7 @@ public sealed class WebcamCaptureProbeTests
         {
             s.WebcamConsentGiven = true; s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
             tracker.CameraOpenTimeout = TimeSpan.FromMilliseconds(100);
-            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _) => { attempts++; return late; }, 2000, 1);
+            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _, _) => { attempts++; return late; }, 2000, 1);
             Assert.False(tracker.Start());
             Assert.True(late.Entered.Wait(TimeSpan.FromSeconds(5)));
             Assert.Equal(WebcamTrackingState.CameraInUse, tracker.State);
@@ -239,7 +239,7 @@ public sealed class WebcamCaptureProbeTests
             loc.SetLanguage("de");
             s.WebcamConsentGiven = true; s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
             int attempt = 0;
-            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _) => ++attempt == 1 ? new Frames { Opens = false } : late, 20, 1);
+            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _, _) => ++attempt == 1 ? new Frames { Opens = false } : late, 20, 1);
             tracker.OnStartupProgress += record;
             shell.Show();
             start = tracker.StartAsync();
@@ -276,7 +276,7 @@ public sealed class WebcamCaptureProbeTests
         try
         {
             loc.SetLanguage("de"); s.WebcamConsentGiven = true; s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
-            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _) => new Frames(), 20, 1);
+            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _, _) => new Frames(), 20, 1);
             Assert.False(tracker.Start());
             Assert.Equal(WebcamTrackingState.CameraInUse, tracker.State);
             Assert.Equal("Kamera nicht verfügbar. Sie wird möglicherweise von einer anderen App verwendet oder durch die Kamera-Datenschutzeinstellungen blockiert.", tracker.LastError);
@@ -315,7 +315,7 @@ public sealed class WebcamCaptureProbeTests
             s.WebcamConsentGiven = true; s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
             tracker.CameraOpenTimeout = TimeSpan.FromMilliseconds(100);
             int attempt = 0;
-            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _) => ++attempt == 1 ? new Frames { Opens = false } : late, 20, 1);
+            WebcamTracker.SourceFactory = () => new OpenCvFrameSource((_, _, _) => ++attempt == 1 ? new Frames { Opens = false } : late, 20, 1);
             tracker.OnStartupProgress += record;
             Assert.False(tracker.Start());
             Assert.True(late.Entered.Wait(TimeSpan.FromSeconds(5)));
@@ -330,5 +330,22 @@ public sealed class WebcamCaptureProbeTests
             (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory, tracker.CameraOpenTimeout) = old;
         }
     });
+
+    [Fact] // WPF WebcamTrackingService.cs:1236-1237,1296: one device per open, even across retries
+    public void DeviceChangeDuringRetryAppliesOnlyOnNextStart()
+    {
+        var s = CoreSettings.Current; var old = (s.WebcamDeviceIndex, V4l2Cameras.Root, Environment.GetEnvironmentVariable("CCP_WEBCAM_DEVICE"));
+        var indices = new List<int>();
+        try
+        {
+            Environment.SetEnvironmentVariable("CCP_WEBCAM_DEVICE", null); V4l2Cameras.Root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString()); s.WebcamDeviceIndex = 1;
+            using var first = new OpenCvFrameSource((index, _, _) => { indices.Add(index); return new Frames { Paint = (_, _) => s.WebcamDeviceIndex = 2 }; }, 20, 1);
+            Assert.False(first.Open()); Assert.Equal(2, s.WebcamDeviceIndex); Assert.True(indices.Count >= 2); Assert.All(indices, i => Assert.Equal(1, i));
+            indices.Clear();
+            using var second = new OpenCvFrameSource((index, _, _) => { indices.Add(index); return new Frames { Opens = false }; }, 20, 1);
+            Assert.False(second.Open()); Assert.True(indices.Count >= 2); Assert.All(indices, i => Assert.Equal(2, i));
+        }
+        finally { (s.WebcamDeviceIndex, V4l2Cameras.Root) = (old.WebcamDeviceIndex, old.Root); Environment.SetEnvironmentVariable("CCP_WEBCAM_DEVICE", old.Item3); }
+    }
 
 }
