@@ -18,8 +18,6 @@ namespace ConditioningControlPanel.Services
     /// the Avalonia head's transport for WPF <c>ProfileSyncService.UseOopsieInsuranceAsync</c>
     /// (<c>POST /v2/user/use-oopsie</c>). Charges live on the account: nothing is applied locally unless
     /// the server said yes.
-    /// ponytail: no 401 auth recovery (WPF HandleUnauthorizedAsync), as the rest of the Avalonia head;
-    /// WPF keeps its own send in ProfileSyncService for that reason.
     /// </summary>
     public sealed class StreakFix
     {
@@ -68,6 +66,8 @@ namespace ConditioningControlPanel.Services
                 {
                     if (V2AuthService.MergedRecovery is { } merged && await merged(response, json).ConfigureAwait(true))
                         return (false, Loc.Get("account_merged_retry_hint"), null);
+                    // WPF ProfileSyncService.cs:3912 recovers the session but does not replay this spend.
+                    await AuthRecovery.HandleUnauthorizedAsync(response).ConfigureAwait(true);
                     string? error = null;
                     try { error = JsonConvert.DeserializeObject<Reply>(json)?.Error; } catch (JsonException) { } // swallow: a non-JSON body reads as the status line
                     error ??= $"Server error: {response.StatusCode}";
