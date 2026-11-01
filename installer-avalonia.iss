@@ -3,7 +3,7 @@
 ;
 ; Requirements:
 ; 1. Install Inno Setup from https://jrsoftware.org/isinfo.php
-; 2. Build the app first: dotnet publish CCP.Avalonia/CCP.Avalonia.csproj -c Release -p:PublishProfile=win-x64 (.NET 10 SDK; build-installer.bat does this)
+; 2. Build the app first: dotnet publish CCP.Avalonia/CCP.Avalonia.csproj -c Release -p:PublishProfile=win-x64 (.NET 10 SDK)
 ; 3. Compile this script with Inno Setup Compiler
 ;
 ; The installer will:
@@ -110,7 +110,16 @@ ShowLanguageDialog=auto
 InfoBeforeFile=INSTALL_AVALONIA.txt
 
 [Languages]
-Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"; InfoBeforeFile: "INSTALL_AVALONIA.txt"
+Name: "chinesesimplified"; MessagesFile: "compiler:Default.isl,installer-notices\zh-CN.isl"; InfoBeforeFile: "installer-notices\zh-CN.txt"
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"; InfoBeforeFile: "installer-notices\ja.txt"
+Name: "korean"; MessagesFile: "compiler:Default.isl,installer-notices\ko.isl"; InfoBeforeFile: "installer-notices\ko.txt"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"; InfoBeforeFile: "installer-notices\es.txt"
+Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"; InfoBeforeFile: "installer-notices\pt-BR.txt"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"; InfoBeforeFile: "installer-notices\fr.txt"
+Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"; InfoBeforeFile: "installer-notices\it.txt"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"; InfoBeforeFile: "installer-notices\de.txt"
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"; InfoBeforeFile: "installer-notices\ru.txt"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -138,7 +147,7 @@ Source: "redist\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall;
 ;   https://go.microsoft.com/fwlink/p/?LinkId=2124703
 Source: "redist\MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: WebView2RuntimeNeeded
 
-; Main executable: the SIGNED Avalonia exe, renamed on install (build-installer.bat signs it before staging)
+; Main executable: the Avalonia exe, renamed on install. Sign it before staging for release.
 Source: "{#PublishDir}\{#SourceExeName}"; DestDir: "{app}"; DestName: "{#MyAppExeName}"; Flags: ignoreversion
 
 ; All other files from publish directory (the original exe name is excluded: it is installed above)
@@ -209,6 +218,16 @@ Type: files;      Name: "{app}\Resources\sounds\ZAP COCK DRAIN OBEY.mp3"
 ; 7.2 (WPF -> Avalonia upgrade): WPF's loose WebView2 loader. The Avalonia head bundles its own web
 ; view natives in the single-file exe, so a stale loader beside it could only shadow them.
 Type: files;      Name: "{app}\WebView2Loader.dll"
+
+; WPF shipped LibVLC 3.0.21 in {app}\libvlc (ConditioningControlPanel.csproj:146,945-953).
+; These exact old-only paths are absent from the 3.0.24 publish; preserve other files.
+Type: files;      Name: "{app}\libvlc\lua\playlist\youtube.luac"
+Type: files;      Name: "{app}\libvlc\plugins\access\libbluray-awt-j2se-1.3.2.jar"
+Type: files;      Name: "{app}\libvlc\plugins\access\libbluray-j2se-1.3.2.jar"
+Type: files;      Name: "{app}\libvlc\plugins\codec\libschroedinger_plugin.dll"
+Type: files;      Name: "{app}\libvlc\plugins\codec\libsdl_image_plugin.dll"
+Type: files;      Name: "{app}\libvlc\win-x64\lua\playlist\youtube.luac"
+Type: files;      Name: "{app}\libvlc\win-x86\lua\playlist\youtube.luac"
 
 [Icons]
 ; Start Menu shortcut

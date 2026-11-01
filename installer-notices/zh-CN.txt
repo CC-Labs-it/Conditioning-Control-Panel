@@ -1,0 +1,7 @@
+﻿升级到 Avalonia
+
+从 WPF 升级时，内置浏览器的登录状态会重置。请重新登录在 CCP 中打开的网站。
+
+新的浏览器配置文件 browser_data_avalonia 位于 CCP 用户数据文件夹中。旧的 browser_data 配置文件会保留。
+
+此浏览器更改不会清除 CCP 账户令牌、设置或进度。

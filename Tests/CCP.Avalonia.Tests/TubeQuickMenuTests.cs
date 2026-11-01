@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -23,6 +24,26 @@ namespace CCP.Avalonia.Tests;
 /// close-time cleanup (no voice, no singleton hook left behind).</summary>
 public sealed class TubeQuickMenuTests
 {
+    [Theory]
+    [InlineData("MenuRed", 255, 99, 71)]
+    [InlineData("MenuGreen", 144, 238, 144)]
+    [InlineData("MenuPatreon", 155, 89, 182)]
+    [InlineData("MenuLocked", 0x60, 0x60, 0x70)]
+    public async Task MenuColorsCanBeUsedOnUiAndWorkerThreads(string name, byte r, byte g, byte b)
+    {
+        // A non-UI test may initialize AvatarTubeWindow before a window opens. The same
+        // foreground later reaches the compositor through the menu's IconLabel.
+        var brush = await Task.Run(() => (ISolidColorBrush)typeof(AvatarTubeWindow)
+            .GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!);
+        void Check()
+        {
+            if (brush is AvaloniaObject owned) owned.VerifyAccess();
+            Assert.Equal(Color.FromRgb(r, g, b), brush.Color);
+        }
+        await Task.Run(Check);
+        AvaloniaTestDispatcher.Run(Check);
+    }
+
     private static void Click(AvatarTubeWindow tube, string name) =>
         tube.FindControl<MenuItem>(name)!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 

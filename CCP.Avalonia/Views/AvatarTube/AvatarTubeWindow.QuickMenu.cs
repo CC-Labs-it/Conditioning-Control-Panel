@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/AvatarTube/AvatarTubeWindow.ChatInput.cs: the right-click menu's
 // handlers and state - MenuItemEngine_Click :1053 (#479 guards), MenuItemTriggerMode_Click :1095,
 // MenuItemBambiTakeover_Click :1113, MenuItemTalkToBambi_Click :1178, MenuItemMute_Click :1324,
-// MenuItemMuteWhispers_Click :1343, MenuItemDismiss_Click :400, UpdateQuickMenuState :1386 - and the
+// MenuItemMuteWhispers_Click :1343, MenuItemDismiss_Click :400, UpdateQuickMenuState :1429 - and the
 // input-panel close rules Window_PreviewMouseDown :358 / ImgAvatar_MouseRightButtonDown :180.
 // Detach/Attach/Shrink/Grow sit in Windowing.cs, the personality submenu in ContentGates.cs.
 //
@@ -19,6 +19,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -33,10 +34,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
     public partial class AvatarTubeWindow
     {
-        private static readonly IBrush MenuRed = new SolidColorBrush(Color.FromRgb(255, 99, 71));
-        private static readonly IBrush MenuGreen = new SolidColorBrush(Color.FromRgb(144, 238, 144));
-        private static readonly IBrush MenuPatreon = new SolidColorBrush(Color.FromRgb(155, 89, 182));
-        private static readonly IBrush MenuLocked = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x70));
+        // Static helpers can initialize this window on a worker before the UI uses its menu.
+        private static readonly IBrush MenuRed = new ImmutableSolidColorBrush(Color.FromRgb(255, 99, 71));
+        private static readonly IBrush MenuGreen = new ImmutableSolidColorBrush(Color.FromRgb(144, 238, 144));
+        private static readonly IBrush MenuPatreon = new ImmutableSolidColorBrush(Color.FromRgb(155, 89, 182));
+        private static readonly IBrush MenuLocked = new ImmutableSolidColorBrush(Color.FromRgb(0x60, 0x60, 0x70));
 
         private MenuItem? QuickItem(string name) => this.FindControl<MenuItem>(name);
 
