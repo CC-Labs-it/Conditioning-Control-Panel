@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -86,6 +87,29 @@ public sealed class PresetsFocalFxTests
         Assert.Equal(0.97, press.ScaleX);
         host.MouseMove(new Point(1, 1)); host.MouseUp(new Point(1, 1), MouseButton.Left, RawInputModifiers.None); Settle();
         Assert.Equal(1, press.ScaleX);
+    });
+
+    [Fact]
+    public Task TurningMotionOffDuringArrivalLetsPointerLiftTheRowImmediately() => WithPresets((host, view) =>
+    {
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        var clock = new StepClock();
+        row.SetValue(StepClock.Property, clock.Instance);
+        typeof(PresetsTabView).GetMethod("StaggerZones", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(view, null);
+        clock.Step(0);
+        clock.Step(80);
+        Assert.InRange(slide.Y, 0.1, 9.9); // the arrival still owns the row's transform
+
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Settle();
+        host.MouseMove(Center(host, row));
+        Settle();
+        Assert.Equal(-2, slide.Y);
+        host.MouseMove(new Point(1, 1));
+        Settle();
+        Assert.Equal(0, slide.Y);
     });
 
     [Fact]
@@ -211,4 +235,15 @@ public sealed class PresetsFocalFxTests
     private static void Click(Window host, Control c) { var p = Center(host, c); host.MouseDown(p, MouseButton.Left, RawInputModifiers.None); host.MouseUp(p, MouseButton.Left, RawInputModifiers.None); }
     private static void Settle() { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); }
     private sealed class Clock : TimeProvider { public long Now; public override long TimestampFrequency => TimeSpan.TicksPerSecond; public override long GetTimestamp() => Now; }
+
+    // Avalonia 12's animation clock is internal; step the same clock used by SharedDeeperThemeTests.
+    private sealed class StepClock
+    {
+        private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", throwOnError: true)!;
+        private static readonly System.Reflection.MethodInfo Pulse = Base.GetMethod("Pulse", Any | System.Reflection.BindingFlags.Instance)!;
+        public static readonly AvaloniaProperty Property = (AvaloniaProperty)typeof(Animatable).GetField("ClockProperty", Any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        public void Step(double ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
+    }
 }
