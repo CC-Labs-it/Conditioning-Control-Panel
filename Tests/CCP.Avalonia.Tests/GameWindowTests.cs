@@ -616,6 +616,7 @@ public sealed partial class GameWindowTests
     private static void RunRace(string? owned, Action<LauncherWindow, List<double>, List<double>> body) => Run((_, launcher) =>
     {
         var (oldOwns, oldBank, oldXp, oldAssets, oldClock) = (RacingAccess.IsGrantedProvider, GameWindow.RaceBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.RaceUtcNow);
+        var oldLab = CoreEntitlement.HasLabProvider;
         var lib = Directory.CreateTempSubdirectory("race-lib-").FullName;
         var xp = new List<double>();
         var sparks = new List<double>();
@@ -631,9 +632,22 @@ public sealed partial class GameWindowTests
         finally
         {
             (RacingAccess.IsGrantedProvider, GameWindow.RaceBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.RaceUtcNow) = (oldOwns, oldBank, oldXp, oldAssets, oldClock);
+            CoreEntitlement.HasLabProvider = oldLab;
             Directory.Delete(lib, true);
         }
     });
+
+    [Fact]
+    public void Race_TestScopeRestoresLabProviderWhenBodyThrows()
+    {
+        var lab = CoreEntitlement.HasLabProvider;
+        Assert.Throws<InvalidOperationException>(() => RunRace(null, (_, _, _) =>
+        {
+            CoreEntitlement.HasLabProvider = () => true;
+            throw new InvalidOperationException("scope probe");
+        }));
+        Assert.Same(lab, CoreEntitlement.HasLabProvider);
+    }
 
     private static GameWindow OpenRetiredRace()
     {

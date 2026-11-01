@@ -41,6 +41,8 @@ public sealed partial class GameWindowTests
     {
         var (oldOwns, oldHttp, oldBase) = (RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase);
         var (oldUid, oldSecret, oldGate) = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider);
+        var (oldLab, oldPremium, oldFree, oldDenied) = (CoreEntitlement.HasLabProvider,
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler);
         var fake = new GrHttp();
         using var http = new System.Net.Http.HttpClient(fake);
         try
@@ -60,8 +62,42 @@ public sealed partial class GameWindowTests
         {
             (RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
+            (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
+                CoreEntitlement.ShowDeniedHandler) = (oldLab, oldPremium, oldFree, oldDenied);
         }
     });
+
+    [Fact]
+    public void Glassroad_TestScopeRestoresProvidersWhenBodyThrows()
+    {
+        var (lab, premium, free, denied, owns) = (CoreEntitlement.HasLabProvider,
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
+            CoreEntitlement.ShowDeniedHandler, RacingAccess.IsGrantedProvider);
+        Assert.Throws<InvalidOperationException>(() => RunGlassroad((_, _, _) =>
+        {
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreEntitlement.IsFreeTodayProvider = _ => true;
+            CoreEntitlement.ShowDeniedHandler = _ => { };
+            throw new InvalidOperationException("scope probe");
+        }));
+        // Check before the assembly-wide isolation hook restores anything.
+        Assert.Same(lab, CoreEntitlement.HasLabProvider);
+        Assert.Same(premium, CoreEntitlement.HasPremiumProvider);
+        Assert.Same(free, CoreEntitlement.IsFreeTodayProvider);
+        Assert.Same(denied, CoreEntitlement.ShowDeniedHandler);
+        Assert.Same(owns, RacingAccess.IsGrantedProvider);
+    }
+
+    [Fact]
+    public void Glassroad_PureTileTestsRestoreProviders()
+    {
+        var lab = CoreEntitlement.HasLabProvider;
+        Glassroad_TileLocksBelowPrime(2, false);
+        Assert.Same(lab, CoreEntitlement.HasLabProvider);
+        var owns = RacingAccess.IsGrantedProvider;
+        Glassroad_RaceTileIsVisibleWithoutPurchase();
+        Assert.Same(owns, RacingAccess.IsGrantedProvider);
+    }
 
     // ---- pure rules ----
 
@@ -82,9 +118,14 @@ public sealed partial class GameWindowTests
     [InlineData(2, false)]
     public void Glassroad_TileLocksBelowPrime(int tier, bool locked)
     {
-        CoreEntitlement.HasLabProvider = tier < 0 ? null : () => tier == 2;
-        Assert.Equal(locked, LauncherWindow.Destinations["race"].Locked());
-        Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
+        var oldLab = CoreEntitlement.HasLabProvider;
+        try
+        {
+            CoreEntitlement.HasLabProvider = tier < 0 ? null : () => tier == 2;
+            Assert.Equal(locked, LauncherWindow.Destinations["race"].Locked());
+            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
+        }
+        finally { CoreEntitlement.HasLabProvider = oldLab; }
     }
 
     [Theory]
@@ -128,9 +169,14 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Glassroad_RaceTileIsVisibleWithoutPurchase()
     {
-        RacingAccess.IsGrantedProvider = _ => false;
-        Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
-        Assert.True(LauncherWindow.CanStartGame("race"));
+        var oldOwns = RacingAccess.IsGrantedProvider;
+        try
+        {
+            RacingAccess.IsGrantedProvider = _ => false;
+            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
+            Assert.True(LauncherWindow.CanStartGame("race"));
+        }
+        finally { RacingAccess.IsGrantedProvider = oldOwns; }
     }
 
     [Theory]
