@@ -57,7 +57,7 @@ public sealed class BarkEngineTests : IDisposable
         var repeat = Rule("PossessionEffect", "private a", "private b");
         var oldLogger = Serilog.Log.Logger;
         var sink = new BarkLogSink();
-        Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger();
+        Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Information().WriteTo.Sink(sink).CreateLogger();
         try
         {
             // Seed a fully used pool to exercise the recycle path as well as the commit path.
@@ -82,6 +82,8 @@ public sealed class BarkEngineTests : IDisposable
                 .Where(m => m.Contains(once.Id) || m.Contains(repeat.Id)).ToList();
             Assert.Contains(messages, m => m.Contains("[BARK dry-run] WOULD FIRE") && m.Contains(once.Id));
             Assert.Contains(messages, m => m.Contains("[BARK dry-run] blocked") && m.Contains("already-fired"));
+            Assert.Contains(sink.Events, ev => ev.Level == Serilog.Events.LogEventLevel.Information
+                && ev.RenderMessage().Contains("[BARK dry-run] blocked") && ev.RenderMessage().Contains(once.Id));
             var picks = messages.Where(m => m.Contains("WOULD FIRE") && m.Contains(repeat.Id)).ToList();
             Assert.Equal(2, picks.Count);
             Assert.NotEqual(picks[0].Split("variant#=")[1], picks[1].Split("variant#=")[1]);
@@ -95,6 +97,30 @@ public sealed class BarkEngineTests : IDisposable
             _s.BarkVariantRotation.Remove(repeat.Id);
             _s.BarkLifetimeFired.Remove(once.Id);
         }
+    }
+
+    [Fact] // WPF BarkService.cs:2024-2028: ordinary blocked decisions remain Debug.
+    public void OrdinaryBlockedDecisionsStayAtDebug()
+    {
+        var rule = Rule("AttentionCheckFail", "private line");
+        var e = Engine(rule);
+        e.DryRun = false;
+        _s.AvatarEnabled = false;
+        var oldLogger = Serilog.Log.Logger;
+        var sink = new BarkLogSink();
+        try
+        {
+            Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Information().WriteTo.Sink(sink).CreateLogger();
+            Assert.False(e.Raise("AttentionCheckFail"));
+            Assert.Empty(sink.Events); // the Avalonia default does not log ordinary blocks
+            Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger();
+            Assert.False(e.Raise("AttentionCheckFail"));
+            var blocked = Assert.Single(sink.Events);
+            Assert.Equal(Serilog.Events.LogEventLevel.Debug, blocked.Level);
+            Assert.Contains("companion-off", blocked.RenderMessage());
+            Assert.DoesNotContain("private line", blocked.RenderMessage());
+        }
+        finally { Serilog.Log.Logger = oldLogger; }
     }
 
     private sealed class ZeroRandom : Random

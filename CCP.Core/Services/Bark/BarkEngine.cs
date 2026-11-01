@@ -153,7 +153,13 @@ namespace ConditioningControlPanel.Services.Bark
                     if (winner == null) { Log.Debug("[BARK] trigger={Trigger} no rule matched conditions", trigger); return false; }
                     pool = ResolvePool(winner);
                     (var fire, idx, var reason) = EvaluateGate(winner, pool, guaranteed);
-                    if (!fire) { Log.Debug("{Tag:l} blocked trigger={Trigger} rule={Rule} reason={Reason}", DryRun ? "[BARK dry-run]" : "[BARK]", trigger, winner.Id, reason); return false; }
+                    if (!fire)
+                    {
+                        // WPF BarkService.cs:2024-2028 logs blocks at Debug; Avalonia's default floor is Information.
+                        Log.Write(DryRun ? Serilog.Events.LogEventLevel.Information : Serilog.Events.LogEventLevel.Debug,
+                            "{Tag:l} blocked trigger={Trigger} rule={Rule} reason={Reason}", DryRun ? "[BARK dry-run]" : "[BARK]", trigger, winner.Id, reason);
+                        return false;
+                    }
                     Log.Information("{Tag:l} {Verb:l} trigger={Trigger} rule={Rule} class={Class} variant#={Idx}",
                         DryRun ? "[BARK dry-run]" : "[BARK]", DryRun ? "WOULD FIRE" : "FIRE", trigger, winner.Id, winner.Class, idx);
                     if (!DryRun && Speak == null) return false;
