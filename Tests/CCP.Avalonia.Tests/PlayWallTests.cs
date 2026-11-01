@@ -294,4 +294,148 @@ public sealed class PlayWallTests
         });
     }
 
+    [Theory]
+    [InlineData("breakoutdemo", "breakout")]
+    [InlineData("breakout", "breakoutdemo")]
+    public async System.Threading.Tasks.Task BreakoutModes_AskBeforeReplacingTheOpenGame(string from, string to)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var oldServer = GameWindow.Server;
+            var oldLab = CoreEntitlement.HasLabProvider;
+            var oldConfirm = GameWindow.ConfirmBreakoutSwitch;
+            var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+            var root = Directory.CreateTempSubdirectory("breakout-switch-");
+            using var server = new WebAssetServer(root.FullName);
+            GameWindow.Server = () => server;
+            bool allowed = true;
+            CoreEntitlement.HasLabProvider = () => allowed;
+            try
+            {
+                LocalizationManager.Instance.SetLanguage("it");
+                var first = GameWindow.Launch(from)!;
+                Assert.Same(first, GameWindow.Launch(from));
+                if (to == "breakout")
+                {
+                    allowed = false;
+                    Assert.Null(GameWindow.Launch(to));
+                    Assert.Empty(first.OwnedWindows);
+                    allowed = true;
+                }
+                var switching = GameWindow.LaunchAsync(to);
+                var dialog = Assert.Single(first.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+                Assert.Equal(Loc.Get("launcher_switch_title"), dialog.Title);
+                Assert.Equal(Loc.Get("launcher_switch_body"), dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+                var no = dialog.FindControl<Button>("BtnCancel")!;
+                var yes = dialog.FindControl<Button>("BtnOk")!;
+                Assert.True(no.IsDefault);
+                Assert.Equal(Loc.Get("btn_no"), ((TextBlock)no.Content!).Text);
+                Assert.Equal(Loc.Get("btn_yes"), ((TextBlock)yes.Content!).Text);
+                Assert.Equal("Sì", ((TextBlock)yes.Content!).Text);
+                Assert.False(switching.IsCompleted);
+                Assert.Null(GameWindow.Launch(to)); // a second click cannot open another prompt
+                Assert.Single(first.OwnedWindows);
+                Assert.Same(first, Assert.Single(GameWindow.OpenWindowsForTests()));
+                no.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Null(await switching);
+                Assert.True(first.IsVisible);
+                Assert.Same(first, Assert.Single(GameWindow.OpenWindowsForTests()));
+
+                switching = GameWindow.LaunchAsync(to);
+                dialog = Assert.Single(first.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+                if (to == "breakout") allowed = false; // WPF already checked the tier before asking
+                dialog.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var second = Assert.IsType<GameWindow>(await switching);
+                Assert.Equal(to, second.Spec.Id);
+                if (to == "breakout")
+                {
+                    var init = Newtonsoft.Json.Linq.JObject.FromObject(second.InitMessage());
+                    Assert.Equal(3, (int)init["breakout"]!["storyLimit"]!);
+                    allowed = true;
+                }
+                Assert.False(first.IsVisible);
+                Assert.Same(second, Assert.Single(GameWindow.OpenWindowsForTests()));
+
+                // A panic can close the old host while the confirmation is open.
+                var answer = new System.Threading.Tasks.TaskCompletionSource<bool>();
+                GameWindow.ConfirmBreakoutSwitch = owner => { Assert.Same(second, owner); return answer.Task; };
+                switching = GameWindow.LaunchAsync(from);
+                GameWindow.CloseAllForPanic();
+                answer.SetResult(true);
+                Assert.Equal(from, (await switching)!.Spec.Id);
+                Assert.Single(GameWindow.OpenWindowsForTests());
+            }
+            finally
+            {
+                GameWindow.CloseAllForPanic();
+                GameWindow.ConfirmBreakoutSwitch = oldConfirm;
+                LocalizationManager.Instance.SetLanguage(oldLanguage);
+                GameWindow.Server = oldServer;
+                CoreEntitlement.HasLabProvider = oldLab;
+                root.Delete(true);
+            }
+        });
+    }
+
+    [Fact]
+    public void FullBreakout_ProviderEventsRefreshImmediatelyAndUnsubscribeOnClose()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var oldServer = GameWindow.Server;
+            var oldLab = CoreEntitlement.HasLabProvider;
+            var oldSources = GameWindow.BreakoutTierSources;
+            var root = Directory.CreateTempSubdirectory("breakout-tiers-");
+            using var server = new WebAssetServer(root.FullName);
+            using var patreon = new ProviderSubscription("patreon", () => new ConditioningControlPanel.Models.AppSettings());
+            using var substar = new ProviderSubscription("substar", () => new ConditioningControlPanel.Models.AppSettings());
+            GameWindow.Server = () => server;
+            GameWindow.BreakoutTierSources = () => (patreon, substar);
+            bool allowed = true;
+            CoreEntitlement.HasLabProvider = () => allowed;
+            int Subscribers(ProviderSubscription p) => ((Delegate?)typeof(ProviderSubscription)
+                .GetField("TierChanged", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(p))?.GetInvocationList().Length ?? 0;
+            try
+            {
+                var game = GameWindow.Launch("breakout")!;
+                Assert.Equal(1, Subscribers(patreon));
+                Assert.Equal(1, Subscribers(substar));
+                var frames = new System.Collections.Generic.List<Newtonsoft.Json.Linq.JObject>();
+                game.Posted += json => frames.Add(Newtonsoft.Json.Linq.JObject.Parse(json));
+                game.Web.OnNavigationCompleted(game.PageUrl!);
+                game.Web.OnWebMessage("{\"type\":\"ready\"}");
+                allowed = false;
+                patreon.NotifyEntitlementRaised(ConditioningControlPanel.Models.PatreonTier.None);
+                Assert.Equal(3, (int)frames[1]["breakout"]!["storyLimit"]!);
+                allowed = true;
+                System.Threading.Tasks.Task.Run(() => substar.NotifyEntitlementRaised(ConditioningControlPanel.Models.PatreonTier.Level2)).GetAwaiter().GetResult();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(8, (int)frames[2]["breakout"]!["storyLimit"]!);
+                allowed = false;
+                System.Threading.Tasks.Task.Run(() => patreon.NotifyEntitlementRaised(ConditioningControlPanel.Models.PatreonTier.None)).GetAwaiter().GetResult();
+                GameWindow.BreakoutTierSources = () => (null, null); // the providers may have been replaced
+                game.Close(); // a queued event must not post after close
+                Assert.Equal(0, Subscribers(patreon));
+                Assert.Equal(0, Subscribers(substar));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(3, frames.Count);
+            }
+            finally
+            {
+                GameWindow.CloseAllForPanic();
+                GameWindow.BreakoutTierSources = oldSources;
+                GameWindow.Server = oldServer;
+                CoreEntitlement.HasLabProvider = oldLab;
+                root.Delete(true);
+            }
+        });
+    }
+
 }

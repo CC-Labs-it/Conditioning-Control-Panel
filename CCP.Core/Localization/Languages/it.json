@@ -4485,6 +4485,8 @@
   "title_save_asset_preset": "Salva preset asset",
   "title_save_phrase_preset": "Salva preset frasi",
   "btn_ok": "OK",
+  "btn_yes": "Sì",
+  "btn_no": "No",
   "skill_mult_streak_power_days": "Potere della serie ({0} giorni)",
   "skill_streak_bonus_name": "Bonus serie: giorno {0}!",
   "skill_streak_bonus_flavor": "Che bello rivederti! +{0} XP per la tua serie di {1} giorni~",

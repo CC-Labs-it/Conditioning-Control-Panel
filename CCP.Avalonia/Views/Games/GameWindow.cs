@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.JustDrop;
 using ConditioningControlPanel.Services.Chaos;
@@ -71,17 +73,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal bool IsReady { get; private set; }
         private bool _closing;
 
-        /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
-        /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
+        // WPF BackRoomHostService.cs:291-325: both modes share one host and ask before switching.
+        internal static Func<Window, Task<bool>> ConfirmBreakoutSwitch { get; set; } = owner =>
+            Views.Dialogs.MessageDialog.ConfirmAsync(owner, Loc.Get("launcher_switch_title"), Loc.Get("launcher_switch_body"),
+                defaultToCancel: true, okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"));
+        private bool _breakoutSwitchPending;
+
         internal static GameWindow? Launch(string id)
         {
-            id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
+            var task = LaunchAsync(id);
+            return task.IsCompleted ? task.GetAwaiter().GetResult() : null;
+        }
+
+        internal static Task<GameWindow?> LaunchAsync(string id) => LaunchAsync(id, false);
+
+        private static async Task<GameWindow?> LaunchAsync(string id, bool gateChecked)
+        {
+            id = ResolveDoor(id);
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
-            // WPF BreakoutHostService.LaunchFull checks access even when the game is already open.
-            if (spec.Id == "breakout" && !BreakoutGate()) return null;
+            if (spec.Id == "breakout" && !gateChecked && !BreakoutGate()) return null;
+            bool breakout = spec.Id is "breakout" or "breakoutdemo";
             GameWindow? live;
-            lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
-            if (live != null) { live.Activate(); return live; }
+            lock (Open) live = Open.FirstOrDefault(w => breakout
+                ? w.Spec.Id is "breakout" or "breakoutdemo"
+                : string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
+            if (live != null)
+            {
+                live.Activate();
+                if (live.Spec.Id == spec.Id) return live;
+                if (live._breakoutSwitchPending) return null;
+                live._breakoutSwitchPending = true;
+                try
+                {
+                    if (!await ConfirmBreakoutSwitch(live)) return null;
+                    if (!live._closing) live.Close();
+                    return await LaunchAsync(id, true); // WPF checked the tier before the confirmation
+                }
+                catch (Exception ex) { Log.Warning(ex, "[Game] Breakout switch failed"); return null; }
+                finally { live._breakoutSwitchPending = false; }
+            }
             try { if (spec.Id != "breakout" && spec.Gate != null && !spec.Gate()) return null; }
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", id); return null; }
             var window = new GameWindow(spec);
@@ -107,7 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); if (spec.Id == "breakout") StartBreakoutAccessWatch(); };
             Closing += (_, _) => _closing = true;
-            Closed += (_, _) => { lock (Open) Open.Remove(this); _breakoutAccessWatch?.Stop(); DisposeRace(); DisposeDtrh(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); StopBreakoutAccessWatch(); DisposeRace(); DisposeDtrh(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
@@ -247,19 +277,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return new { storyLimit = full ? 8 : 3, endless = full, demo = !full };
         }
 
+        internal static Func<(ProviderSubscription? Patreon, ProviderSubscription? SubscribeStar)> BreakoutTierSources { get; set; } =
+            () => (AccountSeed.Patreon, AccountSeed.SubscribeStar);
+        private ProviderSubscription? _breakoutPatreon, _breakoutSubscribeStar;
         private DispatcherTimer? _breakoutAccessWatch;
         private bool _lastBreakoutAccess;
 
         private void StartBreakoutAccessWatch()
         {
             _lastBreakoutAccess = CoreEntitlement.HasLab;
+            (_breakoutPatreon, _breakoutSubscribeStar) = BreakoutTierSources();
+            if (_breakoutPatreon != null) _breakoutPatreon.TierChanged += OnBreakoutTierChanged;
+            if (_breakoutSubscribeStar != null) _breakoutSubscribeStar.TierChanged += OnBreakoutTierChanged;
             _breakoutAccessWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             _breakoutAccessWatch.Tick += (_, _) => CheckBreakoutAccess();
             _breakoutAccessWatch.Start();
         }
 
+        private void StopBreakoutAccessWatch()
+        {
+            _breakoutAccessWatch?.Stop();
+            if (_breakoutPatreon != null) _breakoutPatreon.TierChanged -= OnBreakoutTierChanged;
+            if (_breakoutSubscribeStar != null) _breakoutSubscribeStar.TierChanged -= OnBreakoutTierChanged;
+        }
+
+        private void OnBreakoutTierChanged(object? sender, PatreonTier tier)
+        {
+            if (Dispatcher.UIThread.CheckAccess()) CheckBreakoutAccess();
+            else Dispatcher.UIThread.Post(CheckBreakoutAccess);
+        }
+
         internal void CheckBreakoutAccess()
         {
+            if (_closing) return;
             bool allowed = CoreEntitlement.HasLab;
             if (allowed == _lastBreakoutAccess) return;
             _lastBreakoutAccess = allowed;
