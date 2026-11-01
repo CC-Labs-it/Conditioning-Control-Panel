@@ -374,7 +374,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             InvalidateVisual();
         }
 
-        private void Burst()
+        internal void Burst()
         {
             var count = PremiumSparkRules.BurstCount(Tier, Motion);
             if (count <= 0 || !AmbientFxCanvas.Env.AllowTransitions) return;

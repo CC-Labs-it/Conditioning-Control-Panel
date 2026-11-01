@@ -295,6 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _pendingRiseTier = tier;
             var color = tier >= 2 ? global::Avalonia.Media.Color.FromRgb(0x5E, 0xE6, 0xFF) : global::Avalonia.Media.Color.FromRgb(0xFF, 0xD7, 0x00);
             RefreshProfileBubble();
+            if (Named<global::ConditioningControlPanel.Avalonia.Controls.PremiumSpark>("HeaderPremiumSpark") is { } spark) { spark.Refresh(); spark.Burst(); }
             if (Named<global::Avalonia.Controls.Button>("BtnProfileBubble") is { } bubble) _profileBubbleBurst.Fire(bubble, 60, color: color);
             FlashProfileBubbleGlow(color);
         }
@@ -308,11 +309,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _pendingRiseTier = 0;
             try
             {
-                if (!CoreAccount.HasPremiumAccess) return;
                 var s = CoreSettings.Current;
-                if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
-                var tier = CoreAccount.HasLabAccess ? 2 : 1;
-                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise)) return;
+                var tier = Platform.AccountSeed.EffectivePaidTier();
+                var verdict = TierOnNotice.Decide(s.LastKnownEffectiveTier, tier, Platform.AccountSeed.EntitlementServerAnswered);
+                if (verdict.Record != s.LastKnownEffectiveTier) { s.LastKnownEffectiveTier = verdict.Record; CoreSettings.Save(); }
+                if (tier == 0 || ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
+                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise))
+                {
+                    if (verdict.Owed) { var title = Loc.Get(TierOnNotice.TitleKey(tier)); var body = Loc.Get("tier_on_body"); Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem { Key = "tier-on:" + tier, Glyph = "💖", Title = title, Summary = body, Open = () => new Dialogs.MessageDialog(title, body, showCancel: false).Show(this) }); }
+                    return;
+                }
                 var key = TierCelebration.KeyFor(tier)!;
                 if (onRise && IsVisible && WindowState != global::Avalonia.Controls.WindowState.Minimized
                     && !CoreSession.IsSessionRunning && !CoreTutorial.IsActive && !Platform.AppUpdater.IsUpdateDialogActive

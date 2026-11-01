@@ -196,6 +196,7 @@ internal static class AccountSeed
     }
 
     internal static event Action<int>? SubscriptionTierRaised;
+    internal static bool EntitlementServerAnswered;
     private static int _subscriptionReadInFlight;
 
     internal static async Task<JustSubscribedOutcome> CheckSubscriptionNowAsync()
@@ -223,7 +224,7 @@ internal static class AccountSeed
                     if (node != null && SameSession())
                     {
                         reached = true;
-                        var tier = EntitlementTierRule.ParseTier(node["effective_tier"]);
+                        var tier = EntitlementTierRule.ParseTier(node["effective_tier"]); if (tier.HasValue) EntitlementServerAnswered = true;
                         var verdict = EntitlementTierRule.Decide(s.PatreonTier, tier);
                         var seen = EntitlementTierRule.ServerTierSeenAfter(verdict, tier, s.ServerTierSeen);
                         bool changed = seen != s.ServerTierSeen;
@@ -249,7 +250,7 @@ internal static class AccountSeed
             }
             if (SameSession() && patreon?.IsAuthenticated == true)
             {
-                try { await patreon.ValidateSubscriptionAsync(forceRefresh: true, canApply: SameSession); reached |= SameSession(); }
+                try { await patreon.ValidateSubscriptionAsync(forceRefresh: true, canApply: SameSession, onApplied: () => reached = true); reached |= SameSession(); }
                 catch (Exception ex) { Log.Debug("Just-subscribed validation failed: {E}", ex.Message); }
             }
         }

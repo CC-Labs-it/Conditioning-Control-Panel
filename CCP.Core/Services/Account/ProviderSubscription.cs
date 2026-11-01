@@ -203,7 +203,7 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>Validate subscription status with the proxy. Never throws: any failure keeps
         /// the current (cached or None) tier.</summary>
-        public async Task<PatreonTier> ValidateSubscriptionAsync(bool forceRefresh = false, Func<bool>? canApply = null)
+        public async Task<PatreonTier> ValidateSubscriptionAsync(bool forceRefresh = false, Func<bool>? canApply = null, Action? onApplied = null)
         {
             if (IsVerifying && !forceRefresh) return CurrentTier;
 
@@ -271,7 +271,7 @@ namespace ConditioningControlPanel.Services
                     var refreshed = await RefreshTokensAsync(tokens.RefreshToken, tokens.ExpiresAt, canApply);
                     if (canApply?.Invoke() == false) return CurrentTier;
                     if (refreshed)
-                        return await ValidateSubscriptionAsync(forceRefresh: true, canApply: canApply);
+                        return await ValidateSubscriptionAsync(forceRefresh: true, canApply: canApply, onApplied: onApplied);
                     ClearTokens();
                     return Drop();
                 }
@@ -290,7 +290,7 @@ namespace ConditioningControlPanel.Services
                     return CurrentTier;
                 }
 
-                return ApplyValidated(sub, settings, prizesFor);
+                var result = ApplyValidated(sub, settings, prizesFor); onApplied?.Invoke(); return result;
             }
             catch (Exception ex)
             {

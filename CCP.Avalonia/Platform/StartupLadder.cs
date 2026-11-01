@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// announcement is up, or one opened under <see cref="StartupQueueCore.PassiveSettle"/> ago,
     /// the next waits and is re-routed once it has gone.
     /// ponytail: no modal ladder, launcher hold or game-host park on this head, so
-    /// LadderBusy / GameHostUp / LauncherHolding stay false and Route never answers Defer; port the
+    /// LadderBusy / LauncherHolding stay false; the presenter now sees games; port the
     /// pump when the startup modals move onto a shared ladder.
     /// </summary>
     internal static class StartupLadder
@@ -58,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             ModalUp = Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
+            GameHostUp = Views.Games.GameWindow.IsAnyOpen(),
             FirstLaunchUntilUtc = _firstLaunchUntilUtc,
             NowUtc = nowUtc,
         };

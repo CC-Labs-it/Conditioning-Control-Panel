@@ -87,7 +87,7 @@ public sealed class JustSubscribedTests
             Assert.True(button.IsEnabled);
 
             s.UnifiedId = "test-user"; s.AuthToken = "test-token";
-            var wire = new ProfileWire();
+            var wire = new ProfileWire(); bool sparkBurst = false; AccountSeed.Patreon!.TierChanged += (_, _) => sparkBurst = shell.Named<global::ConditioningControlPanel.Avalonia.Controls.PremiumSpark>("HeaderPremiumSpark")!.Field.Alive.Any(m => m.Kind == global::ConditioningControlPanel.Controls.Header.MoteKind.Burst);
             AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(1, wire.Reads);
@@ -100,6 +100,8 @@ public sealed class JustSubscribedTests
             await Until(() => button.IsEnabled);
             await Until(() => s.SeenFeatureIntros.Contains(TierCelebration.KeyT2));
             Assert.Equal(1, shell._profileBubbleBurst.Count);
+            Assert.True(sparkBurst);
+            Assert.Equal(2, s.LastKnownEffectiveTier);
             var ring = shell.Named<global::Avalonia.Controls.Shapes.Ellipse>("ProfileBubbleGlowRing")!;
             Assert.Equal("#ff5ee6ff", ((global::Avalonia.Media.ISolidColorBrush)ring.Stroke!).Color.ToString().ToLowerInvariant());
             s.MotionLevel = MotionLevel.Off;
@@ -109,6 +111,16 @@ public sealed class JustSubscribedTests
             shell.ShowTab("settings");
             shell.ShowTab("premium");
             Assert.False(row.IsVisible);
+
+            foreach (var child in shell.OwnedWindows.ToArray()) child.Close();
+            StartupLadder.ResetForTests(); s.SeenFeatureIntros.Remove(TierCelebration.KeyT2); s.SeenFeatureIntros.Remove(TierCelebration.LegacyKey); s.PatreonTier = 0; s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = null;
+            var game = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow(); game.Show();
+            wire = new ProfileWire(); var gameCheck = AccountSeed.CheckSubscriptionNowAsync(); wire.Answer("{\"user\":{\"effective_tier\":2}}"); await gameCheck; await Until(() => StartupLadder.Inbox.Items.Any(item => item.Key == "intro:" + TierCelebration.KeyT2));
+            Assert.Contains(StartupLadder.Inbox.Items, item => item.Key == "intro:" + TierCelebration.KeyT2);
+            Assert.DoesNotContain(TierCelebration.KeyT2, s.SeenFeatureIntros);
+            s.SeenFeatureIntros.Add(TierCelebration.KeyT2); s.LastKnownEffectiveTier = 0;
+            shell.MaybeShowPremiumCelebration(); Assert.Equal(2, s.LastKnownEffectiveTier);
+            var notice = Assert.Single(StartupLadder.Inbox.Items, item => item.Key == "tier-on:2"); game.Close(); StartupLadder.Inbox.Open(notice); var dialog = Assert.Single(shell.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>(), d => d.Title == Loc.Get("tier_on_prime")); dialog.FindControl<Button>("BtnOk")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.False(dialog.IsVisible);
 
             // The Settings page refreshes the inline row even while another section is selected.
             shell.OpenAppSettingsSection("general");
@@ -129,7 +141,7 @@ public sealed class JustSubscribedTests
         {
             AccountSeed.NewV2 = oldFactory;
             foreach (var child in shell.OwnedWindows.ToArray()) child.Close();
-            shell.Close();
+            global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.CloseAllForPanic(); shell.Close();
             CoreSettings.ServiceProvider = null;
         }
     });
@@ -236,6 +248,9 @@ public sealed class JustSubscribedTests
             Assert.Equal(JustSubscribedOutcome.BasicOn, await AccountSeed.CheckSubscriptionNowAsync());
             Assert.Equal(1, handler.Reads);
             Assert.Equal(1, AccountSeed.EffectivePaidTier());
+            s.AuthToken = "before-repair";
+            Assert.Equal(JustSubscribedOutcome.NotYet, await AccountSeed.CheckSubscriptionNowAsync());
+            Assert.Equal("repaired", s.AuthToken);
         }
         finally { AccountSeed.NewV2 = oldFactory; CoreSettings.ServiceProvider = null; }
     });
@@ -296,7 +311,7 @@ public sealed class JustSubscribedTests
             Assert.Equal("/patreon/validate", request.RequestUri!.AbsolutePath);
             Reads++;
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-                { Content = new StringContent("{\"is_active\":true,\"tier\":1}") });
+                { Content = new StringContent("{\"is_active\":true,\"tier\":1,\"auth_token\":\"repaired\"}") });
         }
     }
 
