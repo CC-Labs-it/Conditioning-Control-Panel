@@ -7,13 +7,16 @@
  * Copy is dry and short.
  */
 import { LOOK_OUTFITS, LOOK_VEHICLES, DEFAULT_LOOK, normLook, SHOP_LOOK_OUTFITS, LOOK_PAINTS, LOOK_UMBRELLAS, LOOK_TRAILS } from '../net/protocol.js';
-import { KARTS, PAINTS, UMBRELLAS, TRAILS, lockedKarts, ownedKarts, ownedLooks } from './garageState.js';
+import { KARTS, PAINTS, UMBRELLAS, TRAILS, lockedKarts, ownedKarts, ownedLooks, cleanGarage, STORAGE as GARAGE_STORAGE } from './garageState.js';
+import { stampGarageBlock } from '../meta/record.js';
 import { formatTime, ordinal, BOT_NAMES } from './format.js';
 import { LINK_TOKEN } from '../net/lobbyApi.js';
+import { COURSES } from '../track/catalog.js';
 
 export const POLL_MS = 15000;
 export const PRIME_TIER = 2;
-export const TRACKS = Object.freeze({ threshold: 'Threshold' });
+export const TRACKS = Object.freeze(Object.fromEntries(COURSES.map((c) => [c.id, c.name])));
+const ONLINE_COURSES = COURSES.filter((c) => c.online);
 export const LOOK_KEY = 'glassroad.look.v1';
 
 const int = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
@@ -39,6 +42,8 @@ export function rowStartsIn(row, listMs, nowMs) {
   if (!row || row.startsIn == null || !(row.startsIn >= 0)) return null;
   return Math.max(0, Math.round(row.startsIn - Math.max(0, (nowMs - listMs) / 1000)));
 }
+/** The small line under an open table: who hosts it, its laps, when it starts. The course is the row's title. */
+export const tableLine = (r, starts) => 'Host ' + r.host + (r.friend ? ' (friend)' : '') + ', ' + r.laps + (r.laps === 1 ? ' lap, ' : ' laps, ') + startsLabel(starts);
 export const startsLabel = (s) => (s == null ? 'Host starts' : s <= 0 ? 'Starting' : s < 60 ? 'Starts in ' + s + ' s' : 'Starts in ' + Math.ceil(s / 60) + ' min');
 
 /**
@@ -89,14 +94,21 @@ const HOST_STEPS = { laps: [1, 9], seats: [2, 8] };
 export function cleanHost(f = {}) {
   const mode = f.mode === 'friends' ? 'friends' : 'open';
   return {
-    mode, laps: int(f.laps, 1, 9, 3), seats: int(f.seats, 2, 8, 8), botFill: f.botFill !== false,
+    mode, track: ONLINE_COURSES.some((c) => c.id === f.track) ? f.track : null, laps: int(f.laps, 1, 9, 3), seats: int(f.seats, 2, 8, 8), botFill: f.botFill !== false,
     laneKeeper: mode === 'friends' ? !!f.laneKeeper : false,
   };
 }
-/** One step of a host form row (dir +1 / -1). Numbers wrap; switches flip; lane keeper stays off on open tables. */
+/** One step of a host form row (dir +1 / -1). Numbers and courses wrap; switches flip; lane keeper stays off on open
+ * tables. A new course brings its own lap count unless the host already changed it. */
 export function stepHost(form, key, dir = 1) {
   const f = cleanHost(form);
   if (key === 'mode') f.mode = f.mode === 'open' ? 'friends' : 'open';
+  else if (key === 'track') {
+    const n = ONLINE_COURSES.length, at = Math.max(0, ONLINE_COURSES.findIndex((c) => c.id === f.track));
+    const was = ONLINE_COURSES[at], to = ONLINE_COURSES[(at + (dir < 0 ? -1 : 1) + n) % n];
+    if (f.laps === was.laps) f.laps = to.laps;
+    f.track = to.id;
+  }
   else if (HOST_STEPS[key]) { const [lo, hi] = HOST_STEPS[key], span = hi - lo + 1; f[key] = lo + (((f[key] - lo + (dir < 0 ? -1 : 1)) % span) + span) % span; }
   else if (key === 'botFill' || key === 'laneKeeper') f[key] = !f[key];
   return cleanHost(f);
@@ -104,7 +116,7 @@ export function stepHost(form, key, dir = 1) {
 /** POST /v2/race/open body (NET.md section 12). No stakes here: they wait for RACE_STAKES. */
 export function hostBody(form, look, track = 'threshold') {
   const f = cleanHost(form);
-  return { track, mode: f.mode, seats: f.seats, laps: f.laps, botFill: f.botFill, laneKeeper: f.laneKeeper, look: normLook(look) };
+  return { track: f.track || track, mode: f.mode, seats: f.seats, laps: f.laps, botFill: f.botFill, laneKeeper: f.laneKeeper, look: normLook(look) };
 }
 
 // ---- seats -------------------------------------------------------------------------------------
@@ -135,6 +147,21 @@ export function applySeat(seats, msg) {
   out[msg.seat] = s;
   return out;
 }
+
+/** Racers who were seated and are now gone (left, or the seat emptied), never `me`: [{ seat, name }] for the
+ *  '<name> left' line in the room and in the race. */
+export function seatsGone(was, now, me = -1) {
+  const out = [];
+  if (!Array.isArray(was) || !Array.isArray(now)) return out;
+  for (const a of was) {
+    if (!a || a.kind !== 'human' || a.left || a.seat === me) continue;
+    const b = now[a.seat];
+    if (!b || b.kind === 'empty' || b.left) out.push({ seat: a.seat, name: seatName(a) });
+  }
+  return out;
+}
+/** The line for one racer gone. */
+export const goneLine = (name) => (name || 'Racer') + ' left';
 
 /** The name a seat shows: its ticket name, our short names for bots, 'Open seat' when empty. */
 export function seatName(s) {
@@ -171,6 +198,27 @@ export const humans = (seats) => (seats || []).filter((s) => s.kind === 'human' 
 export const readyCount = (seats) => humans(seats).filter((s) => s.ready).length;
 /** The host may press Start in the lobby phase with at least one human seated. */
 export const canStart = (seats, mySeat, phase) => phase === 'lobby' && !!(seats && seats[mySeat] && seats[mySeat].host) && humans(seats).length > 0;
+/** The host's seat, or -1 (a quick room has none). A room with a host starts only when the host says (owner 2026-10-30). */
+export const hostSeat = (seats) => { const h = (seats || []).find((s) => s && s.kind === 'human' && s.host); return h ? h.seat : -1; };
+/** The lobby line under the room title: the host sees the ready count, everyone else waits for the host. */
+export function lobbyNote(seats, mySeat, mode) {
+  const me = (seats || [])[mySeat], count = readyCount(seats) + ' of ' + humans(seats).length + ' ready';
+  if (hostSeat(seats) >= 0 && !(me && me.host)) return 'Waiting for the host, ' + count;
+  return (mode === 'friends' ? 'Friends room' : 'Open table') + ', ' + count;
+}
+/** The start is waiting on seats still loading: the line everyone sees, or '' when nobody is. */
+export function holdNote(seats, hold, mySeat) {
+  const w = (hold || []).filter((i) => seats && seats[i] && seats[i].kind === 'human' && !seats[i].left);
+  if (!w.length) return '';
+  if (w.length > 1) return 'Waiting for ' + w.length + ' players to load';
+  return w[0] === mySeat ? 'Still loading, the race waits for you' : 'Waiting for ' + (seats[w[0]].name || 'a player') + ' to load';
+}
+/** The host moved to another seat (the old host left the lobby): the line everyone sees, or '' when nothing moved. */
+export function hostMoved(was, now, mySeat) {
+  const a = hostSeat(was), b = hostSeat(now);
+  if (a < 0 || b < 0 || a === b) return '';
+  return b === mySeat ? 'You are the host now' : seatName(now[b]) + ' is the host now';
+}
 
 // ---- looks -------------------------------------------------------------------------------------
 
@@ -250,6 +298,18 @@ export function loadLook(storage) {
 }
 export function saveLook(storage, look) {
   try { storage.setItem(LOOK_KEY, JSON.stringify(normLook(look))); return true; } catch (e) { return false; }
+}
+/** A player stepped a lobby look row (72 contract C1): the block carries it with the garage as this device stores it.
+ * @returns the record to push, or null. */
+export function stampLook(storage, look) {
+  let state = null;
+  try { state = JSON.parse(storage.getItem(GARAGE_STORAGE)); } catch (e) { /* no garage saved yet */ }
+  return stampGarageBlock({ state: state && typeof state === 'object' && !Array.isArray(state) ? state : cleanGarage(null), look: normLook(look) }, storage);
+}
+/** A pulled block's look into this device's store. normLook drops unknown ids; the lobby's own show() runs fitLook
+ * with the account's owned choices, so a look it cannot wear falls back there and the block keeps the pick. */
+export function adoptBlockLook(storage, block) {
+  return !!block && saveLook(storage, block.look);
 }
 
 // ---- time --------------------------------------------------------------------------------------

@@ -117,7 +117,8 @@ forward; Again and Menu stay on every page. Gentle visuals: fades only, no stamp
 
 `kart:velvet-lock`, `kart:undertow`, `hat:umbrella` (the per-course umbrella glide art replaces the
 beanie when picked). The garage reads `unlockedSet(record)`; `LOCKED` minus the unlocked karts is what
-stays dark. No reward is ever a stat, a feature or Sparkles.
+stays dark. Unlocks stay cosmetic only: never a stat, a feature or Sparkles. Sparkles come from
+finishing, paid by place (B1): the host claims them from `race-result` and the server prices the claim.
 
 ## 7. Modes
 
@@ -132,6 +133,14 @@ CCP-Server `GET /v2/race/profile` -> `{ ok, record }`, `PUT /v2/race/profile` bo
 `mergeRecords` arithmetic, never lowers. The client merges the server record into the local one at
 boot and PUTs after each saved run, through the same transport as the lobby (desktop host relay or
 direct fetch on the web). Signed out: local only.
+
+The record's optional `garage` block (7.2, shared shop contract C1) makes the kart look travel:
+`{ state: <glassroad.garage.v1>, look: <glassroad.look.v1>, updatedAt: <ISO> }`. The newer `updatedAt` wins
+the whole block, a side without one never erases it, a block over 4 KB is dropped alone. The page stamps it on a
+real player change only (`hud/garageState.js garageTracker`, `hud/lobbyMath.js stampLook`), never on load, and
+applies a newer one through `cleanGarage` while the garage is open and at rest, else at its next open. A pick
+that does not fit falls back quietly and stays in the block for when the grant lands. `glassroad.garage.seen.v1`
+remembers what this device last took. It never reaches feel.json or the tracks: no course hash move.
 
 ## 9. Copy
 

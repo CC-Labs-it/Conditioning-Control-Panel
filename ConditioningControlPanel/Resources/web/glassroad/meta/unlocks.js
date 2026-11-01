@@ -1,4 +1,5 @@
-/* meta/unlocks.js - cosmetic unlocks (CONTRACT-LOGBOOK.md section 6). Never a stat, a feature or Sparkles.
+/* meta/unlocks.js - cosmetic unlocks (CONTRACT-LOGBOOK.md section 6). Never a stat, a feature or Sparkles:
+ * finishing pays Sparkles by place (B1, claimed by the host from race-result); unlocks stay cosmetic only.
  * `garage` is the garage key the RECORD lane unlocks; `by` is the achievement that grants it.
  */
 export const UNLOCKS = Object.freeze({

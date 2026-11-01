@@ -91,7 +91,7 @@ that client's last batch, except the seats that client uploads. 8 karts: 328 B p
 The room accepts at most 25 upload frames per second per socket (more are dropped and count toward the `rate` flag),
 and only records whose seat is the sender's own or one it keeps; uploads before `countAt` are ignored.
 
-Client render rule (B2-c): remote karts 100 ms in the past, dead reckoning up to 250 ms, corrections blended over 150 ms.
+Client render rule (B2-c): remote karts 100 ms in the past, dead reckoning up to 250 ms, corrections blended over 150 ms. While racing a record's tick counts the sender's sim steps (re-anchored to the room clock when they part by more than 2 ticks, dropped sim time or a pause); the viewer draws on its frame clock, leaning toward server time. A wall-clock stamp or a Date.now draw time costs up to a tick: 67 cm at 40 m/s.
 
 ## 4. JSON messages (text frames)
 
@@ -153,7 +153,7 @@ Room -> client:
 
 - `phase`: `lobby | countdown | racing | done`. `resume`: hex of the seat's own last record (reconnect mid-race).
 - `cfg` (from the ticket, identical for every seat): `{ track, laps: 1..9, seats: 2..8, mode: 'open'|'friends',
-  laneKeeper: bool, staked: bool, botFill: bool, autoStartS: u16 }` (0 = only the host or a full ready grid starts).
+  laneKeeper: bool, staked: bool, botFill: bool, autoStartS: u16 }` (a room with a host ignores it: only the host starts).
 - Seat: `{ seat, kind: 'human'|'bot'|'empty', name, platform: 'desktop'|'web'|'phone'|null, look: { outfit, vehicle, skin? },
   host, ready, idle, left }`. Names come from tickets (bots: `EMI bot`); no uid ever reaches another client.
 - Abort reasons: `hello ticket expired replay version config full started closed server`. Close codes: 4000 race
@@ -211,7 +211,7 @@ no eligible client the bots freeze where they are. Bot records carry the bot fla
 |---|---|
 | ticket lifetime | 120 s (room accepts `exp` up to now + 300 s, rejects past `exp`) |
 | hello deadline | 5 s after the socket opens |
-| auto start | open rooms: `cfg.autoStartS` (lobby default 45) after the first hello, or at once when every seat is a ready human; friends rooms: the host's `start` or a full ready grid |
+| start | a room with a host (open tables, friends rooms): only the host's `start`; ready is a signal to the host, never a trigger. The host leaving the lobby hands the role to the longest-seated human (a `seats` list); a hosted lobby nobody starts closes after 10 min (`abort closed`). A room with no host (quick): `cfg.autoStartS` (45) after the first hello, or at once when every seat is a ready human |
 | lead | `countAt = now + 3000`, `startAt = countAt + COUNT_MS` (3000), `goTick` integer |
 | results | final when every connected human finished, or 15 s after the first human finish, or 600 s after go |
 | unfinished rows | `finished: false`, `timeMs: null`, placed by progress |
