@@ -9,6 +9,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Compositor;
 using Xunit;
 
@@ -41,21 +42,24 @@ public sealed class SubliminalSharedStageTests
         var raise = SharedOverlayHost.Raise;
         var available = PinkFilterOverlay.IsAvailable;
         var query = ScreenList.QueryOverride;
+        var provider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
         var stages = new List<Window>();
-        SharedOverlayHost.Configure = (w, _) => { stages.Add(w); w.Width = 300; w.Height = 200; return true; };
-        SharedOverlayHost.IsTransparent = _ => true;
-        SharedOverlayHost.Raise = _ => true;
-        PinkFilterOverlay.IsAvailable = () => true;
-        ScreenList.QueryOverride = _ => new[] { ScreenAt(Bounds) };
-        var settings = CoreSettings.Current;
-        settings.PinkFilterEnabled = true;
-        settings.PinkFilterColor = "#112233";
-        settings.PinkFilterOpacity = 40;
-        settings.PinkFilterTargetMonitor = 0;
         var owner = new Window();
-        owner.Show();
         try
         {
+            CoreSettings.ServiceProvider = () => service;
+            SharedOverlayHost.Configure = (w, _) => { stages.Add(w); w.Width = 300; w.Height = 200; return true; };
+            SharedOverlayHost.IsTransparent = _ => true;
+            SharedOverlayHost.Raise = _ => true;
+            PinkFilterOverlay.IsAvailable = () => true;
+            ScreenList.QueryOverride = _ => new[] { ScreenAt(Bounds) };
+            var settings = service.Current;
+            settings.PinkFilterEnabled = true;
+            settings.PinkFilterColor = "#112233";
+            settings.PinkFilterOpacity = 40;
+            settings.PinkFilterTargetMonitor = 0;
+            owner.Show();
             if (tintFirst) PinkFilterOverlay.Refresh(owner);
             Assert.True(SubliminalOverlay.ShowHosted(Bounds, "TEST", 0.8, TimeSpan.FromSeconds(5)));
             if (!tintFirst) PinkFilterOverlay.Refresh(owner);
@@ -97,14 +101,53 @@ public sealed class SubliminalSharedStageTests
         }
         finally
         {
-            PinkFilterOverlay.CloseAll();
-            SubliminalOverlay.CloseAll();
-            owner.Close();
-            SharedOverlayHost.Configure = configure;
-            SharedOverlayHost.IsTransparent = transparency;
-            SharedOverlayHost.Raise = raise;
-            PinkFilterOverlay.IsAvailable = available;
-            ScreenList.QueryOverride = query;
+            try
+            {
+                PinkFilterOverlay.CloseAll();
+                SubliminalOverlay.CloseAll();
+                owner.Close();
+            }
+            finally
+            {
+                SharedOverlayHost.Configure = configure;
+                SharedOverlayHost.IsTransparent = transparency;
+                SharedOverlayHost.Raise = raise;
+                PinkFilterOverlay.IsAvailable = available;
+                ScreenList.QueryOverride = query;
+                CoreSettings.ServiceProvider = provider;
+            }
+        }
+    });
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public void Tint_scenario_leaves_the_callers_settings_untouched(bool tintFirst, bool fallback) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var provider = CoreSettings.ServiceProvider;
+        var service = fallback ? null : new SettingsService();
+        CoreSettings.ServiceProvider = service is null ? null : () => service;
+        var settings = CoreSettings.Current;
+        var before = (settings.PinkFilterEnabled, settings.PinkFilterColor, settings.PinkFilterOpacity, settings.PinkFilterTargetMonitor);
+        try
+        {
+            settings.PinkFilterEnabled = false;
+            settings.PinkFilterColor = "#abcdef";
+            settings.PinkFilterOpacity = 7;
+            settings.PinkFilterTargetMonitor = -1;
+            var caller = CoreSettings.ServiceProvider;
+            var expected = (settings.PinkFilterEnabled, settings.PinkFilterColor, settings.PinkFilterOpacity, settings.PinkFilterTargetMonitor);
+            Tint_and_card_share_a_stage_and_stop_independently(tintFirst);
+            Assert.Same(caller, CoreSettings.ServiceProvider);
+            Assert.Same(settings, CoreSettings.Current);
+            Assert.Equal(expected, (settings.PinkFilterEnabled, settings.PinkFilterColor, settings.PinkFilterOpacity, settings.PinkFilterTargetMonitor));
+        }
+        finally
+        {
+            try { (settings.PinkFilterEnabled, settings.PinkFilterColor, settings.PinkFilterOpacity, settings.PinkFilterTargetMonitor) = before; }
+            finally { CoreSettings.ServiceProvider = provider; }
         }
     });
 
