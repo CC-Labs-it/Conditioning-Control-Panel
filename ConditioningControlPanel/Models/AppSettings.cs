@@ -131,6 +131,18 @@ namespace ConditioningControlPanel.Models
     }
 
     /// <summary>
+    /// Studio › Wallpaper mode. Static = the composed still-image collage; Dynamic = the same collage
+    /// with its gifs moving, live behind the desktop icons (not in performance mode); OwnImage = one
+    /// picture the user picked. Only one runs.
+    /// </summary>
+    public enum WallpaperMode
+    {
+        Static,
+        Dynamic,
+        OwnImage
+    }
+
+    /// <summary>
     /// Flashes v2 (Back Room prizes): how a compositor flash moves while it is up. Still is the
     /// base; DriftBounce and Pendulum are owned styles (Services/Prizes/PrizeGrants); Mix rolls
     /// per flash among Still plus whatever is owned. Ownership is never read from settings: an
@@ -7458,6 +7470,82 @@ namespace ConditioningControlPanel.Models
         {
             get => _wallpaperSourceFolder;
             set { _wallpaperSourceFolder = value; OnPropertyChanged(); }
+        }
+
+        private bool _collageWallpaperEnabled = false;
+        /// <summary>
+        /// Cinematic collage wallpaper: while a session is active, compose a fresh collage from the
+        /// user's own images (assets/images) and set it as the desktop wallpaper, rotating on
+        /// <see cref="CollageWallpaperIntervalSeconds"/>. Independent of the Takeover
+        /// <see cref="WallpaperEnabled"/> behaviour. The original desktop is restored when it stops.
+        /// </summary>
+        [JsonProperty]
+        public bool CollageWallpaperEnabled
+        {
+            get => _collageWallpaperEnabled;
+            set { _collageWallpaperEnabled = value; OnPropertyChanged(); }
+        }
+
+        private bool _collageRunWithCcp = false;
+        /// <summary>
+        /// "Run with CCP": keep the wallpaper up the whole time CCP is open, not just while the engine
+        /// runs. A Stop leaves it. Panic takes it down until the next Start or launch, like every effect.
+        /// Local to this PC: never in a cloud backup (ProfileSyncService.ExcludedBackupProperties).
+        /// </summary>
+        [JsonProperty]
+        public bool CollageRunWithCcp
+        {
+            get => _collageRunWithCcp;
+            set { _collageRunWithCcp = value; OnPropertyChanged(); }
+        }
+
+        private WallpaperMode _collageMode = WallpaperMode.Static;
+        /// <summary>
+        /// Which wallpaper runs (see <see cref="WallpaperMode"/>): the still collage (default), the moving
+        /// one (<see cref="Services.DynamicWallpaperService"/>, not available in <see cref="PerformanceMode"/>),
+        /// or the user's own picture (<see cref="CollageOwnImagePath"/>). Only one at a time.
+        /// </summary>
+        [JsonProperty]
+        public WallpaperMode CollageMode
+        {
+            get => _collageMode;
+            set { _collageMode = value; OnPropertyChanged(); }
+        }
+
+        private string _collageOwnImagePath = "";
+        /// <summary>The image the user picked for Own image mode (jpg/png/bmp). Used where it is:
+        /// never copied, changed or deleted. Local to this PC: a path means nothing on another one.</summary>
+        [JsonProperty]
+        public string CollageOwnImagePath
+        {
+            get => _collageOwnImagePath;
+            set { _collageOwnImagePath = value ?? ""; OnPropertyChanged(); }
+        }
+
+        private int _collageWallpaperIntervalSeconds = 60;
+        /// <summary>
+        /// How often the collage wallpaper recomposes into a brand-new layout, in seconds. The
+        /// slider spans 10 s to 5 min; the text field can go past that, clamped to 10 s to 24 h.
+        /// Only used while <see cref="CollageWallpaperRotate"/> is on.
+        /// </summary>
+        [JsonProperty]
+        public int CollageWallpaperIntervalSeconds
+        {
+            get => _collageWallpaperIntervalSeconds;
+            set { _collageWallpaperIntervalSeconds = Math.Clamp(value, 10, 86400); OnPropertyChanged(); }
+        }
+
+        private bool _collageWallpaperRotate = true;
+        /// <summary>
+        /// When on, the collage recomposes on <see cref="CollageWallpaperIntervalSeconds"/>. When
+        /// off, it composes ONE collage for the session and holds it (still re-matching the active
+        /// mod's colour, just not cycling).
+        /// </summary>
+        [JsonProperty]
+        public bool CollageWallpaperRotate
+        {
+            get => _collageWallpaperRotate;
+            set { _collageWallpaperRotate = value; OnPropertyChanged(); }
         }
 
         #endregion

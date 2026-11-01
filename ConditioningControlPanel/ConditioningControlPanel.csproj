@@ -86,7 +86,13 @@
          CPU SKElement path is used for now (reliable on AllowsTransparency layered windows);
          native libSkiaSharp extracts via IncludeNativeLibrariesForSelfExtract for single-file. -->
     <PackageReference Include="SkiaSharp.Views.WPF" Version="2.88.8" />
-    
+
+    <!-- Dynamic wallpaper (DynamicWallpaperService): Direct3D11 + Direct2D + DirectComposition bindings.
+         Managed-only (no native DLLs), bundled inside the signed single-file exe like the other libs. -->
+    <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
+    <PackageReference Include="Vortice.Direct2D1" Version="3.6.2" />
+    <PackageReference Include="Vortice.DirectComposition" Version="3.6.2" />
+
     <!-- MVVM Framework -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     
