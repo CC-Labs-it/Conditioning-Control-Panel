@@ -67,7 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             finally { _browserCardSyncing = false; }
             SyncBrowserMuteIcon();
             RefreshBrowserWebcamButton();
-            ApplyBambiCloudVisibility(navigateIfHidden: false);
+            SyncSiteRadiosToActiveMod(navigateIfChanged: false);
             SyncBrowserPrompt();
         }
 
@@ -151,21 +151,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_browserCardSyncing) return;
             CoreSettings.Current.ForceShowBambiCloud = ChkForceShowBambiCloud.IsChecked == true;
             CoreSettings.Save();
-            ApplyBambiCloudVisibility(navigateIfHidden: true);
+            SyncSiteRadiosToActiveMod(navigateIfChanged: true);
         }
 
-        /// <summary>The radio shows when the mod wants it OR the user forces it. Hidden while selected, the dot moves to
-        /// HypnoTube and, on a user change, the page follows (WPF SyncSiteRadiosToActiveMod(navigateIfChanged: true)).</summary>
-        private void ApplyBambiCloudVisibility(bool navigateIfHidden)
+        // WPF MainWindow.Browser.cs:518-580 and MainWindow.xaml.cs:2708-2721.
+        private void SyncSiteRadiosToActiveMod(bool navigateIfChanged)
         {
-            bool modWants = true;
-            try { modWants = App.Mods?.ShowBambiCloudOption() ?? true; }
-            catch (Exception ex) { Log.Debug("ShowBambiCloudOption: {E}", ex.Message); }
-            bool show = modWants || CoreSettings.Current.ForceShowBambiCloud;
-            RbBambiCloud.IsVisible = show;
-            if (show || RbBambiCloud.IsChecked != true) return;
-            RbHypnoTube.IsChecked = true;
-            if (navigateIfHidden) Shell?.BrowserSiteToggle_Click(RbHypnoTube, new RoutedEventArgs());
+            try
+            {
+                bool modWants = App.Mods?.ShowBambiCloudOption() ?? true;
+                RbBambiCloud.IsVisible = modWants || CoreSettings.Current.ForceShowBambiCloud;
+                var current = BrowserWebHost.CurrentUrl?.AbsoluteUri;
+                if (modWants && current != null &&
+                    (current.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase) ||
+                     current.Contains("hypnotube.com", StringComparison.OrdinalIgnoreCase))) return;
+
+                var defaultUrl = App.Mods?.GetDefaultBrowserUrl() ?? "https://bambicloud.com/";
+                var target = modWants && defaultUrl.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase)
+                    ? RbBambiCloud : RbHypnoTube;
+                bool moved = target.IsChecked != true;
+                target.IsChecked = true;
+                if (moved && navigateIfChanged && BrowserWebHost.Source != null && !CoreSettings.Current.OfflineMode)
+                    Shell?.BrowserSiteToggle_Click(target, new RoutedEventArgs());
+            }
+            catch (Exception ex) { Log.Debug("SyncSiteRadiosToActiveMod: {E}", ex.Message); }
         }
 
         // ------------------------------------------------------------------ the load prompt

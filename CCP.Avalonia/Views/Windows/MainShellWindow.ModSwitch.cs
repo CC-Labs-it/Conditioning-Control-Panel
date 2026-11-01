@@ -6,7 +6,7 @@
 // choice and the wizard all go through ActivateMod + ApplyActiveModChange; nothing else switches.
 //
 // ponytail: ApplyActiveModChange repaints what this head has - the selector, the palette. WPF also
-// reloads the takeover art, achievement grid, BambiCloud radio + browser URL, Hypnotube link
+// reloads the takeover art, achievement grid, Hypnotube link
 // editor and per-mod defaults; each joins here when its surface is live. Home tile art now follows
 // CoreMods.ModChanged as well as startup; the manager footer is the WPF 7.1.5 action row.
 
@@ -183,6 +183,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeModSelector();
             LoadLogo();   // WPF MainWindow.xaml.cs:3127
             RefreshThemeAwareElements();
+
+            // WPF MainWindow.xaml.cs:3244-3261: sync first, then move an already open
+            // browser to the exact mod default when the mod does not use BambiCloud.
+            BrowserPage?.SyncBrowserCard();
+            if (!mods.ShowBambiCloudOption() && BrowserView?.Source != null && !CoreSettings.Current.OfflineMode)
+                NavigateBrowser(mods.GetDefaultBrowserUrl());
 
             // WPF ApplyActiveModChange: restore only an explicit pick remembered in this mod.
             // A restore keeps custom prompts intact and does not record a new pick.

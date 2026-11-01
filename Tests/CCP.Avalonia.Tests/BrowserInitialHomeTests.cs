@@ -89,4 +89,115 @@ public sealed class BrowserInitialHomeTests
         Assert.Equal(0, host.NavigationRequests);
     });
 
+    [Fact]
+    public Task SiteSyncUsesModDefaultBeforeLoadAndDoesNotNavigate() => Run((shell, page, host, mod) =>
+    {
+        mod.ShowBambiCloudOption = true;
+        mod.DefaultUrl = "https://hypnotube.com/mod-home";
+        page.SyncBrowserCard();
+        Assert.True(page.FindControl<RadioButton>("RbBambiCloud")!.IsVisible);
+        Assert.True(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
+        Assert.Null(host.Source);
+        Assert.Equal(0, host.NavigationRequests);
+        mod.DefaultUrl = "https://bambicloud.com/mod-home";
+        page.SyncBrowserCard();
+        Assert.True(page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked);
+        Assert.Equal(0, host.NavigationRequests);
+    });
+
+    [Fact]
+    public Task SiteSyncPreservesKnownLivePageButReselectsAfterExternalPage() => Run((shell, page, host, mod) =>
+    {
+        mod.ShowBambiCloudOption = true;
+        mod.DefaultUrl = "https://hypnotube.com/mod-home";
+        Assert.True(shell.NavigateToUrlInBrowser("https://bambicloud.com/video"));
+        host.OnNavigationCompleted(new Uri("https://bambicloud.com/video"));
+        int requests = host.NavigationRequests;
+        page.SyncBrowserCard();
+        Assert.True(page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked);
+        Assert.Equal(requests, host.NavigationRequests);
+
+        Assert.True(shell.NavigateToUrlInBrowser("https://example.com/"));
+        host.OnNavigationCompleted(new Uri("https://example.com/"));
+        requests = host.NavigationRequests;
+        page.SyncBrowserCard();
+        Assert.True(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
+        Assert.Equal(requests, host.NavigationRequests);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ModSwitchMovesOnlyAnOpenOnlineBrowserToExactDefault(bool loaded) => Run((shell, page, host, mod) =>
+    {
+        var target = AvApp.Mods!.InstalledMods[BuiltInMods.DronificationId].Manifest;
+        var previous = target.Browser;
+        target.Browser = new ModBrowser { DefaultUrl = "https://hypnotube.com/new-mod", ShowBambiCloudOption = false };
+        try
+        {
+            CoreSettings.Current.ForceShowBambiCloud = true;
+            page.SyncBrowserCard();
+            if (loaded) host.Navigate(new Uri("https://bambicloud.com/video"));
+            page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked = true;
+            int requests = host.NavigationRequests;
+            shell.SwitchActiveModFromLauncher(BuiltInMods.DronificationId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(page.FindControl<RadioButton>("RbBambiCloud")!.IsVisible);
+            Assert.True(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
+            Assert.Equal(requests + (loaded ? 1 : 0), host.NavigationRequests);
+            Assert.Equal(loaded ? "https://hypnotube.com/new-mod" : null, host.Source?.AbsoluteUri);
+        }
+        finally { target.Browser = previous; }
+    });
+
+    [Fact]
+    public Task OfflineModSwitchKeepsOpenBrowserParked() => Run((shell, page, host, mod) =>
+    {
+        var target = AvApp.Mods!.InstalledMods[BuiltInMods.DronificationId].Manifest;
+        var previous = target.Browser;
+        target.Browser = new ModBrowser { DefaultUrl = "https://hypnotube.com/new-mod", ShowBambiCloudOption = false };
+        try
+        {
+            host.Navigate(new Uri("about:blank"));
+            CoreSettings.Current.OfflineMode = true;
+            int requests = host.NavigationRequests;
+            shell.SwitchActiveModFromLauncher(BuiltInMods.DronificationId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
+            Assert.Equal(requests, host.NavigationRequests);
+            Assert.Equal("about:blank", host.Source!.AbsoluteUri);
+        }
+        finally { target.Browser = previous; }
+    });
+
+    [Fact]
+    public Task OverrideSyncDoesNotLoadAnUnopenedBrowser() => Run((shell, page, host, mod) =>
+    {
+        var check = page.FindControl<CheckBox>("ChkForceShowBambiCloud")!;
+        check.IsChecked = true;
+        page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked = true;
+        check.IsChecked = false;
+        Assert.True(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
+        Assert.Null(host.Source);
+        Assert.Equal(0, host.NavigationRequests);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task OverrideSyncMovesSelectionAndNavigatesOnlyOnline(bool offline) => Run((shell, page, host, mod) =>
+    {
+        var check = page.FindControl<CheckBox>("ChkForceShowBambiCloud")!;
+        check.IsChecked = true;
+        page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked = true;
+        host.Navigate(new Uri("https://bambicloud.com/video"));
+        CoreSettings.Current.OfflineMode = offline;
+        int requests = host.NavigationRequests;
+        check.IsChecked = false;
+        Assert.False(page.FindControl<RadioButton>("RbBambiCloud")!.IsVisible);
+        Assert.True(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
+        Assert.Equal(requests + (offline ? 0 : 1), host.NavigationRequests);
+        Assert.Equal(offline ? "https://bambicloud.com/video" : "https://hypnotube.com/", host.Source!.AbsoluteUri);
+    });
+
 }
