@@ -9,15 +9,10 @@
 // "BrowserWebHost"/>, which wraps Avalonia's NativeWebView and draws a legible fallback panel
 // naming the page where no engine is installed. Setting its Source IS the navigation, and its
 // NavigationCompleted carries the live URL (OnBrowserNavigationCompleted). What WebHost does NOT
-// expose is a document-script channel, a mute or a fullscreen signal - and
-// every member that needed one of those is still a note, not a half-port.
+// has a post-load script channel; document-created injection and native fullscreen signals remain absent.
 //
-// TWO DELIBERATE DEVIATIONS, both because WebHost is narrower than CoreWebView2:
-//   1. autoPlayFullscreen is ACCEPTED AND IGNORED by NavigateToUrlInBrowser, and logged. The WPF
-//      path injects JS from a NavigationCompleted hook; returning false for that flag alone would
-//      break the plain-navigation half of the same call for every caller.
-//   2. (Resolved) the offline-block toast now shows through App.Notifications, as WPF
-//      NotifyBrowserBlockedOffline does (MainWindow.Browser.cs:489-494).
+// The avatar-link path requests autoplay through WebHost's script channel after navigation.
+// Native fullscreen may still be refused by the browser's user-activation policy.
 //
 // THE MUTE PAIR is ported onto the card itself (Views/Tabs/SettingsTabView.BrowserCard.cs) over the WebHost
 // script channel (Views/Controls/WebHostMedia.cs), re-applied after each navigation. There is still no ENGINE
@@ -34,9 +29,8 @@
 //   * WebView2 itself (36): the init/teardown chain (InitializeBrowserAsync, InitAndNavigateAsync,
 //     TearDownBrowserForReinit, NavigateWhenBrowserReadyAsync, BrowserLoadingText_Click,
 //     OpenUrlExternallyAfterBrowserFailure, _browserInitializing, _browserCorePending); the
-//     script channel (AutoPlayAndFullscreenVideoAsync,
-//     AutoPlayBambiCloudPlaylistAsync, EndWebVideoTakeover, OnBrowserWebMessageReceived,
-//     HandleBrowserMediaMessage, the four HandleAudioSync* members, HookHapticAudioSyncRearm,
+//     remaining media reporting, duration limits, audio sync and native fullscreen rig, including
+//     the four HandleAudioSync* members, HookHapticAudioSyncRearm,
 //     OnHapticConnectionChangedForAudioSync, _hapticAudioSyncConnHooked); the pop-out and
 //     fullscreen rig (BtnPopOutBrowser_Click, FocusBrowserSurface's pop-out half,
 //     HandleBrowserFullscreenChanged, Arm/DisarmFullscreenEscapes, Enter/ExitBrowserFullscreen,
@@ -54,6 +48,8 @@
 //     SyncSiteRadiosToActiveMod, so write it with that caller.
 
 using System;
+using System.Threading.Tasks;
+using Avalonia.Threading;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -109,9 +105,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var host = BrowserView;
                 if (host == null) return false;
-                host.Navigate(new Uri(url));   // even when equal: WPF #867, re-click goes home
-                Log.Information("Browser navigated to {Url}", url);
-                return true;
+                var issued = host.Navigate(new Uri(url));   // equal URLs still reload
+                if (issued) Log.Information("Browser navigated to {Url}", url);
+                return issued;
             }
             catch (Exception ex)
             {
@@ -140,6 +136,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// remote video-stop path, exactly as on WPF.</summary>
         private void NavigateBrowserToCurrentSiteHome()
         {
+            ++_browserAutoplayGeneration;
+            _pendingBrowserAutoplay = null;
             RevealDashboardBrowser("reload");   // WPF Browser.cs:3153 / :603 (site-toggle)
             NavigateBrowser(SiteHomeUrl());
         }
@@ -164,12 +162,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Navigates the embedded browser and brings its tab forward. Public because
         /// the callers live elsewhere on WPF (speech-bubble links, the remote controller).</summary>
-        /// <param name="autoPlayFullscreen">ACCEPTED AND IGNORED - see deviation 2 in the header.
-        /// WebHost has no script channel, so the video takeover cannot be requested. The plain
-        /// navigation still happens, which is what every caller needs first.</param>
+        /// <param name="autoPlayFullscreen">Request playback and fullscreen after the page loads.</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
-            if (string.IsNullOrWhiteSpace(url)) return false;
+            ++_browserAutoplayGeneration;
+            _pendingBrowserAutoplay = null;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var target)) return false;
             if (BrowserBlockedOffline(userInitiated)) return false;
 
             // WPF's FocusBrowserSurface, minus the pop-out branch: there is no browser pop-out
@@ -187,11 +185,144 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (bambi != null) bambi.IsChecked = lower.Contains("bambicloud.com");
             if (hypno != null) hypno.IsChecked = lower.Contains("hypnotube.com");
 
-            if (autoPlayFullscreen)
-                Log.Warning("Auto-play/fullscreen requested but WebHost has no script channel - takeover skipped: {Url}", url);
-
-            return NavigateBrowser(url);
+            var host = BrowserView;
+            _pendingBrowserAutoplay = autoPlayFullscreen && host != null ? target : null;
+            if (host != null) HookAvatarBrowser(host);
+            var issued = NavigateBrowser(url);
+            if (!issued) _pendingBrowserAutoplay = null;
+            return issued;
         }
+
+        // WPF Speech.cs:1512-1529 and BrowserMediaService.cs:196-223,333-376.
+        // The queue service is not on this head; the live claim still gates its available interactions.
+        private WebHost? _hookedAvatarBrowser;
+        private Uri? _pendingBrowserAutoplay;
+        private int _browserAutoplayGeneration;
+        private volatile bool _avatarBrowserPlaying, _avatarBrowserSessionActive, _avatarBrowserTakeover;
+        private DateTime _avatarBrowserHeartbeat;
+        private DispatcherTimer? _avatarBrowserWatchdog;
+        internal bool AvatarBrowserSessionActive { get => _avatarBrowserSessionActive; private set => _avatarBrowserSessionActive = value; }
+        internal bool AvatarBrowserTakeover { get => _avatarBrowserTakeover; private set => _avatarBrowserTakeover = value; }
+        internal bool AvatarBrowserBusy => AvatarBrowserTakeover || _avatarBrowserPlaying;
+        internal Func<Task> BrowserAutoplayDelay = () => Task.Delay(1500);
+
+        internal void ClaimAvatarBrowserSession()
+        {
+            ++_browserAutoplayGeneration;
+            _pendingBrowserAutoplay = null;
+            AvatarBrowserSessionActive = AvatarBrowserTakeover = true;
+            _avatarBrowserPlaying = false;
+            _avatarBrowserHeartbeat = DateTime.UtcNow;
+            _avatarBrowserWatchdog ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _avatarBrowserWatchdog.Tick -= BrowserWatchdogTick;
+            _avatarBrowserWatchdog.Tick += BrowserWatchdogTick;
+            _avatarBrowserWatchdog.Start();
+        }
+
+        internal void EndAvatarBrowserSession()
+        {
+            ++_browserAutoplayGeneration;
+            _pendingBrowserAutoplay = null;
+            AvatarBrowserSessionActive = AvatarBrowserTakeover = _avatarBrowserPlaying = false;
+            _avatarBrowserWatchdog?.Stop();
+        }
+
+        private void BrowserWatchdogTick(object? sender, EventArgs e) => CheckBrowserHeartbeat(DateTime.UtcNow);
+
+        internal void CheckBrowserHeartbeat(DateTime now)
+        {
+            if (AvatarBrowserSessionActive && (now - _avatarBrowserHeartbeat).TotalSeconds >= (_avatarBrowserPlaying ? 20 : 60))
+            {
+                if (AvatarBrowserTakeover) StopAvatarBrowserSession();
+                else EndAvatarBrowserSession();
+            }
+        }
+
+        // WPF MainWindow.xaml.cs:2045 and Browser.cs:973: invalidate delayed work, pause, and exit fullscreen.
+        internal void StopAvatarBrowserSession()
+        {
+            ++_browserAutoplayGeneration;
+            _pendingBrowserAutoplay = null;
+            if (BrowserView is { HasEngine: true } host)
+                _ = host.InvokeScriptAsync("window._ccpTakeoverStopped=true;document.querySelectorAll('video,audio').forEach(v=>{try{v.pause()}catch(e){}});if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});");
+            EndAvatarBrowserSession();
+        }
+
+        private void HookAvatarBrowser(WebHost host)
+        {
+            if (ReferenceEquals(_hookedAvatarBrowser, host)) return;
+            _hookedAvatarBrowser = host;
+            host.NavigationFinished += OnAvatarBrowserNavigationFinished;
+            host.WebMessage += OnAvatarBrowserMessage;
+            Closed += (_, _) => StopAvatarBrowserSession();
+        }
+
+        private void OnAvatarBrowserNavigationFinished(Uri url, bool success)
+        {
+            var target = _pendingBrowserAutoplay;
+            // Completion from an older navigation must not start playback on the wrong page.
+            if (target == null || !target.Equals(url)) return;
+            _pendingBrowserAutoplay = null;
+            if (!success) { EndAvatarBrowserSession(); return; }
+            _ = StartBrowserAutoplay(_hookedAvatarBrowser!, target, _browserAutoplayGeneration);
+        }
+
+        internal async Task StartBrowserAutoplay(WebHost host, Uri target, int generation)
+        {
+            await BrowserAutoplayDelay(); // WPF Browser.cs:835-837,1023-1026
+            if (generation != _browserAutoplayGeneration || !host.HasEngine) return;
+            await host.InvokeScriptAsync((IsBrowserPlaylist(target) ? BrowserPlaylistScript : BrowserVideoScript)
+                .Replace("__GEN__", generation.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        internal static bool IsBrowserPlaylist(Uri target) =>
+            target.Host.EndsWith("bambicloud.com", StringComparison.OrdinalIgnoreCase) &&
+            target.AbsolutePath.Contains("/playlist/", StringComparison.OrdinalIgnoreCase);
+
+        private void OnAvatarBrowserMessage(string message)
+        {
+            if (!AvatarBrowserSessionActive) return;
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(message);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("type", out var type) || type.GetString() != "ccpAvatarMedia" ||
+                    !root.TryGetProperty("generation", out var gen) || !gen.TryGetInt32(out var value) || value != _browserAutoplayGeneration ||
+                    !root.TryGetProperty("state", out var state)) return;
+                switch (state.GetString())
+                {
+                    case "playing": _avatarBrowserPlaying = true; _avatarBrowserHeartbeat = DateTime.UtcNow; break;
+                    case "progress": if (_avatarBrowserPlaying) _avatarBrowserHeartbeat = DateTime.UtcNow; break;
+                    case "ended": EndAvatarBrowserSession(); break;
+                    case "fsExit": AvatarBrowserTakeover = false; break;
+                }
+            }
+            catch (System.Text.Json.JsonException) { }
+            catch (InvalidOperationException) { }
+        }
+
+        // Adapted from WPF Browser.cs:839-954 and :1028-1075. The carrier is WebView2 on Windows
+        // and invokeCSharpAction on WebKit; heartbeat keeps a live session distinct from a stalled load.
+        private const string BrowserVideoScript = """
+            (async function(){const gen=__GEN__; const send=s=>{const m=JSON.stringify({type:'ccpAvatarMedia',generation:gen,state:s});if(window.chrome?.webview?.postMessage)window.chrome.webview.postMessage(m);else if(window.invokeCSharpAction)window.invokeCSharpAction(m);};
+            window._ccpTakeoverStopped=false;let v=document.querySelector('video');
+            for(let i=0;i<20&&!v;i++){await new Promise(r=>setTimeout(r,500));if(window._ccpTakeoverStopped)return;v=document.querySelector('video');}
+            if(!v){send('fsExit');return;}let timer;const beat=()=>{if(!v.paused&&!v.ended)send('progress');};
+            v.addEventListener('playing',()=>{send('playing');clearInterval(timer);timer=setInterval(beat,1000);});
+            v.addEventListener('ended',()=>{clearInterval(timer);if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});send('ended');},{once:true});
+            let entered=false;document.addEventListener('fullscreenchange',()=>{if(document.fullscreenElement||document.webkitFullscreenElement)entered=true;else if(entered)send('fsExit');});
+            const fs=()=>{if(window._ccpTakeoverStopped)return;try{const p=v.requestFullscreen?v.requestFullscreen():v.webkitRequestFullscreen?.();if(p?.catch)p.catch(()=>{});}catch(e){}};
+            v.muted=false;try{await v.play();fs();}catch(e){v.addEventListener('playing',fs,{once:true});}
+            })();
+            """;
+        private const string BrowserPlaylistScript = """
+            (async function(){const gen=__GEN__;const send=s=>{const m=JSON.stringify({type:'ccpAvatarMedia',generation:gen,state:s});if(window.chrome?.webview?.postMessage)window.chrome.webview.postMessage(m);else if(window.invokeCSharpAction)window.invokeCSharpAction(m);};
+            window._ccpTakeoverStopped=false;let b=document.querySelector('button.play-action');
+            for(let i=0;i<20&&!b;i++){await new Promise(r=>setTimeout(r,250));if(window._ccpTakeoverStopped)return;b=document.querySelector('button.play-action');}if(!b){send('ended');return;}
+            const bind=a=>{if(a.__ccpAvatarBound)return;a.__ccpAvatarBound=true;let timer;a.addEventListener('playing',()=>{send('playing');clearInterval(timer);timer=setInterval(()=>{if(!a.paused&&!a.ended)send('progress');},1000);});a.addEventListener('ended',()=>{clearInterval(timer);send('ended');});};
+            const scan=()=>document.querySelectorAll('audio').forEach(bind);scan();new MutationObserver(scan).observe(document.body,{childList:true,subtree:true});b.click();setTimeout(()=>{if(!window._ccpTakeoverStopped)send('playing');},3000);
+            })();
+            """;
 
         // ============================== the profile viewer ==============================
 
