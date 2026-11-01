@@ -100,4 +100,82 @@ public sealed class BubblePopEffectsTests
         }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task LuckyShadowFollowsSpriteAlphaAndSparkles() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().WithInterFont()
+                .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var randomField = typeof(AmbientBubbleField).GetField(nameof(AmbientBubbleField.Random))!;
+        var oldRandom = randomField.GetValue(BubbleOverlay.Field);
+        var oldImage = BubbleOverlay.Image;
+        var oldSkills = s.UnlockedSkills;
+        var (day, paid, perf, auto, suppressed) = (s.AmbientBubbleXpDayKey, s.AmbientBubbleXpPaidToday,
+            s.PerformanceMode, s.AutoPerformanceMode, s.SuppressPerkNotifications);
+        using var sprite = new WriteableBitmap(new PixelSize(160, 160), new Vector(96, 96),
+            global::Avalonia.Platform.PixelFormat.Bgra8888, global::Avalonia.Platform.AlphaFormat.Premul);
+        using (var buffer = sprite.Lock())
+        {
+            var pixels = new byte[buffer.RowBytes * 160];
+            for (var y = 70; y < 90; y++)
+                for (var x = 15; x < 35; x++)
+                {
+                    var i = y * buffer.RowBytes + x * 4;
+                    pixels[i] = pixels[i + 1] = pixels[i + 2] = pixels[i + 3] = 255;
+                }
+            Marshal.Copy(pixels, 0, buffer.Address, pixels.Length);
+        }
+        var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 260, 220), 1) { Width = 260, Height = 220 };
+        try
+        {
+            randomField.SetValue(BubbleOverlay.Field, new AlwaysLucky());
+            BubbleOverlay.Image = sprite;
+            s.UnlockedSkills = new List<string> { "lucky_bubbles" };
+            s.AmbientBubbleXpDayKey = "";
+            s.AmbientBubbleXpPaidToday = 0;
+            s.PerformanceMode = false;
+            s.AutoPerformanceMode = false;
+            s.SuppressPerkNotifications = true;
+            BubbleOverlay.Field.Bubbles.Clear();
+            var bubble = new AmbientBubble { X = 30, Y = 30, Size = 160 };
+            BubbleOverlay.Field.Bubbles.Add(bubble);
+            BubbleOverlay.Pop(bubble);
+            Assert.Equal(24, bubble.LuckyGlowBlur);
+            for (var i = 0; i < bubble.Sparkles!.Length; i++)
+            {
+                bubble.Sparkles[i].X = 95;
+                bubble.Sparkles[i].Y = 0;
+                bubble.Sparkles[i].Size = 20;
+            }
+            w.Show();
+            byte Alpha(int x, int y)
+            {
+                using var frame = new RenderTargetBitmap(new PixelSize(260, 220));
+                frame.Render((Control)w.Content!);
+                var mem = Marshal.AllocHGlobal(4);
+                try { frame.CopyPixels(new PixelRect(x, y, 1, 1), mem, 4, 4); return Marshal.ReadByte(mem, 3); }
+                finally { Marshal.FreeHGlobal(mem); }
+            }
+            Assert.InRange(Alpha(145, 65), (byte)0, (byte)2); // transparent, far from both shapes
+            var spriteGlow = Alpha(73, 110);   // outside the opaque patch
+            var sparkleGlow = Alpha(220, 110); // outside the separated sparkle
+            bubble.LuckyGlowBlur = 0;
+            Assert.True(spriteGlow > Alpha(73, 110));
+            Assert.True(sparkleGlow > Alpha(220, 110));
+        }
+        finally
+        {
+            BubbleOverlay.Field.Bubbles.Clear(); w.Close();
+            BubbleOverlay.Image = oldImage;
+            randomField.SetValue(BubbleOverlay.Field, oldRandom);
+            s.UnlockedSkills = oldSkills;
+            (s.AmbientBubbleXpDayKey, s.AmbientBubbleXpPaidToday, s.PerformanceMode, s.AutoPerformanceMode,
+                s.SuppressPerkNotifications) = (day, paid, perf, auto, suppressed);
+        }
+        return Task.CompletedTask;
+    });
 }
