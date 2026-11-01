@@ -176,9 +176,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BrowserWebHost.IsVisible = _browserPoppedOut || (!offline && !prompt);
         }
 
-        /// <summary>WPF BrowserLoadingText_Click: load the selected site. The shell's reload is exactly that, behind the
-        /// offline gate (WPF #867).</summary>
-        internal void OnBrowserPromptClick() => Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
+        // WPF MainWindow.Browser.cs:48-54,288-290: an initialized browser is not reloaded.
+        internal void OnBrowserPromptClick()
+        {
+            if (_browserPoppedOut) Shell?.PopOutBrowser();
+            else Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
+        }
 
         // WPF MainWindow.Browser.cs:2736-2796: the card names the other window and returns to its load prompt on close.
         internal void SetBrowserPoppedOut(bool poppedOut)

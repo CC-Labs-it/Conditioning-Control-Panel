@@ -1,6 +1,8 @@
 using System;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -8,6 +10,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -89,6 +92,45 @@ public sealed class BrowserPopoutTests
             Assert.Equal(WindowState.Normal, popout.WindowState);
             Assert.Equal("https://hypnotube.com/video", browser.Source!.ToString());
             Assert.True(page.FindControl<TextBlock>("BrowserLoadingText")!.IsVisible);
+        }
+        finally { shell.BrowserPopoutWindow?.Close(); shell.Close(); CoreSettings.ServiceProvider = old; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PoppedOutPlaceholderFocusesWithoutReloading() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var old = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.OfflineMode = false;
+        settings.Current.DashboardBrowserCollapsed = false;
+        settings.Current.MotionLevel = MotionLevel.Off;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("settings");
+            shell.PopOutBrowser();
+            var page = shell.FindControl<SettingsTabView>("SettingsTab")!;
+            var browser = page.FindControl<WebHost>("BrowserWebHost")!;
+            var placeholder = page.FindControl<TextBlock>("BrowserLoadingText")!;
+            var popout = shell.BrowserPopoutWindow!;
+            var url = new Uri("https://hypnotube.com/video");
+            browser.Navigate(url);
+            var requests = browser.NavigationRequests;
+            popout.WindowState = WindowState.Minimized;
+            bool pressed = false;
+            placeholder.PointerPressed += (_, _) => pressed = true;
+            placeholder.RaiseEvent(new PointerPressedEventArgs(placeholder,
+                new Pointer(1, PointerType.Mouse, true), shell, default, 0,
+                new PointerPointProperties(), KeyModifiers.None, 1));
+            Assert.True(pressed);
+            Assert.Equal(requests, browser.NavigationRequests);
+            Assert.Equal(url, browser.Source);
+            Assert.Same(popout, shell.BrowserPopoutWindow);
+            Assert.Equal(WindowState.Normal, popout.WindowState);
         }
         finally { shell.BrowserPopoutWindow?.Close(); shell.Close(); CoreSettings.ServiceProvider = old; }
         return Task.CompletedTask;
