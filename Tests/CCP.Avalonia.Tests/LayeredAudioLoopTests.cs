@@ -50,14 +50,44 @@ public sealed class LayeredAudioLoopTests
         var audio = new LibVlcAudio("--aout=dummy");
         var dir = Directory.CreateTempSubdirectory("ccp-voice-"); var wav = Path.Combine(dir.FullName, "voice.wav");
         WriteSilentWav(wav, ms: 6000);
-        using var routed = new ManualResetEventSlim(); string? selected = null;
+        using var routed = new ManualResetEventSlim(); string? selected = null; bool wasPlaying = true;
         CoreSettings.Current.AudioOutputDeviceId = "headphones";
-        audio.RouteVoice = p => { selected = LibVlcAudio.PreferredDevice(CoreSettings.Current.AudioOutputDeviceId,
+        audio.RouteVoice = p => { wasPlaying = p.IsPlaying; selected = LibVlcAudio.PreferredDevice(CoreSettings.Current.AudioOutputDeviceId,
             p.OutputDevice, ["headphones"]); routed.Set(); };
         using var voice = audio.CreateVoice(wav, .5, false, () => { });
         try {
             Assert.NotNull(voice); Assert.False(routed.IsSet);
-            Assert.True(voice.Play()); Assert.True(routed.Wait(5000)); Assert.Equal("headphones", selected);
+            Assert.True(voice.Play()); Assert.True(routed.Wait(5000)); Assert.Equal("headphones", selected); Assert.False(wasPlaying);
+        }
+        finally { voice?.Dispose(); try { dir.Delete(true); } catch { } }
+    }
+    [Theory]
+    [InlineData(0.0, 0)]
+    [InlineData(0.5, 79)]
+    public void Voice_sets_startup_gain_and_device_before_play(double gain, int expected)
+    {
+        var pulse = Environment.GetEnvironmentVariable("CCP_TEST_PULSE_VOICE") == "1";
+        var audio = pulse ? new LibVlcAudio() : new LibVlcAudio("--aout=dummy");
+        var dir = Directory.CreateTempSubdirectory("ccp-voice-start-");
+        var wav = Path.Combine(dir.FullName, "voice.wav"); WriteSilentWav(wav, ms: 6000);
+        int? applied = null, atRoute = null; bool? playingAtGain = null, playingAtRoute = null;
+        string? selected = null; int? nativeVolume = null; LibVLCSharp.Shared.MediaPlayer? livePlayer = null;
+        var target = pulse ? "test_headphones" : "headphones";
+        CoreSettings.Current.AudioOutputDeviceId = target;
+        audio.SetVoiceVolume = (p, value) => { playingAtGain = p.IsPlaying; applied = value; p.Volume = value; };
+        audio.RouteVoice = p => { livePlayer = p; playingAtRoute = p.IsPlaying; atRoute = applied; nativeVolume = p.Volume;
+            if (pulse) { LibVlcAudio.ApplyPreferredDevice(p); selected = p.OutputDevice; }
+            else selected = LibVlcAudio.PreferredDevice(CoreSettings.Current.AudioOutputDeviceId, p.OutputDevice, [target]); };
+        using var voice = audio.CreateVoice(wav, gain, false, () => { });
+        try {
+            Assert.NotNull(voice); Assert.True(voice.Play());
+            Assert.Equal(expected, applied); Assert.Equal(expected, atRoute);
+            Assert.False(playingAtGain); Assert.False(playingAtRoute); Assert.Equal(target, selected);
+            if (pulse) {
+                Assert.Equal(expected, nativeVolume);
+                Assert.True(SpinWait.SpinUntil(() => livePlayer!.IsPlaying, 5000));
+                Assert.Equal(expected, livePlayer!.Volume); Assert.Equal(target, livePlayer.OutputDevice);
+            }
         }
         finally { voice?.Dispose(); try { dir.Delete(true); } catch { } }
     }

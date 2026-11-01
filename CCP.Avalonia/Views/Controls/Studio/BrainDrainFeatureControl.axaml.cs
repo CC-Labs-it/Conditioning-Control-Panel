@@ -1,6 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
+using ModelSettings = global::ConditioningControlPanel.Models.AppSettings;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Localization;
 
@@ -79,22 +82,50 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         private readonly CheckBox _keepClear;
         private bool _loading;
         private readonly System.Action _loadAudio;
+        private ModelSettings? _observed;
+        private SettingsService? _service;
+        private bool _attached;
 
-        // WPF re-reads on Loaded and on its settings rebind hook; the Studio tab keeps this control
-        // alive, so a Reset or cloud restore (CurrentReplaced) must repaint the toggle.
+        // WPF BrainDrainFeatureControl.xaml.cs:37-54,68-71,201-218.
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced += LoadKeepClear;
-            LoadKeepClear();
-            _loadAudio();
+            _attached = true;
+            _service = CoreSettings.Service;
+            if (_service != null) _service.CurrentReplaced += RebindSettings;
+            RebindSettings();
             RefreshClipCount();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
-            if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= LoadKeepClear;
+            _attached = false;
+            if (_service != null) _service.CurrentReplaced -= RebindSettings;
+            if (_observed != null) _observed.PropertyChanged -= SettingsChanged;
+            _service = null;
+            _observed = null;
             base.OnDetachedFromVisualTree(e);
+        }
+
+        private void RebindSettings()
+        {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(RebindSettings); return; }
+            if (!_attached) return;
+            if (_observed != null) _observed.PropertyChanged -= SettingsChanged;
+            _observed = CoreSettings.Current;
+            _observed.PropertyChanged += SettingsChanged;
+            LoadKeepClear();
+        }
+
+        private void SettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName is nameof(ModelSettings.BrainDrainEnabled)
+                or nameof(ModelSettings.BrainDrainIntensity) or nameof(ModelSettings.BrainDrainHighRefresh)
+                or nameof(ModelSettings.BrainDrainKeepPicturesClear))
+            {
+                void Paint() { if (_attached) LoadKeepClear(); }
+                if (Dispatcher.UIThread.CheckAccess()) Paint(); else Dispatcher.UIThread.Post(Paint);
+            }
         }
 
         private void LoadKeepClear()

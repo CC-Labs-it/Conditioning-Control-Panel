@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     internal sealed class LibVlcAudio
     {
         private readonly LibVLC _vlc;
+        private readonly string[] _voiceOutputs = [];
         private readonly Func<string, string> _pactl = Pactl;
         private readonly TimeProvider _duckClock = TimeProvider.System;
 
@@ -77,6 +78,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (OperatingSystem.IsWindows() && bundled != null) Core.Initialize(bundled);
             else { if (OperatingSystem.IsLinux()) LibVlcNative.Install(); Core.Initialize(); }
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
+            var requested = options.FirstOrDefault(o => o.StartsWith("--aout=", StringComparison.Ordinal));
+            _voiceOutputs = requested != null ? requested[7..].Split(',') : OperatingSystem.IsWindows()
+                ? ["directsound", "mmdevice"] : OperatingSystem.IsLinux() ? ["pulse", "alsa"] : ["auhal"];
             _vlc = new LibVLC(WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray());
             Shared ??= _vlc;
             _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
@@ -214,39 +218,55 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return voice;
         }
 
-        internal Action<MediaPlayer> RouteVoice = ApplyPreferredDevice; // WPF BrainDrainService.cs:351
+        internal Action<MediaPlayer> RouteVoice = ApplyPreferredDevice; // WPF BrainDrainService.cs:342-345
+        internal Action<MediaPlayer, int> SetVoiceVolume = (player, volume) => player.Volume = volume;
 
         private Voice NewVoice(string path, Action onEnded)
         {
             var media = new Media(_vlc, path, FromType.FromPath);
             media.AddOption(NoVideo);
-            return new Voice(new MediaPlayer(media), media, onEnded, RouteVoice);
+            var player = new MediaPlayer(media);
+            // SetAudioOutput creates the output before any samples are submitted. Try the same
+            // platform outputs in priority order; a failed output must not play at default gain.
+            var ready = _voiceOutputs.Any(output => player.SetAudioOutput(output) && player.Volume >= 0);
+            return new Voice(player, media, onEnded, RouteVoice, SetVoiceVolume, ready);
         }
 
-        private sealed class Voice(MediaPlayer player, Media media, Action onEnded, Action<MediaPlayer> route) : MindWipePlayer.IVoice
+        private sealed class Voice(MediaPlayer player, Media media, Action onEnded, Action<MediaPlayer> route,
+            Action<MediaPlayer, int> setVolume, bool ready) : MindWipePlayer.IVoice
         {
-            private int _vol, _done;
+            private volatile int _vol;
+            private int _done;
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
             internal Action<long>? Started;
             internal volatile bool Failed;
             public double Volume
             {
-                // Cubic like PlayOneShot; applied off libvlc's thread once the output exists.
+                // Cubic like PlayOneShot; live updates run off libvlc's event thread.
                 set { _vol = (int)Math.Round(Math.Cbrt(Math.Clamp(value, 0, 1)) * 100); Apply(); }
             }
-            private void Apply(bool routing = false) => ThreadPool.QueueUserWorkItem(_ =>
-            { lock (player) if (_done == 0 && player.IsPlaying) { if (routing) route(player); player.Volume = _vol; } });
+            private void Apply() => ThreadPool.QueueUserWorkItem(_ =>
+            { lock (player) if (_done == 0 && player.IsPlaying) player.Volume = _vol; });
             public bool Play()
             {
                 var started = 0;
                 player.Playing += (_, _) =>
                 {
-                    Apply(routing: true); // The output/device list exists only once Playing arrives.
+                    Apply();
                     if (Interlocked.Exchange(ref started, 1) == 0) Fire(() => Started?.Invoke(Math.Max(0, player.Length)));
                 };
                 player.EndReached += (_, _) => Dispose();
                 player.EncounteredError += (_, _) => { Failed = true; Dispose(); };
-                if (player.Play()) return true;
+                lock (player)
+                {
+                    // WPF BrainDrainService.cs:342-345,387: set gain and device before Play.
+                    if (_done == 0 && ready)
+                    {
+                        setVolume(player, _vol);
+                        route(player);
+                        if (player.Play()) return true;
+                    }
+                }
                 Failed = true;
                 Dispose();
                 return false;
@@ -574,8 +594,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static string? PreferredDevice(string? saved, string? current, IEnumerable<string> available)
             => string.IsNullOrEmpty(saved) || saved == current || !available.Contains(saved) ? null : saved;
 
-        /// <summary>Call once the player is live (its Playing event), never before: like WPF's
-        /// mmdevice, the output's device list is only meaningful once it exists.</summary>
+        /// <summary>Call after the player's audio output exists. Voices open it before playback;
+        /// one-shots open it as playback starts.</summary>
         internal static void ApplyPreferredDevice(MediaPlayer player)
         {
             try

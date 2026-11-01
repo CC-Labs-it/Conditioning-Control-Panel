@@ -83,6 +83,35 @@ public class BrainDrainTests {
             card.FindControl<Button>("BtnRefreshAudio")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal(2, player.ClipCount); Assert.False(card.FindControl<Border>("NoAudioHint")!.IsVisible);
             var opened = ""; ExternalOpener.Shell = path => { opened = path; return true; }; card.FindControl<Button>("BtnOpenAudioFolder")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal(BrainDrainPlayer.Folder, opened);
             CoreEngine.Stop(); Assert.False(player.IsRunning); }); return Task.CompletedTask; });
+    [Fact] public Task Rack_toggle_repaints_card_and_card_can_stop_it() => AvaloniaTestDispatcher.RunAsync(() => {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        Run(_ => {
+            var s = CoreSettings.Current; s.BrainDrainEnabled = false;
+            var player = new BrainDrainPlayer((_, _, _, _) => new Voice(), new Clock()); player.Seed();
+            var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            var card = new BrainDrainFeatureControl(); var host = new Window { Content = card };
+            try {
+                host.Show(); CoreEngine.Start();
+                var enable = card.FindControl<CheckBox>("ChkEnable")!;
+                Assert.False(enable.IsChecked); shell.ToggleWallFeature("braindrain");
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(player.IsRunning); Assert.True(enable.IsChecked);
+                enable.IsChecked = false; Assert.False(player.IsRunning); Assert.False(s.BrainDrainEnabled);
+                var service = CoreSettings.Service!;
+                service.RestoreFrom(new ConditioningControlPanel.Models.AppSettings { BrainDrainEnabled = false });
+                Task.Run(() => service.Current.BrainDrainEnabled = true).GetAwaiter().GetResult();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.True(enable.IsChecked);
+                service.Current.BrainDrainIntensity = 37; service.Current.BrainDrainHighRefresh = true;
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Equal(37, card.FindControl<Slider>("SliderIntensity")!.Value);
+                Assert.True(card.FindControl<CheckBox>("ChkHighRefresh")!.IsChecked);
+            }
+            finally { CoreEngine.Stop(); host.Close(); shell.Close(); }
+        });
+        return Task.CompletedTask;
+    });
     [Fact] public async Task Emergency_watchdog_reaches_brain_drain_off_thread() {
         var previous = CoreEngine.StopBrainDrain;
         try {
