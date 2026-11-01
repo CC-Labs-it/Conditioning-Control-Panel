@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Controls.Shapes;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.EmiDesk;
 
@@ -13,6 +14,8 @@ public partial class EmiDeskWindow
     private EmiChain? _tourSpeech;
     private int _tourSpeechFrame;
     private Border? _tourBubble;
+    private Polygon? _tourBubbleTail;
+    private bool _tourBubbleRelayoutPending;
     private TextBlock? _tourText;
     internal string? TourSpeechText => _tourBubble?.IsVisible == true ? _tourText?.Text : null;
     internal string? TourSpeechLine => _tourSpeech?.Seq[3].Bubble;
@@ -43,7 +46,7 @@ public partial class EmiDeskWindow
     {
         var frame = _tourSpeech!.Seq[_tourSpeechFrame];
         DrawFace(frame.Text);
-        // WPF EmiDeskWindow.Bubble.cs:201-221,309-341: palette, font, width and crown anchor.
+        // WPF EmiDeskWindow.Bubble.cs:201-265: one bubble and tail, resized with her.
         if (_tourBubble == null)
         {
             _tourText = new TextBlock { Foreground = new SolidColorBrush(Color.Parse("#FF69B4")),
@@ -51,15 +54,32 @@ public partial class EmiDeskWindow
             _tourBubble = new Border { Background = new SolidColorBrush(Color.Parse("#181832")),
                 BorderBrush = _tourText.Foreground, BorderThickness = new Thickness(1),
                 Padding = new Thickness(8, 8, 10, 8), Child = _tourText, IsHitTestVisible = false };
+            _tourBubbleTail = new Polygon { Fill = _tourBubble.Background, Stroke = _tourBubble.BorderBrush,
+                StrokeThickness = 1, IsHitTestVisible = false };
+            _bubbleCanvas.Children.Add(_tourBubbleTail);
             _bubbleCanvas.Children.Add(_tourBubble);
+            _tourBubble.SizeChanged += (_, _) => LayoutTourBubble();
+            Resized += (_, _) => LayoutTourBubble();
+            Moved += (_, _) => { if (_book != null) PostTourBubbleRelayout(); };
         }
         _tourText!.Text = frame.Bubble;
         _tourBubble.IsVisible = !string.IsNullOrEmpty(frame.Bubble);
+        _tourBubbleTail!.IsVisible = _tourBubble.IsVisible;
+        LayoutTourBubble();
+        _tourSpeechTimer!.Interval = TimeSpan.FromMilliseconds(frame.Ms);
+        _tourSpeechTimer.Start();
+    }
+
+    // WPF EmiDeskWindow.Bubble.cs:303-413,478-493: size, book dodge, screen clamp and tail.
+    private void LayoutTourBubble()
+    {
+        if (_tourBubble?.IsVisible != true || _tourText == null || _tourBubbleTail == null) return;
         _tourText.FontSize = Math.Max(10, Math.Round(11 * BodyWidth / 220));
         _tourText.LineHeight = Math.Round(_tourText.FontSize * 1.4);
         _tourBubble.MaxWidth = Math.Clamp(BodyWidth * 1.5, 220, 380);
         _tourBubble.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var size = _tourBubble.DesiredSize;
+        var size = new Size(Math.Max(_tourBubble.DesiredSize.Width, _tourBubble.Bounds.Width),
+            Math.Max(_tourBubble.DesiredSize.Height, _tourBubble.Bounds.Height));
         double rightLeft = OverlayPadX + BodyWidth * .58;
         double flippedLeft = OverlayPadX + BodyWidth * .42 - size.Width;
         // WPF Bubble.cs:368-403: convert through the window, then use the shared clip guard.
@@ -70,11 +90,28 @@ public partial class EmiDeskWindow
             lo = this.PointToClient(new PixelPoint(screen.WorkingArea.X, screen.WorkingArea.Y)).X;
             hi = this.PointToClient(new PixelPoint(screen.WorkingArea.Right, screen.WorkingArea.Y)).X;
         }
-        var (left, _) = EmiBubblePlacement.Resolve(rightLeft, flippedLeft, size.Width, false, Width, lo, hi);
+        var (left, flip) = EmiBubblePlacement.Resolve(rightLeft, flippedLeft, size.Width, _book?.SideOfHer > 0, Width, lo, hi);
+        double top = Math.Max(2, OverlayPad + BodyWidth * BodyAspect * .04 - size.Height);
         Canvas.SetLeft(_tourBubble, Math.Round(left));
-        Canvas.SetTop(_tourBubble, Math.Round(Math.Max(2, OverlayPad + BodyWidth * BodyAspect * .04 - size.Height)));
-        _tourSpeechTimer!.Interval = TimeSpan.FromMilliseconds(frame.Ms);
-        _tourSpeechTimer.Start();
+        Canvas.SetTop(_tourBubble, Math.Round(top));
+        _tourBubbleTail.Points = flip
+            ? new Points { new Point(0, 0), new Point(10, 0), new Point(10, 10) }
+            : new Points { new Point(10, 0), new Point(0, 0), new Point(0, 10) };
+        Canvas.SetLeft(_tourBubbleTail, Math.Round(flip ? left + size.Width - 10 : left));
+        Canvas.SetTop(_tourBubbleTail, Math.Round(top + size.Height - 1));
+    }
+
+    // Post after the book has finished placing itself, coalescing drag and side changes.
+    // WPF EmiDeskWindow.Bubble.cs:420-475.
+    internal void PostTourBubbleRelayout()
+    {
+        if (_closingForGood || _tourBubbleRelayoutPending || _tourBubble?.IsVisible != true) return;
+        _tourBubbleRelayoutPending = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _tourBubbleRelayoutPending = false;
+            if (!_closingForGood) LayoutTourBubble();
+        }, DispatcherPriority.Background);
     }
 
     partial void OnBubbleTextCore(string? text)
@@ -87,5 +124,6 @@ public partial class EmiDeskWindow
         _tourSpeechTimer?.Stop();
         _tourSpeech = null;
         if (_tourBubble != null) _tourBubble.IsVisible = false;
+        if (_tourBubbleTail != null) _tourBubbleTail.IsVisible = false;
     }
 }
