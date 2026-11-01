@@ -5,6 +5,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.EmiDesk;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
@@ -138,9 +139,9 @@ public partial class EmiDeskWindow
         Canvas.SetLeft(plate, w / 2 - 30 * k); Canvas.SetTop(plate, h / 2 - 36 * k); c.Children.Add(plate);
         var font = new FontFamily("avares://CCP.Avalonia/Resources/emi/fonts#Press Start 2P, Consolas, monospace");
         double size = Math.Max(6, 12 * k);
-        var brb = new TextBlock { Text = "brb", FontFamily = font, FontSize = size, Foreground = Brush.Parse("#F5F0E1"), Width = w, TextAlignment = TextAlignment.Center };
+        var brb = new TextBlock { Text = Loc.Get("emi_desk_offair_brb"), FontFamily = font, FontSize = size, Foreground = Brush.Parse("#F5F0E1"), Width = w, TextAlignment = TextAlignment.Center };
         Canvas.SetTop(brb, h / 2 - size); c.Children.Add(brb);
-        _glassSignal = new TextBlock { Text = "NO SIGNAL", FontFamily = font, FontSize = Math.Max(5, 7 * k), Foreground = Brush.Parse("#F5F0E1"), Opacity = .85 };
+        _glassSignal = new TextBlock { Text = Loc.Get("emi_desk_offair_no_signal"), FontFamily = font, FontSize = Math.Max(5, 7 * k), Foreground = Brush.Parse("#F5F0E1"), Opacity = .85 };
         Canvas.SetLeft(_glassSignal, 10 * k); Canvas.SetTop(_glassSignal, h - Math.Max(9, 16 * k)); c.Children.Add(_glassSignal);
         for (double y = 0; y < h; y += 2) AddGlassBox(c, 0, y, w, 1, "#000000", .16);
         _glassMotion = AmbientFxCanvas.Env.Level == MotionLevel.Full;
