@@ -96,17 +96,21 @@ public sealed class ChaosAmbientRainTests
         {
             Setup();
             var firer = EffectPayload.Firer;
+            var language = ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage;
             try
             {
+                ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage("en");
                 ChaosRunHost.StartRun(new ChaosRunConfig());
                 int fired = 0;
                 EffectPayload.Firer = _ => fired++;
                 ChaosRunHost.FirePayloadForDetonation(new EffectBubbleSpec { Payload = new GifCascadePayload() });
                 ChaosRunHost.FirePayloadForDetonation(new EffectBubbleSpec { Payload = new VideoPayload() });
                 Assert.Equal(1, fired);
+                Assert.Equal("▶ the deep is busy, video fizzles", ChaosRunHost.State!.RecentEvents[0]);
                 Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("chaos_heavy_dropped", "video"), ChaosRunHost.State!.RecentEvents[0]);
             }
-            finally { ChaosRunHost.ForceShutdown(); EffectPayload.Firer = firer; }
+            finally { ChaosRunHost.ForceShutdown(); EffectPayload.Firer = firer;
+                ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage(language); }
             return Task.CompletedTask;
         });
     }
