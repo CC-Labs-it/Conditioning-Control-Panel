@@ -101,7 +101,7 @@ internal sealed partial class BillboardCardHost
         {
             _ctaLandAt = _ctaShineAt = double.NegativeInfinity;
             _ctaScale.ScaleX = _ctaScale.ScaleY = _ctaSquash.ScaleX = _ctaSquash.ScaleY = 1;
-            _ctaTravel.Y = 0; _ctaReleasing = _ctaReleaseTravel = false;
+            _ctaTravel.Y = _fromTravel = _travelTarget; _ctaReleasing = _ctaReleaseTravel = false;
         }
         bool oneShot = Env.AllowTransitions && (_ctaNow - _hoverAt < 0.3 || _ctaNow - _pressAt < 0.3 || _ctaNow - _glowAt < 0.3 ||
             _ctaNow - _ctaShineAt < 0.6 || _ctaNow - _ctaLandAt < 0.7);
