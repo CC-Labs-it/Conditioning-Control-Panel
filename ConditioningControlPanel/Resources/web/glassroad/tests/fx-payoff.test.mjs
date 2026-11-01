@@ -15,6 +15,29 @@ function setup({ feel = {}, granted = true, roll = 0 } = {}) {
   return { f, bus, p, asked, run };
 }
 
+test('Tunnel Vision: the words last as long as the ride, fading out on tunnel-end at the same pace', () => {
+  const t = setup();
+  t.bus.emit('tunnel-start', { racer: 1 });
+  assert.equal(t.p.words.kind, 'none', 'a rival ride says nothing');
+  t.bus.emit('tunnel-start', { racer: 0 });
+  assert.equal(t.p.words.kind, 'brainDrain');
+  const dur = t.p.words.durS;
+  t.run(2);
+  assert.equal(t.p.words.k, 1);
+  t.bus.emit('tunnel-end', { racer: 1 });
+  assert.equal(t.p.words.endT, null, 'a rival landing ends nothing');
+  t.bus.emit('tunnel-end', { racer: 0 });
+  assert.equal(t.p.words.durS, dur, 'the cards keep their pace');
+  t.run(0.25);
+  assert.ok(t.p.words.k > 0.3 && t.p.words.k < 0.7, 'fading: ' + t.p.words.k);
+  t.run(0.3);
+  assert.equal(t.p.words.kind, 'none');
+  t.bus.emit('tunnel-start', { racer: 0 });
+  t.run(dur + 1);
+  assert.equal(t.p.words.kind, 'none', 'a ride longer than the stream just runs out');
+  assert.doesNotThrow(() => t.bus.emit('tunnel-end', { racer: 0 }));
+});
+
 test('a spin on you pays a word cascade and one flash; the cascade has several words', () => {
   const t = setup();
   t.bus.emit('item-hit', { victim: 0, by: 1, kind: 'disc', verdict: 'hit', durationS: 1 });

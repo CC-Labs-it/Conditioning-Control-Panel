@@ -21,7 +21,7 @@ export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand 
   const g = (k) => feel.get('payoff.' + k);
   const gOn = () => !!(gentle ? gentle.on : feel.get('gentle.on'));
   const rise = (s) => (gentle ? gentle.rise(s) : s), fade = (s) => (gentle ? gentle.fade(s) : s);
-  const words = { kind: 'none', k: 0, t: 0, durS: 0, strength: 1, prevKind: 'none', prevK: 0, params: { seed: 0, gentle: false } };
+  const words = { kind: 'none', k: 0, t: 0, durS: 0, endT: null, strength: 1, prevKind: 'none', prevK: 0, params: { seed: 0, gentle: false } };
   const flash = { kind: 'none', k: 0, t: 0, durS: 0, prevKind: 'none', prevK: 0, params: { seed: 0, cover: 0, corner: false, scale: 0, gentle: false } };
   const fog = { kind: 'none', k: 0, t: 0, durS: 1.7, params: { seed: 0, gentle: false } };
   const stats = { cascades: 0, padWords: 0, flashes: 0, refused: 0 };
@@ -37,7 +37,7 @@ export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand 
   }
 
   function sayWords(durS) {
-    Object.assign(words, { kind: 'brainDrain', t: 0, durS, k: 1 });
+    Object.assign(words, { kind: 'brainDrain', t: 0, durS, k: 1, endT: null });
     words.params = { seed: ++seed, gentle: gOn() };
   }
   function showFlash() {
@@ -82,7 +82,12 @@ export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand 
       fog.k = fogStrength * Math.min(1, fog.t / fogIn, Math.max(0, 1 - Math.max(0, fog.t - fog.durS) / fogOut));
       if (fog.t >= fog.durS + fogOut) Object.assign(fog, { kind: 'none', k: 0, t: 0 });
     }
-    if (words.kind !== 'none' && (words.t += dt) >= words.durS + WORD_TAIL_S) Object.assign(words, { kind: 'none', k: 0, t: 0, durS: 0 });
+    if (words.kind !== 'none') {
+      words.t += dt;
+      const end = words.endT ?? words.durS, tail = words.endT === null ? WORD_TAIL_S : fade(WORD_TAIL_S);
+      if (words.endT !== null) words.k = Math.max(0, 1 - (words.t - end) / tail);   // never durS: it paces the cards
+      if (words.t >= end + tail) Object.assign(words, { kind: 'none', k: 0, t: 0, durS: 0, endT: null });
+    }
     if (flash.kind !== 'none') {
       const t = (flash.t += dt), up = flashIn > 0 ? Math.min(1, t / flashIn) : 1;
       const down = t <= flash.durS ? 1 : flashOut > 0 ? Math.max(0, 1 - (t - flash.durS) / flashOut) : 0;
@@ -91,15 +96,22 @@ export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand 
     }
   }
   function reset() {
-    Object.assign(words, { kind: 'none', k: 0, t: 0, durS: 0 });
+    Object.assign(words, { kind: 'none', k: 0, t: 0, durS: 0, endT: null });
     Object.assign(flash, { kind: 'none', k: 0, t: 0, durS: 0 });
     Object.assign(fog, { kind: 'none', k: 0, t: 0 });
     clock = 0; lastCascade = lastFlash = lastPad = -1e9;
   }
 
   // Tunnel Vision: the words stream past the player for the ride (cascade only: no fog, no flash, the road stays clear)
-  function onTunnel(e) { if (e && e.racer === 0 && g('on')) sayWords(feel.get('items.tunnelMaxS')); }
-  const offs = [bus.on('item-hit', onHit), bus.on('pad', onPad), bus.on('tunnel-start', onTunnel), ...MALUS_EVENTS.map((name) => bus.on(name, onMalus))];
+  // (a ride lasts as long as its gap needs, so its length is known only when it ends)
+  let rideWords = false;
+  function onTunnel(e) { if (e && e.racer === 0 && g('on')) { sayWords(feel.get('items.tunnelMaxS')); rideWords = true; } }
+  function onTunnelEnd(e) {
+    if (!e || e.racer !== 0 || !rideWords) return;
+    rideWords = false;
+    if (words.kind !== 'none' && words.endT === null) words.endT = Math.min(words.t, words.durS);
+  }
+  const offs = [bus.on('item-hit', onHit), bus.on('pad', onPad), bus.on('tunnel-start', onTunnel), bus.on('tunnel-end', onTunnelEnd), ...MALUS_EVENTS.map((name) => bus.on(name, onMalus))];
   return { words, flash, fog, stats, update, reset, dispose() { for (const off of offs) off(); } };
 }
 
