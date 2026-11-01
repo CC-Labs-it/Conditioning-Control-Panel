@@ -66,17 +66,17 @@ public sealed class ChaosRunHostTests
                 ChaosRunHost.StartRun(Cfg());
                 ChaosRunHost.Overlay!.FinishCountdown();
                 ChaosRunHost.StopTimerForTests();
-                var state = ChaosRunHost.State!;
+                var state = ChaosRunHost.State!; var sparks = ChaosMeta.State.Sparks;
                 state.ToyPower["rabbit_caller"] = 3;
                 state.MaxedBoons.Add("rabbit_caller");
                 var toy = new ChaosToyState { Id = "rabbit_caller", CooldownSec = 20 };
                 state.ActiveToys.Add(toy);
                 ChaosRunHost.UseToyById("rabbit_caller");
-                Assert.Equal(0, toy.CooldownRemainingSec);
+                Assert.Equal(0, toy.CooldownRemainingSec); Assert.Equal(sparks, ChaosMeta.State.Sparks);
                 Assert.Null(ChaosCursorGlowOverlay.Active);
                 available = true;
                 ChaosRunHost.UseToyById("rabbit_caller");
-                Assert.Equal(20, toy.CooldownRemainingSec);
+                Assert.Equal(20, toy.CooldownRemainingSec); Assert.Equal(sparks + 15, ChaosMeta.State.Sparks);
                 Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("chaos_rabbit_whistle"), state.RecentEvents[0]);
                 Assert.True(ChaosCursorGlowOverlay.Active!.HaloVisible);
                 ChaosRunHost.RabbitAimTick(); // arming click is swallowed
@@ -113,7 +113,7 @@ public sealed class ChaosRunHostTests
                 available = false; ChaosRunHost.RabbitAimTick();
                 Assert.Equal(0, toy.CooldownRemainingSec);
                 Assert.False(ChaosCursorGlowOverlay.Active!.HaloVisible);
-                available = true; ChaosRunHost.UseToyById("rabbit_caller");
+                available = true; ChaosRunHost.UseToyById("rabbit_caller"); Assert.Equal(sparks + 15, ChaosMeta.State.Sparks);
                 Assert.True(ChaosCursorGlowOverlay.Active!.HaloVisible);
                 ChaosRunHost.ForceShutdown();
                 Assert.Empty(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsDarter == true));
@@ -157,7 +157,7 @@ public sealed class ChaosRunHostTests
                 Assert.Equal(6, ChaosRunHost.SlowMoRemainingSec, 6);
                 Assert.Equal(0.12, BubbleOverlay.Field.ChaosTimeScale, 6);
                 Assert.Equal(1 / 0.12, EffectPayload.GlobalDurationMult, 6);
-                Ticks(4);
+                BubbleOverlay.Field.Bubbles.Clear(); Ticks(1); Assert.Single(BubbleOverlay.Field.Bubbles); Ticks(3);
                 var next = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0));
                 BubbleOverlay.PopChaos(next);
                 Assert.Equal(5.8, ChaosRunHost.SlowMoRemainingSec, 6);

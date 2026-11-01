@@ -429,10 +429,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_spawning || _state == null || _manualPaused || _lessonCardPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
             double elapsed = ChaosRunEngine.Advance(_state);
-            if (SlowMoRemainingSec > 0)
+            if (SlowMoRemainingSec > 0 || BubbleOverlay.Field.Bubbles.Count == 0)
             {
-                SlowMoRemainingSec -= ChaosRunEngine.TICK_SEC;
-                if (SlowMoRemainingSec <= 0) EndSlowMo();
+                if (SlowMoRemainingSec > 0 && (SlowMoRemainingSec -= ChaosRunEngine.TICK_SEC) <= 0) EndSlowMo();
+                if (BubbleOverlay.Field.Bubbles.Count == 0) SpawnTick();
             }
             UpdateHeatTint();
             TickToys();
@@ -709,7 +709,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (t.Id == id) { UseToy(t); return; }
         }
 
-        /// <summary>WPF UseToy: Rabbit Caller; other toy effects and first-play award remain open.</summary>
+        /// <summary>WPF UseToy: Rabbit Caller and first-play award; other toy effects remain open.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
@@ -720,13 +720,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.PushEvent(Loc.Get("chaos_rabbit_pointer"));
                 return;
             }
-            var r = ChaosToyRules.Use(_state, toy, running);
+            var r = ChaosToyRules.Use(_state, toy, running); if (r == ChaosToyRules.UseResult.Fired && toy.Id != "rabbit_caller") ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
             if (r != ChaosToyRules.UseResult.Fired || toy.Id != "rabbit_caller") return;
             double power = _state.ToyPower.TryGetValue(toy.Id, out var p) ? p : 0;
             ArmRabbitCall(Math.Max(1, (int)power), _state.MaxedBoons.Contains(toy.Id));
             ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
-            _state.PushEvent(Loc.Get("chaos_rabbit_whistle"));
+            _state.PushEvent(Loc.Get("chaos_rabbit_whistle")); ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);
         }
 
         // WPF ChaosModeService.cs:2834-2914: hold the whistle until a fresh left press on a live field.

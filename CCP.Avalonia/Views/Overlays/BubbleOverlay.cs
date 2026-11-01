@@ -280,11 +280,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             else
             {
                 var i = Math.Max(0, Targets.FindIndex(sc => sc.IsPrimary));
-                if (spec.SpawnAtPxX is double x && spec.SpawnAtPxY is double y && _chaosHost != null)
+                if (_chaosHost != null)
                 {
-                    var point = new PixelPoint((int)x, (int)y);
                     var screens = ScreenList.Enumerate(_chaosHost);
-                    var screen = screens.FirstOrDefault(sc => point.X >= sc.Bounds.X && point.X < sc.Bounds.Right && point.Y >= sc.Bounds.Y && point.Y < sc.Bounds.Bottom) ?? screens.OrderBy(sc =>
+                    var point = new PixelPoint((int)(spec.SpawnAtPxX ?? 0), (int)(spec.SpawnAtPxY ?? 0));
+                    var screen = spec.SpawnAtPxX == null || spec.SpawnAtPxY == null ? screens.FirstOrDefault(sc => sc.IsPrimary) : screens.FirstOrDefault(sc => point.X >= sc.Bounds.X && point.X < sc.Bounds.Right && point.Y >= sc.Bounds.Y && point.Y < sc.Bounds.Bottom) ?? screens.OrderBy(sc =>
                     {
                         var r = sc.Bounds;
                         double dx = Math.Max(Math.Max(r.X - (double)point.X, point.X - (double)r.Right), 0);
