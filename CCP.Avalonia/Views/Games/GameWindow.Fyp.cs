@@ -216,13 +216,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         // WPF FypHostService.cs:924-1045: consent, off-thread start, and camera ownership.
         private bool _fypEyeSubscribed, _fypGazeSubscribed, _fypStartedCamera, _fypEyeEnabling;
         // WPF's singleton host shares an in-flight enable across close and reopen (:926-969).
-        private static Task<bool>? _fypCameraStart;
+        private static Task<bool>? _fypCameraStart; private static int _fypStopEpoch, _fypStartEpoch;
+        private static object? _fypStartSession;
+        private object? _fypOwnedSession;
         private static GameWindow? _fypCameraClaim;
         private static readonly object FypStopGate = new();
         private static Task _fypCameraStopTask = Task.CompletedTask;
         internal static Task FypCameraStopTask { get { lock (FypStopGate) return _fypCameraStopTask; } }
         // Panic can queue a second tracker stop after games close; wait for both before reopening.
-        internal static void TrackFypCameraStop(Task stop) { lock (FypStopGate) _fypCameraStopTask = Task.WhenAll(_fypCameraStopTask, stop); }
+        private static async Task ObserveFypStop(Task stop) { try { await stop; } catch (Exception ex) { Log.Warning(ex, "[Game] fyp: camera stop failed"); } }
+        internal static void TrackFypCameraStop(Task stop) { lock (FypStopGate) { Interlocked.Increment(ref _fypStopEpoch); _fypCameraStopTask = Task.WhenAll(_fypCameraStopTask, ObserveFypStop(stop)); } }
         private int _fypEyeGeneration;
         private DateTime _fypLastGaze = DateTime.MinValue;
         internal Task? FypEyeTask { get; private set; }
@@ -270,16 +273,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 if (_fypCameraStart != null || !FypCameraRunning)
                 {
                     PostFypEyeStatus("starting");
-                    var start = _fypCameraStart ??= FypStartCameraOverride?.Invoke() ?? WebcamTracker.Instance.StartAsync();
+                    if (_fypCameraStart == null) { _fypStartSession = null; _fypStartEpoch = Volatile.Read(ref _fypStopEpoch); }
+                    var start = _fypCameraStart ??= FypStartCameraOverride?.Invoke() ?? WebcamTracker.Instance.StartAsync(session => _fypStartSession = session); int startEpoch = _fypStartEpoch;
                     _fypCameraClaim = this;
                     bool started;
                     try { started = await start; }
                     catch { if (ReferenceEquals(_fypCameraStart, start)) _fypCameraStart = null; throw; }
-                    if (!started)
+                    if (!started || startEpoch != Volatile.Read(ref _fypStopEpoch))
                     {
                         if (ReferenceEquals(_fypCameraStart, start)) _fypCameraStart = null;
-                        if (FypEyeWanted(generation)) FailFypEyeControl(
-                            WebcamTracker.Instance.State == WebcamTrackingState.Error ? "error" : "no-camera");
+                        if (FypEyeWanted(generation) && startEpoch != Volatile.Read(ref _fypStopEpoch)) Dispatcher.UIThread.Post(StartFypEyeControl);
+                        else if (FypEyeWanted(generation)) FailFypEyeControl(WebcamTracker.Instance.State == WebcamTrackingState.Error ? "error" : "no-camera");
                         return;
                     }
                     if (ReferenceEquals(_fypCameraClaim, this) && FypEyeWanted(generation))
@@ -287,11 +291,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         _fypCameraClaim = null;
                         if (ReferenceEquals(_fypCameraStart, start)) _fypCameraStart = null;
                         _fypStartedCamera = true;
+                        _fypOwnedSession = _fypStartSession;
                     }
                     else if (_fypCameraClaim == null && ReferenceEquals(_fypCameraStart, start))
                     {
                         _fypCameraStart = null;
                         _fypStartedCamera = true; // nobody adopted the late start
+                        _fypOwnedSession = _fypStartSession;
                         DisableFypEyeControl();
                         return;
                     }
@@ -339,8 +345,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (_fypStartedCamera)
             {
                 _fypStartedCamera = false;
-                // StopAsync invalidates pending starts before hopping off the UI thread.
-                TrackFypCameraStop(FypStopCameraOverride != null ? Task.Run(FypStopCameraOverride) : tracker.StopAsync());
+                // Stop only FYP's capture; do not cancel a later owner's start.
+                TrackFypCameraStop(FypStopCameraOverride != null ? Task.Run(FypStopCameraOverride) : tracker.StopOwnedAsync(_fypOwnedSession));
             }
         }
 

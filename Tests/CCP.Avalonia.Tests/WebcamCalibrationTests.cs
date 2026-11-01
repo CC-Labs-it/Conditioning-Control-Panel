@@ -499,7 +499,7 @@ public sealed class WebcamCalibrationTests
     });
 
     /// <summary>Opens only when the test releases it, so a Stop can land mid-start deterministically.</summary>
-    private sealed class GatedSource : IFrameSource
+    internal sealed class GatedSource : IFrameSource
     {
         public readonly ManualResetEventSlim Entered = new(), Release = new();
         public bool Open() { Entered.Set(); Release.Wait(TimeSpan.FromSeconds(30)); return true; }

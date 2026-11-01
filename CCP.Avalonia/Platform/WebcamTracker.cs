@@ -207,11 +207,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <summary>Off the UI thread, as WPF StartWebcamOffUiThreadAsync: model load and camera
         /// negotiation can take seconds.</summary>
-        public Task<bool> StartAsync()
+        public Task<bool> StartAsync() => StartAsync(null);
+        internal Task<bool> StartAsync(Action<object>? owned)
         {
             int gen = Volatile.Read(ref _gen);
             Interlocked.Increment(ref _queued);   // counts as starting before the pool picks it up
-            return Task.Run(() => { try { return Start(gen); } finally { Interlocked.Decrement(ref _queued); } });
+            return Task.Run(() => { try { return Start(gen, owned); } finally { Interlocked.Decrement(ref _queued); } });
         }
         private int _queued;
         /// <summary>The generation is bumped before the hop, so a start in flight cannot publish its
@@ -223,7 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         public bool Start() => Start(Volatile.Read(ref _gen));
 
-        private bool Start(int gen)
+        private bool Start(int gen, Action<object>? owned = null)
         {
             if (IsRunning) return true;
             if (Interlocked.Exchange(ref _busy, 1) != 0) return false;
@@ -297,7 +298,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_gate)
                 {
                     stale = gen != _gen;
-                    if (!stale) _run = run;
+                    if (!stale) { _run = run; owned?.Invoke(run); }
                 }
                 if (stale)
                 {
@@ -341,10 +342,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
             CoreSettings.Save();
         }
 
+        internal Task StopOwnedAsync(object? owner)
+        {
+            Run? run;
+            lock (_gate) { if (owner == null || !ReferenceEquals(_run, owner)) return Task.CompletedTask; _gen++; run = Interlocked.Exchange(ref _run, null); }
+            return Task.Run(() => StopRun(run));
+        }
+
         public void Stop()
         {
             Run? run;
             lock (_gate) { _gen++; run = Interlocked.Exchange(ref _run, null); }
+            StopRun(run);
+        }
+        private void StopRun(Run? run)
+        {
             SetTrackingState(WebcamTrackingState.Stopped);
             if (run == null) return;
             run.Stop = true;
