@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Specialized;
 using System.Linq;
+using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.LogicalTree;
@@ -48,11 +49,66 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
         }
 
+        // WPF MainWindow.Inbox.cs:397-456: wait until the conversation tab is gone, then file quietly.
+        private ITimer? _capWatch;
+
+        internal void OnCompanionCapHit()
+        {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(OnCompanionCapHit); return; }
+            try
+            {
+                if (CoreSettings.Service == null || CoreAccount.HasLabAccess) return;
+                const string key = "companion_cap";
+                var today = StartupLadder.Time.GetLocalNow().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                if (CoreSettings.Current.InboxStamps.TryGetValue(key, out var last) && last == today) return;
+                _capWatch ??= StartupLadder.Time.CreateTimer(_ =>
+                {
+                    if (Dispatcher.UIThread.CheckAccess()) TryFileCapRow();
+                    else Dispatcher.UIThread.Post(TryFileCapRow);
+                }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+            }
+            catch (Exception ex) { Log.Debug("[Inbox] cap watch: {E}", ex.Message); }
+        }
+
+        private void TryFileCapRow()
+        {
+            try
+            {
+                if (_capWatch == null) return;
+                if (string.Equals(CurrentTab, "companion", StringComparison.OrdinalIgnoreCase)
+                    && IsVisible && WindowState != WindowState.Minimized) return;
+                _capWatch.Dispose();
+                _capWatch = null;
+                if (CoreSettings.Service == null || CoreAccount.HasLabAccess) return;
+                var tier = CoreAccount.HasPremiumAccess ? 2 : 1;
+                const string key = "companion_cap";
+                var today = StartupLadder.Time.GetLocalNow().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                var stamps = CoreSettings.Current.InboxStamps;
+                if (stamps.TryGetValue(key, out var last) && last == today) return;
+                stamps[key] = today;
+                CoreSettings.Save();
+                var title = tier == 2
+                    ? global::ConditioningControlPanel.Localization.Loc.GetF("conv_cap_basic", 1000, 2000)
+                    : global::ConditioningControlPanel.Localization.Loc.GetF("conv_cap_free", 100, 1000, 2000);
+                var body = global::ConditioningControlPanel.Localization.Loc.Get("conv_cap_body");
+                StartupLadder.Inbox.File(new Services.Startup.InboxItem
+                {
+                    Key = "conv:" + key, Glyph = "💬", Title = title, Summary = body,
+                    Open = () => Dialogs.InboxNoticeCard.Present(this, title, body,
+                        global::ConditioningControlPanel.Localization.Loc.Get(tier == 2 ? "conv_get_prime" : "conv_get_basic"),
+                        () => Dialogs.VaultGateDialog.Launch(tier == 2
+                            ? "https://www.patreon.com/checkout/CodeBambi?rid=27681505"
+                            : "https://www.patreon.com/checkout/CodeBambi?rid=27604786")),
+                });
+            }
+            catch (Exception ex) { Log.Debug("[Inbox] cap row: {E}", ex.Message); }
+        }
+
         private void InitializeInboxBadge()
         {
             var inbox = StartupLadder.Inbox.Items;
             inbox.CollectionChanged += OnInboxCollectionChanged;
-            Closed += (_, _) => inbox.CollectionChanged -= OnInboxCollectionChanged;
+            Closed += (_, _) => { inbox.CollectionChanged -= OnInboxCollectionChanged; _capWatch?.Dispose(); _capWatch = null; };
             RefreshInboxBadge();
         }
 
