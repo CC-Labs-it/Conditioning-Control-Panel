@@ -78,6 +78,51 @@ public class TestIsolationTests
         Assert.False(leaked.HasPendingSave);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void SeenAppMethodsRestoreTheirInputsBeforeTheAssemblyHookRuns(int method) =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            // Call the test bodies directly: the assembly hook cannot hide missing local cleanup.
+            var snapshot = ProcessStateSnapshot.Take();
+            try
+            {
+                var service = new ConditioningControlPanel.Services.SettingsService();
+                CoreSettings.ServiceProvider = () => service;
+                CoreEntitlement.HasPremiumProvider = () => false;
+                var provider = CoreSettings.ServiceProvider;
+                var premium = CoreEntitlement.HasPremiumProvider;
+                var settings = service.Current;
+                settings.KeywordTriggersEnabled = false;
+                settings.KeywordTriggerAppScope = ConditioningControlPanel.Models.AwarenessAppScope.ExceptListed;
+                settings.KeywordTriggerIgnoreOwnFocus = true;
+                settings.KeywordTriggerApps = new() { "cleanup_sentinel" };
+                var apps = settings.KeywordTriggerApps;
+                service.SaveImmediate();
+                var file = Path.Combine(TestUserDataProfile.Root, "settings.json");
+                var before = File.ReadAllBytes(file);
+                var tests = new AwarenessSeenAppsTests();
+                switch (method)
+                {
+                    case 0: tests.EverywhereSamplesEveryTwoSecondsWhileScopedInputAlwaysResolves(); break;
+                    case 1: tests.RunningSourceRemembersEightDistinctAppsBeforeScopeFilteringButNeverOwnOrUnknown(); break;
+                    case 2: tests.ChipAddsAndSavesWithoutRearmingKeyboardAndUsesLocalizedTooltip("en", "Add 'bg3_dx11' to the list"); break;
+                }
+                Assert.Same(provider, CoreSettings.ServiceProvider);
+                Assert.Same(premium, CoreEntitlement.HasPremiumProvider);
+                Assert.False(settings.KeywordTriggersEnabled); // JsonIgnore: JSON snapshots cannot restore this
+                Assert.Equal(ConditioningControlPanel.Models.AwarenessAppScope.ExceptListed, settings.KeywordTriggerAppScope);
+                Assert.True(settings.KeywordTriggerIgnoreOwnFocus);
+                Assert.Same(apps, settings.KeywordTriggerApps);
+                Assert.Equal(new[] { "cleanup_sentinel" }, settings.KeywordTriggerApps);
+                Assert.Equal(before, File.ReadAllBytes(file));
+                Assert.False(service.HasPendingSave);
+            }
+            finally { snapshot.Restore(); }
+        });
+
     /// <summary>A debounce that already FIRED is no longer armed. Its write used to land after Restore
     /// and became every later test's baseline (Welcomed, no age acceptance: an extra Age Verification
     /// dialog in JumpRightInTests, flake-stackcapture). Restore must wait for that write.</summary>

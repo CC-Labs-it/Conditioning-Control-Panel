@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -22,43 +23,68 @@ public sealed class AwarenessSeenAppsTests
     [Fact]
     public void EverywhereSamplesEveryTwoSecondsWhileScopedInputAlwaysResolves()
     {
+        var provider = CoreSettings.ServiceProvider;
+        var premium = CoreEntitlement.HasPremiumProvider;
         var s = CoreSettings.Current;
-        s.KeywordTriggerAppScope = AwarenessAppScope.Everywhere;
-        s.KeywordTriggerIgnoreOwnFocus = false;
-        var engine = new KeywordAudioRuntime();
-        var now = new DateTime(2026, 10, 30);
-        Assert.True(engine.NeedsForeground(now));
-        Assert.False(engine.NeedsForeground(now.AddMilliseconds(1999)));
-        Assert.True(engine.NeedsForeground(now.AddSeconds(2)));
-        s.KeywordTriggerAppScope = AwarenessAppScope.OnlyListed;
-        Assert.True(engine.NeedsForeground(now.AddMilliseconds(2001)));
-        s.KeywordTriggerAppScope = AwarenessAppScope.Everywhere;
-        s.KeywordTriggerIgnoreOwnFocus = true;
-        Assert.True(engine.NeedsForeground(now.AddMilliseconds(2002)));
+        var saved = (s.KeywordTriggersEnabled, s.KeywordTriggerAppScope, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerApps);
+        try
+        {
+            s.KeywordTriggerAppScope = AwarenessAppScope.Everywhere;
+            s.KeywordTriggerIgnoreOwnFocus = false;
+            var engine = new KeywordAudioRuntime();
+            var now = new DateTime(2026, 10, 30);
+            Assert.True(engine.NeedsForeground(now));
+            Assert.False(engine.NeedsForeground(now.AddMilliseconds(1999)));
+            Assert.True(engine.NeedsForeground(now.AddSeconds(2)));
+            s.KeywordTriggerAppScope = AwarenessAppScope.OnlyListed;
+            Assert.True(engine.NeedsForeground(now.AddMilliseconds(2001)));
+            s.KeywordTriggerAppScope = AwarenessAppScope.Everywhere;
+            s.KeywordTriggerIgnoreOwnFocus = true;
+            Assert.True(engine.NeedsForeground(now.AddMilliseconds(2002)));
+        }
+        finally
+        {
+            (s.KeywordTriggersEnabled, s.KeywordTriggerAppScope, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerApps) = saved;
+            CoreSettings.ServiceProvider = provider;
+            CoreEntitlement.HasPremiumProvider = premium;
+        }
     }
 
     [Fact]
     public void RunningSourceRemembersEightDistinctAppsBeforeScopeFilteringButNeverOwnOrUnknown()
     {
-        CoreEntitlement.HasPremiumProvider = () => true;
+        var provider = CoreSettings.ServiceProvider;
+        var premium = CoreEntitlement.HasPremiumProvider;
         var s = CoreSettings.Current;
-        s.KeywordTriggersEnabled = true;
-        s.KeywordTriggerAppScope = AwarenessAppScope.OnlyListed;
-        s.KeywordTriggerApps = new(); // all input suppressed, but suggestions must still fill
+        var saved = (s.KeywordTriggersEnabled, s.KeywordTriggerAppScope, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerApps);
         var engine = new KeywordAudioRuntime();
-        engine.Key(KeywordInputKey.None, "inactive");
-        Assert.Empty(engine.GetRecentForegroundApps());
-        engine.Start();
-        for (var i = 0; i < 10; i++) engine.Key(KeywordInputKey.None, "app" + i);
-        engine.Character('x', "APP5");
-        engine.Key(KeywordInputKey.None, "ccp", true);
-        engine.Key(KeywordInputKey.None, null);
-        engine.Key(KeywordInputKey.None, " ");
-        Assert.Equal(new[] { "app5", "app9", "app8", "app7", "app6", "app4", "app3", "app2" }, engine.GetRecentForegroundApps());
-        engine.Stop();
-        engine.Key(KeywordInputKey.None, "stopped");
-        Assert.Equal(8, engine.GetRecentForegroundApps().Length);
-        Assert.DoesNotContain("stopped", engine.GetRecentForegroundApps());
+        try
+        {
+            CoreEntitlement.HasPremiumProvider = () => true;
+            s.KeywordTriggersEnabled = true;
+            s.KeywordTriggerAppScope = AwarenessAppScope.OnlyListed;
+            s.KeywordTriggerApps = new(); // all input suppressed, but suggestions must still fill
+            engine.Key(KeywordInputKey.None, "inactive");
+            Assert.Empty(engine.GetRecentForegroundApps());
+            engine.Start();
+            for (var i = 0; i < 10; i++) engine.Key(KeywordInputKey.None, "app" + i);
+            engine.Character('x', "APP5");
+            engine.Key(KeywordInputKey.None, "ccp", true);
+            engine.Key(KeywordInputKey.None, null);
+            engine.Key(KeywordInputKey.None, " ");
+            Assert.Equal(new[] { "app5", "app9", "app8", "app7", "app6", "app4", "app3", "app2" }, engine.GetRecentForegroundApps());
+            engine.Stop();
+            engine.Key(KeywordInputKey.None, "stopped");
+            Assert.Equal(8, engine.GetRecentForegroundApps().Length);
+            Assert.DoesNotContain("stopped", engine.GetRecentForegroundApps());
+        }
+        finally
+        {
+            engine.Stop();
+            (s.KeywordTriggersEnabled, s.KeywordTriggerAppScope, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerApps) = saved;
+            CoreSettings.ServiceProvider = provider;
+            CoreEntitlement.HasPremiumProvider = premium;
+        }
     }
 
     [Theory]
@@ -78,21 +104,28 @@ public sealed class AwarenessSeenAppsTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var previousLanguage = LocalizationManager.Instance.CurrentLanguage;
+        var provider = CoreSettings.ServiceProvider;
+        var premium = CoreEntitlement.HasPremiumProvider;
+        var settingsFile = Path.Combine(TestUserDataProfile.Root, "settings.json");
+        var persisted = File.Exists(settingsFile) ? File.ReadAllBytes(settingsFile) : null;
         var service = new SettingsService();
-        CoreSettings.ServiceProvider = () => service;
-        CoreEntitlement.HasPremiumProvider = () => true;
-        service.Current.KeywordTriggersEnabled = true;
-        service.Current.KeywordTriggerAppScope = AwarenessAppScope.OnlyListed;
-        service.Current.KeywordTriggerApps = new() { "CHROME.exe" };
+        var settings = service.Current;
+        var saved = (settings.KeywordTriggersEnabled, settings.KeywordTriggerAppScope,
+            settings.KeywordTriggerIgnoreOwnFocus, settings.KeywordTriggerApps);
         var engine = KeywordTriggerHead.Engine;
         var ring = (System.Collections.Generic.LinkedList<string>)typeof(KeywordAudioRuntime)
             .GetField("_seenApps", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(engine)!;
         var before = ring.ToArray();
-        ring.Clear();
-        engine.Start();
         Window? chipHost = null;
         try
         {
+            CoreSettings.ServiceProvider = () => service;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            settings.KeywordTriggersEnabled = true;
+            settings.KeywordTriggerAppScope = AwarenessAppScope.OnlyListed;
+            settings.KeywordTriggerApps = new() { "CHROME.exe" };
+            ring.Clear();
+            engine.Start();
             engine.Key(KeywordInputKey.None, "chrome");
             engine.Key(KeywordInputKey.None, "bg3_dx11");
             LocalizationManager.Instance.SetLanguage(language);
@@ -138,9 +171,28 @@ public sealed class AwarenessSeenAppsTests
         }
         finally
         {
-            chipHost?.Close();
-            engine.Stop(); ring.Clear(); foreach (var app in before) ring.AddLast(app);
-            LocalizationManager.Instance.SetLanguage(previousLanguage);
+            try
+            {
+                chipHost?.Close();
+                engine.Stop(); ring.Clear(); foreach (var app in before) ring.AddLast(app);
+                LocalizationManager.Instance.SetLanguage(previousLanguage);
+            }
+            finally
+            {
+                try
+                {
+                    (settings.KeywordTriggersEnabled, settings.KeywordTriggerAppScope,
+                        settings.KeywordTriggerIgnoreOwnFocus, settings.KeywordTriggerApps) = saved;
+                    service.SaveImmediate(); // flush restoration before switching the shared provider back
+                }
+                finally
+                {
+                    CoreSettings.ServiceProvider = provider;
+                    CoreEntitlement.HasPremiumProvider = premium;
+                    if (persisted is null) File.Delete(settingsFile);
+                    else File.WriteAllBytes(settingsFile, persisted);
+                }
+            }
         }
     });
 }
