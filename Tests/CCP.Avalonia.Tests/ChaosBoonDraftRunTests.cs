@@ -32,13 +32,13 @@ public sealed class ChaosBoonDraftRunTests
     public void Draft_feed_translations_preserve_the_english_copy_and_format_in_all_languages() {
         var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance; string language = loc.CurrentLanguage;
         string[] keys = { "chaos_draft_reroll_event", "chaos_draft_sin_bonus_event",
-            "chaos_draft_shielded_sin_event", "chaos_draft_surrender_event", "chaos_draft_skip_event" };
+            "chaos_draft_shielded_sin_event", "chaos_draft_surrender_event", "chaos_draft_skip_event", "chaos_draft_skip_announce" };
         try {
             loc.SetLanguage("en");
             var english = keys.Select(loc.Get).ToArray();
             Assert.Equal(new[] { "🎲 tempted fate again", "🕯 sin embraced (+{0:0.00}x)",
                 "🕯 the candle took the sting (no drawback)", "🕯 you said yes. it gave back (+1 resistance)",
-                "♥ resisted → +1 resistance" }, english);
+                "♥ resisted → +1 resistance", "+1 RESISTANCE" }, english);
             foreach (var (code, _, _) in global::ConditioningControlPanel.Localization.LocalizationManager.AvailableLanguages) {
                 loc.SetLanguage(code);
                 for (int i = 0; i < keys.Length; i++) {
@@ -112,11 +112,7 @@ public sealed class ChaosBoonDraftRunTests
                 Ticks(1);
                 Assert.True(state.ElapsedSec > held);
             }
-            finally {
-                ChaosRunHost.ForceShutdown();
-                ChaosWaveTimerWindow.SkipPlatformChecksForTests = false;
-                loc.SetLanguage(language);
-            }
+            finally { ChaosRunHost.ForceShutdown(); ChaosWaveTimerWindow.SkipPlatformChecksForTests = false; loc.SetLanguage(language); }
         });
     }
 
@@ -127,7 +123,8 @@ public sealed class ChaosBoonDraftRunTests
             Setup();
             var meta = ChaosMeta.State; int runs = meta.RunsCompleted;
             var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance; string language = loc.CurrentLanguage;
-            loc.SetLanguage("en");
+            loc.SetLanguage("de");
+            var settings = global::ConditioningControlPanel.CoreSettings.Current; bool announcer = settings.ChaosAnnouncerEnabled;
             try {
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                 ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
@@ -142,9 +139,10 @@ public sealed class ChaosBoonDraftRunTests
                 var state = ChaosRunHost.State!;
                 int shields = state.Shields;
                 var skip = ChaosRunHost.Overlay.FindControl<Button>("BtnSkipBoon")!;
-                Assert.True(skip.IsVisible);
+                Assert.True(skip.IsVisible); ChaosAnnouncerOverlay.CloseActive(); settings.ChaosAnnouncerEnabled = true;
                 skip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Assert.Equal(shields + 1, state.Shields); Assert.Contains("resisted → +1 resistance", state.RecentEvents);
+                Assert.Equal(shields + 1, state.Shields); Assert.Contains("widerstanden → +1 Widerstand", state.RecentEvents);
+                Assert.Equal("+1 WIDERSTAND", ChaosAnnouncerOverlay.Active!.Current!.Text);
                 Assert.Empty(state.RunPickTiles); Assert.Equal(2, state.WaveIndex);
                 double held = state.ElapsedSec;
                 Ticks(4);
@@ -153,7 +151,7 @@ public sealed class ChaosBoonDraftRunTests
                 Ticks(1);
                 Assert.True(state.ElapsedSec > held);
             }
-            finally { ChaosRunHost.ForceShutdown(); meta.RunsCompleted = runs; loc.SetLanguage(language); }
+            finally { ChaosRunHost.ForceShutdown(); ChaosAnnouncerOverlay.CloseActive(); settings.ChaosAnnouncerEnabled = announcer; meta.RunsCompleted = runs; loc.SetLanguage(language); }
             return Task.CompletedTask;
         });
     }
@@ -230,8 +228,7 @@ public sealed class ChaosBoonDraftRunTests
                 ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
                 var state = ChaosRunHost.State!;
                 Ticks(80);
-                var cards = ChaosRunHost.Overlay.FindControl<StackPanel>("BoonCardHost")!;
-                var first = (Border)cards.Children[0];
+                var first = (Border)ChaosRunHost.Overlay.FindControl<StackPanel>("BoonCardHost")!.Children[0];
                 ((StackPanel)first.Child!).Children.OfType<Button>().Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var confirm = (global::Avalonia.Threading.DispatcherTimer)typeof(ChaosOverlayWindow)
                     .GetField("_confirmTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
@@ -266,8 +263,7 @@ public sealed class ChaosBoonDraftRunTests
                 double multiplier = state.BoonMult;
                 int shields = state.Shields;
                 Ticks(80);
-                var cards = ChaosRunHost.Overlay.FindControl<StackPanel>("BoonCardHost")!;
-                Assert.Equal(2, cards.Children.Count);
+                var cards = ChaosRunHost.Overlay.FindControl<StackPanel>("BoonCardHost")!; Assert.Equal(2, cards.Children.Count);
                 await Task.Delay(600);
                 var sin = (Border)cards.Children[1];
                 var pick = ((StackPanel)sin.Child!).Children.OfType<Button>().Single();
@@ -318,5 +314,4 @@ public sealed class ChaosBoonDraftRunTests
             dir.Delete(true);
         }
     }
-
 }

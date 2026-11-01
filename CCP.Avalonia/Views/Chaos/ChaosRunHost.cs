@@ -523,7 +523,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.Shields++;
                 _state.PushEvent(IconText.BareLoc("chaos_draft_skip_event"));
                 Pulse(Color.FromRgb(120, 220, 160), 0.22);
-                ChaosAnnouncerOverlay.Announce("+1 RESISTANCE", ChaosAnnounceKind.Willpower, artKey: "resistance");
+                ChaosAnnouncerOverlay.Announce(IconText.BareLoc("chaos_draft_skip_announce"), ChaosAnnounceKind.Willpower, artKey: "resistance");
             }
             _state.WaveIndex = _pendingWave;
             _state.ActIndex = ChaosRunEngine.ActFor(_pendingWave);
@@ -538,8 +538,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_draftPaused || !_spawning) return;
             if (_pendingDraftCards.Count > 0)
             {
-                _lessonCardPaused = true;
-                _lessonCardsAfterDraft = true;
+                _lessonCardPaused = _lessonCardsAfterDraft = true;
                 BubbleOverlay.HoldChaos(true);
                 foreach (var card in _pendingDraftCards)
                     ChaosUnlockCardOverlay.Show(card, ResumeAfterLessonCard, autoDismiss: false);
@@ -613,11 +612,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_lessonCardPaused || ChaosUnlockCardOverlay.IsShowing) return;
             _lessonCardPaused = false;
             BubbleOverlay.HoldChaos(_manualPaused);
-            if (_lessonCardsAfterDraft)
-            {
-                _lessonCardsAfterDraft = false;
-                FinishDraftResume();
-            }
+            if (_lessonCardsAfterDraft) { _lessonCardsAfterDraft = false; FinishDraftResume(); }
             else if (_spawning && !_manualPaused) _spawnTimer?.Start();
         }
 
