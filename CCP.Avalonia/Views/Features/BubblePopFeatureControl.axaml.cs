@@ -49,7 +49,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             foreach (var box in TriggerTypeBoxes()) box.IsCheckedChanged += TriggerType_Changed;
             CmbMotion.SelectionChanged += CmbMotion_Changed;
             RowGetBubblesV2.RowChanged += (_, _) => RebuildMotionPicker();
-            RowGetBubblesV2.Configure(Services.Prizes.V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
+            // WPF includes the Brain Drain bubble in this prize (BubbleService.cs:1159,1202).
+            // Keep the offer out of reach until that effect is implemented on this head.
+            RowGetBubblesV2.Configure(Services.Prizes.V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box", available: false);
 
             LoadFromSettings();
 

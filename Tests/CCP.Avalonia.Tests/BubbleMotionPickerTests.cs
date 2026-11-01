@@ -10,9 +10,11 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Prizes;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -36,6 +38,8 @@ public sealed class BubbleMotionPickerTests
             // Nothing owned: WPF hides the picker but keeps the purchase offer.
             PrizeOwnership.IsGranted = _ => false;
             var bare = new BubblePopFeatureControl();
+            // Exercise the existing offer path once the missing effect is available.
+            bare.FindControl<V2GetItRow>("RowGetBubblesV2")!.Configure(V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
             Assert.True(bare.FindControl<Border>("V2Box")!.IsVisible);
             Assert.False(bare.FindControl<Control>("MotionRow")!.IsVisible);
 
@@ -100,6 +104,7 @@ public sealed class BubbleMotionPickerTests
             PrizeOwnership.ResetHeld();
             settings.BubbleMotionStyle = BubbleMotionStyle.SpiralIn;
             var panel = new BubblePopFeatureControl();
+            panel.FindControl<V2GetItRow>("RowGetBubblesV2")!.Configure(V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
             var picker = panel.FindControl<ComboBox>("CmbMotion")!;
             var box = panel.FindControl<Border>("V2Box")!;
             host = new Window { Content = panel };
