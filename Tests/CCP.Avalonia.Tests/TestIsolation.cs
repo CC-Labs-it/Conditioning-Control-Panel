@@ -248,6 +248,12 @@ internal sealed class ProcessStateSnapshot
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
 
+        // Panic methods mutate private process-wide state, including through PanicSurfaces.StopAll.
+        // Restore the exact quiet deadline, restart hold and count, not just the public seams.
+        var panic = typeof(ConditioningControlPanel.Services.Safety.PanicAftermath);
+        foreach (var name in new[] { "_quietUntilMs", "_engineHeld", "_panics" })
+            found.Add(panic.GetField(name, AnyStatic)!);
+
         // Every `Type.Member =` a test writes, through `using Alias = ...;` too.
         var alias = new Regex(@"^using\s+(\w+)\s*=\s*(?:global::)?([\w.]+)\s*;", RegexOptions.Multiline);
         var assign = new Regex(@"(?<![\w.])(?:global::)?((?:\w+\.)*\w+)\.(\w+)\s*=(?![=>])");
