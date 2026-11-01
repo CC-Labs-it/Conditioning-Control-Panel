@@ -115,6 +115,75 @@ public sealed class SingleFeatureCardMuteTests
         return Task.CompletedTask;
     });
 
+    // WPF FeatureCard.xaml.cs:584-602 starts a To-only fade at the displayed opacity.
+    [Fact]
+    public Task ReversingAnActiveFadeContinuesFromTheDisplayedOpacity() => WithClockCard((card, mute, window, clock) =>
+    {
+        card.IsActive = true;
+        clock.Step(0); clock.Step(100);
+        Assert.Equal(0.25, mute.Opacity, 3);
+        card.IsActive = false;
+        Assert.Equal(0.25, mute.Opacity, 3); // no jump to the previous target
+        clock.Step(100); clock.Step(200);
+        Assert.Equal(0.8125, mute.Opacity, 3);
+        clock.Step(300);
+        Assert.Equal(1, mute.Opacity, 3);
+
+        card.IsActive = true;
+        clock.Step(300); clock.Step(350);
+        Assert.InRange(mute.Opacity, 0.01, 0.99);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        card.IsActive = false;
+        Assert.Null(mute.Transitions);
+        Assert.Equal(1, mute.Opacity);
+        clock.Step(600);
+        Assert.Equal(1, mute.Opacity);
+    });
+
+    // Home hover must not cancel a running fade when its target remains unchanged.
+    [Fact]
+    public Task HomeHoverDoesNotInterruptAnActiveFade() => WithClockCard((card, mute, window, clock) =>
+    {
+        card.IsActive = true;
+        clock.Step(0); clock.Step(100);
+        Assert.Equal(0.25, mute.Opacity, 3);
+        window.MouseMove(card.TranslatePoint(new Point(40, 40), window)!.Value);
+        Assert.True(card.IsPointerOver);
+        Assert.Equal(0.25, mute.Opacity, 3);
+        clock.Step(150);
+        Assert.Equal(0.0625, mute.Opacity, 5);
+        window.MouseMove(new Point(2, 2));
+        Assert.False(card.IsPointerOver);
+        Assert.Equal(0.0625, mute.Opacity, 5);
+        clock.Step(200);
+        Assert.Equal(0, mute.Opacity, 3);
+    });
+
+    private static Task WithClockCard(Action<FeatureCard, Border, Window, SharedDeeperThemeTests.StepClock> check) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        var motion = settings.MotionLevel;
+        settings.MotionLevel = MotionLevel.Off;
+        using var art = new WriteableBitmap(new PixelSize(1, 1), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
+        var card = new FeatureCard { Width = 180, Height = 140, Icon = art, DashboardDepth = true, DimWhenInactive = true };
+        var window = new Window { Width = 240, Height = 200, Content = card };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+            var mute = card.FindControl<Border>("ImgIconMute")!;
+            Assert.True(card.IsLoaded && mute.IsEffectivelyVisible);
+            Assert.Equal(1, mute.Opacity);
+            var clock = new SharedDeeperThemeTests.StepClock();
+            mute.SetValue(SharedDeeperThemeTests.StepClock.Property, clock.Instance);
+            settings.MotionLevel = MotionLevel.Full;
+            check(card, mute, window, clock);
+        }
+        finally { window.Close(); settings.MotionLevel = motion; }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task DashboardToggleRepaintsSingleCard() => AvaloniaTestDispatcher.RunAsync(() =>
     {

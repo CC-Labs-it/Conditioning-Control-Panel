@@ -298,11 +298,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             bool mute = CardMuteRule.ShouldMute(DimWhenInactive, IsActive || TutorialPreview,
                 IsLocked, _hovered && !DashboardDepth, TeaseTier > 0);
             _txtTitle.Opacity = mute ? MutedTitleOpacity : 1.0;
-            // Detaching the previous transition also cancels an in-flight fade before a snap.
-            _imgIconMute.Transitions = ms <= 0 ? null : new Transitions
-            {
-                new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(ms), Easing = new QuadraticEaseOut() }
-            };
+            // Keep an in-flight fade on animated updates; detach it only for a snap.
+            if (ms <= 0) _imgIconMute.Transitions = null;
+            else if (_imgIconMute.Transitions == null)
+                _imgIconMute.Transitions = new Transitions
+                {
+                    new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(ms), Easing = new QuadraticEaseOut() }
+                };
             _imgIconMute.Opacity = mute ? 1.0 : 0.0;
         }
 
