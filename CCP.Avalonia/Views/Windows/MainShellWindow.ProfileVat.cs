@@ -123,13 +123,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             glass.SetLip(read.Lip);
             _vatCap = read.Cap; // Before synchronous FillPercentChanged.
-            // No charge host yet, so this hidden surface cannot have an active pour.
-            var step = _vatHold.Fold(read, pouring: false);
+            var step = _vatHold.Fold(read, pouring: glass.IsPouring);
             switch (step.Action)
             {
                 case FaucetActionKind.Snap: glass.SnapTo(step.Fill); break;
                 case FaucetActionKind.Ease: glass.EaseTo(step.Fill); break;
-
+                // WPF ProfileVat.cs:320-332: extend the user gesture only while seen.
+                case FaucetActionKind.Pour:
+                    if (glass.IsPresenting) glass.PourTo(step.Fill, userGesture: true);
+                    else glass.EaseTo(step.Fill);
+                    break;
             }
             UpdateVatReadout(); // Cap retunes need repaint even without a percent change.
         }
