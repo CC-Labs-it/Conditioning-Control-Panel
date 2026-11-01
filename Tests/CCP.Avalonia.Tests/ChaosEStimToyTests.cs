@@ -24,9 +24,11 @@ public class ChaosEStimToyTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Equipped_toy_arms_clicks_pays_hops_and_cleans_up(bool maxed)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Equipped_toy_arms_clicks_pays_hops_and_cleans_up(bool maxed, bool skia)
     {
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
@@ -39,6 +41,13 @@ public class ChaosEStimToyTests
             meta.ToyPockets = 1;
             meta.ActiveLifetimeBoons.Add("e_stim");
             meta.LifetimeBoonLevels["e_stim"] = 1;
+            var settings = CoreSettings.Current;
+            var oldSkiaEnabled = settings.ChaosSkiaFxEnabled;
+            var oldComposited = ChaosSkiaFxOverlay.Composited;
+            var oldSkiaSkip = ChaosSkiaFxOverlay.SkipPlatformChecksForTests;
+            settings.ChaosSkiaFxEnabled = skia;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
             var oldCanShow = ChaosEStimOverlay.CanShow;
             var oldPointer = ChaosEStimGlow.ReadPointer;
             var oldAudio = CoreAudio.PlayOneShotProvider;
@@ -98,7 +107,18 @@ public class ChaosEStimToyTests
                 BubbleOverlay.Press(source, source.CenterX, source.CenterY);
                 Assert.Equal(5, BubbleOverlay.EStimChargesLeft);
                 Assert.Contains("5", state.RecentEvents.First());
-                Assert.True(ChaosEStimOverlay.Active!.BoltCount > 0);
+                if (skia)
+                {
+                    Assert.NotNull(ChaosSkiaFxOverlay.Active);
+                    Assert.True(ChaosSkiaFxOverlay.Active!.Fx.BoltCount > 0);
+                    Assert.Null(ChaosEStimOverlay.Active);
+                }
+                else
+                {
+                    Assert.Null(ChaosSkiaFxOverlay.Active);
+                    Assert.NotNull(ChaosEStimOverlay.Active);
+                    Assert.True(ChaosEStimOverlay.Active!.BoltCount > 0);
+                }
                 Assert.Contains("estim_zap", cues);
                 Assert.False(treat.Popping); // first hop waits 70 ms
                 var deadline = System.Diagnostics.Stopwatch.StartNew();
@@ -139,6 +159,10 @@ public class ChaosEStimToyTests
             finally
             {
                 ChaosRunHost.ForceShutdown();
+                ChaosSkiaFxOverlay.CloseActive();
+                settings.ChaosSkiaFxEnabled = oldSkiaEnabled;
+                ChaosSkiaFxOverlay.Composited = oldComposited;
+                ChaosSkiaFxOverlay.SkipPlatformChecksForTests = oldSkiaSkip;
                 ChaosRunHost.PulseFx = oldPulse;
                 CoreAudio.PlayOneShotProvider = oldAudio;
                 ChaosEStimOverlay.CanShow = oldCanShow;

@@ -118,7 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return null;
             }
             var w = new ChaosSkiaFxOverlay(live: true);
-            if (!X11Overlay.SetClickThrough(w, true) | !X11Overlay.SetOverrideRedirect(w, w._stagePx) && !SkipPlatformChecksForTests)
+            if ((!X11Overlay.SetClickThrough(w, true) | !X11Overlay.SetOverrideRedirect(w, w._stagePx)) && !SkipPlatformChecksForTests)
             {
                 Log.Warning("ChaosSkiaFx: the platform refused a click-through topmost overlay, so no chaos sparkle field");
                 _refused = true;

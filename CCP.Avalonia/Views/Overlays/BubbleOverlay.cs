@@ -343,7 +343,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 double scale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
                 return new PixelPoint((int)Math.Round(b.CenterX * scale), (int)Math.Round(b.CenterY * scale));
             }
-            ChaosEStimOverlay.Strike(hits.Select(h => (CenterPx(h.From), CenterPx(h.Target))).ToList());
+            var bolts = hits.Select(h => (From: CenterPx(h.From), To: CenterPx(h.Target))).ToList();
+            // WPF BubbleService.cs:441: the Skia setting selects the lightning renderer.
+            if (ChaosSkiaFxOverlay.Enabled)
+                ChaosSkiaFxOverlay.Strike(bolts.Select(b => (new Point(b.From.X, b.From.Y), new Point(b.To.X, b.To.Y))).ToList());
+            else
+                ChaosEStimOverlay.Strike(bolts);
             int generation = _eStimGeneration;
             foreach (var (_, target, delay) in hits)
                 DispatcherTimer.RunOnce(() =>
