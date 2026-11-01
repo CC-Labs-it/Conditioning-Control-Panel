@@ -9,6 +9,8 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services;   // SubliminalCard
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using Serilog;
@@ -18,8 +20,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <summary>
     /// The head half of WPF <c>SubliminalService.ShowSubliminalVisuals</c>
     /// (ConditioningControlPanel/Services/Subliminal/SubliminalService.cs:666): one card per
-    /// targeted screen, full-screen, click-through, override-redirect, faded 50 ms in, held
-    /// SubliminalDuration x 17 ms (min 100), faded 50 ms out, to SubliminalOpacity. Core
+    /// targeted screen, full-screen, click-through, override-redirect, fading to SubliminalOpacity,
+    /// held SubliminalDuration x 17 ms (min 100), then fading out. Core
     /// <see cref="CoreSubliminal"/> decides when and which phrase and calls <see cref="Show"/>.
     ///
     /// <para>A new card replaces the one on screen (WPF reuses one keep-alive window per screen,
@@ -32,13 +34,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal static class SubliminalOverlay
     {
         private static readonly List<SubliminalOverlayWindow> Active = new();
+        internal static IReadOnlyList<SubliminalOverlayWindow> Shown => Active;
+        // Headless tests drive Show without native windows, as for SpiralOverlay.
+        internal static bool SkipPlatformChecksForTests;
         private static bool _warnedUnavailable;
 
         /// <summary>Draw one card for <paramref name="text"/> on every targeted screen; <paramref name="opacity"/>
         /// (percent) overrides the setting, as WPF FlashSubliminalCustom's does.</summary>
         public static void Show(Visual host, string text, int? opacity = null)
         {
-            if (!X11Overlay.IsAvailable)
+            if (!SkipPlatformChecksForTests && !X11Overlay.IsAvailable)
             {
                 if (!_warnedUnavailable) Log.Warning("Subliminal: this platform cannot show click-through overlays, so subliminals are skipped");
                 _warnedUnavailable = true;
@@ -55,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var w = new SubliminalOverlayWindow(text);
-                if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds))
+                if (!SkipPlatformChecksForTests && (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds)))
                 {
                     if (!_warnedUnavailable) Log.Warning("Subliminal: the platform refused a click-through topmost overlay window; skipped");
                     _warnedUnavailable = true;
@@ -145,7 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Grid Build(string text, Models.AppSettings s)
         {
             var grid = new Grid { IsHitTestVisible = false };
-            if (!s.SubBackgroundTransparent)
+            if (!s.SubBackgroundTransparent && !s.GentleVisuals)
                 grid.Children.Add(new Rectangle { Fill = new SolidColorBrush(Parse(s.SubBackgroundColor, Colors.Black)) });
 
             var family = new FontFamily(string.IsNullOrWhiteSpace(s.SubliminalFont) ? "Arial" : s.SubliminalFont + ", Arial");
@@ -169,40 +174,64 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static Color Parse(string? hex, Color fallback) => Color.TryParse(hex, out var c) ? c : fallback;
 
-        /// <summary>WPF AnimateSubliminal: 0 -> alpha over 50 ms, hold, alpha -> 0 over 50 ms, then
-        /// close. Compositor-side alpha (<see cref="X11Overlay.SetOpacity"/>), so the card renders once.</summary>
+        private Action<TimeSpan>? _fadeTick;
+        private TimeSpan _fade, _hold;
+        private long _fadeStart;
+        private double _alpha;
+        internal static TimeProvider Clock = TimeProvider.System;
+        internal double CurrentOpacity { get; private set; }
+        internal bool IsFading => _fadeTick != null;
+
+        /// <summary>WPF SubliminalService.cs:631-644,1344-1374: fade, hold, fade.
+        /// Capture the Gentle duration per card and apply native alpha on the shared dispatcher pump.</summary>
         public void Run(double alpha, TimeSpan hold)
         {
-            var fade = TimeSpan.FromMilliseconds(SubliminalCard.DefaultFadeMs);
+            _alpha = alpha;
+            _hold = hold;
+            _fade = TimeSpan.FromMilliseconds(GentleVisuals.FadeMs(SubliminalCard.DefaultFadeMs));
             var closed = false;
-            Closed += (_, _) => closed = true;   // a newer card may have closed this one already
-            // The envelope starts at the card's first frame, not at Show(): mapping and the first
-            // full-screen paint take time a 100 ms hold cannot spare. A backstop from Show() caps the
-            // lifetime anyway, so a late first frame shortens the card instead of stranding it.
-            DispatcherTimer.RunOnce(() => { if (!closed) Close(); }, MaxLifetime(hold));
+            var started = false;
+            Closed += (_, _) => { closed = true; StopFade(); };
+            // Bound lifetime even if a first frame never arrives, allowing 100 ms for mapping.
+            DispatcherTimer.RunOnce(() => { if (!closed && !started) Close(); }, MaxLifetime(hold, _fade));
             RequestFrame(this, _ =>
             {
-                if (closed) return;
-                Ramp(0, alpha, TimeSpan.Zero, fade);
-                Ramp(alpha, 0, fade + hold, fade);
-                DispatcherTimer.RunOnce(() => { if (!closed) Close(); }, fade + hold + fade + TimeSpan.FromMilliseconds(1));
+                if (closed || started) return;
+                started = true;
+                DispatcherTimer.RunOnce(() => { if (!closed) Close(); }, MaxLifetime(hold, _fade));
+                _fadeStart = Clock.GetTimestamp();
+                // A near-transparent XWayland window can stop producing frames. The shared
+                // dispatcher pump keeps opacity moving even when window frame callbacks stall.
+                _fadeTick = _ => FadeFrame();
+                DispatcherFrameSource.Shared.Subscribe(_fadeTick);
+                FadeFrame();
             });
+        }
+
+        internal void FadeFrame()
+        {
+            if (_fadeTick == null) return; // the shared source may have snapshotted this callback before close
+            var ticks = Clock.GetElapsedTime(_fadeStart).Ticks;
+            var holdEnd = (_fade + _hold).Ticks;
+            var end = holdEnd + _fade.Ticks;
+            CurrentOpacity = _alpha * (ticks < _fade.Ticks ? (double)ticks / _fade.Ticks
+                : ticks < holdEnd ? 1 : Math.Clamp((double)(end - ticks) / _fade.Ticks, 0, 1));
+            X11Overlay.SetOpacity(this, CurrentOpacity);
+            if (ticks >= end) { StopFade(); Close(); }
+        }
+
+        private void StopFade()
+        {
+            if (_fadeTick is not { } tick) return;
+            _fadeTick = null;
+            DispatcherFrameSource.Shared.Unsubscribe(tick);
         }
 
         /// <summary>Test seam: a test swaps in a first frame that never comes.</summary>
         internal static Action<TopLevel, Action<TimeSpan>> RequestFrame = (t, a) => t.RequestAnimationFrame(a);
 
-        /// <summary>Show() to forced close: the whole envelope plus 100 ms of first-frame slack.</summary>
-        internal static TimeSpan MaxLifetime(TimeSpan hold) => hold + TimeSpan.FromMilliseconds(4 * SubliminalCard.DefaultFadeMs);
-
-        private void Ramp(double from, double to, TimeSpan start, TimeSpan span)
-        {
-            const int steps = 3;   // ~one step per 60 Hz frame across 50 ms
-            for (var i = 1; i <= steps; i++)
-            {
-                var v = from + (to - from) * i / steps;
-                DispatcherTimer.RunOnce(() => X11Overlay.SetOpacity(this, v), start + span * i / steps);
-            }
-        }
+        /// <summary>Backstop for the first frame or a running envelope, with 100 ms slack.</summary>
+        internal static TimeSpan MaxLifetime(TimeSpan hold) => MaxLifetime(hold, TimeSpan.FromMilliseconds(SubliminalCard.DefaultFadeMs));
+        internal static TimeSpan MaxLifetime(TimeSpan hold, TimeSpan fade) => hold + fade + fade + TimeSpan.FromMilliseconds(100);
     }
 }
