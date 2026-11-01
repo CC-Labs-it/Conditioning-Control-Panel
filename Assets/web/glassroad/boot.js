@@ -23,7 +23,7 @@ import { createHostEscape } from './host/hostEscape.js';
 import { showSlip, hideSlip, releaseSlip } from './sparkles-slip.js';
 import { createCardMedia, PHONE_READY_CLIPS } from './host/cardMedia.js';
 import { createScrolllerFeed } from './host/scrolllerFeed.js';
-import { createDevicePictures, decodeInto } from './host/devicePictures.js';
+import { createDevicePictures, decodeClip, decodeInto } from './host/devicePictures.js';
 import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
 import { nichesFor, isDefault, savePick } from './host/scrolllerNiches.js';
 import { createLocalLibrary, pickFiles, feedSwitch, loadFilesChoice, saveFilesChoice, openFilePicker } from './host/localLibrary.js';
@@ -467,7 +467,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const deviceOrigin = init.caps.scrolller?.origin === 'device';
   // The desktop caches them too and serves them from its own media host, drawn into canvases (`mediaOrigin`, https only).
   const mediaOrigin = /^https:\/\/[a-z0-9.-]+$/.test(init.caps.scrolller?.mediaOrigin || '') ? init.caps.scrolller.mediaOrigin : location.origin;
-  if (deviceOrigin) scrolller.useDeviceOrigin(mediaOrigin);
+  if (deviceOrigin) scrolller.useDeviceOrigin(mediaOrigin, { clips: init.caps.scrolller?.clips === true });
   // "My files" (host/localLibrary.js): the player's own pictures as blob urls, never uploaded; while it is on the
   // Scrolller switch is off, so the host fetches nothing. Kept across courses; only the choice survives a reload.
   const library = shared.library ||= createLocalLibrary();
@@ -545,7 +545,9 @@ async function boot(course, options, lifetime, isCurrent) {
   // quiet = the garage holds its last frame (the hit cam's compile of every program waits on GPU replies that each
   // menu frame delays: measured 0.25 s alone, 4 s with frames between; shaders and water do not care)
   const lights = { ready: false, busy: false, covered: false, want: null, quiet: false, stage: 'Getting the lights ready', p: 0 };
-  const WARM_MENU_FPS = 30; let menuDrawMs = 0;   // the garage's pace while the lights warm
+  // the garage's pace while the lights warm: a phone holds 30 fps for the warm, a desktop draws every frame.
+  // 2 ms short of the 30 fps interval, so a late vsync does not drop a 60 Hz phone to an uneven 20.
+  const warmMenuGapMs = () => (renderer.device === 'phone' ? 1000 / 30 - 2 : 0); let menuDrawMs = 0;
   let online = null, lobbyUi = null;
   let songToken = 0, pickedSong = shared.courseSongs[TRACK_ID] || null;
   lifetime.defer(() => { songToken++; });
@@ -636,7 +638,7 @@ async function boot(course, options, lifetime, isCurrent) {
   // My files and Off win: while either is picked this provider holds nothing and the display route above has the faces.
   const devicePictures = deviceOrigin && qs.get('media') !== '0' && world.media ? createDevicePictures(world.media, { feed: scrolller,
     active: () => !shared.filesOn && coursePick.source === 'scrolller',
-    ...(renderer.device === 'phone' ? null : { decode: (url, canvas, o) => decodeInto(url, canvas, { ...o, edge: 1280 }) }) }) : null;
+    ...(renderer.device === 'phone' ? null : { decode: (url, canvas, o) => decodeInto(url, canvas, { ...o, edge: 1280 }), clip: (url, canvas, o) => decodeClip(url, canvas, { ...o, edge: 1280 }) }) }) : null;
   if (devicePictures) { lifetime.defer(() => devicePictures.dispose()); lifetime.defer(scrolller.subscribe(() => devicePictures.sync())); }
   world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || devicePictures?.sourceForFlash(seed) || null);
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
@@ -1454,8 +1456,11 @@ async function boot(course, options, lifetime, isCurrent) {
   if (cardMedia) await cardMedia.ready;
   if (!lifetime.alive) return;
   loaded('media');
+  // the gate screen's own context and Loom program (its first build froze the race at the first gate): a blocking
+  // WebGL link of about 0.4 s, so it runs under the cover and never stalls the live garage
+  gateScreen.warm(world.spirals && world.spirals.gates[0] ? world.spirals.gates[0].params : null);
   // GARAGE FIRST: the cover lifts on the garage now; every material, the post chain, the mirrors, the water probe,
-  // the hit cam and the gate screen warm behind the live menu (warmLights). Race waits for them under the cover.
+  // and the hit cam warm behind the live menu (warmLights). Race waits for them under the cover.
   showLoading('Ready to roll', 1);
   hud.setReady(true);
   bridge.ready();
@@ -1546,11 +1551,6 @@ async function boot(course, options, lifetime, isCurrent) {
       finally { lights.quiet = false; }
         if (!lifetime.alive) return;
       }
-      // and the gate screen's own context and Loom program (its first build froze the race at the first gate)
-      showLights('One last look', 0.98);
-      await paintGap();
-      if (!lifetime.alive) return;
-      gateScreen.warm(world.spirals && world.spirals.gates[0] ? world.spirals.gates[0].params : null);
       if (qs.get('profileLoad') === '1') debug.readyGraphs = renderer.stats().compiledGraphs;
       if (!isCurrent()) return;
       renderer.beginCourse(); // Covered preparation must not count toward a later quality verdict.
@@ -1990,7 +1990,7 @@ async function boot(course, options, lifetime, isCurrent) {
     hopLatch.clear(); itemLatch.clear();
     if (BOT && botT && now >= botT) { botT = 0; if (state === 'menu') startRace(); }
     garage?.setVisible(!!garage && state === 'menu' && hud.card === 'menu' && !lights.covered);
-    if (lights.quiet || now - menuDrawMs < 1000 / WARM_MENU_FPS) return;
+    if (lights.quiet || now - menuDrawMs < warmMenuGapMs()) return;
     menuDrawMs = now;
     const pst = P.st;
     audio.update(0, { active: false, menu: state === 'menu', boosting: false, drifting: false, driftTier: 0, airborne: false, onRoad: true,

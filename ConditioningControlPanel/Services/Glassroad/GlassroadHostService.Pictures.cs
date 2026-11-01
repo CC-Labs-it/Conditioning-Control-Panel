@@ -11,11 +11,12 @@ namespace ConditioningControlPanel.Services.Glassroad;
 
 // ============================ Scrolller pictures (2026-10-31) ============================
 //
-// The race's world screens and flashes show Scrolller stills on the desktop too, on the phone's
-// wire (glassroad CONTRACT.md section 7, device origin): caps.scrolller, set-setting, setting,
-// scrolller-niches, scrolller-feed. The fetch is the shared pool (GoonOnlineMedia, stills only),
-// so the daily share, the 24 h rule, the off switch and temp-file ownership are the same as
-// chess. Every file is a plain https://ccp.assets/.temp/... url the page draws into a canvas.
+// The race's world screens and flashes show Scrolller stills and moving clips on the desktop too,
+// on the phone's wire (glassroad CONTRACT.md section 7, device origin): caps.scrolller, set-setting,
+// setting, scrolller-niches, scrolller-feed. The fetch is the shared pool (GoonOnlineMedia), so the
+// daily share, the 24 h rule, the off switch and temp-file ownership are the same as chess. Every
+// file is a plain https://ccp.assets/.temp/... url: stills go through a canvas, clips play on the
+// screens directly. Clips count against the daily share by their real size.
 //
 // Nothing is fetched before the gate (GlassroadRules.PicturesOn), and a press with no app consent
 // asks the app's own consent question first. Every exit runs DisposePictures through Close.
@@ -27,6 +28,7 @@ internal static partial class GlassroadHostService
     private static GoonOnlineMedia? _pictures;
     private static DispatcherTimer? _picturesTimer;
     private static IReadOnlyList<string> _pictureUrls = Array.Empty<string>();
+    private static IReadOnlyList<string> _pictureClips = Array.Empty<string>();
     private static List<string> _pictureNiches = new();
     private static int _pictureOffset;
 
@@ -106,7 +108,7 @@ internal static partial class GlassroadHostService
             var s = App.Settings?.Current;
             var subs = FypOnlineCoordinator.ResolveChannels(_pictureNiches, null);
             if (subs.Count == 0) subs = FypOnlineCoordinator.ResolveChannels(s?.FypOnlineNiches, s?.FypOnlineCustomSubs);
-            _pictures ??= GoonOnlineMedia.ForGameStills(PicturesTenant, OnPictureSnapshot);
+            _pictures ??= GoonOnlineMedia.ForGame(PicturesTenant, OnPictureSnapshot);
             _pictures.Start(subs);
             if (_picturesTimer == null)
             {
@@ -122,6 +124,7 @@ internal static partial class GlassroadHostService
     {
         try { _pictures?.Off(); } catch (Exception ex) { Diag.Swallowed(ex); }
         _pictureUrls = Array.Empty<string>();
+        _pictureClips = Array.Empty<string>();
         PostPictureFeed();
     }
 
@@ -129,7 +132,8 @@ internal static partial class GlassroadHostService
     private static void OnPictureSnapshot(GoonOnlineMedia.Snapshot snap)
     {
         var urls = snap.Images.Select(i => i.Url).ToList();
-        RunOnUi(() => { _pictureUrls = urls; PostPictureFeed(); });
+        var clips = snap.Videos.Select(i => i.Url).ToList();
+        RunOnUi(() => { _pictureUrls = urls; _pictureClips = clips; PostPictureFeed(); });
     }
 
     private static void PostPictureFeed()
@@ -137,7 +141,7 @@ internal static partial class GlassroadHostService
         try
         {
             var frame = GlassroadRules.PicturesFeed(_pictureUrls, _pictureOffset,
-                FypOnlineCoordinator.Catalog.Select(n => (n.Id, n.Label)));
+                FypOnlineCoordinator.Catalog.Select(n => (n.Id, n.Label)), _pictureClips);
             _core?.PostWebMessageAsJson(frame.ToString(Newtonsoft.Json.Formatting.None));
         }
         catch (Exception ex) { App.Logger?.Debug("Glassroad: pictures post failed: {E}", ex.Message); }
@@ -151,6 +155,7 @@ internal static partial class GlassroadHostService
         try { _pictures?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
         _pictures = null;
         _pictureUrls = Array.Empty<string>();
+        _pictureClips = Array.Empty<string>();
         _pictureNiches = new List<string>();
         _pictureOffset = 0;
     }
