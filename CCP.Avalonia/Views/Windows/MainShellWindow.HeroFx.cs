@@ -50,8 +50,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ProgressionBank.Awarded += awarded;
             ProgressionBank.LevelUp += levelUp;
             Closed += (_, _) => { ProgressionBank.Awarded -= awarded; ProgressionBank.LevelUp -= levelUp; };
-            if (Named<Border>("XPBar")?.Parent is Control track)
-                track.SizeChanged += (_, _) => FillXpBar(animate: false);
+            if (Named<Border>("XPBar") is { } fill)
+            {
+                if (fill.Parent is Control track)
+                    track.SizeChanged += (_, _) => FillXpBar(animate: false);
+                // WPF wires this before the first layout, independent of section paint.
+                if (Named<Border>("XpDepthBead") is { } bead)
+                {
+                    bead.IsVisible = fill.Bounds.Width >= 5;
+                    fill.SizeChanged += (_, e) => bead.IsVisible = e.NewSize.Width >= 5;
+                }
+            }
             // WPF XPBarTrack_ToolTipOpening (MainWindow.UiUpdates.cs:2897): the ambient-bubble daily
             // budget, computed on open so it is never stale; read-only.
             if (Named<Border>("XPBarTrack") is { } xpTrack)

@@ -1688,7 +1688,7 @@
                                      corners poking out of the 8px-tall bar at each end. -->
                                 <Panel>
                                 <Border x:Name="XpDepthGloss" Margin="1,0" CornerRadius="4" Background="{DynamicResource DepthTubeGloss}" IsHitTestVisible="False"/>
-                                <Border x:Name="XpDepthBead" Width="8" Height="8" Margin="0,0,-4,0" HorizontalAlignment="Right" CornerRadius="4" Background="{DynamicResource DepthTubeBead}" IsHitTestVisible="False"/>
+                                <Border x:Name="XpDepthBead" IsVisible="False" Width="8" Height="8" Margin="0,0,-4,0" HorizontalAlignment="Right" CornerRadius="4" Background="{DynamicResource DepthTubeBead}" IsHitTestVisible="False"/>
                                 <Border x:Name="XPBarSheen" Margin="4,0" IsHitTestVisible="False" Opacity="0">
                                     <Border.Background>
                                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">

@@ -32,6 +32,38 @@ public sealed class SyncS6bDepthTests
         Assert.Equal(brush.GradientStops[0].Color.R, brush.GradientStops[1].Color.R);
     }
 
+    [Fact]
+    public async Task BeadTracksFillOnLaunchBeforeAnyNavigation()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            AmbientBeatLoopsTests.Setup();
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            CoreSettings.Current.PlayerXP = 0;
+            var w = new MainShellWindow();
+            try
+            {
+                w.Show();
+                Dispatcher.UIThread.RunJobs();
+                w.UpdateLayout();
+                Assert.Equal("settings", w.CurrentTab);
+                var fill = w.Named<Border>("XPBar")!;
+                var bead = w.Named<Border>("XpDepthBead")!;
+                // No ShowTab or PaintDepthHud: size changes must work on the first screen.
+                foreach (var width in new[] { 0, 4, 5, 40, 4, 0, 8 })
+                {
+                    fill.Width = width;
+                    w.UpdateLayout();
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(width, fill.Bounds.Width);
+                    Assert.Equal(width >= 5, bead.IsVisible);
+                }
+            }
+            finally { w.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Theory]
     [InlineData("banner")]
     [InlineData("logo")]

@@ -7,8 +7,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 
 public partial class MainShellWindow
 {
-    private bool _hudDepthWired;
-
     internal void PaintDepthHud(Color hue)
     {
         if (Named<Border>("HudDepthTop") is { } band)
@@ -17,14 +15,5 @@ public partial class MainShellWindow
             top.Background = DepthPaint.Well(hue, 5);
         if (Named<Border>("XpDepthLeft") is { } left)
             left.Background = DepthPaint.Well(hue, 6, left: true);
-        if (Named<Border>("XPBar") is { } fill && Named<Border>("XpDepthBead") is { } bead)
-        {
-            bead.IsVisible = fill.Bounds.Width >= 5;
-            if (!_hudDepthWired)
-            {
-                _hudDepthWired = true;
-                fill.SizeChanged += (_, e) => bead.IsVisible = e.NewSize.Width >= 5;
-            }
-        }
     }
 }
