@@ -4,8 +4,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -51,8 +53,8 @@ public sealed class BrowserPopoutTests
             Assert.Equal(1024, popout.Width);
             Assert.Equal(768, popout.Height);
             Assert.True(placeholder.IsVisible);
-            Assert.Equal(Loc.Get("label_browser_popped_out_nclick_to_focus_window"), placeholder.Text);
-            Assert.Equal(Loc.Get("btn_focus"), label.Text);
+            Assert.Equal(IconText.BareLoc("label_browser_popped_out_nclick_to_focus_window"), placeholder.Text);
+            Assert.Equal(IconText.BareLoc("btn_focus"), label.Text);
             Assert.Equal(Loc.Get("tooltip_browser_is_popped_out_click_to_focus"), ToolTip.GetTip(button));
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Same(popout, shell.BrowserPopoutWindow);
@@ -60,10 +62,54 @@ public sealed class BrowserPopoutTests
             Assert.Null(shell.BrowserPopoutWindow);
             Assert.Contains(browser, container.Children);
             Assert.False(placeholder.IsVisible);
-            Assert.Equal(Loc.Get("btn_pop_out"), label.Text);
+            Assert.Equal(IconText.BareLoc("btn_pop_out"), label.Text);
             Assert.Equal(Loc.Get("tooltip_pop_out_browser_to_resizable_window"), ToolTip.GetTip(button));
         }
         finally { shell.BrowserPopoutWindow?.Close(); shell.Close(); CoreSettings.ServiceProvider = old; }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("label_browser_popped_out_nclick_to_focus_window")]
+    [InlineData("btn_focus")]
+    [InlineData("label_browser_disabled_in_offline_mode")]
+    [InlineData("label_click_to_load_browser")]
+    public Task BrowserLabelsStayBareAcrossLanguages(string key) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var old = CoreSettings.ServiceProvider;
+        var previousLanguage = LocalizationManager.Instance.CurrentLanguage;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.OfflineMode = false;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.PopOutBrowser();
+            var page = shell.FindControl<SettingsTabView>("SettingsTab")!;
+            var target = page.FindControl<TextBlock>(key == "btn_focus" ? "TxtPopOutBrowser" : "BrowserLoadingText")!;
+            if (key == "label_browser_disabled_in_offline_mode")
+            {
+                settings.Current.OfflineMode = true;
+                shell.SyncOfflineModeState();
+            }
+            else if (key == "label_click_to_load_browser") shell.BrowserPopoutWindow!.Close();
+
+            foreach (var (language, _, _) in LocalizationManager.AvailableLanguages)
+            {
+                LocalizationManager.Instance.SetLanguage(language);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(IconText.BareLoc(key), target.Text);
+            }
+        }
+        finally
+        {
+            shell.BrowserPopoutWindow?.Close();
+            shell.Close();
+            CoreSettings.ServiceProvider = old;
+            LocalizationManager.Instance.SetLanguage(previousLanguage);
+        }
         return Task.CompletedTask;
     });
 
@@ -159,15 +205,16 @@ public sealed class BrowserPopoutTests
             settings.Current.OfflineMode = true;
             shell.SyncOfflineModeState();
             var placeholder = page.FindControl<TextBlock>("BrowserLoadingText")!;
-            Assert.Equal(Loc.Get("label_browser_disabled_in_offline_mode"), placeholder.Text);
+            Assert.Equal(IconText.BareLoc("label_browser_disabled_in_offline_mode"), placeholder.Text);
             popout.Close();
             Assert.True(placeholder.IsVisible);
             Assert.False(browser.IsVisible);
-            Assert.Equal(Loc.Get("label_browser_disabled_in_offline_mode"), placeholder.Text);
+            Assert.Equal(IconText.BareLoc("label_browser_disabled_in_offline_mode"), placeholder.Text);
             settings.Current.OfflineMode = false;
             shell.SyncOfflineModeState();
             Assert.False(placeholder.IsVisible);
             Assert.True(browser.IsVisible);
+            Assert.Equal(IconText.BareLoc("label_click_to_load_browser"), placeholder.Text);
         }
         finally { shell.BrowserPopoutWindow?.Close(); shell.Close(); CoreSettings.ServiceProvider = old; }
         return Task.CompletedTask;

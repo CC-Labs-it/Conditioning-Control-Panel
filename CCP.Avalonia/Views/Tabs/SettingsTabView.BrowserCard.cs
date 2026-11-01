@@ -10,9 +10,11 @@
 
 using System;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Localization;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -187,15 +189,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void SetBrowserPoppedOut(bool poppedOut)
         {
             _browserPoppedOut = poppedOut;
-            BrowserLoadingText.Bind(TextBlock.TextProperty, LocBinding(CoreSettings.Current.OfflineMode
+            BrowserLoadingText.Bind(TextBlock.TextProperty, LocBareBinding(CoreSettings.Current.OfflineMode
                 ? "label_browser_disabled_in_offline_mode" : poppedOut
                     ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser"));
-            TxtPopOutBrowser.Bind(TextBlock.TextProperty, LocBinding(poppedOut ? "btn_focus" : "btn_pop_out"));
+            TxtPopOutBrowser.Bind(TextBlock.TextProperty, LocBareBinding(poppedOut ? "btn_focus" : "btn_pop_out"));
             if (!CoreSettings.Current.OfflineMode)
                 BtnPopOutBrowser.Bind(ToolTip.TipProperty, LocBinding(poppedOut
                     ? "tooltip_browser_is_popped_out_click_to_focus" : "tooltip_pop_out_browser_to_resizable_window"));
             SyncBrowserPrompt();
         }
+
+        private static Binding LocBareBinding(string key) => (Binding)new StrBareExtension(key).ProvideValue(null!);
 
         private void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e) => Shell?.PopOutBrowser();
         private void ToggleEnhanceIfPossible_Changed(object? sender, RoutedEventArgs e) { } // greyed: see the header
