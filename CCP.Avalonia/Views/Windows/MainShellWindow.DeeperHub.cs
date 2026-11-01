@@ -49,6 +49,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void ReloadDeeperLibraryFromDisk() => DeeperModel?.ReloadLibrary();
 
+        /// <summary>WPF MainWindow.DeeperTab.cs:677: refresh library changes while the tab is visible.</summary>
+        internal void OnDeeperLibraryChanged()
+        {
+            try
+            {
+                if (Named<DeeperTabView>("DeeperTab") is { IsVisible: true }) ReloadDeeperLibraryFromDisk();
+            }
+            catch (Exception ex) { Log.Debug("Deeper library refresh error: {Error}", ex.Message); }
+        }
+
         /// <summary>WPF ApplyDeeperFilterAndSort after a submission record changed: repaint badges.</summary>
         internal void RefreshDeeperLibraryRows() => DeeperModel?.Refresh();
 
@@ -98,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 open.Activate();
                 return open;
             }
-            var player = new EnhancementPlayerWindow(null, null);
+            var player = new EnhancementPlayerWindow(null, null) { LibraryRefreshShell = new(this) };
             player.Closed += (_, _) => { if (ReferenceEquals(_deeperPlayer, player)) _deeperPlayer = null; };
             _deeperPlayer = player;
             if (IsVisible) player.Show(this); else player.Show();
