@@ -257,7 +257,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ponytail: ported: premium gate, double warning, Activate, panel swap, clock, the secret
         // phrase, the Emergency Exit breath; the title-bar badge, blood-red theme and activation flash
         // are MainShellWindow.Lockdown.cs; the Strict toggles grey themselves (HoldWhileLockdown).
-        // Not on this head: the Possession haunt/readout and Dose feature selection.
+        // Not on this head: the Possession haunt/readout.
         // The system-key hook runs on Windows only.
 
         /// <summary>The head's live Lockdown (null in renders and tests that set none).</summary>
@@ -320,8 +320,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ld.Activate(TimeSpan.FromMinutes(minutes));
         }
 
-        /// <summary>WPF consent, limited to the Dose engine behavior implemented here. Possession and
-        /// feature selection are not hosted; system keys are blocked only on Windows.</summary>
+        /// <summary>WPF consent, including Dose feature selection. Possession is not hosted;
+        /// system keys are blocked only on Windows.</summary>
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg) => LockdownWarning(minutes, cfg, OperatingSystem.IsWindows());
 
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg, bool windows)
