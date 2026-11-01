@@ -54,6 +54,11 @@ public sealed class FavoritesDtrhCardTests
                 shell.ShowTab("play");
                 Dispatcher.UIThread.RunJobs();
                 var play = shell.Named<PlayTabView>("PlayTab")!;
+                var card = Assert.IsType<Border>(Assert.Single(play.FindControl<Grid>("SlotDtrh")!.Children));
+                Assert.Same(play.Resources["PlayCardT2"], card.Theme);
+                Assert.Equal(new Thickness(3), card.BorderThickness);
+                Assert.Equal(2, TierFxBorder.GetTier(card));
+                Assert.Equal(3, TierFxBorder.GetRimThickness(card));
                 var button = play.FindControl<Button>("BtnPlayDtrh")!;
                 var band = play.FindControl<Border>("PlayLockDtrh")!;
                 var badge = play.FindControl<TierBadge>("PlayBadgeDtrh")!;

@@ -322,7 +322,8 @@
           </Grid>
           <!-- WPF PlayTabView.xaml:491-520: Down the Rabbit Hole. -->
           <Grid x:Name="SlotDtrh">
-            <Border Theme="{StaticResource PlayCard}">
+            <Border Theme="{StaticResource PlayCardT2}"
+                    fx:TierFxBorder.Tier="2" fx:TierFxBorder.RimThickness="3">
               <Grid>
                 <Grid RowDefinitions="Auto,Auto,*,Auto">
                   <Border Grid.Row="0" Theme="{StaticResource PlayCardArtPlate}">
