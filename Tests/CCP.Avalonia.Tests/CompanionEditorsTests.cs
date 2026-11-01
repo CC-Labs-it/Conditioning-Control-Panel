@@ -4,10 +4,12 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
@@ -186,8 +188,12 @@ public sealed class CompanionEditorsTests
     [Fact]
     public Task PromptEditor_is_reachable_from_make_her_yours_links() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        if (OperatingSystem.IsLinux()) AmbientBeatLoopsTests.Setup(); // bundled font for a standalone Linux run
         Setup();
         var service = new SettingsService();
+        service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
+        service.Current.WhatMovedCardShown = 1;
+        service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys.Except(service.Current.SeenFeatureIntros));
         CoreSettings.ServiceProvider = () => service;
         var shell = new MainShellWindow();
         try
@@ -197,6 +203,7 @@ public sealed class CompanionEditorsTests
             // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
             shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            shell.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
@@ -204,9 +211,15 @@ public sealed class CompanionEditorsTests
             foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
+                shell.UpdateLayout();
                 button.BringIntoView();
-                Dispatcher.UIThread.RunJobs();
+                shell.UpdateLayout();
+                // Pointer hit testing uses the compositor's last frame, which may predate the scroll.
+                ContentHitTestTests.RenderLiveTree(shell);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                var hit = shell.InputHitTest(at) as Visual;
+                Assert.True(hit == button || (hit != null && button.IsVisualAncestorOf(hit)),
+                    $"{button.Content} at {at} hit {hit?.GetType().Name ?? "nothing"}");
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
