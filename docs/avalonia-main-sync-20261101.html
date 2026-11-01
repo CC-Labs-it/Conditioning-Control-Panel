@@ -16,6 +16,7 @@ table{border-collapse:collapse;margin:1em 0;width:100%}th,td{border:1px solid va
 th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockquote{margin:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--line)}
 .counts{font-weight:600}.src{color:var(--muted);font-size:.85em}
 </style>
+<script type="application/json" id="ledger-meta">{"total": 28, "pin": "c70d1a8f95", "base": "b3bfe652df"}</script>
 </head>
 <body>
 <h1>Main sync #12 delta ledger (2026-11-01)</h1>
@@ -71,7 +72,7 @@ Nothing in this delta is left as needs-port.</p>
 <tr><td><code>sync11-dtrh-basic</code> #3897</td><td>Merged into this sync's <code>-compat</code>: 7.2.1 announces DtRH at Basic, and the door would otherwise refuse Basic on this head.</td></tr>
 <tr><td><code>sync11-wallet-net</code> #3899</td><td>Not landed. Green at its own base.</td></tr>
 <tr><td><code>sync11-profile-equip</code> #3898</td><td>Not landed.</td></tr>
-<tr><td><code>sync11-race-pictures</code> #3896</td><td>Not landed. Check it against B2 before it does (see the PR).</td></tr>
+<tr><td><code>sync11-race-pictures</code> #3896</td><td>Not landed, and do not land it as is. It sets <code>caps.scrolller</code> on every OS and starts <code>GoonOnlineMedia.ForGameStills</code> with no platform check, so it offers Scrolller on a Linux host. B2 says My files / Off until a gate exists. Omit the cap and refuse its messages off Windows, or hold it for the 7.2.x work.</td></tr>
 <tr><td><code>sync11-xp-tip</code></td><td>Not landed. Branch only, no PR.</td></tr>
 </table>
 
