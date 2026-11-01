@@ -28,8 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// are in IntakeHostWindow.Bridge.cs; window mode, duck and the heartbeat watchdog in
     /// IntakeHostWindow.Lifecycle.cs.
     /// ponytail: not ported yet - relaunch on a web-process crash (WebHost raises no process-failed),
-    /// the EmiDesk intakeRunning hold (this head's
-    /// EmiDeskService has no Fire/ReleaseHold director), punch-card session credit (pending drafts
+    /// the EmiDesk moment and speech director, punch-card session credit (pending drafts
     /// are persisted after a saved result). Next slices in
     /// ~/ccp-port/briefs/intake-plan.md.
     /// </summary>

@@ -1,7 +1,9 @@
 using System;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -30,9 +32,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private WindowState? _duckedFrom;
         private bool _pageReady;
         private DispatcherTimer? _heartbeatWatch;
+        private bool _intakeHoldArmed;
 
         private void StartLifecycle()
         {
+            // WPF EmiDeskService.cs:678-701,727-733: holds arm while away, but the
+            // presentation or a not-yet-visible desk owns the moment while she is out.
+            var desk = EmiDeskService.Instance;
+            if (!desk.IsOut || desk.Window is { IsVisible: true, PresentationActive: false })
+            {
+                EmiLineEngine.Instance.Draw("intakeRunning");
+                _intakeHoldArmed = true;
+            }
             Run.Beat(Now);
             _heartbeatWatch = new DispatcherTimer { Interval = HeartbeatPoll };
             _heartbeatWatch.Tick += (_, _) => CheckHeartbeat();
@@ -42,6 +53,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void EndLifecycle()
         {
+            // WPF IntakeHostService.cs:1069-1077: every close releases the hold.
+            if (_intakeHoldArmed)
+            {
+                _intakeHoldArmed = false;
+                EmiLineEngine.Instance.ReleaseHold("intakeRunning");
+            }
             _heartbeatWatch?.Stop();
             _heartbeatWatch = null;
             RestoreMain();   // WPF DisposeAll: give the control panel back before anything else
