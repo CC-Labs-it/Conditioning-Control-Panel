@@ -8712,5 +8712,11 @@
   "online_official_plan_prime": "Prime gets the biggest daily share. Anything you've already seen replays free.",
   "online_official_nice": "Nice",
   "online_official_stamped_line": "Online media comes from Scrolller. Each picture and clip carries a small \"via Scrolller\" mark.",
-  "online_cache_day_line": "Online media is kept in a small cache on this computer for a day, never uploaded."
+  "online_cache_day_line": "Online media is kept in a small cache on this computer for a day, never uploaded.",
+  "chaos_draft_rerolled": "🎲 tempted fate again",
+  "chaos_draft_sin_embraced": "🕯 sin embraced (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "🕯 the candle took the sting (no drawback)",
+  "chaos_draft_sin_resistance": "🕯 you said yes. it gave back (+1 resistance)",
+  "chaos_draft_resisted": "♥ resisted → +1 resistance",
+  "chaos_draft_resistance_announce": "+1 RESISTANCE"
 }

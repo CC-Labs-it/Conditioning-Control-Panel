@@ -7959,5 +7959,11 @@
   "online_official_plan_prime": "Prime получает самую большую дневную долю. Всё, что вы уже видели, повторяется бесплатно.",
   "online_official_nice": "Отлично",
   "online_official_stamped_line": "Онлайн-медиа приходят из Scrolller. На каждой картинке и клипе есть маленькая пометка \"via Scrolller\".",
-  "online_cache_day_line": "Онлайн-медиа хранятся в небольшом кэше на этом компьютере один день и никуда не загружаются."
+  "online_cache_day_line": "Онлайн-медиа хранятся в небольшом кэше на этом компьютере один день и никуда не загружаются.",
+  "chaos_draft_rerolled": "🎲 снова испытала судьбу",
+  "chaos_draft_sin_embraced": "🕯 грех принят (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "🕯 свеча сняла боль (без недостатков)",
+  "chaos_draft_sin_resistance": "🕯 ты сказала да. она ответила тем же (+1 сопротивление)",
+  "chaos_draft_resisted": "♥ сопротивление → +1 сопротивление",
+  "chaos_draft_resistance_announce": "+1 СОПРОТИВЛЕНИЕ"
 }

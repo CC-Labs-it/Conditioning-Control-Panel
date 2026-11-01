@@ -10,6 +10,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -24,6 +25,7 @@ public sealed class ChaosWaveDraftTests
         ChaosMeta.Init();
         ChaosMeta.State.RunsCompleted = 2; // skip is unlocked
         ChaosMeta.State.SeenSkipDebut = true;
+        ChaosMeta.State.LessonsComplete.Add("silk_touch"); // this suite exercises drafts, not lesson cards
     }
 
     private static void Ticks(int count) { for (int i = 0; i < count; i++) ChaosRunHost.Tick(); }
@@ -160,6 +162,65 @@ public sealed class ChaosWaveDraftTests
                 Assert.Equal(2, state.WaveIndex);
             }
             finally { ChaosRunHost.ForceShutdown(); }
+        });
+    }
+
+    // WPF ChaosModeService.cs:1521, 1555-1561, 1580-1583: the English wording and translated output.
+    [Theory]
+    [InlineData("en", "🎲 tempted fate again", "♥ resisted → +1 resistance", "+1 RESISTANCE")]
+    [InlineData("es", "🎲 volviste a tentar a la suerte", "♥ resististe → +1 resistencia", "+1 RESISTENCIA")]
+    [InlineData("pt-BR", "🎲 tentou a sorte de novo", "♥ resistiu → +1 resistência", "+1 RESISTÊNCIA")]
+    [InlineData("fr", "🎲 le destin est tenté à nouveau", "♥ tu as résisté → +1 résistance", "+1 RÉSISTANCE")]
+    [InlineData("it", "🎲 hai tentato ancora la sorte", "♥ hai resistito → +1 resistenza", "+1 RESISTENZA")]
+    [InlineData("de", "🎲 das Schicksal erneut herausgefordert", "♥ widerstanden → +1 Widerstand", "+1 WIDERSTAND")]
+    [InlineData("ru", "🎲 снова испытала судьбу", "♥ сопротивление → +1 сопротивление", "+1 СОПРОТИВЛЕНИЕ")]
+    [InlineData("ja", "🎲 再び運命を試した", "♥ 抵抗した → +1 抵抗力", "+1 抵抗力")]
+    [InlineData("ko", "🎲 다시 운명에 도전했어", "♥ 저항했어 → +1 저항력", "+1 저항력")]
+    [InlineData("zh-CN", "🎲 再次挑战命运", "♥ 抵抗 → +1 抵抗力", "+1 抵抗力")]
+    public async Task Draft_feedback_uses_the_selected_language(string language, string rerolled, string resisted, string announced)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var loc = LocalizationManager.Instance;
+            var oldLanguage = loc.CurrentLanguage;
+            var settings = global::ConditioningControlPanel.CoreSettings.Current;
+            bool oldAnnouncer = settings.ChaosAnnouncerEnabled;
+            try
+            {
+                loc.SetLanguage(language);
+                settings.ChaosAnnouncerEnabled = true;
+                // Verify the other three keys are present in each actual language, not an English fallback.
+                foreach (var key in new[] { "chaos_draft_sin_embraced", "chaos_draft_sin_shielded", "chaos_draft_sin_resistance" })
+                {
+                    Assert.NotEqual(key, Loc.Get(key));
+                    if (language != "en") Assert.NotEqual(loc.GetEnglish(key), Loc.Get(key));
+                }
+                Assert.DoesNotContain("{0", Loc.GetF("chaos_draft_sin_embraced", 0.4));
+                if (language == "en")
+                {
+                    Assert.Equal("🕯 sin embraced (+{0:0.00}x)", loc.GetEnglish("chaos_draft_sin_embraced"));
+                    Assert.Equal("🕯 the candle took the sting (no drawback)", loc.GetEnglish("chaos_draft_sin_shielded"));
+                    Assert.Equal("🕯 you said yes. it gave back (+1 resistance)", loc.GetEnglish("chaos_draft_sin_resistance"));
+                }
+                Start();
+                var state = ChaosRunHost.State!;
+                state.RerollsLeft = 1;
+                Ticks(80);
+                var overlay = ChaosRunHost.Overlay!;
+                Click(overlay.FindControl<Button>("BtnReroll")!);
+                Assert.Contains(rerolled, state.RecentEvents);
+                Click(overlay.FindControl<Button>("BtnSkipBoon")!);
+                Assert.Contains(resisted, state.RecentEvents);
+                Assert.Equal(announced, ChaosAnnouncerOverlay.Active!.Current!.Text);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                settings.ChaosAnnouncerEnabled = oldAnnouncer;
+                loc.SetLanguage(oldLanguage);
+            }
+            return Task.CompletedTask;
         });
     }
 

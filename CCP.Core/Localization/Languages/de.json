@@ -7959,5 +7959,11 @@
   "online_official_plan_prime": "Prime bekommt den größten Tagesanteil. Was du schon gesehen hast, läuft gratis noch mal.",
   "online_official_nice": "Schön",
   "online_official_stamped_line": "Online-Medien kommen von Scrolller. Jedes Bild und jeder Clip trägt einen kleinen \"via Scrolller\"-Vermerk.",
-  "online_cache_day_line": "Online-Medien bleiben einen Tag in einem kleinen Cache auf diesem Computer und werden nie hochgeladen."
+  "online_cache_day_line": "Online-Medien bleiben einen Tag in einem kleinen Cache auf diesem Computer und werden nie hochgeladen.",
+  "chaos_draft_rerolled": "🎲 das Schicksal erneut herausgefordert",
+  "chaos_draft_sin_embraced": "🕯 Sünde angenommen (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "🕯 die Kerze nahm den Schmerz (kein Nachteil)",
+  "chaos_draft_sin_resistance": "🕯 du hast ja gesagt. sie gab etwas zurück (+1 Widerstand)",
+  "chaos_draft_resisted": "♥ widerstanden → +1 Widerstand",
+  "chaos_draft_resistance_announce": "+1 WIDERSTAND"
 }

@@ -7959,5 +7959,11 @@
   "online_official_plan_prime": "Prime recibe la mayor cuota diaria. Lo que ya has visto se repite gratis.",
   "online_official_nice": "Genial",
   "online_official_stamped_line": "Los medios en línea vienen de Scrolller. Cada imagen y clip lleva una pequeña marca \"via Scrolller\".",
-  "online_cache_day_line": "Los medios en línea se guardan un día en una pequeña caché de este ordenador y nunca se suben."
+  "online_cache_day_line": "Los medios en línea se guardan un día en una pequeña caché de este ordenador y nunca se suben.",
+  "chaos_draft_rerolled": "🎲 volviste a tentar a la suerte",
+  "chaos_draft_sin_embraced": "🕯 pecado aceptado (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "🕯 la vela quitó el aguijón (sin desventaja)",
+  "chaos_draft_sin_resistance": "🕯 dijiste que sí. te devolvió algo (+1 resistencia)",
+  "chaos_draft_resisted": "♥ resististe → +1 resistencia",
+  "chaos_draft_resistance_announce": "+1 RESISTENCIA"
 }

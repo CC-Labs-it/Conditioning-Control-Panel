@@ -8707,5 +8707,11 @@
   "online_official_plan_prime": "Prime ha la quota giornaliera più ampia. Quello che hai già visto si riguarda gratis.",
   "online_official_nice": "Bello",
   "online_official_stamped_line": "I media online arrivano da Scrolller. Ogni immagine e clip porta un piccolo marchio \"via Scrolller\".",
-  "online_cache_day_line": "I media online restano un giorno in una piccola cache su questo computer e non vengono mai caricati."
+  "online_cache_day_line": "I media online restano un giorno in una piccola cache su questo computer e non vengono mai caricati.",
+  "chaos_draft_rerolled": "🎲 hai tentato ancora la sorte",
+  "chaos_draft_sin_embraced": "🕯 peccato accolto (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "🕯 la candela ha tolto il dolore (nessuno svantaggio)",
+  "chaos_draft_sin_resistance": "🕯 hai detto sì. lei ha ricambiato (+1 resistenza)",
+  "chaos_draft_resisted": "♥ hai resistito → +1 resistenza",
+  "chaos_draft_resistance_announce": "+1 RESISTENZA"
 }
