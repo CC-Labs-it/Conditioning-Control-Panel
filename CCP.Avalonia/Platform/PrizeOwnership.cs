@@ -31,6 +31,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Test seam: the owned-check every caller uses.</summary>
         internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
 
+        internal static event Action? Changed;
+
         private static readonly object Gate = new();
         private static string? _heldAccount;
         private static long _revision;
@@ -44,18 +46,30 @@ namespace ConditioningControlPanel.Avalonia.Platform
             lock (Gate) return current != null && current == _heldAccount && _grants.Contains(id);
         }
 
+        /// <summary>WPF OwnershipService.Grants: current account server grants, without debug overrides.</summary>
+        internal static string[] Grants()
+        {
+            var current = FriendsHead.Identity()?.UnifiedId;
+            lock (Gate) return current != null && current == CoreAccount.UnifiedUserId && current == _heldAccount
+                ? _grants.ToArray() : Array.Empty<string>();
+        }
+
         /// <summary>WPF OwnershipService.ApplySnapshot: another account's snapshot and a lower
         /// revision for the held account are ignored; blank ids skipped, ids trimmed.</summary>
         internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
         {
             var current = FriendsHead.Identity()?.UnifiedId;
             if (string.IsNullOrEmpty(accountId) || grants is null || current != accountId) return;
+            bool changed;
             lock (Gate)
             {
                 if (_heldAccount == accountId && revision < _revision) return;
-                (_heldAccount, _revision) = (accountId, revision);
-                _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                var next = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                changed = _heldAccount != accountId ? next.Count != 0 : !_grants.SetEquals(next);
+                (_heldAccount, _revision, _grants) = (accountId, revision, next);
             }
+            if (changed)
+                try { Changed?.Invoke(); } catch (Exception ex) { Serilog.Log.Debug("[Prizes] change handler failed: {Error}", ex.Message); }
         }
 
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>

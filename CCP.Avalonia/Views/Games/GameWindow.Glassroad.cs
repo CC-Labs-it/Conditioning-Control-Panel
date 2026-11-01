@@ -62,6 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_grOpen) return;
             _grOpen = true;
+            PrizeOwnership.Changed += OnGlassroadOwnershipChanged;
             _grEarlyInitSent = _grPinged = false;
             _grLastBeatUtc = _grLastProgressUtc = DateTime.UtcNow;
             Closed += (_, _) => CloseGlassroad();
@@ -78,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_grOpen) return;
             _grOpen = false;
+            PrizeOwnership.Changed -= OnGlassroadOwnershipChanged;
             try { _grWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _grWatch = null;
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Race); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -93,9 +95,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var uid = CoreAccount.UnifiedUserId;
                 bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(PbpAuthToken());
                 Post(GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed));
+                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, PrizeOwnership.Grants()));
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
+        }
+
+        // WPF GlassroadHostService.cs:187-192: a counter snapshot lifts owned garage karts.
+        private void OnGlassroadOwnershipChanged()
+        {
+            void Send() { if (_grOpen && !_closing) Post(GlassroadHostRules.OwnedFrame(PrizeOwnership.Grants())); }
+            if (Dispatcher.UIThread.CheckAccess()) Send();
+            else Dispatcher.UIThread.Post(Send);
         }
 
         /// <summary>The server's last effective tier, else the entitlement this head knows (display only: the
