@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Games;
@@ -10,19 +11,21 @@ using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.Fyp.Online;
+using ConditioningControlPanel.Services.Launcher;
 using Serilog;
 using RowItem = ConditioningControlPanel.Services.Startup.InboxItem;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>
-/// PORTED (invites only) from ConditioningControlPanel/Services/Friends/FriendsLanding.cs: what a delivery
+/// PORTED from ConditioningControlPanel/Services/Friends/FriendsLanding.cs: what a delivery
 /// does when it lands. Core's <see cref="FriendsLandingRouter"/> decides (hold, Inbox, knock); this sink
 /// knocks an invite with a <see cref="KnockCard"/>, files Inbox rows, and throws the words a delivery or a send
 /// leaves through <see cref="FloatingWord"/> (poke received with Emi's line, the sent beat, Say/Tell from outside
-/// the drawer). Nothing here plays or joins by itself. A light timer re-attaches to <see cref="FriendsHead.Service"/>
+/// the drawer). A light timer re-attaches to <see cref="FriendsHead.Service"/>
 /// and releases the held queue (WPF :28-82).
-/// Request corner notices are in FriendsLanding.Notices.cs; poke and watch notices remain unported.
+/// Request and watch corner notices are in FriendsLanding.Notices.cs; poke notices remain unported.
 /// </summary>
 internal static partial class FriendsLanding
 {
@@ -180,11 +183,13 @@ internal static partial class FriendsLanding
         {
             var anchor = inGame ? ActiveGameWindow() ?? Anchor() : Anchor();   // WPF :262
             // The bell off, or nothing of ours on screen: the Inbox row and nothing else (WPF :263-264).
-            if (anchor == null || !NoticesOn || item.Kind != SendKind.Invite) { Inbox(item); return; }
+            if (anchor == null || !NoticesOn) { Inbox(item); return; }
             Sfx("chaos/dling.mp3", 0.18f, "friends-knock", incoming: true);   // WPF FriendsSfx.Knock
-            if (!inGame) EmiSays(Str("friends_land_emi_knock", "someone wants you"), "o_o");   // WPF :266-270
-            // An invite knocks with a card that counts down to its own expiry (WPF :251-258).
-            ShowCard(anchor, item);
+            if (!inGame) EmiSays(item.Kind == SendKind.Invite
+                ? Str("friends_land_emi_knock", "someone wants you") : Str("friends_land_emi_present", "a present"),
+                item.Kind == SendKind.Invite ? "o_o" : "^_~");   // WPF :266-270
+            if (item.Kind == SendKind.Invite) ShowCard(anchor, item);
+            else ShowWatchNotice(anchor, item);
         }
 
         public void Inbox(InboxItem item)
@@ -222,16 +227,21 @@ internal static partial class FriendsLanding
     private static bool NoticesOn => CoreSettings.Current.FriendNotificationsEnabled;
 
     /// <summary>An Inbox row opened later: the card again while it is still answerable (WPF Reopen :465).
-    /// Opened by hand, so it comes up whatever the bell says.</summary>
+    /// An invite opens by hand regardless of the bell; a watch follows the notice bell (WPF :482-490).</summary>
     private static void Reopen(InboxItem item)
     {
-        if (item.IsExpired(KnockCard.Clock())) return;   // ponytail: WPF's Emi "that one already left" line
+        if (item.IsExpired(KnockCard.Clock()))
+        {
+            if (item.Kind == SendKind.Watch) EmiSays(Str("friends_land_too_late", "that one already left"), ";_;");
+            return;
+        }
         if (item.Kind == SendKind.Invite)
         {
             if (Anchor() is { } anchor) ShowCard(anchor, item);
             else TheSink.Inbox(item);   // WPF :478 Knock -> no anchor -> the row again
         }
-        // ponytail: a poke/watch row reopens as its corner notice in WPF (FriendNotices, not on this head).
+        else if (item.Kind == SendKind.Watch) TheSink.Knock(item, inGame: false);
+        // Poke reopening belongs to the separate poke-notices work.
     }
 
     /// <summary>How a card ended (WPF OnKnockDone :487).</summary>
@@ -253,7 +263,12 @@ internal static partial class FriendsLanding
                 Sfx("chaos/sink.mp3", 0.10f, "friends-sink");   // WPF FriendsSfx.Dismiss
                 return;
         }
-        if (item.Kind != SendKind.Invite) { StartupLadder.Inbox.Remove("friends:" + item.Id); return; }
+        if (item.Kind != SendKind.Invite)
+        {
+            StartupLadder.Inbox.Remove("friends:" + item.Id);
+            if (item.Watch != null) Watch(item.Watch);
+            return;
+        }
         if (!CanJoin(item)) { OnKnockDone(item, KnockOutcome.Later); return; }   // never a Joined receipt for nothing
         StartupLadder.Inbox.Remove("friends:" + item.Id);
         FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Joined));
@@ -280,6 +295,58 @@ internal static partial class FriendsLanding
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
     }
+
+    // WPF FriendsLanding.cs:632-696: resolve a reference locally; never trust a sender's URL.
+    internal static void Watch(WatchRef watch)
+    {
+        if (!watch.IsValid()) return;
+        switch (watch.Kind)
+        {
+            case WatchKind.Catalogue:
+                string? path = null;
+                try
+                {
+                    foreach (var entry in CoreSettings.Current.DeeperSubmissions)
+                        if (string.Equals(entry.Value?.CatalogueId, watch.Id, StringComparison.Ordinal) && File.Exists(entry.Key))
+                        { path = entry.Key; break; }
+                }
+                catch (Exception ex) { Log.Debug(ex, "[Friends] catalogue lookup failed"); }
+                if (path == null) { OpenPanelTab("deeper"); return; }
+                try { PlayWatchCatalogue(path); }
+                catch (Exception ex) { Log.Warning(ex, "[Friends] deeper player failed"); OpenPanelTab("deeper"); }
+                return;
+            case WatchKind.Flavour:
+                var s = CoreSettings.Current;
+                var niches = LandingRules.FlavourNiches(watch.Id);
+                if (niches.Count == 0) return;
+                var source = LauncherMediaSettings.IsKnownSource(s.MediaSource) ? s.MediaSource : LauncherMediaSettings.SourceLocal;
+                if (source == LauncherMediaSettings.SourceLocal && s.HasRemoteMediaConsent) source = LauncherMediaSettings.SourceMixed;
+                LauncherMediaSettings.Apply(s, source, s.RemoteMediaRatio, niches.ToList());
+                FypOnlineCoordinator.ResetAllChannels();
+                CoreSettings.Save();
+                var anchor = ActiveGameWindow() ?? Anchor();
+                if (anchor != null) ShowWatchWord(anchor, Str("friends_land_flavour_on", "flavour on"));
+                return;
+            case WatchKind.Ht:
+                var url = LandingRules.HtUrl(watch.Id);
+                if (url != null) OpenWatchUrl(url);
+                return;
+        }
+    }
+
+    // Small head seams for the WPF player and browser calls; tests replace the window edges.
+    internal static Action<Window, string> ShowWatchWord { get; set; } = (owner, text) => FloatingWord.Throw(owner, text, pink: true, small: true);
+    internal static Action<string> PlayWatchCatalogue { get; set; } = path =>
+    {
+        var panel = MainShellWindow.Current ?? throw new InvalidOperationException("Panel unavailable");
+        panel.ShowOrActivateDeeperPlayer().LoadEnhancementFile(path);
+    };
+    internal static Action<string> OpenWatchUrl { get; set; } = url =>
+    {
+        if (MainShellWindow.Current is not { } panel) return;
+        LauncherWindow.OpenPanel(panel);
+        panel.NavigateToUrlInBrowser(url, autoPlayFullscreen: false, userInitiated: true);
+    };
 
     private static readonly FriendsSfxGate SfxGate = new();
 
