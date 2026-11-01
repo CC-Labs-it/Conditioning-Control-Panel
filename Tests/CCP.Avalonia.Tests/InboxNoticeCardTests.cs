@@ -281,48 +281,52 @@ public sealed class InboxNoticeCardTests
     });
 
     [Fact]
-    public void FirstTierReadingStaysInMemoryAndAChangeSaves() => Run(() =>
+    public void FirstTierBaselineAndRiseSurviveReloadWithoutClosingTheShell() => Run(() =>
     {
-        var oldPremium = CoreAccount.HasPremiumAccessProvider;
-        var oldLab = CoreAccount.HasLabAccessProvider;
-        var oldSettings = CoreSettings.ServiceProvider;
+        var (oldPremium, oldLab, oldSettings) = (CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider, CoreSettings.ServiceProvider);
         MainShellWindow? shell = null;
         Window? other = null;
         try
         {
-            CoreAccount.HasPremiumAccessProvider = () => false;
-            CoreAccount.HasLabAccessProvider = () => false;
-            var service = new SettingsService { SaveDebounceDueTimeMilliseconds = Timeout.Infinite }; // observe pending saves before flushing
-            // Returning-install fixture: unrelated feature intros are already spent.
+            bool premium = false;
+            CoreAccount.HasPremiumAccessProvider = CoreAccount.HasLabAccessProvider = () => premium;
+            var service = new SettingsService { SaveDebounceDueTimeMilliseconds = Timeout.Infinite };
+            service.Current.Welcomed = service.Current.HasAcceptedAgeVerification = true;
+            service.Current.WhatMovedCardShown = 1;
             service.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys.Except(service.Current.SeenFeatureIntros));
             CoreSettings.ServiceProvider = () => service;
+            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
             shell = new MainShellWindow();
             shell.Show();
             other = new Window();
             other.Show();
             void Refocus()
             {
-                SettingsService.DisarmAllPendingSaves(); // only this focus pass may arm a save
+                SettingsService.DisarmAllPendingSaves();
                 other.Activate();
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                shell.Activate(); // the user path: the Activated focus hook
+                shell.Activate();
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             }
-            service.Current.LastKnownEffectiveTier = null;
+            void Reload(int tier)
+            {
+                Assert.True(service.HasPendingSave); // the notice must queue the write before this flush
+                service.SaveImmediate(suppressCloudBackup: true);
+                service = new SettingsService { SaveDebounceDueTimeMilliseconds = Timeout.Infinite };
+                Assert.Equal(tier, service.Current.LastKnownEffectiveTier);
+            }
             SettingsService.DisarmAllPendingSaves();
-            shell.TierOnNoticePass(mayShow: false);
-            Assert.Equal(0, service.Current.LastKnownEffectiveTier);
-            Assert.False(service.HasPendingSave); // observe before dispatcher jobs can flush a debounce
             service.Current.LastKnownEffectiveTier = null;
+            shell.TierOnNoticePass(mayShow: false);
+            Reload(0); // reload while both windows remain open, without an exit save
             Refocus();
-            Assert.Equal(0, service.Current.LastKnownEffectiveTier);
-            Assert.False(service.HasPendingSave); // a first reading must not write settings.json
-            CoreAccount.HasPremiumAccessProvider = () => true; // a known rise 0 -> 2 is saved at once
-            CoreAccount.HasLabAccessProvider = () => true;
+            Assert.False(service.HasPendingSave); // an unchanged baseline does not write again
+            premium = true;
             Assert.Contains(TierCelebration.KeyT2, service.Current.SeenFeatureIntros);
             Refocus();
-            Assert.Equal(2, service.Current.LastKnownEffectiveTier);
-            Assert.True(service.HasPendingSave);
+            Reload(2);
+            Refocus();
+            Assert.False(service.HasPendingSave);
         }
         finally
         {

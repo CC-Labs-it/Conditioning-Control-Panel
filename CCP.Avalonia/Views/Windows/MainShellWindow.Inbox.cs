@@ -99,11 +99,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var verdict = Services.TierOnNoticeRule.Decide(settings.LastKnownEffectiveTier, current, mayRecordDrop: Platform.AccountSeed.ServerTierAnsweredThisRun);
                 if (verdict.Record != settings.LastKnownEffectiveTier)
                 {
-                    // Unlike WPF MainWindow.Patreon.cs:1209, keep the first reading in memory
-                    // until the next normal save so opening the shell does not write settings.json.
-                    var known = settings.LastKnownEffectiveTier.HasValue;
                     settings.LastKnownEffectiveTier = verdict.Record;
-                    if (known) CoreSettings.Save();
+                    CoreSettings.Save();
                 }
                 if (!verdict.Owed || !mayShow
                     || Services.TierCelebration.IsOwed(settings.SeenFeatureIntros, current, onRise: true)) return;
