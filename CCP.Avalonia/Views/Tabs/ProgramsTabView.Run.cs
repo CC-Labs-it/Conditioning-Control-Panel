@@ -91,13 +91,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF RefreshProgramsUI + RebuildProgramsTab (:490-584): pick the panel, build it, reveal it.</summary>
         internal void RefreshPrograms()
         {
-            if (!IsVisible && VisualRoot is not null)
+            SubscribePrograms(); // WPF :453 subscribes even while the tab is hidden.
+            if (!IsVisible || VisualRoot is null)
             {
                 _refreshPending = true;
                 return;
             }
             _refreshPending = false;
-            SubscribePrograms();
 
             var svc = AvApp.Programs;
             var enrollment = svc?.ActiveEnrollment;

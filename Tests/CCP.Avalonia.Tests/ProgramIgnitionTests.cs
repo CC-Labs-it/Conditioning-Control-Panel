@@ -158,6 +158,30 @@ public sealed class ProgramIgnitionTests
 
     [Theory]
     [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Off)]
+    public void SavedCompletedDaySpringsOnFirstOpenAndDoesNotReplay(MotionLevel motion) =>
+        WithRun(lastDay: false, (shell, tab, svc, _) =>
+        {
+            var banner = tab.FindControl<Border>("TodayCompleteBanner")!;
+            var scale = (ScaleTransform)banner.RenderTransform!;
+            Assert.True(svc.TodayRecord!.DayCompleted);
+            Assert.True(banner.IsVisible);
+            Assert.Equal(.9, scale.ScaleX, 3);
+            Assert.Equal(.9, scale.ScaleY, 3);
+            Step(.175);
+            Assert.Equal(1.0175, scale.ScaleX, 4);
+            tab.RefreshPrograms();
+            Assert.Equal(1.0175, scale.ScaleX, 4);
+            Step(.175);
+            Assert.Equal(1, scale.ScaleX, 3);
+            shell.ShowTab("settings");
+            shell.ShowTab("programs");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, scale.ScaleX, 3);
+        }, savedComplete: true, motion: motion);
+
+    [Theory]
+    [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Reduced)]
     [InlineData(MotionLevel.Off)]
     public void DayCompleteBannerSpringsOncePerDayAndAgainForANewAttempt(MotionLevel motion) => WithRun(lastDay: false, (_, tab, svc, _) =>
@@ -349,7 +373,8 @@ public sealed class ProgramIgnitionTests
         BeatLoop.StepAll();
     }
 
-    private static void WithRun(bool lastDay, Action<MainShellWindow, ProgramsTabView, ProgramService, ProgramDefinition> body) =>
+    private static void WithRun(bool lastDay, Action<MainShellWindow, ProgramsTabView, ProgramService, ProgramDefinition> body,
+        bool savedComplete = false, MotionLevel motion = MotionLevel.Full) =>
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
@@ -369,7 +394,7 @@ public sealed class ProgramIgnitionTests
                 }
             };
             for (var i = 1; i < day; i++) state.Active.GetOrCreateRecord(i, today.AddDays(i - day)).DayCompleted = true;
-            state.Active.GetOrCreateRecord(day, today);
+            state.Active.GetOrCreateRecord(day, today).DayCompleted = savedComplete;
 
             var dir = Directory.CreateTempSubdirectory("ccp-programs-ignition-").FullName;
             var path = System.IO.Path.Combine(dir, "programs.json");
@@ -381,7 +406,7 @@ public sealed class ProgramIgnitionTests
             var (motion, perf) = (settings.MotionLevel, settings.PerformanceMode);
             var (seenTab, seenIntro) = (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro);
             settings.HasSeenProgramsTab = settings.HasSeenProgramsIntro = true;
-            settings.MotionLevel = MotionLevel.Full;
+            settings.MotionLevel = motion;
             settings.PerformanceMode = false;
             MainShellWindow? shell = null;
             BeatLoop.Time = _time = new SteppedTime();
@@ -390,6 +415,11 @@ public sealed class ProgramIgnitionTests
                 var svc = AvApp.Programs = new ProgramService(path, readOnly: true);
                 shell = new MainShellWindow { Width = 1400, Height = 900 };
                 shell.Show();
+                if (savedComplete)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.False(shell.Named<ProgramsTabView>("ProgramsTab")!.IsVisible);
+                }
                 shell.ShowTab("programs");
                 Dispatcher.UIThread.RunJobs();
                 var tab = shell.Named<ProgramsTabView>("ProgramsTab")!;
