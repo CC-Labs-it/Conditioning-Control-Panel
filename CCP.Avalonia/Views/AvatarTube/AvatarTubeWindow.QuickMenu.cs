@@ -33,10 +33,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
     public partial class AvatarTubeWindow
     {
-        private static readonly IBrush MenuRed = new SolidColorBrush(Color.FromRgb(255, 99, 71));
-        private static readonly IBrush MenuGreen = new SolidColorBrush(Color.FromRgb(144, 238, 144));
-        private static readonly IBrush MenuPatreon = new SolidColorBrush(Color.FromRgb(155, 89, 182));
-        private static readonly IBrush MenuLocked = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x70));
+        // Static helpers may initialize this type off the UI thread. Immutable brushes can be
+        // shared with menu icons rendered on the UI dispatcher regardless of initialization order.
+        private static readonly IBrush MenuRed = new SolidColorBrush(Color.FromRgb(255, 99, 71)).ToImmutable();
+        private static readonly IBrush MenuGreen = new SolidColorBrush(Color.FromRgb(144, 238, 144)).ToImmutable();
+        private static readonly IBrush MenuPatreon = new SolidColorBrush(Color.FromRgb(155, 89, 182)).ToImmutable();
+        private static readonly IBrush MenuLocked = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x70)).ToImmutable();
 
         private MenuItem? QuickItem(string name) => this.FindControl<MenuItem>(name);
 

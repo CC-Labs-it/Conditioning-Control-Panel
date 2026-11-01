@@ -365,6 +365,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             _saved = true;
+            App.Notifications.Dismiss(LegacyNoticeKey); // WPF WebcamCalibrationWindow.xaml.cs:445-447
             CoreSettings.Current.WebcamCalibrated = true;
             CoreSettings.Current.WebcamCalibrationMode = "SixteenPoint";
             CoreSettings.Save();
@@ -445,6 +446,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // ─────────────────────────────────────────────────────────────────────
         //  Verify panel
         // ─────────────────────────────────────────────────────────────────────
+
+        internal const string LegacyNoticeKey = "recalibrate-multimonitor";
 
         /// <summary>Shows the dialog, re-opening while the user asks to recalibrate; true when a
         /// calibration was accepted. Opens on the calibrated monitor (WPF ApplyCalibrationScreenPlacement).</summary>
