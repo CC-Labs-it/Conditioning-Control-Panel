@@ -21,7 +21,8 @@ internal sealed class SpeakPromptSession
     private readonly SpeakPromptPlan _plan;
     private readonly SpeakPromptCueSession _cue;
     private readonly CancellationTokenSource _stop = new();
-    private bool _started, _stopped, _evicted, _recognizing;
+    private bool _started, _evicted;
+    private int _stopped;
 
     // Instance seams let tests exercise the same session without a microphone or modal dialog.
     internal Func<bool> Available = () => PulseMicSource.Speech?.IsAvailable == true;
@@ -39,6 +40,7 @@ internal sealed class SpeakPromptSession
     };
     internal Action RestoreVoice = () => MainShellWindow.Current?.RefreshVoiceInputModes();
     internal Func<bool> IsListening = () => PulseMicSource.Speech?.IsListening == true;
+    // Retained as a test seam: a prompt must not stop the global listener.
     internal Action StopListening = () => PulseMicSource.Speech?.StopListening();
     internal Func<string, RecognizeOptions, CancellationToken, Task<PhraseResult>> Recognize = (target, options, ct) =>
         PulseMicSource.Speech?.RecognizePhraseAsync(target, options, ct) ?? Task.FromResult(PhraseResult.NotAvailable);
@@ -50,15 +52,16 @@ internal sealed class SpeakPromptSession
     internal SpeakPromptSession(TriggerEffectAction effect, IPlaybackTimeSource? source)
     {
         _plan = new SpeakPromptPlan(effect, DateTime.UtcNow);
-        _cue = new SpeakPromptCueSession(_plan, text => Flash(text), source: source);
+        _cue = new SpeakPromptCueSession(_plan, text => Flash(text), _stop.Token, source);
     }
 
-    private static void FlashCustom(string text)
+    internal static void FlashCustom(string text)
     {
         // WPF SubliminalService.cs:311-323,576-599: custom text is sanitized, immediate and has no haptic.
         if (string.IsNullOrWhiteSpace(text)) return;
         text = SanitizeFlash(text);
         if (MainShellWindow.Current is { } host) SubliminalOverlay.Show(host, text);
+        App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
         CoreProgression.AddXP(10, "Subliminal");
     }
 
@@ -74,18 +77,18 @@ internal sealed class SpeakPromptSession
     // UI-thread owned, including the asynchronous consent continuation and final cleanup.
     internal async Task StartAsync()
     {
-        if (_started || _stopped) return;
+        if (_started || Volatile.Read(ref _stopped) != 0) return;
         _started = true;
         try
         {
-            if (string.IsNullOrWhiteSpace(_plan.Target) || !Available()) return;
+            if (string.IsNullOrWhiteSpace(_plan.Target) || !Available() || Volatile.Read(ref _stopped) != 0) return;
             if (!Consent())
             {
-                if (PromptedConsentThisRun) return;
+                if (Volatile.Read(ref _stopped) != 0 || PromptedConsentThisRun) return;
                 PromptedConsentThisRun = true;
                 if (!await AskConsent() || !Consent()) return;
             }
-            if (_stopped) return;
+            if (Volatile.Read(ref _stopped) != 0) return;
             try { _evicted = EvictVoice(); }
             catch (Exception ex) { Log.Debug("Speak prompt mic handoff: {E}", ex.Message); }
             _cue.Start();
@@ -111,14 +114,9 @@ internal sealed class SpeakPromptSession
                 continue;
             }
             PhraseResult result;
-            try
-            {
-                _recognizing = true;
-                result = await Recognize(_plan.Target, new RecognizeOptions { Timeout = TimeSpan.FromSeconds(10) }, ct);
-            }
+            try { result = await Recognize(_plan.Target, new RecognizeOptions { Timeout = TimeSpan.FromSeconds(10) }, ct); }
             catch (OperationCanceledException) { break; }
             catch { result = PhraseResult.NotAvailable; }
-            finally { _recognizing = false; }
             if (ct.IsCancellationRequested) break;
             var heard = SpeakPromptPlan.Classify(result);
             if (heard == SpeakHeard.Retry) { await Delay(200, ct); continue; }
@@ -145,13 +143,11 @@ internal sealed class SpeakPromptSession
 
     internal void Stop()
     {
-        if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(Stop); return; }
-        if (_stopped) return;
-        _stopped = true;
+        if (Interlocked.Exchange(ref _stopped, 1) != 0) return;
         try { _stop.Cancel(); } catch { }
-        _cue.Dispose();
-        try { if (_recognizing && IsListening()) StopListening(); } catch { }
-        Restore();
+        void Teardown() { _cue.Dispose(); Restore(); }
+        if (Dispatcher.UIThread.CheckAccess()) Teardown();
+        else Dispatcher.UIThread.Post(Teardown);
     }
 
     private void Finish()

@@ -10,6 +10,8 @@ using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
 using ConditioningControlPanel.Services.Speech;
 using Xunit;
+using AvApp = ConditioningControlPanel.Avalonia.App;
+using ConditioningControlPanel.Services.Companion.Brain;
 
 namespace CCP.Avalonia.Tests;
 
@@ -55,6 +57,91 @@ public sealed class SpeakPromptSessionTests
         Assert.Equal("say YES", SpeakPromptSession.SanitizeFlash("  say <b>YES</b>  "));
         Assert.Equal(new string('x', 200), SpeakPromptSession.SanitizeFlash(new string('x', 220)));
     }
+
+    [Fact]
+    public Task CustomFlash_ReportsCueAndFeedbackUsage() => Run(() =>
+    {
+        var seen = new List<string>();
+        void OnFeature(string feature) => seen.Add(feature);
+        AvApp.FeatureUsed += OnFeature;
+        try
+        {
+            SpeakPromptSession.FlashCustom(" ");
+            SpeakPromptSession.FlashCustom("Say YES");
+            SpeakPromptSession.FlashCustom("good");
+            Assert.Equal(new[] { MemorySignalWriter.FeatureSubliminal, MemorySignalWriter.FeatureSubliminal }, seen);
+        }
+        finally { AvApp.FeatureUsed -= OnFeature; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task QueuedStart_StoppedOffThread_DoesNotAskOrListen() => Run(async () =>
+    {
+        var source = new Playback();
+        var s = Session(source);
+        var probes = 0;
+        s.Available = () => { probes++; return true; };
+        s.Consent = () => false;
+        s.AskConsent = () => { probes++; return Task.FromResult(true); };
+        s.Start();
+        Task.Run(s.Stop).GetAwaiter().GetResult(); // keep the UI queue blocked until Stop returns
+        var drained = new TaskCompletionSource();
+        global::Avalonia.Threading.Dispatcher.UIThread.Post(() => drained.SetResult());
+        await drained.Task;
+        Assert.Equal(0, probes);
+        Assert.Equal(0, source.Pauses);
+    });
+
+    [Fact]
+    public Task OffThreadStop_CancelsBeforeUiCleanup() => Run(async () =>
+    {
+        var s = Session(new Playback());
+        var result = new TaskCompletionSource<PhraseResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken token = default;
+        s.Recognize = (_, _, ct) => { token = ct; return result.Task; };
+        var run = s.StartAsync();
+        try
+        {
+            Task.Run(s.Stop).GetAwaiter().GetResult();
+            Assert.True(token.IsCancellationRequested);
+        }
+        finally { result.TrySetResult(new PhraseResult { Matched = true }); await run; }
+    });
+
+    [Fact]
+    public Task StopDuringHandoff_DoesNotStartCueOrHold() => Run(async () =>
+    {
+        var source = new Playback();
+        var s = Session(source);
+        var restores = 0;
+        s.EvictVoice = () => { Task.Run(s.Stop).GetAwaiter().GetResult(); return true; };
+        s.RestoreVoice = () => restores++;
+        s.Recognize = (_, _, _) => Task.FromResult(new PhraseResult { Matched = true });
+        await s.StartAsync();
+        Assert.Equal(0, source.Pauses);
+        Assert.Equal(1, restores);
+    });
+
+    [Fact]
+    public Task CompletedRecognition_ThenAnotherCapture_StopDoesNotStopIt() => Run(async () =>
+    {
+        var source = new Playback();
+        var result = new TaskCompletionSource<PhraseResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var otherCapture = new CancellationTokenSource();
+        var s = Session(source);
+        CancellationToken promptToken = default;
+        s.Recognize = (_, _, ct) => { promptToken = ct; return result.Task; };
+        var run = s.StartAsync();
+        result.SetResult(new PhraseResult { Matched = true }); // continuation is still queued on the UI
+        s.IsListening = () => true; // another capture owns the global listener now
+        s.StopListening = otherCapture.Cancel;
+        s.Stop();
+        Assert.True(promptToken.IsCancellationRequested);
+        Assert.False(otherCapture.IsCancellationRequested);
+        await run;
+        Assert.Equal(1, source.Plays);
+    });
 
     [Fact]
     public Task EmptyAndUnavailable_DoNotAskOrClaimMic() => Run(async () =>
@@ -187,18 +274,18 @@ public sealed class SpeakPromptSessionTests
     {
         var source = new Playback();
         var result = new TaskCompletionSource<PhraseResult>();
-        int restores = 0, stops = 0, feedback = 0;
+        int restores = 0, stops = 0, globalStops = 0, feedback = 0;
         CancellationToken token = default;
         var s = Session(source);
         s.EvictVoice = () => true;
         s.IsListening = () => false;
         s.RestoreVoice = () => restores++;
-        s.Recognize = (_, _, ct) => { token = ct; return result.Task; };
+        s.Recognize = (_, _, ct) => { token = ct; ct.Register(() => stops++); return result.Task; };
         s.Flash = text => { if (text == "good") feedback++; };
         var run = s.StartAsync();
         Assert.Equal(1, source.Pauses);
         s.IsListening = () => true;
-        s.StopListening = () => stops++;
+        s.StopListening = () => globalStops++;
         s.Stop();
         s.Stop();
         Assert.True(token.IsCancellationRequested);
@@ -206,6 +293,7 @@ public sealed class SpeakPromptSessionTests
         await run;
         Assert.Equal(0, feedback);
         Assert.Equal(1, stops);
+        Assert.Equal(0, globalStops);
         Assert.Equal(1, source.Plays);
         Assert.Equal(1, restores);
     });
