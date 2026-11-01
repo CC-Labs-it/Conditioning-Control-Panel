@@ -169,6 +169,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:3837 (end of MainWindow_Loaded): MainShellWindow.PendingRegistration.cs.
             Opened += (_, _) => ArmPendingRegistration();
             Opened += (_, _) => WireOnlineMeterPill();   // MainShellWindow.OnlineMeter.cs (WPF WireOnlineMeter)
+            // WPF MainWindow.xaml.cs:3619-3649: offer an update for pre-multi-monitor calibration.
+            Opened += (_, _) =>
+            {
+                try
+                {
+                    var cal = Platform.WebcamTracker.Instance.Calibration;
+                    if (cal?.MonitorBounds != null && string.IsNullOrEmpty(cal.MonitorBounds.DeviceName))
+                        App.Notifications.ShowSticky(WebcamCalibrationWindow.LegacyNoticeKey,
+                            "Your calibration needs updating for multi-monitor support.", Helpers.NotificationType.Warning,
+                            "Recalibrate", async () =>
+                            {
+                                try { await WebcamCalibrationWindow.ShowDialogWithRecalibrate(this); }
+                                catch (Exception ex) { Serilog.Log.Warning(ex, "Recalibrate toast: failed to open calibration window"); }
+                            });
+                }
+                catch (Exception ex) { Serilog.Log.Debug("Recalibrate-suggest check failed: {Error}", ex.Message); }
+            };
         }
 
         /// <summary>Uses an already-loaded catalogue without making the parameterless shell open
