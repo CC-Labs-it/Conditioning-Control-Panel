@@ -113,7 +113,7 @@ public sealed class MandatoryVideoToyInputTests
         });
     }
 
-    private sealed class VideoHost : IMandatoryVideoHost
+    internal sealed class VideoHost : IMandatoryVideoHost
     {
         public int Closed;
         public void Show(string path, bool strict) { }
@@ -121,7 +121,7 @@ public sealed class MandatoryVideoToyInputTests
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();
     }
 
-    private sealed class StillTime : TimeProvider
+    internal sealed class StillTime : TimeProvider
     {
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period) => new Never();
         private sealed class Never : ITimer
