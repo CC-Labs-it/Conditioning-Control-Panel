@@ -326,8 +326,11 @@ namespace ConditioningControlPanel.Services
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).
         /// Non-earned requests pass userEarned=false so a deferred replay rechecks feature enablement.</summary>
         public bool Trigger(bool? strictOverride = null, string? path = null, bool userEarned = true, bool userInitiated = false)
+            => Trigger(strictOverride, path, userEarned, userInitiated, false);
+
+        private bool Trigger(bool? strictOverride, string? path, bool userEarned, bool userInitiated, bool replaceActive)
         {
-            if (_playing) return false;
+            if (_playing && !replaceActive) return false;
             if (_cascadeDefer != null) return true; // WPF: coalesce, retain the first request
             if (CascadeIsRaining?.Invoke() == true)
             {
@@ -349,10 +352,20 @@ namespace ConditioningControlPanel.Services
                         return;
                     }
                     var replay = DropDefer();
-                    if (!Trigger(strictOverride, path, userEarned) && !_playing)
+                    var replayGeneration = _retryGeneration;
+                    try
                     {
-                        if (replay) AfterEnd();
-                        else if (_running) ScheduleNext(); // preserve the base empty-library re-arm
+                        if (!Trigger(strictOverride, path, userEarned, false, replaceActive) && !_playing)
+                        {
+                            if (replay) AfterEnd();
+                            else if (_running && (!replaceActive || _scheduler == null)) ScheduleNext(); // preserve the base empty-library re-arm
+                        }
+                    }
+                    catch (Exception ex) when (replaceActive)
+                    {
+                        Log.Error(ex, "VideoService: cascade replay failed");
+                        if (_playing && _retryGeneration != replayGeneration) { _playing = false; IsStrict = false; Dispose(ref _preroll); }
+                        if (_running && !_playing && _scheduler == null) ScheduleNext();
                     }
                 }), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
                 _cascadeDefer = pending;
@@ -372,6 +385,7 @@ namespace ConditioningControlPanel.Services
                 {
                     if (!ReferenceEquals(pending, _feedDefer)) return;
                     var attemptingReplay = false;
+                    var replayGeneration = _retryGeneration;
                     try
                     {
                         if (FeedOwnsTheScreen?.Invoke() == true && _time.GetUtcNow() < deadline)
@@ -387,14 +401,14 @@ namespace ConditioningControlPanel.Services
                             if (_running && !_playing && _scheduler == null) ScheduleNext();
                             return;
                         }
-                        attemptingReplay = !_playing;
-                        if (!Trigger(strictOverride, path, userEarned) && !_playing && _running) ScheduleNext();
+                        attemptingReplay = true;
+                        if (!Trigger(strictOverride, path, userEarned, false, true) && !_playing && _running && _scheduler == null) ScheduleNext();
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "VideoService: feed replay failed");
                         Dispose(ref _feedDefer);
-                        if (attemptingReplay && _playing)
+                        if (attemptingReplay && _playing && _retryGeneration != replayGeneration)
                         {
                             _playing = false;
                             IsStrict = false;
@@ -407,6 +421,7 @@ namespace ConditioningControlPanel.Services
                 pending.Change(TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
                 return true;
             }
+            if (replaceActive && _playing) { ForceCleanup(); Penalties = 0; } // WPF VideoService.cs:2325,2659
             path ??= PickNext();
             if (path == null)
             {

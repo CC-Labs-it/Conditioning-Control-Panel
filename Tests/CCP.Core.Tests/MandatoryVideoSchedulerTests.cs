@@ -279,6 +279,107 @@ public sealed class MandatoryVideoSchedulerTests
         v.Stop();
     });
 
+    // WPF VideoService.cs:2055,2226,2325: after the feed clears, a replay waits for
+    // cascade rain and then replaces the active full-screen video.
+    [Theory, InlineData(false), InlineData(true)]
+    public void FeedReplayReplacesAnActiveVideoAfterCascade(bool cascade) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true; var rain = false;
+        var v = new MandatoryVideoScheduler(host, clock, () => new[] { Clips[1] })
+            { FeedOwnsTheScreen = () => feed, CascadeIsRaining = () => rain };
+        var settings = CoreSettings.Current; var attention = settings.AttentionChecksEnabled;
+        try
+        {
+            v.Start(); Assert.True(v.Trigger(strictOverride: true, userEarned: false));
+            Assert.True(v.Trigger(strictOverride: false, path: Clips[0], userEarned: true));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal((Clips[0], false), Assert.Single(host.Shown));
+            if (cascade)
+            {
+                settings.AttentionChecksEnabled = true;
+                v.NoteSpawn(); v.Ended(); Assert.Equal(1, v.Penalties);
+                host.Then!(); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            }
+            var closes = host.Closes; var shown = host.Shown.Count;
+            feed = false; rain = cascade;
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            if (cascade)
+            {
+                Assert.Equal(closes, host.Closes); Assert.Equal(shown, host.Shown.Count);
+                rain = false; clock.Advance(TimeSpan.FromMilliseconds(250));
+            }
+            Assert.Equal(closes + 1, host.Closes);
+            Assert.True(v.IsPlaying); Assert.Equal(0, v.Penalties);
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal((Clips[1], true), host.Shown[^1]);
+        }
+        finally { v.Stop(); settings.AttentionChecksEnabled = attention; }
+    });
+
+    [Theory, InlineData(false), InlineData(true)]
+    public void FeedReplayStartupFailureAfterReplacementDoesNotLatchPlaying(bool cascade) => With(6, false, () =>
+    {
+        var clock = new FailOnceClock(); var host = new Host(); var feed = true; var rain = false;
+        var v = new MandatoryVideoScheduler(host, clock, () => new[] { Clips[1] })
+            { FeedOwnsTheScreen = () => feed, CascadeIsRaining = () => rain };
+        v.Start();
+        v.Trigger(strictOverride: true, userEarned: false);
+        v.Trigger(strictOverride: false, path: Clips[0], userEarned: true);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        feed = false; rain = cascade;
+        if (!cascade) clock.FailNextCreate = true;
+        clock.Advance(TimeSpan.FromMilliseconds(500));
+        if (cascade) { Assert.Equal(0, host.Closes); rain = false; clock.FailNextCreate = true; clock.Advance(TimeSpan.FromMilliseconds(250)); }
+        Assert.Equal(1, host.Closes);
+        Assert.False(v.IsPlaying);
+        Assert.False(v.IsStrict);
+        clock.Advance(TimeSpan.FromSeconds(722));
+        Assert.Equal(2, host.Shown.Count);
+        v.Stop();
+    });
+
+    [Theory, InlineData(false), InlineData(true)]
+    public void FeedReplayDoesNotReplaceActiveVideoWhenIneligible(bool expire) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { FeedOwnsTheScreen = () => feed };
+        v.Start();
+        v.Trigger(userEarned: false);
+        v.Trigger(path: Clips[0], userEarned: true);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        if (expire) clock.Advance(TimeSpan.FromSeconds(90));
+        else CoreSettings.Current.MandatoryVideosEnabled = false;
+        feed = false;
+        clock.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.Equal(0, host.Closes);
+        Assert.True(v.IsPlaying);
+        v.Stop();
+    });
+
+    // WPF VideoService.cs:2400 returns without replacing a pending scheduled timer.
+    [Theory, InlineData(false, false), InlineData(false, true), InlineData(true, false), InlineData(true, true)]
+    public void EmptyFeedReplayKeepsOrRearmsTheSchedule(bool schedulerAlreadyFired, bool cascade) => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true; var rain = false; var probes = 0; var notices = 0;
+        IReadOnlyList<string> clips = Array.Empty<string>();
+        var v = new MandatoryVideoScheduler(host, clock, () => clips)
+            { FeedOwnsTheScreen = () => { probes++; return feed; }, CascadeIsRaining = () => rain };
+        v.NoVideos += () => notices++;
+        v.Start();
+        if (schedulerAlreadyFired)
+            for (var second = 0; second < 218 && probes == 0; second++) clock.Advance(TimeSpan.FromSeconds(1));
+        else { v.Trigger(userEarned: false); clock.Advance(TimeSpan.FromSeconds(89)); }
+        Assert.True(probes > 0);
+        feed = false; rain = cascade;
+        clock.Advance(TimeSpan.FromMilliseconds(500));
+        if (cascade) { Assert.Equal(0, notices); rain = false; clock.Advance(TimeSpan.FromMilliseconds(250)); }
+        Assert.Equal(1, notices); Assert.Empty(host.Shown);
+        clips = Clips;
+        clock.Advance(TimeSpan.FromSeconds(schedulerAlreadyFired ? 218 : 128));
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
     [Fact]
     public void RemoteTriggerIsNotTreatedAsAnEarnedBubble() => With(6, false, () =>
     {
