@@ -53,13 +53,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static readonly ConditioningControlPanel.Services.PackMediaPool PackImages =
             new(ConditioningControlPanel.Services.ContentPackStore.ImageType);
         private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed;
+        private static readonly object BurstGate = new();
         private static int _generation;
 
         /// <summary>Bumped by every CloseAll; a burst scheduled under an older one never spawns.</summary>
         internal static int Generation => _generation;
 
         /// <summary>A burst is still spawning (WPF <c>_isBusy</c>); the ambient tick skips.</summary>
-        public static bool IsBusy => _busy;
+        public static bool IsBusy { get { lock (BurstGate) return _busy; } }
+        internal static int BeginBurst() { lock (BurstGate) { _busy = true; return _generation; } }
+        internal static void FinishBurst(int generation) { lock (BurstGate) if (generation == _generation) _busy = false; }
 
         /// <summary>Fire one burst. Any attached visual works as <paramref name="host"/>; it only
         /// reaches <c>Screens</c>. Like WPF's _isBusy, a second press is ignored from the click
@@ -67,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// (amount, duration ms, size %); null keeps the user's setting.</summary>
         public static async void TriggerOnce(Visual host, int? amount = null, int? durationMs = null, int? size = null, bool ambient = false)
         {
-            if (_busy) return;
+            if (IsBusy) return;
             if (!X11Overlay.IsAvailable)
             {
                 if (!_warnedUnavailable) Log.Warning("Flash: this platform cannot show click-through overlays, so flashes are skipped");
@@ -77,8 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             var screens = ScreenList.Enumerate(host);
             if (screens.Count == 0) return;
-            _busy = true;
-            var generation = _generation;
+            var generation = BeginBurst();
             var scheduled = false;
             try
             {
@@ -106,11 +108,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // WPF waits 1 s after FlashAboutToDisplay so the avatar's line lands first, then
                 // staggers 300 ms per image.
                 Schedule(flashes, 0, StaggerMs, generation, cap, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
-                    done: () => _busy = false);
+                    done: () => FinishBurst(generation));
                 scheduled = true;
             }
             catch (Exception ex) { Log.Error(ex, "Flash: burst failed"); }
-            finally { if (!scheduled) _busy = false; }
+            finally { if (!scheduled) FinishBurst(generation); }
         }
 
         internal static TimeSpan VoiceLifetime(AppSettings s, bool ambient, int? durationMs, double? voiceSeconds) =>
@@ -155,8 +157,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static TimeProvider VoiceClock = TimeProvider.System;
         internal static Func<string, Task<double?>> VoiceDuration = async path =>
         {
-            try { using var audio = await Views.Deeper.DeeperLocalAudio.Open(path); return audio?.DurationSeconds; }
-            catch (Exception ex) { Log.Debug("Flash: duration probe failed: {Error}", ex.Message); return null; }
+            var ready = new TaskCompletionSource<double?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stop = CoreAudio.PlayStoppable(path, 0, "flash-voice",
+                t => { if (t > TimeSpan.Zero) ready.TrySetResult(t.TotalSeconds); },
+                () => { ready.TrySetResult(null); done.TrySetResult(); });
+            try { return await ready.Task; } finally { stop(); await done.Task; }
         };
         internal static Action<int, Action> AfterVoice = (ms, action) => _ = Task.Delay(ms).ContinueWith(_ => action());
 
@@ -456,7 +462,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static void RetireBurst()
         {
-            Interlocked.Increment(ref _generation);
+            lock (BurstGate) { Interlocked.Increment(ref _generation); _busy = false; }
             Interlocked.Exchange(ref _stopFlashVoice, null)?.Invoke();
         }
 

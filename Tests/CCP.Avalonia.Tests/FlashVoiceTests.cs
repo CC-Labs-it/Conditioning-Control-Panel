@@ -179,11 +179,18 @@ public class FlashVoiceTests
             var s = new AppSettings { FlashAudioEnabled = true, MasterVolume = 100 };
             if (phase == 0)
             {
-                var pending = FlashOverlay.VoiceAfterLead(s, FlashOverlay.Generation, file);
+                var oldBurst = FlashOverlay.BeginBurst();
+                var pending = FlashOverlay.VoiceAfterLead(s, oldBurst, file);
                 CoreEngine.ApplyLive("flash", false);
+                Assert.False(FlashOverlay.IsBusy);
+                var newBurst = FlashOverlay.BeginBurst();
+                FlashOverlay.FinishBurst(oldBurst);
+                Assert.True(FlashOverlay.IsBusy);
                 lead.SetResult();
                 Assert.Null(await pending);
                 Assert.Equal(0, plays);
+                FlashOverlay.FinishBurst(newBurst);
+                Assert.False(FlashOverlay.IsBusy);
             }
             else if (phase == 1)
             {
@@ -224,6 +231,12 @@ public class FlashVoiceTests
         try
         {
             s.AvatarEnabled = true; s.BarkChatSuppressionMs = 0;
+            Action<TimeSpan>? probeStart = null; Action? probeEnd = null;
+            CoreAudio.PlayStoppableProvider = (_, gain, tag, start, end) =>
+            { Assert.Equal(0, gain); Assert.Equal("flash-voice", tag); probeStart = start; probeEnd = end; return () => probeEnd!(); };
+            var probe = oldDuration(file);
+            probeStart!(TimeSpan.Zero); Assert.False(probe.IsCompleted);
+            probeStart(TimeSpan.FromSeconds(6)); Assert.Equal(6, await probe);
             var rule = new BarkRule { Id = Guid.NewGuid().ToString(), Trigger = "AttentionCheckFail",
                 VariantPool = new() { new BarkVariant("eyes") } };
             var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => { } };
@@ -273,7 +286,8 @@ public class FlashVoiceTests
         var output = Path.Combine(dir, "audible.wav");
         LibVlcAudio audio;
         try { audio = new LibVlcAudio("--aout=file", "--audiofile-file=" + output, "--audiofile-wav"); }
-        catch (Exception ex) { Directory.Delete(dir, true); Assert.Skip("libvlc unavailable: " + ex.Message); return; }
+        catch { Directory.Delete(dir, true); throw; }
+        var oldProvider = CoreAudio.PlayStoppableProvider;
         using (var w = new BinaryWriter(File.Create(path)))
         {
             const int bytes = 48000;
@@ -286,7 +300,8 @@ public class FlashVoiceTests
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         try
         {
-            var parsed = await FlashOverlay.VoiceDuration(path);
+            CoreAudio.PlayStoppableProvider = audio.PlayOneShot;
+            var parsed = await FlashOverlay.VoiceDuration(path).WaitAsync(TimeSpan.FromSeconds(8));
             Assert.InRange(parsed!.Value, 2.9, 3.1);
             var stop = audio.PlayOneShot(path, 0f, "flash-voice", t => { if (t > TimeSpan.Zero) started.TrySetResult(t); }, () => ended.TrySetResult());
             try
@@ -297,7 +312,7 @@ public class FlashVoiceTests
             }
             finally { stop(); await ended.Task.WaitAsync(TimeSpan.FromSeconds(8)); }
         }
-        finally { Directory.Delete(dir, true); }
+        finally { CoreAudio.PlayStoppableProvider = oldProvider; Directory.Delete(dir, true); }
     }
 
     [Fact]
