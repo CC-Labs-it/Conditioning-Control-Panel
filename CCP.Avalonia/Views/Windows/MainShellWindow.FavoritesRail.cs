@@ -65,11 +65,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 EventHandler onIdentity = (_, _) => Dispatcher.UIThread.Post(RefreshFavoritesRail);
                 PrizeGrants.GrantsChanged += onGrants;
                 CoreAccount.UnifiedIdentityChanged += onIdentity;
+                EventHandler<Models.ModPackage> onMod = (_, _) => Dispatcher.UIThread.Post(RefreshFavoritesRail);
+                CoreMods.ModChanged += onMod;
                 Closed += (_, _) =>
                 {
                     LocalizationManager.Instance.LanguageChanged -= onLanguage;
                     PrizeGrants.GrantsChanged -= onGrants;
                     CoreAccount.UnifiedIdentityChanged -= onIdentity;
+                    CoreMods.ModChanged -= onMod;
                 };
             }
             RefreshFavoritesRail();
@@ -116,7 +119,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var entries = SettingsPaletteIndex.All.Where(e => FavoritesRailRule.IsDestination(e.Id))
                     .ToDictionary(e => e.Id, StringComparer.Ordinal);
                 bool Known(string id) => entries.TryGetValue(id, out var e) && e.Available;
-                drawer.Paint(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.GlowColor);
+                var glow = App.Mods?.GetGlowColorRgb(); // WPF FxTheme.cs:19-29
+                drawer.Paint(glow is { } c ? Color.FromRgb(c.R, c.G, c.B) : global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.GlowColor);
                 drawer.FavoritesList.Children.Clear();
                 foreach (var id in s.RailFavorites.Where(Known))
                     drawer.FavoritesList.Children.Add(BuildRailChip(dash, entries[id]));

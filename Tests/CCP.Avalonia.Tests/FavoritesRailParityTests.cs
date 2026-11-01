@@ -265,4 +265,37 @@ public class FavoritesRailParityTests
         }
         return Task.CompletedTask;
     });
+    // WPF FxTheme.cs:19-29 and PageFavoritesDrawer.cs:140-155.
+    [Fact]
+    public Task MountedDrawerRepaintsForActiveMod() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var snapshot = new CoreModsSnapshot();
+        global::ConditioningControlPanel.Avalonia.App.StartMods();
+        var mods = global::ConditioningControlPanel.Avalonia.App.Mods!;
+        var shell = new MainShellWindow();
+        mods.ActivateMod(BuiltInMods.SissyHypnoId);
+        var mod = mods.ActiveMod;
+        var before = mod.Manifest.FxPalette;
+        try
+        {
+            shell.Show();
+            shell.ShowTab("play");
+            mod.Manifest.FxPalette = new ModFxPalette { GlowColor = "#123456" };
+            CoreMods.RaiseModChanged(null, mod);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Color.FromArgb(0x80, 0x12, 0x34, 0x56),
+                Assert.IsType<SolidColorBrush>(shell.PageFavorites!.Rail.BorderBrush).Color);
+            var face = Assert.IsType<Border>(shell.PageFavorites.Handle.Content);
+            Assert.Equal(Color.FromArgb(0x80, 0x12, 0x34, 0x56), Assert.IsType<SolidColorBrush>(face.BorderBrush).Color);
+        }
+        finally
+        {
+            mod.Manifest.FxPalette = before;
+            shell.Close(); snapshot.Dispose();
+            global::ConditioningControlPanel.Avalonia.App.ResetReleaseContent();
+        }
+        return Task.CompletedTask;
+    });
+
 }

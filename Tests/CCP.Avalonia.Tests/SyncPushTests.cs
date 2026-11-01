@@ -11,6 +11,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json.Linq;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using Xunit;
@@ -386,4 +387,57 @@ public sealed partial class AccountSeedTests
         finally { ProgressionBank.LevelUp -= hook; System.IO.Directory.Delete(dir, recursive: true); }
         return Task.CompletedTask;
     });
+    // WPF ProfileSyncService.cs:570,670,1874: sync adopts grants, logout drops them.
+    [Fact]
+    public void ReturningOwnerGetsPrizesFromSync() => WithFreshInstall(async () =>
+    {
+        var (wire, _, _) = SignIn("u1", L40Profile("u1"));
+        PrizeOwnership.ResetHeld();
+        wire.SyncReply = """{"success":true,"prizes":{"revision":3,"grants":["fx.bubble.rain"]}}""";
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        Assert.True(PrizeOwnership.Held(PrizeOwnership.BubbleRain));
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var s = CoreSettings.Current;
+            s.Welcomed = s.HasAcceptedAgeVerification = true;
+            s.RailFavorites.Clear(); s.RailFavorites.Add("door.studio");
+            var shell = new global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            try
+            {
+                shell.Show();
+                var chip = Assert.IsType<global::Avalonia.Controls.Button>(Assert.Single(shell.SettingsPage!.FindControl<global::Avalonia.Controls.StackPanel>("FavoritesList")!.Children));
+                Assert.Contains(((global::Avalonia.Controls.Grid)chip.Content!).Children.OfType<global::Avalonia.Controls.Border>(),
+                    b => b.Child is global::Avalonia.Controls.TextBlock t && t.Text == ConditioningControlPanel.Localization.Loc.Get("badge_v2"));
+            }
+            finally { shell.Close(); }
+            return Task.CompletedTask;
+        });
+        ProviderSubscription.PrizesSink?.Invoke("u1", "other", new PrizesBlock { Revision = 4, Grants = new() }, "test");
+        Assert.True(PrizeOwnership.Held(PrizeOwnership.BubbleRain));
+        ProviderSubscription.PrizesSink?.Invoke("u1", "u1", new PrizesBlock { Revision = 4, Grants = new() { PrizeOwnership.JackpotRemix } }, "test");
+        Assert.True(PrizeOwnership.Held(PrizeOwnership.JackpotRemix));
+        ProviderSubscription.PrizesSink?.Invoke("u1", "u1", new PrizesBlock { Revision = 3, Grants = new() }, "test");
+        ProviderSubscription.PrizesSink?.Invoke("u1", "u1", null, "test");
+        Assert.True(PrizeOwnership.Held(PrizeOwnership.JackpotRemix));
+    });
+
+    [Fact]
+    public void LogoutThenSameAccountDoesNotRestoreOldPrizes() => WithFreshInstall(async () =>
+    {
+        SignIn("u1", L40Profile("u1"));
+        PrizeOwnership.ApplySnapshot("u1", 8, new[] { PrizeOwnership.BubbleRain });
+        Assert.True(PrizeOwnership.Held(PrizeOwnership.BubbleRain));
+        CoreAccount.UnifiedUserId = null; // A counter reply races logout before settings are cleared.
+        PrizeOwnership.ApplySnapshot("u1", 9, new[] { PrizeOwnership.BubbleRain });
+        Assert.False(PrizeOwnership.Held(PrizeOwnership.BubbleRain));
+        CoreAccount.UnifiedUserId = "u1";
+        await AccountSeed.Logout();
+        SignIn("u1", L40Profile("u1"));
+        Assert.False(PrizeOwnership.Held(PrizeOwnership.BubbleRain));
+        PrizeOwnership.ApplySnapshot("u1", 1, new[] { PrizeOwnership.JackpotRemix });
+        Assert.True(PrizeOwnership.Held(PrizeOwnership.JackpotRemix));
+    });
+
 }
