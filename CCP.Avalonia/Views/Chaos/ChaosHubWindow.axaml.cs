@@ -106,6 +106,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private T Part<T>(string name) where T : Control => this.FindControl<T>(name)
             ?? throw new InvalidOperationException($"ChaosHubWindow: no '{name}' in the XAML");
 
+        internal static ChaosHubWindow? Current { get; private set; }
+
         public ChaosHubWindow()
         {
             // Init runs WPF's on-load refunds/sanitize, which can save. A render draws the
@@ -115,7 +117,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
-            Closed += (_, _) => UnlockCards.Stop();
+            Current = this;
+            Closed += (_, _) => { UnlockCards.Stop(); if (Current == this) Current = null; };
             _menuView = Part<Grid>("MenuView");
             _menuLeftCol = Part<Grid>("MenuLeftCol");
             _panelImprove = Part<Grid>("PanelImprove");

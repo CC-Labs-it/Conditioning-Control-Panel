@@ -4,8 +4,8 @@
 // DtrhRunWire), run-started / run-progress / run-ended with the one-payout latch (:360, :583) and the
 // close-mid-run booking (:1002 DtrhRunCloseRule). The kept Escape (:119) is posted by the panic key's pause
 // claim (MainShellWindow.PanicKey.cs, Core PanicPolicy.KeptEscapePage.Dtrh); a full panic closes it with
-// every other game (PanicSurfaces "games"). Shell frames (boot-error, exit's 1200 ms close, exit-done)
-// stay in GameWindow.HandleMessage.
+// every other game (PanicSurfaces "games"). Exit's 1200 ms close and exit-done stay in
+// GameWindow.HandleMessage; boot-error falls back to the classic run or hub.
 // Slice B: the manifest's online half (Core DtrhRemoteMedia: online media copied to this machine, re-posted as
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
 // ponytail: slice game-dtrh-host-c, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
@@ -19,6 +19,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -91,12 +92,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "run-ended":
                     OnDtrhRunEnded(o, fromTeardown: false);
                     return true;
+                case "boot-error":
+                    // WPF DtrhHostService.cs:923-954: dispose the failed web host before
+                    // falling back to the first descent or the existing/new hub.
+                    Close();
+                    Dispatcher.UIThread.Post(LaunchDtrhFallback);
+                    return true;
                 case "exit":
                     _dtrhExiting = true;   // the shell arms the 1200 ms close (WPF ArmExitWatchdog)
                     return false;
                 default:
                     return false;
             }
+        }
+
+        private static void LaunchDtrhFallback()
+        {
+            try
+            {
+                if (ChaosRunHost.IsActive) return;   // WPF :943
+                // WPF loads meta at app startup (App.xaml.cs:2746); this head loads it on the hub.
+                if (ChaosHubWindow.Current == null) ChaosMeta.Init();
+                if (ChaosMeta.State.RunsCompleted == 0)
+                {
+                    ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());   // WPF :944-946
+                    return;
+                }
+                if (ChaosHubWindow.Current is { } current) { current.Activate(); return; }
+                new ChaosHubWindow().Show();
+            }
+            catch (Exception ex) { Log.Error(ex, "Dtrh fallback failed"); }
         }
 
         /// <summary>WPF OnPageReady (:271): init, then the manifest.</summary>

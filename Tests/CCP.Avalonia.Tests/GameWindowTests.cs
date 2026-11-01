@@ -12,6 +12,8 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -994,6 +996,84 @@ public sealed partial class GameWindowTests
             Assert.Equal(new[] { true, true }, runs);
         });
     }
+
+    // WPF LauncherCatalogue.cs:242-247 -> DtrhHostService.cs:923-954 ->
+    // ChaosHubWindow.xaml.cs:1718-1730 -> BubbleService.cs:4685/:4918.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public void Dtrh_boot_error_reaches_a_run_and_its_pooled_pop_text(int completed) => RunDtrh(true, (_, _, _, _) =>
+    {
+        var prepare = ChaosPopText.Prepare;
+        var canShow = ChaosPopText.PlatformCanShow;
+        var enabled = CoreSettings.Current.ChaosAnnouncerEnabled;
+        ChaosPopText.Prepare = (w, r) => { w.Position = r.Position; return true; };
+        ChaosPopText.PlatformCanShow = () => true;
+        CoreSettings.Current.ChaosAnnouncerEnabled = true;
+        try
+        {
+            ChaosMeta.Init();
+            ChaosMeta.State.RunsCompleted = completed;
+            ChaosMeta.Save();
+            LauncherWindow.Instance!.Play(LauncherCards.Find("dtrh")!);
+            Assert.True(GameWindow.IsAnyOpen()); // the launcher, not the next lookup, opened it
+            var game = GameWindow.Launch("dtrh")!; // focuses the same host
+            game.Web.OnNavigationCompleted(game.PageUrl!);
+            game.Web.OnWebMessage("{\"type\":\"boot-error\",\"msg\":\"renderer\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(game.IsVisible);
+            if (completed == 0)
+            {
+                Assert.True(ChaosRunHost.IsActive);
+                Assert.True(ChaosRunHost.State!.Config.ScriptedFirstRun);
+                Assert.Null(ChaosHubWindow.Current);
+                // A second failed launch must not start another run.
+                var state = ChaosRunHost.State;
+                var meta = ChaosMeta.State;
+                var retry = GameWindow.Launch("dtrh")!;
+                retry.HandleMessage("{\"type\":\"boot-error\"}");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(state, ChaosRunHost.State);
+                Assert.Same(meta, ChaosMeta.State);
+            }
+            else
+            {
+                var hub = Assert.IsType<ChaosHubWindow>(ChaosHubWindow.Current);
+                Assert.True(hub.IsVisible);
+                Assert.False(ChaosRunHost.IsActive);
+                var retry = GameWindow.Launch("dtrh")!;
+                retry.HandleMessage("{\"type\":\"boot-error\"}");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(hub, ChaosHubWindow.Current);
+                hub.FallIn();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(ChaosHubWindow.Current);
+                Assert.True(ChaosRunHost.IsActive);
+                Assert.False(ChaosRunHost.State!.Config.ScriptedFirstRun);
+            }
+            ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            ChaosRunHost.State!.Config.EnabledVariants = new List<string> { "flash" };
+            ChaosRunHost.State.ShowPopScores = false;
+            ChaosRunHost.State.Focus = 100;
+            ChaosRunHost.SpawnTick();
+            var bubble = BubbleOverlay.Field.Bubbles.First(b => b.Spec?.VariantId == "flash");
+            BubbleOverlay.Press(bubble, bubble.CenterX, bubble.CenterY);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("FLASH", Assert.Single(ChaosPopText.Pool.All).LabelText);
+            ChaosRunHost.ForceShutdown();
+            Assert.Empty(ChaosPopText.Pool.All);
+        }
+        finally
+        {
+            ChaosHubWindow.Current?.Close();
+            ChaosRunHost.ForceShutdown();
+            ChaosPopText.ShutdownPool();
+            ChaosPopText.Prepare = prepare;
+            ChaosPopText.PlatformCanShow = canShow;
+            CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
+        }
+    });
 
     /// <summary>WPF DtrhHostService.PostManifest / OnRemoteCopiesReady (724ac82bc): the manifest's urls are root-relative
     /// (hostMedia.js counts only those, not 127.0.0.1, as local); with online media on, copies landing in
