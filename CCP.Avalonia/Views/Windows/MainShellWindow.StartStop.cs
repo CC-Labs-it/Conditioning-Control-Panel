@@ -97,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void StopEngine()
         {
             _engineGen++;
+            BrainDrainOverlay.Stop();   // WPF StopEngineCore stops ad-hoc overlays too.
             App.Sessions?.Pause();
             CoreEngine.Stop();
         }

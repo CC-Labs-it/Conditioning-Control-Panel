@@ -517,10 +517,8 @@ namespace ConditioningControlPanel.Avalonia
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
-                // P31: WPF seeds EffectPayloadFiring. ponytail: no chaos payload effects on this head yet
-                // (next lane chaos-bubble-field-b); log so a fired payload is never silently dropped.
-                Services.Chaos.EffectPayload.Firer = p =>
-                    Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", p.DisplayName);
+                // WPF EffectPayloadFiring: the timed Brain Drain visual; other payloads still log.
+                Views.Overlays.BrainDrainOverlay.Seed();
                 LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
@@ -1092,6 +1090,7 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.SubliminalOverlay.CloseAll();
             Views.Overlays.BouncingTextOverlay.Stop();
             Views.Overlays.ChaosFlashOverlay.CloseActive();
+            Views.Overlays.BrainDrainOverlay.Stop();
             Views.Overlays.SpiralOverlay.CloseAll();   // WPF StopEngine -> App.Overlay.Stop(); panic and exit too
         }
 

@@ -335,4 +335,111 @@ public sealed class KeywordAudioRuntimeTests
         finally { ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = previous; }
     });
 
+    [Fact] // WPF KeywordTriggerService.cs:1361-1367,1490-1518,1859-1865
+    public Task OverlappingKeywordReplacesClipWithoutCancellingEarlierDispatch() => RunAsync(async (engine, s, played) =>
+    {
+        var previous = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+        int drains = 0;
+        ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = _ => drains++;
+        var first = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+        first.PlayCount = 2; first.DelayBetweenMs = 50;
+        s.KeywordTriggers[0].Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain });
+        s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "stand", CooldownSeconds = 1,
+            Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = first.FilePath, DuckSystemAudio = false } } });
+        var now = new DateTime(2026, 10, 14, 12, 0, 0);
+        engine.Now = () => now;
+        var gap = new TaskCompletionSource(); var cleanup = new TaskCompletionSource();
+        var ended = new List<Action?>();
+        CoreAudio.PlayStoppableProvider = (path, volume, _, _, finish) =>
+        { played.Add((path, volume)); ended.Add(finish); return () => played.Add(("stopped", 0)); };
+        engine.Delay = (ms, _) => ms == 50 ? gap.Task : cleanup.Task;
+        try
+        {
+            Type(engine, "sit"); Assert.Single(played);
+            now = now.AddSeconds(2); Type(engine, "stand");
+            Assert.Equal(2, played.Count(x => x.Path != "stopped")); Assert.Equal(0, drains);
+            ended[1]!(); Dispatcher.UIThread.RunJobs(); cleanup.SetResult(); await Task.Yield();
+            gap.SetResult(); await Task.Yield();
+            Assert.Equal(3, played.Count(x => x.Path != "stopped")); Assert.Equal(1, drains);
+            ended[1]!(); Dispatcher.UIThread.RunJobs(); await Task.Yield();
+            Assert.NotEqual("stopped", played.Last().Path); // stale completion cannot stop the replacement
+        }
+        finally { ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = previous; }
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1805-1808, EffectPayloadFiring.cs:70-99
+    public void KeywordUsesTimedDrainHandlerWithWpfGuardsAndPanicStop() => Run((engine, s, _) =>
+    {
+        var previous = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+        var show = ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.ShowOverride;
+        var running = ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.UserDrainRunning;
+        var schedule = ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.Schedule;
+        var strength = s.BrainDrainBlurStrength;
+        var motion = s.MotionLevel; var gentle = s.GentleVisuals; var probe = UiMotionPreference.OsProbe;
+        UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue; s.GentleVisuals = false;
+        var scheduled = new List<(Action Fire, TimeSpan Due)>();
+        var starts = new List<(int Strength, bool Melt)>();
+        bool userDrain = false;
+        var now = new DateTime(2026, 10, 14, 12, 0, 0);
+        engine.Now = () => now;
+        ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.Seed();
+        ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.ShowOverride = (n, melt) => { starts.Add((n, melt)); return true; };
+        ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.UserDrainRunning = () => userDrain;
+        ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.Schedule = (a, t) => scheduled.Add((a, t));
+        try
+        {
+            s.AwarenessLoopProtectionEnabled = false; s.BrainDrainBlurStrength = 47;
+            s.MotionLevel = MotionLevel.Full;
+            s.KeywordTriggers[0].Actions = new List<KeywordAction> { new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain } };
+            Type(engine, "sit");
+            Assert.Equal((47, true), Assert.Single(starts));
+            Assert.Equal(TimeSpan.FromSeconds(10), Assert.Single(scheduled).Due);
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.IsShowing);
+            now = now.AddSeconds(2); Type(engine, "sit"); Assert.Single(starts); // do not overlap
+            scheduled[0].Fire(); Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.IsShowing);
+            now = now.AddSeconds(2); s.BrainDrainBlurStrength = 0; Type(engine, "sit"); Assert.Single(starts);
+            now = now.AddSeconds(2); s.BrainDrainBlurStrength = 47; userDrain = true; Type(engine, "sit"); Assert.Single(starts);
+            now = now.AddSeconds(2); userDrain = false; s.MotionLevel = MotionLevel.Reduced; Type(engine, "sit"); Assert.Equal((47, false), starts[1]);
+            ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.StopEngine(); // panic reaches the same stop
+            Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.IsShowing);
+            now = now.AddSeconds(2); Type(engine, "sit"); Assert.Equal(3, starts.Count);
+            scheduled[1].Fire(); // a stale timer cannot stop the new effect
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.IsShowing);
+            scheduled[2].Fire(); Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.IsShowing);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.Stop();
+            ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.ShowOverride = show;
+            ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.UserDrainRunning = running;
+            ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.Schedule = schedule;
+            ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = previous;
+            s.BrainDrainBlurStrength = strength; s.MotionLevel = motion; s.GentleVisuals = gentle;
+            UiMotionPreference.OsProbe = probe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+    });
+
+    [Fact] // WPF StopTriggerAudio, KeywordTriggerService.cs:1902-1911; panic cancels queued repeats on this head.
+    public Task PanicCancelsAllOverlappingKeywordRepeats() => RunAsync(async (engine, s, played) =>
+    {
+        var previous = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+        int drains = 0; ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = _ => drains++;
+        var first = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+        first.PlayCount = 2; first.DelayBetweenMs = 50;
+        s.KeywordTriggers[0].Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain });
+        s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "stand", CooldownSeconds = 1,
+            Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = first.FilePath, PlayCount = 2, DelayBetweenMs = 50, DuckSystemAudio = false },
+                new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain } } });
+        var now = new DateTime(2026, 10, 14, 12, 0, 0); engine.Now = () => now;
+        var gap = new TaskCompletionSource(); engine.Delay = (_, _) => gap.Task;
+        try
+        {
+            Type(engine, "sit"); now = now.AddSeconds(2); Type(engine, "stand");
+            Assert.Equal(2, played.Count(x => x.Path != "stopped"));
+            engine.StopAudio(); gap.SetResult(); await Task.Yield();
+            Assert.Equal(2, played.Count(x => x.Path != "stopped")); Assert.Equal(0, drains);
+        }
+        finally { ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = previous; }
+    });
+
 }

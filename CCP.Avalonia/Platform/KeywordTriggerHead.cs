@@ -118,7 +118,8 @@ internal sealed class KeywordAudioRuntime
 {
     private readonly KeywordTextInput _input = new();
     private readonly KeywordCooldowns _cooldowns = new();
-    private CancellationTokenSource? _audio;
+    private CancellationTokenSource _pendingAudio = new();
+    private long _voiceGeneration;
     private Action? _stop;
     private long? _duckGeneration;
     internal Func<DateTime> Now = () => DateTime.Now;
@@ -213,9 +214,19 @@ internal sealed class KeywordAudioRuntime
     // Highlight+AvatarComment trigger with no audio and no settings; both actions land with wire-shell-keyword-triggers-b.
     internal void FireDemo(string keyword, string source) { }
 
+    // WPF KeywordTriggerService.cs:1512-1517,1859-1865: replacing the playing clip
+    // must not cancel another match waiting between repeats. Panic/stop cancels all of them.
     internal void StopAudio()
     {
-        _audio?.Cancel(); _audio?.Dispose(); _audio = null;
+        var pending = _pendingAudio;
+        _pendingAudio = new CancellationTokenSource();
+        pending.Cancel(); pending.Dispose();
+        StopCurrentAudio();
+    }
+
+    private void StopCurrentAudio()
+    {
+        ++_voiceGeneration;
         var stop = _stop; _stop = null;
         try { stop?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "Keyword clip stop failed"); }
         if (_duckGeneration is { } generation) CoreAudio.Unduck(generation);
@@ -233,9 +244,8 @@ internal sealed class KeywordAudioRuntime
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
         if (!File.Exists(path)) return true;
-        StopAudio();
-        var cancellation = _audio = new CancellationTokenSource();
-        var token = cancellation.Token;
+        StopCurrentAudio();
+        var token = _pendingAudio.Token;
         if (audio.DuckSystemAudio && CoreSettings.Current.AudioDuckingEnabled)
         {
             CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
@@ -249,18 +259,19 @@ internal sealed class KeywordAudioRuntime
                 if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, token);
                 token.ThrowIfCancellationRequested();
                 _stop?.Invoke();
+                var generation = ++_voiceGeneration;
                 var last = i == count - 1;
                 _stop = CoreAudio.PlayStoppable(path,
                     KeywordMatchRules.AudioVolume(audio.Volume, CoreSettings.Current.MasterVolume), "keyword-trigger",
                     onFinished: () => { if (last) Dispatcher.UIThread.Post(async () =>
                     {
-                        try { await Delay(500, token); if (!token.IsCancellationRequested) StopAudio(); }
+                        try { await Delay(500, token); if (!token.IsCancellationRequested && generation == _voiceGeneration) StopCurrentAudio(); }
                         catch (OperationCanceledException) { }
                     }); });
             }
             return true;
         }
         catch (OperationCanceledException) { return false; }
-        catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); return false; }
+        catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopCurrentAudio(); return false; }
     }
 }
