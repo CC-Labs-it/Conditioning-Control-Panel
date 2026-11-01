@@ -15,11 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private DateTime _browserMediaBeat;
         private DispatcherTimer? _browserMediaWatchdog;
 
-        private void StartBrowserMediaReporter()
-        {
-            StopBrowserMediaTracking();
-            _ = BrowserWebHost.InvokeScriptAsync(BrowserMediaReporter);
-        }
+        private void StartBrowserMediaReporter() => _ = BrowserWebHost.InvokeScriptAsync(BrowserMediaReporter);
 
         internal void OnBrowserMediaMessage(string message)
         {

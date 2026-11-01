@@ -107,6 +107,10 @@ public sealed class BrowserMediaTakeoverTests
                 Assert.False(tab.BrowserMediaPlaying);
                 host.OnWebMessage(JsonSerializer.Serialize("{\"type\":\"ccpMedia\",\"state\":\"playing\"}"));
                 Assert.True(tab.BrowserMediaPlaying);
+                host.OnNavigationCompleted(new Uri("https://example.com/failed"), success: false);
+                Assert.True(tab.BrowserMediaPlaying);
+                host.OnNavigationCompleted(new Uri("https://example.com/#part"));
+                Assert.True(tab.BrowserMediaPlaying);
                 now = now.AddSeconds(19);
                 host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"progress\"}");
                 now = now.AddSeconds(19);
@@ -116,6 +120,7 @@ public sealed class BrowserMediaTakeoverTests
                 tab.CheckBrowserMediaHeartbeat();
                 Assert.False(tab.BrowserMediaPlaying);
                 host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+                host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\",\"reason\":\"navigated\"}");
                 host.OnNavigationCompleted(new Uri("https://example.com/next"));
                 Assert.False(tab.BrowserMediaPlaying);
             }
