@@ -210,6 +210,16 @@ Type: files;      Name: "{app}\Resources\sounds\ZAP COCK DRAIN OBEY.mp3"
 ; view natives in the single-file exe, so a stale loader beside it could only shadow them.
 Type: files;      Name: "{app}\WebView2Loader.dll"
 
+; WPF shipped LibVLC 3.0.21 in {app}\libvlc (ConditioningControlPanel.csproj:146,945-953).
+; These exact old-only paths are absent from the 3.0.24 publish; preserve other files.
+Type: files;      Name: "{app}\libvlc\lua\playlist\youtube.luac"
+Type: files;      Name: "{app}\libvlc\plugins\access\libbluray-awt-j2se-1.3.2.jar"
+Type: files;      Name: "{app}\libvlc\plugins\access\libbluray-j2se-1.3.2.jar"
+Type: files;      Name: "{app}\libvlc\plugins\codec\libschroedinger_plugin.dll"
+Type: files;      Name: "{app}\libvlc\plugins\codec\libsdl_image_plugin.dll"
+Type: files;      Name: "{app}\libvlc\win-x64\lua\playlist\youtube.luac"
+Type: files;      Name: "{app}\libvlc\win-x86\lua\playlist\youtube.luac"
+
 [Icons]
 ; Start Menu shortcut
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startmenuicon

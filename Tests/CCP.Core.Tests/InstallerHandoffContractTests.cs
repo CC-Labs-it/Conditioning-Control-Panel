@@ -122,10 +122,37 @@ public class InstallerHandoffContractTests
         Assert.Matches(@"Type: files;\s+Name: ""\{app\}\\WebView2Loader.dll""", ava);
     }
 
+    // WPF csproj:146,945-953 ships LibVLC 3.0.21 under {app}\libvlc; Avalonia
+    // csproj:81,311-315 ships 3.0.24 there. These are the old-only publish paths.
+    [Fact]
+    public void UpgradeRemovesOnlyRetiredWpfLibVlcFiles()
+    {
+        Assert.Contains("VideoLAN.LibVLC.Windows\" Version=\"3.0.21\"", Read("ConditioningControlPanel/ConditioningControlPanel.csproj"));
+        Assert.Contains("VideoLAN.LibVLC.Windows\" Version=\"3.0.24\"", Read("CCP.Avalonia/CCP.Avalonia.csproj"));
+        var installer = Read("installer-avalonia.iss");
+        var section = installer.Replace("\r\n", "\n").Split("\n[InstallDelete]\n")[1].Split("\n[Icons]\n")[0];
+        var rows = Regex.Matches(section, @"(?im)^Type:\s*([^;]+);\s*Name:\s*""(\{app\}\\libvlc(?:\\[^""\r\n]*)?)""")
+            .Select(m => (Type: m.Groups[1].Value.Trim(), Path: m.Groups[2].Value)).ToArray();
+        var expected = new[]
+        {
+            @"{app}\libvlc\lua\playlist\youtube.luac",
+            @"{app}\libvlc\plugins\access\libbluray-awt-j2se-1.3.2.jar",
+            @"{app}\libvlc\plugins\access\libbluray-j2se-1.3.2.jar",
+            @"{app}\libvlc\plugins\codec\libschroedinger_plugin.dll",
+            @"{app}\libvlc\plugins\codec\libsdl_image_plugin.dll",
+            @"{app}\libvlc\win-x64\lua\playlist\youtube.luac",
+            @"{app}\libvlc\win-x86\lua\playlist\youtube.luac",
+        };
+        Assert.All(rows, row => Assert.Equal("files", row.Type));
+        Assert.Equal(expected.OrderBy(x => x), rows.Select(row => row.Path).OrderBy(x => x));
+    }
+
     // Transcribed from origin/main aa9918833722f057079e455167cb3d1b14462340:
     // ConditioningControlPanel/Services/Update/UpdateService.cs:775-786 (ordered patterns + regex),
     // :1044 (relaunch exe), :1163 and :1197 (/DIR and silent arguments).
-    // No moving remote ref is fetched during tests. Recheck the shipping release in Part B.
+    // The published v7.1.15 tag b46f52ece11dc78a88c2c77f0a6f8922646e7d7f has the same
+    // UpdateService.cs:775-786,1044,1163,1197 contract. No moving ref is fetched in tests;
+    // a live Windows handoff and any later shipping release still need verification.
     [Fact]
     public void MainWpfUpdaterSelectsProductionButRejectsUnsignedCiArtifact()
     {
