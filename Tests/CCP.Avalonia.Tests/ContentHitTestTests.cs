@@ -25,16 +25,25 @@ namespace CCP.Avalonia.Tests;
 /// click side effect runs.</summary>
 public sealed class ContentHitTestTests
 {
+    private sealed class SteppedClock : TimeProvider
+    {
+        public long Now;
+        public override long GetTimestamp() => Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+    }
+
     [Fact]
     public async Task ContentButtonsReceiveThePointerAtTheirCentre()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            ConditioningControlPanel.CoreSettings.Current.GentleVisuals = false;
+            var w = new MainShellWindow { TabClock = new SteppedClock() };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -45,12 +54,19 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                Assert.Same(w.Named<Control>(panelName), w.EnteringTab);
+                // Finish the active entrance before committing the frame used for hit testing.
+                // The frame clock can otherwise move the tab and its staggered children between
+                // the compositor batch and the pointer probe on a busy runner.
+                w.CompleteTabTransition();
+                Assert.Null(w.EnteringTab);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
                 if (tab == "awareness") w.Named<Control>(panelName)!.FindControl<Border>("AwarenessGate")!.IsVisible = false;
                 RenderLiveTree(w);
                 int tested = 0;
+                var names = new HashSet<string>();
                 foreach (var b in w.Named<Control>(panelName)!.GetVisualDescendants().OfType<Button>().ToList())
                 {
                     // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
@@ -63,6 +79,7 @@ public sealed class ContentHitTestTests
                     if (!new Rect(w.Bounds.Size).Contains(p) || b.GetVisualAncestors().OfType<ScrollViewer>().Any(s => !Inside(s, p, w))) continue;
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer
                     tested++;
+                    if (b.Name != null) names.Add(b.Name);
                     var hit = w.InputHitTest(p) as Visual;
                     bool pressed = false;
                     void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
@@ -75,12 +92,63 @@ public sealed class ContentHitTestTests
                         misses.Add($"{tab} {b.Name ?? b.GetType().Name} @{p}: hit {hit?.GetType().Name}/{(hit as Control)?.Name}, pressed {pressed}");
                 }
                 Assert.True(tested >= 3, $"{tab}: only {tested} buttons on screen to test");
+                if (tab == "awareness")
+                {
+                    Assert.Contains("BtnAwarenessTutorial", names);
+                    Assert.Contains("ChkAwarenessMaster", names);
+                }
             }
             w.Close();
             Assert.True(misses.Count == 0, string.Join("\n", misses));
             return Task.CompletedTask;
         });
     }
+
+    [Fact]
+    public Task AwarenessHeroReceivesPointerDuringEntrance() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+        ConditioningControlPanel.CoreSettings.Current.GentleVisuals = false;
+        var clock = new SteppedClock();
+        var w = new MainShellWindow { TabClock = clock };
+        try
+        {
+            ToolTip.SetServiceEnabled(w, false);
+            w.Show();
+            Dispatcher.UIThread.RunJobs();
+            w.ShowTab("awareness");
+            var tab = w.Named<Control>("AwarenessTab")!;
+            tab.FindControl<Border>("AwarenessGate")!.IsVisible = false;
+            Assert.Same(tab, w.EnteringTab);
+            foreach (var milliseconds in new[] { 0d, 100d, 620d })
+            {
+                clock.Now = TimeSpan.FromMilliseconds(milliseconds).Ticks;
+                w.TickTabTransition();
+                foreach (var name in new[] { "BtnAwarenessTutorial", "ChkAwarenessMaster" })
+                {
+                    RenderLiveTree(w);
+                    Assert.Equal(milliseconds == 0 ? 0 : milliseconds == 100 ? 0.75 : 1, tab.Opacity, 5);
+                    var button = tab.FindControl<Button>(name)!;
+                    var p = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), w)!.Value;
+                    var hit = w.InputHitTest(p) as Visual;
+                    Assert.True(hit == button || (hit != null && button.IsVisualAncestorOf(hit)), $"{name} at {milliseconds} ms hit {hit?.GetType().Name}/{(hit as Control)?.Name}");
+                    bool pressed = false;
+                    void Swallow(object? sender, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
+                    button.AddHandler(InputElement.PointerPressedEvent, Swallow, RoutingStrategies.Tunnel);
+                    w.MouseDown(p, MouseButton.Left);
+                    w.MouseUp(p, MouseButton.Left);
+                    button.RemoveHandler(InputElement.PointerPressedEvent, (EventHandler<PointerPressedEventArgs>)Swallow);
+                    Assert.True(pressed, $"{name} did not receive a press at {milliseconds} ms");
+                }
+            }
+        }
+        finally { w.Close(); }
+        return Task.CompletedTask;
+    });
 
     /// <summary>Renders a frame holding the live tree. One forced tick is not that: while a batch is in
     /// flight MediaContext holds the next commit back, so the tick renders the OLDER batch and the layout
