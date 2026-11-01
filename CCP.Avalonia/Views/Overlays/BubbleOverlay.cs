@@ -554,7 +554,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var b = bubbles[i];
                 if (b.Screen != Index || !b.Clickable || b.Popping) continue;
-                Rects[n++] = new PixelRect((int)((b.X + b.FreezeOffsetX) * Scaling) - Bounds.X, (int)((b.Y + b.FreezeOffsetY) * Scaling) - Bounds.Y,
+                Rects[n++] = new PixelRect((int)(b.X * Scaling) - Bounds.X, (int)(b.Y * Scaling) - Bounds.Y,
                     (int)(b.Size * Scaling), (int)(b.Size * Scaling));
             }
             var drawn = HasBubbles();

@@ -122,7 +122,7 @@ public sealed class BubbleOverlayTests
                 f.StartFreeze();
                 bubble.FreezeOffsetX = 4; bubble.FreezeOffsetY = -3;
                 w.Sync();
-                Assert.Equal(new PixelRect(104, 67, 100, 100), w.Rects[0]);
+                Assert.Equal(new PixelRect(100, 70, 100, 100), w.Rects[0]);
                 for (int i = 0; i < 7; i++) f.Step();
                 for (int i = 0; i < 40 && System.Math.Sin(bubble.FreezePulsePhase) < 0.7; i++) f.Step();
                 byte frozen = Alpha();

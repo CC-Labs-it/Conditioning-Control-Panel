@@ -394,8 +394,7 @@ namespace ConditioningControlPanel.Services
             for (var i = Bubbles.Count - 1; i >= 0; i--)
             {
                 var b = Bubbles[i];
-                if (b.Screen == screen && b.Clickable && !b.Popping
-                    && b.Contains(x - b.FreezeOffsetX, y - b.FreezeOffsetY)) return b;
+                if (b.Screen == screen && b.Clickable && !b.Popping && b.Contains(x, y)) return b;
             }
             return null;
         }

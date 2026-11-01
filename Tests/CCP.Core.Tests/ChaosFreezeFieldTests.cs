@@ -50,9 +50,8 @@ public class ChaosFreezeFieldTests
         Assert.InRange(chaos.FreezeOffsetX, -4, 4);
         Assert.True(chaos.FreezeOffsetX != 0 || chaos.FreezeOffsetY != 0);
         Assert.Equal((0, 0), (ambient.FreezeOffsetX, ambient.FreezeOffsetY));
-        double edge = chaos.FreezeOffsetX > 0 ? chaos.X + chaos.Size + chaos.FreezeOffsetX / 2
-            : chaos.X + chaos.FreezeOffsetX / 2;
-        Assert.Same(chaos, f.HitTest(0, edge, chaos.CenterY + chaos.FreezeOffsetY));
+        Assert.Same(chaos, f.HitTest(0, chaos.X + 0.5, chaos.CenterY));
+        Assert.Null(f.HitTest(0, chaos.X + chaos.Size + 0.5, chaos.CenterY));
         Assert.Equal(0.18, chaos.FreezePulsePhase, 5);
         for (int i = 0; i < 6; i++) f.Step();
         Assert.Equal(0, f.FreezeImpactMs);
@@ -82,6 +81,32 @@ public class ChaosFreezeFieldTests
         f.EndFreeze();
         f.Step();
         Assert.Equal(0.54, first.FreezePulsePhase, 5);
+    }
+
+    /// <summary>WPF BubbleService.cs:3020-3024,4560-4563: shudder never moves the shared hit disc.</summary>
+    [Fact]
+    public void A_stationary_press_at_the_logical_edge_does_not_detonate_during_shudder()
+    {
+        var now = DateTime.UtcNow;
+        var field = new AmbientBubbleField { Clock = () => now };
+        var live = new AmbientBubble { X = 40, Y = 50, Size = 100, Clickable = true,
+            Spec = new EffectBubbleSpec { IsLive = true, FuseMs = 5000 }, FuseRemainingMs = 5000 };
+        field.Bubbles.Add(live);
+        field.StartFreeze();
+        live.FreezeOffsetX = 4;
+        double x = live.X + 0.5, y = live.CenterY;
+        Assert.Same(live, field.HitTest(0, x, y));
+        Assert.Null(field.HitTest(0, live.X + live.Size + 2, y));
+        int detonated = 0, defused = 0;
+        field.ChaosDetonated = _ => detonated++;
+        field.ChaosDefused = _ => defused++;
+        field.PressLive(live, true, x, y);
+        field.Step();
+        Assert.True(live.Channeling);
+        Assert.False(live.Popping);
+        now = now.AddMilliseconds(ChaosTuning.DEFUSE_HOLD_MS + 1);
+        field.Step();
+        Assert.Equal((0, 1), (detonated, defused));
     }
 
 }
