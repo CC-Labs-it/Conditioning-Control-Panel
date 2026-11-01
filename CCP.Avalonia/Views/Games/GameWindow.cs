@@ -69,10 +69,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal bool IsReady { get; private set; }
         private bool _closing;
 
-        /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
-        /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
         internal static Func<Uri, bool> LinuxRaceLaunch { get; set; } = LinuxRaceHost.TryLaunch;
 
+        /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
+        /// rather than relaunched (a second click mid-match must never restart it). Null when refused, and
+        /// also when Glassroad is hosted out of process by the Linux race shell.</summary>
         internal static GameWindow? Launch(string id)
         {
             id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1

@@ -93,7 +93,8 @@ internal sealed class LinuxRaceHost : IDisposable
         });
         _ = Task.Run(async () => { try { var b = new char[1024]; while (await _process.StandardError.ReadAsync(b, 0, b.Length) != 0) { } } catch { } });
     }
-    private bool UnsupportedPanicKey => _displayBackend != "x11" && CoreSettings.Current.PanicKey != "Escape";
+    // A non-Escape key reaches CCP during the race only through a live X11 listener (WPF GlassroadHostService.cs:79-134 hooks every key).
+    private bool UnsupportedPanicKey => CoreSettings.Current.PanicKey != "Escape" && !(_displayBackend == "x11" && _x11Listening());
     // Runs on the pipe reader: arm the watchdog before anything is queued behind a wedged UI.
     internal void ReadFrame(JObject frame)
     {
@@ -107,7 +108,13 @@ internal sealed class LinuxRaceHost : IDisposable
         if (type != RaceShellProtocol.Escape) { Dispatcher.UIThread.Post(() => Receive(frame)); return; }
         if (!RaceShellProtocol.AcceptEscape(ref _lastEscape, (long?)frame["sequence"] ?? 0,
             _x11Listening() && CoreSettings.Current.PanicKey == "Escape", _displayBackend)) return;
-        void Handle() { if (_closed != 0) return; InFront = true; if (CoreSettings.Current.PanicKey == "Escape") _panic(DateTime.Now); else Pause(); }
+        void Handle()
+        {
+            bool escapePanics = CoreSettings.Current.PanicKey == "Escape";
+            // Killed meanwhile (watchdog): the race is gone, so the recovered UI still runs the full panic, not a pause.
+            if (_closed != 0) { if (escapePanics) { Dispose(); _panic(DateTime.Now); } return; }
+            InFront = true; if (escapePanics) _panic(DateTime.Now); else Pause();
+        }
         if (CoreSettings.Current.PanicKey == "Escape" && CoreSettings.Current.PanicKeyEnabled && !MainShellWindow.LockdownActive
             && !MainShellWindow.CapturingPanicKey && !Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
             Platform.PanicWatchdog.QueueWatched(Handle);

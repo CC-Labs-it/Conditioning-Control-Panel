@@ -305,11 +305,13 @@ public sealed partial class GameWindowTests
     });
 
     [Theory]
-    [InlineData("wayland", "F12", true)]
-    [InlineData("wayland", "Pause", true)]
-    [InlineData(null, "F12", true)]
-    [InlineData("x11", "F12", false)]
-    public void Glassroad_UnsupportedPanicKeyFailsClosed(string? backend, string key, bool closed) => RunGlassroad("1", (_, _, _) =>
+    [InlineData("wayland", "F12", true, true)]
+    [InlineData("wayland", "Pause", true, true)]
+    [InlineData(null, "F12", true, true)]
+    [InlineData("x11", "F12", true, false)]
+    [InlineData("x11", "F12", false, true)]
+    [InlineData("x11", "Escape", false, false)]
+    public void Glassroad_UnsupportedPanicKeyFailsClosed(string? backend, string key, bool listening, bool closed) => RunGlassroad("1", (_, _, _) =>
     {
         if (!OperatingSystem.IsLinux()) return;
         CoreSettings.Current.PanicKey = key;
@@ -317,7 +319,7 @@ public sealed partial class GameWindowTests
         start.ArgumentList.Add("/bin/cat");
         using var p = System.Diagnostics.Process.Start(start)!;
         using var observer = System.Diagnostics.Process.GetProcessById(p.Id);
-        using var host = new LinuxRaceHost(p);
+        using var host = new LinuxRaceHost(p, x11Listening: () => listening);
         host.ReadFrame(new JObject { ["type"] = "shell-loaded", ["displayBackend"] = backend });
         Dispatcher.UIThread.RunJobs();
         if (closed) { Assert.True(observer.WaitForExit(5000)); Assert.Null(LinuxRaceHost.Current); }
@@ -333,8 +335,8 @@ public sealed partial class GameWindowTests
         start.ArgumentList.Add("/bin/cat");
         using var p = System.Diagnostics.Process.Start(start)!;
         using var observer = System.Diagnostics.Process.GetProcessById(p.Id);
-        var handled = 0;
-        using var host = new LinuxRaceHost(p, _ => handled++, () => false);
+        var handled = 0; LinuxRaceHost? atPanic = null;
+        using var host = new LinuxRaceHost(p, _ => { handled++; atPanic = LinuxRaceHost.Current; }, () => false);
         using var fired = new System.Threading.ManualResetEventSlim();
         var teardown = ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown;
         try
@@ -347,6 +349,10 @@ public sealed partial class GameWindowTests
             Assert.True(fired.Wait(TimeSpan.FromSeconds(6)));
             Assert.True(observer.WaitForExit(5000));
             Assert.Equal(0, handled);
+            // The UI recovers: the queued press still runs the full panic, with the dead race no longer in front.
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, handled);
+            Assert.Null(atPanic);
         }
         finally { ConditioningControlPanel.Avalonia.Platform.PanicWatchdog.Teardown = teardown; Dispatcher.UIThread.RunJobs(); }
     });
