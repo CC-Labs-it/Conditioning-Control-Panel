@@ -137,6 +137,59 @@ public sealed class ShellSettingsWiringTests
         await Task.CompletedTask;
     });
 
+    [Fact]
+    public Task TourBubbleFollowsResizeAndDodgesTheBook() => Run(async (_, settings) =>
+    {
+        settings.Current.MotionLevel = MotionLevel.Off;
+        var desk = new ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskWindow();
+        try
+        {
+            desk.Show();
+            var area = desk.Screens.ScreenFromWindow(desk)!.WorkingArea;
+            // Leave room for both sides of the bubble and the book on her right.
+            desk.Position = new PixelPoint(area.X + area.Width / 2 - 330 - 110, area.Y + 200);
+            desk.SayTourLine("A tour line", "^_^");
+            var bubble = desk.BubbleHost.Children.OfType<Border>().Single();
+            var tail = desk.BubbleHost.Children.OfType<global::Avalonia.Controls.Shapes.Polygon>().Single();
+            var text = Assert.IsType<TextBlock>(bubble.Child);
+            Assert.True(tail.IsVisible);
+            Assert.Equal(new Point(0, 10), tail.Points![2]);
+            double right = Canvas.GetLeft(bubble);
+            Assert.Equal(right, Canvas.GetLeft(tail));
+
+            desk.ApplyBodyWidth(300);
+            Assert.Equal(15, text.FontSize);
+            Assert.NotEqual(right, Canvas.GetLeft(bubble));
+            right = Canvas.GetLeft(bubble);
+
+            desk.OpenBook();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, desk.Book!.SideOfHer);
+            Assert.True(Canvas.GetLeft(bubble) < right);
+            Assert.Equal(new Point(10, 10), tail.Points![2]);
+            Assert.Equal(Math.Round(Canvas.GetLeft(bubble) + Math.Max(bubble.DesiredSize.Width, bubble.Bounds.Width) - 10), Canvas.GetLeft(tail));
+
+            desk.CloseBook();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(right, Canvas.GetLeft(bubble));
+            Assert.Equal(new Point(0, 10), tail.Points![2]);
+
+            desk.OpenBook();
+            Dispatcher.UIThread.RunJobs();
+            desk.Position = new PixelPoint(area.Right - 330 - 100, area.Y + 200);
+            desk.SnapToNearestCorner();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(-1, desk.Book!.SideOfHer);
+            Assert.Equal(new Point(0, 10), tail.Points![2]);
+            Assert.Equal(Canvas.GetLeft(bubble), Canvas.GetLeft(tail));
+            desk.CancelChain();
+            Assert.False(bubble.IsVisible);
+            Assert.False(tail.IsVisible);
+        }
+        finally { desk.Close(); }
+        await Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(0, ".", 420)]
     [InlineData(1, "..", 420)]
