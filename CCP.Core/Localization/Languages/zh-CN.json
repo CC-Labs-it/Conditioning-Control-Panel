@@ -1,4 +1,7 @@
 {
+  "chaos_draft_rerolled": "🎲 再次挑战命运", "chaos_draft_sin_embraced": "🕯 接受罪孽 (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "🕯 烛火带走了刺痛 (没有负面效果)", "chaos_draft_sin_resistance": "🕯 你答应了。她给了你回报 (+1 抵抗力)",
+  "chaos_draft_resisted": "♥ 抵抗 → +1 抵抗力", "chaos_draft_resistance_announce": "+1 抵抗力",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",
@@ -8468,11 +8471,5 @@
   "online_official_plan_prime": "Prime 每日额度最大。看过的内容重播免费。",
   "online_official_nice": "好的",
   "online_official_stamped_line": "在线媒体来自 Scrolller。每张图片和短片都带有一个小小的“via Scrolller”标记。",
-  "online_cache_day_line": "在线媒体只会在这台电脑的小缓存里保留一天，从不上传。",
-  "chaos_draft_rerolled": "🎲 再次挑战命运",
-  "chaos_draft_sin_embraced": "🕯 接受罪孽 (+{0:0.00}x)",
-  "chaos_draft_sin_shielded": "🕯 烛火带走了刺痛 (没有负面效果)",
-  "chaos_draft_sin_resistance": "🕯 你答应了。她给了你回报 (+1 抵抗力)",
-  "chaos_draft_resisted": "♥ 抵抗 → +1 抵抗力",
-  "chaos_draft_resistance_announce": "+1 抵抗力"
+  "online_cache_day_line": "在线媒体只会在这台电脑的小缓存里保留一天，从不上传。"
 }

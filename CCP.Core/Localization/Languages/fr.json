@@ -1,4 +1,7 @@
 {
+  "chaos_draft_rerolled": "🎲 le destin est tenté à nouveau", "chaos_draft_sin_embraced": "🕯 péché accepté (+{0:0.00}x)",
+  "chaos_draft_sin_shielded": "🕯 la bougie a ôté la morsure (sans contrepartie)", "chaos_draft_sin_resistance": "🕯 tu as dit oui. elle a rendu la pareille (+1 résistance)",
+  "chaos_draft_resisted": "♥ tu as résisté → +1 résistance", "chaos_draft_resistance_announce": "+1 RÉSISTANCE",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",
@@ -7959,11 +7962,5 @@
   "online_official_plan_prime": "Prime a la plus grosse part quotidienne. Ce que tu as déjà vu se rejoue gratuitement.",
   "online_official_nice": "Cool",
   "online_official_stamped_line": "Les médias en ligne viennent de Scrolller. Chaque image et clip porte une petite mention \"via Scrolller\".",
-  "online_cache_day_line": "Les médias en ligne restent un jour dans un petit cache sur cet ordinateur, jamais envoyés.",
-  "chaos_draft_rerolled": "🎲 le destin est tenté à nouveau",
-  "chaos_draft_sin_embraced": "🕯 péché accepté (+{0:0.00}x)",
-  "chaos_draft_sin_shielded": "🕯 la bougie a ôté la morsure (sans contrepartie)",
-  "chaos_draft_sin_resistance": "🕯 tu as dit oui. elle a rendu la pareille (+1 résistance)",
-  "chaos_draft_resisted": "♥ tu as résisté → +1 résistance",
-  "chaos_draft_resistance_announce": "+1 RÉSISTANCE"
+  "online_cache_day_line": "Les médias en ligne restent un jour dans un petit cache sur cet ordinateur, jamais envoyés."
 }
