@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services;   // SubliminalCard
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
@@ -173,16 +174,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static Color Parse(string? hex, Color fallback) => Color.TryParse(hex, out var c) ? c : fallback;
 
-        private DispatcherTimer? _fadeTimer;
+        private Action<TimeSpan>? _fadeTick;
         private TimeSpan _fade, _hold;
         private long _fadeStart;
         private double _alpha;
         internal static TimeProvider Clock = TimeProvider.System;
         internal double CurrentOpacity { get; private set; }
-        internal bool IsFading => _fadeTimer?.IsEnabled == true;
+        internal bool IsFading => _fadeTick != null;
 
         /// <summary>WPF SubliminalService.cs:631-644,1344-1374: fade, hold, fade.
-        /// Capture the Gentle duration per card and apply native alpha on a dispatcher timer.</summary>
+        /// Capture the Gentle duration per card and apply native alpha on the shared dispatcher pump.</summary>
         public void Run(double alpha, TimeSpan hold)
         {
             _alpha = alpha;
@@ -190,7 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _fade = TimeSpan.FromMilliseconds(GentleVisuals.FadeMs(SubliminalCard.DefaultFadeMs));
             var closed = false;
             var started = false;
-            Closed += (_, _) => { closed = true; _fadeTimer?.Stop(); };
+            Closed += (_, _) => { closed = true; StopFade(); };
             // Bound lifetime even if a first frame never arrives, allowing 100 ms for mapping.
             DispatcherTimer.RunOnce(() => { if (!closed && !started) Close(); }, MaxLifetime(hold, _fade));
             RequestFrame(this, _ =>
@@ -199,23 +200,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 started = true;
                 DispatcherTimer.RunOnce(() => { if (!closed) Close(); }, MaxLifetime(hold, _fade));
                 _fadeStart = Clock.GetTimestamp();
-                // A near-transparent XWayland window can stop producing frames. A timer keeps the
-                // native opacity moving after the first frame, even when frame callbacks stall.
-                _fadeTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => FadeFrame());
-                _fadeTimer.Start();
+                // A near-transparent XWayland window can stop producing frames. The shared
+                // dispatcher pump keeps opacity moving even when window frame callbacks stall.
+                _fadeTick = _ => FadeFrame();
+                DispatcherFrameSource.Shared.Subscribe(_fadeTick);
                 FadeFrame();
             });
         }
 
         internal void FadeFrame()
         {
+            if (_fadeTick == null) return; // the shared source may have snapshotted this callback before close
             var ticks = Clock.GetElapsedTime(_fadeStart).Ticks;
             var holdEnd = (_fade + _hold).Ticks;
             var end = holdEnd + _fade.Ticks;
             CurrentOpacity = _alpha * (ticks < _fade.Ticks ? (double)ticks / _fade.Ticks
                 : ticks < holdEnd ? 1 : Math.Clamp((double)(end - ticks) / _fade.Ticks, 0, 1));
             X11Overlay.SetOpacity(this, CurrentOpacity);
-            if (ticks >= end) { _fadeTimer?.Stop(); Close(); }
+            if (ticks >= end) { StopFade(); Close(); }
+        }
+
+        private void StopFade()
+        {
+            if (_fadeTick is not { } tick) return;
+            _fadeTick = null;
+            DispatcherFrameSource.Shared.Unsubscribe(tick);
         }
 
         /// <summary>Test seam: a test swaps in a first frame that never comes.</summary>
