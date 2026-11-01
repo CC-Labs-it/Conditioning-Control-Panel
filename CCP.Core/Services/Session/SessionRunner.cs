@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Services
     /// A session run for heads without WPF: a port (not a move) of WPF SessionEngine
     /// (ConditioningControlPanel/Services/Session/SessionEngine.cs) over the pure pieces in SessionRules,
     /// <see cref="SessionSettingsSnapshot"/>, <see cref="PhrasePoolCustody"/>, <see cref="CoreEngine"/> and
-    /// <see cref="SessionLogService"/>. Drives flash, subliminal (+ whispers flag), bouncing text and lock cards.
+    /// <see cref="SessionLogService"/>. Drives flash, subliminal (+ whispers flag), bouncing text, lock cards and continuous bubbles.
     ///
     /// Also pause/resume (100 XP per pause), the flash ramp and the pink tint (ramp + ±3 min random start).
     ///
@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Services
     /// The session-scoped corner GIF too: admission, start/end minute, pause hide, stop handback and
     /// the #474 live edits; the head draws it through <see cref="CoreCornerGif.SessionShowHandler"/>.
     ///
-    /// ponytail: not driven here - video, bubbles, bubble count, mind wipe, brain drain, spiral,
+    /// ponytail: not driven here - video, bubble count, mind wipe, brain drain, spiral,
     /// ducking, phase events,
     /// EMI Desk, friends, season recap and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
@@ -224,6 +224,21 @@ namespace ConditioningControlPanel.Services
             }
             else LockCardScheduler.Instance.Stop();
 
+            // WPF SessionEngine.cs:1498-1524: take custody even if dashboard bubbles
+            // are already running. Intermittent bursts are a separate schedule (part B).
+            s.BubblesEnabled = ss.BubblesEnabled && !ss.BubblesIntermittent && ss.BubblesStartMinute == 0;
+            if (ss.BubblesEnabled)
+            {
+                s.BubblesFrequency = ss.BubblesFrequency;
+                s.BubblesClickable = ss.BubblesClickable;
+            }
+            if (s.BubblesEnabled)
+            {
+                CoreBubbles.Start();
+                CoreBubbles.RefreshFrequency(); // Start can no-op on a dashboard-owned field
+            }
+            else CoreBubbles.Stop();
+
             // SessionEngine.cs:1627: pop quiz is a user-level toggle (AppSettings), not per-session.
             if (s.PopQuizEnabled) CoreEngine.PopQuiz?.Start();
             else CoreEngine.PopQuiz?.Stop();
@@ -253,6 +268,7 @@ namespace ConditioningControlPanel.Services
             PauseCount++;
             _stopwatch.Stop();
             _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+            CoreBubbles.Stop();   // WPF SessionEngine.cs:522
             CoreFlash.Stop();
             CoreSubliminal.Stop();
             LockCardScheduler.Instance.Stop();
@@ -276,6 +292,10 @@ namespace ConditioningControlPanel.Services
             if (ss.SubliminalEnabled && !_deferred.IsPending("subliminal")) CoreSubliminal.Start();
             if (ss.LockCardEnabled && !_deferred.IsPending("lock cards")) LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
             if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
+            // Part B: restore WPF SessionEngine.cs:570 after its burst schedule (:1013-1067)
+            // can stop intermittent bubbles again (MainWindow.Presets.cs:2257).
+            if (ss.BubblesEnabled && !ss.BubblesIntermittent)
+                CoreBubbles.Start();
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
             // SessionEngine.cs:575: the pause closed it; admission is asked afresh.
             var minutes = Elapsed.TotalMinutes;
@@ -310,6 +330,30 @@ namespace ConditioningControlPanel.Services
             }
             UpdateRamps(session, minutes);
             _deferred.FireDue(minutes);
+
+            // WPF SessionEngine.cs:925-933: delayed continuous bubbles bypass the normal
+            // engine start, and the flag stays off until this minute.
+            var bubbleSettings = session.Settings;
+            if (bubbleSettings.BubblesEnabled && !bubbleSettings.BubblesIntermittent
+                && bubbleSettings.BubblesStartMinute > 0 && minutes >= bubbleSettings.BubblesStartMinute
+                && !CoreSettings.Current.BubblesEnabled)
+            {
+                CoreSettings.Current.BubblesEnabled = true;
+                CoreBubbles.Start();
+            }
+
+            // WPF SessionEngine.cs:818-829: delayed continuous bubbles gain one per
+            // minute of frequency every five active minutes after their start.
+            if (bubbleSettings.BubblesEnabled && !bubbleSettings.BubblesIntermittent
+                && bubbleSettings.BubblesStartMinute > 0 && minutes >= bubbleSettings.BubblesStartMinute)
+            {
+                var frequency = bubbleSettings.BubblesFrequency + (int)((minutes - bubbleSettings.BubblesStartMinute) / 5);
+                if (CoreSettings.Current.BubblesFrequency != frequency)
+                {
+                    CoreSettings.Current.BubblesFrequency = frequency;
+                    CoreBubbles.RefreshFrequency();
+                }
+            }
 
             // Pink delayed start at its randomised minute (SessionEngine.cs:849); the head shows it.
             var s = CoreSettings.Current;

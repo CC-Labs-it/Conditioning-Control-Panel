@@ -29,6 +29,8 @@ public sealed class ChasterBookedPopTests
         {
             var (place, cursor, time, frames) = (ChasterBookedPop.Place, ChasterBookedPop.Cursor, ChasterBookedPop.Time, ChasterBookedPop.Frames);
             var (fakeFrames, fakeTime) = (new FakeFrames(), new SteppedTime());
+            var coalescingClock = MainShellWindow.ChasterClock;
+            MainShellWindow.ChasterClock = fakeTime; // the 400 ms merge window, as well as the pop's lifetime
             ChasterBookedPop.Place = (_, _) => placeable;
             ChasterBookedPop.Cursor = () => null;
             ChasterBookedPop.Time = fakeTime;
@@ -41,6 +43,7 @@ public sealed class ChasterBookedPopTests
             finally
             {
                 ChasterBookedPop.CloseAll();
+                MainShellWindow.ChasterClock = coalescingClock;
                 (ChasterBookedPop.Place, ChasterBookedPop.Cursor, ChasterBookedPop.Time, ChasterBookedPop.Frames) = (place, cursor, time, frames);
             }
         }));
@@ -59,10 +62,18 @@ public sealed class ChasterBookedPopTests
         Assert.Equal(0, RailFlashes(shell));               // the pop replaced the rail figure, as WPF
         Assert.Equal(1, frames.Count);                     // one clock while it lives
 
+        time.Advance(TimeSpan.FromMilliseconds(BookedFlashPlan.CoalesceMs - 1));
         var second = chaster.NoteAt("typo", Bubble);       // inside the coalescing window: same pop, bigger number
         Dispatcher.UIThread.RunJobs();
         Assert.Same(pop, ChasterBookedPop.Live.Single());
         Assert.Equal(CircesTab.Format(first.AppliedSeconds + second.AppliedSeconds), pop.Stage.Text);
+
+        // The window is anchored at the FIRST booking. Its exact boundary starts a new pop.
+        time.Advance(TimeSpan.FromMilliseconds(1));
+        chaster.NoteAt("attention", Bubble);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, ChasterBookedPop.Live.Count);
+        Assert.Equal(2, frames.Count);
 
         time.Advance(TimeSpan.FromMilliseconds(pop.Plan.TotalMs + 1));
         frames.Frame(TimeSpan.FromSeconds(5));
