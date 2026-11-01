@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -11,6 +12,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
+using ConditioningControlPanel.Services.Bark;
 using OpenCvSharp;
 using Xunit;
 
@@ -175,4 +177,64 @@ public sealed class WebcamTongueTests
             host.Close();
         }
     });
+    [Fact] // WPF BarkService.cs:653-663: a held tongue event raises the companion rule
+    public void CurrentTongueEventReachesBarkGate_StoppedRunCannotSpeak() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var tracker = WebcamTracker.Instance;
+        var type = typeof(WebcamTracker);
+        var runField = type.GetField("_run", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var lastFire = type.GetField("_lastTongueOut", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var previousFire = lastFire.GetValue(tracker);
+        var mouth = (MouthOpenDetector)type.GetField("_mouth", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(tracker)!;
+        var process = type.GetMethod("ProcessTongueLandmarks", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var run = Activator.CreateInstance(type.GetNestedType("Run", BindingFlags.NonPublic)!, nonPublic: true)!;
+        var s = CoreSettings.Current;
+        var old = (BarkHead.Engine, s.AvatarEnabled, s.BarkChatSuppressionMs);
+        var rotation = s.BarkVariantRotation.ToDictionary(x => x.Key, x => x.Value.ToList());
+        var rule = new BarkRule { Id = "test-tongue", Trigger = "TongueOut", VariantPool = new() { new BarkVariant("tongue") } };
+        var spoken = 0;
+        var bark = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => spoken++ };
+        using var frame = Frame(20);
+        var lm = Landmarks();
+        var t = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        void OpenMouth()
+        {
+            mouth.Reset();
+            for (int i = 0; i < 18; i++) mouth.Update(.1, t.AddMilliseconds(i), .5);
+            mouth.Update(.6, t.AddMilliseconds(20), .5);
+            mouth.Update(.6, t.AddMilliseconds(21), .5);
+            Assert.True(mouth.IsOpen);
+        }
+        void Feed(DateTime at) => process.Invoke(tracker, new object[] { frame, lm, at, run });
+        try
+        {
+            s.AvatarEnabled = true; s.BarkChatSuppressionMs = 0;
+            bark.Start(); BarkHead.Engine = bark;
+            lastFire.SetValue(tracker, DateTime.MinValue);
+            runField.SetValue(tracker, run);
+            tracker.NoFace(); OpenMouth();
+            Feed(t); Feed(t.AddMilliseconds(350));
+            runField.SetValue(tracker, null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, spoken);
+
+            runField.SetValue(tracker, run);
+            tracker.NoFace(); OpenMouth();
+            Feed(t.AddSeconds(2)); Feed(t.AddMilliseconds(2350));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, spoken);
+            tracker.NoFace(); OpenMouth();
+            Feed(t.AddSeconds(4)); Feed(t.AddMilliseconds(4350));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, spoken); // existing bark gate enforces its 60-second gap
+        }
+        finally
+        {
+            runField.SetValue(tracker, null); tracker.NoFace(); mouth.Reset();
+            lastFire.SetValue(tracker, previousFire);
+            s.BarkVariantRotation = rotation;
+            (BarkHead.Engine, s.AvatarEnabled, s.BarkChatSuppressionMs) = old;
+        }
+    });
+
 }
