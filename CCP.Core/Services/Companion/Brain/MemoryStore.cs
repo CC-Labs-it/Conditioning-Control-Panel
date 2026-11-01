@@ -137,6 +137,10 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         // A wiped store stays off disk until a later model mutation, even if an old timer or
         // the shutdown backstop calls SaveNow after the wipe.
         private bool _wiped;
+        private bool _wipePending;
+        private readonly HashSet<string> _wipeFiles = new(StringComparer.OrdinalIgnoreCase);
+        private string WipeMarkerPath => _path + ".wipe";
+        internal Action<string> DeleteWipeFile { get; set; } = File.Delete;
 
         private readonly string _path;
         private readonly Func<DateTime> _clock;
@@ -199,6 +203,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
 
             Load();
             _saveTimer = new Timer(_ => SaveNow(), null, Timeout.Infinite, Timeout.Infinite);
+            if (_wipePending) RequestSave();
 
             if (!mirrorAppSignals) return;
 
@@ -723,35 +728,72 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                     catch (ObjectDisposedException) { }
                 }
 
-                var dir = Path.GetDirectoryName(_path);
-                foreach (var file in new[]
-                         {
-                             _path,
-                             dir == null ? null : Path.Combine(dir, "episodes.json"),
-                             dir == null ? null : Path.Combine(dir, "maintenance.json"),
-                             dir == null ? null : Path.Combine(dir, "session.json"),
-                             LegacyLocalHistoryPath()
-                         })
-                {
-                    if (string.IsNullOrEmpty(file)) continue;
-                    try
-                    {
-                        if (File.Exists(file)) File.Delete(file);
-                        // Temp/backup siblings (memory.json.tmp from an interrupted atomic save, *.bak)
-                        // hold the same text; a wipe that leaves them has not wiped.
-                        var parent = Path.GetDirectoryName(file);
-                        if (parent != null && Directory.Exists(parent))
-                            foreach (var sibling in Directory.GetFiles(parent, Path.GetFileName(file) + ".*"))
-                                File.Delete(sibling);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Warning(ex, "MemoryStore: failed to delete {File} during wipe", file);
-                    }
-                }
+                RetryWipe(all: true);
             }
 
-            Log.Information("MemoryStore: memory wiped");
+            if (_wipePending) Log.Warning("MemoryStore: wipe incomplete; retry scheduled");
+            else Log.Information("MemoryStore: memory wiped");
+        }
+
+        private string?[] WipeTargets()
+        {
+            var parent = Path.GetDirectoryName(_path);
+            return new[] { _path, parent == null ? null : Path.Combine(parent, "episodes.json"),
+                parent == null ? null : Path.Combine(parent, "maintenance.json"),
+                parent == null ? null : Path.Combine(parent, "session.json"), LegacyLocalHistoryPath() };
+        }
+
+        // P records the failed target bits and first-seen latch; C records only the latch.
+        private void RetryWipe(bool all = false)
+        {
+            string firstSeen;
+            lock (_lock) firstSeen = _profile.TryGetValue(KeyFirstSeen, out var value) ? value as string ?? "" : "";
+            var targets = WipeTargets();
+            if (all)
+            {
+                _wipeFiles.Clear();
+                foreach (var file in targets) if (!string.IsNullOrEmpty(file)) _wipeFiles.Add(file);
+            }
+            string PendingMarker()
+            {
+                int mask = 0;
+                for (int i = 0; i < targets.Length; i++)
+                    if (targets[i] is { } file && _wipeFiles.Contains(file)) mask |= 1 << i;
+                return "P\n" + mask.ToString(CultureInfo.InvariantCulture) + "\n" + firstSeen;
+            }
+            bool failed = false;
+            try
+            {
+                var dir = Path.GetDirectoryName(_path);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                AtomicWrite(WipeMarkerPath, PendingMarker());
+            }
+            catch (Exception ex) { failed = true; Log.Warning(ex, "MemoryStore: failed to record wipe"); }
+
+            foreach (var file in _wipeFiles.ToArray())
+            {
+                try
+                {
+                    DeleteWipeFile(file);
+                    var dir = Path.GetDirectoryName(file);
+                    if (dir != null && Directory.Exists(dir))
+                        foreach (var sibling in Directory.GetFiles(dir, Path.GetFileName(file) + ".*"))
+                            if (!string.Equals(sibling, WipeMarkerPath, StringComparison.OrdinalIgnoreCase)
+                                && !string.Equals(sibling, WipeMarkerPath + ".tmp", StringComparison.OrdinalIgnoreCase))
+                                DeleteWipeFile(sibling);
+                    _wipeFiles.Remove(file);
+                }
+                catch (Exception ex) { failed = true; Log.Warning(ex, "MemoryStore: failed to delete {File} during wipe", file); }
+            }
+            try
+            {
+                if (failed) AtomicWrite(WipeMarkerPath, PendingMarker());
+                else if (firstSeen.Length == 0) File.Delete(WipeMarkerPath);
+                else AtomicWrite(WipeMarkerPath, "C\n" + firstSeen);
+            }
+            catch (Exception ex) { failed = true; Log.Warning(ex, "MemoryStore: failed to complete wipe"); }
+            _wipePending = failed;
+            if (failed) RequestSave();
         }
 
         /// <summary>
@@ -816,6 +858,8 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             {
                 try
                 {
+                    if (_wipePending) RetryWipe();
+                    if (_wipePending) return;
                     string json;
                     lock (_lock)
                     {
@@ -825,6 +869,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                     var dir = Path.GetDirectoryName(_path);
                     if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
                     AtomicWrite(_path, json);
+                    File.Delete(WipeMarkerPath);
                 }
                 catch (Exception ex)
                 {
@@ -932,6 +977,29 @@ namespace ConditioningControlPanel.Services.Companion.Brain
 
         private void Load()
         {
+            if (File.Exists(WipeMarkerPath))
+            {
+                try
+                {
+                    var marker = File.ReadAllText(WipeMarkerPath);
+                    bool complete = marker.StartsWith("C\n", StringComparison.Ordinal);
+                    int separator = complete ? 1 : marker.IndexOf('\n', 2);
+                    if (separator < 0 || (!complete && (!marker.StartsWith("P\n", StringComparison.Ordinal)
+                        || !int.TryParse(marker.AsSpan(2, separator - 2), out _)))) throw new FormatException("Invalid wipe marker");
+                    string firstSeen = marker[(separator + 1)..];
+                    if (firstSeen.Length > 0) _profile[KeyFirstSeen] = firstSeen;
+                    if (!complete)
+                    {
+                        int mask = int.Parse(marker.AsSpan(2, separator - 2), CultureInfo.InvariantCulture);
+                        var targets = WipeTargets();
+                        for (int i = 0; i < targets.Length; i++)
+                            if ((mask & (1 << i)) != 0 && targets[i] is { } file) _wipeFiles.Add(file);
+                        _wiped = true; RetryWipe(); return;
+                    }
+                    if (!File.Exists(_path)) { _wiped = true; return; }
+                }
+                catch (Exception ex) { _wiped = true; Log.Warning(ex, "MemoryStore: could not read wipe marker"); return; }
+            }
             string json;
             try
             {

@@ -132,6 +132,106 @@ public sealed class MemoryStoreWipeConcurrencyTests : IDisposable
         }
     }
 
+    [Fact]
+    public void Wipe_shutdown_and_reload_preserves_only_first_seen()
+    {
+        var store = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
+        store.UpdateProfileSignal(MemoryStore.KeyFirstSeen, "2025-11-02");
+        store.UpdateProfileSignal(MemoryStore.KeyLevel, 42L);
+        store.AddFact("forgotten", MemoryFactKind.Event);
+        store.NoteChatTurn("bambi");
+        store.SaveNow();
+        store.Wipe();
+        var newSession = Path.Combine(_dir, "companion", "session.json");
+        File.WriteAllText(newSession, "new session");
+        store.Dispose();
+        Assert.False(File.Exists(PathToMemory));
+        using var reloaded = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
+        Assert.Equal("new session", File.ReadAllText(newSession));
+        Assert.Equal("2025-11-02", reloaded.Profile[MemoryStore.KeyFirstSeen]);
+        Assert.Single(reloaded.Profile);
+        Assert.Empty(reloaded.GetFacts());
+        Assert.Empty(reloaded.Relationships);
+    }
+
+    [Fact]
+    public void Failed_delete_is_retried_before_new_memory_is_saved()
+    {
+        using var store = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
+        store.UpdateProfileSignal(MemoryStore.KeyFirstSeen, "2025-11-02");
+        store.AddFact("forgotten", MemoryFactKind.Event);
+        store.SaveNow();
+        bool blocked = true;
+        store.DeleteWipeFile = file =>
+        {
+            if (blocked && file == PathToMemory) throw new IOException("temporarily locked");
+            File.Delete(file);
+        };
+        store.Wipe();
+        Assert.True(File.Exists(PathToMemory));
+        store.AddFact("new memory", MemoryFactKind.Event);
+        var newSession = Path.Combine(_dir, "companion", "session.json");
+        File.WriteAllText(newSession, "new session");
+        blocked = false;
+        store.SaveNow();
+        Assert.Equal("new session", File.ReadAllText(newSession));
+        using var reloaded = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
+        Assert.Equal("2025-11-02", reloaded.Profile[MemoryStore.KeyFirstSeen]);
+        Assert.Equal("new memory", Assert.Single(reloaded.GetFacts()).Text);
+    }
+
+    [Fact]
+    public void An_unremovable_path_is_not_treated_as_missing()
+    {
+        using var store = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
+        Directory.CreateDirectory(PathToMemory);
+        store.Wipe();
+        Assert.True(File.Exists(PathToMemory + ".wipe"));
+        Directory.Delete(PathToMemory);
+        store.SaveNow();
+        Assert.False(File.Exists(PathToMemory + ".wipe"));
+    }
+
+    [Fact]
+    public async Task Failed_delete_retries_after_the_lock_is_released()
+    {
+        using var store = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
+        store.AddFact("forgotten", MemoryFactKind.Event);
+        store.SaveNow();
+        int blocked = 1;
+        store.DeleteWipeFile = file => { if (Volatile.Read(ref blocked) != 0 && file == PathToMemory) throw new IOException("locked"); File.Delete(file); };
+        store.Wipe();
+        Assert.True(File.Exists(PathToMemory));
+        Volatile.Write(ref blocked, 0);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        while (File.Exists(PathToMemory) && DateTime.UtcNow < deadline) await Task.Delay(50);
+        Assert.False(File.Exists(PathToMemory));
+    }
+
+    [Fact]
+    public void Pending_wipe_recovers_after_shutdown_without_resurrecting_memory()
+    {
+        var store = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
+        store.UpdateProfileSignal(MemoryStore.KeyFirstSeen, "2025-11-02");
+        store.AddFact("forgotten", MemoryFactKind.Event);
+        store.SaveNow();
+        store.DeleteWipeFile = file =>
+        {
+            if (file == PathToMemory) throw new IOException("temporarily locked");
+            File.Delete(file);
+        };
+        store.Wipe();
+        store.Dispose();
+        Assert.True(File.Exists(PathToMemory));
+        var newSession = Path.Combine(_dir, "companion", "session.json");
+        File.WriteAllText(newSession, "new session");
+        using var reloaded = new MemoryStore(PathToMemory, chatMemoryEnabled: () => true);
+        Assert.Equal("2025-11-02", reloaded.Profile[MemoryStore.KeyFirstSeen]);
+        Assert.Empty(reloaded.GetFacts());
+        Assert.False(File.Exists(PathToMemory));
+        Assert.Equal("new session", File.ReadAllText(newSession));
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch (DirectoryNotFoundException) { }
