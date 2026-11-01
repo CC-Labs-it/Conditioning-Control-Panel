@@ -170,6 +170,41 @@ public sealed class AiPermissionsLiveFeedTests
     });
 
     [Fact]
+    public Task TierChangesRepaintEffectiveEffectsWithoutChangingSavedChoice() => Run(service =>
+    {
+        CoreSecrets.RetrieveProvider = _ => null;
+        CoreSecrets.StoreProvider = (_, _) => { };
+        Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(p => new ProviderSubscription(p)));
+        bool lab = false;
+        CoreAccount.HasLabAccessProvider = () => lab;
+        service.Current.CompanionPrompt.AllowAiToControlEffects = true;
+        var grid = new AiPermissionsGrid();
+        var window = new Window { Content = grid };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var toggle = grid.FindControl<CheckBox>("ChkCapEffects")!;
+            var panel = grid.FindControl<Control>("EffectPermsPanel")!;
+            Assert.False(toggle.IsChecked);
+            Assert.False(panel.IsVisible);
+            lab = true;
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon!.NotifyEntitlementRaised(PatreonTier.Level2);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(toggle.IsChecked);
+            Assert.True(panel.IsVisible);
+            lab = false;
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar!.NotifyEntitlementRaised(PatreonTier.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(toggle.IsChecked);
+            Assert.False(panel.IsVisible);
+            Assert.True(service.Current.CompanionPrompt.AllowAiToControlEffects);
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task LockBandCtaOpensSettingsAccountAsWpfDoes() => Run(_ =>
     {
         var shell = new MainShellWindow();

@@ -85,6 +85,40 @@ public sealed class PremiumGatesTests
     }
 
     [Fact]
+    public void TakeoverAutonomyFollowsPremiumAndFreeDay()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            bool premium = false, free = false;
+            CoreEntitlement.HasPremiumProvider = () => premium;
+            CoreEntitlement.IsFreeTodayProvider = key => free && key == "takeover";
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.Show();
+                var tab = shell.Named<Control>("BambiTakeoverTab")!;
+                var locked = tab.FindControl<Control>("AutonomyLocked")!;
+                var unlocked = tab.FindControl<Control>("AutonomyUnlocked")!;
+                void Check(bool open)
+                {
+                    shell.RefreshEntitlementVeils();
+                    Assert.Equal(!open, locked.IsVisible);
+                    Assert.Equal(open, unlocked.IsVisible);
+                }
+                Check(false);
+                free = true; Check(true);
+                free = false; premium = true; Check(true);
+                premium = false; Check(false);
+            }
+            finally { shell.Close(); }
+        });
+    }
+
+    [Fact]
     public void FlippingTheSeam_UnlocksEveryVeilAndLockband()
     {
         AvaloniaTestDispatcher.Run(() =>
