@@ -43,19 +43,23 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// feat-backroom-counter-buy). Per run only: no profile-sync feed yet (svc-prize-ownership).</summary>
         internal static bool Held(string id)
         {
-            var current = FriendsHead.Identity()?.UnifiedId;
-            lock (Gate) return current != null && current == _heldAccount && _grants.Contains(id);
+            // WPF OwnershipService.cs:60,77-82,155-157: cached grants follow the signed-in
+            // account, not the availability of a network identity while Offline mode is on.
+            lock (Gate) return _heldAccount != null
+                && string.Equals(CoreAccount.UnifiedUserId, _heldAccount, StringComparison.Ordinal)
+                && _grants.Contains(id);
         }
 
         /// <summary>WPF OwnershipService.ApplySnapshot: another account's snapshot and a lower
         /// revision for the held account are ignored; blank ids skipped, ids trimmed.</summary>
         internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
         {
-            var current = FriendsHead.Identity()?.UnifiedId;
-            if (string.IsNullOrEmpty(accountId) || grants is null || current != accountId) return;
+            if (string.IsNullOrEmpty(accountId) || grants is null) return;
             bool changed;
             lock (Gate)
             {
+                // A response already in flight can arrive offline; reject it only if the account changed.
+                if (!string.Equals(CoreAccount.UnifiedUserId, accountId, StringComparison.Ordinal)) return;
                 if (_heldAccount == accountId && revision < _revision) return;
                 var next = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
                 changed = _heldAccount != accountId || !_grants.SetEquals(next);
