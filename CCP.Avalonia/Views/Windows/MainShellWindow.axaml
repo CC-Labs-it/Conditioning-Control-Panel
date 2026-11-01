@@ -1673,9 +1673,9 @@
                     <Border x:Name="XPBarTrack" Grid.Column="2" Background="{DynamicResource DepthWellFloorBrush}" CornerRadius="4" Height="8" Margin="0,0,10,0"
                             ToolTip.Tip=" ">
                         <Grid>
-                            <Border x:Name="XpDepthTop" Height="5" VerticalAlignment="Top" Background="{DynamicResource DepthWellTop}" IsHitTestVisible="False"/>
-                            <Border x:Name="XpDepthLeft" Width="6" HorizontalAlignment="Left" Background="{DynamicResource DepthWellLeft}" IsHitTestVisible="False"/>
-                            <Border Height="1" VerticalAlignment="Bottom" Background="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
+                            <Border x:Name="XpDepthTop" Height="5" CornerRadius="4,4,0,0" VerticalAlignment="Top" Background="{DynamicResource DepthWellTop}" IsHitTestVisible="False"/>
+                            <Border x:Name="XpDepthLeft" Width="6" CornerRadius="4,0,0,4" HorizontalAlignment="Left" Background="{DynamicResource DepthWellLeft}" IsHitTestVisible="False"/>
+                            <Border Height="1" VerticalAlignment="Bottom" Margin="4,0" Background="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
                             <Border x:Name="XPBar" Background="{DynamicResource PinkBrush}" CornerRadius="4"
                                     HorizontalAlignment="Left" Width="100">
                                 <!-- Chrome FX (PR-1): a slow gloss travelling along the filled part of
@@ -1687,6 +1687,8 @@
                                      child to CornerRadius, so a full-bleed gloss would show square
                                      corners poking out of the 8px-tall bar at each end. -->
                                 <Panel>
+                                <Border x:Name="XpDepthGloss" Margin="1,0" CornerRadius="4" Background="{DynamicResource DepthTubeGloss}" IsHitTestVisible="False"/>
+                                <Border x:Name="XpDepthBead" Width="8" Height="8" Margin="0,0,-4,0" HorizontalAlignment="Right" CornerRadius="4" Background="{DynamicResource DepthTubeBead}" IsHitTestVisible="False"/>
                                 <Border x:Name="XPBarSheen" Margin="4,0" IsHitTestVisible="False" Opacity="0">
                                     <Border.Background>
                                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
@@ -1696,8 +1698,6 @@
                                         </LinearGradientBrush>
                                     </Border.Background>
                                 </Border>
-                                <Border x:Name="XpDepthGloss" Margin="1,0" CornerRadius="4" Background="{DynamicResource DepthTubeGloss}" IsHitTestVisible="False"/>
-                                <Border x:Name="XpDepthBead" Width="8" Height="8" Margin="0,0,-4,0" HorizontalAlignment="Right" CornerRadius="4" Background="{DynamicResource DepthTubeBead}" IsHitTestVisible="False"/>
                                 </Panel>
                             </Border>
                             <Border x:Name="XPBarFlashOverlay" Background="{DynamicResource PinkBrush}" CornerRadius="4"

@@ -37,6 +37,8 @@ public sealed class SyncS6bDepthTests
     [InlineData("logo")]
     [InlineData("billboard")]
     [InlineData("hud")]
+    [InlineData("xpCaps")]
+    [InlineData("xpLayers")]
     public async Task ChromeDepthPreservesContentAndTracksTheFill(string area)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
@@ -119,6 +121,39 @@ public sealed class SyncS6bDepthTests
                     w.ShowTab("settings");
                     Assert.Same(well, frame.Child);
                     Assert.Same(slot, well.Children[0]);
+                }
+                if (area == "xpCaps")
+                {
+                    var track = w.Named<Border>("XPBarTrack")!;
+                    Assert.Equal(8, track.Height);
+                    Assert.Equal(new CornerRadius(4), track.CornerRadius);
+                    var top = w.Named<Border>("XpDepthTop")!;
+                    var left = w.Named<Border>("XpDepthLeft")!;
+                    var groove = Assert.IsType<Grid>(track.Child);
+                    var foot = Assert.Single(groove.Children.OfType<Border>(), b => b.Height == 1);
+                    Assert.Equal(new CornerRadius(4, 4, 0, 0), top.CornerRadius);
+                    Assert.Equal(new CornerRadius(4, 0, 0, 4), left.CornerRadius);
+                    Assert.Equal(new Thickness(4, 0), foot.Margin);
+                    Assert.Same(groove, top.Parent);
+                    Assert.Same(groove, left.Parent);
+                    foreach (var band in new[] { top, left, foot })
+                    {
+                        Assert.False(band.IsHitTestVisible);
+                        Assert.True(groove.Children.IndexOf(band) < groove.Children.IndexOf(w.Named<Border>("XPBar")!));
+                    }
+                }
+                if (area == "xpLayers")
+                {
+                    var fill = w.Named<Border>("XPBar")!;
+                    var layers = Assert.IsType<Panel>(fill.Child);
+                    var gloss = w.Named<Border>("XpDepthGloss")!;
+                    var bead = w.Named<Border>("XpDepthBead")!;
+                    var sheen = w.Named<Border>("XPBarSheen")!;
+                    Assert.Same(layers, gloss.Parent);
+                    Assert.Same(layers, bead.Parent);
+                    Assert.True(layers.Children.IndexOf(gloss) < layers.Children.IndexOf(bead));
+                    Assert.True(layers.Children.IndexOf(bead) < layers.Children.IndexOf(sheen));
+                    Assert.Equal(new Thickness(4, 0), sheen.Margin);
                 }
                 if (area == "hud")
                 {
