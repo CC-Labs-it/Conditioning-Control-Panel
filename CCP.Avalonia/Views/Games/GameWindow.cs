@@ -162,6 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (IsDtrh && HandleDtrh(o)) return;
             if (IsGlassroad && HandleGlassroad(o)) return;
             if (IsBreakout && (string?)o["type"] == "room-option") { HandleBreakoutOption(o); return; }
+            if (IsBreakout && (string?)o["type"] == "funnel") { HandleBreakoutFunnel(o); return; }
             switch ((string?)o["type"])
             {
                 case "ready":
@@ -253,6 +254,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             frame["motion"] = motion.ToString().ToLowerInvariant();
             frame["reduced"] = motion != ConditioningControlPanel.Models.MotionLevel.Full;
             frame["audio"] = JObject.FromObject(BreakoutAudio());
+            // WPF BackRoomHostService.cs:614-616: the demo end card uses the cached plan list.
+            frame["plans"] = ConditioningControlPanel.Services.Vault.PlanCatalog.ToWire(ConditioningControlPanel.Services.Vault.PlanCatalog.Current);
             // WPF BackRoomHostService.cs:32-38,589-609: English keys, resolved in the active language.
             var loc = LocalizationManager.Instance;
             frame["lex"] = JObject.FromObject(loc.KeysWithPrefix("br_").ToDictionary(k => k, loc.Get));
