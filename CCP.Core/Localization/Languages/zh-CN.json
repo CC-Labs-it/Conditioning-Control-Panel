@@ -1,10 +1,6 @@
 {
-  "chaos_draft_reroll_event": "🎲 再次挑战命运",
-  "chaos_draft_sin_bonus_event": "🕯 接受罪孽（+{0:0.00}x）",
-  "chaos_draft_shielded_sin_event": "🕯 烛光带走了痛苦（没有负面效果）",
-  "chaos_draft_surrender_event": "🕯 你说了同意。她给了回馈（+1 抵抗力）",
-  "chaos_draft_skip_event": "♥ 抵抗成功 → +1 抵抗力",
-  "chaos_draft_skip_announce": "+1 抵抗力",
+  "chaos_treat_faded_label": "消散", "chaos_treat_faded": "💨 {0}消散了", "chaos_treat_faded_streak": "💨 {0}消散了。连击减半至x{1}", "chaos_draft_reroll_event": "🎲 再次挑战命运", "chaos_draft_sin_bonus_event": "🕯 接受罪孽（+{0:0.00}x）",
+  "chaos_draft_shielded_sin_event": "🕯 烛光带走了痛苦（没有负面效果）", "chaos_draft_surrender_event": "🕯 你说了同意。她给了回馈（+1 抵抗力）", "chaos_draft_skip_event": "♥ 抵抗成功 → +1 抵抗力", "chaos_draft_skip_announce": "+1 抵抗力",
   "chaos_welcome_shower_event": "🚿 欢迎阵雨：从天而降的奖励",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",

@@ -58,7 +58,8 @@ namespace ConditioningControlPanel.Services
         public bool Clickable, Popping, Lucky;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
-        private double _startX, _top, _bottom, _speed, _wobbleOffset, _timeAlive;
+        private double _startX, _top, _bottom, _speed, _wobbleOffset, _timeAlive, _treatLifeMs;
+        private bool _dissolving;
         private int _animType;
 
         // ---- live chaos bubble (WPF Bubble _fuseRemainingMs / _isChanneling / TickChannel) ----
@@ -76,7 +77,7 @@ namespace ConditioningControlPanel.Services
         private double _channelMs, _channelStartFuseSec;
         private DateTime _channelStartUtc;
 
-        public enum Result { Alive, Missed, Done, Detonated, Defused }
+        public enum Result { Alive, Missed, Done, Detonated, Defused, Expired }
 
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
         public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
@@ -163,6 +164,9 @@ namespace ConditioningControlPanel.Services
         {
             var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
+            // WPF BubbleService.cs:3249-3252: explicitly timed treats rot; other variants do not.
+            if (!spec.IsLive && !spec.IsDarter && !spec.IsFreeze && !spec.IsHeart && !spec.IsDroplet
+                && !spec.IsEscort && !spec.IsTease && !spec.IsBrittle) b._treatLifeMs = spec.TreatLifeMs;
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
                        * Math.Max(0.1, spec.SpeedMult) * Chaos.ChaosTuning.CHAOS_SPEED_MULT;
             b._animType = r.Next(4);
@@ -180,11 +184,12 @@ namespace ConditioningControlPanel.Services
         public const double DangerTelegraphMs = 1200;
 
         /// <summary>WPF _dangerFactor (BubbleService.cs:4155): 0 until the last DangerTelegraphMs of a
-        /// live fuse, then ramps to 1 at fuse-out. Visual only.</summary>
+        /// live fuse or timed treat, then ramps to 1 at expiry. Visual only.</summary>
         public double DangerFactor
         {
             get
             {
+                if (_treatLifeMs > 0) return Math.Clamp(1.0 - _treatLifeMs / 1500, 0, 1); // WPF :4228-4231
                 if (Spec is not { IsLive: true } || FuseTotalMs <= 0) return 0;
                 double dangerMs = Math.Min(FuseTotalMs, DangerTelegraphMs);
                 return FuseRemainingMs < dangerMs ? Math.Clamp(1.0 - FuseRemainingMs / Math.Max(1, dangerMs), 0, 1) : 0;
@@ -245,9 +250,9 @@ namespace ConditioningControlPanel.Services
             if (Popping)
             {
                 // Pop animation - expand and fade; lucky pops linger ~50% longer.
-                Scale += Deflating ? -0.03 : 0.04;
-                Fade -= Lucky ? 0.044 : 0.066;
-                Angle += 2;
+                Scale = _dissolving ? Math.Max(0.1, Scale - 0.02) : Scale + (Deflating ? -0.03 : 0.04);
+                Fade -= _dissolving ? 0.05 : Lucky ? 0.044 : 0.066;
+                if (!_dissolving) Angle += 2;
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
@@ -257,6 +262,9 @@ namespace ConditioningControlPanel.Services
                 FuseRemainingMs -= FuseStepMs;
                 if (FuseRemainingMs <= 0) return GoOff(null);
             }
+            // WPF BubbleService.cs:4223-4232,4862-4870: rot is quiet, once, and pauses with the field.
+            if (_treatLifeMs > 0 && (_treatLifeMs -= FuseStepMs) <= 0)
+            { Popping = _dissolving = true; return Result.Expired; }
             _timeAlive += 0.02;
             double offset = 0;
             switch (_animType)
@@ -305,6 +313,7 @@ namespace ConditioningControlPanel.Services
         public Action<AmbientBubble>? ChaosDetonated;
         /// <summary>A live chaos bubble was snapped (held to the end, or swept).</summary>
         public Action<AmbientBubble>? ChaosDefused;
+        public Action<AmbientBubble>? ChaosTreatExpired;
 
         /// <summary>A press on a live bubble (WPF OnPlayerPress): starts its channel, or sets it off.</summary>
         public void PressLive(AmbientBubble b, bool canChannel, double cursorX, double cursorY)
@@ -362,6 +371,7 @@ namespace ConditioningControlPanel.Services
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Defused) { ChaosDefused?.Invoke(b); continue; }
+                if (r == AmbientBubble.Result.Expired) { ChaosTreatExpired?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Missed) missed++;
                 Bubbles.RemoveAt(i);
             }

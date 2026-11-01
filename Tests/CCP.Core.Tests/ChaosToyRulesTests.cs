@@ -79,7 +79,10 @@ public class ChaosToyRulesTests
     {
         var s = Run(("vibe_popping", 5));
         ChaosToyRules.Build(s, 1, _ => true, "Q", "E");
-        s.ActivesDisabled = true;
+        var urge = ChaosBoonPool.All.Find(b => b.Id == "the_urge")!; var originalMult = s.TotalMult; s.ApplyBoon(urge);
+        Assert.Equal(3.0, s.UrgeMult); Assert.Equal(3 * originalMult, s.TotalMult, 6);
+        var shielded = Run(("vibe_popping", 5)); shielded.ApplyBoon(urge, shieldDrawback: true);
+        Assert.Equal(2.0, shielded.UrgeMult); Assert.False(shielded.ActivesDisabled);
         Assert.Equal(ChaosToyRules.UseResult.Denied, ChaosToyRules.Use(s, s.ActiveToys[0], running: true));
         Assert.Equal(0, s.ActiveToys[0].CooldownRemainingSec);
         Assert.Contains("no toys", s.RecentEvents[0]);

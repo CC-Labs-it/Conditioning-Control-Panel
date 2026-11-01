@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
-    /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
+    /// motion but FloatUp, default treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
     /// milestones, lessons/first-times, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Scripted onboarding
@@ -81,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static int _pendingWave;
         private static readonly List<ChaosUnlockCardInfo> _pendingDraftCards = new();
         // WPF ChaosModeService.cs:1476-1479: defer cards until their advertised effects are hosted.
-        private static readonly string[] DraftableBoons = { "defuse_chain", "golden_touch", "extra_shield", "welcome_shower", "hair_trigger" };
+        private static readonly string[] DraftableBoons = { "defuse_chain", "golden_touch", "extra_shield", "welcome_shower", "heavy_drop", "hair_trigger", "the_urge", "double_or_nothing" };
         // The HUD splits the marker from the localized feed text for its IconGlyph.
         private static void PushLocalizedEvent(string key, params object[] args) =>
             _state?.PushEvent(ConditioningControlPanel.Localization.Loc.GetF(key, args));
@@ -141,7 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _boonBar.Show();
             picks.CollectionChanged += (_, _) => _boonBar?.SetPicks(picks);
             // WPF ChaosModeService.cs:369: the field is ready before the opening payload.
-            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse);
+            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTreatExpired);
             // WPF ChaosModeService.cs:422-435: the loadout pick enters before wave 1.
             // Scripted first descents ignore even a stale equipped id.
             var equipped = _state.Config.ScriptedFirstRun ? null : ChaosMeta.State.EquippedStartBoon;
@@ -259,6 +259,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     $"+{(int)ChaosFieldMath.TreatFocusGain(spec.PayMult)} FOCUS", Color.FromRgb(0x7A, 0xE0, 0xFF));
             ShowPopScore(pts);
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
+        }
+
+        // WPF ChaosModeService.cs:1898-1913: a rotted treat costs half the streak, never a pop.
+        private static void OnTreatExpired(AmbientBubble b)
+        {
+            if (_state == null || b.Spec == null || _manualPaused || _draftPaused || _lessonCardPaused) return;
+            Label(b, ConditioningControlPanel.Localization.Loc.Get("chaos_treat_faded_label"), Color.FromRgb(0xB8, 0xB8, 0xD0));
+            string name = b.Spec.Payload.DisplayName;
+            if (_state.Combo > 1) { _state.Combo /= 2; PushLocalizedEvent("chaos_treat_faded_streak", name, _state.Combo); }
+            else { _state.Combo = 0; PushLocalizedEvent("chaos_treat_faded", name); }
+            Pulse(Color.FromRgb(150, 150, 175), 0.10);
         }
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>

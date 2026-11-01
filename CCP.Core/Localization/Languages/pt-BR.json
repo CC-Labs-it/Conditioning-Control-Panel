@@ -1,10 +1,6 @@
 {
-  "chaos_draft_reroll_event": "🎲 tentou a sorte de novo",
-  "chaos_draft_sin_bonus_event": "🕯 pecado aceito (+{0:0.00}x)",
-  "chaos_draft_shielded_sin_event": "🕯 a vela levou a dor (sem desvantagem)",
-  "chaos_draft_surrender_event": "🕯 você disse sim. ela retribuiu (+1 resistência)",
-  "chaos_draft_skip_event": "♥ resistiu → +1 resistência",
-  "chaos_draft_skip_announce": "+1 RESISTÊNCIA",
+  "chaos_treat_faded_label": "DESVANECEU", "chaos_treat_faded": "💨 {0} desvaneceu", "chaos_treat_faded_streak": "💨 {0} desvaneceu. sequência reduzida a x{1}", "chaos_draft_reroll_event": "🎲 tentou a sorte de novo", "chaos_draft_sin_bonus_event": "🕯 pecado aceito (+{0:0.00}x)",
+  "chaos_draft_shielded_sin_event": "🕯 a vela levou a dor (sem desvantagem)", "chaos_draft_surrender_event": "🕯 você disse sim. ela retribuiu (+1 resistência)", "chaos_draft_skip_event": "♥ resistiu → +1 resistência", "chaos_draft_skip_announce": "+1 RESISTÊNCIA",
   "chaos_welcome_shower_event": "🚿 chuva de boas-vindas: mimos vindos de cima",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Este aprimoramento está publicado no catálogo da comunidade.",

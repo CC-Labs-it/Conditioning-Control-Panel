@@ -1,10 +1,6 @@
 {
-  "chaos_draft_reroll_event": "🎲 tempted fate again",
-  "chaos_draft_sin_bonus_event": "🕯 sin embraced (+{0:0.00}x)",
-  "chaos_draft_shielded_sin_event": "🕯 the candle took the sting (no drawback)",
-  "chaos_draft_surrender_event": "🕯 you said yes. it gave back (+1 resistance)",
-  "chaos_draft_skip_event": "♥ resisted → +1 resistance",
-  "chaos_draft_skip_announce": "+1 RESISTANCE",
+  "chaos_treat_faded_label": "FADED", "chaos_treat_faded": "💨 {0} faded away", "chaos_treat_faded_streak": "💨 {0} faded… streak halved to x{1}", "chaos_draft_reroll_event": "🎲 tempted fate again", "chaos_draft_sin_bonus_event": "🕯 sin embraced (+{0:0.00}x)",
+  "chaos_draft_shielded_sin_event": "🕯 the candle took the sting (no drawback)", "chaos_draft_surrender_event": "🕯 you said yes. it gave back (+1 resistance)", "chaos_draft_skip_event": "♥ resisted → +1 resistance", "chaos_draft_skip_announce": "+1 RESISTANCE",
   "chaos_welcome_shower_event": "🚿 welcome shower: treats from above",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",

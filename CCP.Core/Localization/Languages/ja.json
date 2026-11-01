@@ -1,10 +1,6 @@
 {
-  "chaos_draft_reroll_event": "🎲 もう一度運命に挑んだ",
-  "chaos_draft_sin_bonus_event": "🕯 罪を受け入れた（+{0:0.00}x）",
-  "chaos_draft_shielded_sin_event": "🕯 ろうそくが痛みを引き受けた（不利な効果なし）",
-  "chaos_draft_surrender_event": "🕯 あなたは受け入れた。お返しをもらった（抵抗力+1）",
-  "chaos_draft_skip_event": "♥ 抵抗した → 抵抗力+1",
-  "chaos_draft_skip_announce": "抵抗力+1",
+  "chaos_treat_faded_label": "消失", "chaos_treat_faded": "💨 {0}が消えた", "chaos_treat_faded_streak": "💨 {0}が消えた。連続数が半分のx{1}に", "chaos_draft_reroll_event": "🎲 もう一度運命に挑んだ", "chaos_draft_sin_bonus_event": "🕯 罪を受け入れた（+{0:0.00}x）",
+  "chaos_draft_shielded_sin_event": "🕯 ろうそくが痛みを引き受けた（不利な効果なし）", "chaos_draft_surrender_event": "🕯 あなたは受け入れた。お返しをもらった（抵抗力+1）", "chaos_draft_skip_event": "♥ 抵抗した → 抵抗力+1", "chaos_draft_skip_announce": "抵抗力+1",
   "chaos_welcome_shower_event": "🚿 歓迎のシャワー: 上からご褒美",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",

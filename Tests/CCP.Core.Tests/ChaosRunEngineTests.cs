@@ -42,11 +42,13 @@ public class ChaosRunEngineTests
     public void An_armed_relapse_buys_exactly_one_more_loop()
     {
         var s = Run(60, 3);
-        s.RelapseLoopArmed = true;
+        s.DropPerPop = 2; s.ApplyBoon(ChaosBoonPool.All.Find(b => b.Id == "double_or_nothing")!, shieldDrawback: true);
+        Assert.True(s.RelapseLoopArmed);
         var log = Drive(s);
         Assert.Equal(new List<Beat> { new(20, "wave2"), new(40, "wave3"), new(50, "ending"), new(60, "relapse"), new(60, "wave4"), new(80, "over") }, log);
         Assert.Equal(80, s.RunDurationSec);
         Assert.Equal(4, s.WaveCount);
+        Assert.Equal((14, 4), (ChaosRunEngine.GoldScaled(s, 7), ChaosRunEngine.DropsPerPop(s)));
     }
 
     [Fact]
