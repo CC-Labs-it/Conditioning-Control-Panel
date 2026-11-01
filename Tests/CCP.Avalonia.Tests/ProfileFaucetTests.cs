@@ -9,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using ConditioningControlPanel.Services.Haptics.Core;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -39,6 +40,7 @@ public sealed class ProfileFaucetTests
     [InlineData("repeat")]
     [InlineData("off")]
     [InlineData("minimize")]
+    [InlineData("intro")]
     public Task TrainerCardHoldsUntilACompletedKeyboardCharge(string action) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
@@ -47,11 +49,11 @@ public sealed class ProfileFaucetTests
                 .SetupWithoutStarting();
         bool completed = action is "complete" or "reduced" or "compact" or "muted" or "brim" or "enter" or "repeat" or "off";
         int earned = action == "brim" ? 5000 : 1000;
-        var settings = new ConditioningControlPanel.Services.SettingsService();
-        CoreSettings.ServiceProvider = () => settings;
+        var settings = new ConditioningControlPanel.Services.SettingsService(); CoreSettings.ServiceProvider = () => settings;
         var s = CoreSettings.Current;
         s.AvatarEnabled = false; s.PerformanceMode = true; s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
         s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        if (action == "intro") { StartupLadder.ResetForTests(); FeatureIntroPopup.ResetForTests(); s.SeenFeatureIntros.Remove("descent-vat"); MainShellWindow.IsStartupDialogShowing = true; }
         s.UnifiedId = "faucet-test"; s.OfflineMode = false;
         s.MasterVolume = action == "muted" ? 0 : 100; s.VatPouredTodayXp = 0; s.VatPouredAccount = "";
         CoreSecrets.RetrieveProvider = _ => "test-token";
@@ -105,6 +107,7 @@ public sealed class ProfileFaucetTests
             var ring = page.FindControl<Grid>("ProfileVatChargeRing")!;
             Assert.True(glass.IsVisible); Assert.True(tap.IsVisible);
             Assert.Equal(0, glass.Fill); Assert.Equal(0, s.VatPouredTodayXp);
+            if (action == "intro") { Assert.True(StartupLadder.Inbox.Contains("intro:descent-vat")); Assert.DoesNotContain("descent-vat", s.SeenFeatureIntros); return; }
             if (action == "off") s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
             if (action == "reduced") s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Reduced;
             if (action == "compact")
@@ -166,6 +169,6 @@ public sealed class ProfileFaucetTests
                 Assert.Equal(completed ? action == "brim" ? 1.22 : .25 : 0, glass.Fill, 3);
             }
         }
-        finally { shell?.Close(); service.Reset(); CoreHaptics.Service = priorHaptics; }
+        finally { shell?.Close(); service.Reset(); CoreHaptics.Service = priorHaptics; if (action == "intro") { MainShellWindow.IsStartupDialogShowing = false; StartupLadder.ResetForTests(); FeatureIntroPopup.ResetForTests(); } }
     });
 }

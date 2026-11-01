@@ -39,6 +39,7 @@ public partial class MainShellWindow
         }
         ArmVat(glass, read.Cap);
         glass.SetLip(read.Lip);
+        if (_vatOnScreen) MaybeShowFeatureIntro("descent-vat", "discord"); // WPF MainWindow.ProfileVat.cs:300
         var step = _faucetHold.Fold(read, glass.IsPouring);
         switch (step.Action)
         {
