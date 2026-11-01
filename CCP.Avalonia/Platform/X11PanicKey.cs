@@ -28,6 +28,7 @@ internal static class X11PanicKey
     // Values and offsets from the compiler against X11/extensions/XInput2.h on x86_64.
     private const int MappingNotify = 34, GenericEvent = 35, XI_RawKeyPress = 13, XI_RawKeyRelease = 14, XIAllMasterDevices = 1;
     private const int XEventSize = 192, CookieExtension = 32, CookieEvType = 36, CookieData = 48, RawDetail = 56;
+    private const uint ControlMask = 4;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct XIEventMask { public int DeviceId; public int MaskLen; public IntPtr Mask; }
@@ -41,6 +42,10 @@ internal static class X11PanicKey
     [DllImport(LibX11)] private static extern int XFlush(IntPtr display);
     [DllImport(LibX11)] private static extern int XCloseDisplay(IntPtr display);
     [DllImport(LibX11)] private static extern int XRefreshKeyboardMapping(IntPtr mappingEvent);
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ModifierMap { public int MaxKeys; public IntPtr Keys; }
+    [DllImport(LibX11)] private static extern IntPtr XGetModifierMapping(IntPtr display);
+    [DllImport(LibX11)] private static extern int XFreeModifiermap(IntPtr map);
     [DllImport(LibX11)] internal static extern ulong XStringToKeysym(string name);
     [DllImport(LibX11)] private static extern byte XKeysymToKeycode(IntPtr display, ulong keysym);
     [StructLayout(LayoutKind.Sequential)]
@@ -55,12 +60,14 @@ internal static class X11PanicKey
     [DllImport(LibX11)] private static extern bool XkbLookupKeySym(IntPtr display, byte code, uint modifiers, out uint consumed, out ulong sym);
 
     /// <summary>Optional keyword source; called on the listener thread, never consumes the key.</summary>
-    internal static volatile Action<ulong>? KeywordKey;
+    internal static volatile Action<ulong, uint>? KeywordKey;
 
     [DllImport(LibXi)] private static extern int XIQueryVersion(IntPtr display, ref int major, ref int minor);
     [DllImport(LibXi)] private static extern int XISelectEvents(IntPtr display, IntPtr window, ref XIEventMask mask, int count);
 
     private static int _started;
+    private static int _controlMapReady;
+    internal static bool KeywordSourceReady => IsListening && Volatile.Read(ref _controlMapReady) != 0;
 
     /// <summary>True once the listener is up: a panic press can actually arrive (LockCardWindow's
     /// strict-mode exit question, WPF PanicHook.IsInstalled).</summary>
@@ -161,15 +168,56 @@ internal static class X11PanicKey
         {
             if (display != IntPtr.Zero) XCloseDisplay(display);
             _started = 0;
+            Volatile.Write(ref _controlMapReady, 0);
             Log.Warning("Panic key: X11 listener unavailable ({Why}); the tray's Stop everything is the panic control", why);
             return false;
         }
     }
 
+    // The raw event carries no modifiers. Read the server's Control keycodes once, then
+    // follow their press/release events in order; a later XkbGetState can already see a release.
+    private static (HashSet<int>? Keys, HashSet<int> Held) ReadControlKeys(IntPtr display)
+    {
+        var held = new HashSet<int>();
+        try
+        {
+            var ptr = XGetModifierMapping(display);
+            if (ptr == IntPtr.Zero) return (null, held);
+            try
+            {
+                var map = Marshal.PtrToStructure<ModifierMap>(ptr);
+                if (map.MaxKeys is <= 0 or > 256 || map.Keys == IntPtr.Zero) return (null, held);
+                var keys = new HashSet<int>();
+                for (var i = 0; i < map.MaxKeys; i++)
+                {
+                    var code = Marshal.ReadByte(map.Keys, 2 * map.MaxKeys + i); // ControlMapIndex
+                    if (code != 0) keys.Add(code);
+                }
+                var down = new byte[32];
+                XQueryKeymap(display, down);
+                foreach (var code in keys) if ((down[code >> 3] & (1 << (code & 7))) != 0) held.Add(code);
+                return (keys, held);
+            }
+            finally { XFreeModifiermap(ptr); }
+        }
+        catch (Exception ex) { Log.Debug(ex, "Keyword modifier map unavailable"); return (null, held); }
+    }
+
+    internal static void TrackControl(HashSet<int>? keys, HashSet<int> held, int code, bool pressed)
+    {
+        if (keys?.Contains(code) != true) return;
+        if (pressed) held.Add(code); else held.Remove(code);
+    }
+
+    internal static uint? ControlAtEvent(uint state, uint latchedOrLocked, HashSet<int>? keys, HashSet<int> held)
+        => keys == null ? null : (state & ~ControlMask) | (held.Count > 0 ? ControlMask : 0) | (latchedOrLocked & ControlMask);
+
     private static void Listen(IntPtr display, int opcode, Func<string?> currentKey, Action onPress)
     {
         var ev = Marshal.AllocHGlobal(XEventSize);
         string? boundName = null;
+        var (controlKeys, heldControl) = ReadControlKeys(display);
+        Volatile.Write(ref _controlMapReady, controlKeys == null ? 0 : 1);
         void Resolve()
         {
             var name = currentKey();
@@ -189,6 +237,8 @@ internal static class X11PanicKey
                 {
                     // Layout/keymap change: refresh Xlib's cache and re-resolve the keycode.
                     XRefreshKeyboardMapping(ev);
+                    (controlKeys, heldControl) = ReadControlKeys(display);
+                    Volatile.Write(ref _controlMapReady, controlKeys == null ? 0 : 1);
                     boundName = null;
                     Resolve();
                     continue;
@@ -203,14 +253,18 @@ internal static class X11PanicKey
                 if (keycode < 0) continue;
 
                 Resolve();
+                TrackControl(controlKeys, heldControl, keycode, evType == XI_RawKeyPress);
                 if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
                 Route(true, keycode, onPress);
                 try
                 {
                     if (KeywordKey is { } keyword && KeywordTriggerHead.KeyboardInputAllowed && keycode <= byte.MaxValue
-                        && XkbGetState(display, 0x100, out var state) == 0
-                        && XkbLookupKeySym(display, (byte)keycode, (uint)(state.Mods | (state.Group << 13)), out _, out var sym))
-                        keyword(sym);
+                        && XkbGetState(display, 0x100, out var state) == 0)
+                    {
+                        var captured = ControlAtEvent(state.Mods, (uint)(state.LatchedMods | state.LockedMods), controlKeys, heldControl);
+                        if (captured is { } mods && XkbLookupKeySym(display, (byte)keycode, mods | (uint)(state.Group << 13), out var consumed, out var sym))
+                            keyword(sym, mods & ~(consumed & ControlMask)); // preserve an XKB-consumed AltGr level
+                    }
                 }
                 catch (Exception ex) { Log.Debug(ex, "Keyword input failed"); } // never block PTT or toy keys
                 // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).

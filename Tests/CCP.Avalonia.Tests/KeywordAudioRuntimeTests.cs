@@ -71,6 +71,19 @@ public sealed class KeywordAudioRuntimeTests
         Type(engine, "sit"); Assert.Equal(2, played.Count);
     });
 
+    [Fact] // WPF KeywordTriggerService.cs:233-235, :1933-1938 keeps ToUnicode control characters.
+    public void WindowsControlCharacterPreventsJoiningTextAcrossAShortcut() => Run((engine, _, played) =>
+    {
+        Type(engine, "s");
+        var control = KeywordTriggerHead.WindowsTranslatedChar(1, new System.Text.StringBuilder("\u0003"));
+        if (control is { } c) engine.Character(c);
+        Type(engine, "it");
+        Assert.Empty(played);
+        engine.Key(ConditioningControlPanel.Services.KeywordInputKey.Clear);
+        Type(engine, "sit");
+        Assert.Single(played);
+    });
+
     [Fact]
     public void LiveMasterAndEntitlementGatesPreventPlaybackAndPresetAudioWins() => Run((engine, s, played) =>
     {
