@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -249,6 +250,60 @@ public class EmiDeskGlassTests
         {
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             BeatLoop.Time = oldTime; CoreSettings.ServiceProvider = oldSettings;
+        }
+        return Task.CompletedTask;
+    });
+    // WPF EmiChannels.Screensavers.cs:371-411: both labels fit, including the signal's last step.
+    [Fact]
+    public Task OffAirLabelsFitTheSmallestGlassInEveryLanguage() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        var savedBedtime = EmiState.Current.BedtimeUntil;
+        var desk = new EmiDeskWindow();
+        try
+        {
+            EmiState.Current.BedtimeUntil = DateTime.MinValue;
+            CoreSettings.Current.EmiDeskGlass = true;
+            desk.ApplyBodyWidth(EmiDeskWindow.MinBodyWidth);
+            desk.Show(); Dispatcher.UIThread.RunJobs();
+            foreach (var lang in new[] { "en", "de", "es", "fr", "it", "pt-BR", "ru", "ja", "ko", "zh-CN" })
+            {
+                LocalizationManager.Instance.SetLanguage(lang);
+                desk.NoteGlassActivity();
+                var flip = DateTime.UtcNow.AddSeconds(61);
+                desk.PollGlass(flip);
+                desk.AdvanceGlass(flip.AddMilliseconds(220));
+                var layer = Assert.IsType<Canvas>(Assert.Single(desk.GlassHost.Children));
+                var labels = layer.Children.OfType<TextBlock>().ToArray();
+                Assert.Equal(2, labels.Length);
+                double VisibleWidth(TextBlock label)
+                {
+                    var probe = new TextBlock { Text = label.Text, FontFamily = label.FontFamily, FontSize = label.FontSize };
+                    probe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    return probe.DesiredSize.Width * (label.RenderTransform is ScaleTransform scale ? scale.ScaleX : 1);
+                }
+                var maxSignalOffset = 30 * Math.Max(.1, layer.Width / 152);
+                Assert.True(VisibleWidth(labels[0]) <= layer.Width + .01, $"{lang}: centre label exceeds glass");
+                Assert.True(Math.Abs(Canvas.GetLeft(labels[0]) + VisibleWidth(labels[0]) / 2 - layer.Width / 2) < .1, $"{lang}: centre label is not centered");
+                Assert.True(VisibleWidth(labels[1]) + maxSignalOffset <= layer.Width + .01, $"{lang}: signal exceeds glass at its last step");
+                for (int step = 0; step <= 5; step++)
+                {
+                    desk.AdvanceGlass(flip.AddMilliseconds(220).AddSeconds(step));
+                    Assert.True(Canvas.GetLeft(labels[1]) + VisibleWidth(labels[1]) <= layer.Width + .01, $"{lang}: signal exceeds glass at step {step}");
+                }
+            }
+        }
+        finally
+        {
+            desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
+            LocalizationManager.Instance.SetLanguage(language); CoreSettings.ServiceProvider = oldSettings;
         }
         return Task.CompletedTask;
     });
