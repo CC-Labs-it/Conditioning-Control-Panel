@@ -73,6 +73,7 @@ internal sealed class LuckyToastWindow : Window
         var color = flash ? Colors.Gold : Colors.HotPink;
         w._title.Foreground = w._card.BorderBrush = new SolidColorBrush(color);
         w._card.BoxShadow = new BoxShadows(new BoxShadow { Color = Color.FromArgb(204, color.R, color.G, color.B), Blur = 30 });
+        w._title.Text = Loc.Get("lucky_toast_title");
         w.Multiplier.Text = string.Format(Loc.Get("lucky_toast_multiplier"), multiplier);
         w._fading = false;
         w._entering = decision == LuckyToastRule.Decision.Show;

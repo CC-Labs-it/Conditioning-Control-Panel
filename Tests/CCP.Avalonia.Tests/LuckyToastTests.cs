@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -23,6 +24,38 @@ public sealed class LuckyToastTests
         public override long GetTimestamp() => Now;
         public override long TimestampFrequency => 1000;
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Reused_toast_reads_the_new_language_on_visible_refresh_and_after_hide(bool hidden) => Ui(() =>
+    {
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("en");
+            var clock = new Clock();
+            LuckyToastWindow.Clock = clock;
+            LuckyToastWindow.ShowProc(true, 10);
+            var w = LuckyToastWindow.Current!;
+            var title = (TextBlock)((StackPanel)((Border)w.Content!).Child!).Children[0];
+            Assert.Equal("Lucky", title.Text);
+            if (hidden)
+            {
+                clock.Now = 3000; w.Tick();
+                clock.Now = 3300; w.Tick();
+                Assert.False(w.IsVisible);
+            }
+            loc.SetLanguage("fr");
+            LuckyToastWindow.ShowProc(false, 20);
+            Assert.Same(w, LuckyToastWindow.Current);
+            Assert.True(w.IsVisible);
+            Assert.Equal("Chance", title.Text);
+            Assert.Equal("20x XP", w.Multiplier.Text);
+        }
+        finally { loc.SetLanguage(previous); }
+    });
 
     [Fact]
     public Task Toast_fades_on_shared_beat_and_releases_it_on_hide_and_close() => Ui(() =>

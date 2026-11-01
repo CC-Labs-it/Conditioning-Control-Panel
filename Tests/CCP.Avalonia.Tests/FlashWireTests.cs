@@ -106,7 +106,9 @@ public sealed class FlashWireTests
             var root = Directory.CreateTempSubdirectory("ccp-hydra-disk-").FullName;
             var assets = CorePaths.EffectiveAssetsProvider;
             var present = FlashOverlay.Present;
-            var sc = new Window().Screens.All[0];
+            var probe = new Window();
+            var sc = probe.Screens.All[0];
+            probe.Close();
             var parent = new FlashOverlayWindow(Picture()) { SpawnScreen = sc, Ambient = true,
                 MotionStyle = FlashMotionStyle.Still };
             try
