@@ -84,6 +84,24 @@ public sealed class TubeArtBoundsTests
         Assert.Equal(left, flippedLeft);
         Assert.Equal(right, flippedRight);
         Assert.Equal(axis, flippedAxis, 6);
+
+        // WPF Windowing.cs:1132-1135: undo the mirror about its APPLIED origin while her centre moves.
+        avatar.RenderTransform = new TranslateTransform(avatarTranslation + 20, 0);
+        Assert.True(tube.TryMeasureArtInsetsPx(out var movedLeft, out var movedRight, out _));
+        Assert.Equal(left, movedLeft);
+        Assert.Equal(right, movedRight);
+        // First placement after the change must be right; a second layout must not be needed to repair it.
+        tube.UpdatePosition();
+        var centre = avatar.TranslatePoint(new Point(avatar.Bounds.Width / 2, 0), tube)!.Value.X;
+        int freshInset = Math.Max(0, (int)Math.Round(2 * centre - ((int)Math.Round(tube.Width) - right)) - 3);
+        var freshX = main.Position.X + (int)Math.Round(main.ClientSize.Width) - freshInset;
+        Assert.Equal(freshX, tube.Position.X);
+        Assert.Equal(freshInset, tube.InputRect!.Value.X);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(tube.TryMeasureArtInsetsPx(out movedLeft, out movedRight, out _));
+        Assert.Equal(left, movedLeft);
+        Assert.Equal(right, movedRight);
+        Assert.Equal(freshX, tube.Position.X);
         tube.Detach();
         Assert.Null(frame.RenderTransform);
         tube.Attach();

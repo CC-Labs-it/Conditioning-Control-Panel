@@ -73,7 +73,7 @@ public partial class AvatarTubeWindow
             double scale = Math.Min(w / bitmap.PixelSize.Width, h / bitmap.PixelSize.Height);
             double offset = (w - bitmap.PixelSize.Width * scale) / 2;
             // Undo our own render mirror before TranslatePoint, just as WPF undoes it before PointToScreen.
-            double X(double x) => _tubeArtFlipped ? 2 * TubeFlipAxis() - x : x;
+            double X(double x) => _tubeArtFlipped ? 2 * _imgTubeFrame.RenderTransformOrigin.Point.X - x : x;
             var a = _imgTubeFrame.TranslatePoint(new Point(X(offset + _artMinCol * scale), h / 2), this);
             var b = _imgTubeFrame.TranslatePoint(new Point(X(offset + (_artMaxCol + 1) * scale), h / 2), this);
             if (a == null || b == null) return false;

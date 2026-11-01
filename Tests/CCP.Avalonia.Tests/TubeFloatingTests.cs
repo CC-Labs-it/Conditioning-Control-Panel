@@ -94,9 +94,11 @@ public sealed class TubeFloatingTests
             Dispatcher.UIThread.RunJobs();
             var sprite = tube.FindControl<Image>("ImgAvatar")!;
             var bob = Assert.IsType<TranslateTransform>(Assert.IsType<TransformGroup>(sprite.RenderTransform).Children[1]);
+            var originalGroup = sprite.RenderTransform;
             void Check(double scale)
             {
                 var group = Assert.IsType<TransformGroup>(sprite.RenderTransform);
+                Assert.Same(originalGroup, group); // Repeated refreshes must reuse the bob's only group.
                 Assert.Same(bob, group.Children[1]);
                 var positive = false;
                 var negative = false;

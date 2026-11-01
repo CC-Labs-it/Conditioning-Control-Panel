@@ -832,7 +832,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 // WPF Avatar.cs:765-777 scales independently of Windowing.cs:746-750's bob.
                 // Apply scale first so Tube Fit never scales the four-pixel translation.
                 img.RenderTransform = ReferenceEquals(img, _imgAvatar)
-                    ? new TransformGroup { Children = { transform ?? new ScaleTransform(), _avatarFloat } }
+                    ? AvatarSpriteTransform(transform?.ScaleX ?? 1.0)
                     : transform;
             }
 

@@ -11,6 +11,15 @@ public partial class AvatarTubeWindow
     private double _floatPhase;
     // Keep the sprite's motion separate from the parent's reply bounce (Chat.cs).
     private readonly TranslateTransform _avatarFloat = new();
+    private readonly ScaleTransform _avatarFitScale = new();
+    private TransformGroup? _avatarSpriteTransform;
+
+    // One group owns the bob for this window's lifetime; layout only updates its scale.
+    private TransformGroup AvatarSpriteTransform(double scale)
+    {
+        _avatarFitScale.ScaleX = _avatarFitScale.ScaleY = scale;
+        return _avatarSpriteTransform ??= new TransformGroup { Children = { _avatarFitScale, _avatarFloat } };
+    }
 
     internal void StartFloatingAnimation()
     {
