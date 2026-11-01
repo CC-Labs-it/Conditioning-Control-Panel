@@ -314,7 +314,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void PremiumRefresh()
         {
-            var last = CoreSettings.Current.LastKnownEffectiveTier;
+            var last = CoreSettings.Current.LastKnownEffectiveTier; // A displayed celebration spends its seen flag after this pass.
             MaybeShowPremiumCelebration(last is int known && Platform.EntitlementRefresh.EffectiveTier > known);
             TierOnNoticePass();
         }
