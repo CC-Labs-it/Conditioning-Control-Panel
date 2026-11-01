@@ -6,25 +6,34 @@ import { test } from 'node:test';
 const source = readFileSync(new URL('../../CCP.Avalonia/Views/Windows/MainShellWindow.Browser.cs', import.meta.url), 'utf8');
 const script = source.match(/internal const string VideoAutoPlayScript = """\s*([\s\S]*?)\s*""";/)?.[1];
 assert.ok(script, 'production script exists');
+const stopScript = source.match(/internal const string PanicBrowserMediaScript = """\s*([\s\S]*?)\s*""";/)?.[1];
+assert.ok(stopScript, 'production panic script exists');
 
-function page({ availableAfter = 0, blocked = false, muted = false } = {}) {
+function page({ availableAfter = 0, blocked = false, muted = false, manualTimers = false, deferredPlay = null } = {}) {
     const listeners = {};
     let queries = 0, plays = 0, enters = 0, exits = 0;
-    const intervals = [];
+    const intervals = [], timers = [];
+    let videoPauses = 0, audioPauses = 0;
+    const audio = { pause: () => audioPauses++ };
     const video = {
         muted: true,
         addEventListener: (event, handler) => { listeners[event] = handler; },
-        play: () => { plays++; return blocked ? Promise.reject(new Error('blocked')) : Promise.resolve(); },
+        play: () => { plays++; return deferredPlay ?? (blocked ? Promise.reject(new Error('blocked')) : Promise.resolve()); },
+        pause: () => videoPauses++,
         requestFullscreen: () => { enters++; return Promise.resolve(); },
     };
     const document = {
         querySelector: () => ++queries > availableAfter ? video : null,
+        querySelectorAll: () => [video, audio],
         fullscreenElement: video,
         exitFullscreen: () => { exits++; },
     };
     const window = { __ccpMuted: muted };
-    const run = () => runInNewContext(script, { document, window, setTimeout: (f, ms) => { intervals.push(ms); f(); } });
-    return { video, window, run, listeners, intervals, counts: () => ({ queries, plays, enters, exits }) };
+    const context = { document, window, setTimeout: (f, ms) => { intervals.push(ms); if (manualTimers) timers.push(f); else f(); } };
+    const run = () => runInNewContext(script, context);
+    const stop = () => runInNewContext(stopScript, context);
+    return { video, document, window, run, stop, listeners, intervals, timers,
+        counts: () => ({ queries, plays, enters, exits }), pauses: () => [videoPauses, audioPauses] };
 }
 
 test('waits for video, plays, requests fullscreen and exits on end or double click', async () => {
@@ -55,4 +64,56 @@ test('gives up after twenty polls when no player appears', async () => {
     assert.equal(p.counts().queries, 21);
     assert.deepEqual(p.intervals, Array(20).fill(500));
     assert.equal(p.counts().plays, 0);
+});
+
+
+test('panic during polling prevents a later player from starting', async () => {
+    const p = page({ availableAfter: 1, manualTimers: true });
+    const running = p.run();
+    assert.equal(p.timers.length, 1);
+    p.stop();
+    p.timers.shift()();
+    await running;
+    assert.deepEqual(p.pauses(), [1, 1]);
+    assert.equal(p.counts().plays, 0);
+    assert.equal(p.counts().enters, 0);
+});
+
+test('panic pauses page audio and video and exits active fullscreen', async () => {
+    const p = page();
+    await p.run();
+    assert.equal(p.counts().enters, 1);
+    p.stop();
+    assert.deepEqual(p.pauses(), [1, 1]);
+    assert.equal(p.counts().exits, 1);
+    assert.equal(p.window._ccpTakeoverStopped, true);
+});
+
+test('panic prevents a late play promise or a later user play event from reopening fullscreen', async () => {
+    let resolvePlay;
+    const p = page({ deferredPlay: new Promise(resolve => { resolvePlay = resolve; }) });
+    await p.run();
+    p.stop();
+    resolvePlay();
+    await Promise.resolve();
+    assert.equal(p.counts().enters, 0);
+
+    const blocked = page({ blocked: true });
+    await blocked.run();
+    await Promise.resolve();
+    blocked.stop();
+    blocked.listeners.playing();
+    assert.equal(blocked.counts().enters, 0);
+});
+
+
+test('panic exits the WebKit fullscreen variant', () => {
+    const p = page();
+    let exited = 0;
+    p.document.fullscreenElement = null;
+    p.document.exitFullscreen = null;
+    p.document.webkitFullscreenElement = p.video;
+    p.document.webkitExitFullscreen = () => { exited++; };
+    p.stop();
+    assert.equal(exited, 1);
 });

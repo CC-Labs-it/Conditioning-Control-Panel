@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
@@ -104,4 +105,59 @@ public sealed class CompanionVideoAutoPlayTests
             Dispatcher.UIThread.RunJobs();
         }
     });
+
+    [Fact]
+    public Task PanicCancelsPendingAndDelayedWatchLinksAndAllowsANewOne() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.OfflineMode = false;
+        (settings.Current.Welcomed, settings.Current.HasAcceptedAgeVerification,
+            settings.Current.WhatMovedCardShown, settings.Current.AvatarEnabled) = (true, true, 1, false);
+        var shell = new MainShellWindow();
+        var surfaces = PanicSurfaces.All;
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var host = shell.Named<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
+            var scripts = new List<string>();
+            host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+            var delay = new TaskCompletionSource();
+            var waits = 0;
+            shell.BrowserAutoPlayDelay = () => { waits++; return delay.Task; };
+            var video = new Uri("https://127.0.0.1/video");
+            PanicSurfaces.All = new[] { Assert.Single(surfaces, s => s.Id == "browser-media") };
+
+            Assert.True(shell.NavigateToUrlInBrowser(video.ToString(), true));
+            host.OnNavigationCompleted(video);
+            Assert.Equal(1, waits);
+            PanicSurfaces.StopAll("test", shell);
+            Assert.Single(scripts, s => s == MainShellWindow.PanicBrowserMediaScript);
+            delay.SetResult();
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(MainShellWindow.VideoAutoPlayScript, scripts);
+
+            Assert.True(shell.NavigateToUrlInBrowser(video.ToString(), true));
+            PanicSurfaces.StopAll("test", shell);
+            host.OnNavigationCompleted(video);
+            Assert.Equal(1, waits);
+            Assert.Equal(2, scripts.Count(s => s == MainShellWindow.PanicBrowserMediaScript));
+            Assert.DoesNotContain(MainShellWindow.VideoAutoPlayScript, scripts);
+
+            Assert.True(shell.NavigateToUrlInBrowser(video.ToString(), true));
+            host.OnNavigationCompleted(video);
+            Assert.Equal(2, waits);
+            Assert.Single(scripts, s => s == MainShellWindow.VideoAutoPlayScript);
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            PanicSurfaces.All = surfaces;
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
 }

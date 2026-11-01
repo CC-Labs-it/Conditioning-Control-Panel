@@ -108,6 +108,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _pendingVideoAutoPlay = null;
         }
 
+        // WPF MainWindow.xaml.cs:2042-2045 and MainWindow.Browser.cs:973-990.
+        // Invalidate the delayed injection before asking the current page to stop.
+        internal void StopBrowserMediaForPanic()
+        {
+            CancelVideoAutoPlay();
+            if (BrowserView is { HasEngine: true } host)
+                _ = host.InvokeScriptAsync(PanicBrowserMediaScript);
+        }
+
+        internal const string PanicBrowserMediaScript = """
+            (function() {
+                window._ccpForcedFs = false;
+                window._ccpTakeoverStopped = true;
+                document.querySelectorAll('video,audio').forEach(v => { try { v.pause(); } catch (e) {} });
+                try {
+                    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+                    if (exit && (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement)) {
+                        const result = exit.call(document);
+                        if (result && result.catch) result.catch(() => {});
+                    }
+                } catch (e) {}
+            })();
+            """;
+
         private void ArmVideoAutoPlay(WebHost host)
         {
             var request = _browserRequestGeneration;
