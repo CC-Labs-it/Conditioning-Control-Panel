@@ -111,9 +111,7 @@ namespace ConditioningControlPanel.Services.Billboard.Board
             }
             Prune(keepVersion: post.Version);
         }
-        /// <summary>True until a post of this version has been on screen once.</summary>
         public bool IsNew(int version) => version > SeenVersion;
-        /// <summary>The newest version that has been on screen (persisted beside the cache).</summary>
         public int SeenVersion
         {
             get
@@ -125,7 +123,6 @@ namespace ConditioningControlPanel.Services.Billboard.Board
                 }
             }
         }
-        /// <summary>The board card for <paramref name="version"/> reached the screen.</summary>
         public void MarkShown(int version)
         {
             lock (_gate)
@@ -163,7 +160,6 @@ namespace ConditioningControlPanel.Services.Billboard.Board
             }
             catch (Exception ex) { Log.Debug("Board: could not cache the picture: {Error}", ex.Message); }
         }
-        /// <summary>Deletes every cached picture except <paramref name="keepVersion"/>.</summary>
         private void Prune(int keepVersion)
         {
             try
