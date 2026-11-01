@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services
@@ -315,6 +316,47 @@ namespace ConditioningControlPanel.Services
         {
             foreach (var b in Bubbles.ToArray())
                 if (b.Snap()) ChaosDefused?.Invoke(b);
+        }
+
+        /// <summary>WPF BubbleService.cs:373-423: charged pops choose three nearest targets, or a
+        /// breadth-first chain of at most 40. Coordinates are the bubbles' global DIP centres.</summary>
+        public List<(AmbientBubble From, AmbientBubble Target, int DelayMs)> EStimTargets(AmbientBubble source, bool fork)
+        {
+            static double Dist(AmbientBubble a, AmbientBubble b)
+            {
+                double x = a.CenterX - b.CenterX, y = a.CenterY - b.CenterY;
+                return x * x + y * y;
+            }
+            var pool = Bubbles.Where(b => !ReferenceEquals(b, source) && !b.Popping && b.Spec is { } s
+                && !s.IsDarter && !s.IsFreeze && !s.IsTease && !s.IsBrittle && !s.IsChaperoneLive).ToList();
+            var hits = new List<(AmbientBubble From, AmbientBubble Target, int DelayMs)>();
+            if (!fork)
+            {
+                foreach (var b in pool.OrderBy(b => Dist(source, b)))
+                {
+                    if (hits.Count == 3 || Dist(source, b) > 600 * 600) break;
+                    hits.Add((source, b, 70 * (hits.Count + 1)));
+                }
+            }
+            else
+            {
+                var queue = new Queue<(AmbientBubble Bubble, int Depth)>();
+                var taken = new HashSet<AmbientBubble> { source };
+                queue.Enqueue((source, 0));
+                while (queue.Count > 0 && hits.Count < 40)
+                {
+                    var (current, depth) = queue.Dequeue();
+                    foreach (var b in pool)
+                    {
+                        if (taken.Contains(b) || Dist(current, b) > 600 * 600) continue;
+                        taken.Add(b);
+                        hits.Add((current, b, 70 * (depth + 1)));
+                        queue.Enqueue((b, depth + 1));
+                        if (hits.Count == 40) break;
+                    }
+                }
+            }
+            return hits;
         }
 
         public bool CanSpawn(AppSettings s) => Bubbles.Count < Cap(s);

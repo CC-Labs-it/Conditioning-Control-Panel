@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -102,6 +103,8 @@ public sealed class ChaosRunHostTests
             Setup();
             FreshMeta();
             var log = Juice();
+            var language = LocalizationManager.Instance.CurrentLanguage;
+            LocalizationManager.Instance.SetLanguage("en");
             try
             {
                 var meta = ChaosMeta.State;
@@ -157,6 +160,26 @@ public sealed class ChaosRunHostTests
                 toy.CooldownRemainingSec = 0;
                 ChaosRunHost.UseToyById("snap_field");
                 Assert.Equal(sparks + 15, meta.Sparks);
+                // Each real firing reads the current language, without falling back to English.
+                foreach (var (code, liveText, allText) in new[]
+                {
+                    ("en", "✋ snapped. every live one let go", "✋ snapped. all of it."),
+                    ("de", "✋ geschnappt. alle lebenden sind frei", "✋ geschnappt. alle"),
+                    ("es", "✋ atrapadas. las activas se soltaron", "✋ atrapadas. todas"),
+                    ("fr", "✋ relâchées. toutes les bulles actives", "✋ relâchées. toutes"),
+                    ("it", "✋ scattate. tutte le bolle attive sono libere", "✋ scattate. tutte"),
+                    ("ja", "✋ 弾けた。生きたバブルはすべて解放", "✋ 弾けた。すべて"),
+                    ("ko", "✋ 터졌다. 살아 있는 버블이 모두 풀렸다", "✋ 터졌다. 모두"),
+                    ("pt-BR", "✋ estouradas. todas as bolhas ativas foram soltas", "✋ estouradas. todas"),
+                    ("ru", "✋ лопнули. все активные пузыри освобождены", "✋ лопнули. все"),
+                    ("zh-CN", "✋ 已弹开。所有活跃气泡都已释放", "✋ 已弹开。全部")
+                })
+                {
+                    LocalizationManager.Instance.SetLanguage(code);
+                    toy.CooldownRemainingSec = 0;
+                    ChaosRunHost.UseToyById("snap_field");
+                    Assert.Equal(maxed ? allText : liveText, state.RecentEvents.First());
+                }
                 ChaosRunHost.ForceShutdown();
                 Assert.Empty(ChaosRunHost.ToyButtons);
                 ChaosRunHost.StartRun(Cfg());
@@ -165,7 +188,7 @@ public sealed class ChaosRunHostTests
                 Ticks(1);
                 Assert.False(Assert.Single(ChaosRunHost.ToyButtons).Toy.IsEffectActive);
             }
-            finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            finally { LocalizationManager.Instance.SetLanguage(language); Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
             return Task.CompletedTask;
         });
     }

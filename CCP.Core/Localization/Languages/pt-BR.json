@@ -1,4 +1,10 @@
 {
+  "chaos_snap_live": "✋ estouradas. todas as bolhas ativas foram soltas",
+  "chaos_snap_all": "✋ estouradas. todas",
+  "chaos_estim_charge": "⚡ carregado. os próximos {0} estouros conduzem",
+  "chaos_estim_chain": "⚡ carregado. os próximos {0} estouros criam uma cadeia",
+  "chaos_estim_left": "⚡ a corrente salta. restam {0}",
+  "chaos_estim_spent": "⚡ carga esgotada",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Este aprimoramento está publicado no catálogo da comunidade.",
   "deeper_submission_badge_pending": "Pendente",

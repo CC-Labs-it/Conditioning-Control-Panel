@@ -1,4 +1,10 @@
 {
+  "chaos_snap_live": "✋ 弾けた。生きたバブルはすべて解放",
+  "chaos_snap_all": "✋ 弾けた。すべて",
+  "chaos_estim_charge": "⚡ 充電済み。次の{0}回は電流が流れる",
+  "chaos_estim_chain": "⚡ 充電済み。次の{0}回は連鎖する",
+  "chaos_estim_left": "⚡ 電流が走る。残り{0}回",
+  "chaos_estim_spent": "⚡ 充電終了",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

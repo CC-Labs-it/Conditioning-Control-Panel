@@ -1,4 +1,10 @@
 {
+  "chaos_snap_live": "✋ geschnappt. alle lebenden sind frei",
+  "chaos_snap_all": "✋ geschnappt. alle",
+  "chaos_estim_charge": "⚡ geladen. nächste {0} Treffer leiten",
+  "chaos_estim_chain": "⚡ geladen. nächste {0} Treffer verketten",
+  "chaos_estim_left": "⚡ Strom schlägt über. {0} übrig",
+  "chaos_estim_spent": "⚡ Ladung verbraucht",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",
