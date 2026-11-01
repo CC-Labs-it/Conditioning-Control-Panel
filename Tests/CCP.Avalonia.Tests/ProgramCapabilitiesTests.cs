@@ -84,7 +84,12 @@ public sealed class ProgramCapabilitiesTests
         foreach (var overlay in new[] { "PinkFilterOverlay.cs", "SpiralOverlay.cs" })
         {
             var src = Src("Views", "Overlays", overlay);
-            Assert.Matches(@"QuestMinutes\.Follow\(Windows\.Count > 0\)", src);
+            if (overlay == "PinkFilterOverlay.cs")
+            {
+                Assert.Matches(@"QuestMinutes\.Follow\(IsShowing\)", src);
+                Assert.Matches(@"IsShowing\s*=>\s*Windows\.Count > 0 \|\| Hosted\.Count > 0", src);
+            }
+            else Assert.Matches(@"QuestMinutes\.Follow\(Windows\.Count > 0\)", src);
             Assert.Matches(@"QuestMinutes\.Follow\(false\)", src);
         }
         Assert.Matches(@"LockdownDeactivated \+=[^;]*?TrackLockdownCompleted\(", Src("App.axaml.cs"));

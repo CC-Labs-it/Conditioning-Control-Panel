@@ -7,12 +7,13 @@ using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Services.UI;               // MonitorTarget
+using ConditioningControlPanel.Services.Compositor;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
     /// <summary>
-    /// Owns the Pink Filter tint: one <see cref="TintOverlayWindow"/> per targeted monitor, kept
+    /// Owns the Pink Filter tint on a shared per-screen stage, with a window fallback, kept
     /// in step with <see cref="Models.AppSettings"/>. The Avalonia counterpart of
     /// <c>OverlayService</c>'s Pink region (StartPinkFilter / StopPinkFilter /
     /// UpdatePinkFilterOpacity / RefreshFilterColor), minus everything that belongs to the session
@@ -26,10 +27,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para><b>Two refusals, and both matter more than showing the tint:</b> a full-screen
     /// topmost window that is not click-through locks the user out of their own desktop, and a
     /// window whose transparency request was denied paints an opaque screen-sized block instead of
-    /// a wash. Either one is caught in <see cref="Accept"/> and the window is closed rather than
-    /// left up. That is why this feature does NOT work through the Avalonia head on Windows or
-    /// under a native Wayland backend: <see cref="X11Overlay"/> is X11-only and answers false
-    /// there, so no tint is shown at all rather than an un-dismissable one.</para>
+    /// a wash. Refused stages and fallback windows are closed rather than left up.
+    /// <see cref="X11Overlay"/> dispatches to the X11 or Windows backend; an unsupported
+    /// backend refuses the tint.</para>
     /// </summary>
     internal static class PinkFilterOverlay
     {
@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool PulseHold;
 
         private static bool _refused;
+        internal static Func<bool> IsAvailable = () => X11Overlay.IsAvailable;
 
         /// <summary>Whether a tint can actually reach the screen: X11 with click-through, a
         /// compositing manager, and no earlier refusal by <see cref="Accept"/>. Takeover picks its
@@ -49,12 +50,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             && X11Overlay.IsAvailable && X11Overlay.IsCompositing;
 
         private static readonly List<TintOverlayWindow> Windows = new();
+        private static readonly List<(SharedOverlayHost.Lease Lease, Border Tint)> Hosted = new();
 
         /// <summary>WPF AchievementService:239 - quest minutes while the tint is on screen.</summary>
         internal static readonly OverlayQuestMinutes QuestMinutes = new(m => App.Quests?.TrackPinkFilterMinutes(m));
 
         /// <summary>The tint is on screen now.</summary>
-        internal static bool IsShowing => Windows.Count > 0;
+        internal static bool IsShowing => Windows.Count > 0 || Hosted.Count > 0;
         private static int[] _shownOn = Array.Empty<int>();
         private static Window? _hookedOwner;
 
@@ -87,9 +89,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.
-            if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
+            if (IsShowing && Hosted.All(x => x.Lease.IsOpen) && want.SequenceEqual(_shownOn))
             {
                 foreach (var w in Windows) w.SetTint(r, g, b, opacity);
+                foreach (var (_, tint) in Hosted) SetTint(tint, r, g, b, opacity);
                 return;
             }
 
@@ -100,7 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // once per tick and logs a warning each time. Accept still runs - IsAvailable being
             // true does not promise THIS window is an X11 one, nor that the compositor granted
             // transparency.
-            if (!X11Overlay.IsAvailable)
+            if (!IsAvailable())
             {
                 Log.Debug("Pink filter: no X11 display, so no tint on this platform");
                 return;
@@ -110,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             foreach (var i in want)
             {
+                if (ShowHosted(screens[i].Bounds, r, g, b, opacity)) continue;
                 var w = new TintOverlayWindow();
                 w.PlaceOn(screens[i]);
                 w.SetTint(r, g, b, opacity);
@@ -121,12 +125,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Windows.Add(w);
             }
             _shownOn = want;
-            QuestMinutes.Follow(Windows.Count > 0);
-            Log.Debug("Pink filter showing on {Count} screen(s) at {Opacity}%", Windows.Count, s.PinkFilterOpacity);
+            QuestMinutes.Follow(IsShowing);
+            Log.Debug("Pink filter showing on {Count} screen(s) at {Opacity}%", Windows.Count + Hosted.Count, s.PinkFilterOpacity);
         }
+
+        // WPF PinkTintLayer and SubliminalLayer share a compositor host; tint draws above cards.
+        internal static bool ShowHosted(PixelRect bounds, byte r, byte g, byte b, double opacity)
+        {
+            var lease = SharedOverlayHost.Acquire(bounds);
+            if (lease == null) return false;
+            var tint = new Border { Background = new SolidColorBrush(), IsHitTestVisible = false, ZIndex = CompositorLayers.PinkTint };
+            SetTint(tint, r, g, b, opacity);
+            lease.Canvas.Children.Add(tint);
+            Hosted.Add((lease, tint));
+            lease.Raise();
+            return true;
+        }
+
+        private static void SetTint(Border tint, byte r, byte g, byte b, double opacity) =>
+            ((SolidColorBrush)tint.Background!).Color = Color.FromArgb((byte)(Math.Clamp(opacity, 0, 1) * 255), r, g, b);
 
         public static void CloseAll()
         {
+            foreach (var (lease, tint) in Hosted)
+            {
+                lease.Canvas.Children.Remove(tint);
+                lease.Dispose();
+            }
+            Hosted.Clear();
             foreach (var w in Windows)
             {
                 try { w.Close(); }
