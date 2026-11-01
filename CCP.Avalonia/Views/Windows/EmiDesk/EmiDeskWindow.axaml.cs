@@ -1665,12 +1665,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // Inside the cooldown she only winks, so spam cannot loop the show (widget.js pet()).
                 if (PatClock.GetUtcNow().UtcDateTime < _petCooldownUntil)
                 {
-                    StartPatFeedback(EmiPatFeedback.Wink);
+                    StartPatFeedback(EmiPatFeedback.Wink, "pet");
                 }
                 else
                 {
                     _petCooldownUntil = PatClock.GetUtcNow().UtcDateTime.AddMilliseconds(PetCooldownMs);
-                    StartPatFeedback(EmiPatFeedback.Pet);
+                    StartPatFeedback(EmiPatFeedback.Pet, "pet");
                     CountPat();
                 }
                 FireDeskEvent("petted");
@@ -2625,17 +2625,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 {
                     _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
                     EmiSfx.Chime();
-                    StartPatFeedback(EmiPatFeedback.Glee);
+                    StartPatFeedback(EmiPatFeedback.Glee, "pet");
                     return;
                 }
                 if (now < _petCooldownUntil)
                 {
                     StartPatFeedback(step == EmiPokeStep.Rage ? EmiPatFeedback.Rage
-                        : step == EmiPokeStep.Annoyed ? EmiPatFeedback.Annoyed : EmiPatFeedback.Flick);
+                        : step == EmiPokeStep.Annoyed ? EmiPatFeedback.Annoyed : EmiPatFeedback.Flick,
+                        step == EmiPokeStep.Rage ? "shock" : step == EmiPokeStep.Annoyed ? "idle" : "pet");
                     return;
                 }
                 _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
-                StartPatFeedback(EmiPatFeedback.Pet);
+                StartPatFeedback(EmiPatFeedback.Pet, "pet");
                 CountPat();
                 FireDeskEvent("petted");
             }

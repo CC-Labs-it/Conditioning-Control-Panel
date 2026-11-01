@@ -17,21 +17,22 @@ public partial class EmiDeskWindow
     private Action? _wakeFeedbackDone;
 
     // WPF EmiChainPlayer.cs:77-133: hold every frame, including the last, before Done.
-    // Reuse the existing wordless face clock and the shared canon instead of another player.
+    // Reuse the existing wordless clock and shared canon for the wake face and pose.
     private void StartWakeFeedback(Action? done)
     {
         var seq = EmiChains.Chains["wake"].Seq;
         var frames = new EmiPatFrame[seq.Count];
         for (int i = 0; i < seq.Count; i++) frames[i] = new(seq[i].Text, seq[i].Ms);
-        StartPatFeedback(frames);
+        StartPatFeedback(frames, EmiChains.Chains["wake"].BodyFrame!);
         _wakeFeedbackDone = done;
     }
 
-    // Part B: full chain player, particle bursts, body art/moves and speech priority.
+    // Part B: full chain player, particle bursts, body moves and speech priority.
     // The wordless wake and pat faces share this clock; only wake may be cut for a pat.
-    private void StartPatFeedback(IReadOnlyList<EmiPatFrame> frames)
+    private void StartPatFeedback(IReadOnlyList<EmiPatFrame> frames, string pose)
     {
         StopPatFeedback();
+        SetPose(pose);
         _patFeedback = frames;
         _patFaceDrawn = null;
         _patFeedbackFrom = PatClock.GetUtcNow();
@@ -52,6 +53,7 @@ public partial class EmiDeskWindow
             var done = _wakeFeedbackDone;
             bool wake = _summonChainLive;
             StopPatFeedback(restoreFace: !wake);
+            SetPose("idle");
             done?.Invoke();
         }
         else if (face != _patFaceDrawn) { _patFaceDrawn = face; DrawFace(face); }   // P07
