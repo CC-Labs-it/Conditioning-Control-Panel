@@ -21,6 +21,7 @@ public sealed class LeashSelfCard : Border
 {
     private static readonly IBrush Ink = new SolidColorBrush(Color.Parse("#0B0716"));
     private readonly Func<ILeashService?> _service;
+    private readonly Func<Window?>? _owner;
     private readonly StackPanel _body = new();
     private MyLeash _me;
 
@@ -29,10 +30,11 @@ public sealed class LeashSelfCard : Border
         LeashIntensity.Standard, DateTimeOffset.UtcNow.AddDays(-2), 3, null, LeashRemoteMode.Ask,
         Array.Empty<Punishment>(), null, 0, Array.Empty<Sticker>()), () => null) { }
 
-    internal LeashSelfCard(MyLeash me, Func<ILeashService?> service)
+    internal LeashSelfCard(MyLeash me, Func<ILeashService?> service, Func<Window?>? owner = null)
     {
         _me = me;
         _service = service;
+        _owner = owner;
         Tag = "leash-self-card";
         Background = new SolidColorBrush(Color.Parse("#24102F"));
         BorderBrush = new SolidColorBrush(Color.Parse("#88FF5FB4"));
@@ -159,7 +161,7 @@ public sealed class LeashSelfCard : Border
 
     internal async Task CutAsync()
     {
-        if (TopLevel.GetTopLevel(this) is MainShellWindow shell) await shell.CutLeashAsync();
+        if ((_owner?.Invoke() ?? TopLevel.GetTopLevel(this)) is MainShellWindow shell) await shell.CutLeashAsync();
         else
         {
             try { LeashTaskHost.Runner?.Cancel(); } catch { }
