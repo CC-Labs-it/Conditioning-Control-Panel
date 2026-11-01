@@ -23,7 +23,7 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed partial class AccountSeedTests
 {
-    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements" };
+    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "descent_auto", "achievements" };
 
     /// <summary>Records every request with its body; profile GET answers <see cref="Profile"/> (500 when null).</summary>
     private sealed class SyncWire : HttpMessageHandler
@@ -143,6 +143,7 @@ public sealed partial class AccountSeedTests
         Assert.True((int)body["xp"]! >= L40Xp, $"xp {body["xp"]} < {L40Xp}");
         Assert.Equal(40, (int)body["level"]!);
         Assert.Equal(1, (int)body["descent_epoch"]!);
+        Assert.True((bool)body["descent_auto"]!);
         Assert.Superset(new HashSet<string> { "first_steps", "night_owl", "linux_only" },
             body["achievements"]!.Values<string>().ToHashSet()!);
     });
@@ -200,26 +201,35 @@ public sealed partial class AccountSeedTests
         var (wire, _, _) = SignIn("u1", L40Profile("u1"));
         Assert.True(await AccountSeed.LoadProfileAsync());
         Assert.Equal(40, CoreSettings.Current.PlayerLevel);
-
+        CoreSettings.Current.PendingDescentMigrationChoice = "restore";
+        CoreSettings.Current.DescentEpoch = 1;
+        CoreSettings.Current.DescentVeteranArchive = true;
         await AccountSeed.Logout();
         Assert.Equal(1, CoreSettings.Current.PlayerLevel);
         Assert.Equal(0, CoreSettings.Current.PlayerXP);
         Assert.Equal(0, CoreSettings.Current.LastConfirmedServerXp);
+        Assert.Null(CoreSettings.Current.PendingDescentMigrationChoice);
+        Assert.False(CoreSettings.Current.DescentVeteranArchive);
 
         var second = """{"user":{"unified_id":"u2","level":2,"xp":900,"current_season":"2026-08"}}""";
         SignIn("u2", second, wire);
         Assert.True(await AccountSeed.LoadProfileAsync());
         var body = wire.Syncs.Last();
         Assert.Equal("u2", (string?)body["unified_id"]);
+        Assert.Null(body["descent_migration"]);
         Assert.Equal(900, (int)body["xp"]!);
         Assert.Equal(2, (int)body["level"]!);
     });
 
-    [Fact]
-    public void SigningInAsADifferentAccount_ClearsTheLastOnesProgression_BeforeTheFirstPush() => WithFreshInstall(async () =>
+    [Theory]
+    [InlineData("uA")]
+    [InlineData(null)] // a previously logged-out build may have left an orphaned pending choice
+    public void SigningInAsADifferentAccount_ClearsTheLastOnesProgression_BeforeTheFirstPush(string? previousId) => WithFreshInstall(async () =>
     {
         var s = CoreSettings.Current;
         var (wire, _, _) = SignIn("uA", profile: null);
+        s.UnifiedId = previousId;
+        s.PendingDescentMigrationChoice = "restore";
         (s.PlayerLevel, s.PlayerXP, s.HighestLevelEver) = (40, 500, 40);   // account A's progression, still in settings
         wire.Profile = """{"user":{"unified_id":"uB","level":2,"xp":900,"current_season":"2026-08","achievements":["b_only"]}}""";
         await AvaloniaTestDispatcher.RunAsync(async () =>
@@ -234,6 +244,7 @@ public sealed partial class AccountSeedTests
         });
         var body = Assert.Single(wire.Syncs);
         Assert.Equal("uB", (string?)body["unified_id"]);
+        Assert.Null(body["descent_migration"]);
         Assert.Equal(900, (int)body["xp"]!);
         Assert.Equal(2, (int)body["level"]!);
         Assert.Equal(new[] { "b_only" }, body["achievements"]!.Values<string>());

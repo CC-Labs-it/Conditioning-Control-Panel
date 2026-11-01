@@ -210,7 +210,7 @@ namespace ConditioningControlPanel.Services
                 }
                 CoreSettings.Save();
                 DescentReader?.NotifySurfaces("descent migration committed");
-                _ = PushAsync("descent migration");
+                Nudge("descent migration");
             });
         }
         public DateTime? LastSyncTime { get; private set; }
@@ -237,9 +237,8 @@ namespace ConditioningControlPanel.Services
         public void Reset()
         {
             StopHeartbeat();
-            lock (_migrationGate) { _migrationOffer = null; _migrationOwner = null; _migrationAccount = null; _migrationGeneration++; }
+            lock (_migrationGate) { _migrationOffer = null; _migrationOwner = null; _migrationAccount = null; _migrationGeneration++; _nudgePending = 0; Loaded = false; }
             DescentReader?.Reset();
-            Loaded = false;
             _serverAchievements = null;
             _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
             LastSyncTime = null;
@@ -309,7 +308,9 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 var totalXp = ProfileAdopt.TotalXp(s);
-                var watermark = DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice) ? 0 : ProfileAdopt.ActiveXpWatermark(s);
+                var pendingChoice = s.PendingDescentMigrationChoice;
+                var migrationSubmitInFlight = DescentMigrationChoices.IsValid(pendingChoice);
+                var watermark = migrationSubmitInFlight ? 0 : ProfileAdopt.ActiveXpWatermark(s);
                 if (watermark > 0 && totalXp < watermark)
                 {
                     Log.Error("[XP watermark] Sync REFUSED — would push {Xp} XP, below the {Watermark} XP last agreed", (int)totalXp, (int)watermark);
@@ -321,10 +322,10 @@ namespace ConditioningControlPanel.Services
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
                 var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s)));
-                if (DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice))
+                if (migrationSubmitInFlight)
                 {
                     var payload = JObject.Parse(body);
-                    payload["descent_migration"] = new JObject { ["choice"] = s.PendingDescentMigrationChoice };
+                    payload["descent_migration"] = new JObject { ["choice"] = pendingChoice };
                     body = payload.ToString(Formatting.None);
                 }
                 var tokenUsed = s.AuthToken;
@@ -383,7 +384,7 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
-                    ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
+                    ProfileAdopt.ApplySyncResponse(s, reply, UtcNow(), migrationSubmitInFlight);
                     // WPF ProfileSyncService.cs:1984-1994: the ack wins over an offer in the same reply.
                     Descent.DescentMigrationAck.Apply(s, reply);
                     migrationReply = reply;
@@ -413,15 +414,27 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF NudgeSyncSoon: one coalesced push, 3 s out or just past the cooldown.</summary>
+        internal Func<TimeSpan, Task> NudgeDelay = Task.Delay;
         public void Nudge(string reason)
         {
-            if (!Loaded || Interlocked.Exchange(ref _nudgePending, 1) == 1) return;
+            AppSettings settings; string? id; int generation;
+            lock (_migrationGate)
+            {
+                if (!Loaded || _nudgePending != 0) return;
+                _nudgePending = 1; generation = _migrationGeneration; settings = CoreSettings.Current; id = settings.UnifiedId;
+            }
             var wait = NudgeSettle;
             if (LastSyncTime is { } last && UtcNow() - last < Cooldown) wait = Cooldown - (UtcNow() - last) + NudgeCooldownSlack;
-            _ = Task.Delay(wait).ContinueWith(async _ =>
+            _ = NudgeDelay(wait).ContinueWith(async _ =>
             {
-                Interlocked.Exchange(ref _nudgePending, 0);
-                await PushAsync(reason);
+                lock (_migrationGate)
+                {
+                    if (generation != _migrationGeneration) return;
+                    _nudgePending = 0;
+                    if (!Loaded || !ReferenceEquals(settings, CoreSettings.Current) || settings.UnifiedId != id) return;
+                }
+                if (LastSyncTime is { } latest && UtcNow() - latest < Cooldown) { Nudge(reason); return; }
+                await PushAsync(reason, waitForGate: true);
             }, TaskScheduler.Default);
         }
 
