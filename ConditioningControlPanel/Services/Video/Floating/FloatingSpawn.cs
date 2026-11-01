@@ -9,21 +9,27 @@ namespace ConditioningControlPanel.Services.Video.Floating
     /// WebView2 only initialises inside a shown window, but it stays veiled (DWM-cloaked:
     /// still composed, not on screen, no clicks) until its picture is painted. A clip that never gets there is
     /// skipped and its window closed, never left on screen. Pure, pinned by FloatingVideoPolishTests.
+    /// Compatibility facade only: Core FloatingRevealGate owns the admission policy.
     /// </summary>
     internal static class FloatingFirstFrame
     {
         /// <summary>From the page's ready handshake: this long for a painted picture. Not playing by then =
         /// the clip is skipped; playing = the window is shown anyway.</summary>
-        public const int ReadyBudgetMs = 4000;
+        public const int ReadyBudgetMs = FloatingRevealGate.ReadyBudgetMs;
 
         /// <summary>No frame report (a page without requestVideoFrameCallback, or one Chromium treats
         /// as hidden): the clip counts as painted once it has been playing this long...</summary>
-        public const int PlayingGraceMs = 1000;
+        public const int PlayingGraceMs = FloatingRevealGate.PlayingGraceMs;
 
         /// <summary>...and this much of it has played since "playing".</summary>
-        public const int AdvanceMs = 400;
+        public const int AdvanceMs = FloatingRevealGate.AdvanceMs;
 
-        internal enum Verdict { Wait, Reveal, Skip }
+        internal enum Verdict
+        {
+            Wait = (int)FloatingRevealGate.Verdict.Wait,
+            Reveal = (int)FloatingRevealGate.Verdict.Reveal,
+            Skip = (int)FloatingRevealGate.Verdict.Skip
+        }
 
         /// <param name="frameSeen">The page reported its picture painted: several presented frames with
         /// the media time moving, on a visible page (player.js announceFirstFrame). One callback was
@@ -33,15 +39,7 @@ namespace ConditioningControlPanel.Services.Video.Floating
         /// <param name="msSinceReady">Since the page's ready handshake, or null before it (the
         /// WebView2 start-up has its own, longer watch).</param>
         public static Verdict Decide(bool frameSeen, long? msSincePlaying, long advancedMs, long? msSinceReady)
-        {
-            if (frameSeen) return Verdict.Reveal;
-            if (msSincePlaying >= PlayingGraceMs && advancedMs >= AdvanceMs) return Verdict.Reveal;
-            // Playing but no proof by the budget (a page that stops reporting while cloaked): shown
-            // anyway, never skipped. Lifting the cloak is what lets such a page paint.
-            if (msSincePlaying != null) return (msSinceReady ?? msSincePlaying) >= ReadyBudgetMs ? Verdict.Reveal : Verdict.Wait;
-            if (msSinceReady >= ReadyBudgetMs) return Verdict.Skip;
-            return Verdict.Wait;
-        }
+            => (Verdict)FloatingRevealGate.Decide(frameSeen, msSincePlaying, advancedMs, msSinceReady);
     }
 
     /// <summary>

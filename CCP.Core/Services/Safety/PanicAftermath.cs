@@ -11,9 +11,10 @@ namespace ConditioningControlPanel.Services.Safety
     /// haptics PANIC STOP it kept speaking triggers and pulsing the toy about 22 s later. Any panic
     /// (local or remote) now arms a QUIET window, the same five minutes EMI keeps silent after a
     /// panic, measured on the monotonic tick count. Trigger Mode skips its tick and any queued
-    /// trigger inside it, haptics included, muted or not. Only the user's own START ends it early
-    /// (WPF MainWindow.StartEngineFromUser; Avalonia the Start button, Start normally and Jump right
-    /// in): the scheduler, auto-start, a remote or program session start and the Lockdown keeper never do.</para>
+    /// trigger inside it, haptics included, muted or not. Only the user's own START or session Resume ends it early
+    /// (WPF MainWindow.StartEngineFromUser; Avalonia the Start button, Start normally, Jump right in,
+    /// and Start today's session when it starts the engine): scheduled starts, auto-start, remote
+    /// session starts and the Lockdown keeper never do.</para>
     ///
     /// <para>2. A remote "resume" (or the voice "resume", same path) resumed a session a LOCAL panic
     /// had paused, and ResumeSession restarts flashes, video and subliminals even with the engine
