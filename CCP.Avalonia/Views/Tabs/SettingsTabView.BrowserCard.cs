@@ -30,7 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void HookBrowserCard()
         {
-            BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
+            BrowserWebHost.NavigationCompleted += _ => { ApplyBrowserMute(); StartBrowserMediaReporter(); };
+            BrowserWebHost.WebMessage += OnBrowserMediaMessage;
             BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };
             AttachedToVisualTree += (_, _) =>
             {
@@ -44,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
+                StopBrowserMediaTracking();
             };
             foreach (Control c in new Control[] { ToggleEnhanceIfPossible, BtnPopOutBrowser })
             {
