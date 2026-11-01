@@ -143,6 +143,7 @@ public sealed class TubeTriggerModeTests
             }
             finally { CompanionLinkLauncher.Navigate = previousNavigate; }
             tube.EndSpeechBubble();
+            Assert.Empty(text.Inlines!);
             s.CustomTriggers = new() { "freeze" }; // retain the close-path audio fail-proof
             s.TriggerIntervalSeconds = 120; // the settings event alone must restart the loop
             Dispatcher.UIThread.RunJobs();
@@ -156,7 +157,7 @@ public sealed class TubeTriggerModeTests
             ((Stepped)tube.SpeechClock).Now += TimeSpan.FromSeconds(3);
             delays[^1].Fire(); // first tick schedules the lead-in
             var pending = delays[^1];
-            if (closeDuringTyping) pending.Fire();
+            if (closeDuringTyping) { pending.Fire(); loops[^1].Tick(); Assert.Equal("f", text.Text); Assert.Empty(text.Inlines!); }
             var closingAnimation = loops[^1];
             var beforeClose = audio;
             tube.Close();

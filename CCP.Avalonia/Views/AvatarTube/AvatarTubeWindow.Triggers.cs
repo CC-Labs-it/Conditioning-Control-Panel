@@ -58,7 +58,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private Action? _stopTriggerLoop;
         private Action _cancelFirstTrigger = static () => { };
-
         /// <summary>Runs <c>tick</c> every interval until the returned stop; tests swap in a manual one (P08).</summary>
         internal Func<TimeSpan, Action, Action> TriggerLoopScheduler = static (interval, tick) =>
         {
@@ -69,7 +68,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         };
 
         internal bool TriggerLoopRunning => _stopTriggerLoop != null;
-
         private void StartTriggerTimer()
         {
             var s = CoreSettings.Current;
@@ -191,6 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void CancelTriggerAnimation()
         {
             _triggerAnimationGeneration++;
+            _txtSpeech.Inlines?.Clear();
             _cancelTriggerAnimation();
             _cancelTriggerAnimation = static () => { };
         }
