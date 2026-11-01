@@ -12,12 +12,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls;
 // Friend links share Core's grammar, account cache and wire. Clipboard stays in the head.
 public sealed partial class FriendsDrawer
 {
-    private bool _linkBusy, _linkNoteGood;
-    private string? _linkNoteText;
-    private TextBlock? _note;
-    private bool _noteFresh;
-    private IDisposable? _linkNoteTimer;
-    private Button? _linkPill;
+    private bool _linkBusy, _linkNoteGood, _noteFresh; private string? _linkNoteText;
+    private TextBlock? _note; private IDisposable? _linkNoteTimer; private Button? _linkPill;
     internal string LinkNoteText => _linkNoteText ?? "";
     internal Func<DateTimeOffset> LinkClock { get; set; } = () => Services.ServerClock.UtcNow;
     internal Func<string, Task<bool>>? CopyText { get; set; }
@@ -57,11 +53,7 @@ public sealed partial class FriendsDrawer
             }
             else SetLinkNote(Loc.Get("friends_link_offline"), false);
             // Render replaced the pressed pill. Animate the replacement once it is laid out.
-            Dispatcher.UIThread.Post(() =>
-            {
-                if (_linkPill is not { } pill) return;
-                PlayLinkFx(pill, false);
-            });
+            Dispatcher.UIThread.Post(() => { if (_linkPill is { } pill) PlayLinkFx(pill, false); });
             return isLink;
         }
         finally { _linkBusy = false; }
@@ -113,7 +105,6 @@ public sealed partial class FriendsDrawer
             ClaimResult.Unusable => AddResult.NotFound, _ => AddResult.TryLater,
         };
     }
-
     private void SetLinkNote(string text, bool good)
     {
         (_linkNoteText, _linkNoteGood, _noteFresh) = (text, good, true);
@@ -130,7 +121,6 @@ public sealed partial class FriendsDrawer
         }, TimeSpan.FromSeconds(4));
         Render();
     }
-
     private Control? LinkNote()
     {
         if (_linkNoteText == null) return null;
@@ -148,7 +138,6 @@ public sealed partial class FriendsDrawer
         }
         return _note = note;
     }
-
     private readonly Canvas _linkFx = new() { IsHitTestVisible = false, ClipToBounds = false };
     internal Action<string> LinkSound { get; set; } = cue => FriendsLanding.Sfx("chaos/" +
         (cue == "click" ? "ui_click.mp3" : cue == "accepted" ? "ui_unlock.mp3" : "ui_denied.mp3"),
@@ -156,12 +145,12 @@ public sealed partial class FriendsDrawer
     internal void PlayLinkFx(Control from, bool wave)
     {
         var k = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => .5, _ => 1.0 };
-        if (k == 0) return;
+        if (k == 0 || TopLevel.GetTopLevel(this) == null) return; // closed drawer: a detached BeatLoop would wait in Live forever
         var fx = new LinkBurst(from, wave, k, from.TranslatePoint(new Point(from.Bounds.Width / 2, from.Bounds.Height / 2), _linkFx) ?? default);
         _linkFx.Children.Add(fx);
         global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop? beat = null;
         beat = new(fx, seconds => { fx.Step(seconds * 1000); if (fx.Done) { beat!.Stop(); _linkFx.Children.Remove(fx); } });
-        fx.DetachedFromVisualTree += (_, _) => { fx.Step(double.MaxValue); beat.Stop(); }; beat.OnParked = () => { fx.Step(double.MaxValue); beat.Stop(); _linkFx.Children.Remove(fx); }; beat.Start();
+        fx.DetachedFromVisualTree += (_, _) => { fx.Step(double.MaxValue); beat.Stop(); Dispatcher.UIThread.Post(() => _linkFx.Children.Remove(fx)); }; beat.OnParked = () => { fx.Step(double.MaxValue); beat.Stop(); _linkFx.Children.Remove(fx); }; beat.Start();
     }
     // WPF FriendsDrawer.Juice.cs: Pop 380/110 ms, 12 sparks; Shockwave two rings 120 ms apart, 14 sparks.
     internal sealed class LinkBurst : Control
@@ -174,11 +163,12 @@ public sealed partial class FriendsDrawer
         { _from = from; Wave = wave; _k = k; _center = center; Effect = new DropShadowEffect { Color = ((ISolidColorBrush)(wave ? Mint : Lilac)).Color, BlurRadius = wave ? 12 : 6, Opacity = .9, OffsetX = 0, OffsetY = 0 }; Width = Height = 1; Tag = wave ? "friends-link-wave" : "friends-link-pop"; Step(0); }
         internal static double PopScale(double ms, double k) => ms >= 380 ? 1 : ms <= 110
             ? 1 + .22 * k * (1 - Math.Pow(1 - ms / 110, 2))
-            : 1 + .22 * k * Math.Exp(-4 * (ms - 110) / 270) * Math.Cos(2.5 * Math.PI * (ms - 110) / 270);
+            : 1 + .22 * k * (1 - global::ConditioningControlPanel.Services.EmiDesk.EmiTossRules.ElasticOut((ms - 110) / 270));
         internal void Step(double ms)
         {
             Age = ms;
-            if (!Wave) { var scale = PopScale(ms, _k); _from.RenderTransformOrigin = new RelativePoint(.5, .5, RelativeUnit.Relative); _from.RenderTransform = new ScaleTransform(scale, scale); }
+            if (!Wave) { var scale = PopScale(ms, _k); // the theme's press transition would smooth each beat; WPF BeginAnimation owns the scale
+                if (ms < 380) _from.Transitions = null; _from.RenderTransformOrigin = new RelativePoint(.5, .5, RelativeUnit.Relative); _from.RenderTransform = new ScaleTransform(scale, scale); if (ms >= 380) _from.ClearValue(TransitionsProperty); }
             InvalidateVisual();
         }
         public override void Render(DrawingContext dc)
