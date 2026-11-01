@@ -337,21 +337,42 @@ public sealed class ChaosGifCascadeOverlayTests
     }
 
     [Fact]
+    public async Task UnimplementedVideoDetonationDoesNotReserveOrBlockCascade()
+    {
+        await WithDetonationRun(async () =>
+        {
+            BubbleOverlay.Field.Clock = () => DateTime.UnixEpoch;
+            Detonate(new VideoPayload());
+            Assert.False(ChaosRunHost.HeavyEffectActive);
+            var pick = ChaosGifCascadeOverlay.LastPick;
+            Detonate(new GifCascadePayload());
+            Assert.NotSame(pick, ChaosGifCascadeOverlay.LastPick);
+            Assert.True(ChaosRunHost.HeavyEffectActive);
+            await ChaosGifCascadeOverlay.LastPick!;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(ChaosGifCascadeOverlay.IsRaining);
+        });
+    }
+
+    [Fact]
     public async Task VideoEndDoesNotShortenAnExistingHeavyReservation()
     {
         var video = new MandatoryVideoScheduler(new GateVideoHost());
-        await WithDetonationRun(() =>
+        await WithDetonationRun(async () =>
         {
             var now = DateTime.UnixEpoch;
             BubbleOverlay.Field.Clock = () => now;
-            Detonate(new VideoPayload()); // 18-second video floor, WPF :2308
+            Detonate(new GifCascadePayload()); // the runnable payload reserves 11 seconds
+            await ChaosGifCascadeOverlay.LastPick!;
+            Dispatcher.UIThread.RunJobs();
+            ChaosGifCascadeOverlay.CloseActive();
+            await Decoded();
             Assert.True(video.Trigger(path: "gate-test.mp4"));
             video.End();
             now = now.AddSeconds(3);
             Assert.True(ChaosRunHost.HeavyEffectActive);
-            now = now.AddSeconds(15);
+            now = now.AddSeconds(8);
             Assert.False(ChaosRunHost.HeavyEffectActive);
-            return Task.CompletedTask;
         }, video);
     }
 

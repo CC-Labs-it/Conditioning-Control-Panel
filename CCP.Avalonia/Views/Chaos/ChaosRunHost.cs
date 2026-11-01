@@ -394,10 +394,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state?.PushEvent(Loc.GetF("chaos_heavy_fizzle", payload.DisplayName));
                 return;
             }
-            if (heavy)
-                _heavyUntilUtc = BubbleOverlay.Field.Clock().AddSeconds(
-                    payload.Kind == EffectBubblePayloadKind.GifCascade
-                        ? GifCascadePayload.DURATION_SEC + 5 : VideoPayload.SEGMENT_SEC + 3);
+            // ponytail: restore the video reservation with its runner (WPF :2305-2308).
+            if (payload.Kind == EffectBubblePayloadKind.GifCascade)
+                _heavyUntilUtc = BubbleOverlay.Field.Clock().AddSeconds(GifCascadePayload.DURATION_SEC + 5);
             FireScaledPayload(payload);
         }
 
