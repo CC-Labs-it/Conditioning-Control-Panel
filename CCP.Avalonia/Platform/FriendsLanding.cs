@@ -353,17 +353,25 @@ internal static partial class FriendsLanding
                 var s = CoreSettings.Current;
                 var niches = LandingRules.FlavourNiches(watch.Id);
                 if (niches.Count == 0) return;
-                var source = LauncherMediaSettings.IsKnownSource(s.MediaSource) ? s.MediaSource : LauncherMediaSettings.SourceLocal;
-                if (source == LauncherMediaSettings.SourceLocal && s.HasRemoteMediaConsent) source = LauncherMediaSettings.SourceMixed;
-                LauncherMediaSettings.Apply(s, source, s.RemoteMediaRatio, niches.ToList());
-                FypOnlineCoordinator.ResetAllChannels();
-                CoreSettings.Save();
-                var anchor = ActiveGameWindow() ?? Anchor();
-                if (anchor != null) ShowWatchWord(anchor, Str("friends_land_flavour_on", "flavour on"));
+                try
+                {
+                    var source = LauncherMediaSettings.IsKnownSource(s.MediaSource) ? s.MediaSource : LauncherMediaSettings.SourceLocal;
+                    if (source == LauncherMediaSettings.SourceLocal && s.HasRemoteMediaConsent) source = LauncherMediaSettings.SourceMixed;
+                    LauncherMediaSettings.Apply(s, source, s.RemoteMediaRatio, niches.ToList());
+                    FypOnlineCoordinator.ResetAllChannels();
+                    CoreSettings.Save();
+                    var anchor = ActiveGameWindow() ?? Anchor();
+                    if (anchor != null) ShowWatchWord(anchor, Str("friends_land_flavour_on", "flavour on"));
+                }
+                catch (Exception ex) { Log.Warning(ex, "[Friends] flavour apply failed"); }
                 return;
             case WatchKind.Ht:
                 var url = LandingRules.HtUrl(watch.Id);
-                if (url != null) OpenWatchUrl(url);
+                if (url != null)
+                {
+                    try { OpenWatchUrl(url); }
+                    catch (Exception ex) { Log.Warning(ex, "[Friends] ht watch failed"); }
+                }
                 return;
         }
     }
