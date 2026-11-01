@@ -161,4 +161,51 @@ public sealed class ShellEnhancementParityTests
         return Task.CompletedTask;
     });
 
+    // WPF BubbleService.cs:3477-3517,3553-3554,3791-3808,4401-4417.
+    [Fact]
+    public Task Lucky_glow_does_not_clip_outer_sparkles_on_small_bubbles() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldImage = BubbleOverlay.Image;
+        var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 400, 400), 1) { Width = 400, Height = 400 };
+        var b = new AmbientBubble { X = 162.5, Y = 162.5, Size = 75, Popping = true, Lucky = true,
+            Sparkles = [new AmbientBubble.SparkleParticle { X = 110, Size = 8, Alpha = 1 },
+                        new AmbientBubble.SparkleParticle { X = -110, Size = 8, Alpha = 1 },
+                        new AmbientBubble.SparkleParticle { Y = 110, Size = 8, Alpha = 1 },
+                        new AmbientBubble.SparkleParticle { Y = -110, Size = 8, Alpha = 1 }] };
+        BubbleOverlay.Field.Bubbles.Add(b);
+        try
+        {
+            BubbleOverlay.Image = null;
+            w.Show(); Dispatcher.UIThread.RunJobs();
+            byte[] Frame()
+            {
+                using var frame = new RenderTargetBitmap(new PixelSize(400, 400));
+                frame.Render((Control)w.Content!);
+                var bytes = new byte[400 * 400 * 4];
+                var pinned = GCHandle.Alloc(bytes, GCHandleType.Pinned);
+                try { frame.CopyPixels(new PixelRect(0, 0, 400, 400), pinned.AddrOfPinnedObject(), bytes.Length, 400 * 4); }
+                finally { pinned.Free(); }
+                return bytes;
+            }
+            var centers = new[] { (310, 200), (90, 200), (200, 310), (200, 90) };
+            var samples = new[] { (0, 0), (3, 0), (-3, 0), (0, 3), (0, -3) };
+            void AssertParticles(byte[] frame)
+            {
+                foreach (var (x, y) in centers)
+                foreach (var (dx, dy) in samples)
+                    Assert.True(frame[((y + dy) * 400 + x + dx) * 4 + 3] > 0,
+                        $"missing particle pixel at {x + dx},{y + dy} with blur {b.LuckyGlowBlur}");
+            }
+            AssertParticles(Frame());
+            foreach (var blur in new[] { 18.0, 24.0 })
+            {
+                b.LuckyGlowBlur = blur;
+                AssertParticles(Frame());
+            }
+        }
+        finally { w.Close(); BubbleOverlay.Field.Bubbles.Remove(b); BubbleOverlay.Image = oldImage; }
+        return Task.CompletedTask;
+    });
+
 }

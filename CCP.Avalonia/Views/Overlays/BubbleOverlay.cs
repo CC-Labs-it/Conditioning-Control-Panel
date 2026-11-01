@@ -513,7 +513,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         if (b.LuckyGlowBlur > 0)
                         {
                             var glow = b.LuckyGlowBlur <= 18 ? BalancedGlow : QualityGlow;
-                            using (dc.PushEffect(glow, new Rect(cx - size, cy - size, size * 2, size * 2)))
+                            var bounds = new Rect(cx - size, cy - size, size * 2, size * 2);
+                            // WPF BubbleService.cs:3477,3517,3791: sparkles can travel beyond the sprite.
+                            foreach (var sp in b.Sparkles)
+                            {
+                                if (sp.Alpha <= 0) continue;
+                                double r = sp.Size * k / 2;
+                                bounds = bounds.Union(new Rect(cx + sp.X * k - r, cy + sp.Y * k - r, 2 * r, 2 * r));
+                            }
+                            using (dc.PushEffect(glow, bounds.Inflate(b.LuckyGlowBlur)))
                                 DrawBubble(dc, b, img, cx, cy, size, k, m);
                         }
                         else DrawBubble(dc, b, img, cx, cy, size, k, m);
