@@ -393,7 +393,7 @@ namespace ConditioningControlPanel
 
         /// <summary>
         /// Cleans up stale temp files from previous sessions (crash recovery).
-        /// Deletes ccp_temp_* and haptic_video_* files from both the assets temp dir and system temp.
+        /// Deletes ccp_temp_*, haptic_video_* and ccp_collage_* files from both the assets temp dir and system temp.
         /// </summary>
         public static void CleanupStaleTempFiles()
         {
@@ -425,6 +425,14 @@ namespace ConditioningControlPanel
                 try
                 {
                     foreach (var file in Directory.GetFiles(dir, "ccp_temp_*"))
+                    {
+                        try { File.Delete(file); deleted++; }
+                        catch (Exception ex) { Diag.Swallowed(ex); }
+                    }
+                    // A composed wallpaper left by a crash. The restore of the user's own runs from the
+                    // settings breadcrumb, so this file has nothing left to do. ccp_original_wallpaper
+                    // stays: that breadcrumb can still need it.
+                    foreach (var file in Directory.GetFiles(dir, "ccp_collage_*"))
                     {
                         try { File.Delete(file); deleted++; }
                         catch (Exception ex) { Diag.Swallowed(ex); }
@@ -1292,7 +1300,9 @@ namespace ConditioningControlPanel
                 // Stop autonomy mode
                 Autonomy?.Stop();
 
-                // Restore wallpaper
+                // Restore wallpaper. The collage first: Deactivate refuses while it runs, and every
+                // stop-everything gesture funnels through here (panic included), "Run with CCP" or not.
+                Wallpaper?.StopCollage();
                 Wallpaper?.Deactivate();
 
                 // Stop avatar voice lines
@@ -5733,6 +5743,15 @@ Application State:
         [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool TerminateProcess(IntPtr hProcess, uint uExitCode);
 
+        /// <summary>Windows is logging off or shutting down: put the real wallpaper back first, so a
+        /// "Run with CCP" collage never stays behind as the desktop.</summary>
+        protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+        {
+            try { Wallpaper?.StopAndFlush(TimeSpan.FromSeconds(3)); }
+            catch (Exception ex) { Diag.Swallowed(ex, "wallpaper restore on session end"); }
+            base.OnSessionEnding(e);
+        }
+
         protected override void OnExit(ExitEventArgs e)
         {
 #if DEBUG
@@ -5764,6 +5783,11 @@ Application State:
             // the watchdog on the way out. That is not the freeze we are hunting — disarm it so the
             // next launch doesn't cry hang over a clean, if slow, exit.
             try { Services.UiHangWatchdog.ClearSentinelOnCleanExit(); } catch (Exception ex) { Diag.Swallowed(ex); }
+
+            // Wallpaper back early, ahead of the slow teardown below. The restore is queued (#1453), so
+            // wait for it (3 s, like Wallpaper.Dispose). The later Wallpaper.Dispose is then a no-op.
+            try { Wallpaper?.StopAndFlush(TimeSpan.FromSeconds(3)); }
+            catch (Exception ex) { Diag.Swallowed(ex, "wallpaper restore on exit"); }
 
             // Haptics FIRST and synchronously (bounded ~2s): a Lovense level has no server-side
             // watchdog, so a toy we don't countermand keeps running after the app is gone. This
