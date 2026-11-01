@@ -1684,6 +1684,7 @@ padlock never covers a running lockdown, and an unreadable recovery file fails o
 <h2 id="2026-10-30-windows-shard-0-flakes">2026-10-30: Three Windows-only tests are listed as known flakes (routine; evidence)</h2>
 <ul>
 <li>CompanionEditorsTests.PromptEditor_is_reachable_from_make_her_yours_links, ContentHitTestTests.ContentButtonsReceiveThePointerAtTheirCentre, PresetsFocalFxTests.PointerLiftAndPrimaryButtonSquishMatchWpfSnapAtOff failed only in the full Windows shard 0 on many unrelated lanes, passed 5/5 isolated on Windows (rcheck 40986959844) and on the base PR CI. Listed so a red only on them counts as green with flakes; the root cause stays an open lane. No test was skipped or weakened.</li>
+<li>2026-11-01 follow-up for PR #3516, run 41207003693: ContentHitTestTests sampled live coordinates while entrance transforms still advanced past the rendered composition batch. The probe now calls CompleteTabTransition and asserts EnteringTab is null before rendering and clicking; all pointer assertions and minimum button counts remain. A controlled frame-gap reproduction fails with the original test and passes with the fix. Diagnostic Linux font mappings and timing injection were removed. This addresses the ContentHitTest race recorded above; the other listed flakes are unchanged.</li>
 </ul>
 <h2 id="2026-10-30-rain-registry-and-avatar-generation-rule-in-core">2026-10-30: Rain v2 shared parts live in Core (main sync 9 compat; routine)</h2>
 <ul>
