@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
 
 namespace ConditioningControlPanel.Services.Audio
 {
@@ -17,19 +15,10 @@ namespace ConditioningControlPanel.Services.Audio
     /// into the VideoDiag trace, which is the log a bug report uploads. At most one line per player
     /// per ten seconds. It never blocks, never throws and never changes what plays.</para>
     /// </summary>
-    public static class EngineOffAudioLog
+    public static partial class EngineOffAudioLog
     {
-        /// <summary>Minimum gap between two lines for the same player.</summary>
-        public static readonly TimeSpan MinGap = TimeSpan.FromSeconds(10);
-
-        private static readonly Dictionary<string, DateTime> _lastLine = new(StringComparer.Ordinal);
-        private static readonly object _gate = new();
-
         /// <summary>The engine is started, or a session is running.</summary>
         public static bool EngineRunning => IsRunning(App.IsEngineRunning, App.IsSessionRunning);
-
-        /// <summary>Pure half of <see cref="EngineRunning"/>.</summary>
-        public static bool IsRunning(bool engineRunning, bool sessionRunning) => engineRunning || sessionRunning;
 
         /// <summary>
         /// A sound from <paramref name="player"/> just started. Logs it when the engine is off.
@@ -57,52 +46,12 @@ namespace ConditioningControlPanel.Services.Audio
         {
             try
             {
-                if (LineFor(player + ":held", null, engineRunning: false, asked: false, DateTime.UtcNow) != null)
-                    VideoDiag.Log("AUDIO", $"engine off: {player} held its {what}");
+                var line = CoreAudioDiagnostics.HeldLineFor(player, what, DateTime.UtcNow);
+                if (line != null) VideoDiag.Log("AUDIO", line);
             }
             catch
             {
             }
-        }
-
-        /// <summary>
-        /// The line to write, or null for "write nothing" (engine running, an asked-for sound, or
-        /// this player already wrote one inside <see cref="MinGap"/>).
-        /// </summary>
-        public static string? LineFor(string player, string? path, bool engineRunning, bool asked, DateTime nowUtc)
-        {
-            if (engineRunning || asked) return null;
-            if (string.IsNullOrEmpty(player)) player = "audio";
-
-            lock (_gate)
-            {
-                if (_lastLine.TryGetValue(player, out var last) && nowUtc - last < MinGap && nowUtc >= last)
-                    return null;
-                _lastLine[player] = nowUtc;
-            }
-
-            return $"engine off: {player} started '{NameOf(path)}'";
-        }
-
-        /// <summary>File name only: a full path can carry the Windows user name.</summary>
-        public static string NameOf(string? path)
-        {
-            if (string.IsNullOrWhiteSpace(path)) return "?";
-            try
-            {
-                var name = Path.GetFileName(path.TrimEnd('/', '\\'));
-                return string.IsNullOrEmpty(name) ? "?" : name;
-            }
-            catch
-            {
-                return "?";
-            }
-        }
-
-        /// <summary>Test seam: forget every player's last line.</summary>
-        internal static void ResetForTests()
-        {
-            lock (_gate) _lastLine.Clear();
         }
     }
 }

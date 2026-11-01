@@ -208,6 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     if (_disposed || !_live.Contains(c)) return;
                     c.Playing = true;
                 }
+                CoreAudioDiagnostics.Note("layered-audio", _path);
                 Schedule(c, 0);
                 lock (c) { if (c.Disposed) return; LibVlcAudio.ApplyPreferredDevice(c.Player); }
                 ApplyVolume(c);

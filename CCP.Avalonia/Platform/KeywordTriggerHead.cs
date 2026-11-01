@@ -163,14 +163,17 @@ internal sealed class KeywordAudioRuntime
             _cooldowns.Record(t, s, now.ToUniversalTime());
         }
         // WPF merge: preset first, and only the first enabled PlayAudio action wins.
+        var audioKind = "PlayAudio";
         var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
         if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
         {
             var t = fired[0];
+            audioKind = "legacy audio";
             audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
                 PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
         }
-        if (audio != null) Play(audio);
+        if (audio != null && CoreAudioDiagnostics.EngineRunning) Play(audio);
+        else if (audio != null) CoreAudioDiagnostics.NoteHeld("keyword-trigger", audioKind);
     }
 
     // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic

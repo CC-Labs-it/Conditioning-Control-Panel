@@ -6,7 +6,7 @@ namespace ConditioningControlPanel.Services.AudioPlayer
     /// <summary>
     /// The playlist's rules with no audio and no settings in them: the list, which track is
     /// current, and where next / previous / the end of a track lead under loop and shuffle.
-    /// <see cref="AudioPlaylistService"/> owns one and does the playing.
+    /// The head owns the player and uses these rules to choose tracks.
     ///
     /// Tracks are whole paths. Two paths that differ only in case are the same file (Windows).
     /// </summary>
@@ -226,4 +226,9 @@ namespace ConditioningControlPanel.Services.AudioPlayer
             return at;
         }
     }
+}
+
+namespace ConditioningControlPanel.Services.AudioPlayer
+{
+    public enum AudioPlaylistLoop { Off = 0, All = 1, One = 2 }
 }
