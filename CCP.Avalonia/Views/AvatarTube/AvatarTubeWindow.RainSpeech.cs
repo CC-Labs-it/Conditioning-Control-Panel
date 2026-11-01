@@ -5,7 +5,10 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Avalonia.Platform;
+using System.Threading.Tasks;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Platform;
+using LibVLCSharp.Shared;
 using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel.Services.Companion.Rain;
@@ -21,6 +24,29 @@ public partial class AvatarTubeWindow
     private long _rainClipTick;
     internal Func<long> RainClock = static () => Environment.TickCount64;
     internal Func<TimeSpan, Action, IDisposable> RainSchedule = static (delay, fire) => DispatcherTimer.RunOnce(fire, delay);
+    private IDisposable? _speechLeadIn;
+    private readonly Dictionary<string, double> _rainAudioSeconds = new();
+
+    // WPF AudioDurationSec (Avatar.cs:1259-1272): the clip length, read once per path before the line is planned.
+    internal Func<string, double> RainAudioProbe = static path =>
+    {
+        if (LibVlcAudio.Shared is not { } vlc || !File.Exists(path)) return 0;
+        try
+        {
+            using var media = new Media(vlc, path, FromType.FromPath);
+            // Parsed off the UI context so libvlc's completion cannot wait on the blocked dispatcher.
+            return Task.Run(() => media.Parse(MediaParseOptions.ParseLocal, 1000)).Result == MediaParsedStatus.Done
+                ? Math.Max(0, media.Duration) / 1000.0 : 0;
+        }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Rain voice length unavailable"); return 0; }
+    };
+
+    private double RainProbedSeconds(string? audioPath)
+    {
+        if (_rainMap == null || string.IsNullOrEmpty(audioPath)) return 0;
+        if (!_rainAudioSeconds.TryGetValue(audioPath, out var sec)) _rainAudioSeconds[audioPath] = sec = RainAudioProbe(audioPath);
+        return sec;
+    }
 
     private void LoadRainTiming()
     {

@@ -4,7 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
@@ -115,8 +117,7 @@ public sealed class RainSpeechTests
         var audio = Path.Combine(f.Root, "vocal.wav"); File.WriteAllText(audio, "voice");
         CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { plays++; return () => { }; };
         f.Tube.GigglePriority("*giggles*", phraseAudioPath: audio, mood: "warm"); await f.Clip("giggle");
-        f.Advance(249); Assert.Equal(0, plays);
-        f.Advance(1); Assert.Equal(1, plays);
+        Assert.Equal(1, plays); // an AI-source line has no lead-in (WPF Speech.cs:651-654)
         var map = Path.Combine(f.Tube.RainFolder!, "emotes.json");
         File.WriteAllText(map, File.ReadAllText(map).Replace("minClipMs:0", "minClipMs:2500"));
         await f.Tube.RefreshRainPlayback();
@@ -142,12 +143,50 @@ public sealed class RainSpeechTests
         f.Settings.Current.AvatarMuted = false;
         f.Tube.GigglePriority("another spoken line", phraseAudioPath: audio);
         var clickPending = f.Timers.Last(); Assert.True(f.Tube.RainClickEmote()); clickPending.Fire(); await f.Clip("giggle");
-        int plays = 0;
-        CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { plays++; return () => { }; };
-        f.Tube.GigglePriority("*giggles*", phraseAudioPath: audio);
-        f.Tube.PanicSilence(); f.Advance(250); Assert.Equal(0, plays);
         f.Tube.GigglePriority("another spoken line", phraseAudioPath: audio);
         var closePending = f.Timers.Last(); f.Tube.Close(); closePending.Fire(); started!(TimeSpan.FromSeconds(8));
         Assert.Null(f.Tube.RainFolder); Assert.Null(f.Tube.RainActivePlayer);
+    });
+
+    private static (Func<int> plays, string audio, Border bubble) Voice(Fixture f)
+    {
+        int plays = 0;
+        CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { plays++; return () => { }; };
+        var audio = Path.Combine(f.Root, "vocal.wav"); File.WriteAllText(audio, "voice");
+        return (() => plays, audio, f.Tube.FindControl<Border>("SpeechBubble")!);
+    }
+    private static object? HideTimer(AvatarTubeWindow tube) => typeof(AvatarTubeWindow)
+        .GetField("_speechTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(tube);
+
+    [Fact]
+    public Task PresetNonverbalLeadInHoldsBubbleHideTimerAndVoiceUntilAfterMinHold() => Run(async () =>
+    {
+        using var f = new Fixture();
+        var map = Path.Combine(f.Root, new string('c', 64), "emotes.json");
+        File.WriteAllText(map, File.ReadAllText(map).Replace("minClipMs:0", "minClipMs:2500"));
+        await f.Start(); var (plays, audio, bubble) = Voice(f);
+        f.Tube.Giggle("*giggles*", audio);
+        f.Advance(2749); await f.Clip("giggle"); // fresh idle: 2500 ms hold, then 250 ms lead-in (WPF CirceEmotes.cs:731-735)
+        Assert.Equal(0, plays()); Assert.False(bubble.IsVisible); Assert.Null(HideTimer(f.Tube));
+        f.Advance(1);
+        Assert.Equal(1, plays()); Assert.True(bubble.IsVisible); Assert.True(((DispatcherTimer)HideTimer(f.Tube)!).IsEnabled);
+    });
+
+    [Fact]
+    public Task UntextedShortClipIsClassifiedByItsLengthBeforeItPlays() => Run(async () =>
+    {
+        using var f = new Fixture(); await f.Start(); var (plays, audio, bubble) = Voice(f);
+        f.Tube.RainAudioProbe = _ => 1.0; // under nonverbalMaxSec 1.4 (WPF CirceEmotes.cs:627-635, 788)
+        f.Tube.Giggle("", audio); await f.Clip("giggle");
+        f.Advance(249); Assert.Equal(0, plays());
+        f.Advance(1); Assert.Equal(1, plays()); Assert.True(bubble.IsVisible);
+    });
+
+    [Fact]
+    public Task PanicDuringPresetLeadInDropsVoiceAndBubble() => Run(async () =>
+    {
+        using var f = new Fixture(); await f.Start(); var (plays, audio, bubble) = Voice(f);
+        f.Tube.Giggle("*giggles*", audio); f.Tube.PanicSilence();
+        f.Advance(3000); Assert.Equal(0, plays()); Assert.False(bubble.IsVisible);
     });
 }

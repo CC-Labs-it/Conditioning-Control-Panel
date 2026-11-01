@@ -1271,6 +1271,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     SpokenAudioDone = clipDone.Task;
                     _stopSpoken();   // WPF ShowGiggle StopSpokenAudio (Speech.cs:474): every new line cuts the last
                     _stopSpoken = static () => { };
+                    _speechLeadIn?.Dispose(); _speechLeadIn = null;   // WPF Speech.cs:634
 
                     // The chat log owns the bubble while it is up - take it back before rendering.
                     if (_isShowingChatHistory)
@@ -1286,46 +1287,55 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
+                    int leadIn = 0;
+                    Action? playLineAudio = null;
                     if (IsMuted) StopRainSpeech();
-                    if (!IsMuted)
+                    else
                     {
                         var id = emotionLineId ?? (phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath));
-                        int leadIn = StartRainSpeech(id, mood, text, phraseAudioPath, RainEstimatedSeconds(text));
+                        double probed = RainProbedSeconds(phraseAudioPath);   // WPF CirceEmotes.cs:627-629
+                        leadIn = StartRainSpeech(id, mood, text, phraseAudioPath, probed > 0 ? probed : RainEstimatedSeconds(text));
                         int rainVersion = _rainSpeechVersion;
-                        void PlayLineAudio()
+                        playLineAudio = () => PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken, duration => RunOnAvatar(() =>
                         {
-                            PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken, duration => RunOnAvatar(() =>
-                            {
-                                if (leadIn == 0 && duration.TotalSeconds > 0 && rainVersion == _rainSpeechVersion)
-                                    StartRainSpeech(id, mood, text, phraseAudioPath, duration.TotalSeconds);
-                            }));
-                        }
-                        if (leadIn > 0 && (playSound || !string.IsNullOrEmpty(phraseAudioPath)))
-                        {
-                            bool cancelled = false;
-                            var pending = RainSchedule(TimeSpan.FromMilliseconds(leadIn), () =>
-                            {
-                                if (cancelled || _avatarSetsClosed || IsMuted) return;
-                                _stopSpoken = static () => { };
-                                PlayLineAudio();
-                            });
-                            _stopSpoken = () => { cancelled = true; pending.Dispose(); spoken(); };
-                        }
-                        else PlayLineAudio();
+                            if (leadIn == 0 && probed <= 0 && duration.TotalSeconds > 0 && rainVersion == _rainSpeechVersion)
+                                StartRainSpeech(id, mood, text, phraseAudioPath, duration.TotalSeconds);
+                        }));
                         spokenHandled = true;
                     }
 
-                    SyncAskButtonsFor(text);
-                    _txtSpeech.Text = text;
-                    _speechBubble.MaxWidth = 380;
-                    ApplySpeechBubblePlacement();
-                    _speechBubble.IsVisible = true;
                     _isGiggling = true;
                     _isShowingAiBubble = !preset;
                     _currentSpeechSource = source;
                     _currentSpeechLength = text.Length;
-
-                    StartBubbleHideTimer(text);
+                    void Speak()
+                    {
+                        playLineAudio?.Invoke();
+                        SyncAskButtonsFor(text);
+                        _txtSpeech.Text = text;
+                        _speechBubble.MaxWidth = 380;
+                        ApplySpeechBubblePlacement();
+                        _speechBubble.IsVisible = true;
+                        StartBubbleHideTimer(text);
+                    }
+                    // WPF Speech.cs:634-655: a preset line holds audio, bubble and its hide timer behind the
+                    // emote lead-in (EmoteAudioLeadInSeconds); an AI line speaks at once.
+                    if (preset && leadIn > 0)
+                    {
+                        bool audioCut = false;
+                        Action cut = () => { if (audioCut) return; audioCut = true; playLineAudio = null; spoken(); };
+                        _stopSpoken = cut;
+                        _speechLeadIn = RainSchedule(TimeSpan.FromMilliseconds(leadIn), () =>
+                        {
+                            _speechLeadIn = null;
+                            if (_stopSpoken == cut) _stopSpoken = static () => { };
+                            bool superseded = !_isGiggling || _avatarSetsClosed;   // WPF Speech.cs:507
+                            if (superseded || IsMuted) cut();
+                            try { if (!superseded) Speak(); }
+                            catch (Exception ex) { Log.Warning(ex, "AvatarTube deferred line failed"); }
+                        });
+                    }
+                    else Speak();
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
                 }
                 catch (Exception ex) { Log.Warning(ex, "AvatarTube GigglePriority failed"); }
