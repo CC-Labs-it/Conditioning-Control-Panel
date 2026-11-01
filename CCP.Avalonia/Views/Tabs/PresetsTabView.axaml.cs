@@ -1068,11 +1068,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _ => ("rack_src_builtin", "SessionSrcBuiltInBrush", "SessionSrcBuiltInWashBrush")
             };
 
-        private static string SessionName(Session session) =>
-            LocalizedOrFallback(session.LocalizedName, $"session_{session.Id}_name", session.GetModeAwareName());
+        private static string SessionName(Session session) => session.GetModeAwareName();
 
-        private static string SessionDescription(Session session) =>
-            LocalizedOrFallback(session.LocalizedDescription, $"session_{session.Id}_desc", session.GetModeAwareDescription());
+        private static string SessionDescription(Session session) => session.GetModeAwareDescription();
 
         private static string LocalizedOrFallback(string localized, string key, string fallback) =>
             string.IsNullOrWhiteSpace(localized) || string.Equals(localized, key, StringComparison.Ordinal)

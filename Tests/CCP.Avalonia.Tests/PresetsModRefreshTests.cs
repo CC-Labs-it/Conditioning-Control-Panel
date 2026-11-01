@@ -76,6 +76,9 @@ public sealed class PresetsModRefreshTests
         var preset = new Preset { Id = "mod-refresh-hidden", Name = "My preset", Description = "Description" };
         CoreSettings.Current.UserPresets.Add(preset);
         string prefix = "Old";
+        string modId = BuiltInMods.BambiSleepId;
+        var oldMod = CoreMods.ActiveModIdProvider;
+        CoreMods.ActiveModIdProvider = () => modId;
         CoreMods.MakeModAwareProvider = text => prefix + " " + text;
         var view = new PresetsTabView();
         var host = new Window { Width = 1200, Height = 900, Content = view };
@@ -90,6 +93,7 @@ public sealed class PresetsModRefreshTests
             view.FindControl<Control>("SessionSpoilerPanel")!.IsVisible = true;
             view.IsVisible = false; Settle();
             var oldChip = Chip(view, preset.Id);
+            modId = BuiltInMods.DronificationId;
             prefix = "New"; RaiseMod(); Settle();
             Assert.Same(oldChip, Chip(view, preset.Id));
             Assert.Equal("Old My preset", ChipName(view, preset.Id));
@@ -102,7 +106,52 @@ public sealed class PresetsModRefreshTests
             Assert.True(view.FindControl<Control>("SessionSpoilerPanel")!.IsVisible);
             Assert.Equal(title, Text(view, "TxtDetailTitle"));
         }
-        finally { host.Close(); CoreSettings.Current.UserPresets.Remove(preset); }
+        finally { host.Close(); CoreSettings.Current.UserPresets.Remove(preset); CoreMods.ActiveModIdProvider = oldMod; }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuiltInSessionRackUsesModeAwareCopyAfterModChange(bool description) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var oldMod = CoreMods.ActiveModIdProvider;
+        var oldText = CoreMods.MakeModAwareProvider;
+        string modId = BuiltInMods.BambiSleepId;
+        CoreMods.ActiveModIdProvider = () => modId;
+        CoreMods.MakeModAwareProvider = text => text;
+        var view = new PresetsTabView();
+        var host = new Window { Width = 1200, Height = 900, Content = view };
+        try
+        {
+            host.Show(); Settle();
+            Border Row() => view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>()
+                .Single(r => r.Tag is Session { Id: "morning_drift" });
+            var session = Assert.IsType<Session>(Row().Tag);
+            var before = description ? session.GetModeAwareDescription() : session.GetModeAwareName();
+            modId = BuiltInMods.DronificationId;
+            RaiseMod(); Settle();
+            var after = description ? session.GetModeAwareDescription() : session.GetModeAwareName();
+            Assert.NotEqual(before, after);
+            var row = Row();
+            if (description)
+            {
+                var blurb = Assert.IsType<Grid>(row.Child).Children.OfType<TextBlock>().Single(t => Grid.GetColumn(t) == 3);
+                Assert.Equal(after.Split('\n')[0].Trim(), blurb.Text);
+                Assert.Equal(after, ToolTip.GetTip(blurb));
+            }
+            else Assert.Equal(after, RowTitle(row));
+            row.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+            Settle();
+            if (description) Assert.StartsWith(after, Text(view, "TxtSessionDescription"));
+            else Assert.Equal($"{session.Icon} {after}", Text(view, "TxtDetailTitle"));
+        }
+        finally
+        {
+            host.Close();
+            CoreMods.ActiveModIdProvider = oldMod;
+            CoreMods.MakeModAwareProvider = oldText;
+        }
     });
 
     [Fact]

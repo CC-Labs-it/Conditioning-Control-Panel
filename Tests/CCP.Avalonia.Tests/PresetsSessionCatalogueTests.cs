@@ -139,6 +139,7 @@ public sealed class PresetsSessionCatalogueTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             var previousLanguage = LocalizationManager.Instance.CurrentLanguage;
+            var previousMod = CoreMods.ActiveModIdProvider;
             var root = Path.Combine(Path.GetTempPath(), "ccp-mounted-language-tests-" + Guid.NewGuid().ToString("N"));
             var builtInFolder = Path.Combine(root, "built-in");
             var customFolder = Path.Combine(root, "custom");
@@ -147,6 +148,7 @@ public sealed class PresetsSessionCatalogueTests
             try
             {
                 EnsureAvalonia();
+                CoreMods.ActiveModIdProvider = () => BuiltInMods.CCPDefaultId;
                 Directory.CreateDirectory(builtInFolder);
                 Directory.CreateDirectory(customFolder);
                 var service = new SessionFileService(customFolder, builtInFolder);
@@ -167,6 +169,8 @@ public sealed class PresetsSessionCatalogueTests
                 var manager = new SessionManager(service);
                 manager.LoadAllSessions();
                 var builtIn = Assert.Single(manager.AllSessions, session => session.Id == "morning_drift");
+                var nameKey = PresetNaming.SessionKey(builtIn.Id, BuiltInMods.CCPDefaultId, CoreSettings.Current.InstallDate)!;
+                var englishName = Loc.Get(nameKey);
                 var custom = Assert.Single(manager.AllSessions, session => session.Id == "live_language_custom");
                 var view = new PresetsTabView { Width = 1100, Height = 760 };
                 view.UseSessionManager(manager);
@@ -184,7 +188,7 @@ public sealed class PresetsSessionCatalogueTests
                 Click(host, builtInRow);
                 builtInRow.Focus();
                 Assert.True(builtInRow.IsFocused);
-                Assert.Equal("Morning Drift", RowText(builtInRow, 2));
+                Assert.Equal(englishName, RowText(builtInRow, 2));
                 Assert.Equal("BUILT-IN", SourceText(builtInRow));
                 Assert.Equal("⭐ Easy", PillText(builtInRow, 4));
                 Assert.Equal("30 min", RowText(builtInRow, 5));
@@ -197,8 +201,10 @@ public sealed class PresetsSessionCatalogueTests
                 Assert.True(builtInRow.IsFocused);
                 Assert.Same(builtInRow, panel.Children.Single(row => row.Tag is Session session && session.Id == builtIn.Id));
                 Assert.Same(builtIn, builtInRow.Tag);
-                Assert.Equal("晨曦漫游", RowText(builtInRow, 2));
-                Assert.StartsWith("让清晨轻轻带你进入", RowText(builtInRow, 3));
+                var chineseName = Loc.Get(nameKey);
+                Assert.NotEqual(englishName, chineseName);
+                Assert.Equal(chineseName, RowText(builtInRow, 2));
+                Assert.StartsWith("让清晨带你飘进", RowText(builtInRow, 3));
                 Assert.Equal("⭐ 简单", PillText(builtInRow, 4));
                 Assert.Equal("30 分钟", RowText(builtInRow, 5));
                 Assert.Equal("+400 XP", RowText(builtInRow, 6));
@@ -222,13 +228,13 @@ public sealed class PresetsSessionCatalogueTests
                 Dispatcher.UIThread.RunJobs();
                 LocalizationManager.Instance.SetLanguage("de");
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal("晨曦漫游", RowText(builtInRow, 2));
+                Assert.Equal(chineseName, RowText(builtInRow, 2));
 
                 reattachedHost = new Window { Width = 1100, Height = 760, Content = view };
                 reattachedHost.Show();
                 Dispatcher.UIThread.RunJobs();
                 Dispatcher.UIThread.RunJobs();
-                Assert.Equal(builtIn.LocalizedName, RowText(builtInRow, 2));
+                Assert.Equal(Loc.Get(nameKey), RowText(builtInRow, 2));
                 Assert.Equal(custom.Name, RowText(customRow, 2));
                 Assert.Equal(Loc.Get("rack_src_builtin"), SourceText(builtInRow));
                 Assert.Equal(Loc.GetF("rack_duration", builtIn.DurationMinutes), RowText(builtInRow, 5));
@@ -240,7 +246,7 @@ public sealed class PresetsSessionCatalogueTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(builtInRow.IsFocused);
                 Assert.Same(builtIn, builtInRow.Tag);
-                Assert.Equal("Morning Drift", RowText(builtInRow, 2));
+                Assert.Equal(englishName, RowText(builtInRow, 2));
                 Assert.Equal("BUILT-IN", SourceText(builtInRow));
                 Assert.Equal("30 min", RowText(builtInRow, 5));
                 Assert.Equal("2 sessions", view.FindControl<TextBlock>("TxtRackCount")!.Text);
@@ -255,6 +261,7 @@ public sealed class PresetsSessionCatalogueTests
                 }
                 finally
                 {
+                    CoreMods.ActiveModIdProvider = previousMod;
                     LocalizationManager.Instance.SetLanguage(previousLanguage);
                     Dispatcher.UIThread.RunJobs();
                     if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
@@ -948,7 +955,7 @@ public sealed class PresetsSessionCatalogueTests
 
     private static void AssertDetails(PresetsTabView view, Session expected)
     {
-        Assert.Equal($"{expected.Icon} {expected.LocalizedName}",
+        Assert.Equal($"{expected.Icon} {expected.GetModeAwareName()}",
             view.FindControl<TextBlock>("TxtDetailTitle")!.Text);
         Assert.Equal(Loc.GetF("label_0_minutes", expected.DurationMinutes),
             view.FindControl<TextBlock>("TxtSessionDuration")!.Text);
@@ -956,7 +963,7 @@ public sealed class PresetsSessionCatalogueTests
             view.FindControl<TextBlock>("TxtSessionXP")!.Text);
         Assert.Equal(expected.GetDifficultyText(),
             view.FindControl<TextBlock>("TxtSessionDifficulty")!.Text);
-        Assert.Contains(expected.LocalizedDescription,
+        Assert.Contains(expected.GetModeAwareDescription(),
             view.FindControl<TextBlock>("TxtSessionDescription")!.Text);
         Assert.False(view.FindControl<StackPanel>("SessionSpoilerPanel")!.IsVisible);
         Assert.True(view.FindControl<ScrollViewer>("SessionDetailScroller")!.IsVisible);
@@ -996,7 +1003,7 @@ public sealed class PresetsSessionCatalogueTests
         Assert.True(AvaloniaTestDispatcher.IsDispatcherThread);
         if (Application.Current is null)
         {
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
