@@ -88,8 +88,14 @@ public class BrowserResetReviewTests
             var ack = Path.Combine(CorePaths.UserData, AppUpdater.BrowserResetAcknowledged);
             File.Delete(ack);
             File.WriteAllText(marker, "pending");
-            CoreSettings.Current.OfflineMode = true;
+            CoreSettings.Current.OfflineMode = false;
+            var oldApi = Environment.GetEnvironmentVariable("CCP_UPDATE_API_URL");
+            Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api");
+            var feed = new Feed("99.1.0");
+            AppUpdater.Handler = feed;
+            ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData);
             var shell = new MainShellWindow();
+            global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow? game = null;
             AnnouncementPopup? announcement = null;
             try
             {
@@ -120,7 +126,21 @@ public class BrowserResetReviewTests
                 FeatureIntroPopup.ShowIfFirstTime("lockdown", launcher);
                 Dispatcher.UIThread.RunJobs();
                 Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
+                await Until(() => Volatile.Read(ref feed.Requests) > 0 && AppUpdater.Latest?.IsNewer == true);
                 CloseNotice();
+                await Task.Delay(1200);
+                Assert.Null(AppUpdater.OpenDialog); // updates wait while the launcher owns the screen
+                launcher.Hide();
+                shell.Show();
+                game = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow();
+                game.Show();
+                await Task.Delay(1200);
+                Assert.Null(AppUpdater.OpenDialog); // and while a game is open, even with the panel visible
+                game.Close();
+                game = null;
+                await Until(() => AppUpdater.OpenDialog != null);
+                Assert.Same(shell, AppUpdater.OpenDialog!.Owner);
+                AppUpdater.OpenDialog.FindControl<Button>("BtnLater")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 await startup;
                 Assert.True(File.Exists(ack));
                 Assert.False(File.Exists(marker));
@@ -129,8 +149,13 @@ public class BrowserResetReviewTests
             finally
             {
                 announcement?.Close();
+                game?.Close();
+                AppUpdater.OpenDialog?.Close();
                 AppUpdater.BrowserResetDialog?.Close();
                 shell.Close();
+                AppUpdater.Handler = null;
+                Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", oldApi);
+                ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData);
                 File.Delete(marker);
                 File.Delete(ack);
             }
@@ -149,6 +174,9 @@ public class BrowserResetReviewTests
             var other = Directory.CreateDirectory(Path.Combine(root, "other-user")).FullName;
             Directory.CreateDirectory(Path.Combine(other, "browser_data"));
             var owner = new Window();
+            WelcomeBackOffer.ResetForTests();
+            WelcomeBackSheet? sheet = null;
+            using var hook = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is WelcomeBackSheet s) sheet = s; });
             try
             {
                 owner.Show();
@@ -164,8 +192,14 @@ public class BrowserResetReviewTests
                 FeatureIntroPopup.ShowIfFirstTime("lockdown", owner);
                 Dispatcher.UIThread.RunJobs();
                 Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
+                var welcome = WelcomeBackOffer.Present(new WelcomeBackSheetContent());
+                await Task.Delay(700);
+                Assert.Null(sheet);
                 CloseNotice();
                 await showing;
+                await Until(() => sheet != null);
+                sheet!.Close();
+                await welcome;
                 Assert.True(File.Exists(Path.Combine(root, AppUpdater.BrowserResetAcknowledged)));
                 Assert.False(AppUpdater.NeedsBrowserResetNotice(root, true));
                 Assert.True(AppUpdater.NeedsBrowserResetNotice(other, true));
@@ -173,21 +207,61 @@ public class BrowserResetReviewTests
             }
             finally
             {
+                sheet?.Close();
                 AppUpdater.BrowserResetDialog?.Close();
                 owner.Close();
+                WelcomeBackOffer.ResetForTests();
                 Directory.Delete(root, true);
             }
         });
     }
 
-    private sealed class Feed : HttpMessageHandler
+    [Fact]
+    public async Task FailedUpdateIsOwnerlessInTrayAndRetainedIfExitPrecedesDisplay()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            CoreSettings.Current.OfflineMode = true;
+            var shell = new MainShellWindow();
+            UpdateFailedDialog? failed = null;
+            using var hook = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is UpdateFailedDialog f) failed = f; });
+            try
+            {
+                shell.Show(); shell.Hide();
+                ReleaseFeed.SetPendingUpdateAttempt(CorePaths.UserData, "99.1.0");
+                File.WriteAllText(ReleaseFeed.AttemptResultFilePath(CorePaths.UserData), "1");
+                var startup = AppUpdater.StartupAsync(shell);
+                await Until(() => failed != null);
+                Assert.Null(failed!.Owner);
+                Assert.False(File.Exists(ReleaseFeed.AttemptFilePath(CorePaths.UserData)));
+                failed.Close(); await startup; failed = null;
+                ReleaseFeed.SetPendingUpdateAttempt(CorePaths.UserData, "99.2.0");
+                MainShellWindow.IsStartupDialogShowing = true;
+                startup = AppUpdater.StartupAsync(shell);
+                await Task.Delay(900);
+                shell.Close();
+                MainShellWindow.IsStartupDialogShowing = false;
+                await startup;
+                Assert.True(File.Exists(ReleaseFeed.AttemptFilePath(CorePaths.UserData)));
+            }
+            finally
+            {
+                MainShellWindow.IsStartupDialogShowing = false;
+                failed?.Close(); shell.Close();
+                ReleaseFeed.ClearPendingUpdateAttempt(CorePaths.UserData);
+            }
+        });
+    }
+
+    private sealed class Feed(string tag = "0.0.0") : HttpMessageHandler
     {
         public int Requests;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Interlocked.Increment(ref Requests);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            { Content = new StringContent("{\"tag_name\":\"v0.0.0\"}") });
+            { Content = new StringContent($"{{\"tag_name\":\"v{tag}\"}}") });
         }
     }
 

@@ -164,9 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try
             {
                 await Task.Delay(500);
-                var outcome = ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion);
-                var report = outcome is { Succeeded: false }
-                    ? ShowFailedUpdateAsync(shell, outcome.Version, () => closed) : Task.CompletedTask;
+                var report = ShowFailedUpdateAsync(shell, () => closed);
                 var notice = ShowBrowserResetWhenReadyAsync(shell, report, () => closed);
 
                 // A waiting or open notice must not hold the network check or the update pill.
@@ -174,8 +172,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (info?.IsNewer == true) shell.ShowUpdatePill(info.Version);
                 await notice;
                 await report;
-                if (info?.IsNewer != true || closed) return;
-                var owner = await WaitForStartupOwnerAsync(shell, () => closed, requireAge: true);
+                if (info?.IsNewer != true || closed || ReleaseFeed.GetSkippedUpdateVersion(UserData) == info.Version) return;
+                var owner = await WaitForStartupOwnerAsync(shell, () => closed, requireAge: true, panelOnly: true);
                 if (owner != null && !_busy) await OfferAsync(owner, info);
             }
             catch (Exception ex)
@@ -226,16 +224,20 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally { BrowserResetDialog = null; MainShellWindow.IsStartupDialogShowing = previous; }
         }
 
-        private static async Task ShowFailedUpdateAsync(MainShellWindow shell, string version, Func<bool> closed)
+        private static async Task ShowFailedUpdateAsync(MainShellWindow shell, Func<bool> closed)
         {
-            var owner = await WaitForStartupOwnerAsync(shell, closed, requireAge: false);
-            if (owner == null) return;
+            if (!File.Exists(ReleaseFeed.AttemptFilePath(UserData))) return;
+            while (!closed() && (StartupModalOpen() || StartupLadder.PassiveWindowUp())) await Task.Delay(500);
+            if (closed()) return; // leave the attempt on disk until it can be reported
+            var outcome = ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion);
+            if (outcome is not { Succeeded: false }) return;
+            var owner = StartupOwner(shell); // WPF UpdateFailedDialog.ShowFor supports no visible owner
             var previous = MainShellWindow.IsStartupDialogShowing;
             MainShellWindow.IsStartupDialogShowing = true;
             try
             {
                 var dialog = new UpdateFailedDialog(Loc.Get("title_update_failed"),
-                    Loc.GetF("msg_update_install_failed", version, CoreReleaseContent.AppVersion)) { Topmost = true };
+                    Loc.GetF("msg_update_install_failed", outcome.Version, CoreReleaseContent.AppVersion)) { Topmost = true };
                 await dialog.ShowDialogSafe(owner);
             }
             catch (Exception ex) { Log.Warning(ex, "Failed to show update failure dialog"); }
@@ -253,11 +255,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return games?.FirstOrDefault();
         }
 
-        private static async Task<Window?> WaitForStartupOwnerAsync(MainShellWindow shell, Func<bool> closed, bool requireAge)
+        private static async Task<Window?> WaitForStartupOwnerAsync(MainShellWindow shell, Func<bool> closed, bool requireAge, bool panelOnly = false)
         {
             while (!closed())
             {
-                var owner = StartupOwner(shell);
+                var owner = panelOnly
+                    ? shell.IsVisible && shell.WindowState != WindowState.Minimized && !shell.BuildingHiddenForBoot
+                        && LauncherWindow.Instance is not { IsVisible: true } && !Views.Games.GameWindow.IsAnyOpen() ? shell : null
+                    : StartupOwner(shell);
                 if (owner != null && (!requireAge || CoreSettings.Current.HasAcceptedAgeVerification)
                     && !StartupModalOpen() && !StartupLadder.PassiveWindowUp()) return owner;
                 await Task.Delay(500);

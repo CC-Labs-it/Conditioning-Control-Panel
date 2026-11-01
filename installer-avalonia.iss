@@ -643,13 +643,28 @@ end;
 // Called after installation completes successfully
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  SelectedAssetsPath, UserDataPath: String;
+  SelectedAssetsPath, UserDataPath, UserDataOverride: String;
 begin
   if CurStep = ssPostInstall then
   begin
     // The WPF updater uses /SILENT (UpdateService.cs:914, ReleaseFeed.cs:432),
     // which skips InfoBeforeFile. Leave a notice for the new head to show on launch.
     UserDataPath := ExpandConstant('{localappdata}\ConditioningControlPanel');
+    UserDataOverride := GetEnv('CCP_USERDATA_DIR');
+    if Length(UserDataOverride) > 0 then
+    begin
+      if (UserDataOverride[1] = '\') or (UserDataOverride[1] = '/') then UserDataPath := UserDataOverride
+      else if Length(UserDataOverride) > 1 then
+        if (UserDataOverride[2] = ':') and
+           (((UserDataOverride[1] >= 'A') and (UserDataOverride[1] <= 'Z')) or
+            ((UserDataOverride[1] >= 'a') and (UserDataOverride[1] <= 'z'))) then
+          UserDataPath := UserDataOverride;
+    end;
+    // Interactive setup already showed InfoBeforeFile to this user.
+    if not WizardSilent and (DirExists(UserDataPath + '\browser_data') or
+       FileExists(UserDataPath + '\browser-reset.pending')) then
+      if not SaveStringToFile(UserDataPath + '\browser-reset.ack.json', '{}', False) then
+        Log('Could not write browser reset acknowledgment');
     if WizardSilent and DirExists(UserDataPath + '\browser_data') and
        not DirExists(UserDataPath + '\browser_data_avalonia') then
       if not SaveStringToFile(UserDataPath + '\browser-reset.pending', 'pending', False) then
