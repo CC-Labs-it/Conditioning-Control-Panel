@@ -24,7 +24,7 @@ public sealed class BrainDrainRestackTests
         try
         {
             drain.Show(); picture.Show();
-            Assert.False(X11Overlay.RestackBelow(drain, picture));
+            Assert.False(X11Overlay.RestackBelow(drain, picture)); Assert.False(Win32Overlay.SetCaptureAffinity(drain, 0x11)); Assert.True(Win32Overlay.SetCaptureAffinity(drain, 0));
         }
         finally { picture.Close(); drain.Close(); }
         return Task.CompletedTask;

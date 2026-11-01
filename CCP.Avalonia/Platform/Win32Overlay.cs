@@ -45,13 +45,13 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
     [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
-    // WPF Compositor/OverlayCaptureAffinity.cs:48-59: best effort, including older Windows.
+    // WPF Compositor/OverlayCaptureAffinity.cs:48-59; unavailable exclusion fails closed.
     internal static uint CaptureAffinity(bool allowCapture) => allowCapture ? 0u : 0x11u;
-    internal static void SetCaptureAffinity(TopLevel window, uint affinity)
+    internal static bool SetCaptureAffinity(TopLevel window, uint affinity)
     {
-        if (!OperatingSystem.IsWindows() || window.TryGetPlatformHandle() is not { HandleDescriptor: "HWND" } h || h.Handle == IntPtr.Zero) return;
-        try { SetWindowDisplayAffinity(h.Handle, affinity); }
-        catch (Exception ex) { Serilog.Log.Debug(ex, "Brain Drain capture affinity failed"); }
+        if (!OperatingSystem.IsWindows() || window.TryGetPlatformHandle() is not { HandleDescriptor: "HWND" } h || h.Handle == IntPtr.Zero) return affinity == 0;
+        try { return SetWindowDisplayAffinity(h.Handle, affinity) || affinity == 0; }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Brain Drain capture affinity failed"); return affinity == 0; }
     }
     // WPF OverlayService.cs:3247. hWndInsertAfter means immediately below this window.
     internal static bool RestackBelow(IntPtr hwnd, IntPtr after)

@@ -76,18 +76,18 @@ public sealed class BrainDrainKeepClearRowTests
             var chk = card.FindControl<CheckBox>("ChkKeepClear")!;
             Assert.False(chk.IsChecked);
 
-            var enable = card.FindControl<CheckBox>("ChkEnable")!; var blur = card.FindControl<Slider>("SliderBlurStrength")!; service.RestoreFrom(new AppSettings { BrainDrainBlurStrength = 0 }); Dispatcher.UIThread.RunJobs();
-            Assert.Equal(0, blur.Value); blur.Value = 1; blur.Value = 0; Assert.Equal(0, service.Current.BrainDrainBlurStrength); service.Current.BrainDrainEnabled = true; service.Current.BrainDrainBlurStrength = 37; service.Current.BrainDrainKeepPicturesClear = true;
-            Dispatcher.UIThread.RunJobs(); Assert.True(enable.IsChecked); Assert.Equal(37, blur.Value); Assert.True(chk.IsChecked);
+            var enable = card.FindControl<CheckBox>("ChkEnable")!; var blur = card.FindControl<Slider>("SliderBlurStrength")!; var capture = card.FindControl<CheckBox>("ChkAllowCapture")!; service.RestoreFrom(new AppSettings { BrainDrainBlurStrength = 0, AllowOverlayCapture = true }); Dispatcher.UIThread.RunJobs(); Assert.True(new BrainDrainFeatureControl().FindControl<CheckBox>("ChkAllowCapture")!.IsChecked);
+            Assert.Equal(0, blur.Value); blur.Value = 1; blur.Value = 0; Assert.Equal(0, service.Current.BrainDrainBlurStrength); Assert.True(capture.IsChecked); service.SaveImmediate(true); Assert.False(service.HasPendingSave); capture.IsChecked = false; Assert.False(service.Current.AllowOverlayCapture); Assert.True(service.HasPendingSave); capture.IsChecked = true; Assert.True(service.Current.AllowOverlayCapture); service.Current.BrainDrainEnabled = true; service.Current.BrainDrainBlurStrength = 37; service.Current.BrainDrainKeepPicturesClear = true;
+            Dispatcher.UIThread.RunJobs(); Assert.True(enable.IsChecked); Assert.Equal(37, blur.Value); Assert.True(chk.IsChecked); service.Current.AllowOverlayCapture = false; Dispatcher.UIThread.RunJobs(); Assert.False(capture.IsChecked);
             var oldModel = service.Current; oldModel.BrainDrainKeepPicturesClear = false; Dispatcher.UIThread.RunJobs(); Assert.False(chk.IsChecked);
-            service.RestoreFrom(new AppSettings { BrainDrainKeepPicturesClear = true, BrainDrainBlurStrength = 72 });
+            service.RestoreFrom(new AppSettings { BrainDrainKeepPicturesClear = true, BrainDrainBlurStrength = 72, AllowOverlayCapture = true });
             Dispatcher.UIThread.RunJobs();
-            Assert.True(chk.IsChecked); Assert.False(enable.IsChecked); Assert.Equal(72, blur.Value);
+            Assert.True(chk.IsChecked); Assert.False(enable.IsChecked); Assert.Equal(72, blur.Value); Assert.True(capture.IsChecked);
             var propertyEvent = typeof(AppSettings).GetField("PropertyChanged", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
             Assert.DoesNotContain(((System.Delegate?)propertyEvent.GetValue(oldModel))?.GetInvocationList() ?? System.Array.Empty<System.Delegate>(), d => ReferenceEquals(d.Target, card));
             host.Content = null;
             Assert.DoesNotContain(((System.Delegate?)propertyEvent.GetValue(service.Current))?.GetInvocationList() ?? System.Array.Empty<System.Delegate>(), d => ReferenceEquals(d.Target, card));
-            service.Current.BrainDrainEnabled = true; Dispatcher.UIThread.RunJobs(); Assert.False(enable.IsChecked);
+            service.Current.BrainDrainEnabled = true; service.Current.AllowOverlayCapture = false; Dispatcher.UIThread.RunJobs(); Assert.False(enable.IsChecked); Assert.True(capture.IsChecked);
         }
         finally
         {

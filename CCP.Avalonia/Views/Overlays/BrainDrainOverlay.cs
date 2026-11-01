@@ -12,7 +12,7 @@ using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
-// WPF OverlayService.cs:456-465,2232-2250,2598-2610,3199-3248,3760-3764: native KWin/Windows blur, others fail closed.
+// WPF OverlayService.cs:456-465,2232-2250,2598-2610,3199-3248,3760-3764: native blur, unprotected hosts fail closed.
 // No capture/feedback copy; the native kernel and melt remain outside this keep-clear port.
 internal static class BrainDrainOverlay
 {
@@ -25,7 +25,7 @@ internal static class BrainDrainOverlay
     private static readonly DispatcherTimer Timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     internal static Func<Window, bool> Prepare = X11Overlay.EnableDesktopBlur;
     internal static Func<IReadOnlyList<Window>, IReadOnlyList<BrainDrainKeepClear.BandEntry>> ReadBand = X11Overlay.VisibleOwnBand;
-    internal static Action<Window, uint> Capture = Win32Overlay.SetCaptureAffinity;
+    internal static Func<Window, uint, bool> Capture = Win32Overlay.SetCaptureAffinity;
     internal static Action<Window, double> Alpha = (w, a) => X11Overlay.SetOpacity(w, a);
     internal static Action<Window> Raise = w => X11Overlay.Raise(w);
     internal static Action<Window, Window> Below = (w, a) => X11Overlay.RestackBelow(w, a);
@@ -54,8 +54,8 @@ internal static class BrainDrainOverlay
     private static void SettingsReplaced() => Changed(null, new PropertyChangedEventArgs(null));
     private static void Changed(object? sender, PropertyChangedEventArgs e)
     {
-        if (Dispatcher.UIThread.CheckAccess()) Reconcile();
-        else Dispatcher.UIThread.Post(() => Reconcile());
+        void Apply() { if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(AppSettings.AllowOverlayCapture)) { _retryAfterUtc = DateTime.MinValue; _retrySeconds = 5; } Reconcile(); }
+        if (Dispatcher.UIThread.CheckAccess()) Apply(); else Dispatcher.UIThread.Post(Apply);
     }
     internal static void Reconcile(DateTime? now = null)
     {
@@ -88,12 +88,12 @@ internal static class BrainDrainOverlay
                     Topmost = true, Background = Brushes.Transparent,
                     TransparencyLevelHint = new[] { WindowTransparencyLevel.Blur, WindowTransparencyLevel.Transparent },
                     Tag = screen, Position = b.Position, Width = b.Width / scale, Height = b.Height / scale };
-                try { Capture(w, affinity); w.Show(); Capture(w, affinity); if (!Prepare(w)) { w.Close(); CloseHosts(); Serilog.Log.Warning("Brain Drain: compositor blur or click-through unavailable"); return; } Hosts.Add(w); }
+                try { if (Capture(w, affinity)) { w.Show(); if (Capture(w, affinity) && Prepare(w)) { Hosts.Add(w); continue; } } w.Close(); CloseHosts(); Serilog.Log.Warning("Brain Drain: capture protection or compositor blur unavailable"); return; }
                 catch { w.Close(); CloseHosts(); return; }
             }
         }
         // WPF OverlayService.cs:2814-2823,3786: creation, live change and replacement.
-        foreach (var w in Hosts) Capture(w, affinity); _retryAfterUtc = DateTime.MinValue; _retrySeconds = 5;
+        foreach (var w in Hosts) if (!Capture(w, affinity)) { CloseHosts(); _retryAfterUtc = utcNow.AddSeconds(_retrySeconds); _retrySeconds = Math.Min(_retrySeconds * 2, 60); return; } _retryAfterUtc = DateTime.MinValue; _retrySeconds = 5;
         // WPF Compositor/BrainDrainLayer.cs:296-301, rounded alpha at 1..100 strength.
         foreach (var w in Hosts) Alpha(w, Math.Round((.10 + .75 * Math.Pow((Math.Clamp(s.BrainDrainBlurStrength, 1, 100) - 1) / 99.0, .66)) * 255) / 255);
         // Forced off transition raises the blur again. Ordinary ticks only repair an actual drift.
