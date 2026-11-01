@@ -4,7 +4,7 @@
 // First load uses the mod default (WPF MainWindow.Browser.cs:225).
 // Remaining gaps: page fullscreen, autoplay, media ownership/audio-sync and remote takeover.
 // Document mute cannot reach cross-origin frames; WebHost has no engine mute.
-// Popup evidence and remaining gaps: docs/cloud/row2-shell-browser.md.
+// Remaining gaps: docs/cloud/row2-shell-browser.md.
 
 using System;
 using Avalonia.Controls;
