@@ -340,7 +340,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
             _poseTimer.Stop();
             _speechTimer?.Stop();
-            ClearSpeechQueue();
+            ClearSpeechQueue(); CancelSpeechLeadIn();
             _cooldownTickTimer?.Stop();
             _possessionGlitchTimer?.Stop();
             _bounceTimer?.Stop();
@@ -1271,7 +1271,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     SpokenAudioDone = clipDone.Task;
                     _stopSpoken();   // WPF ShowGiggle StopSpokenAudio (Speech.cs:474): every new line cuts the last
                     _stopSpoken = static () => { };
-                    _speechLeadIn?.Dispose(); _speechLeadIn = null;   // WPF Speech.cs:634
+                    CancelSpeechLeadIn();   // WPF Speech.cs:634
 
                     // The chat log owns the bubble while it is up - take it back before rendering.
                     if (_isShowingChatHistory)
@@ -1287,18 +1287,16 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
-                    int leadIn = 0;
+                    var id = emotionLineId ?? (phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath));
+                    double probed = RainProbedSeconds(phraseAudioPath);
+                    int leadIn = StartRainSpeech(id, mood, text, phraseAudioPath, probed > 0 ? probed : RainEstimatedSeconds(text));
                     Action? playLineAudio = null;
-                    if (IsMuted) StopRainSpeech();
-                    else
+                    if (!IsMuted)
                     {
-                        var id = emotionLineId ?? (phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath));
-                        double probed = RainProbedSeconds(phraseAudioPath);   // WPF CirceEmotes.cs:627-629
-                        leadIn = StartRainSpeech(id, mood, text, phraseAudioPath, probed > 0 ? probed : RainEstimatedSeconds(text));
                         int rainVersion = _rainSpeechVersion;
                         playLineAudio = () => PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken, duration => RunOnAvatar(() =>
                         {
-                            if (leadIn == 0 && probed <= 0 && duration.TotalSeconds > 0 && rainVersion == _rainSpeechVersion)
+                            if (leadIn == 0 && probed <= 0 && duration.TotalSeconds > 0 && rainVersion == _rainSpeechVersion && !IsMuted)
                                 StartRainSpeech(id, mood, text, phraseAudioPath, duration.TotalSeconds);
                         }));
                         spokenHandled = true;
@@ -1323,11 +1321,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     if (preset && leadIn > 0)
                     {
                         bool audioCut = false;
-                        Action cut = () => { if (audioCut) return; audioCut = true; playLineAudio = null; spoken(); };
+                        Action cut = () => { if (audioCut) return; audioCut = true; playLineAudio = null; if (spokenHandled) spoken(); };
                         _stopSpoken = cut;
+                        int leadVersion = _speechLeadInVersion;
                         _speechLeadIn = RainSchedule(TimeSpan.FromMilliseconds(leadIn), () =>
                         {
-                            _speechLeadIn = null;
+                            if (leadVersion != _speechLeadInVersion) return;
+                            ++_speechLeadInVersion; _speechLeadIn = null;
                             if (_stopSpoken == cut) _stopSpoken = static () => { };
                             bool superseded = !_isGiggling || _avatarSetsClosed;   // WPF Speech.cs:507
                             if (superseded || IsMuted) cut();
@@ -1354,7 +1354,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             RunOnAvatar(() =>
             {
                 if (_isPlayingUninterruptibleClip) return;
-                ClearSpeechQueue();   // WPF Speech.cs:719-721: nothing queued talks over the open mic
+                if (_speechLeadIn != null) _stopSpoken();
+                ClearSpeechQueue(); CancelSpeechLeadIn();   // WPF Speech.cs:719-721
                 _speechTimer?.Stop();
                 _isGiggling = false;
                 _isShowingAiBubble = false;

@@ -34,7 +34,7 @@ public sealed class RainSpeechTests
         private readonly Func<SettingsService>? _settings = CoreSettings.ServiceProvider;
         private readonly Func<string>? _mod = CoreMods.ActiveModIdProvider;
         private readonly Func<string, float, string, Action<TimeSpan>?, Action?, Action?>? _audio = CoreAudio.PlayStoppableProvider;
-        public Fixture()
+        public Fixture(int minClipMs = 0)
         {
             if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>()
                 .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
@@ -47,7 +47,7 @@ public sealed class RainSpeechTests
             }
             File.WriteAllText(Path.Combine(folder, "manifest.json"), $"{{rev:1,lookHash:'{hash}',clips:{{" +
                 string.Join(",", names.Select(n => $"{n}:{{file:'{n}.png',frames:2,fps:1,w:1,h:1}}")) + "}}");
-            File.WriteAllText(Path.Combine(folder, "emotes.json"), "{fadeMs:0,minClipMs:0,talkStartDelayMs:1000,talkLeadOutMs:500," +
+            File.WriteAllText(Path.Combine(folder, "emotes.json"), $"{{fadeMs:0,minClipMs:{minClipMs},talkStartDelayMs:1000,talkLeadOutMs:500," +
                 "idleRotation:[{clip:'idle'}],talking:{pool:['talk_a','talk_b'],maxTalkClips:2},expressive:{pool:['giggle']}," +
                 "clickEmotes:['giggle'],stemPrefix:{session:'greeting',session_start:'joy',bad:'missing'},mood:{warm:'affection',playful:'giggle'}}");
             File.WriteAllText(Path.Combine(folder, "clip_timing.json"), "{talk_a:{durationMs:2500,speakStartMs:100,speakEndMs:2100},talk_b:{durationMs:2500,speakStartMs:100,speakEndMs:2100}}");
@@ -107,7 +107,7 @@ public sealed class RainSpeechTests
         Action? gap = null;
         f.Tube.SpeechDelayScheduler = (_, fire) => { gap = fire; return () => { }; };
         f.Tube.Giggle("first line");
-        f.Tube.Giggle("queued line", "/tmp/session_start_02.wav", mood: "warm");
+        BarkHead.Speak(new ConditioningControlPanel.Services.Bark.BarkSpeech("queued line", "/tmp/session_start_02.wav", false, "warm", false), f.Tube); Assert.Equal(1, f.Tube.QueuedSpeechCount); Assert.Empty(f.Tube.ChatHistory);
         f.Tube.EndSpeechBubble(); Assert.NotNull(gap); gap!();
         f.Advance(1000); await f.Talk();
         f.Advance(500); await f.Clip("joy");
@@ -131,15 +131,18 @@ public sealed class RainSpeechTests
     {
         using var f = new Fixture(); await f.Start();
         var audio = Path.Combine(f.Root, "session_start.wav"); File.WriteAllText(audio, "voice");
-        Action<TimeSpan>? started = null;
-        CoreAudio.PlayStoppableProvider = (_, _, _, callback, _) => { started = callback; return () => { }; };
-        f.Tube.GigglePriority("a spoken line", phraseAudioPath: audio);
+        Action<TimeSpan>? started = null; int stops = 0;
+        CoreAudio.PlayStoppableProvider = (_, _, _, callback, _) => { started = callback; return () => stops++; };
+        f.Settings.Current.AvatarMuted = true; f.Tube.GigglePriority("a spoken line", phraseAudioPath: audio);
+        f.Advance(1000); await f.Talk(); Assert.Null(started);
+        f.Settings.Current.AvatarMuted = false; f.Tube.PanicSilence(); f.Advance(10000); await f.Clip("idle");
+        f.Tube.GigglePriority("a spoken line", phraseAudioPath: audio); f.Tube.ShowListeningBubble("listening"); Assert.Equal(0, stops); f.Tube.HideListeningBubble();
         var stale = f.Timers.Last(); f.Tube.PanicSilence(); Assert.True(stale.Cancelled); stale.Fire(); started!(TimeSpan.FromSeconds(8));
         f.Advance(10000); await f.Clip("idle");
         f.Tube.GigglePriority("another spoken line", phraseAudioPath: audio);
         f.Advance(1000); await f.Talk();
-        var pending = f.Timers.Last(); f.Settings.Current.AvatarMuted = true; Assert.True(pending.Cancelled); pending.Fire();
-        f.Advance(10000); await f.Clip("idle");
+        var pending = f.Timers.Last(); f.Settings.Current.AvatarMuted = true; started!(TimeSpan.FromSeconds(8)); Assert.Equal(2, stops); Assert.False(pending.Cancelled);
+        f.Advance(650); await f.Clip("joy");
         f.Settings.Current.AvatarMuted = false;
         f.Tube.GigglePriority("another spoken line", phraseAudioPath: audio);
         var clickPending = f.Timers.Last(); Assert.True(f.Tube.RainClickEmote()); clickPending.Fire(); f.Advance(2000); await f.Clip("giggle");
@@ -161,8 +164,8 @@ public sealed class RainSpeechTests
         f.Tube.QueueRainClick("giggle"); var panic = f.Timers.Last();
         f.Tube.PanicSilence(); Assert.True(panic.Cancelled); panic.Fire(); await f.Clip("idle");
         f.Tube.QueueRainClick("giggle"); var mute = f.Timers.Last(); f.Settings.Current.AvatarMuted = true;
-        Assert.True(mute.Cancelled); mute.Fire(); await f.Clip("idle"); f.Settings.Current.AvatarMuted = false;
-        f.Tube.QueueRainClick("giggle"); var speech = f.Timers.Last();
+        Assert.False(mute.Cancelled); f.Advance(2000); await f.Clip("giggle"); f.Settings.Current.AvatarMuted = false;
+        f.Tube.QueueRainClick("greeting"); var speech = f.Timers.Last();
         f.Tube.GigglePriority("a spoken line", playSound: false); Assert.True(speech.Cancelled); speech.Fire();
         f.Advance(1000); await f.Talk();
         f.Tube.QueueRainClick("giggle"); var close = f.Timers.Last();
@@ -205,11 +208,8 @@ public sealed class RainSpeechTests
     [Fact]
     public Task PresetNonverbalLeadInHoldsBubbleHideTimerAndVoiceUntilAfterMinHold() => Run(async () =>
     {
-        using var f = new Fixture();
-        var map = Path.Combine(f.Root, new string('c', 64), "emotes.json");
-        File.WriteAllText(map, File.ReadAllText(map).Replace("minClipMs:0", "minClipMs:2500"));
-        await f.Start(); var (plays, audio, bubble) = Voice(f);
-        f.Tube.Giggle("*giggles*", audio);
+        using var f = new Fixture(2500); await f.Start(); var (plays, audio, bubble) = Voice(f);
+        BarkHead.Speak(new ConditioningControlPanel.Services.Bark.BarkSpeech("*giggles*", audio, false, null, false), f.Tube); Assert.Empty(f.Tube.ChatHistory);
         f.Advance(2749); await f.Clip("giggle"); // fresh idle: 2500 ms hold, then 250 ms lead-in (WPF CirceEmotes.cs:731-735)
         Assert.Equal(0, plays()); Assert.False(bubble.IsVisible); Assert.Null(HideTimer(f.Tube));
         f.Advance(1);
@@ -227,10 +227,21 @@ public sealed class RainSpeechTests
     });
 
     [Fact]
+    public Task ThinkingReplacesPendingVoiceAndRainSequence() => Run(async () =>
+    {
+        using var f = new Fixture(2500); await f.Start(); var (_, audio, bubble) = Voice(f); f.Tube.Giggle("*giggles*", audio);
+        var old = f.Timers.ToArray(); var done = f.Tube.SpokenAudioDone; Assert.False(done.IsCompleted);
+        f.Tube.StartThinkingAnimation(); Assert.True(done.IsCompleted); Assert.All(old, t => Assert.True(t.Cancelled));
+        foreach (var t in old) t.Fire(); Assert.True(bubble.IsVisible); Assert.NotEqual("*giggles*", f.Tube.FindControl<TextBlock>("TxtSpeech")!.Text);
+        Assert.Contains(f.Timers, t => !t.Cancelled); CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => () => throw new InvalidOperationException(); f.Tube.GigglePriority("voiced", phraseAudioPath: audio); f.Tube.StartThinkingAnimation(); Assert.NotNull(f.Tube.ThinkingFrame);
+    });
+
+    [Fact]
     public Task PanicDuringPresetLeadInDropsVoiceAndBubble() => Run(async () =>
     {
         using var f = new Fixture(); await f.Start(); var (plays, audio, bubble) = Voice(f);
-        f.Tube.Giggle("*giggles*", audio); f.Tube.PanicSilence();
-        f.Advance(3000); Assert.Equal(0, plays()); Assert.False(bubble.IsVisible);
+        f.Tube.Giggle("*giggles*", audio); var stale = f.Timers.Last(); f.Tube.PanicSilence();
+        f.Tube.SpeechDelayScheduler = (_, _) => () => { }; f.Tube.Giggle("queued after panic"); Assert.True(f.Tube.IsSpeaking);
+        Assert.True(stale.Cancelled); stale.Fire(); f.Advance(3000); Assert.Equal(0, plays()); Assert.False(bubble.IsVisible);
     });
 }

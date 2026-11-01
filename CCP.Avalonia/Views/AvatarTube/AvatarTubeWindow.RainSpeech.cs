@@ -10,7 +10,6 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using LibVLCSharp.Shared;
 using Newtonsoft.Json.Linq;
-using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel.Services.Companion.Rain;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
@@ -25,6 +24,8 @@ public partial class AvatarTubeWindow
     internal Func<long> RainClock = static () => Environment.TickCount64;
     internal Func<TimeSpan, Action, IDisposable> RainSchedule = static (delay, fire) => DispatcherTimer.RunOnce(fire, delay);
     private IDisposable? _speechLeadIn;
+    private int _speechLeadInVersion;
+    private void CancelSpeechLeadIn() { ++_speechLeadInVersion; _speechLeadIn?.Dispose(); _speechLeadIn = null; }
     private readonly Dictionary<string, double> _rainAudioSeconds = new();
 
     // WPF AudioDurationSec (Avatar.cs:1259-1272): the clip length, read once per path before the line is planned.
@@ -107,7 +108,7 @@ public partial class AvatarTubeWindow
     private int StartRainSpeech(string? id, string? mood, string? text, string? audioPath, double seconds)
     {
         CancelRainClick(); CancelRainSpeech();
-        if (_rainMap == null || _avatarSetsClosed || IsMuted) return 0;
+        if (_rainMap == null || _avatarSetsClosed) return 0;
         _rainSpeechOwned = true;
         int version = _rainSpeechVersion;
         int minHold = Math.Max(0, (int?)_rainMap["minClipMs"] ?? 2500);
@@ -177,7 +178,7 @@ public partial class AvatarTubeWindow
         if (milliseconds <= 0) { if (version == _rainSpeechVersion) action(); return; }
         _rainSpeechTimer = RainSchedule(TimeSpan.FromMilliseconds(milliseconds), () =>
         {
-            if (version == _rainSpeechVersion && !_avatarSetsClosed && !IsMuted) { _rainSpeechTimer = null; action(); }
+            if (version == _rainSpeechVersion && !_avatarSetsClosed) { _rainSpeechTimer = null; action(); }
         });
     }
 
@@ -189,7 +190,6 @@ public partial class AvatarTubeWindow
 
     private void MuteRainSpeech()
     {
-        StopRainSpeech();
         try { _stopSpoken(); } catch { }
         _stopSpoken = static () => { };
     }

@@ -84,14 +84,12 @@ internal static class BarkHead
         CoreSettingsHooks.SettingChangedSink = name => OnSettingChanged(e, name);
     }
 
-    /// <summary>WPF Speak (:1985): preempting barks through GigglePriority, the clip as her voice.
-    /// ponytail: an ordinary VOICED bark goes the same way (this tube's Giggle takes no clip); the gate has
-    /// already dropped it if she was speaking, so it never cuts a line off.</summary>
-    internal static void Speak(BarkSpeech s)
+    /// <summary>WPF Speak: ordinary barks queue, priority barks preempt.</summary>
+    internal static void Speak(BarkSpeech s) => Speak(s, Views.AvatarTube.AvatarTubeWindow.Live);
+    internal static void Speak(BarkSpeech s, Views.AvatarTube.AvatarTubeWindow? tube)
     {
-        var tube = Views.AvatarTube.AvatarTubeWindow.Live;
         if (tube == null) return;
-        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text, mood: s.Mood); return; }
+        if (s.SilentEgg || !s.Priority) { tube.Giggle(s.Text, s.SilentEgg ? null : s.AudioPath, !s.SilentEgg && s.AudioPath != null, s.Mood); return; }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
             phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
     }
