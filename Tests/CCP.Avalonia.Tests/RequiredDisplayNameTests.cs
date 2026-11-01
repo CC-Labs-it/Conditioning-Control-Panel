@@ -1,4 +1,7 @@
 using System;
+using System.Linq;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Localization;
 using System.Collections.Generic;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using System.Threading.Tasks;
@@ -125,6 +128,20 @@ public sealed class RequiredDisplayNameTests
                     paint.Invoke(null, new object?[] { owned, locked, "Session owns this setting" });
                 Assert.Equal(!locked, toggle.IsEnabled);
             }
+            var host = new Window { Content = view, Width = 1000, Height = 1100 };
+            try
+            {
+                host.Show(); host.UpdateLayout();
+                var label = Assert.Single(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == Loc.Get("setting_video_replay_failed_check"));
+                Assert.True(label.IsEffectivelyVisible && label.Bounds.Width > 0 && label.Bounds.Height > 0);
+                var row = Assert.IsType<Grid>(toggle.Parent);
+                Assert.Same(row, label.Parent);
+                var size = view.FindControl<Slider>("SliderTargetSize")!;
+                var panel = Assert.IsType<StackPanel>(row.Parent);
+                Assert.Equal(panel.Children.IndexOf((Control)size.Parent!) + 1, panel.Children.IndexOf(row));
+            }
+            finally { host.Close(); }
             return Task.CompletedTask;
         });
     }

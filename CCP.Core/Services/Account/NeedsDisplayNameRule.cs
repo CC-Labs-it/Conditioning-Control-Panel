@@ -11,7 +11,7 @@ namespace ConditioningControlPanel.Services.Account
 
     /// <summary>
     /// The display name is required (owner call 2026-10-20): a signed-in account with no name is
-    /// asked for one after every sign-in and at the next launch, until it has one. Pure, so the
+    /// asked for one once per account per launch in the port, until it has one. Pure, so the
     /// sign-in paths, the startup ladder and the null-name fallbacks all read the same rule.
     /// </summary>
     public static class NeedsDisplayNameRule
