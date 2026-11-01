@@ -6,6 +6,9 @@ using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Styling;
+using F = ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
@@ -18,7 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// The title bar's "Online 42%" pill (WPF MainWindow.OnlineMeter.cs PaintOnlineMeterPill / OnlineMeterPill_Click):
     /// visible from every tab while online media is in the source, consented and switched on; a click opens the Assets
     /// tab, where the card sits. Percent only, never MB.
-    /// <para>The ring is tracked separately in ledger row 206.</para>
+    /// <para>ponytail: the ring is tracked separately in ledger row 206.</para>
     /// </summary>
     public partial class MainShellWindow
     {
@@ -80,11 +83,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     Padding = new Thickness(16, 14), CornerRadius = new CornerRadius(12),
                     Background = new SolidColorBrush(Color.FromRgb(0x18, 0x18, 0x30)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x5C)), BorderThickness = new Thickness(1),
                     Child = new StackPanel { Width = 276, Spacing = 6 },
                 };
                 holder.PointerEntered += (_, _) => _onlineHoverLeave?.Stop();
                 holder.PointerExited += (_, _) => _onlineHoverLeave?.Start();
-                holder.PointerPressed += (_, _) => { if (!IsActive) Activate(); };
+                holder.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+                {
+                    if (!IsActive) Activate();
+                    e.Handled = true; // The overlay's logical parent is inside the draggable title bar.
+                }, RoutingStrategies.Bubble, handledEventsToo: true);
                 _onlineHover = new Popup
                 {
                     Child = holder, PlacementTarget = OnlinePill, Placement = PlacementMode.Bottom,
@@ -100,29 +108,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (OnlineHoverBody is not { } body) return;
             body.Children.Clear();
-            void Line(string key) => body.Children.Add(new TextBlock
+            void Line(string key, Color ink) => body.Children.Add(new TextBlock
             {
                 Text = Loc.Get(key), TextWrapping = TextWrapping.Wrap, FontSize = 12,
-                Foreground = Brushes.White,
+                Foreground = new SolidColorBrush(ink),
             });
-            var help = new Button
+            var help = F.Pill(new TextBlock
             {
-                Content = "?", Tag = "online-help-open", Width = 16, Height = 16,
-                MinWidth = 0, MinHeight = 0, Padding = new Thickness(0), Focusable = false,
-                Cursor = new Cursor(StandardCursorType.Help),
-            };
+                Text = "?", FontFamily = F.Display, FontWeight = FontWeight.Bold, FontSize = 10,
+                Foreground = F.Lilac, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            }, new SolidColorBrush(Color.FromRgb(0x24, 0x18, 0x38)), F.Lilac, "online-help-open",
+                new SolidColorBrush(Color.FromArgb(0x66, 0xB9, 0x9C, 0xFF)));
+            help.Width = help.Height = 16;
+            help.MinWidth = help.MinHeight = 0;
+            help.Padding = new Thickness(0);
+            help.Margin = new Thickness(8, 0, 0, 0);
+            help.Focusable = false;
+            help.VerticalAlignment = VerticalAlignment.Top;
+            help.Cursor = new Cursor(StandardCursorType.Help);
             global::Avalonia.Automation.AutomationProperties.SetName(help, Loc.Get(OnlineMeterRules.HelpTitleKey));
             help.Click += (_, e) => { e.Handled = true; OpenOnlineMeterHelp(); };
             var head = new DockPanel();
             DockPanel.SetDock(help, Dock.Right);
             head.Children.Add(help);
-            head.Children.Add(new TextBlock { Text = Loc.Get("online_hover_title"), Foreground = Brushes.White });
+            head.Children.Add(new TextBlock { Text = Loc.Get("online_hover_title"), FontSize = 13, FontWeight = FontWeight.SemiBold,
+                TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF5)) });
             body.Children.Add(head);
-            Line("online_hover_body");
-            if (st.UpsellKey != null) Line(st.UpsellKey);
+            Line("online_hover_body", Color.FromRgb(0xCC, 0xCC, 0xE0));
+            if (st.UpsellKey != null) Line(st.UpsellKey, Color.FromRgb(0xE0, 0xB0, 0xFF));
             if (st.SeePlansTier is int tier)
             {
-                var plans = new Button { Content = Loc.Get("online_see_plans"), HorizontalAlignment = HorizontalAlignment.Left };
+                var plans = new Button { Content = Loc.Get("online_see_plans"), HorizontalAlignment = HorizontalAlignment.Left,
+                    Theme = this.FindResource("SmallPinkButton") as ControlTheme, Padding = new Thickness(12, 5), FontSize = 12 };
                 plans.Click += (_, _) => OpenOnlinePlans(tier);
                 body.Children.Add(plans);
             }

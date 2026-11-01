@@ -9,6 +9,10 @@ using Avalonia.LogicalTree;
 using Avalonia.Controls.Documents;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using Avalonia.Interactivity;
+using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -120,13 +124,15 @@ public sealed class OnlineMeterSurfaceTests
     }
 
     [Fact]
-    public void Official_note_entrance_obeys_motion_and_gentle_visuals()
+    public void Official_note_entrance_obeys_motion_and_keeps_wpf_duration()
     {
         var off = AssetsTabView.OfficialEntrance(ConditioningControlPanel.Models.MotionLevel.Off, false);
         Assert.Empty(off);
         var reduced = AssetsTabView.OfficialEntrance(ConditioningControlPanel.Models.MotionLevel.Reduced, true);
         var fade = Assert.Single(reduced);
-        Assert.Equal(TimeSpan.FromMilliseconds(ConditioningControlPanel.Services.Safety.GentleVisuals.RiseMs(420, true)), fade.Duration);
+        // WPF LandOnlineOfficialNote uses 420 ms, above GentleVisuals' 300 ms floor in both modes.
+        Assert.Equal(TimeSpan.FromMilliseconds(420), fade.Duration);
+        Assert.Equal(fade.Duration, Assert.Single(AssetsTabView.OfficialEntrance(ConditioningControlPanel.Models.MotionLevel.Reduced, false)).Duration);
         Assert.Equal(0.2, ((global::Avalonia.Styling.Setter)fade.Children[0].Setters[0]).Value);
         Assert.Equal(1.0, ((global::Avalonia.Styling.Setter)fade.Children[1].Setters[0]).Value);
         var full = AssetsTabView.OfficialEntrance(ConditioningControlPanel.Models.MotionLevel.Full, false);
@@ -242,11 +248,58 @@ public sealed class OnlineMeterSurfaceTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task Spent_hover_handles_presses_before_the_title_bar() => Run(() =>
+    {
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.PaintOnlineMeterPill(State(100, spent: true));
+            shell.OpenOnlineHover(State(100, spent: true));
+            var holder = Assert.IsType<Border>(shell.OnlineHoverBody!.Parent);
+            var title = shell.FindControl<Border>("TitleBarBorder")!;
+            var reachedTitle = 0;
+            title.AddHandler(InputElement.PointerPressedEvent, (_, _) => reachedTitle++, RoutingStrategies.Bubble);
+            var initial = shell.WindowState;
+            var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+            foreach (var clicks in new[] { 1, 2 })
+            {
+                var press = new PointerPressedEventArgs(holder, pointer, shell, new Point(300, 100), 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, clicks);
+                holder.RaiseEvent(press);
+                Assert.True(press.Handled);
+                Assert.Equal(0, reachedTitle);
+                Assert.Equal(initial, shell.WindowState);
+            }
+            Assert.Equal(Color.Parse("#3A3A5C"), Assert.IsType<SolidColorBrush>(holder.BorderBrush).Color);
+            var body = shell.OnlineHoverBody;
+            var head = Assert.IsType<DockPanel>(body.Children[0]);
+            var heading = Assert.Single(head.Children.OfType<TextBlock>());
+            Assert.Equal(13, heading.FontSize);
+            Assert.Equal(FontWeight.SemiBold, heading.FontWeight);
+            Assert.Equal(Color.Parse("#CCCCE0"), Assert.IsType<SolidColorBrush>(Assert.IsType<TextBlock>(body.Children[1]).Foreground).Color);
+            Assert.Equal(Color.Parse("#E0B0FF"), Assert.IsType<SolidColorBrush>(Assert.IsType<TextBlock>(body.Children[2]).Foreground).Color);
+            Assert.NotNull(Assert.Single(body.Children.OfType<Button>()).Theme);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
+
     private static Task Run(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         OnlineMeterTestPlatform.EnsureApplication();
         LocalizationManager.Instance.SetLanguage("en");
-        await body();
+        var settings = CoreSettings.Current;
+        var (source, consent) = (settings.MediaSource, settings.RemoteMediaConsented);
+        var (enabled, cap) = (ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
+        try { await body(); }
+        finally
+        {
+            settings.MediaSource = source;
+            settings.RemoteMediaConsented = consent;
+            ScrolllerPolicy.Apply(enabled, cap);
+        }
     });
 
     private static string RepoRoot()
