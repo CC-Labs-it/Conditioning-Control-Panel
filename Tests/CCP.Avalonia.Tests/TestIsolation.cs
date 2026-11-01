@@ -1,4 +1,7 @@
 using System;
+using Avalonia;
+using Avalonia.Headless;
+using ConditioningControlPanel.Avalonia.Platform;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -54,6 +57,13 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
     public override void Before(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
+            // The first test owns the platform for the whole process. Use the shipped fonts here,
+            // before a class-specific setup can omit them and make later shell tests order-dependent.
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
             Current = ProcessStateSnapshot.Take();
             OpenWindows.Mark();
             // P76: a held startup card opens only when a test steps the ladder clock, never by wall time.
