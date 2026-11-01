@@ -122,6 +122,84 @@ public sealed class SpiralRecoveryTests
             Assert.Equal(initiallyRandom ? configured : first, SpiralOverlay.SourcePath());
         });
 
+    [Fact]
+    public Task Recorded_platform_refusal_stops_reconciliation_before_decode()
+        => WithOverlay(async (host, first, second) =>
+        {
+            // Model an earlier native click-through refusal, with platform checks left on.
+            var refused = typeof(SpiralOverlay).GetField("_refused",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            var saved = refused.GetValue(null);
+            try
+            {
+                SpiralOverlay.Refresh(host);
+                await Settle();
+                Assert.True(SpiralOverlay.IsReconciling);
+                refused.SetValue(null, true);
+                SpiralOverlay.SkipPlatformChecksForTests = false;
+                for (var i = 0; i < 3; i++)
+                {
+                    SpiralOverlay.Reconcile(host);
+                    Assert.False(SpiralOverlay.IsReconciling || SpiralOverlay.IsShowing);
+                    Assert.Null(SpiralOverlay.Decoding);
+                }
+            }
+            finally { refused.SetValue(null, saved); }
+        });
+
+    // WPF OverlayService.cs:1562,1590-1594: an unchanged failed path is not decoded again.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Unchanged_failed_images_are_skipped_and_edited_files_recover(bool randomize)
+        => WithOverlay(async (host, first, second) =>
+        {
+            CoreSettings.Current.SpiralRandomize = randomize;
+            File.WriteAllText(first, "broken");
+            File.WriteAllText(second, "broken");
+            SpiralOverlay.Refresh(host);
+            await Settle();
+            for (var i = 0; i < 4; i++)
+            {
+                SpiralOverlay.Reconcile(host);
+                Assert.Null(SpiralOverlay.Decoding);
+                Assert.False(SpiralOverlay.IsShowing);
+            }
+            File.WriteAllBytes(first, Gif);
+            File.WriteAllBytes(second, Gif);
+            File.SetLastWriteTimeUtc(first, DateTime.UtcNow.AddSeconds(5));
+            File.SetLastWriteTimeUtc(second, DateTime.UtcNow.AddSeconds(5));
+            SpiralOverlay.Reconcile(host);
+            await Settle();
+            Assert.True(SpiralOverlay.IsShowing);
+        });
+
+    [Fact]
+    public Task Failed_video_start_is_skipped_until_its_file_changes()
+        => WithOverlay((host, first, second) =>
+        {
+            var start = SpiralOverlay.VideoStart;
+            var calls = 0;
+            var video = Path.ChangeExtension(first, ".mp4");
+            File.WriteAllText(video, "video");
+            try
+            {
+                CoreSettings.Current.SpiralRandomize = false;
+                CoreSettings.Current.SpiralPath = video;
+                SpiralOverlay.VideoStart = (_, _) => { calls++; return null; };
+                SpiralOverlay.Refresh(host);
+                Assert.Equal(1, calls);
+                for (var i = 0; i < 4; i++) SpiralOverlay.Reconcile(host);
+                Assert.Equal(1, calls);
+                Assert.False(SpiralOverlay.IsShowing);
+                File.SetLastWriteTimeUtc(video, DateTime.UtcNow.AddSeconds(5));
+                SpiralOverlay.Reconcile(host);
+                Assert.Equal(2, calls);
+                return Task.CompletedTask;
+            }
+            finally { SpiralOverlay.VideoStart = start; }
+        });
+
     private static Screen MakeScreen(int width)
     {
         // Same synthetic PlatformScreen seam as MultiMonitorResultTests; no native handles used.

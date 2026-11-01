@@ -65,6 +65,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static DispatcherTimer? _reconcileTimer;
         private static (int Index, PixelRect Bounds, double Scale)[]? _layout;
         private static bool _dualMonitor;
+        // WPF OverlayService.cs:1562,1590-1594 remembers a failed decode instead of retry churn.
+        // Keep each failed candidate, including video starts, until its file metadata changes.
+        private static readonly Dictionary<string, (DateTime Write, long Length)> FailedSources = new();
+
+        private static (DateTime Write, long Length) FileVersion(string path)
+        {
+            try
+            {
+                var file = new FileInfo(path);
+                return (file.LastWriteTimeUtc, file.Exists ? file.Length : -1);
+            }
+            catch { return (default, -1); }
+        }
+
+        private static bool IsUnchangedFailure(string path)
+        {
+            if (!FailedSources.TryGetValue(path, out var failed)) return false;
+            if (failed == FileVersion(path)) return true;
+            FailedSources.Remove(path);
+            if (_framesKey == path) _framesKey = "";
+            return false;
+        }
 
         // WPF OverlayService.cs:463,797-802: retry an absent spiral every 500 ms.
         // Decode completion still gets one immediate retry; subsequent attempts yield to the timer.
@@ -75,7 +97,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _sourcePath = null;
                 _randomizeAtStart = null; // WPF OverlayService.cs:416 rereads policy on restart.
                 _repicked = false;
-                if (_frames.Count == 0) _framesKey = "";
             }
             Refresh(host);
         }
@@ -119,6 +140,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var s = CoreSettings.Current;
             if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
 
+            // No compositor means no per-pixel alpha; a recorded native refusal is permanent.
+            // Gate before the timer and decode so unsupported platforms do no periodic work.
+            if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
+            {
+                CloseAll();
+                return;
+            }
             StartReconciler(TopLevel.GetTopLevel(host) ?? host);
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -138,6 +166,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _dualMonitor = s.DualMonitorEnabled;
 
             var path = SourcePath();
+            if (IsUnchangedFailure(path))
+            {
+                if (Windows.Count > 0) CloseWindows();
+                // One immediate random re-pick; later ticks can try other candidates or changed files.
+                if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; Refresh(host); }
+                return;
+            }
             var video = IsVideo(path);
             if (_framesKey != path)
             {
@@ -150,14 +185,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 foreach (var old in _frames) old.Dispose();
                 (_frames, _framesKey, _index) = (new List<Bitmap>(), path, 0);
             }
-            if (_frames.Count == 0 && !video)   // undecodable: logged once by the decode
-            {
-                // WPF's 500 ms tick re-picks past a broken random file; re-pick once so the run is not blank.
-                if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; Refresh(host); return; }
-                CloseWindows();
-                return;
-            }
-
             var opacity = PaintedOpacity;
 
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
@@ -167,13 +194,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
 
             CloseWindows();
-            // No compositor = no per-pixel alpha: the spiral would be an opaque screen-sized block.
-            if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
-            {
-                Log.Debug("Spiral: no composited click-through overlay on this platform, so no spiral");
-                return;
-            }
-
             foreach (var i in want)
             {
                 var w = new SpiralOverlayWindow();
@@ -198,9 +218,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             QuestMinutes.Follow(Windows.Count > 0);
             if (video && Windows.Count > 0)
             {
+                var version = FileVersion(path);
                 try { _videoPlayer = VideoStart(path, ShowVideoFrame); }
                 catch (Exception ex) { Log.Warning(ex, "Spiral: video could not start"); }
-                if (_videoPlayer == null) { CloseWindows(); return; }
+                if (_videoPlayer == null) { FailedSources[path] = version; CloseWindows(); return; }
             }
             if (_frames.Count > 1 && Windows.Count > 0)
             {
@@ -267,8 +288,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static async Task DecodeThenRefresh(Visual host, string path)
         {
+            var version = FileVersion(path);
+            // Publish Decoding before a fast worker can complete and clear it on the UI thread.
+            await Task.Yield();
             var (frames, delay) = await Task.Run(() => Decode(path));
-            if (frames.Count == 0) Log.Warning("Spiral: no frames decoded from {Path}; spiral not shown", path);
+            if (frames.Count == 0)
+            {
+                FailedSources[path] = version;
+                Log.Warning("Spiral: no frames decoded from {Path}; spiral not shown", path);
+            }
             foreach (var old in _frames) old.Dispose();
             (_frames, _framesKey, _delay, _index) = (frames, path, delay, 0);
             Decoding = null;   // or the Refresh below, still inside this task, cannot start a newer path's decode
