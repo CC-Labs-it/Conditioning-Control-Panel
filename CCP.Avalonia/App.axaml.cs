@@ -890,7 +890,9 @@ namespace ConditioningControlPanel.Avalonia
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
                 WireAchievementUnlocks(Achievements);
+                var dirtyBeforeChatBackfill = Achievements.IsDirty;
                 BackfillCompanionChatCount(Achievements, Brain);   // WPF GamificationBridge.Start:132
+                DeferEmptyBackfillSave(Achievements, dirtyBeforeChatBackfill);
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
                 // Its loss must not cost the launch.
@@ -1290,6 +1292,14 @@ namespace ConditioningControlPanel.Avalonia
                 try { w.Close(); } catch (Exception ex) { Serilog.Log.Debug(ex, "MantraWindow close on exit"); }
             Mantra.Dispose();
             Platform.ToneWav.DeleteFiles();
+        }
+
+        /// <summary>An empty backfill only sets the one-shot latch. Keep it in memory until a real
+        /// achievement change saves it, so an idle launch does not create or rewrite the file.</summary>
+        internal static void DeferEmptyBackfillSave(AchievementEngine engine, bool dirtyBeforeBackfill)
+        {
+            if (!dirtyBeforeBackfill && engine.Progress.CompanionChatBackfilled && engine.Progress.CompanionMessages == 0)
+                engine.IsDirty = false;
         }
 
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
