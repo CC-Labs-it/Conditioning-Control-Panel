@@ -106,13 +106,16 @@ public sealed class TakeoverTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
-        s.AutonomyModeEnabled = false;
-        s.AutonomyConsentGiven = true;
-        s.AutonomyResumeOnStartup = false;
-        CoreEntitlement.HasPremiumProvider = () => true;
-        var shell = new MainShellWindow();
+        var saved = (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.AutonomyResumeOnStartup);
+        var premium = CoreEntitlement.HasPremiumProvider;
+        MainShellWindow? shell = null;
         try
         {
+            s.AutonomyModeEnabled = false;
+            s.AutonomyConsentGiven = true;
+            s.AutonomyResumeOnStartup = false;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            shell = new MainShellWindow();
             shell.Show();
             shell.ShowTab("bambitakeover");
             var tab = shell.GetLogicalDescendants().OfType<global::ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>().Single();
@@ -141,8 +144,61 @@ public sealed class TakeoverTests
         }
         finally
         {
-            shell.Autonomy.Stop();
-            shell.RequestExit();
+            try { shell?.Autonomy.Stop(); shell?.RequestExit(); }
+            finally
+            {
+                CoreEntitlement.HasPremiumProvider = premium;
+                (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.AutonomyResumeOnStartup) = saved;
+            }
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF MainWindow.Autonomy.cs:171-185 updates the button before starting or stopping the service.
+    [Fact]
+    public Task QueuedStartCannotRepaintAfterStop() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var saved = (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.AutonomyResumeOnStartup);
+        var premium = CoreEntitlement.HasPremiumProvider;
+        MainShellWindow? shell = null;
+        try
+        {
+            s.AutonomyModeEnabled = false;
+            s.AutonomyConsentGiven = true;
+            s.AutonomyResumeOnStartup = false;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            shell = new MainShellWindow();
+            shell.Show();
+            shell.ShowTab("bambitakeover");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.GetLogicalDescendants().OfType<global::ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>().Single();
+            var button = tab.FindControl<Button>("BtnAutonomyStartStop")!;
+            string? Label() => (button.Content as TextBlock)?.Text;
+            button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.True(shell.Autonomy.IsEnabled);
+            button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.False(shell.Autonomy.IsEnabled);
+            Assert.False(s.AutonomyModeEnabled);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_start_2"), Label());
+            button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.True(shell.Autonomy.IsEnabled);
+            Assert.True(s.AutonomyModeEnabled);
+        }
+        finally
+        {
+            try { shell?.Autonomy.Stop(); shell?.RequestExit(); }
+            finally
+            {
+                CoreEntitlement.HasPremiumProvider = premium;
+                (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.AutonomyResumeOnStartup) = saved;
+            }
         }
         return Task.CompletedTask;
     });
