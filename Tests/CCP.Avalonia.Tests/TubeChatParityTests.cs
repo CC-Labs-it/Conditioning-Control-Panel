@@ -282,6 +282,101 @@ public sealed class TubeChatParityTests
         return Task.CompletedTask;
     });
 
+    // WPF App.xaml.cs:779-790: no companion offers while another activity owns the user.
+    [Theory]
+    [InlineData("quiet")]
+    [InlineData("mantra")]
+    [InlineData("remote")]
+    public void AskCardsWaitForTheUserToBeFree(string owner) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var previousAvatar = settings.AvatarEnabled;
+        var previousAsks = settings.CompanionAsksEnabled;
+        var previousTutorial = CoreTutorial.IsActiveProvider;
+        settings.AvatarEnabled = true;
+        settings.CompanionAsksEnabled = true;
+        CoreTutorial.IsActiveProvider = () => false;
+        var relay = ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay;
+        using var remote = new ConditioningControlPanel.Services.RemoteRelay(
+            () => null, () => null, "test", (_, _) => null, _ => { });
+        ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay = new(() => remote);
+        var connected = typeof(ConditioningControlPanel.Services.RemoteRelay)
+            .GetProperty("ControllerConnected")!;
+        var dir = Directory.CreateTempSubdirectory("ccp-ask-owner-").FullName;
+        var previousBrain = AvApp.Brain;
+        var restore = SaveSeams();
+        using var brain = new CompanionBrain(new AiService("http://127.0.0.1:9"),
+            memory: new MemoryStore(Path.Combine(dir, "memory.json")),
+            store: new CompanionSessionStore(Path.Combine(dir, "session.json"), Path.Combine(dir, "legacy.json")));
+        AvApp.Brain = brain;
+        try
+        {
+            AvApp.SeedCompanionTubeSeams();
+            CompanionBrain.ActivitiesProvider = () => Array.Empty<CompanionActivity>();
+            CompanionAskService.SessionOptions = () => new[] { new AskOption("s-one", "Session one", () => true) };
+            var asks = new CompanionAskService();
+            var shown = 0;
+            CompanionAskService.ShowCardSurface = _ => shown++;
+            Assert.True(ConversationDelivery.AskCardsShown!("what can I do"));
+
+            if (owner == "quiet") CoreTutorial.IsActiveProvider = () => true;
+            if (owner == "mantra") AvApp.Mantra.StartSession(3);
+            if (owner == "remote") connected.SetValue(
+                ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay.Value, true);
+            Assert.False(ConversationDelivery.AskCardsShown!("what can I do"));
+            asks.ShowNow(AskKind.Session);
+            Assert.Equal(0, shown);
+
+            CoreTutorial.IsActiveProvider = () => false;
+            AvApp.Mantra.EndSession();
+            connected.SetValue(remote, false);
+            Assert.True(ConversationDelivery.AskCardsShown!("what can I do"));
+            asks.ShowNow(AskKind.Session);
+            Assert.Equal(1, shown);
+        }
+        finally
+        {
+            AvApp.Mantra.EndSession();
+            restore();
+            CoreTutorial.IsActiveProvider = previousTutorial;
+            settings.AvatarEnabled = previousAvatar;
+            settings.CompanionAsksEnabled = previousAsks;
+            AvApp.Brain = previousBrain;
+            ConditioningControlPanel.Avalonia.Views.Tabs.RemoteControlTabView.Relay = relay;
+            brain.Dispose();
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Theory]
+    [InlineData("tutorial")]
+    [InlineData("avatar")]
+    [InlineData("asks")]
+    public void AskCardOwnerCaseRestoresItsOriginalState(string state) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var settings = CoreSettings.Current;
+        var previous = (CoreTutorial.IsActiveProvider, settings.AvatarEnabled, settings.CompanionAsksEnabled);
+        Func<bool> tutorial = () => true;
+        try
+        {
+            CoreTutorial.IsActiveProvider = tutorial;
+            settings.AvatarEnabled = false;
+            settings.CompanionAsksEnabled = false;
+            AskCardsWaitForTheUserToBeFree("mantra");
+            if (state == "tutorial") Assert.Same(tutorial, CoreTutorial.IsActiveProvider);
+            if (state == "avatar") Assert.False(settings.AvatarEnabled);
+            if (state == "asks") Assert.False(settings.CompanionAsksEnabled);
+        }
+        finally
+        {
+            (CoreTutorial.IsActiveProvider, settings.AvatarEnabled, settings.CompanionAsksEnabled) = previous;
+        }
+    });
+
     [Theory]
     [InlineData(0, 0)]
     [InlineData(40, -7.5)]

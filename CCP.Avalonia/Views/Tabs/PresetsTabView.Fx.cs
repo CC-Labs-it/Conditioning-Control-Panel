@@ -45,7 +45,7 @@ public partial class PresetsTabView
             _fxWindow.PropertyChanged += OnFxWindowProperty;
         }
         CoreMods.ModChanged += OnFxModChanged;
-        Env.MotionGateChanged += RefreshCardSheen;
+        Env.MotionGateChanged += OnFxMotionChanged;
         RefreshCardSheen();
     }
 
@@ -60,13 +60,19 @@ public partial class PresetsTabView
         }
         _fxWindow = null;
         CoreMods.ModChanged -= OnFxModChanged;
-        Env.MotionGateChanged -= RefreshCardSheen;
+        Env.MotionGateChanged -= OnFxMotionChanged;
         CancelEntrances();
         DetachCardSheen();
         DetachRowSweep();
     }
 
     private void OnFxWindowChanged(object? sender, EventArgs e) => RefreshCardSheen();
+    private void OnFxMotionChanged()
+    {
+        // WPF LiftSessionRow clears its running animation when motion is off (:437-440).
+        if (!Env.AllowTransitions) CancelEntrances();
+        RefreshCardSheen();
+    }
     private void OnFxClosed(object? sender, EventArgs e) => DetachFocalFx();
     private void OnFxWindowProperty(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
