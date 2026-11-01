@@ -75,6 +75,16 @@ public sealed class EmiDeskTossTests
             var squash = (CancellationTokenSource?)typeof(EmiDeskWindow).GetField("_squashAnim", Priv)!.GetValue(desk);
             Assert.NotNull(squash);                                  // the landing owns the squash slot
 
+            // WPF Toss.cs:105,111: dizzy owns the face until its final hold. Finish the
+            // actual player before testing a later drop; TossClock does not drive dispatcher timers.
+            Assert.True(desk.ChainLive);
+            var dizzy = EmiChains.Get("dizzy")!;
+            Assert.Equal(dizzy.Seq[0].Text, desk.Face);
+            var player = (EmiChainPlayer)typeof(EmiDeskWindow).GetField("_chainPlayer", Priv)!.GetValue(desk)!;
+            foreach (var frame in dizzy.Seq) EmiChainPlaybackTests.Tick(player, Math.Max(1, frame.Ms));
+            Assert.False(desk.ChainLive);
+            Assert.Equal(EmiChains.RestFace, desk.Face);
+
             // A slow drag is a drop: not counted, the bump cue.
             clock.Now += TimeSpan.TicksPerSecond;
             desk.MouseDown(c, MouseButton.Left);
