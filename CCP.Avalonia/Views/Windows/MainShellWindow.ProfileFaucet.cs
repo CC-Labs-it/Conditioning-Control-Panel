@@ -1,5 +1,5 @@
 // Charge/pour host: WPF MainWindow.ProfileFaucet.cs:135-348, 544-844, 1067-1144.
-// Coordinator wiring and gesture feedback remain part B.
+// Waiting and gesture motion share independent transforms.
 using System;
 using Avalonia;
 using Avalonia.Controls;
@@ -33,6 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var faucet = Vat<Grid>("ProfileVatFaucet");
             if (faucet == null) return;
             WireFaucet(faucet);
+            AttachFaucetTransforms(faucet);
             double left = Math.Round(jarW * .10 - 8), top = Math.Round(jarH * .175 - 36);
             faucet.Margin = new Thickness(left, top, 0, 0);
             faucet.IsVisible = true;
@@ -63,6 +64,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             CancelFaucetCharge(silent: true);
             StopFaucetWaitingMotion();
+            StopFaucetFeedback();
+            StopFaucetScale();
             _faucetHold.Reset();
             foreach (string name in new[] { "ProfileVatFaucet", "ProfileVatChip", "ProfileVatChargeRing", "ProfileVatTickDrain", "ProfileVatTickCap", "ProfileVatTickMax" })
                 if (Vat<Control>(name) is { } control) control.IsVisible = false;
@@ -90,7 +93,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 CancelFaucetCharge(silent: false);
                 e.Pointer.Capture(null);
             };
-            faucet.PointerExited += (_, _) => { if (_faucetCharging) CancelFaucetCharge(silent: false);  };
+            faucet.PointerEntered += (_, _) => { if (!_faucetCharging) AnimateFaucetScale(1.16); };
+            faucet.PointerExited += (_, _) => { if (_faucetCharging) CancelFaucetCharge(silent: false); else AnimateFaucetScale(1); };
             faucet.PointerCaptureLost += (_, _) => CancelFaucetCharge(silent: true);
             faucet.LostFocus += (_, _) => { _faucetKeyHeld = false; CancelFaucetCharge(silent: true); };
             faucet.KeyDown += (_, e) =>
@@ -124,6 +128,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 AmbientFxCanvas.Env.MotionGateChanged -= UpdateFaucetPresentation;
                 CancelFaucetCharge(silent: true);
                 StopFaucetWaitingMotion();
+                StopFaucetFeedback();
+                StopFaucetScale();
             };
         }
         private void OnFaucetVatOffScreen()
@@ -131,6 +137,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _faucetKeyHeld = false;
             CancelFaucetCharge(silent: true);
             StopFaucetWaitingMotion();
+            StopFaucetFeedback();
+            StopFaucetScale();
         }
 
         private void UpdateFaucetPresentation()
@@ -158,7 +166,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void StartFaucetCharge()
         {
+            StopFaucetFeedback();
             _faucetCharging = true;
+            AnimateFaucetScale(.94, .09);
             _faucetChargeRungsPlayed = 1;
             _faucetChargeCompact = _faucetChargePolicy.IsCompact(DateTime.UtcNow);
             _faucetChargeBudgetMs = VatFaucetChargePolicy.BudgetMilliseconds(_faucetHold.HeldXp, _faucetChargeCompact);
@@ -197,6 +207,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!_vatArmed || VatGlass is not { } glass || _faucetHold.HeldXp <= 0) { UpdateFaucetPresentation(); return; }
             bool wasOver = glass.IsPastBrim(glass.Fill);
             var step = _faucetHold.PourAll();
+            AnimateFaucetScale(1, .12);
+            StartFaucetFeedback(pour: true);
             PlayFaucetSfx("faucet_pour.wav", .35f);
             glass.PourTo(step.Fill, userGesture: true);
             var rule = CoreSettings.Current.Haptics?.V2?.Rule(HapticEventKind.LevelUp);
@@ -215,7 +227,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var pointer = _faucetPointer;
             _faucetPointer = null;
             pointer?.Capture(null);
-            if (wasCharging && !silent) { PlayFaucetSfx("faucet_charge_drop.wav", .15f); }
+            if (wasCharging) AnimateFaucetScale(1);
+            if (wasCharging && !silent) { StartFaucetFeedback(pour: false); PlayFaucetSfx("faucet_charge_drop.wav", .15f); }
             UpdateFaucetPresentation();
         }
         private void HideChargeRing()

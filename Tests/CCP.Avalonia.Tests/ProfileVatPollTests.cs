@@ -44,12 +44,8 @@ public sealed class ProfileVatPollTests
             var page = shell.ProfilePage!;
             Assert.True(page.IsVisible);
             var glass = page.FindControl<VatGlassCanvas>("ProfileVatGlass")!;
-            // The faucet host is a follow-up: no misleading jar is revealed just because data arrived,
-            // and no 60 s poll runs for a jar nobody sees (P07).
-            Assert.False(glass.IsVisible);
-            Assert.False(shell.VatPollRunning);
-            // Stand-in for lane -b's ApplyDescentToVat, the only future ArmVat caller.
-            shell.ArmVat(glass, 4000);
+            // An accepted block now arms the actual jar and its poll.
+            Assert.True(glass.IsVisible);
             Assert.True(shell.VatPollRunning);
             shell.WindowState = WindowState.Minimized;
             Assert.False(shell.VatPollRunning);

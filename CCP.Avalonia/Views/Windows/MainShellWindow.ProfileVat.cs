@@ -18,9 +18,7 @@
 // silent no-op forever.
 //
 // The shared DescentService now supplies read-only server data, sign-in/logout and gated polling.
-// ponytail: ApplyDescentToVat (the only ArmVat caller) remains follow-up wire-shell-profile-vat-b;
-// the charge host is wired by ArmVat; coordinator application remains part B. Until the jar is armed it stays dark, and the 60 s
-// poll stays off with it (P07): one read on card open still feeds the curve-epoch follow.
+// Accepted server readings feed the shared coordinator and persisted faucet hold.
 
 using System;
 using System.Globalization;
@@ -46,6 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The avatar size the hero uses when the vat is dark. Do not change.</summary>
         private const double VatDarkAvatarSize = 104;
 
+        private readonly VatFillCoordinator _vatCoordinator = new();
         private bool _vatArmed;
         private bool _vatOnScreen;
         private DispatcherTimer? _vatPollTimer;
@@ -81,18 +80,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _vatOnScreen = onScreen;
             if (onScreen)
             {
+                if (_vatArmed && _faucetHold.HeldXp > 0) VatGlass?.SnapTo(_faucetHold.DisplayFill);
+                ApplyDescentToVat();
                 _vatDescent?.RequestRefresh("trainer card open");
-                UpdateFaucetPresentation();
             }
-            // ponytail: keep the jar dark until the coordinator feeds the persisted faucet hold.
-            // A server reading alone must not auto-pour or strand held XP in a jar without a tap.
             EvaluateVatPoll();
         }
 
         private bool VatPollWanted => _vatArmed && _vatOnScreen && ProfilePage?.IsEffectivelyVisible == true
             && _vatDescent?.HasSeenBlock == true && VatGlassCanvas.WindowIsPresenting(this);
 
-        private void OnDescentBlockChanged(object? sender, EventArgs e) => EvaluateVatPoll();
+        private void OnDescentBlockChanged(object? sender, EventArgs e)
+        {
+            ApplyDescentToVat();
+            EvaluateVatPoll();
+        }
+
+        // WPF MainWindow.ProfileVat.cs:267-345: server truth, held fill, lip, and intro.
+        private void ApplyDescentToVat()
+        {
+            if (VatGlass is not { } glass) return;
+            var block = _vatDescent?.Current;
+            var read = _vatCoordinator.Apply(block);
+            if (block?.Vat == null) { DisarmVat(); return; }
+            ArmVat(glass, read.Cap);
+            glass.SetLip(read.Lip);
+            PositionVatTickGlyphs();
+            if (_vatOnScreen) MaybeShowFeatureIntro("descent-vat", "discord");
+            var step = _faucetHold.Fold(read, glass.IsPouring);
+            switch (step.Action)
+            {
+                case FaucetActionKind.Snap: glass.SnapTo(step.Fill); break;
+                case FaucetActionKind.Ease: glass.EaseTo(step.Fill); break;
+                case FaucetActionKind.Pour:
+                    if (glass.IsPresenting) glass.PourTo(step.Fill, userGesture: true);
+                    else glass.EaseTo(step.Fill);
+                    break;
+            }
+            UpdateVatReadout();
+            UpdateFaucetPresentation();
+        }
 
         private void EvaluateVatPoll()
         {
@@ -121,8 +148,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The glass, or null before the Profile tab has been realized.</summary>
         private VatGlassCanvas? VatGlass => ProfilePage?.FindControl<VatGlassCanvas>("ProfileVatGlass");
 
-        /// <summary>Repaint the readout when the drawn percent changes. Wired by WireProfileVat on
-        /// WPF; fill application and its subscription remain in the faucet follow-up.</summary>
+        /// <summary>Repaint the readout when the drawn percent changes. WireFaucet subscribes
+        /// when the jar is armed, as WireProfileVat does in WPF.</summary>
         private void OnVatFillPercentChanged(object? sender, int pct)
         {
             try { UpdateVatReadout(); }
