@@ -215,7 +215,9 @@ public sealed class GameWindowFypTests
         var w = GameWindow.Launch(GameWindow.FypId)!;
         var targets = new List<string>();
         var oldShell = ExternalOpener.Shell;
+        var oldSelect = ExternalOpener.SelectInFileManager;
         ExternalOpener.Shell = target => { targets.Add(target); return true; };
+        ExternalOpener.SelectInFileManager = _ => false; // exercise the existing folder fallback
         try
         {
             w.HandleMessage("{\"type\":\"file-menu\",\"id\":\"videos/clip.mp4\"}");
@@ -254,7 +256,43 @@ public sealed class GameWindowFypTests
             Assert.False(lastMenu.IsOpen);
             Assert.Null(w.FypFileMenu);
         }
-        finally { ExternalOpener.Shell = oldShell; }
+        finally { ExternalOpener.Shell = oldShell; ExternalOpener.SelectInFileManager = oldSelect; }
+    });
+
+    [Fact]
+    public void FileMenu_RevealSelectsTheFile_AndHandlesMissingFileOrFileManager() => Run((_, lib) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var dir = Directory.CreateDirectory(Path.Combine(lib, "videos")).FullName;
+        var path = Path.Combine(dir, "a clip.mp4");
+        File.WriteAllBytes(path, new byte[] { 1 });
+        var w = GameWindow.Launch(GameWindow.FypId)!;
+        var selected = new List<string>();
+        var opened = new List<string>();
+        var (oldShell, oldSelect) = (ExternalOpener.Shell, ExternalOpener.SelectInFileManager);
+        var selects = true;
+        ExternalOpener.Shell = target => { opened.Add(target); return true; };
+        ExternalOpener.SelectInFileManager = target => { selected.Add(target); return selects; };
+        try
+        {
+            w.HandleMessage("{\"type\":\"file-menu\",\"id\":\"videos/a clip.mp4\"}");
+            var menu = Assert.IsType<ContextMenu>(w.FypFileMenu);
+            var reveal = menu.Items.Cast<MenuItem>().Last();
+            reveal.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal(new[] { path }, selected);
+            Assert.Empty(opened);
+
+            selects = false; // FileManager1 is unavailable
+            reveal.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal(new[] { path, path }, selected);
+            Assert.Equal(new[] { dir }, opened);
+
+            File.Delete(path); // it disappeared after the menu opened, as in WPF's fallback
+            reveal.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal(new[] { path, path }, selected);
+            Assert.Equal(new[] { dir, dir }, opened);
+        }
+        finally { (ExternalOpener.Shell, ExternalOpener.SelectInFileManager) = (oldShell, oldSelect); }
     });
 
     private static void Wait(Task t)
