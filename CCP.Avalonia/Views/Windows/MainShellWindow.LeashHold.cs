@@ -34,7 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private readonly LeashHoldFlow _leashHold = new();
         private DispatcherTimer? _leashHoldClock;
-        private bool _leashHoldFromPortal, _leashHoldPortalUnproven;
+        private bool _leashHoldFromPortal;
         private static bool _portalHoldLive;
 
         /// <summary>A portal hold is being timed on the leash clock: the portal stays bound until it ends.</summary>
@@ -76,14 +76,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void LeashHoldClockTick()
         {
             var key = _leashHoldFromPortal ? true : LeashHoldKeyDown();
-            if (!_leashHold.Held || !LeashHoldLeashed || key == false || (key == null && _leashHoldPortalUnproven)) { LeashHoldReleased(); return; }
+            if (!_leashHold.Held || !LeashHoldLeashed || key != true) { LeashHoldReleased(); return; }
             ApplyLeashHold(_leashHold.Down(LeashHoldTime.GetUtcNow().UtcDateTime, true));
         }
 
         /// <summary>The panic key came up: the hold ends, the ring goes, nothing is asked or cut.</summary>
         internal void LeashHoldReleased()
         {
-            _leashHoldFromPortal = _leashHoldPortalUnproven = _portalHoldLive = false;
+            _leashHoldFromPortal = _portalHoldLive = false;
             _leashHoldClock?.Stop();
             ApplyLeashHold(_leashHold.Up());
         }
@@ -95,7 +95,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_leashHold.Held) LeashHoldReleased();
             HandlePanicKeyPress(DateTime.Now);
             _leashHoldFromPortal = PortalPanicShortcut.ReportsRelease;
-            _leashHoldPortalUnproven = !_leashHoldFromPortal;
             LeashHoldPressed();
             _portalHoldLive = _leashHoldClock?.IsEnabled == true;
         }
