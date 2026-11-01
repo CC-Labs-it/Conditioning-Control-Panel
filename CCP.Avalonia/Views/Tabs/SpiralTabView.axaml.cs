@@ -50,8 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///   <item><c>SpiralEmbedView</c> now carries the Core ready/state protocol over WebHost;
     ///     native process-loss reporting and a pre-document carrier remain
     ///     unavailable on this seam.</item>
-    ///   <item><c>DescentBarkWatcher</c> still needs the companion bark adapter.
-    ///     Room SFX and the Windows motion cap are ported. <c>HelpPopover</c> is real on
+    ///   <item>Room SFX and the Windows motion cap are ported. <c>HelpPopover</c> is real on
     ///     this head and carries the shared Core topic.</item>
     /// </list>
     ///
@@ -292,22 +291,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PropertyChanged += (_, e) =>
             {
                 if (e.Property != IsVisibleProperty) return;
-                if (IsVisible) Refresh();
+                if (IsVisible) { Refresh(); AnnounceEntry(); }
                 else Suspend();
             };
         }
 
-        /// <summary>
-        /// The tab was navigated to. Called from <c>ShowTab("spiral")</c>, which can happen at any
-        /// time and from anywhere (the rail entry, the fuse chip, the profile plate, the account
-        /// menu, a first light), so the room is re-read from scratch rather than trusted from
-        /// whenever this view was last painted.
-        ///
-        /// <para>ponytail: needs <c>DescentBarkWatcher.NotifySpiralOpened()</c> (WPF head), which the
-        /// original calls here and on every entry to let the companion say hello to the room once
-        /// ever. It is decoration and it never blocks the entry it rides on.</para>
-        /// </summary>
-        internal void OnTabShown() => Refresh();
+        // WPF SpiralTabView.xaml.cs:361-381: announce only after entry resolves to the spiral.
+        // The bark rule owns the lifetime latch; suppressed barks must not spend it here.
+        private void AnnounceEntry()
+        {
+            if (!IsVisible || _state != SpiralRoomState.Spiral) return;
+            try
+            {
+                var block = App.Descent?.Current;
+                Platform.BarkHead.Engine?.Raise("DescentFirstSpiralOpen", c => c
+                    .Set("stage", (double)(block?.Stage?.N ?? 0))
+                    .Set("banked_days", (double)(block?.Stage?.BankedDays ?? block?.DevotionDays ?? 0)));
+            }
+            catch (Exception ex) { Log.Debug("[Spiral] entry bark failed: {E}", ex.Message); }
+        }
+
+        internal void OnTabShown()
+        {
+            _embedGaveUp = false;
+            Refresh();
+            AnnounceEntry();
+        }
 
         /// <summary>WPF Wire: block changes drive the room, phase and tick drive the fog.</summary>
         private void Wire()
