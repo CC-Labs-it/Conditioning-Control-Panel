@@ -303,6 +303,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             Closed += (_, _) => { StopPart2Timer(); _part2Overlay?.Close(); _part2Overlay = null; };
             KeyDown += DeeperEditorWindow_KeyDown;
             HookPreviewZoomKeys();
+            SidebarRoot.AddHandler(PointerPressedEvent, (_, _) => ArmInspectorSnapshot(true), RoutingStrategies.Tunnel);
+            SidebarRoot.AddHandler(KeyDownEvent, (_, _) => ArmInspectorSnapshot(false), RoutingStrategies.Tunnel);
+            SidebarRoot.AddHandler(GotFocusEvent, (_, _) => _inspectorSessionSnapshotted = false, RoutingStrategies.Bubble, true);
             Closing += Window_Closing;
 
             _validationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
@@ -623,7 +626,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             ApplyPersistedSidebarWidth();
 
             _ = InitializePreviewAsync();
-
             CoreTutorialEvents.Emit("WindowLoaded:DeeperEditorWindow");
             // WPF DeeperEditorWindow.xaml.cs:350-362: once-only coachmarks yield to Part 2.
             if (!RenderProof.Rendering && !CoreSettings.Current.HasSeenDeeperEditorIntro &&
@@ -1922,6 +1924,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
             // Always reset the unified-editor groups; the unified path repopulates if needed.
             HideAllEditors();
+            ResetInspectorSession();
 
             if (_selectedEffect != null)
             {
@@ -2463,7 +2466,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void MarkDirty()
         {
             if (_suppressDirty) return;
-            _isDirty = true;
+            CommitPendingInspectorSnapshot();
+            if (!_isDirty)
+            {
+                _isDirty = true;
+                ApplyWindowTitle();
+            }
             TxtDirty.IsVisible = true;
             // Lane counts piggyback here (cheap) so the chrome stays in sync with any
             // add/remove/edit that touches the data model.
@@ -2864,11 +2872,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             var name = string.IsNullOrEmpty(_enhancement.Metadata.Name)
                 ? Loc.Get("deeper_editor_untitled") : _enhancement.Metadata.Name;
             TxtTitle.Text = name;
-            Title = $"Deeper — {name}";
+            ApplyWindowTitle();
             // Linked-files strip shows the file path; keep it in sync.
             RefreshLinkedFilesUi();
             // Metadata drawer subtitle ("Metadata · {name}") shown when collapsed.
             UpdateMetadataDrawerSubtitle();
+        }
+
+        private void ApplyWindowTitle()
+        {
+            var name = string.IsNullOrEmpty(_enhancement.Metadata.Name)
+                ? Loc.Get("deeper_editor_untitled") : _enhancement.Metadata.Name;
+            Title = $"Deeper - {name}{(_isDirty ? "*" : "")}";
         }
 
         // ---------------------------------------------------------------------------------
