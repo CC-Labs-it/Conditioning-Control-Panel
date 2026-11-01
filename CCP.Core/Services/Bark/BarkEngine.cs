@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// one-shot latches, safety hold, chat suppression, speaking, the 60 s floor and its exemptions,
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
-    /// ponytail: DispatchIdle, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
+    /// ponytail: DispatchIdle and the awareness arbiter land with a caller;
     /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
     /// </summary>
     public sealed class BarkEngine
@@ -62,7 +62,9 @@ namespace ConditioningControlPanel.Services.Bark
         public TimeProvider Clock { get; set; } = TimeProvider.System;
         private DateTime Now => Clock.GetUtcNow().UtcDateTime;
 
-        // Head seams; unseeded = WPF's answer for a missing service. No mouth = nothing said, nothing spent.
+        // Head seams; unseeded = WPF's answer for a missing service. Outside dry-run, no mouth spends nothing.
+        /// <summary>WPF BarkService.cs:180-184: evaluate and log without speaking or persisting.</summary>
+        public bool DryRun { get; set; }
         public Action<BarkSpeech>? Speak;
         public Func<bool>? IsSpeaking;                 // App.AvatarWindow.IsSpeaking
         public Func<int, bool>? IsCompanionBusy;       // App.AvatarWindow.IsCompanionBusy(windowMs)
@@ -97,6 +99,8 @@ namespace ConditioningControlPanel.Services.Bark
         /// <summary>WPF Start (:190): the rules and the persisted no-repeat rotation.</summary>
         public void Start()
         {
+            if (string.Equals(Environment.GetEnvironmentVariable("CCP_BARK_DRYRUN"), "1", StringComparison.Ordinal))
+                DryRun = true;   // WPF BarkService.cs:197-200
             var fresh = SafeLoad();
             var s = CoreSettings.Current;
             lock (_gate)
@@ -149,10 +153,12 @@ namespace ConditioningControlPanel.Services.Bark
                     if (winner == null) { Log.Debug("[BARK] trigger={Trigger} no rule matched conditions", trigger); return false; }
                     pool = ResolvePool(winner);
                     (var fire, idx, var reason) = EvaluateGate(winner, pool, guaranteed);
-                    if (!fire) { Log.Debug("[BARK] blocked trigger={Trigger} rule={Rule} reason={Reason}", trigger, winner.Id, reason); return false; }
-                    Log.Information("[BARK] FIRE trigger={Trigger} rule={Rule} class={Class} variant#={Idx}", trigger, winner.Id, winner.Class, idx);
-                    if (Speak == null) return false;
+                    if (!fire) { Log.Debug("{Tag:l} blocked trigger={Trigger} rule={Rule} reason={Reason}", DryRun ? "[BARK dry-run]" : "[BARK]", trigger, winner.Id, reason); return false; }
+                    Log.Information("{Tag:l} {Verb:l} trigger={Trigger} rule={Rule} class={Class} variant#={Idx}",
+                        DryRun ? "[BARK dry-run]" : "[BARK]", DryRun ? "WOULD FIRE" : "FIRE", trigger, winner.Id, winner.Class, idx);
+                    if (!DryRun && Speak == null) return false;
                     CommitFire(winner, idx, pool);
+                    if (DryRun) return false;
                 }
                 return SpeakLine(winner, pool[idx], ctx);
             }
@@ -315,7 +321,7 @@ namespace ConditioningControlPanel.Services.Bark
             if (!rule.Repeatable)
             {
                 _firedOnceSession.Add(rule.Id);
-                if (rule.Scope != BarkScope.Session) CoreSettings.Current.MarkBarkFired(LatchKey(rule));
+                if (rule.Scope != BarkScope.Session && !DryRun) CoreSettings.Current.MarkBarkFired(LatchKey(rule));
             }
             var key = BarkLineId(rule.Id, pool[idx]);
             if (!_usedVariantKeys.TryGetValue(rule.Id, out var set))
@@ -345,6 +351,7 @@ namespace ConditioningControlPanel.Services.Bark
 
         private void PersistVariantRotation(string ruleId)
         {
+            if (DryRun) return;   // WPF BarkService.cs:1900-1907
             CoreSettings.Current.BarkVariantRotation[ruleId] =
                 _usedVariantKeys.TryGetValue(ruleId, out var set) ? new List<string>(set) : new List<string>();
             CoreSettings.Save(suppressCloudBackup: true);   // local-only, rides the next real change to cloud
