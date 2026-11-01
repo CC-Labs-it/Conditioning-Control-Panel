@@ -549,7 +549,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PanelWallpaperDuration.IsVisible = !keep;
             // WPF MainWindow.Autonomy.cs:435: warn only when the user turns keep on.
             if (keep) Shell?.WarnIfWallpaperLibraryEmpty();
-            // Part B: restore the desktop on off when the wallpaper host is available.
+            // ponytail: Part B: restore the desktop on off when the wallpaper host is available.
         }
 
         /// <summary>WPF MainWindow.Autonomy.cs:329. The folder is saved for Takeover's wallpaper

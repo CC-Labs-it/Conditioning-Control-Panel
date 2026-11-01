@@ -34,10 +34,12 @@ public sealed class WallpaperLibraryWarningTests
     {
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(root);
+        var s = CoreSettings.Current;
+        var saved = (CorePaths.EffectiveAssetsProvider, s.MediaSource, s.WallpaperSourceFolder, s.WallpaperEnabled);
         try
         {
-            CoreSettings.Current.MediaSource = source;
-            CoreSettings.Current.WallpaperSourceFolder = root;
+            s.MediaSource = source;
+            s.WallpaperSourceFolder = root;
             if (file.Length > 0)
             {
                 var path = Path.Combine(root, file);
@@ -47,13 +49,17 @@ public sealed class WallpaperLibraryWarningTests
             Assert.Equal(empty, MainShellWindow.WallpaperLibraryEmpty());
             // A missing custom folder falls back to effective assets.
             CorePaths.EffectiveAssetsProvider = () => root;
-            CoreSettings.Current.WallpaperSourceFolder = Path.Combine(root, "missing");
+            s.WallpaperSourceFolder = Path.Combine(root, "missing");
             Assert.Equal(source == "local", MainShellWindow.WallpaperLibraryEmpty());
             Directory.CreateDirectory(Path.Combine(root, "wallpapers"));
             File.WriteAllText(Path.Combine(root, "wallpapers", "fallback.PNG"), "");
             Assert.False(MainShellWindow.WallpaperLibraryEmpty());
         }
-        finally { Directory.Delete(root, true); }
+        finally
+        {
+            (CorePaths.EffectiveAssetsProvider, s.MediaSource, s.WallpaperSourceFolder, s.WallpaperEnabled) = saved;
+            Directory.Delete(root, true);
+        }
     }
 
     [Fact]
@@ -65,10 +71,12 @@ public sealed class WallpaperLibraryWarningTests
                 .SetupWithoutStarting();
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(root);
-        var shell = new MainShellWindow();
+        var s = CoreSettings.Current;
+        var saved = (CorePaths.EffectiveAssetsProvider, s.MediaSource, s.WallpaperSourceFolder, s.WallpaperEnabled);
+        MainShellWindow? shell = null;
         try
         {
-            var s = CoreSettings.Current;
+            shell = new MainShellWindow();
             s.MediaSource = "local";
             s.WallpaperSourceFolder = root;
             s.WallpaperEnabled = false;
@@ -97,7 +105,37 @@ public sealed class WallpaperLibraryWarningTests
             keep.IsChecked = false;
             Assert.Single(host.Children);
         }
-        finally { shell.Close(); Directory.Delete(root, true); }
+        finally
+        {
+            try { shell?.Close(); }
+            finally
+            {
+                (CorePaths.EffectiveAssetsProvider, s.MediaSource, s.WallpaperSourceFolder, s.WallpaperEnabled) = saved;
+                Directory.Delete(root, true);
+            }
+        }
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task WarningTestsRestoreStateBeforeAssemblyCleanup() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (CorePaths.EffectiveAssetsProvider, s.MediaSource, s.WallpaperSourceFolder, s.WallpaperEnabled);
+
+        // Direct calls run inside this test's single isolation boundary. Its After hook
+        // cannot hide a missing finally in either warning test.
+        MatchesWpfLibraryProbe("mixed", "", false);
+        AssertRestored();
+        await KeepToggleWarnsOnlyOnArmingAndOpensMediaManager();
+        AssertRestored();
+
+        void AssertRestored()
+        {
+            Assert.Same(saved.EffectiveAssetsProvider, CorePaths.EffectiveAssetsProvider);
+            Assert.Equal(saved.MediaSource, s.MediaSource);
+            Assert.Equal(saved.WallpaperSourceFolder, s.WallpaperSourceFolder);
+            Assert.Equal(saved.WallpaperEnabled, s.WallpaperEnabled);
+        }
     });
 }
