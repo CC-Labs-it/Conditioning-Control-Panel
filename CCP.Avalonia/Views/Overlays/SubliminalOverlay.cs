@@ -29,12 +29,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>Whisper audio, ducking, XP and the Bambi Freeze/Reset pair: <see cref="SubliminalWhisperShow"/>.
     /// SubliminalStealsFocus opts into activation after a passive show, still click-through.
-    /// Solid mode uses the shared passive host; focus requests stay on classic cards.</para>
+    /// Both modes use the unified host when enabled; solid mode also uses it as a fallback.
+    /// Focus requests stay on classic cards.</para>
     /// </summary>
     internal static class SubliminalOverlay
     {
         private static readonly List<SubliminalOverlayWindow> Active = new();
         private static bool _warnedUnavailable;
+        internal static Func<bool> IsAvailable = () => X11Overlay.IsAvailable;
         private static readonly Dictionary<PixelRect, SharedOverlayHost.Lease> Hosts = new();
         private static readonly List<Action> RetireHosted = new();
         internal static Action<Action, TimeSpan> Schedule = (action, delay) => DispatcherTimer.RunOnce(action, delay);
@@ -107,7 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// (percent) overrides the setting, as WPF FlashSubliminalCustom's does.</summary>
         public static void Show(Visual host, string text, int? opacity = null)
         {
-            if (!X11Overlay.IsAvailable)
+            if (!IsAvailable())
             {
                 if (!_warnedUnavailable) Log.Warning("Subliminal: this platform cannot show click-through overlays, so subliminals are skipped");
                 _warnedUnavailable = true;
@@ -123,7 +125,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var alpha = SubliminalCard.Alpha(opacity ?? s.SubliminalOpacity);
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
-                if (UseSolidHost(s.SubliminalSolidMode, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
+                // WPF SubliminalService.cs:650-661: the compositor covers both modes.
+                if (UseSolidHost(s.SubliminalSolidMode || s.UnifiedOverlayHost, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
                     ShowHosted(screens[i].Bounds, text, alpha, hold)) continue;
                 var w = new SubliminalOverlayWindow(text);
                 if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds))
