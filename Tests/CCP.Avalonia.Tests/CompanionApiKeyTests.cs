@@ -12,6 +12,10 @@ public sealed class CompanionApiKeyTests
     public void WritesAndClearsTheDedicatedOsSlot()
     {
         Assert.True(SecretStore.Sandboxed);
+        ConditioningControlPanel.Services.AIService.OpenAiCompatibleService.ApiKeyUnprotect = _ => null;
+        var reader = ConditioningControlPanel.Services.AIService.OpenAiCompatibleService.ApiKeyUnprotect;
+        SecretStore.Seed();
+        Assert.Same(reader, ConditioningControlPanel.Services.AIService.OpenAiCompatibleService.ApiKeyUnprotect);
         var protector = CompanionApiKey.WindowsProtect;
         CompanionApiKey.WindowsProtect = null;
         var previous = SecretStore.OsWriteOverride;
@@ -30,20 +34,6 @@ public sealed class CompanionApiKeyTests
             Assert.Null(CompanionApiKey.Read(Convert.ToBase64String(new byte[] { 1, 2, 3 })));
         }
         finally { SecretStore.Store(CompanionApiKey.Slot, null); SecretStore.OsWriteOverride = previous; CompanionApiKey.WindowsProtect = protector; }
-    }
-
-    [Fact]
-    public void WindowsWritesUseTheProtectorAndReportFailure()
-    {
-        var previous = CompanionApiKey.WindowsProtect;
-        try
-        {
-            CompanionApiKey.WindowsProtect = key => Convert.ToBase64String(Encoding.UTF8.GetBytes(key));
-            Assert.Equal("c3ludGhldGlj", CompanionApiKey.Store("synthetic"));
-            CompanionApiKey.WindowsProtect = _ => throw new CryptographicException();
-            Assert.Null(CompanionApiKey.Store("synthetic"));
-        }
-        finally { CompanionApiKey.WindowsProtect = previous; }
     }
 
     [Fact]

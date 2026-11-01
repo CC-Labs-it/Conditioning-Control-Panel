@@ -7960,5 +7960,6 @@
   "online_official_nice": "Genial",
   "online_official_stamped_line": "Los medios en línea vienen de Scrolller. Cada imagen y clip lleva una pequeña marca \"via Scrolller\".",
   "online_cache_day_line": "Los medios en línea se guardan un día en una pequeña caché de este ordenador y nunca se suben.",
-  "companion_engine_api_key_session_only": "Clave API guardada solo para esta sesión."
+  "companion_engine_api_key_session_only": "Clave API guardada solo para esta sesión.",
+  "companion_engine_api_key_save_failed": "Clave API no guardada. Inténtalo de nuevo."
 }

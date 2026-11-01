@@ -13,6 +13,9 @@ internal static class CompanionApiKey
     internal const string Slot = "companion_byo_key";
     internal const string Reference = "ccp-secret:companion-byo-v1";
 
+    internal enum SaveOutcome { Persisted, SessionOnly, Failed }
+    internal static SaveOutcome Outcome;
+
     internal static void Seed() => OpenAiCompatibleService.ApiKeyUnprotect = Read;
 
     // Platform boundary; tests substitute a protector without touching an OS store.
@@ -24,12 +27,13 @@ internal static class CompanionApiKey
 
     internal static string? Store(string? key)
     {
+        Outcome = SaveOutcome.Persisted;
         if (WindowsProtect is { } protect)
         {
             try { return string.IsNullOrEmpty(key) ? "" : protect(key); }
-            catch { Serilog.Log.Warning("Could not protect the companion API key"); return null; }
+            catch { Outcome = SaveOutcome.Failed; Serilog.Log.Warning("Could not protect the companion API key"); return null; }
         }
-        SecretStore.Store(Slot, key);
+        if (!SecretStore.TryStore(Slot, key) && !string.IsNullOrEmpty(key)) Outcome = SaveOutcome.SessionOnly;
         return string.IsNullOrEmpty(key) ? "" : Reference;
     }
 

@@ -7960,5 +7960,6 @@
   "online_official_nice": "了解",
   "online_official_stamped_line": "オンラインメディアはScrolllerから届きます。各画像とクリップに小さな「via Scrolller」の表示があります。",
   "online_cache_day_line": "オンラインメディアはこのパソコンの小さなキャッシュに1日だけ保存され、アップロードされることはありません。",
-  "companion_engine_api_key_session_only": "APIキーはこのセッションでのみ保持されます。"
+  "companion_engine_api_key_session_only": "APIキーはこのセッションでのみ保持されます。",
+  "companion_engine_api_key_save_failed": "APIキーを保存できませんでした。もう一度お試しください。"
 }

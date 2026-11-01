@@ -7960,5 +7960,6 @@
   "online_official_nice": "Legal",
   "online_official_stamped_line": "A mídia online vem do Scrolller. Cada imagem e clipe leva uma pequena marca \"via Scrolller\".",
   "online_cache_day_line": "A mídia online fica um dia em um pequeno cache neste computador e nunca é enviada.",
-  "companion_engine_api_key_session_only": "Chave API mantida apenas nesta sessão."
+  "companion_engine_api_key_session_only": "Chave API mantida apenas nesta sessão.",
+  "companion_engine_api_key_save_failed": "Chave API não salva. Tente novamente."
 }

@@ -134,14 +134,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             set
             {
                 if (_suppressWrite || _preview) return;
-                if (Platform.CompanionApiKey.Store(value) is not { } stored) return;
-                Write(p => p.OpenAiCompatibleApiKey = stored);
+                if (Platform.CompanionApiKey.Store(value) is { } stored)
+                    Write(p => p.OpenAiCompatibleApiKey = stored);
                 Raise(nameof(ApiKeyNote));
             }
         }
 
-        public string ApiKeyNote => Loc.Get(Platform.SecretStore.NotRemembered
-            ? "companion_engine_api_key_session_only" : "companion_engine_api_key_note");
+        public string ApiKeyNote => Loc.Get(Platform.CompanionApiKey.Outcome switch
+        {
+            Platform.CompanionApiKey.SaveOutcome.SessionOnly => "companion_engine_api_key_session_only",
+            Platform.CompanionApiKey.SaveOutcome.Failed => "companion_engine_api_key_save_failed",
+            _ => "companion_engine_api_key_note"
+        });
 
         public string CustomModel
         {
