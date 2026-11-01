@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
@@ -18,6 +20,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static Func<V2AuthService>? AnnouncementClient;
 
         private bool _announcementArmed;
+        private bool _announcementClosed;
+        private ITimer? _announcementDelay;
+        private readonly HashSet<string> _routedAnnouncements = new(StringComparer.Ordinal);
 
         private void InitializeServerAnnouncement()
         {
@@ -25,7 +30,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (_announcementArmed || AnnouncementClient == null) return;
                 _announcementArmed = true;
-                DispatcherTimer.RunOnce(() => _ = CheckServerAnnouncementAsync(), TimeSpan.FromSeconds(7));
+                _announcementDelay = Platform.StartupLadder.Time.CreateTimer(state => Dispatcher.UIThread.Post(() =>
+                {
+                    _announcementDelay?.Dispose();
+                    _announcementDelay = null;
+                    _ = CheckServerAnnouncementAsync();
+                }), null, TimeSpan.FromSeconds(7), Timeout.InfiniteTimeSpan);
+            };
+            Closed += (_, _) =>
+            {
+                _announcementClosed = true;
+                _announcementDelay?.Dispose();
+                _announcementDelay = null;
             };
         }
 
@@ -35,9 +51,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var make = AnnouncementClient;
-                if (make == null) return;
+                if (_announcementClosed || make == null) return;
                 var a = await make().GetAnnouncementAsync(CoreSettings.Current.UnifiedId);
-                if (a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
+                if (_announcementClosed || a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
+                // A scheduled or overlapping response must not refile a row the user already opened.
+                if (!_routedAnnouncements.Add(a.Id!)) return;
                 Log.Information("Server announcement received: id={Id}, title={Title}", a.Id, a.Title);
 
                 string id = a.Id!, title = a.Title!, message = a.Message ?? "";
