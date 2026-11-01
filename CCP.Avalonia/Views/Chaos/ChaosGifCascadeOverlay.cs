@@ -35,6 +35,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Tests drive <see cref="Frame"/> themselves; the frame clock stays off (P08).</summary>
         internal static bool ManualFramesForTests;
         internal static bool Refused;
+        // WPF Services/Media/AnimatedWebp.cs:89-96,167-195 and :399-401.
+        private const int MaxFrames = 96, MaxDecodedFrames = 600;
+        private const long MaxFrameBytes = 24L * 1024 * 1024, MaxSourcePixels = 4096L * 4096;
         private static ChaosGifCascadeOverlay? _active;
         private static long _pickGeneration;
 
@@ -60,8 +63,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }), TaskScheduler.Default);
         }
 
-        /// <summary>WPF GetChaosImagePaths: distinct picks from the enabled images (folder + content packs).
-        /// An empty enabled pool rains nothing (#762/#798).</summary>
+        /// <summary>WPF GetChaosImagePaths: picks from the enabled folder and content packs.
+        /// Pack paths are temporary, so source-level deduplication is still missing.</summary>
         internal static List<string> PickFiles(int batch, AppSettings s)
         {
             var root = CorePaths.EffectiveAssets;
@@ -258,7 +261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             string path = _files[f.FileIndex];
             bool animatedFormat = path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
-                                  || path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase);
+                                  || (path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase) && IsAnimatedWebp(path));
             long len = 0;
             if (animatedFormat) { try { len = new FileInfo(path).Length; } catch { } }
             f.Animated = _cascade.CanAnimate(animatedFormat, len);
@@ -289,9 +292,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 TaskScheduler.Default);
         }
 
-        private static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int px, bool animate)
+        // WPF AnimatedWebp.IsAnimated: a 21-byte RIFF/VP8X animation-flag probe, not an extension check.
+        private static bool IsAnimatedWebp(string path)
         {
-            if (animate) return SpiralOverlay.Decode(path, px);
+            try
+            {
+                using var stream = File.OpenRead(path);
+                var header = new byte[21];
+                return Services.Fyp.Online.ScrolllerDiskCache.IsAnimatedWebp(header, stream.Read(header, 0, header.Length));
+            }
+            catch { return false; }
+        }
+
+        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int px, bool animate)
+        {
+            if (animate)
+            {
+                var decoded = SpiralOverlay.Decode(path, px, MaxFrames, MaxFrameBytes, MaxDecodedFrames, MaxSourcePixels);
+                if (decoded.Frames.Count > 0) return decoded;
+            }
             try
             {
                 using var stream = File.OpenRead(path);
