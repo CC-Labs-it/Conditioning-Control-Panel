@@ -59,7 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>The panel that sent us here, else the app's main window.</summary>
         private MainShellWindow? _panel;
-        private MainShellWindow? Panel => _panel ?? MainShellWindow.Current;
+        internal MainShellWindow? Panel => _panel ?? MainShellWindow.Current;
 
         /// <summary>The launcher, if it has been built this run.</summary>
         internal static LauncherWindow? Instance => _window;

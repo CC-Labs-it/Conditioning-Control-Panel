@@ -1075,6 +1075,47 @@ public sealed partial class GameWindowTests
         }
     });
 
+    // WPF DtrhHostService.cs:949-952 owns the returning player's hub by the main window.
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Dtrh_returning_hub_closes_with_the_shell_even_when_hidden(bool hiddenAtOpen, bool hideAfterOpen) => RunDtrh(true, (shell, _, _, _) =>
+    {
+        shell.TrayHostPresent = () => false; // closing is a real exit, not a tray hide
+        try
+        {
+            ChaosMeta.Init();
+            ChaosMeta.State.RunsCompleted = 2;
+            ChaosMeta.State.SeenIntroGuide = true;
+            ChaosMeta.Save();
+            if (hiddenAtOpen) shell.Hide(); else shell.Show();
+            LauncherWindow.Instance!.Play(LauncherCards.Find("dtrh")!);
+            Assert.True(GameWindow.IsAnyOpen());
+            var game = GameWindow.Launch("dtrh")!;
+            game.Web.OnNavigationCompleted(game.PageUrl!);
+            game.Web.OnWebMessage("{\"type\":\"boot-error\"}");
+            Dispatcher.UIThread.RunJobs();
+            var hub = Assert.IsType<ChaosHubWindow>(ChaosHubWindow.Current);
+            Assert.True(hub.IsVisible);
+            if (!hiddenAtOpen) Assert.Same(shell, hub.Owner);
+            bool closed = false;
+            hub.Closed += (_, _) => closed = true;
+            if (hideAfterOpen) shell.Hide();
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(closed);
+            Assert.False(hub.IsVisible);
+            Assert.Null(ChaosHubWindow.Current);
+            Assert.False(ChaosRunHost.IsActive);
+        }
+        finally
+        {
+            ChaosHubWindow.Current?.Close();
+            ChaosRunHost.ForceShutdown();
+        }
+    });
+
     // WPF DtrhHostService.cs:923-934 dispatches disposal and the fallback together;
     // GameSurfaces.cs:50-51 stops the run and the web host on panic.
     // Stop route: full panic, Chaos shutdown, or the games surface alone.

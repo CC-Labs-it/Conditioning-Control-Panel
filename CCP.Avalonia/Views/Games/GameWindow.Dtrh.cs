@@ -20,6 +20,7 @@ using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -129,7 +130,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     return;
                 }
                 if (ChaosHubWindow.Current is { } current) { current.Activate(); return; }
-                new ChaosHubWindow().Show();
+                var hub = new ChaosHubWindow();
+                var shell = MainShellWindow.Current ?? LauncherWindow.Instance?.Panel;
+                // WPF :951 owns the hub by the loaded main window. Avalonia requires a
+                // visible owner, and Hide detaches owned children, so also follow Closed.
+                if (shell is { IsVisible: true }) hub.Show(shell); else hub.Show();
+                if (shell != null)
+                {
+                    void CloseHub(object? sender, EventArgs e) => hub.Close();
+                    shell.Closed += CloseHub;
+                    hub.Closed += (_, _) => shell.Closed -= CloseHub;
+                }
             }
             catch (Exception ex) { Log.Error(ex, "Dtrh fallback failed"); }
         }
