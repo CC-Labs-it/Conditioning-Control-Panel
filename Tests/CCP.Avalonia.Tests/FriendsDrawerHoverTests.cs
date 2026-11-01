@@ -119,4 +119,63 @@ public sealed class FriendsDrawerHoverTests
             }
         }
     });
+    // WPF FriendsDrawer.Juice.cs:93-134: every row sweeps once, even when open; Off stays still.
+    [Fact]
+    public Task SheenCoversFriendAndRequestRowsAndHonorsMotion() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var previous = settings.MotionLevel;
+        var gentle = settings.GentleVisuals;
+        var probe = UiMotionPreference.OsProbe;
+        settings.GentleVisuals = false;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        using var svc = FriendsDrawerTests.Service().Svc;
+        await svc.RefreshAsync();
+        var drawer = new FriendsDrawer(svc);
+        var window = new Window { Width = 420, Height = 650, Content = drawer };
+        try
+        {
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            foreach (var tag in new[] { "friends-row:u_on", "friends-request-in:u_req" })
+            {
+                var row = Row(drawer, tag);
+                Pointer(row, true);
+                var band = row.GetLogicalDescendants().OfType<global::Avalonia.Controls.Shapes.Rectangle>()
+                    .Single(x => x.Tag as string == "friends-sheen");
+                Assert.False(band.IsHitTestVisible);
+                Assert.Equal(70, band.Width);
+                Assert.Equal(0.9, band.Opacity);
+                await FriendsDrawerTests.Until(() => !row.GetLogicalDescendants().Contains(band));
+                Assert.DoesNotContain(band, row.GetLogicalDescendants());
+            }
+            drawer.Toggle("u_on");
+            var open = Row(drawer, "friends-row:u_on");
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Reduced;
+            Pointer(open, true);
+            var reduced = open.GetLogicalDescendants().OfType<global::Avalonia.Controls.Shapes.Rectangle>()
+                .Single(x => x.Tag as string == "friends-sheen");
+            Assert.Equal(0.45, reduced.Opacity);
+            await FriendsDrawerTests.Until(() => !open.GetLogicalDescendants().Contains(reduced));
+            Assert.DoesNotContain(reduced, open.GetLogicalDescendants());
+            ConditioningControlPanel.CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+            Pointer(open, true);
+            Assert.DoesNotContain(open.GetLogicalDescendants(), x => x is Control c && c.Tag as string == "friends-sheen");
+            settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            settings.GentleVisuals = true;
+            Pointer(open, true);
+            var gentleBand = open.GetLogicalDescendants().OfType<global::Avalonia.Controls.Shapes.Rectangle>()
+                .Single(x => x.Tag as string == "friends-sheen");
+            Assert.Equal(0.45, gentleBand.Opacity);
+        }
+        finally
+        {
+            window.Close(); settings.MotionLevel = previous; settings.GentleVisuals = gentle;
+            UiMotionPreference.OsProbe = probe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+    });
+
 }
