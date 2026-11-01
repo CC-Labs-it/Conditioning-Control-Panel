@@ -25,8 +25,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <see cref="TopLevelFrameSource"/> (WPF CompositionTarget.Rendering, dt clamped at 0.1 s); the
     /// subscription drops when the last logo retires. The window lives until <see cref="CloseActive"/>.
     ///
-    /// <para>The Porn DVD toy is launched by ChaosRunHost. Part B: Intrusive Thoughts,
-    /// Spanker smack, rabbit split, per-logo hosts and RaiseActive above video.</para>
+    /// <para>The Porn DVD toy is launched by ChaosRunHost. Thoughts and rabbit contacts are connected. Remaining: Spanker input, per-logo hosts,
+    /// video restacking, and the run-host rabbit/freeze producers.</para>
     /// </summary>
     internal static class ChaosDvdOverlay
     {
@@ -54,12 +54,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>WPF Launch. Refused (logged, no window) where no composited click-through overlay exists.</summary>
         public static void Launch(Visual host, double durationSec, double speedMult, double scale, int count = 1,
-                                  string? text = null, int splitBounces = 0)
+                                  string? text = null, int splitBounces = 0, bool splitOnRabbit = false)
         {
             // WPF Launch (:98) always hands off to the UI thread.
             if (!Dispatcher.UIThread.CheckAccess())
             {
-                Dispatcher.UIThread.Post(() => Launch(host, durationSec, speedMult, scale, count, text, splitBounces));
+                Dispatcher.UIThread.Post(() => Launch(host, durationSec, speedMult, scale, count, text, splitBounces, splitOnRabbit));
                 return;
             }
             try
@@ -70,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     return;
                 }
                 if (_window == null && !Create(host)) return;
-                foreach (var l in Flock.Launch(durationSec, speedMult, scale, count, text, splitBounces)) AddLabel(l);
+                foreach (var l in Flock.Launch(durationSec, speedMult, scale, count, text, splitBounces, splitOnRabbit)) AddLabel(l);
                 if (_source == null && _window != null)
                 {
                     _last = null;
@@ -175,6 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             foreach (var l in f.Recolored) if (Labels.TryGetValue(l, out var t)) Recolor(t, l);
             foreach (var l in f.Removed)
                 if (Labels.Remove(l, out var t)) _canvas?.Children.Remove(t);
+            var clones = new List<ChaosDvdLogo>();
             foreach (var (l, t) in Labels)
             {
                 Canvas.SetLeft(t, l.X);
@@ -182,8 +183,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 t.Opacity = l.Opacity;
                 // WPF ChaosDvdOverlay.cs:388-390: collide after moving, never while retiring.
                 if (l.FadeOutSec < 0 && !f.Spawned.Contains(l))
-                    BubbleOverlay.PopChaosInRect(new Rect(_origin.X + l.X, _origin.Y + l.Y, l.W, l.H));
+                {
+                    var rect = new Rect(_origin.X + l.X, _origin.Y + l.Y, l.W, l.H);
+                    BubbleOverlay.PopChaosInRect(rect);
+                    if (BubbleOverlay.AnyChaosDarterIntersects(rect) && Flock.TouchRabbit(l) is { } clone)
+                        clones.Add(clone);
+                }
             }
+            foreach (var clone in clones) { AddLabel(clone); PlaySfx("dvd_bounce", 0.4f); }
             if (f.BounceCue) PlaySfx("dvd_bounce", 0.35f);
             if (f.LaunchCue) PlaySfx("dvd_launch", 0.35f);
             if (!Flock.AnyActive) StopLoop();
