@@ -4,11 +4,17 @@ using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Headless;
+using System.Linq;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Safety;
 using Xunit;
+using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
@@ -116,4 +122,114 @@ public sealed class TubePresetSpeechParityTests
         }
         return Task.CompletedTask;
     });
+    // WPF Reactions.cs:145-152, Speech.cs:280,489-511, CompanionIdleVoice.cs:60-71.
+    [Theory]
+    [InlineData(0)] // real awareness reaction, engine off
+    [InlineData(1)] // queued unprompted preset, engine off at delivery
+    [InlineData(2)] // unprompted priority giggle during post-panic quiet
+    public Task UnpromptedSoundObeysTheLiveGate(int scenario) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var s = CoreSettings.Current;
+        s.AvatarEnabled = true; s.AvatarMuted = false; s.MasterVolume = 100; s.AiChatEnabled = false;
+        s.CompanionSpeaksIdleWhenEngineOff = scenario != 0;
+        var old = (CoreMods.ActiveModIdProvider, CoreModArt.AudioOverridePathProvider, CoreModArt.OverridePathProvider,
+            CoreAudio.PlayOneShotProvider, CoreAudio.PlayStoppableProvider, AvApp.Sessions);
+        var path = Path.GetTempFileName();
+        int plays = 0;
+        CoreMods.ActiveModIdProvider = () => "test";
+        CoreModArt.AudioOverridePathProvider = _ => path;
+        CoreModArt.OverridePathProvider = _ => path;
+        CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => plays++;
+        CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { plays++; return () => { }; };
+        AvApp.Sessions = null;
+        PanicAftermath.EndQuiet();
+        var lastReaction = typeof(WindowAwarenessService).GetField("_lastReactionTime", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var oldReaction = lastReaction.GetValue(AvApp.WindowAwareness);
+        var cooldown = typeof(WindowAwarenessService).GetField("_nextReactionCooldownSeconds", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var oldCooldown = cooldown.GetValue(AvApp.WindowAwareness);
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            Assert.False(CoreEngine.IsRunning);
+            tube.Show();
+            if (scenario == 0)
+            {
+                AvApp.WindowAwareness.Stop();
+                lastReaction.SetValue(AvApp.WindowAwareness, DateTime.MinValue);
+                tube._startupTime = DateTime.MinValue;
+                await tube.ReactToActivityAsync(new ActivityChangedEventArgs(ActivityCategory.Gaming, ActivityCategory.Unknown, "Steam", "Steam"));
+            }
+            else if (scenario == 1)
+            {
+                tube.Giggle("prompted");
+                Assert.Equal(1, plays);
+                tube.Giggle("queued", unprompted: true);
+                s.CompanionSpeaksIdleWhenEngineOff = false; // checked when the queue actually speaks
+                Action? deliver = null;
+                tube.SpeechDelayScheduler = (_, fire) => { deliver = fire; return () => { }; };
+                tube.EndSpeechBubble();
+                Assert.NotNull(deliver);
+                deliver!();
+                Assert.Equal(1, plays);
+                plays = 0;
+            }
+            else
+            {
+                PanicAftermath.ArmQuiet();
+                tube.GigglePriority("unprompted", unprompted: true);
+            }
+            Assert.True(tube.HasBubbleUp);
+            Assert.Equal(0, plays); // text remains visible, but neither cue plays
+            tube.GigglePriority("prompted", unprompted: false);
+            Assert.Equal(1, plays); // prompted speech is never held
+            PanicAftermath.EndQuiet();
+            s.CompanionSpeaksIdleWhenEngineOff = true;
+            tube.GigglePriority("allowed", unprompted: true);
+            Assert.Equal(2, plays);
+        }
+        finally
+        {
+            tube.Close(); PanicAftermath.EndQuiet();
+            lastReaction.SetValue(AvApp.WindowAwareness, oldReaction);
+            cooldown.SetValue(AvApp.WindowAwareness, oldCooldown);
+            (CoreMods.ActiveModIdProvider, CoreModArt.AudioOverridePathProvider, CoreModArt.OverridePathProvider,
+                CoreAudio.PlayOneShotProvider, CoreAudio.PlayStoppableProvider, AvApp.Sessions) = old;
+            File.Delete(path);
+        }
+    });
+
+    // WPF Speech.cs:1277-1313,1417-1455,3031-3033: restore the clickable URL after typing.
+    [Fact]
+    public Task PresetLinkSurvivesTypingAndInvokesTheCompanionLauncher() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        CoreSettings.Current.AvatarEnabled = true;
+        CoreSettings.Current.AvatarMuted = true;
+        var oldNavigate = CompanionLinkLauncher.Navigate;
+        string? opened = null;
+        CompanionLinkLauncher.Navigate = url => { opened = url; return true; };
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            tube.Giggle("See [help](https://example.com) now");
+            var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+            tube.TypewriterFrame!();
+            Assert.Equal("S", text.Text);
+            while (tube.TypewriterFrame is { } frame) frame();
+            var link = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>(Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
+            Assert.Equal("help", link.Content);
+            Assert.Equal(text.FontSize, link.FontSize);
+            ((global::Avalonia.Automation.Provider.IInvokeProvider)
+                global::Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(link)).Invoke();
+            Assert.Equal("https://example.com", opened);
+            tube.GigglePriority("next", playSound: false, aiGenerated: false);
+            Assert.Equal("next", text.Text);
+            Assert.Empty(text.Inlines!.OfType<InlineUIContainer>());
+        }
+        finally { tube.Close(); CompanionLinkLauncher.Navigate = oldNavigate; }
+        return Task.CompletedTask;
+    });
+
 }

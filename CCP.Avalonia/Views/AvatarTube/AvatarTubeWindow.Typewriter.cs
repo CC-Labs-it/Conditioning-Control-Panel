@@ -1,7 +1,13 @@
 // WPF AvatarTubeWindow.Speech.cs:2936-3033: the slow preset bubble typewriter.
 using System;
 using System.Text.RegularExpressions;
+using Avalonia;
+using ConditioningControlPanel.Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Views.Controls.Companion;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
@@ -27,6 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         {
             StopTypewriter();
             var plain = PresetLinks.Replace(text, "$1");
+            _txtSpeech.Inlines?.Clear();
             _txtSpeech.Text = "";
             if (plain.Length == 0) return;
             int index = 0;
@@ -38,11 +45,36 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 if (generation != _typewriterGeneration) return;
                 index = Math.Min(plain.Length, index + Math.Max(1, plain.Length / 100));
                 _txtSpeech.Text = plain.Substring(0, index);
-                if (index == plain.Length) StopTypewriter();
+                if (index == plain.Length) { StopTypewriter(); RenderPresetLinks(text); }
             };
             var frame = TypewriterFrame;
             timer.Tick += (_, _) => frame();
             timer.Start();
+        }
+
+        // WPF Speech.cs:1277-1313,1417-1455,3031-3033: restore markdown URLs after typing.
+        private void RenderPresetLinks(string text)
+        {
+            var matches = PresetLinks.Matches(text);
+            if (matches.Count == 0) return;
+            _txtSpeech.Text = null;
+            var inlines = _txtSpeech.Inlines!;
+            inlines.Clear();
+            int end = 0;
+            foreach (Match match in matches)
+            {
+                inlines.Add(new Run(text.Substring(end, match.Index - end)));
+                var label = match.Groups[1].Value;
+                var url = match.Groups[2].Value;
+                if (CompanionLinkNavigation.TryBrowserUri(url, out _))
+                    inlines.Add(new InlineUIContainer(new SafeHyperlinkButton
+                    { Content = label, Padding = new Thickness(0), FontFamily = _txtSpeech.FontFamily,
+                      FontSize = _txtSpeech.FontSize, FontWeight = _txtSpeech.FontWeight,
+                      Foreground = new SolidColorBrush(Color.FromRgb(255, 176, 224)), Command = CompanionLinkLauncher.CommandFor(url) }));
+                else inlines.Add(new Run(label));
+                end = match.Index + match.Length;
+            }
+            inlines.Add(new Run(text.Substring(end)));
         }
 
         private void StopTypewriter()
