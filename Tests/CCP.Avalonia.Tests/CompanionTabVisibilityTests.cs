@@ -1,10 +1,12 @@
 using System;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -221,6 +223,76 @@ public sealed class CompanionTabVisibilityTests
             shell.RequestExit();
             Dispatcher.UIThread.RunJobs();
             CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF hero sync replaces a resolved portrait and keeps it when the next pose cannot load.
+    [Fact]
+    public Task ReselectingCompanionKeepsTheLastLoadablePortrait() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+
+        var dir = Directory.CreateTempSubdirectory("ccp-hero-art-");
+        var firstPath = Path.Combine(dir.FullName, "first.png");
+        var secondPath = Path.Combine(dir.FullName, "second.png");
+        using (var first = new WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96))) first.Save(firstPath);
+        using (var second = new WriteableBitmap(new PixelSize(4, 7), new Vector(96, 96))) second.Save(secondPath);
+        var previousArt = CoreModArt.OverridePathProvider;
+        var previousSettings = CoreSettings.ServiceProvider;
+        CoreModArt.OverridePathProvider = name => name switch
+        {
+            "avatar9001_pose1.png" => firstPath,
+            "avatar9002_pose1.png" => secondPath,
+            _ => null
+        };
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.Welcomed = true;
+        s.HasAcceptedAgeVerification = true;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        s.AwarenessModeEnabled = false;
+        s.SelectedAvatarSet = 9001;
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.Show();
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            var page = shell.GetLogicalDescendants().OfType<ConversationPage>().Single();
+            var hero = page.Vm.Hero!;
+            Assert.Equal(new PixelSize(6, 3), Assert.IsType<Bitmap>(hero.Portrait).PixelSize);
+
+            s.SelectedAvatarSet = 9002;
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            var replacement = Assert.IsType<Bitmap>(hero.Portrait);
+            Assert.Equal(new PixelSize(4, 7), replacement.PixelSize);
+
+            s.SelectedAvatarSet = 9003; // no mod or shipped pose
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(replacement, hero.Portrait);
+        }
+        finally
+        {
+            if (shell != null)
+            {
+                foreach (var w in shell.OwnedWindows.ToList()) w.Close();
+                shell.RequestExit();
+                Dispatcher.UIThread.RunJobs();
+            }
+            CoreModArt.OverridePathProvider = previousArt;
+            CoreSettings.ServiceProvider = previousSettings;
+            dir.Delete(true);
         }
         return Task.CompletedTask;
     });
