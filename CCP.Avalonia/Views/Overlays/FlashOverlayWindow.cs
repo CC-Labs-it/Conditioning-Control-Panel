@@ -39,12 +39,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         // WPF FlashService.cs:119-125 and 1773-1776: speed is snapshotted at spawn,
         // then the safety setting can lengthen the delay further.
-        internal static TimeSpan ScaleFrameDelay(TimeSpan source, double speed)
+        internal const double MIN_GIF_FRAME_DELAY_MS = 10.0;
+
+        internal static TimeSpan ScaleFrameDelay(TimeSpan sourceDelay, double multiplier)
         {
-            double ms = source.TotalMilliseconds;
-            if (!double.IsFinite(ms) || ms <= 0) ms = 100;
-            if (!double.IsFinite(speed) || speed <= 0) speed = 1;
-            return TimeSpan.FromMilliseconds(Math.Max(10, ms / Math.Clamp(speed, 0.25, 4)));
+            var ms = sourceDelay.TotalMilliseconds;
+            if (double.IsNaN(ms) || double.IsInfinity(ms) || ms <= 0) ms = 100.0;
+            if (double.IsNaN(multiplier) || double.IsInfinity(multiplier) || multiplier <= 0) multiplier = 1.0;
+            multiplier = Math.Clamp(multiplier, 0.25, 4.0);
+            return TimeSpan.FromMilliseconds(Math.Max(MIN_GIF_FRAME_DELAY_MS, ms / multiplier));
         }
 
         internal void StartFrames(long start) => _frameStart = start;

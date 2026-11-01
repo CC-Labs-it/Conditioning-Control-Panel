@@ -8,8 +8,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using SkiaSharp;
@@ -19,14 +21,6 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class FlashAnimationTests
 {
-    private sealed class Clock : TimeProvider
-    {
-        public long Now = 100_000;
-        public override long GetTimestamp() => Now;
-        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
-        public void Advance(int ms) => Now += ms * TimeSpan.TicksPerMillisecond;
-    }
-
     private static Task OnUi(Action action) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
@@ -72,9 +66,10 @@ public sealed class FlashAnimationTests
         File.WriteAllBytes(path, Convert.FromBase64String("UklGRoQAAABXRUJQVlA4WAoAAAACAAAAAwAAAwAAQU5JTQYAAAAAAAAAAABBTk1GKAAAAAAAAAAAAAMAAAMAAGQAAAJWUDhMDwAAAC8DwAAABxD9j/4HIqL/AQBBTk1GKAAAAAAAAAAAAAMAAAMAAGQAAABWUDhMDwAAAC8DwAAABxDR//4HIqL/AQA="));
         try
         {
-            var (frames, delay) = FlashOverlay.DecodePicture(path, 4);
+            var (frames, delay) = FlashOverlay.DecodePicture(path, 8);
             try
             {
+                var (shared, _) = FlashOverlay.DecodePicture(path, 16); try { Assert.Same(frames, shared); } finally { FlashOverlay.DisposeFrames(shared); }
                 Assert.Equal(2, frames.Count);
                 Assert.Equal(100, delay.TotalMilliseconds);
                 Assert.Equal(new SKColor(255, 0, 0), Pixel(frames[0], 1, 1));
@@ -116,7 +111,7 @@ public sealed class FlashAnimationTests
         var oldPresent = FlashOverlay.Present;
         var oldAssets = CorePaths.EffectiveAssetsProvider;
         var oldPacks = ConditioningControlPanel.Services.ContentPackStore.Current;
-        var clock = new Clock();
+        var clock = new SteppedTime();
         List<Bitmap>? frames = null;
         bool transferred = false;
         try
@@ -131,7 +126,7 @@ public sealed class FlashAnimationTests
             CorePaths.EffectiveAssetsProvider = () => Directory.GetParent(Path.GetDirectoryName(path)!)!.FullName;
             ConditioningControlPanel.Services.ContentPackStore.Current = null;
             var screen = new Window().Screens.All[0];
-            var picked = FlashOverlay.LoadPictures(1, new[] { screen }, new[] { 0 }, s, new(), null);
+            var picked = FlashOverlay.LoadPictures(1, new[] { screen }, new[] { 0 }, s, new(), null, FlashOverlay.DecodeMax(s, PerformanceTier.Quality));
             var (chosenFrames, delay, rect, chosenPath, chosenScreen) = Assert.Single(picked);
             frames = chosenFrames;
             Assert.Equal(path, chosenPath);
@@ -141,12 +136,31 @@ public sealed class FlashAnimationTests
             transferred = true;
             var window = FlashOverlay.Active[^1].Window;
             Assert.True(FlashOverlay.AnimationRunning);
-            clock.Advance(99); FlashOverlay.AnimationTick();
+            clock.Advance(TimeSpan.FromMilliseconds(99)); FlashOverlay.AnimationTick();
             Assert.Equal(0, window.FrameIndex);
-            clock.Advance(1); FlashOverlay.AnimationTick();
+            clock.Advance(TimeSpan.FromMilliseconds(1)); FlashOverlay.AnimationTick();
             Assert.Equal(1, window.FrameIndex);
-            clock.Advance(300); FlashOverlay.AnimationTick();
+            clock.Advance(TimeSpan.FromMilliseconds(300)); FlashOverlay.AnimationTick();
             Assert.Equal(4, window.FrameIndex); // delayed ticks skip to the right frame
+            s.GentleVisuals = false;
+            var (fastFrames, _) = FlashOverlay.DecodePicture(path, 16);
+            Assert.True(FlashOverlay.Show(fastFrames[0], rect, chosenPath, chosenScreen,
+                1, TimeSpan.Zero, TimeSpan.FromSeconds(5), false, false, 0, frames: fastFrames, frameDelay: TimeSpan.FromMilliseconds(20)));
+            var fast = FlashOverlay.Active[^1].Window;
+            Assert.Equal(1, TopLevelFrameSource.For(window).SubscriberCount);
+            void Frame(int ms)
+            {
+                clock.Advance(TimeSpan.FromMilliseconds(ms));
+                typeof(TopLevelFrameSource).GetMethod("OnFrame", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .Invoke(TopLevelFrameSource.For(FlashOverlay.Animated[0]), new object[] { TimeSpan.FromTicks(clock.GetTimestamp()) });
+            }
+            Frame(7); Frame(7);
+            Assert.Equal(1, fast.FrameIndex); // 10 ms frame delay on a 7 ms render cadence
+            window.Close();
+            Assert.Equal(0, TopLevelFrameSource.For(window).SubscriberCount);
+            Assert.Equal(1, TopLevelFrameSource.For(fast).SubscriberCount);
+            Frame(7); Frame(7);
+            Assert.Equal(2, fast.FrameIndex);
             FlashOverlay.CloseAll(final: false);
             Assert.Empty(FlashOverlay.Animated);
             Assert.False(FlashOverlay.AnimationRunning);
@@ -271,6 +285,41 @@ public sealed class FlashAnimationTests
         Assert.Equal(400, FlashOverlayWindow.ScaleFrameDelay(TimeSpan.FromMilliseconds(100), 0.1).TotalMilliseconds);
     }
 
+    [Fact]
+    public Task Large_burst_uses_tier_cap_and_shares_frames_until_last_release() => OnUi(() => WithGif(10, path =>
+    {
+        var root = Directory.GetParent(Path.GetDirectoryName(path)!)!.FullName;
+        File.WriteAllBytes(path, Gif(Enumerable.Range(0, 10).Select(i => i == 0 ? 1 : 3).ToArray(), 2200, 1300));
+        var old = (CorePaths.EffectiveAssetsProvider, ConditioningControlPanel.Services.ContentPackStore.Current);
+        var s = new AppSettings { ImageScale = 250 };
+        var flashes = new List<(List<Bitmap> Frames, TimeSpan Delay, PixelRect Rect, string Path, Screen Screen)>();
+        try
+        {
+            Assert.Equal(new[] { 2048, 1920, 1280 }, Enum.GetValues<PerformanceTier>().Select(t => FlashOverlay.DecodeMax(s, t)));
+            s.ImageScale = 50; Assert.Equal(256, FlashOverlay.DecodeMax(s, PerformanceTier.Performance));
+            s.ImageScale = 250;
+            CorePaths.EffectiveAssetsProvider = () => root;
+            ConditioningControlPanel.Services.ContentPackStore.Current = null;
+            var screen = MakeScreen(2.5, new PixelRect(0, 0, 3840, 2160), new PixelRect(0, 0, 3840, 2160), true);
+            flashes = FlashOverlay.LoadPictures(5, new[] { screen }, new[] { 0 }, s, new(), null, FlashOverlay.DecodeMax(s, PerformanceTier.Quality));
+            Assert.Equal(5, flashes.Count);
+            Assert.True(flashes[0].Rect.Width > 2048);
+            Assert.Equal(2048, flashes[0].Frames[0].PixelSize.Width);
+            Assert.All(flashes, item => Assert.Same(flashes[0].Frames, item.Frames));
+            var bitmap = flashes[0].Frames[0];
+            while (flashes.Count > 1) { FlashOverlay.DisposeFrames(flashes[^1].Frames); flashes.RemoveAt(flashes.Count - 1); }
+            using (var alive = new MemoryStream()) bitmap.Save(alive, PngBitmapEncoderOptions.Default);
+            FlashOverlay.DisposeFrames(flashes[0].Frames); flashes.Clear();
+            using var disposed = new MemoryStream();
+            Assert.ThrowsAny<Exception>(() => bitmap.Save(disposed, PngBitmapEncoderOptions.Default));
+        }
+        finally
+        {
+            foreach (var flash in flashes) FlashOverlay.DisposeFrames(flash.Frames);
+            (CorePaths.EffectiveAssetsProvider, ConditioningControlPanel.Services.ContentPackStore.Current) = old;
+        }
+    }));
+
     private static SKColor Pixel(Bitmap bitmap, int x, int y)
     {
         using var bytes = new MemoryStream();
@@ -280,29 +329,62 @@ public sealed class FlashAnimationTests
         return decoded.GetPixel(x, y);
     }
 
-    // The same 16x16 background and restore-previous overlays as WPF's
-    // AnimatedWebpGifDisposalTests. Each frame after the first owns a moving gold square.
-    private static int SquareX(int frame) => 2 * (frame - 1) % 14;
-    private static byte[] Gif(int count)
+    private static Screen MakeScreen(double scaling, PixelRect bounds, PixelRect workingArea, bool primary)
     {
-        using var ms = new MemoryStream();
+        // Avalonia's reference assembly hides the runtime platform-screen constructor.
+        // These synthetic handles never reach a native backend or the real desktop.
+        // Pinned to Avalonia 12.1 internals (PlatformScreen ctor, Screen setters): an Avalonia
+        // upgrade that renames them throws here; fix this factory, not the assertions.
+        var screen = (Screen)Activator.CreateInstance(typeof(PlatformScreen),
+            new object[] { new PlatformHandle(new IntPtr(bounds.X), "headless-test") })!;
+        typeof(Screen).GetProperty(nameof(Screen.Scaling))!.SetValue(screen, scaling);
+        typeof(Screen).GetProperty(nameof(Screen.Bounds))!.SetValue(screen, bounds);
+        typeof(Screen).GetProperty(nameof(Screen.WorkingArea))!.SetValue(screen, workingArea);
+        typeof(Screen).GetProperty(nameof(Screen.IsPrimary))!.SetValue(screen, primary);
+        return screen;
+    }
+
+    private const int Size = 16;
+    private static byte[] Gif(int count) => Gif(Enumerable.Range(0, count).Select(i => i == 0 ? 1 : 3).ToArray());
+
+    // ---- a tiny GIF89a writer ----
+
+    private static readonly byte[] Palette = { 40, 10, 60, 255, 105, 180, 255, 215, 0, 0, 0, 0 };
+    private const int SquareY = 6;
+
+    // Frame 0 is the whole background (index 0); frame f >= 1 is a 2x2 gold square (index 2).
+    private static int SquareX(int frame) => 2 * (frame - 1) % (Size - 2);
+
+    private static byte[] Gif(int[] disposals, int width = Size, int height = Size)
+    {
+        var ms = new MemoryStream();
         void U16(int v) { ms.WriteByte((byte)v); ms.WriteByte((byte)(v >> 8)); }
+
         ms.Write(Encoding.ASCII.GetBytes("GIF89a"));
-        U16(16); U16(16);
-        ms.WriteByte(0xF1); ms.WriteByte(0); ms.WriteByte(0);
-        ms.Write(new byte[] { 40, 10, 60, 255, 105, 180, 255, 215, 0, 0, 0, 0 });
-        for (int f = 0; f < count; f++)
+        U16(width); U16(height);
+        ms.WriteByte(0xF1); // global colour table of 4 entries
+        ms.WriteByte(0);
+        ms.WriteByte(0);
+        ms.Write(Palette);
+        ms.Write(new byte[] { 0x21, 0xFF, 0x0B });
+        ms.Write(Encoding.ASCII.GetBytes("NETSCAPE2.0"));
+        ms.Write(new byte[] { 0x03, 0x01, 0x00, 0x00, 0x00 });
+
+        for (int f = 0; f < disposals.Length; f++)
         {
-            int x = f == 0 ? 0 : SquareX(f), y = f == 0 ? 0 : 6;
-            int w = f == 0 ? 16 : 2, h = f == 0 ? 16 : 2;
-            ms.Write(new byte[] { 0x21, 0xF9, 4, (byte)((f == 0 ? 1 : 3) << 2), 10, 0, 0, 0, 0x2C });
+            int x = f == 0 ? 0 : SquareX(f), y = f == 0 ? 0 : SquareY;
+            int w = f == 0 ? width : 2, h = f == 0 ? height : 2;
+            ms.Write(new byte[] { 0x21, 0xF9, 0x04, (byte)(disposals[f] << 2), 10, 0, 0, 0 });
+            ms.WriteByte(0x2C);
             U16(x); U16(y); U16(w); U16(h);
-            ms.WriteByte(0); ms.WriteByte(2);
+            ms.WriteByte(0);
+            ms.WriteByte(2); // LZW minimum code size
             var data = Lzw(Enumerable.Repeat((byte)(f == 0 ? 0 : 2), w * h).ToArray());
             for (int i = 0; i < data.Length; i += 255)
             {
-                int n = Math.Min(255, data.Length - i);
-                ms.WriteByte((byte)n); ms.Write(data, i, n);
+                int n = System.Math.Min(255, data.Length - i);
+                ms.WriteByte((byte)n);
+                ms.Write(data, i, n);
             }
             ms.WriteByte(0);
         }
@@ -310,22 +392,27 @@ public sealed class FlashAnimationTests
         return ms.ToArray();
     }
 
+    // Uncompressed LZW: a clear code before every two pixels keeps the table from growing, so
+    // every code stays 3 bits wide (clear = 4, end = 5).
     private static byte[] Lzw(byte[] indices)
     {
         var output = new List<byte>();
         int acc = 0, bits = 0;
         void Code(int c)
         {
-            acc |= c << bits; bits += 3;
+            acc |= c << bits;
+            bits += 3;
             while (bits >= 8) { output.Add((byte)acc); acc >>= 8; bits -= 8; }
         }
         for (int i = 0; i < indices.Length; i += 2)
         {
-            Code(4); Code(indices[i]);
+            Code(4);
+            Code(indices[i]);
             if (i + 1 < indices.Length) Code(indices[i + 1]);
         }
         Code(5);
         if (bits > 0) output.Add((byte)acc);
         return output.ToArray();
     }
+
 }

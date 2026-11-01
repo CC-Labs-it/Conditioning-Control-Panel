@@ -10,6 +10,7 @@ using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
@@ -87,7 +88,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
                 var targets = PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
                 var occupied = Active.Select(a => a.Rect).ToList();
-                var flashes = await Task.Run(() => LoadPictures(BurstCount(amount, s, Rng), screens, targets, s, occupied, size));
+                var decodeMax = DecodeMax(s, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier);
+                var flashes = await Task.Run(() => LoadPictures(BurstCount(amount, s, Rng), screens, targets, s, occupied, size, decodeMax));
                 if (flashes.Count == 0)
                 {
                     if (!_warnedEmpty) Log.Warning("Flash: no images found in {Path}", ImagesPath());
@@ -261,7 +263,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF FlashService.cs:1771-1777, 3330-3338: one heartbeat for all live GIFs,
         // indexed from real elapsed time so a late tick does not slow the animation.
         internal static readonly List<FlashOverlayWindow> Animated = new();
-        private static DispatcherTimer? _animationTimer;
+        private static FrameClock? _animationTimer;
         internal static bool AnimationRunning => _animationTimer != null;
 
         internal static void StartAnimation(FlashOverlayWindow w)
@@ -270,15 +272,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.StartFrames(Clock.GetTimestamp());
             Animated.Add(w);
             w.Closed += (_, _) => StopAnimation(w);
-            if (_animationTimer != null) return;
-            _animationTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => AnimationTick());
+            if (_animationTimer == null) StartFrameClock();
+        }
+
+        private static void StartFrameClock()
+        {
+            _animationTimer = new FrameClock(Animated[0]) { Interval = TimeSpan.Zero };
+            _animationTimer.Tick += (_, _) => AnimationTick();
             _animationTimer.Start();
         }
 
         internal static void StopAnimation(FlashOverlayWindow w)
         {
+            bool owner = Animated.Count > 0 && Animated[0] == w;
             Animated.Remove(w);
-            if (Animated.Count == 0) { _animationTimer?.Stop(); _animationTimer = null; }
+            if (!owner) return;
+            _animationTimer?.Stop(); _animationTimer = null;
+            if (Animated.Count > 0) StartFrameClock();
         }
 
         internal static void AnimationTick()
@@ -464,7 +474,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var s = CoreSettings.Current;
                 var occupied = Active.Select(a => a.Rect).ToList();
-                var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null));
+                var decodeMax = DecodeMax(s, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier);
+                var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null, decodeMax));
                 if (generation != _generation) { foreach (var f in flashes) DisposeFrames(f.Frames); return; }
                 Schedule(flashes, 0, 100, generation, Cap(s, parent.Ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
                     TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), lifetime, s.FlashClickable,
@@ -489,13 +500,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// record, and a failed decrypt falls back to the folder.</summary>
         internal static string? NextFlashPath(IReadOnlyList<string> files) => PackImages.TryDraw(files.Count) ?? NextPath(files);
 
+        // WPF shares decoded sources; each queued or shown flash owns one reference.
+        private static readonly Dictionary<List<Bitmap>, (string Path, int Cap, TimeSpan Delay, int Uses)> Decodes = new();
+
         internal static void DisposeFrames(IEnumerable<Bitmap> frames)
         {
-            foreach (var frame in frames) frame.Dispose();
+            lock (Decodes)
+            {
+                if (frames is List<Bitmap> list && Decodes.TryGetValue(list, out var entry))
+                {
+                    if (entry.Uses > 1) { Decodes[list] = (entry.Path, entry.Cap, entry.Delay, entry.Uses - 1); return; }
+                    Decodes.Remove(list);
+                }
+                foreach (var frame in frames) frame.Dispose();
+            }
         }
 
         // WPF AnimatedWebp.cs:62-84 bounds concurrent native composition canvases.
         internal static readonly SemaphoreSlim DecodeGate = new(2, 2);
+
+        private static (List<Bitmap> Frames, TimeSpan Delay)? Acquire(string path, int cap)
+        {
+            foreach (var (frames, entry) in Decodes)
+                if (entry.Path == path && (entry.Cap >= cap || Math.Max(frames[0].PixelSize.Width, frames[0].PixelSize.Height) < entry.Cap))
+                {
+                    Decodes[frames] = (entry.Path, entry.Cap, entry.Delay, entry.Uses + 1);
+                    return (frames, entry.Delay);
+                }
+            return null;
+        }
 
         /// <summary>WPF FlashService.cs:1419-1475 and AnimatedWebp.cs:167-244: GIF/WebP
         /// frames are composed in order, kept at display size with a 60-frame / 30 MB budget,
@@ -503,9 +536,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static (List<Bitmap> Frames, TimeSpan Delay) DecodePicture(string path, int maxDimension)
         {
             DecodeGate.Wait();
-            try { return DecodePictureCore(path, maxDimension); }
+            try
+            {
+                lock (Decodes) if (Acquire(path, maxDimension) is { } hit) return hit;
+                var decoded = DecodePictureCore(path, maxDimension);
+                lock (Decodes)
+                {
+                    if (Acquire(path, maxDimension) is { } hit)
+                    { foreach (var frame in decoded.Frames) frame.Dispose(); return hit; }
+                    if (decoded.Frames.Count > 0) Decodes.Add(decoded.Frames, (path, maxDimension, decoded.Delay, 1));
+                }
+                return decoded;
+            }
             finally { DecodeGate.Release(); }
         }
+
+        /// <summary>Largest pixel dimension to decode flash images/GIF frames at, per tier.</summary>
+        public static int MaxDecodeDimension(PerformanceTier tier) => tier switch
+        {
+            PerformanceTier.Performance => 512,
+            PerformanceTier.Balanced => 768,
+            _ => 1024,
+        };
+
+        internal static int DecodeMax(AppSettings settings, PerformanceTier tier) => Math.Clamp((int)(MaxDecodeDimension(tier) * (settings.ImageScale / 100.0)), 256, 2048);
 
         private static (List<Bitmap> Frames, TimeSpan Delay) DecodePictureCore(string path, int maxDimension)
         {
@@ -521,60 +575,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
                 if (codec != null && codec.FrameCount > 1 &&
                     (Path.GetExtension(path).Equals(".gif", StringComparison.OrdinalIgnoreCase) ||
-                     Path.GetExtension(path).Equals(".webp", StringComparison.OrdinalIgnoreCase)))
-                {
-                    int count = codec.FrameCount, sw = codec.Info.Width, sh = codec.Info.Height;
-                    if (sw > 0 && sh > 0 && (long)sw * sh <= 4096L * 4096L)
-                    {
-                        double scale = Math.Min(1, Math.Max(1, maxDimension) / (double)Math.Max(sw, sh));
-                        int tw = Math.Max(1, (int)Math.Round(sw * scale)), th = Math.Max(1, (int)Math.Round(sh * scale));
-                        long bytes = (long)tw * th * 4;
-                        double estimatedMb = bytes * (double)count / (1024 * 1024);
-                        int keep = estimatedMb > 30 ? Math.Max(10, (int)(count * 30 / estimatedMb)) : count;
-                        keep = Math.Min(keep, 60);
-                        int step = Math.Max(1, (int)Math.Ceiling(count / (double)keep));
-                        int decodeCount = Math.Min(count, 600);
-                        var info = codec.FrameInfo;
-                        var full = new SKImageInfo(sw, sh, SKColorType.Bgra8888, SKAlphaType.Premul);
-                        using var canvas = new SKBitmap(full);
-                        using var scaled = new SKBitmap(new SKImageInfo(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul));
-                        var pixels = canvas.GetPixels();
-                        byte[]? restore = null;
-                        int restoreIndex = -1, durationSamples = 0;
-                        long durationTotal = 0;
-                        for (int i = 0; i < decodeCount && frames.Count < keep; i++)
-                        {
-                            int prior = -1;
-                            if (i > 0 && info[i].RequiredFrame >= 0)
-                            {
-                                if (info[i - 1].DisposalMethod != SKCodecAnimationDisposalMethod.RestorePrevious) prior = i - 1;
-                                else if (restore != null && restoreIndex >= info[i].RequiredFrame)
-                                { Marshal.Copy(restore, 0, pixels, restore.Length); prior = restoreIndex; }
-                            }
-                            var result = codec.GetPixels(full, pixels, prior >= 0 ? new SKCodecOptions(i, prior) : new SKCodecOptions(i));
-                            if (result != SKCodecResult.Success && result != SKCodecResult.IncompleteInput) break;
-                            if (i + 1 < decodeCount && info[i].DisposalMethod != SKCodecAnimationDisposalMethod.RestorePrevious
-                                && info[i + 1].DisposalMethod == SKCodecAnimationDisposalMethod.RestorePrevious)
-                            {
-                                restore ??= new byte[canvas.ByteCount];
-                                canvas.GetPixelSpan().CopyTo(restore);
-                                restoreIndex = i;
-                            }
-                            if (i % step != 0) continue;
-                            canvas.ScalePixels(scaled, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
-                            frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),
-                                new PixelSize(tw, th), new Vector(96, 96), scaled.RowBytes));
-                            int duration = info[i].Duration;
-                            if (duration > 0) { durationTotal += duration; durationSamples++; }
-                        }
-                        if (frames.Count >= 2)
-                        {
-                            double avg = durationSamples > 0 ? (double)durationTotal / durationSamples : 100;
-                            if (avg < 20) avg = 100;
-                            return (frames, TimeSpan.FromMilliseconds(Math.Clamp(avg * step, 20, 2000)));
-                        }
-                    }
-                }
+                     Path.GetExtension(path).Equals(".webp", StringComparison.OrdinalIgnoreCase)) &&
+                    DecodeAnimation(codec, maxDimension, frames) is { } delay)
+                    return (frames, delay);
             }
             catch (Exception ex) { Log.Debug("Flash: animated decode failed for {Path}: {E}", path, ex.Message); }
             DisposeFrames(frames);
@@ -588,6 +591,93 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return (frames, TimeSpan.FromMilliseconds(100));
         }
 
+        private static TimeSpan? DecodeAnimation(SKCodec codec, int maxDim, List<Bitmap> frames)
+        {
+            int frameCount = codec.FrameCount;
+            int srcW = codec.Info.Width, srcH = codec.Info.Height;
+            if (srcW <= 0 || srcH <= 0 || (long)srcW * srcH > 4096L * 4096L) return null;
+            var (tw, th) = ScaledSize(srcW, srcH, maxDim);
+            const int maxFrames = 60;
+            const double maxMemoryMb = 30;
+            // Frame budget mirrors FlashService.LoadGifFrames: estimate kept-frame memory, then
+            // subsample evenly across the WHOLE clip rather than truncating to a head slice — the
+            // ceiling stride in FramePlan is what makes that claim true (#683), and the matching
+            // avgMs * step delay below keeps the kept set's wall-clock duration honest.
+            var bytesPerKept = (long)tw * th * 4;
+            var estimatedMemoryMB = (bytesPerKept * frameCount) / (1024.0 * 1024.0);
+            int maxKeep = frameCount;
+            if (estimatedMemoryMB > maxMemoryMb)
+                maxKeep = Math.Max(10, (int)(frameCount * (maxMemoryMb / estimatedMemoryMB)));
+            maxKeep = Math.Min(maxKeep, maxFrames);
+            var plan = (Step: Math.Max(1, (int)Math.Ceiling(frameCount / (double)maxKeep)), DecodeCount: Math.Min(frameCount, 600), MaxKeep: maxKeep);
+            int step = plan.Step;
+
+            // Delta frames must be composed in order, so every frame up to the hard ceiling is
+            // DECODED sequentially into one reusable canvas; only every step-th is KEPT.
+            var frameInfos = codec.FrameInfo;
+            int decodeCount = plan.DecodeCount;   // = min(frameCount, 600), CPU ceiling for pathological files
+            var canvasInfo = new SKImageInfo(srcW, srcH, SKColorType.Bgra8888, SKAlphaType.Premul);
+            using var canvas = new SKBitmap(canvasInfo);
+            IntPtr pixels = canvas.GetPixels();
+
+            using var scaled = new SKBitmap(new SKImageInfo(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul));
+            long durationTotalMs = 0; int durationSamples = 0;
+            // GIF "restore to previous" (disposal 3): a frame shown that way can never be the prior
+            // frame (SKCodec answers InvalidParameters, which used to stop the loop at frame 2). So keep
+            // a copy of the last frame that can, taken only when the next one will be undone, and put it
+            // back for each frame that follows an undone one. WebP never uses this disposal.
+            byte[]? restore = null;
+            int restoreIndex = -1;
+            for (int i = 0; i < decodeCount && frames.Count < plan.MaxKeep; i++)
+            {
+                // Otherwise the canvas (holding frame i-1) satisfies a dependent frame's RequiredFrame;
+                // independent frames decode standalone.
+                int prior = -1;
+                if (i > 0 && frameInfos[i].RequiredFrame >= 0)
+                {
+                    if (frameInfos[i - 1].DisposalMethod != SKCodecAnimationDisposalMethod.RestorePrevious)
+                        prior = i - 1;
+                    else if (restore != null && restoreIndex >= frameInfos[i].RequiredFrame)
+                    {
+                        Marshal.Copy(restore, 0, pixels, restore.Length);
+                        prior = restoreIndex;
+                    }
+                }
+                var opts = prior >= 0 ? new SKCodecOptions(i, prior) : new SKCodecOptions(i);
+                var res = codec.GetPixels(canvasInfo, pixels, opts);
+                if (res != SKCodecResult.Success && res != SKCodecResult.IncompleteInput) break;
+
+                if (i + 1 < decodeCount
+                    && frameInfos[i].DisposalMethod != SKCodecAnimationDisposalMethod.RestorePrevious
+                    && frameInfos[i + 1].DisposalMethod == SKCodecAnimationDisposalMethod.RestorePrevious)
+                {
+                    restore ??= new byte[canvas.ByteCount];
+                    canvas.GetPixelSpan().CopyTo(restore);
+                    restoreIndex = i;
+                }
+
+                if (i % step != 0) continue;
+                canvas.ScalePixels(scaled, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
+                frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),
+                    new PixelSize(tw, th), new Vector(96, 96), scaled.RowBytes));
+                int d = frameInfos[i].Duration;
+                if (d > 0) { durationTotalMs += d; durationSamples++; }
+            }
+            if (frames.Count < 2) return null;
+
+            double avgMs = durationSamples > 0 ? (double)durationTotalMs / durationSamples : 100;
+            if (avgMs < 20) avgMs = 100;   // bogus/zero delays → 100ms, same as the GIF loader
+            return TimeSpan.FromMilliseconds(Math.Clamp(avgMs * step, 20, 2000));
+        }
+
+        private static (int w, int h) ScaledSize(int srcW, int srcH, int maxDim)
+        {
+            int longest = Math.Max(srcW, srcH);
+            if (longest <= maxDim) return (srcW, srcH);
+            double scale = maxDim / (double)longest;
+            return (Math.Max(1, (int)Math.Round(srcW * scale)), Math.Max(1, (int)Math.Round(srcH * scale)));
+        }
+
         private static string ImagesPath() => Path.Combine(CorePaths.EffectiveAssets, "images");
 
         /// <summary>
@@ -598,7 +688,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// decode-at-display-size - never a full-resolution source held per window.
         /// </summary>
         internal static List<(List<Bitmap> Frames, TimeSpan Delay, PixelRect Rect, string Path, Screen Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
-            int[] targets, AppSettings s, List<PixelRect> occupied, int? size)
+            int[] targets, AppSettings s, List<PixelRect> occupied, int? size, int decodeMax)
         {
             var root = CorePaths.EffectiveAssets;
             var dir = Path.Combine(root, "images");
@@ -624,7 +714,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     }
                     var screen = screens[targets[Rng.Next(targets.Length)]];
                     var rect = Place(screen.Bounds, screen.Scaling, info.Width, info.Height, s, Rng, occupied, size);
-                    var (frames, delay) = DecodePicture(path, Math.Max(rect.Width, rect.Height));
+                    var (frames, delay) = DecodePicture(path, Math.Min(decodeMax, Math.Max(rect.Width, rect.Height)));
                     if (frames.Count == 0) continue;
                     result.Add((frames, delay, rect, path, screen));
                     occupied.Add(rect);
