@@ -83,9 +83,8 @@ public sealed class PlayWallTests
                 Assert.False(band.IsVisible);
                 Assert.False(line.IsVisible);
 
-                // GAMES: the full Breakout and Goon have no host on this head, so their Play button
-                // refuses honestly; the Breakout demo and Piece by Piece open their game as the launcher does.
-                foreach (var n in new[] { "BtnPlayBreakout", "BtnPlayGoon" })
+                // Goon has no host on this head; the other cards route to their game host.
+                foreach (var n in new[] { "BtnPlayGoon" })
                 {
                     var b = C<Button>(n);
                     Assert.False(b.IsEnabled, n);
@@ -96,7 +95,7 @@ public sealed class PlayWallTests
                 PlayTabView.LaunchGame = launched.Add;
                 try
                 {
-                    foreach (var n in new[] { "BtnPlayBreakoutDemo", "BtnPlayChess" })
+                    foreach (var n in new[] { "BtnPlayBreakoutDemo", "BtnPlayBreakout", "BtnPlayChess" })
                     {
                         var b = C<Button>(n);
                         Assert.True(b.IsEnabled, n);
@@ -105,9 +104,11 @@ public sealed class PlayWallTests
                     }
                 }
                 finally { PlayTabView.LaunchGame = previousLaunch; }
-                Assert.Equal(new[] { "breakoutdemo", "piecebypiece" }, launched);
-                // Both ids are launcher destinations with a GameWindow host on this head.
-                Assert.All(launched, id => Assert.True(LauncherWindow.CanStartGame(id) && GameWindow.Games.ContainsKey(id), id));
+                Assert.Equal(new[] { "breakoutdemo", "breakout", "piecebypiece" }, launched);
+                // The free ids are launcher destinations; all three have a GameWindow host.
+                Assert.All(launched, id => Assert.True(GameWindow.Games.ContainsKey(id), id));
+                Assert.True(LauncherWindow.CanStartGame("breakoutdemo"));
+                Assert.True(LauncherWindow.CanStartGame("piecebypiece"));
                 Assert.NotNull(C<Image>("PlayBreakoutArt").Source);
 
                 // "Configure in settings" lands on the Devices section (WPF OpenDeviceSettings).
@@ -189,6 +190,105 @@ public sealed class PlayWallTests
                 CoreAccount.IsLoggedInProvider = previousAccount;
                 service.SealForReset();
                 CoreSettings.ServiceProvider = previousSettings;
+                root.Delete(true);
+            }
+        });
+    }
+
+    // WPF PlayTabView.Cards.cs:45-46, BreakoutHostService.cs:14-16,
+    // BreakoutAccess.cs:9-16 and BackRoomHostService.cs:589-599, 737-763.
+    [Fact]
+    public void FullBreakout_RequiresTierTwo_AndTracksAccessDuringTheGame()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var service = new SettingsService();
+            var oldSettings = CoreSettings.ServiceProvider;
+            var oldLab = CoreEntitlement.HasLabProvider;
+            var oldDenied = CoreEntitlement.ShowDeniedHandler;
+            var oldServer = GameWindow.Server;
+            var oldLaunch = PlayTabView.LaunchGame;
+            var root = Directory.CreateTempSubdirectory("play-full-breakout-");
+            using var server = new WebAssetServer(root.FullName);
+            bool allowed = false;
+            int denied = 0;
+            CoreSettings.ServiceProvider = () => service;
+            CoreEntitlement.HasLabProvider = () => allowed;
+            CoreEntitlement.ShowDeniedHandler = _ => denied++;
+            GameWindow.Server = () => server;
+            PlayTabView.LaunchGame = id => GameWindow.Launch(id);
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.Show();
+                shell.ShowTab("play");
+                Dispatcher.UIThread.RunJobs();
+                var play = shell.Named<PlayTabView>("PlayTab")!;
+                var button = play.FindControl<Button>("BtnPlayBreakout")!;
+                Assert.True(button.IsEnabled);
+                Assert.True(play.FindControl<Border>("PlayLockBreakout")!.IsVisible);
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(1, denied);
+                Assert.Null(GameWindow.OpenForTests("breakout"));
+
+                allowed = true;
+                play.RefreshPlayCards();
+                Assert.False(play.FindControl<Border>("PlayLockBreakout")!.IsVisible);
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                var game = Assert.IsType<GameWindow>(GameWindow.OpenForTests("breakout"));
+                var watch = Assert.IsType<DispatcherTimer>(typeof(GameWindow)
+                    .GetField("_breakoutAccessWatch", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .GetValue(game));
+                Assert.Equal(TimeSpan.FromSeconds(2), watch.Interval);
+                Assert.True(watch.IsEnabled);
+                Assert.Equal("/backroom/stations/breakout/play.html", game.PageUrl!.AbsolutePath);
+                Assert.True(game.PageUrl.Query.Contains("desktop=1", StringComparison.Ordinal));
+                Assert.False(game.PageUrl.Query.Contains("demo=1", StringComparison.Ordinal));
+                var frames = new System.Collections.Generic.List<Newtonsoft.Json.Linq.JObject>();
+                game.Posted += json => frames.Add(Newtonsoft.Json.Linq.JObject.Parse(json));
+                game.Web.OnNavigationCompleted(game.PageUrl);
+                game.Web.OnWebMessage("{\"type\":\"ready\"}");
+                Assert.Equal(8, (int)frames.Single()["breakout"]!["storyLimit"]!);
+                Assert.True((bool)frames[0]["breakout"]!["endless"]!);
+                Assert.False((bool)frames[0]["breakout"]!["demo"]!);
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Same(game, Assert.Single(GameWindow.OpenWindowsForTests()));
+
+                // Losing entitlement pushes the demo projection on the two-second watch.
+                allowed = false;
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(2, denied);
+                game.CheckBreakoutAccess(); // the two-second timer's tick
+                Assert.Equal(2, frames.Count);
+                Assert.Equal("settings", (string?)frames[1]["type"]);
+                Assert.Equal(3, (int)frames[1]["breakout"]!["storyLimit"]!);
+                Assert.False((bool)frames[1]["breakout"]!["endless"]!);
+                Assert.True((bool)frames[1]["breakout"]!["demo"]!);
+                allowed = true;
+                game.CheckBreakoutAccess();
+                Assert.Equal(8, (int)frames[2]["breakout"]!["storyLimit"]!);
+                var demo = Newtonsoft.Json.Linq.JObject.FromObject(GameWindow.BreakoutEntitlementFor("breakoutdemo")!);
+                Assert.Equal(3, (int)demo["storyLimit"]!);
+                Assert.False((bool)demo["endless"]!);
+                PanicSurfaces.All.Single(s => s.Id == "games").Stop(shell);
+                Assert.Empty(GameWindow.OpenWindowsForTests());
+                Assert.False(watch.IsEnabled);
+            }
+            finally
+            {
+                GameWindow.CloseAllForPanic();
+                shell.Close();
+                PlayTabView.LaunchGame = oldLaunch;
+                GameWindow.Server = oldServer;
+                CoreEntitlement.HasLabProvider = oldLab;
+                CoreEntitlement.ShowDeniedHandler = oldDenied;
+                service.SealForReset();
+                CoreSettings.ServiceProvider = oldSettings;
                 root.Delete(true);
             }
         });
