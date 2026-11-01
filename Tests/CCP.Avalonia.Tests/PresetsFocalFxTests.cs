@@ -89,6 +89,37 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task MotionOffCancelsAnActiveEntranceBeforeHoverTakesOver() => WithPresets((host, view) =>
+    {
+        // Re-seat the page at Off, then hold a fresh entrance on a hand-stepped clock.
+        view.IsVisible = false;
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        view.IsVisible = true; Settle();
+        var clock = new SharedDeeperThemeTests.StepClock();
+        foreach (var card in view.FindControl<WrapPanel>("PresetCardsPanel")!.Children.OfType<Border>()
+            .Concat(view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>()))
+            card.SetValue(SharedDeeperThemeTests.StepClock.Property, clock.Instance);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        typeof(PresetsTabView).GetMethod("StaggerZones", System.Reflection.BindingFlags.Instance
+            | System.Reflection.BindingFlags.NonPublic)!.Invoke(view, null);
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        clock.Step(0); clock.Step(40);
+        Assert.InRange(slide.Y, 1, 9); // prove the entrance owns translation before changing the gate
+        Assert.InRange(row.Opacity, 0.01, 0.99);
+
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged(); Settle();
+        Assert.Equal(1, row.Opacity);
+        Assert.Equal(0, slide.Y);
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, slide.Y); // WPF MainWindow.TabFxPresetsQuestsAchievements.cs:437-440
+        clock.Step(80); Settle();
+        Assert.Equal(-2, slide.Y); // no remaining entrance clock can overwrite the snapped hover
+        Assert.Equal(1, row.Opacity);
+    });
+
+    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view) =>
     {
         view.IsVisible = false; Settle();
