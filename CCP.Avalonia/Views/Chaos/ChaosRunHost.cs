@@ -459,6 +459,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (!_draftPaused || _state == null || _state.RerollsLeft <= 0) return null;
             _state.RerollsLeft--;
+            _state.PushEvent("🎲 tempted fate again");
             return (DraftOptions(), _state.RerollsLeft);
         }
 
@@ -469,6 +470,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (boon == null)
             {
                 _state.Shields++;
+                _state.PushEvent("♥ resisted → +1 resistance");
                 Pulse(Color.FromRgb(120, 220, 160), 0.22); // WPF :1581
                 ChaosAnnouncerOverlay.Announce(Loc.Get("Chaos_DraftResistance"),
                     ChaosAnnounceKind.Willpower, artKey: "resistance"); // WPF :1583
@@ -485,10 +487,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (boon.Id == "extra_shield") Pulse(Color.FromRgb(120, 220, 160), 0.22); // WPF :1548
                 if (boon.IsCurse)
                 {
-                    if (_state.SinExtraMult > 0) _state.BoonMult += _state.SinExtraMult;
+                    if (_state.SinExtraMult > 0)
+                    {
+                        _state.BoonMult += _state.SinExtraMult;
+                        _state.PushEvent($"🕯 sin embraced (+{_state.SinExtraMult:0.00}x)");
+                    }
+                    if (shielded) _state.PushEvent("🕯 the candle took the sting (no drawback)");
                     if (_state.MaxedBoons.Contains("surrender"))
                     {
                         _state.Shields++;
+                        _state.PushEvent("🕯 you said yes. it gave back (+1 resistance)");
                         Pulse(Color.FromRgb(120, 220, 160), 0.22); // WPF :1562
                     }
                     ChaosOverlayWindow.ChaosSfx.Play("sin_accept", 0.6f); // WPF :1565
@@ -532,6 +540,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         _state.RunIntensity, _state.FuseTimeMult, ChaosMotion.RainDown,
                         _state.Config.EffectIntensity, _state.BubbleScale));
                 BubbleOverlay.PlayChime(0.25f); // WPF :1658
+                _state.PushEvent("🚿 welcome shower — treats from above");
             }
             AnnounceFinalLoopIfEntering();
         }
@@ -542,6 +551,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _finalLoopAnnounced = true;
             ChaosAnnouncerOverlay.Announce(Loc.Get("Chaos_LastLoop"), ChaosAnnounceKind.Depth,
                 artKey: "final_loop", subText: Loc.Get("Chaos_LastLoopSub"));
+            _state.PushEvent("🕳 the last loop.");
         }
 
         /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,

@@ -167,7 +167,14 @@ public sealed class ChaosUnlockCardOverlayTests
         var pulses = new System.Collections.Generic.List<(uint, double)>();
         var cues = new System.Collections.Generic.List<string>();
         ChaosRunHost.PulseFx = (c, strength) => pulses.Add((c.ToUInt32(), strength));
-        ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (p, _, _, _, _) => cues.Add(System.IO.Path.GetFileNameWithoutExtension(p));
+        bool? showerAtChime = null;
+        ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (p, _, _, _, _) =>
+        {
+            string cue = System.IO.Path.GetFileNameWithoutExtension(p);
+            cues.Add(cue);
+            if (cue.StartsWith("chime", StringComparison.Ordinal))
+                showerAtChime = ChaosRunHost.State!.RecentEvents.Contains("🚿 welcome shower — treats from above");
+        };
         ConditioningControlPanel.CoreSettings.Current.ChaosAnnouncerEnabled = true;
         ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3,
             BoonDraftEnabled = true, ColorFlashesEnabled = flashes });
@@ -196,6 +203,9 @@ public sealed class ChaosUnlockCardOverlayTests
         typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic
             | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { null });
         Assert.Equal(shields + 1, state.Shields);
+        Assert.Single(state.RecentEvents, e => e == "♥ resisted → +1 resistance");
+        Assert.DoesNotContain("🚿 welcome shower — treats from above", state.RecentEvents);
+        Assert.DoesNotContain("🕳 the last loop.", state.RecentEvents);
         Assert.Equal(flashes, pulses.Contains((0xFF78DCA0u, 0.22)));
         Assert.Equal(("resistance", ChaosAnnounceKind.Willpower, ConditioningControlPanel.Localization.Loc.Get("Chaos_DraftResistance")),
             (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
@@ -225,6 +235,11 @@ public sealed class ChaosUnlockCardOverlayTests
         Assert.True(BubbleOverlay.Field.Bubbles[0].Y > y);
         Assert.Equal("final_loop", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
         Assert.Single(cues, c => c.StartsWith("chime", StringComparison.Ordinal)); // WPF :1658
+        Assert.Equal(false, showerAtChime); // the feed entry follows the chime
+        Assert.Equal("🕳 the last loop.", state.RecentEvents[0]);
+        Assert.Equal("🚿 welcome shower — treats from above", state.RecentEvents[1]);
+        Assert.Single(state.RecentEvents, e => e == "🕳 the last loop.");
+        Assert.Single(state.RecentEvents, e => e == "🚿 welcome shower — treats from above");
     });
 
     [Theory]
@@ -254,6 +269,7 @@ public sealed class ChaosUnlockCardOverlayTests
         Assert.True(reroll.IsVisible);
         reroll.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(0, state.RerollsLeft);
+        Assert.Single(state.RecentEvents, e => e == "🎲 tempted fate again");
         Assert.False(reroll.IsVisible);
         if (debut) Assert.Equal(((string?)null, ChaosAnnounceKind.Willpower, "you're allowed to refuse now."),
             (ChaosAnnouncerOverlay.Active!.Current!.ArtKey, ChaosAnnouncerOverlay.Active.Current.Kind, ChaosAnnouncerOverlay.Active.Current.Text));
@@ -282,6 +298,9 @@ public sealed class ChaosUnlockCardOverlayTests
         Assert.Equal(curse ? ChaosOverlayWindow.CurseIcon : FluentIcons.Common.Symbol.Diamond, icon.Kind);
         Assert.Equal(FluentIcons.Common.IconVariant.Filled, icon.Variant);
         Assert.Equal(curse, state.SurrenderShieldUsed);
+        Assert.Equal(curse, state.RecentEvents.Contains("🕯 sin embraced (+0.20x)"));
+        Assert.Equal(curse, state.RecentEvents.Contains("🕯 the candle took the sting (no drawback)"));
+        Assert.Equal(curse, state.RecentEvents.Contains("🕯 you said yes. it gave back (+1 resistance)"));
         Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Whisper));
         Assert.Equal(curse, ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Yes));
         Assert.True(ChaosLessons.IsComplete("draft4"));
@@ -294,6 +313,43 @@ public sealed class ChaosUnlockCardOverlayTests
         Assert.Equal(0, BubbleOverlay.ChaosCount);
         Begin();
         Assert.False(ChaosUnlockCardOverlay.IsShowing);
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task Draft_feed_respects_sin_and_deferred_go_conditions(bool maxSurrender, bool shieldUsed) => await Run(_ =>
+    {
+        Begin();
+        var state = ChaosRunHost.State!;
+        state.WelcomeShowerEnabled = false;
+        state.SinExtraMult = 0;
+        state.SurrenderShieldUsed = shieldUsed;
+        if (maxSurrender) state.MaxedBoons.Add("surrender");
+        var lessons = ChaosMeta.State.LessonsComplete;
+        string[] ids = { "silk_touch", "draft4", "surrender" };
+        var wasComplete = ids.Select(lessons.Contains).ToArray();
+        try
+        {
+            foreach (var id in ids) lessons.Add(id);
+            state.ElapsedSec = 20; // not the final loop
+            ChaosRunHost.Tick();
+            var overlay = ChaosRunHost.Overlay!;
+            var sin = ChaosBoonPool.All.First(b => b.IsCurse);
+            typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Instance)!.Invoke(overlay, new object?[] { sin });
+            Assert.DoesNotContain(state.RecentEvents, e => e.StartsWith("🕯 sin embraced", StringComparison.Ordinal));
+            Assert.DoesNotContain("🕯 the candle took the sting (no drawback)", state.RecentEvents);
+            Assert.Equal(maxSurrender, state.RecentEvents.Contains("🕯 you said yes. it gave back (+1 resistance)"));
+            overlay.FinishCountdown();
+            Assert.DoesNotContain("🚿 welcome shower — treats from above", state.RecentEvents);
+            Assert.DoesNotContain("🕳 the last loop.", state.RecentEvents);
+        }
+        finally
+        {
+            for (int i = 0; i < ids.Length; i++)
+                if (!wasComplete[i]) lessons.Remove(ids[i]);
+        }
     });
 
     [Theory]
