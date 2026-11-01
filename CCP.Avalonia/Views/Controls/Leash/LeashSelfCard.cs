@@ -109,8 +109,13 @@ public sealed class LeashSelfCard : Border
         if (TopLevel.GetTopLevel(this) is MainShellWindow shell) await shell.CutLeashAsync();
         else
         {
-            try { LeashTaskHost.Runner?.Cancel(); } catch { }
-            try { if (_service() is { } s) await s.CutAsync(); } catch { }
+            // The task shutdown can close the drawer and unbind it before the cut is sent.
+            ILeashService? service = null;
+            try { service = _service(); } catch { }
+            // WPF LeashSurfaces.NoteCut ends the task and closes its window before the service cut.
+            try { LeashTaskHost.EndTask("cut"); } catch { }
+            try { App.Notifications?.Show(Loc.Get("leash_cut_done"), Helpers.NotificationType.Success); } catch { }
+            try { if (service != null) await service.CutAsync(); } catch { }
         }
     }
 
