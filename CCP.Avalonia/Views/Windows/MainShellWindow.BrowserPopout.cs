@@ -23,7 +23,7 @@ public partial class MainShellWindow
         if (page == null || browser == null || container == null) return;
 
         // WPF InitializeBrowserAsync starts the default site if the browser has not loaded yet.
-        if (browser.Source == null) NavigateBrowser(SiteHomeUrl());
+        if (browser.Source == null) NavigateBrowser(App.Mods?.GetDefaultBrowserUrl() ?? BambiCloudHome);
         RevealDashboardBrowser("browser-init");
         Window? window = null;
         try

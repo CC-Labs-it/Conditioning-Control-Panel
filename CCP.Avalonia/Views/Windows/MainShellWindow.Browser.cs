@@ -47,8 +47,8 @@
 //     TrainerCardText. Still missing: BtnDiscordTabLogin_Click, UpdateDiscordTabUI,
 //     ResolveProfilePictureUnavailable, LoadPatreonBadgeImage, ProfileDiscordHandle_Click,
 //     BtnProfileDiscord_Click (art). Change name / delete profile are ported below.
-//   * CoreMods (1): SyncSiteRadiosToActiveMod needs ShowBambiCloudOption() and
-//     GetDefaultBrowserUrl(); CCP.Core/CoreMods.cs carries neither yet. Its IsBrowserShowingKnownSite
+//   * SyncSiteRadiosToActiveMod remains unported. App.Mods already exposes
+//     ShowBambiCloudOption() and GetDefaultBrowserUrl(). Its IsBrowserShowingKnownSite
 //     helper is NOT restored either: WebHost.CurrentUrl now answers it, but its only caller is
 //     SyncSiteRadiosToActiveMod, so write it with that caller.
 

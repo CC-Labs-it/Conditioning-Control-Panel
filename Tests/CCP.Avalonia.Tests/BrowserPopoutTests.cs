@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -15,6 +16,8 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
+using AvApp = ConditioningControlPanel.Avalonia.App;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -69,9 +72,91 @@ public sealed class BrowserPopoutTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task FirstPopoutLoadsActiveModDefaultEvenWhenBambiIsSelected() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);
+        var modsDir = Path.Combine(TestUserDataProfile.Root, "mods");
+        var builtinsDir = Path.Combine(TestUserDataProfile.Root, "builtin_mods");
+        bool hadMods = Directory.Exists(modsDir), hadBuiltins = Directory.Exists(builtinsDir);
+        using var mods = new CoreModsSnapshot();
+        var old = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.OfflineMode = false;
+        settings.Current.ActiveModId = BuiltInMods.SissyHypnoId;
+        settings.Current.ForceShowBambiCloud = true;
+        MainShellWindow? shell = null;
+        try
+        {
+            AvApp.StartMods();
+            Assert.Equal("https://hypnotube.com/", AvApp.Mods!.GetDefaultBrowserUrl());
+            shell = new MainShellWindow();
+            shell.Show();
+            var page = shell.FindControl<SettingsTabView>("SettingsTab")!;
+            var bambi = page.FindControl<RadioButton>("RbBambiCloud")!;
+            bambi.IsChecked = true;
+            Assert.True(bambi.IsVisible);
+            var browser = page.FindControl<WebHost>("BrowserWebHost")!;
+            Assert.Null(browser.Source);
+            page.FindControl<Button>("BtnPopOutBrowser")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("https://hypnotube.com/", browser.Source!.ToString());
+        }
+        finally
+        {
+            shell?.BrowserPopoutWindow?.Close();
+            shell?.Close();
+            settings.SealForReset();
+            CoreSettings.ServiceProvider = old;
+            AvApp.ResetReleaseContent();
+            if (!hadMods && Directory.Exists(modsDir)) Directory.Delete(modsDir, recursive: true);
+            if (!hadBuiltins && Directory.Exists(builtinsDir)) Directory.Delete(builtinsDir, recursive: true);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(0, "Pop Out", IconKind.Open)]
+    [InlineData(1, "Focus", IconKind.Window)]
+    [InlineData(2, "Pop Out", IconKind.Open)]
+    public Task PopoutButtonDisplaysFluentIconAndPlainText(int state, string expectedText, IconKind expectedIcon) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var old = CoreSettings.ServiceProvider;
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.OfflineMode = false;
+        var shell = new MainShellWindow();
+        try
+        {
+            LocalizationManager.Instance.SetLanguage("en");
+            shell.Show();
+            var page = shell.FindControl<SettingsTabView>("SettingsTab")!;
+            if (state > 0) shell.PopOutBrowser();
+            if (state == 2) shell.BrowserPopoutWindow!.Close();
+            var label = page.FindControl<TextBlock>("TxtPopOutBrowser")!;
+            Assert.Equal(expectedText, label.Text);
+            var glyph = Assert.IsType<IconGlyph>(page.FindControl<IconGlyph>("PopOutBrowserIcon"));
+            Assert.True(glyph.IsVisible);
+            Assert.False(glyph.IsFallback);
+            Assert.Equal(expectedIcon, glyph.Kind);
+        }
+        finally
+        {
+            shell.BrowserPopoutWindow?.Close();
+            shell.Close();
+            CoreSettings.ServiceProvider = old;
+            LocalizationManager.Instance.SetLanguage(language);
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData("label_browser_popped_out_nclick_to_focus_window")]
     [InlineData("btn_focus")]
+    [InlineData("btn_pop_out")]
     [InlineData("label_browser_disabled_in_offline_mode")]
     [InlineData("label_click_to_load_browser")]
     public Task BrowserLabelsStayBareAcrossLanguages(string key) => AvaloniaTestDispatcher.RunAsync(() =>
@@ -88,13 +173,13 @@ public sealed class BrowserPopoutTests
             shell.Show();
             shell.PopOutBrowser();
             var page = shell.FindControl<SettingsTabView>("SettingsTab")!;
-            var target = page.FindControl<TextBlock>(key == "btn_focus" ? "TxtPopOutBrowser" : "BrowserLoadingText")!;
+            var target = page.FindControl<TextBlock>(key is "btn_focus" or "btn_pop_out" ? "TxtPopOutBrowser" : "BrowserLoadingText")!;
             if (key == "label_browser_disabled_in_offline_mode")
             {
                 settings.Current.OfflineMode = true;
                 shell.SyncOfflineModeState();
             }
-            else if (key == "label_click_to_load_browser") shell.BrowserPopoutWindow!.Close();
+            else if (key is "label_click_to_load_browser" or "btn_pop_out") shell.BrowserPopoutWindow!.Close();
 
             foreach (var (language, _, _) in LocalizationManager.AvailableLanguages)
             {

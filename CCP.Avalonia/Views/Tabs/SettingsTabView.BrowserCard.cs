@@ -192,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BrowserLoadingText.Bind(TextBlock.TextProperty, LocBareBinding(CoreSettings.Current.OfflineMode
                 ? "label_browser_disabled_in_offline_mode" : poppedOut
                     ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser"));
+            PopOutBrowserIcon.Kind = poppedOut ? IconKind.Window : IconKind.Open;
             TxtPopOutBrowser.Bind(TextBlock.TextProperty, LocBareBinding(poppedOut ? "btn_focus" : "btn_pop_out"));
             if (!CoreSettings.Current.OfflineMode)
                 BtnPopOutBrowser.Bind(ToolTip.TipProperty, LocBinding(poppedOut
