@@ -60,13 +60,42 @@ public sealed class TabAmbientRegistryTests
             Assert.Equal(((ExclusiveCardRow)card.DataContext!).IsLocked ? 1 : 2, zones.Count(z => z.Bounds == cardRect));
             Assert.Contains(zones, z => !z.Diamond && z.Color == global::Avalonia.Media.Color.Parse("#FFC85A"));
 
+            int updates = view.VaultZoneUpdates;
+            view.QueueVaultZones(); view.QueueVaultZones(); view.QueueVaultZones();
+            Assert.Equal(updates, view.VaultZoneUpdates); // queued, never synchronous
+            Settle(); Assert.Equal(updates + 1, view.VaultZoneUpdates);
+            updates = view.VaultZoneUpdates;
+            shell.InvalidateArrange(); Settle();
+            Assert.Equal(updates, view.VaultZoneUpdates); // unrelated window layout
+            var scroll = view.FindControl<ScrollViewer>("VaultContentScroll")!;
+            scroll.Offset = new Vector(0, 60); scroll.Offset = new Vector(0, 90);
+            Settle(); Assert.True(view.VaultZoneUpdates > updates);
+            updates = view.VaultZoneUpdates;
+            double roomHeight = room.Bounds.Height;
+            view.Height = view.Bounds.Height - 20; Settle();
+            Assert.NotEqual(roomHeight, room.Bounds.Height);
+            Assert.True(view.VaultZoneUpdates > updates); // actual viewport, not Viewbox scaling
+            view.Height = double.NaN; Settle();
+            updates = view.VaultZoneUpdates;
+            view.QueueVaultZones(); // queued while shown, executed after leaving
             shell.ShowTab("settings"); Settle();
             Assert.False(room.IsTicking);
+            Assert.Equal(updates, view.VaultZoneUpdates);
+            view.UpdateVaultZones(); view.QueueVaultZones();
+            shell.InvalidateArrange(); Settle();
+            Assert.Equal(updates, view.VaultZoneUpdates);
             Assert.True(mosaic.IsTicking);
+            settings.MotionLevel = MotionLevel.Reduced;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
             // The registry pause survives another visibility change until navigation resumes it.
             view.IsVisible = true; Settle();
             Assert.False(room.IsTicking);
+            view.UpdateVaultZones(); view.QueueVaultZones(); Settle();
+            Assert.Equal(updates, view.VaultZoneUpdates); // visible but registry-paused
+            AmbientFxCanvas.Env.RaiseMotionGateChanged(); Settle();
+            Assert.False(room.IsTicking); // recomposition also preserves the registry pause
             shell.ShowTab("premium"); Settle();
+            Assert.Equal(AmbientFxLayers.VaultMotes, room.Layers);
             Assert.True(room.IsTicking);
             Assert.Single(registry["premium"]);
 

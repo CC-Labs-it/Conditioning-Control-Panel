@@ -155,10 +155,14 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (twinkle > 0.93)
                 {
                     double g = s * (m.Diamond ? 2.6 : 2);
+                    double stroke = Math.Max(1, s * 0.22);
+                    // Scale the cached 1 px pen instead of allocating size-specific pens per frame.
+                    g /= stroke;
+                    using (ctx.PushTransform(Matrix.CreateScale(stroke, stroke) * Matrix.CreateTranslation(x, y)))
                     using (ctx.PushOpacity(0.75 * a))
                     {
-                        ctx.DrawLine(_vaultGlint, new Point(x - g, y), new Point(x + g, y));
-                        ctx.DrawLine(_vaultGlint, new Point(x, y - g), new Point(x, y + g));
+                        ctx.DrawLine(_vaultGlint, new Point(-g, 0), new Point(g, 0));
+                        ctx.DrawLine(_vaultGlint, new Point(0, -g), new Point(0, g));
                     }
                 }
             }

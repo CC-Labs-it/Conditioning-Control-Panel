@@ -292,10 +292,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// performance budget and reseeds the sim. Never starts a clock the tier or the
         /// reduced-motion setting has ruled out.
         /// </summary>
-        public void StartLayers(AmbientFxConfig config)
+        public void StartLayers(AmbientFxConfig config) => StartLayers(config, preservePause: false);
+
+        // Keep a tab registry pause when refreshing a tab's motion gates.
+        internal void StartLayers(AmbientFxConfig config, bool preservePause)
         {
             _config = config ?? new AmbientFxConfig();
-            _paused = false;
+            _paused = preservePause && _paused;
             _faults = 0;
             _running = _config.Layers != AmbientFxLayers.None;
             ReadEnvironment();

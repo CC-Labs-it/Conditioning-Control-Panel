@@ -35,6 +35,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class ExclusivesTabView : UserControl
     {
         private readonly AmbientFxCanvas _ambientFx;
+        private static readonly Color ZoneGold = Color.FromRgb(0xFF, 0xC8, 0x5A);
+        private static readonly Color ZoneCyan = Color.FromRgb(0x6F, 0xE8, 0xFF);
+        private static readonly Color ZoneLilac = Color.FromRgb(0xB7, 0x9C, 0xFF);
+        private bool _vaultZonesQueued, _ambientNeedsRefresh;
+        internal int VaultZoneUpdates { get; private set; }
 
         public ExclusivesTabView()
         {
@@ -51,7 +56,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // matching WPF EnsureExclusivesBuilt. This view composes it and stops it on unload;
             // the canvas also self-gates on motion, tier and window focus.
             Loaded += OnLoaded;
-            LayoutUpdated += (_, _) => UpdateVaultZones();
+            this.FindControl<ScrollViewer>("VaultContentScroll")!.ScrollChanged += (_, _) => QueueVaultZones();
+            this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, _) => QueueVaultZones();
+            _ambientFx.SizeChanged += (_, _) => QueueVaultZones();
             Unloaded += OnUnloaded;
             // PLAYBOOK P01: the shell hides tabs with IsVisible, so the motion clock follows it too.
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) UpdateMotion(); };
@@ -109,14 +116,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     : AmbientFxLayers.VaultMotes,
                 Intensity = 0.55,
                 FogPuffs = 3,
-            });
+            }, preservePause: true);
 
-        private void RefreshVaultMotion() { StartAmbient(); UpdateMotion(); }
+        private void RefreshVaultMotion()
+        {
+            _ambientNeedsRefresh = true;
+            if (IsEffectivelyVisible)
+            {
+                StartAmbient();
+                _ambientNeedsRefresh = false;
+                QueueVaultZones();
+            }
+            UpdateMotion();
+        }
+
+        // Like WPF QueueVaultZones: scroll and size bursts share one pass after layout.
+        internal void QueueVaultZones()
+        {
+            if (_vaultZonesQueued || !CanUpdateVaultZones) return;
+            _vaultZonesQueued = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                _vaultZonesQueued = false;
+                UpdateVaultZones();
+            }, DispatcherPriority.Background);
+        }
+
+        private bool CanUpdateVaultZones => IsEffectivelyVisible && _ambientFx.IsTicking
+            && _ambientFx.Bounds.Width > 0 && _ambientFx.Bounds.Height > 0;
 
         // Layout changes include scrolling and shelf reflow. Coordinates belong to the canvas,
         // so motes stay on their cards rather than the old scroll position.
         internal void UpdateVaultZones()
         {
+            if (!CanUpdateVaultZones) return;
+            VaultZoneUpdates++;
             var zones = new List<VaultZone>();
             foreach (var c in this.GetVisualDescendants().OfType<Control>())
             {
@@ -134,7 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var bounds = new Rect(at, c.Bounds.Size);
                 if (bounds.Bottom < 0 || bounds.Top > _ambientFx.Bounds.Height) continue;
                 var diamond = group == Services.UI.PremiumGroup.Prime;
-                var hue = Color.Parse(diamond ? "#6FE8FF" : group == Services.UI.PremiumGroup.Basic ? "#FFC85A" : "#B79CFF");
+                var hue = diamond ? ZoneCyan : group == Services.UI.PremiumGroup.Basic ? ZoneGold : ZoneLilac;
                 for (int i = 0; i < weight; i++) zones.Add(new VaultZone(bounds, hue, diamond));
             }
             _ambientFx.SetVaultZones(zones);
@@ -160,6 +194,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void RefreshVault()
         {
+            if (_ambientNeedsRefresh) RefreshVaultMotion();
+            QueueVaultZones();
             RetintVaultChrome();
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
