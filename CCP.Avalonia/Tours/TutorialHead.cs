@@ -75,15 +75,29 @@ namespace ConditioningControlPanel.Avalonia.Tours
         {
             if (!Enum.TryParse<TutorialType>(name, ignoreCase: false, out var type) || !Enum.IsDefined(type)) return;
             if (HostedElsewhere.Contains(type)) { Service.Start(type); return; }
-            _ = StartOnShell(type);
+            _ = StartOnShellSafe(type, TutorialHeadHooks.Shell);
+        }
+
+        private static async Task StartOnShellSafe(TutorialType type, MainShellWindow? shell)
+        {
+            int version = Service.StartVersion; var start = StartOnShell(type, shell, v => version = v);
+            try { await start; }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "Tutorial: start failed");
+                if (version != Service.StartVersion) return;
+                try { _shellOverlay?.Close(); } catch (Exception cleanup) { Serilog.Log.Warning(cleanup, "Tutorial: overlay cleanup failed"); }
+                if (version != Service.StartVersion) return;
+                _shellOverlay = null; CoreTutorial.Skip();
+                if (version == Service.StartVersion && shell?.Named<Views.Tabs.SettingsTabView>("SettingsTab")?.BrowserContainer is { } browser) browser.IsVisible = true;
+            }
         }
 
         /// <summary>WPF MainWindow.StartTutorial: one tour at a time, tab callbacks bound to the
         /// shell the overlay sits on, then the overlay.</summary>
-        internal static async Task StartOnShell(TutorialType type)
+        internal static async Task StartOnShell(TutorialType type, MainShellWindow? shell, Action<int> onStarted)
         {
             if (_shellOverlay != null || Service.IsActive) return;
-            var shell = TutorialHeadHooks.Shell;
             if (shell == null) return;
 
             Service.ConfigureCallbacks(
@@ -120,7 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
             Service.TutorialFinished += OnFinished;
             try
             {
-                var start = Service.StartAsync(type, SummonForTour, () => shell.IsVisible);
+                var start = Service.StartAsync(type, SummonForTour, () => shell.IsVisible, onStarted);
                 int version = Service.StartVersion;
                 if (!await start || !Service.IsActive || version != Service.StartVersion) return;
                 if (!shell.IsVisible) { Service.Skip(); return; }

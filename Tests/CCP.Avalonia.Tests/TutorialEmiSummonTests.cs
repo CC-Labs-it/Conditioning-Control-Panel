@@ -17,8 +17,10 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 
 [Collection(RunsAloneCollection.Name)]
-public sealed class TutorialEmiSummonTests
+public sealed class TutorialEmiSummonTests : Serilog.Core.ILogEventSink
 {
+    private Exception? _startError;
+    public void Emit(Serilog.Events.LogEvent e) { if (e.Level >= Serilog.Events.LogEventLevel.Warning && e.Exception?.Message == "activation probe") _startError = e.Exception; }
     private sealed class Store : TutorialService.ITourCompletionStore
     {
         public bool Has(string name) => false;
@@ -118,6 +120,7 @@ public sealed class TutorialEmiSummonTests
     [InlineData("hide")]
     [InlineData("hide_on_activate")]
     [InlineData("superseded_hidden")]
+    [InlineData("activate_throws")]
     public Task PendingMutePromptPrecedesTheFirstCard(string outcome) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current == null)
@@ -134,6 +137,8 @@ public sealed class TutorialEmiSummonTests
         TutorialHead.ResetForTests();
         var desk = EmiDeskService.Instance;
         var oldAsk = desk.AskMute;
+        var oldLogger = Serilog.Log.Logger;
+        if (outcome == "activate_throws") Serilog.Log.Logger = new Serilog.LoggerConfiguration().WriteTo.Sink(this).CreateLogger();
         var answer = new TaskCompletionSource<EmiMuteChoice>();
         var summoned = new TaskCompletionSource<bool>();
         var stepped = new TaskCompletionSource<bool>();
@@ -183,6 +188,7 @@ public sealed class TutorialEmiSummonTests
             firstStep.OnActivate = () =>
             {
                 activated++;
+                if (outcome == "activate_throws") throw new InvalidOperationException("activation probe");
                 if (outcome == "hide_on_activate") shell.Hide();
                 activate?.Invoke();
             };
@@ -227,13 +233,14 @@ public sealed class TutorialEmiSummonTests
             {
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(CoreTutorial.IsActive);
-                Assert.Equal(outcome == "hide_on_activate" ? 1 : 0, activated);
+                Assert.Equal(outcome is "hide_on_activate" or "activate_throws" ? 1 : 0, activated);
                 Assert.Equal(outcome == "hide_on_activate", stepped.Task.IsCompleted);
                 Assert.Null(TutorialHead.ShellOverlay);
-                if (outcome is "hide" or "hide_on_activate")
+                if (outcome == "activate_throws") Assert.NotNull(_startError);
+                if (outcome is "hide" or "hide_on_activate" or "activate_throws")
                 {
                     Assert.False(shellClosed);
-                    shell.Show();
+                    if (!shell.IsVisible) shell.Show();
                     shell.Named<Button>("BtnMainHelp")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     shell.Named<Button>("BtnTutorialGettingStarted")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     Assert.True(CoreTutorial.IsActive);
@@ -249,6 +256,7 @@ public sealed class TutorialEmiSummonTests
             TutorialHead.ResetForTests();
             desk.Window?.ShutDown();
             desk.AskMute = oldAsk;
+            Serilog.Log.Logger = oldLogger;
             desk.ResetMutePrompt();
             shell.Close();
             settings.SaveImmediate();
