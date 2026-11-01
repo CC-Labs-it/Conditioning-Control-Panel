@@ -47,7 +47,7 @@ namespace ConditioningControlPanel.Services.Deeper
             return true;
         }
 
-        /// <summary>The fade out finished. True means drop the window; false means a <see cref="Show"/>
+        /// <summary>The fade out finished. True means hide the window; false means a <see cref="Show"/>
         /// landed mid-fade (WPF's new fade-in replaces the fade-out, whose Completed never runs).</summary>
         public bool FadedOut()
         {

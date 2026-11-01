@@ -21,12 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>Win32 styles map as in <see cref="TintOverlayWindow"/>; the fade is compositor alpha
     /// (<see cref="X11Overlay.SetOpacity"/>), as SubliminalOverlay's, so a fade frame costs no re-render.
-    /// Differs from WPF on purpose: WPF keeps the window hidden between cues (its layered windows churn
-    /// the render thread); here it closes after the fade out, so no hidden window can keep the process
-    /// alive under OnLastWindowClose.</para>
-    ///
-    /// <para>ponytail: no caller yet. WPF's only caller is Deeper's SpeakPromptSession (Persistent cue
-    /// mode, SpeakPromptSession.cs:172/196), which needs the Deeper runtime ported (deeper-core-c/d).</para>
+    /// The window is retained hidden between cues, as in WPF. Panic and shell teardown close it.</para>
     /// </summary>
     internal sealed class SpeakCueOverlay : Window
     {
@@ -38,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Warn once per process; internal so tests restore it and never leak it into each other.</summary>
         internal static bool Warned;
 
-        /// <summary>The cue window on screen (or fading out), if any.</summary>
+        /// <summary>The retained cue window, including while hidden, if any.</summary>
         internal static SpeakCueOverlay? Active => _active;
 
         /// <summary>Test seams: the fade clock, the platform setup before Show (false = refused), the alpha sink.</summary>
@@ -68,12 +63,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     _active = w;
                     w.Show();
                 }
+                else if (!_active.IsVisible) _active.Show();
                 _active.Display(text);
             }
             catch (Exception ex) { Log.Debug("SpeakCueOverlay.Show: {E}", ex.Message); }
         }
 
-        /// <summary>Fade the cue out; the window closes when the fade ends. Safe from any thread.</summary>
+        /// <summary>Fade the cue out and keep the window hidden. Safe from any thread.</summary>
         public static void HideCue()
         {
             if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(HideCue); return; }
@@ -201,7 +197,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ApplyAlpha(this, _alpha);
             if (elapsed.TotalMilliseconds < SpeakCueState.FadeMs) return;
             _fade++;
-            if (_to == 0 && _state.FadedOut()) CloseNow();
+            if (_to == 0 && _state.FadedOut())
+            {
+                _host.Children.Clear();
+                Hide();
+            }
         }
 
         internal double Alpha => _alpha;
