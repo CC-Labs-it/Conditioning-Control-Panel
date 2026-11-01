@@ -43,6 +43,20 @@ internal static class X11PanicKey
     [DllImport(LibX11)] private static extern int XRefreshKeyboardMapping(IntPtr mappingEvent);
     [DllImport(LibX11)] internal static extern ulong XStringToKeysym(string name);
     [DllImport(LibX11)] private static extern byte XKeysymToKeycode(IntPtr display, ulong keysym);
+    [StructLayout(LayoutKind.Sequential)]
+    private struct XkbState
+    {
+        public byte Group, LockedGroup;
+        public ushort BaseGroup, LatchedGroup;
+        public byte Mods, BaseMods, LatchedMods, LockedMods, CompatState, GrabMods, CompatGrabMods, LookupMods, CompatLookupMods;
+        public ushort PointerButtons;
+    }
+    [DllImport(LibX11)] private static extern int XkbGetState(IntPtr display, uint device, out XkbState state);
+    [DllImport(LibX11)] private static extern bool XkbLookupKeySym(IntPtr display, byte code, uint modifiers, out uint consumed, out ulong sym);
+
+    /// <summary>Optional keyword source; called on the listener thread, never consumes the key.</summary>
+    internal static volatile Action<ulong>? KeywordKey;
+
     [DllImport(LibXi)] private static extern int XIQueryVersion(IntPtr display, ref int major, ref int minor);
     [DllImport(LibXi)] private static extern int XISelectEvents(IntPtr display, IntPtr window, ref XIEventMask mask, int count);
 
@@ -191,6 +205,14 @@ internal static class X11PanicKey
                 Resolve();
                 if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
                 Route(true, keycode, onPress);
+                try
+                {
+                    if (KeywordKey is { } keyword && KeywordTriggerHead.KeyboardInputAllowed && keycode <= byte.MaxValue
+                        && XkbGetState(display, 0x100, out var state) == 0
+                        && XkbLookupKeySym(display, (byte)keycode, (uint)(state.Mods | (state.Group << 13)), out _, out var sym))
+                        keyword(sym);
+                }
+                catch (Exception ex) { Log.Debug(ex, "Keyword input failed"); } // never block PTT or toy keys
                 // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).
                 if (PushToTalk is { } ptt && KeysymOf(PushToTalkKey?.Invoke()) is var ps and not 0
                     && keycode == XKeysymToKeycode(display, ps)) ptt();

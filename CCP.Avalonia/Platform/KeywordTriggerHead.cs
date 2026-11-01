@@ -18,33 +18,93 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
+    internal static Func<bool> CanAttachKeyboard = () => string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"));
+    internal static Func<bool> KeyboardAvailable = () => CanAttachKeyboard() && (OperatingSystem.IsWindows() || X11PanicKey.IsListening);
+    internal static bool KeyboardInputAllowed => Engine.IsActive && CoreSettings.Current.KeywordTriggersEnabled
+        && (CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"));
     private static bool _subscribed;
     private static int _generation;
+    private static bool _keyboardEnabled;
+    private static Action<ulong>? _x11Handler;
     internal static void Sync()
     {
-        if (CoreSettings.Current.KeywordTriggersEnabled)
-        {
-            Engine.Start();
-            if (!_subscribed && OperatingSystem.IsWindows() &&
-                string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
-            {
-                Win32PanicKey.KeyDown += OnKey;
-                _subscribed = true;
-                Win32PanicKey.EnsureListening(); // shares the existing hook and its panic binding
-            }
-        }
-        else Stop();
+        if (!CoreSettings.Current.KeywordTriggersEnabled) { _keyboardEnabled = false; Stop(); return; }
+        _keyboardEnabled = true;
+        Start();
     }
 
-    // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
-    internal static void Stop() { DetachKeyboard(); Engine.Stop(); }
+    // WPF KeywordTriggerService.cs:176-188: Start is idempotent, checks access, and
+    // does not edit KeywordTriggersEnabled. The hook is shared with panic.
+    internal static void Start()
+    {
+        if (!Engine.IsActive && !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return;
+        Engine.Start();
+        if (!_keyboardEnabled || _subscribed || !CanAttachKeyboard()) return;
+        if (OperatingSystem.IsWindows())
+        {
+            Win32PanicKey.KeyDown += OnKey;
+            _subscribed = true;
+            Win32PanicKey.EnsureListening();
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            var generation = Volatile.Read(ref _generation);
+            _x11Handler = sym => OnX11Key(sym, generation);
+            X11PanicKey.KeywordKey += _x11Handler;
+            _subscribed = true;
+        }
+    }
 
-    /// <summary>WPF MainWindow.Awareness.cs:493: Keyboard off drops only the key source; the engine and a playing clip stay.</summary>
-    internal static void DetachKeyboard()
+    // Voice Stop leaves the user's source choice intact for a later Start.
+    internal static void Stop() { SuspendKeyboard(); Engine.Stop(); }
+
+    /// <summary>WPF MainWindow.Awareness.cs:493: Keyboard off drops only the key source.</summary>
+    internal static void DetachKeyboard() { _keyboardEnabled = false; SuspendKeyboard(); }
+
+    private static void SuspendKeyboard()
     {
         Interlocked.Increment(ref _generation);
-        if (_subscribed) Win32PanicKey.KeyDown -= OnKey;
+        if (_subscribed)
+        {
+            if (OperatingSystem.IsWindows()) Win32PanicKey.KeyDown -= OnKey;
+            else if (OperatingSystem.IsLinux()) X11PanicKey.KeywordKey -= _x11Handler;
+        }
+        _x11Handler = null;
         _subscribed = false;
+    }
+
+    // X11's listener translates with the current XKB layout before it posts. Native Wayland
+    // windows do not expose global keys. Never log captured text.
+    private static void OnX11Key(ulong sym, int generation)
+    {
+        if (generation != Volatile.Read(ref _generation)) return;
+        var foreground = KeywordMatchRules.NeedsForeground(CoreSettings.Current)
+            ? X11Windows.Foreground() : (null, false);
+        PostX11Key(sym, foreground.Item1, foreground.Item2, generation);
+    }
+
+    [DllImport("libxkbcommon.so.0")] private static extern uint xkb_keysym_to_utf32(uint keysym);
+    internal static void PostX11Key(ulong sym, string? process, bool own)
+        => PostX11Key(sym, process, own, Volatile.Read(ref _generation));
+
+    private static void PostX11Key(ulong sym, string? process, bool own, int generation)
+    {
+        var special = sym switch
+        {
+            0xff0d or 0xff8d or 0xff1b or 0xff09 or 0xfe20 => (KeywordInputKey?)KeywordInputKey.Clear,
+            0xff08 => KeywordInputKey.Backspace,
+            0x20 => KeywordInputKey.Space,
+            _ => null,
+        };
+        var value = special == null ? xkb_keysym_to_utf32((uint)sym) : 0;
+        char? ch = value is > 0 and <= char.MaxValue && !char.IsControl((char)value) ? (char)value : null;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (generation != Volatile.Read(ref _generation)) return;
+            if (special is { } key) Engine.Key(key, process, own);
+            else if (ch is { } c) Engine.Character(c, process, own);
+            else Engine.Key(KeywordInputKey.None, process, own);
+        });
     }
 
     /// <summary>Panic cuts the clip; WPF leaves the trigger service itself running.</summary>
@@ -122,7 +182,7 @@ internal sealed class KeywordAudioRuntime
     internal Func<DateTime> Now = () => DateTime.Now;
     internal Func<int, CancellationToken, Task> Delay = Task.Delay;
     internal bool IsActive { get; private set; }
-    internal void Start() { IsActive = true; _input.Clear(); }
+    internal void Start() { if (IsActive) return; IsActive = true; _input.Clear(); }
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
 
     private bool Accept(string? process, bool own)

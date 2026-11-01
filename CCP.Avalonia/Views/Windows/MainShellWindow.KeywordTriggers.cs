@@ -8,9 +8,9 @@
 //     gate on the OCR detail), add / import, RefreshKeywordTriggerList, CreateKeywordTriggerRow and
 //     all nine per-row editors: CCP.Avalonia/Views/Controls/Companion/KeywordTriggersPanel*.cs
 //
-// The Windows keyboard/audio runtime is Platform/KeywordTriggerHead.cs; buffer/matching/cooldown
+// The Windows and X11 keyboard/audio runtime is Platform/KeywordTriggerHead.cs; buffer/matching/cooldown
 // rules live in Core and are also consumed by WPF's service. ponytail: OCR, highlight windows,
-// non-audio response actions, recent-app chips and a Linux source remain
+// non-audio response actions, recent-app chips and native Wayland input remain
 // wire-shell-keyword-triggers-b (see the ledger and hand-off).
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows

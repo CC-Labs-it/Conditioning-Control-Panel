@@ -57,7 +57,7 @@ public sealed class ListeningKeywordStopTests
             Assert.True(engine.IsActive);
             CoreEntitlement.HasPremiumProvider = () => false; // stopping is never entitlement-gated
             Assert.Contains("keyword_off", shell.VoiceCmds.Available.Select(i => i.Name));
-            Assert.DoesNotContain("keyword_on", shell.VoiceCmds.Available.Select(i => i.Name));
+            Assert.Equal(KeywordTriggerHead.KeyboardAvailable(), shell.VoiceCmds.Available.Any(i => i.Name == "keyword_on"));
             Assert.True(shell.VoiceCmds.TryHandleInlineCommand("hey bambi keyword triggers off", new[] { "hey bambi" }));
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.False(engine.IsActive);
@@ -77,7 +77,7 @@ public sealed class ListeningKeywordStopTests
             var panel = (global::Avalonia.Controls.Panel)row.Parent!;
             var text = (global::Avalonia.Controls.TextBlock)panel.Children[panel.Children.IndexOf(row) + 1];
             var phrases = string.Concat(text.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Select(r => r.Text));
-            Assert.DoesNotContain("trigger words on", phrases);
+            Assert.Equal(KeywordTriggerHead.KeyboardAvailable(), phrases.Contains("trigger words on"));
             Assert.Contains("trigger words off", phrases);
         }
         finally { KeywordTriggerHead.Stop(); cooldowns.LastGlobal = lastGlobal; shell.Close(); File.Delete(file); }
