@@ -162,9 +162,13 @@ internal sealed class KeywordAudioRuntime
         {
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
+            TrackAchievement(); // WPF TriggerFired, before the panic hold
         }
         // WPF KeywordTriggerService.cs:1196-1200,1263: record the match before holding all actions.
         if (PanicAftermath.TriggersSilenced()) return;
+        // WPF KeywordTriggerService.cs:1224,1280: one quest credit per dispatched trigger.
+        try { foreach (var _ in fired) App.Quests?.TrackKeywordTrigger(); }
+        catch (Exception ex) { Log.Warning(ex, "Keyword quest credit failed"); return; }
 
         // WPF merge: preset first, and only the first enabled PlayAudio action wins.
         var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
@@ -183,13 +187,23 @@ internal sealed class KeywordAudioRuntime
         foreach (var comment in comments) _ = KeywordAvatarComment.DispatchAsync(comment, fired[0]);
     }
 
+    private static void TrackAchievement()
+    {
+        try { App.Achievements?.TrackKeywordTrigger(); }
+        catch (Exception ex) { Log.Warning(ex, "Keyword achievement failed"); }
+    }
+
     // WPF KeywordTriggerService.cs:393-432. Null OCR words draw no highlight.
-    // Feed, quest and achievement recording remain part B.
     internal void FireDemo(string keyword, string source)
     {
         if (string.IsNullOrWhiteSpace(keyword) ||
             !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return;
         var demo = new KeywordTrigger { Id = "tutorial:demo", Keyword = keyword };
+        _cooldowns.Record(demo, CoreSettings.Current, Now().ToUniversalTime()); // WPF RecordFire
+        TrackAchievement();
+        // WPF DispatchResponseAsync catches quest errors and stops that response.
+        try { App.Quests?.TrackKeywordTrigger(); }
+        catch (Exception ex) { Log.Warning(ex, "Keyword quest credit failed"); return; }
         _ = KeywordAvatarComment.DispatchAsync(new AvatarCommentAction
         { FallbackPhraseCategory = "PuppyPraise", RequireAiAvailable = false }, demo);
     }
