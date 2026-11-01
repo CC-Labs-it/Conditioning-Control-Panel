@@ -19,13 +19,13 @@ public class SparklesPortTests
     {
         var o = JObject.Parse("{type:'race-result',finished:true,laps:3,fullLaps:3,place:2,of:8,timeS:600,medal:'glass',ghost:'win',roomId:'room-1'}");
         o["mode"] = mode;
-        var c = GlassroadRewards.SparklesClaimFor(o)!;
+        var c = ConditioningControlPanel.Services.Glassroad.GlassroadRules.SparklesClaimFor(o)!;
         Assert.Equal(expected, c.Mode);
         Assert.Equal(medal, c.Result.Medal);
         Assert.Equal(mode == "online" ? "room-1" : null, (string?)c.Proof?["roomId"]);
         Assert.Equal(600, c.Duration.TotalSeconds);
         o["finished"] = false;
-        Assert.Null(GlassroadRewards.SparklesClaimFor(o));
+        Assert.Null(ConditioningControlPanel.Services.Glassroad.GlassroadRules.SparklesClaimFor(o));
     }
     [Theory]
     [InlineData(0, "gold")]

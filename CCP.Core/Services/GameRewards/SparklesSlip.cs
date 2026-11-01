@@ -1,15 +1,25 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using ConditioningControlPanel.Services.Sparkles;
-using ConditioningControlPanel.Localization;
-using ConditioningControlPanel.Services.Safety;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
+using ConditioningControlPanel.Services.Sparkles;
+
 namespace ConditioningControlPanel.Services.GameRewards;
+
+/// <summary>
+/// SPARKLES BY PLACE (B1 W5): the results slip. Turns what a claim came to into the one page
+/// message every web tree's <c>sparkles-slip.js</c> draws: <c>{ type: "sparkles-receipt", paid,
+/// credited, online, taper, fee, reason, shadow, place, of, medal?, outcome?, sp, stamp, gentle,
+/// lines }</c>. The HOST localises the lines, so no page carries ten language tables.
+/// SENDS NOTHING for a shadow receipt (the rollout day), no claim service, or a refusal the slip
+/// has no line for (signed-out hosts get one line; a busy or pending server gets none).
+/// </summary>
 public static class SparklesSlip
 {
     public const string MessageType = "sparkles-receipt";
+
+    /// <summary>Receipt reasons (and refusals) that the slip names, with their loc key.</summary>
     private static readonly Dictionary<string, string> ReasonKeys = new(StringComparer.Ordinal)
     {
         ["short"] = "Sparkles_Slip_Short",
@@ -22,12 +32,15 @@ public static class SparklesSlip
         ["flagged"] = "Sparkles_Slip_Flagged",
         ["signin"] = "Sparkles_Slip_SignIn",
     };
+
+    /// <summary>The page message for one claim outcome, or null when the slip shows nothing.</summary>
     public static JObject? Build(SparklesClaimOutcome? outcome, bool gentle, Func<string, string> loc)
     {
         if (outcome == null) return null;
         var r = outcome.Receipt;
         if (r == null)
         {
+            // A refusal with no receipt: only the ones the player can act on or should know.
             var why = outcome.Reason ?? "";
             if (why != "ceiling" && !ReasonKeys.ContainsKey(why)) return null;
             return Message(new SparklesReceipt { Reason = why }, gentle, Lines(null, why, loc), loc);
@@ -35,6 +48,8 @@ public static class SparklesSlip
         if (r.Shadow) return null;
         return Message(r, gentle, Lines(r, r.Reason, loc), loc);
     }
+
+    /// <summary>The slip's lines, top to bottom: the result, online, rate, then the reason.</summary>
     public static List<string> Lines(SparklesReceipt? r, string? reason, Func<string, string> loc)
     {
         var lines = new List<string>();
@@ -57,6 +72,8 @@ public static class SparklesSlip
         }
         return lines;
     }
+
+    /// <summary>Place 2 of 8, a medal, or a duel outcome. Null when the receipt names none.</summary>
     private static string? ResultLine(SparklesReceipt r, Func<string, string> loc)
     {
         var kind = r.Result?.Value<string?>("kind") ?? r.Kind;
@@ -78,6 +95,7 @@ public static class SparklesSlip
             };
         return r.Place > 0 && r.Of > 0 ? Fmt(loc("Sparkles_Slip_Place"), r.Place, r.Of) : null;
     }
+
     private static JObject Message(SparklesReceipt r, bool gentle, List<string> lines, Func<string, string> loc)
     {
         var o = new JObject
@@ -101,10 +119,13 @@ public static class SparklesSlip
         if (r.Result?.Value<string?>("outcome") is { } duel) o["outcome"] = duel;
         return o;
     }
+
     private static string Num(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+
     private static string Fmt(string template, params object[] args)
     {
         try { return string.Format(CultureInfo.InvariantCulture, template, args); }
         catch (FormatException) { return template; }
     }
+
 }

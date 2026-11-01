@@ -129,7 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         _grPinged = false;
                         return true;
                     case "race-result":
-                        var reward = ConditioningControlPanel.Services.GameRewards.GlassroadRewards.SparklesClaimFor(o);
+                        var reward = ConditioningControlPanel.Services.Glassroad.GlassroadRules.SparklesClaimFor(o);
                         if (reward != null)
                             SparklesPending = DeliverSparkles(ConditioningControlPanel.Services.Sparkles.SparklesGameEnd.Claim("rt3d", reward.Mode,
                                 reward.Result, reward.Duration, reward.Detail, reward.Proof, Platform.SparklesHead.Service));
