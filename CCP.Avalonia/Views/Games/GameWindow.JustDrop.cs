@@ -52,11 +52,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             bar.Children.Add(_justDropFullscreen);
             var pink = this.TryFindResource("PinkBrush", out var accent) ? accent as IBrush ?? Brushes.HotPink : Brushes.HotPink;
             var panel = this.TryFindResource("PanelBgBrush", out var background) ? background as IBrush ?? Brushes.Black : Brushes.Black;
+            var border = this.TryFindResource("TransparentPink40Brush", out var edge) ? edge as IBrush ?? pink : pink;
             bar.Children.Add(new TextBlock { Text = Title, Margin = new Thickness(12, 0, 8, 0),
                 VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center, FontSize = 12, FontWeight = FontWeight.SemiBold,
                 Foreground = pink, TextTrimming = TextTrimming.CharacterEllipsis });
             var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), Background = Brushes.Black };
-            grid.Children.Add(new Border { Background = panel, BorderBrush = pink,
+            grid.Children.Add(new Border { Background = panel, BorderBrush = border,
                 BorderThickness = new Thickness(0, 0, 0, 1), Child = bar });
             Grid.SetRow(Web, 1);
             grid.Children.Add(Web);

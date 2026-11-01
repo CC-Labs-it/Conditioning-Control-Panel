@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -33,6 +34,8 @@ public sealed class JustDropFullscreenTests
         try
         {
             var button = Toggle(w);
+            Assert.True(w.TryFindResource("TransparentPink40Brush", out var edge));
+            Assert.Same(edge, ((Border)((Grid)w.Content!).Children[0]).BorderBrush);
             Assert.Equal(WindowState.Normal, w.WindowState);
             Assert.Equal(Loc.Get("btn_fullscreen"), button.Content);
             Click(button);

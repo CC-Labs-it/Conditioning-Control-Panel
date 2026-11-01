@@ -381,6 +381,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
             var target = e.Request;
+            // WPF ChaosWebViewHost.cs:1652-1659: do not load a page without host fullscreen control.
+            if (ConfinePageFullscreen && _scrolllerGate is null && target is not { IsAbsoluteUri: true, Scheme: "about" }) { e.Cancel = true; return; }
             if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
@@ -477,8 +479,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (InjectCarrier)
             {
                 _carrierInstall ??= InstallCarrierAsync();
-                await _carrierInstall;
+                if (!await _carrierInstall && ConfinePageFullscreen) return;
             }
+            else if (ConfinePageFullscreen) return;
             if (engine != _scrolllerEngine || report != _gateReport) return;
             _scrolllerGate = gated;
             var src = Source;

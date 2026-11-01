@@ -38,7 +38,7 @@ public sealed class JustDropNativeTests
     private const string Page = """
         <!doctype html><html><body><button id="order" autofocus>Open order</button>
         <script>
-        window.chrome.webview.postMessage({type:'boot'});
+        window.chrome.webview.postMessage({type:'boot', installed:window.__ccpHostEscape===true});
         document.addEventListener('fullscreenchange', function() {
           if (!document.fullscreenElement) window.chrome.webview.postMessage({type:'left'});
         });
@@ -87,7 +87,8 @@ public sealed class JustDropNativeTests
                 try
                 {
                     Assert.True(window.Web.HasEngine, WebHostReason());
-                    await boot.Task.WaitAsync(TimeSpan.FromSeconds(25)); // page's first script saw the installed carrier
+                    var first = JObject.Parse(await boot.Task.WaitAsync(TimeSpan.FromSeconds(25)));
+                    Assert.True((bool?)first["installed"] == true, "document-start listener missing");
                     await check(window, next);
                 }
                 finally { window.Close(); }
@@ -124,10 +125,26 @@ public sealed class JustDropNativeTests
     [Fact]
     public Task PageFocusedEscapeExitsHostFullscreen() => Run(async (w, next) =>
     {
-        var xid = await ObserveUnhandledFullscreen(w);
         w.WindowState = WindowState.FullScreen;
-        await FocusPage(w, xid);
-        Key("Escape");
+        if (OperatingSystem.IsWindows())
+        {
+            var native = w.Web.FindControl<Panel>("WebSlot")!.Children.OfType<NativeWebView>().Single();
+            Assert.NotEqual(IntPtr.Zero, Assert.IsAssignableFrom<IWindowsWebView2PlatformHandle>(native.TryGetPlatformHandle()).CoreWebView2);
+            w.Activate();
+            Assert.True(SetForegroundWindow(w.TryGetPlatformHandle()!.Handle));
+            w.Web.FocusPage();
+            await w.Web.InvokeScriptAsync("document.getElementById('order').focus()");
+            Assert.Equal("order", (await w.Web.InvokeScriptAsync("document.activeElement.id"))?.Trim('"'));
+            await Task.Delay(150);
+            keybd_event(0x1b, 0, 0, 0);
+            keybd_event(0x1b, 0, 2, 0);
+        }
+        else
+        {
+            var xid = await ObserveUnhandledFullscreen(w);
+            await FocusPage(w, xid);
+            Key("Escape");
+        }
         Assert.Equal("ccp-host-escape", (string?)JObject.Parse(await next.Task.WaitAsync(TimeSpan.FromSeconds(15)))["type"]);
         var limit = DateTime.UtcNow.AddSeconds(5);
         while (w.WindowState == WindowState.FullScreen && DateTime.UtcNow < limit) await Task.Delay(25);
@@ -192,6 +209,8 @@ public sealed class JustDropNativeTests
         return await done.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] private static extern void keybd_event(byte key, byte scan, uint flags, nuint extra);
     [DllImport("libglib-2.0.so.0")] private static extern uint g_idle_add(Idle callback, IntPtr data);
     [DllImport("libgobject-2.0.so.0")] private static extern nuint g_signal_connect_data(IntPtr instance, string signal, Signal callback, IntPtr data, IntPtr destroy, int flags);
     [DllImport("libgtk-3.so.0")] private static extern IntPtr gtk_widget_get_toplevel(IntPtr widget);

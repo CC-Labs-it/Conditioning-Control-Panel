@@ -267,6 +267,24 @@ jobs:
       # CCP_MIGRATION_PROFILE runs a real profile locally only). Own testhost: UserData is per process.
       - name: Test Avalonia settings migration
         run: dotnet test Tests/CCP.Avalonia.Migration.Tests/CCP.Avalonia.Migration.Tests.csproj -c Release
+      # The same native Escape test uses WebView2 and a real Windows key here.
+      - name: Test WebView2 document-start Escape
+        run: dotnet test Tests/CCP.Avalonia.NativeTests/CCP.Avalonia.NativeTests.csproj -c Release --filter FullyQualifiedName~PageFocusedEscapeExitsHostFullscreen
+      - name: Prove WebView2 test detects a missing listener
+        shell: pwsh
+        run: |
+          $path = 'CCP.Avalonia/Platform/WebViewCarrier.cs'
+          $source = [IO.File]::ReadAllText($path)
+          $broken = $source.Replace('.AddScriptToExecuteOnDocumentCreatedAsync(script)', '.AddScriptToExecuteOnDocumentCreatedAsync("void 0;")')
+          if ($broken -eq $source) { throw 'Installer mutation did not apply' }
+          try {
+            [IO.File]::WriteAllText($path, $broken)
+            $PSNativeCommandUseErrorActionPreference = $false
+            $output = dotnet test Tests/CCP.Avalonia.NativeTests/CCP.Avalonia.NativeTests.csproj -c Release --filter FullyQualifiedName~PageFocusedEscapeExitsHostFullscreen --logger 'console;verbosity=normal' 2>&1 | Out-String
+            $code = $LASTEXITCODE
+            Write-Host $output
+            if ($code -eq 0 -or $output -notmatch 'document-start listener missing') { throw 'Missing listener did not fail the native assertion' }
+          } finally { [IO.File]::WriteAllText($path, $source) }
       # CCP.Avalonia.Tests (sharded, one testhost per shard) runs in the avalonia-windows matrix job below.
       - name: Test Avalonia scheduler gesture
         run: dotnet test Tests/CCP.Avalonia.Scheduler.Tests/CCP.Avalonia.Scheduler.Tests.csproj -c Release
