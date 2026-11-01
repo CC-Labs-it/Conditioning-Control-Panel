@@ -9,31 +9,18 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 // WPF Services/LockCard/BrainDrainService.cs:138-149,155-207,210-290,297-309,325-411.
 // Reuses the head's stoppable LibVLC voice. No decoder work runs on the UI thread.
 internal sealed class BrainDrainPlayer {
-    internal static BrainDrainPlayer? Instance;
-    private readonly Func<string, double, bool, Action, MindWipePlayer.IVoice?> _create;
-    private readonly TimeProvider _time;
-    private readonly Func<double> _roll;
-    private readonly Random _random = new();
-    private readonly object _gate = new();
-    private string[] _clips = [];
-    private ITimer? _timer;
-    private TimeSpan _interval;
-    private MindWipePlayer.IVoice? _voice;
-    private bool _running, _building;
-    private int _generation;
-    private AppSettings? _settings;
-    private ConditioningControlPanel.Services.SettingsService? _service;
+    internal static BrainDrainPlayer? Instance; private readonly Func<string, double, bool, Action, MindWipePlayer.IVoice?> _create; private readonly TimeProvider _time; private readonly Func<double> _roll;
+    private readonly Random _random = new(); private readonly object _gate = new(); private string[] _clips = []; private ITimer? _timer; private TimeSpan _interval; private MindWipePlayer.IVoice? _voice; private bool _running, _building;
+    private int _generation; private AppSettings? _settings; private ConditioningControlPanel.Services.SettingsService? _service;
     internal bool IsRunning { get { lock (_gate) return _running; } }
     internal int ClipCount { get { lock (_gate) return _clips.Length; } }
-    internal static string Folder => Path.Combine(CorePaths.EffectiveAssets, "braindrain");
-    internal static string LegacyFolder => Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "braindrain");
+    internal static string Folder => Path.Combine(CorePaths.EffectiveAssets, "braindrain"); internal static string LegacyFolder => Path.Combine(AppContext.BaseDirectory, "Resources", "sounds", "braindrain");
     internal static string EnsureFolder() { Directory.CreateDirectory(Folder); return Folder; }
     internal BrainDrainPlayer(Func<string, double, bool, Action, MindWipePlayer.IVoice?> create,
         TimeProvider? time = null, Func<double>? roll = null) {
         _create = create; _time = time ?? TimeProvider.System; _roll = roll ?? _random.NextDouble; }
     internal void Seed() {
-        Instance = this;
-        CoreEngine.StartBrainDrain = Start;
+        Instance = this; CoreEngine.StartBrainDrain = Start;
         CoreEngine.StopBrainDrain = Stop; }
     private static IEnumerable<string> Clips(string folder) {
         try { return Directory.GetFiles(folder).Where(p => new[] { ".mp3", ".wav", ".ogg" }
@@ -46,40 +33,26 @@ internal sealed class BrainDrainPlayer {
         lock (_gate) _clips = files; }
     internal void Start() {
         lock (_gate) {
-            if (_running || !CoreSettings.Current.BrainDrainEnabled) return;
-            Reload(); _running = true;
-            _service = CoreSettings.Service;
-            if (_service != null) _service.CurrentReplaced += RebindSettings;
-            RebindSettings();
-            _interval = TimeSpan.FromMilliseconds(CoreSettings.Current.BrainDrainHighRefresh ? 500 : 5000);
-            _timer = _time.CreateTimer(_ => Tick(), null, _interval, _interval);
+            if (_running || !CoreSettings.Current.BrainDrainEnabled) return; Reload(); _running = true; _service = CoreSettings.Service; if (_service != null) _service.CurrentReplaced += RebindSettings; RebindSettings();
+            _interval = TimeSpan.FromMilliseconds(CoreSettings.Current.BrainDrainHighRefresh ? 500 : 5000); _timer = _time.CreateTimer(_ => Tick(), null, _interval, _interval);
             App.DiscordRpc?.SetBrainDrainActivity(); // WPF BrainDrainService.cs:240
-        }
-    }
+        } }
     private void RebindSettings() {
         lock (_gate) {
-            if (!_running) return;
-            if (_settings != null) _settings.PropertyChanged -= SettingsChanged;
-            _settings = CoreSettings.Current; _settings.PropertyChanged += SettingsChanged;
+            if (!_running) return; if (_settings != null) _settings.PropertyChanged -= SettingsChanged; _settings = CoreSettings.Current; _settings.PropertyChanged += SettingsChanged;
             if (_voice != null) _voice.Volume = Volume; // WPF MainWindow.UiUpdates.cs:1007
-        }
-    }
+        } }
     private static double Volume => Math.Clamp(CoreSettings.Current.MasterVolume, 0, 100) / 100.0
         * Math.Clamp(CoreSettings.Current.BrainDrainVolume, 0, 100) / 100.0;
     private void SettingsChanged(object? sender, PropertyChangedEventArgs e) {
         lock (_gate) {
             if (e.PropertyName is nameof(AppSettings.MasterVolume) or nameof(AppSettings.BrainDrainVolume))
                 if (_voice != null) _voice.Volume = Volume; // WPF BrainDrainService.cs:435-441
-        }
-    }
+        } }
     internal void Stop() {
-        MindWipePlayer.IVoice? voice;
-        ITimer? timer;
-        bool wasRunning;
+        MindWipePlayer.IVoice? voice; ITimer? timer; bool wasRunning;
         lock (_gate) {
-            wasRunning = _running;
-            _running = false; ++_generation;
-            voice = _voice; _voice = null;
+            wasRunning = _running; _running = false; ++_generation; voice = _voice; _voice = null;
             timer = _timer; _timer = null;
             if (_settings != null) _settings.PropertyChanged -= SettingsChanged;
             _settings = null;
