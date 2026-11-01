@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -35,7 +36,7 @@ public sealed class ChaosHubCoreWireTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var old = CoreSettings.Current.ChaosActiveSlot;
@@ -130,21 +131,24 @@ public sealed class ChaosHubCoreWireTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var normal = ChaosBoonPool.All.First(b => !b.IsCurse);
             var curse = ChaosBoonPool.All.First(b => b.IsCurse);
             var unseen = ChaosBoonPool.All.First(b => !b.IsCurse && b.Id != normal.Id);
-            ChaosMetaStore.Save(new ChaosMetaState
-            {
-                BenchPurchases = new HashSet<string> { BenchIds.StartMantra, BenchIds.Diary },
-                DiscoveredCodexIds = new HashSet<string> { "boon:" + normal.Id, "boon:" + curse.Id, "bubble:darter" },
-            }, 1);
-            ChaosMetaStore.SetActiveSlot(1);
-            var hub = new ChaosHubWindow();
+            var old = CoreSettings.Current.ChaosActiveSlot;
+            ChaosHubWindow? hub = null;
             try
             {
+                for (int slot = 1; slot <= 3; slot++) ChaosMetaStore.Delete(slot);
+                ChaosMetaStore.Save(new ChaosMetaState
+                {
+                    BenchPurchases = new HashSet<string> { BenchIds.StartMantra, BenchIds.Diary },
+                    DiscoveredCodexIds = new HashSet<string> { "boon:" + normal.Id, "boon:" + curse.Id, "bubble:darter" },
+                }, 1);
+                ChaosMetaStore.SetActiveSlot(1);
+                hub = new ChaosHubWindow();
                 Border Row(ChaosBoon b) => (Border)hub.FindControl<StackPanel>("MantrasHost")!
                     .Children[ChaosBoonPool.All.IndexOf(b)];
                 void Press(ChaosBoon b, bool left = true)
@@ -174,7 +178,13 @@ public sealed class ChaosHubCoreWireTests
                 Assert.DoesNotContain("Lucky Bubble", diary);
                 Assert.Contains("hold to snap", diary); // verbs are always readable
             }
-            finally { hub.Close(); }
+            finally
+            {
+                hub?.Close();
+                for (int slot = 1; slot <= 3; slot++) ChaosMetaStore.Delete(slot);
+                CoreSettings.Current.ChaosActiveSlot = old;
+                ChaosMeta.Init();
+            }
             return Task.CompletedTask;
         });
     }
@@ -194,14 +204,16 @@ public sealed class ChaosHubCoreWireTests
     public Task Unlock_tooltip_uses_the_selected_language(string language) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var loc = LocalizationManager.Instance;
         var previous = loc.CurrentLanguage;
+        var old = CoreSettings.Current.ChaosActiveSlot;
         ChaosHubWindow? hub = null;
         try
         {
+            for (int slot = 1; slot <= 3; slot++) ChaosMetaStore.Delete(slot);
             loc.SetLanguage("en");
             var english = Loc.Get("chaos_inescapable_unlock_tip");
             loc.SetLanguage(language);
@@ -216,8 +228,43 @@ public sealed class ChaosHubCoreWireTests
                 ChaosRanks.Thresholds[(int)ChaosRank.Devoted], ChaosUpgrades.ById("extreme_tier")!.Cost),
                 ToolTip.GetTip(hub.FindControl<ToggleButton>("SegExtreme")!));
         }
-        finally { hub?.Close(); loc.SetLanguage(previous); }
+        finally
+        {
+            hub?.Close();
+            for (int slot = 1; slot <= 3; slot++) ChaosMetaStore.Delete(slot);
+            CoreSettings.Current.ChaosActiveSlot = old;
+            ChaosMeta.Init();
+            loc.SetLanguage(previous);
+        }
         return Task.CompletedTask;
+    });
+
+    // Call the tests directly: no assembly isolation hook may hide a leak between return and assertion.
+    [Theory]
+    [InlineData("mantra")]
+    [InlineData("tooltip")]
+    public Task Save_tests_clean_up_before_the_next_test(string test) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var old = CoreSettings.Current.ChaosActiveSlot;
+        try
+        {
+            for (int slot = 1; slot <= 3; slot++)
+                ChaosMetaStore.Save(new ChaosMetaState { Gold = 99 }, slot);
+            CoreSettings.Current.ChaosActiveSlot = 2; // restoration to the usual default would hide the leak
+            if (test == "mantra") await Mantra_clicks_persist_toggle_but_unseen_and_curses_do_not();
+            else await Unlock_tooltip_uses_the_selected_language("de");
+            Assert.Equal(2, CoreSettings.Current.ChaosActiveSlot);
+            Assert.Empty(ChaosMeta.State.BenchPurchases);
+            Assert.Empty(ChaosMeta.State.DiscoveredCodexIds);
+            Assert.Null(ChaosMeta.State.EquippedStartBoon);
+            for (int slot = 1; slot <= 3; slot++) Assert.False(File.Exists(ChaosMetaStore.SlotFilePath(slot)));
+        }
+        finally
+        {
+            for (int slot = 1; slot <= 3; slot++) ChaosMetaStore.Delete(slot);
+            CoreSettings.Current.ChaosActiveSlot = old;
+            ChaosMeta.Init();
+        }
     });
 
     private static void Preset(Control root, string tag) =>
