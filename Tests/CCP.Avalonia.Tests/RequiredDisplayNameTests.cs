@@ -84,6 +84,7 @@ public sealed class RequiredDisplayNameTests
         {
             Setup();
             var shell = new MainShellWindow();
+            var priorIdentity = (CoreAccount.IsLoggedInProvider, CoreAccount.UnifiedUserId);
             var opened = new List<DisplayNameDialog>();
             using var hook = Window.WindowOpenedEvent.AddClassHandler<DisplayNameDialog>((d, _) =>
             {
@@ -103,7 +104,11 @@ public sealed class RequiredDisplayNameTests
                 await shell.AskDisplayNameAfterSignIn(shell, result);
                 Assert.Equal(2, opened.Count);
             }
-            finally { foreach (var d in opened) d.Close(); shell.Close(); }
+            finally
+            {
+                (CoreAccount.IsLoggedInProvider, CoreAccount.UnifiedUserId) = priorIdentity;
+                foreach (var d in opened) d.Close(); shell.Close();
+            }
         });
     }
 

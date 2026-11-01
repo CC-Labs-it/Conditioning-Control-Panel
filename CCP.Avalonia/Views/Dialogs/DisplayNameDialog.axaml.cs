@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Account;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;

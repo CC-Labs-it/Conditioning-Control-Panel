@@ -11,7 +11,6 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Account;
 using ConditioningControlPanel.Services.Startup;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows

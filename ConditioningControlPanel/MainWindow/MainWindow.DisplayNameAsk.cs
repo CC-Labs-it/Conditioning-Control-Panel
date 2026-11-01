@@ -82,13 +82,9 @@ namespace ConditioningControlPanel
             // The change first: check-name says "taken" for the asker's OWN name, and a veteran whose
             // stored name is their patron name types exactly that (the change route accepts it, and a
             // refused name never starts its cooldown). Only a refusal asks which line to show.
-            var (ok, error, saved) = await App.ProfileSync.ChangeDisplayNameAsync(name);
-            if (!ok)
-            {
-                if (await App.ProfileSync.IsDisplayNameAvailableAsync(name) == false)
-                    return Loc.GetF("login_name_already_taken", name);
-                return error ?? Loc.Get("msg_failed_to_change_display_name");
-            }
+            var (ok, error, saved) = await NeedsDisplayNameRule.SaveRequiredAsync(name,
+                App.ProfileSync.ChangeDisplayNameAsync, App.ProfileSync.IsDisplayNameAvailableAsync);
+            if (!ok) return error ?? Loc.Get("msg_failed_to_change_display_name");
 
             if (App.Settings?.Current != null)
             {

@@ -4,14 +4,14 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ConditioningControlPanel.Services.Account
+namespace ConditioningControlPanel.Services
 {
     /// <summary>Why a typed name cannot be sent yet. Mirrors the server's own checks.</summary>
     public enum DisplayNameShape { Ok, TooShort, TooLong, BadChars }
 
     /// <summary>
     /// The display name is required (owner call 2026-10-20): a signed-in account with no name is
-    /// asked for one once per account per launch in the port, until it has one. Pure, so the
+    /// asked for one after every sign-in and at the next launch, until it has one. Pure, so the
     /// sign-in paths, the startup ladder and the null-name fallbacks all read the same rule.
     /// </summary>
     public static class NeedsDisplayNameRule
@@ -24,8 +24,9 @@ namespace ConditioningControlPanel.Services.Account
             new(@"[^a-zA-Z0-9À-ɏЀ-ӿ　-鿿 _.\-]", RegexOptions.CultureInvariant);
 
         /// <summary>
-        /// The explicit server answer wins both ways. With no flag (older servers), ask when
-        /// the local name is empty or whitespace. Never ask an anonymous install.
+        /// Ask when signed in and the server says so. The server's answer wins both ways: it blanks the
+        /// name of a veteran whose name equals their patron name and still says false (owner 2026-10-22).
+        /// With no flag (older servers) ask when the name we hold is empty. Never ask an anonymous install.
         /// </summary>
         public static bool ShouldAsk(bool signedIn, string? displayName, bool? serverSaysNeeded)
             => signedIn && (serverSaysNeeded ?? string.IsNullOrWhiteSpace(displayName));

@@ -12,7 +12,6 @@ using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Account;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs

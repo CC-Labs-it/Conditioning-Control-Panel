@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.IO;
 using System.Linq;
-using ConditioningControlPanel.Services.Account;
+using ConditioningControlPanel.Services;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -54,6 +54,13 @@ public class NeedsDisplayNameRuleTests
         Assert.Equal(success ? null : available == false
             ? ConditioningControlPanel.Localization.Loc.GetF("login_name_already_taken", "Own name")
             : "Server refusal", result.error);
+    }
+
+    [Fact]
+    public void Wpf_uses_the_single_Core_rule()
+    {
+        Assert.Equal("CCP.Core", typeof(NeedsDisplayNameRule).Assembly.GetName().Name);
+        Assert.False(File.Exists(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Account", "NeedsDisplayNameRule.cs")));
     }
 
     [Fact]

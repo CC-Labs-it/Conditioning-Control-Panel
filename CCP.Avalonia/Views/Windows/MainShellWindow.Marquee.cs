@@ -191,7 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
-            var displayName = ConditioningControlPanel.Services.Account.NeedsDisplayNameRule.FirstName(s.UserDisplayName,
+            var displayName = ConditioningControlPanel.Services.NeedsDisplayNameRule.FirstName(s.UserDisplayName,
                 AccountSeed.Patreon?.DisplayName, AccountSeed.Discord?.DisplayName, AccountSeed.SubscribeStar?.DisplayName);
             secondary.Text = displayName != null ? Loc.GetF("label_welcome_back_0", displayName)
                 : CoreAccount.IsLoggedIn ? Loc.Get("banner_signed_in_no_name")

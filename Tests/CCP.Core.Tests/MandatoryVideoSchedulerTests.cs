@@ -35,9 +35,10 @@ public sealed class MandatoryVideoSchedulerTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, true)]
-    public void Replay_switch_keeps_failure_credit_and_strict_replay(bool strict, bool replay) => With(6, strict, () =>
+    [InlineData(false, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    public void Replay_switch_keeps_failure_credit_and_strict_replay(bool strict, bool lockdown, bool replay) => With(6, strict, () =>
     {
         var s = CoreSettings.Current;
         var old = (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled);
@@ -46,10 +47,15 @@ public sealed class MandatoryVideoSchedulerTests
         CoreProgression.TrackAttentionCheckProvider = checks.Add;
         var clock = new FakeClock(); var host = new Host();
         var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        var priorLockdown = LockdownService.Current;
+        var activeLockdown = new LockdownService();
         try
         {
             (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled) = (true, false, false);
-            Assert.True(v.Trigger()); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            LockdownService.Current = lockdown ? activeLockdown : null;
+            if (lockdown) activeLockdown.Activate(TimeSpan.FromMinutes(10));
+            Assert.True(v.Trigger(strictOverride: strict)); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(strict, v.IsStrict);
             v.NoteSpawn(); v.Ended();
             Assert.Equal(new[] { false }, checks);
             Assert.Equal(replay ? 1 : 0, host.Messages.Count);
@@ -58,7 +64,8 @@ public sealed class MandatoryVideoSchedulerTests
         }
         finally
         {
-            v.Stop(); CoreProgression.TrackAttentionCheckProvider = prior;
+            v.Stop(); activeLockdown.Dispose(); LockdownService.Current = priorLockdown;
+            CoreProgression.TrackAttentionCheckProvider = prior;
             (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled) = old;
         }
     });
