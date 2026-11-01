@@ -194,6 +194,63 @@ public sealed class LeashHoldTests
         }
     });
 
+    // WPF MainWindow.Leash.cs:353-364 and LeashSurfaces.cs:259-272: No does nothing, Yes cuts and sounds.
+    [Fact]
+    public void HoldConfirmation_OnlyYesPlaysTheCutCue() => AvaloniaTestDispatcher.Run(() =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        (CoreSettings.Current.Welcomed, CoreSettings.Current.HasAcceptedAgeVerification, CoreSettings.Current.PanicKeyEnabled) = (true, true, false);
+        var (oldSvc, oldTime, oldReleased) = (LeashHead.Service, MainShellWindow.LeashHoldTime, X11PanicKey.PanicReleased);
+        var (oldKeyDown, oldInterval) = (MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval);
+        var (oldTargets, oldUi) = (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi);
+        var (oldAudio, oldArt, oldSuppressed) = (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider);
+        var clock = new Clock();
+        var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+        svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
+        (LeashHead.Service, MainShellWindow.LeashHoldTime) = (svc, clock);
+        (MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval) = (() => true, Parked);
+        (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi) = (new Targets(), a => a());
+        var cue = System.IO.Path.GetTempFileName();
+        var sounds = new System.Collections.Generic.List<string>();
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            Hold(shell, clock, 5000);
+            CoreSettings.Current.MasterVolume = 100;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreModArt.AudioOverridePathProvider = rel => { Assert.Equal("chaos/snap.mp3", rel); return cue; };
+            CoreAudio.PlayOneShotProvider = (_, volume, tag, _, _) => { Assert.Equal(0.22f, volume); sounds.Add(tag); };
+            Click(LeashCutConfirmWindow.Current!.NoButton);
+            Assert.Empty(sounds);
+            Assert.NotNull(svc.Snapshot.Me);
+            Release(clock);
+            // Mute the ticks of the next hold; restore audio before confirming.
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            Hold(shell, clock, 5000);
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            Click(LeashCutConfirmWindow.Current!.YesButton);
+            Assert.Equal(new[] { "leash-cut" }, sounds);
+            Assert.Null(svc.Snapshot.Me);
+        }
+        finally
+        {
+            LeashCutConfirmWindow.Current?.Close();
+            LeashHoldRing.Dismiss();
+            shell?.Close();
+            (LeashHead.Service, MainShellWindow.LeashHoldTime, X11PanicKey.PanicReleased) = (oldSvc, oldTime, oldReleased);
+            (MainShellWindow.LeashHoldKeyDown, MainShellWindow.LeashHoldClockInterval) = (oldKeyDown, oldInterval);
+            (LeashCutSafety.LiveTargets, LeashCutSafety.RunOnUi) = (oldTargets, oldUi);
+            (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider) = (oldAudio, oldArt, oldSuppressed);
+            CoreSettings.ServiceProvider = null;
+            System.IO.File.Delete(cue);
+        }
+    });
+
     [Fact]
     public void PortalHold_UsesReleaseRatherThanX11State_AndOnlyAsksAfterFiveSeconds() => AvaloniaTestDispatcher.Run(() =>
     {
