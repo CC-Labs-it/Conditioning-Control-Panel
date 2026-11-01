@@ -29,7 +29,8 @@ internal static class ChaosBouncingTextEffect
         _started = Clock.GetTimestamp();
         Duration = Math.Max(0.5, BouncingTextPayload.DURATION_SEC * EffectPayload.GlobalDurationMult);
         _life = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Duration) };
-        _life.Tick += (_, _) => CheckExpiry();
+        // WPF EffectPayloadFiring.cs:205: the timer tick owns expiry, without a second clock gate.
+        _life.Tick += (_, _) => { if (IsActive) BouncingTextOverlay.Stop(); };
         BouncingTextOverlay.Bounced += OnBounce;
         BouncingTextOverlay.Stopped += Release;
         _life.Start();

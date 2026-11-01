@@ -46,6 +46,7 @@ public sealed class ChaosAmbientRainTests
         {
             Setup();
             var dice = ChaosRunHost.AmbientRng;
+            var saved = (EffectPayload.Firer, CoreAudio.PlayOneShotProvider, EffectPayload.GlobalDurationMult);
             var fired = new List<(EffectPayload Payload, double Duration)>();
             var sounds = new List<string>();
             try
@@ -81,7 +82,8 @@ public sealed class ChaosAmbientRainTests
                 ChaosRunHost.FirePayloadForDetonation(new EffectBubbleSpec { Payload = new VideoPayload() });
                 Assert.IsType<VideoPayload>(Assert.Single(fired).Payload);
             }
-            finally { ChaosRunHost.ForceShutdown(); ChaosRunHost.AmbientRng = dice; }
+            finally { ChaosRunHost.ForceShutdown(); ChaosRunHost.AmbientRng = dice;
+                (EffectPayload.Firer, CoreAudio.PlayOneShotProvider, EffectPayload.GlobalDurationMult) = saved; }
             return Task.CompletedTask;
         });
     }
@@ -93,6 +95,7 @@ public sealed class ChaosAmbientRainTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
+            var firer = EffectPayload.Firer;
             try
             {
                 ChaosRunHost.StartRun(new ChaosRunConfig());
@@ -103,7 +106,7 @@ public sealed class ChaosAmbientRainTests
                 Assert.Equal(1, fired);
                 Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("chaos_heavy_dropped", "video"), ChaosRunHost.State!.RecentEvents[0]);
             }
-            finally { ChaosRunHost.ForceShutdown(); }
+            finally { ChaosRunHost.ForceShutdown(); EffectPayload.Firer = firer; }
             return Task.CompletedTask;
         });
     }
@@ -111,14 +114,18 @@ public sealed class ChaosAmbientRainTests
     // WPF EffectPayloadFiring.cs:177-220: actual runner, enabled phrase, scoped duration,
     // 12 bounces, user ownership, and stop releasing an old timeout before a new owner.
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Text_runner_uses_renderer_and_releases_ownership_on_timeout_bounces_and_stop(bool rebuild)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Text_runner_uses_renderer_and_releases_ownership_on_timeout_bounces_and_stop(bool rebuild, bool realTimer = false)
     {
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             Setup();
             var hostProvider = AvApp.ChaosTextHost;
+            var settings = CoreSettings.Current;
+            var renderer = (ChaosBouncingTextEffect.Clock, BouncingTextOverlay.SkipPlatformChecksForTests, BouncingTextOverlay.ManualFramesForTests);
+            var saved = (EffectPayload.GlobalDurationMult, settings.BouncingTextPool, settings.BouncingTextOutline, BouncingTextOverlay.RaiseAll);
             var clock = new Clock();
             var host = new Window();
             try
@@ -130,6 +137,18 @@ public sealed class ChaosAmbientRainTests
                 BouncingTextOverlay.RaiseAll = () => { };
                 ChaosBouncingTextEffect.Clock = clock;
                 CoreSettings.Current.BouncingTextPool = new Dictionary<string, bool> { ["enabled"] = true, ["disabled"] = false };
+                if (realTimer)
+                {
+                    EffectPayload.GlobalDurationMult = 0; // 0.5 s floor, frozen elapsed clock
+                    AvApp.FireChaosPayload(new BouncingTextPayload());
+                    Assert.True(BouncingTextOverlay.IsRunning);
+                    Assert.True(ChaosBouncingTextEffect.IsActive);
+                    Assert.Equal(0.5, ChaosBouncingTextEffect.Duration);
+                    for (int i = 0; i < 250 && ChaosBouncingTextEffect.IsActive; i++) await Task.Delay(20);
+                    Assert.False(BouncingTextOverlay.IsRunning);
+                    Assert.False(ChaosBouncingTextEffect.IsActive);
+                    return; // only the actual DispatcherTimer can stop this payload
+                }
                 EffectPayload.GlobalDurationMult = 2;
                 AvApp.FireChaosPayload(new BouncingTextPayload());
                 Assert.True(BouncingTextOverlay.IsRunning);
@@ -178,11 +197,21 @@ public sealed class ChaosAmbientRainTests
             {
                 BouncingTextOverlay.Stop(); host.Close();
                 AvApp.ChaosTextHost = hostProvider;
-                ChaosBouncingTextEffect.Clock = TimeProvider.System;
-                BouncingTextOverlay.SkipPlatformChecksForTests = false;
-                BouncingTextOverlay.ManualFramesForTests = false;
+                (EffectPayload.GlobalDurationMult, settings.BouncingTextPool, settings.BouncingTextOutline, BouncingTextOverlay.RaiseAll) = saved;
+                (ChaosBouncingTextEffect.Clock, BouncingTextOverlay.SkipPlatformChecksForTests, BouncingTextOverlay.ManualFramesForTests) = renderer;
             }
-            return Task.CompletedTask;
         });
+    }
+
+    [Fact]
+    public async Task Payload_fixtures_restore_globals_when_called_in_reverse_order()
+    {
+        var saved = (EffectPayload.GlobalDurationMult, EffectPayload.Firer, CoreAudio.PlayOneShotProvider,
+            CoreSettings.Current.BouncingTextPool, CoreSettings.Current.BouncingTextOutline, BouncingTextOverlay.RaiseAll);
+        await Text_runner_uses_renderer_and_releases_ownership_on_timeout_bounces_and_stop(true);
+        await Ambient_failed_hold_softens_htlink(0.1, false, EffectBubblePayloadKind.GifCascade);
+        await Heavy_drop_reaches_live_feed_without_firing();
+        Assert.Equal(saved, (EffectPayload.GlobalDurationMult, EffectPayload.Firer, CoreAudio.PlayOneShotProvider,
+            CoreSettings.Current.BouncingTextPool, CoreSettings.Current.BouncingTextOutline, BouncingTextOverlay.RaiseAll));
     }
 }
