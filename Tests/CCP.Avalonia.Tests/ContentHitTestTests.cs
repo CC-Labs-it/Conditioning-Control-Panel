@@ -13,6 +13,9 @@ using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -32,9 +35,12 @@ public sealed class ContentHitTestTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .UseSkia().WithInterFont().With(AppFonts.Options(systemEmoji: false))
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var w = new MainShellWindow();
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            // Frame pumping must not race the entrance clock between geometry and input.
+            var w = new MainShellWindow { TabClock = new SteppedTime() };
             // The pointer rests on each button after its press; ToolTipService opens that row's tooltip on
             // a real 400 ms timer, and on a slow runner it covered the next rows (hit ToolTip's Border
             // PART_LayoutRoot, Windows CI 38136837018). Tooltips are not what this test is about.
@@ -45,6 +51,10 @@ public sealed class ContentHitTestTests
             foreach (var (tab, panelName) in new[] { ("studio", "StudioTab"), ("presets", "PresetsTab"), ("awareness", "AwarenessTab"), ("quests", "QuestsTab") })
             {
                 w.ShowTab(tab);
+                Assert.Same(w.Named<Control>(panelName), w.EnteringTab);
+                // Match the rendered hit frame to resting geometry, not a moving entrance.
+                w.CompleteTabTransition();
+                Assert.Null(w.EnteringTab);
                 // The logged-out cover is WPF behaviour (MainWindow.Login.cs:378); test the tab under it.
                 if (tab == "quests") w.Named<Control>(panelName)!.FindControl<Border>("QuestsLoginOverlay")!.IsVisible = false;
                 // Same for the free-tier veil (WPF MainWindow.Patreon.cs:63 RefreshPremiumGate).
