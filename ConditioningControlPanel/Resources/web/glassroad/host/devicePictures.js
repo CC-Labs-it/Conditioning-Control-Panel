@@ -20,6 +20,12 @@
  * Flash cards read their picture every frame, so nothing is placed while a burst is live (holdFlash): a view-covering
  * card never cuts to another picture mid-hold and a burst never repeats a still. A takedown still wins: that card's
  * seed answers null at once (the burst's own placeholder) and the other cards keep theirs.
+ *
+ * Clips (desktop, `kind: 'video'` rows; the phone is never sent one). Every second owner plays a clip when the feed has
+ * one, so a tier's decoders are never all busy and the screens mix movement with pictures. Same owners, same turn, muted
+ * and looping, on the tier's video upload rate. Each clip also leaves one frame in the owner's canvas, so flash cards and
+ * pickup fronts still read a canvas and never a video. A clip pauses whenever nothing draws the world, and Gentle Visuals
+ * plays it at half speed like the web's screens.
  */
 import { selectScrolllerSlots } from '../render/mediaSelection.js';
 
@@ -27,6 +33,7 @@ export const PICTURE_EDGE = 640;
 export const TURN_S = 7, GENTLE_TURN_S = 14;
 export const DECODE_TIMEOUT_MS = 10000;
 const RETRY_S = 1, ALL_FAILED_RETRY_S = 30;
+export const CLIP_EVERY = 2, GENTLE_CLIP_RATE = 0.5;
 const NO_ROWS = Object.freeze([]);
 const wipe = (canvas) => { canvas.width = canvas.height = 1; };
 
@@ -66,6 +73,40 @@ export async function decodeInto(url, canvas, { makeImage = () => new Image(), e
   }
 }
 
+/** Let go of a clip's decoder and file. */
+function freeVideo(video) {
+  if (!video) return;
+  try { video.pause?.(); video.removeAttribute?.('src'); video.load?.(); } catch { /* gone */ }
+}
+
+/** Ready one same-origin clip to its first frame, unplayed, and leave that frame in `canvas`. @returns the video. Throws when unusable or hung. */
+export async function decodeClip(url, canvas, { makeVideo = () => document.createElement('video'), edge = PICTURE_EDGE, timeoutMs = DECODE_TIMEOUT_MS } = {}) {
+  const video = makeVideo();
+  video.muted = true; video.defaultMuted = true; video.loop = true; video.playsInline = true; video.preload = 'auto';
+  video.crossOrigin = 'anonymous';   // a redirect off this origin fails instead of tainting the texture
+  video.src = url;
+  let timer = null;
+  try {
+    await new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('clip timed out')), timeoutMs);
+      if (video.readyState >= 2) { resolve(); return; }
+      video.addEventListener('loadeddata', resolve, { once: true });
+      video.addEventListener('error', () => reject(new Error('clip failed')), { once: true });
+    });
+    const bitmap = globalThis.createImageBitmap ? await globalThis.createImageBitmap(video).catch(() => null) : null;
+    const { w, h } = fitEdge(video.videoWidth, video.videoHeight, edge);
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d', { alpha: false }).drawImage(bitmap || video, 0, 0, w, h);
+    bitmap?.close?.();
+    return video;
+  } catch (e) {
+    freeVideo(video);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function hasRow(list, url) {
   for (let i = 0; i < list.length; i++) if (list[i].url === url) return true;
   return false;
@@ -76,12 +117,12 @@ function sameRows(a, b) {
   return true;
 }
 
-export function createDevicePictures(media, { feed, active = () => true, makeCanvas = () => document.createElement('canvas'), decode = decodeInto } = {}) {
+export function createDevicePictures(media, { feed, active = () => true, makeCanvas = () => document.createElement('canvas'), decode = decodeInto, clip = decodeClip } = {}) {
   const faces = selectScrolllerSlots(media?.slots || [], { share: media?.scrolllerShare });
-  const owners = [], ring = [];   // owners: { canvas, url, k, slots } in rotation order; ring: free canvases
+  const owners = [], ring = [];   // owners: { canvas, video, url, k, slots } in rotation order; ring: free canvases
   const flashList = [];           // the distinct pictures on the screens; a taken-down one reads null until the burst ends
   let made = 0, rows = NO_ROWS, cursor = 0, turn = 0, clock = 0, waitS = 0, failures = 0, swaps = 0;
-  let loading = false, next = null, disposed = false, resting = false, flashN = 0, flashDirty = false, held = () => false;
+  let loading = false, next = null, disposed = false, resting = false, flashN = 0, flashDirty = false, held = () => false, wasPaused = false;
   const capacity = () => {
     const c = media?.videoCapacity;
     return Math.min(faces.length, Number.isFinite(c) ? Math.max(0, Math.floor(c)) : 0);
@@ -110,29 +151,34 @@ export function createDevicePictures(media, { feed, active = () => true, makeCan
     if (at >= 0) { flashList[at] = null; flashN--; flashDirty = true; }
     owners.splice(i, 1);
     free(o.canvas);
+    freeVideo(o.video);
   }
   function adopt(list) {
     const same = sameRows(rows, list);
     rows = list;
     if (same) return;   // a repeated feed: nothing decodes or uploads again
     cursor = 0; failures = 0; waitS = 0; resting = false;
-    if (next && !hasRow(list, next.url)) { free(next.canvas); next = null; }
+    if (next && !hasRow(list, next.url)) { free(next.canvas); freeVideo(next.video); next = null; }
     for (let i = owners.length - 1; i >= 0; i--) if (!hasRow(list, owners[i].url)) dropOwner(i);
     for (const canvas of ring) wipe(canvas);
     if (!rows.length) turn = 0;
     if (flashDirty && !held()) rebuildFlash();
   }
   const sync = () => { const list = live(); if (list !== rows) adopt(list); };
-  /** Bring a new owner's faces up (a full pool leaves them on their Loom placeholders). */
-  function attach(pic) {
-    const n = capacity();
+  /** The lowest owner number not in use. */
+  function freeK() {
     let k = 0;
     for (let i = 0; i < owners.length; i++) if (owners[i].k === k) { k++; i = -1; }
+    return k;
+  }
+  /** Bring a new owner's faces up (a full pool leaves them on their Loom placeholders). */
+  function attach(pic) {
+    const n = capacity(), k = freeK();
     const ids = faces.filter((_, i) => i % n === k).map((s) => s.id);
     let taken = false;
-    for (const id of ids) if (media.setSource(id, { kind: 'canvas', el: pic.canvas, borrowed: true, credit: 'scrolller' }) !== false) taken = true;
-    if (!taken) { free(pic.canvas); return; }
-    owners.push({ canvas: pic.canvas, url: pic.url, k, slots: ids });
+    for (const id of ids) if (media.setSource(id, { kind: pic.video ? 'video' : 'canvas', el: pic.video || pic.canvas, borrowed: true, credit: 'scrolller' }) !== false) taken = true;
+    if (!taken) { free(pic.canvas); freeVideo(pic.video); return; }
+    owners.push({ canvas: pic.canvas, video: pic.video || null, url: pic.url, k, slots: ids });
     rebuildFlash();
   }
   function place(gentle) {
@@ -141,33 +187,59 @@ export function createDevicePictures(media, { feed, active = () => true, makeCan
     if (!owners.length || clock < (gentle ? GENTLE_TURN_S : TURN_S) / owners.length) return;
     const o = owners[turn++ % owners.length], pic = next;
     next = null; clock = 0;
-    if (!media.swapStill(o.canvas, pic.canvas)) { free(pic.canvas); return; }
+    const swapped = !o.video && !pic.video ? media.swapStill(o.canvas, pic.canvas)
+      : media.swapSource(o.video || o.canvas, pic.video || pic.canvas, pic.video ? 'video' : 'canvas');
+    if (!swapped) { free(pic.canvas); freeVideo(pic.video); return; }
     ring.push(o.canvas);
-    o.canvas = pic.canvas; o.url = pic.url; swaps++;
+    const gone = o.video;
+    o.canvas = pic.canvas; o.video = pic.video || null; o.url = pic.url; swaps++;
+    freeVideo(gone);   // its last frame is on the GPU until the new source's first upload
     rebuildFlash();
   }
-  /** The next row to decode: one not on the screens, else a repeat only to fill an empty owner, else none. */
-  function pick() {
-    const n = rows.length, cap = capacity();
-    if (!n || !cap) return '';
+  /** The next unused row of this kind (a clip when `clips`) from the cursor, or null. */
+  function scan(clips) {
+    const n = rows.length;
     for (let i = 0; i < n; i++) {
       const at = (cursor + i) % n;
-      if (!onOwner(rows[at].url)) { cursor = (at + 1) % n; return rows[at].url; }
+      if ((rows[at].kind === 'video') === clips && !onOwner(rows[at].url)) { cursor = (at + 1) % n; return rows[at]; }
     }
-    if (owners.length >= cap) return '';
-    const url = rows[cursor % n].url;
-    cursor = (cursor + 1) % n;
-    return url;
+    return null;
+  }
+  /** The next row to decode: one not on the screens, else a repeat only to fill an empty owner, else none. Clips only on every CLIP_EVERY-th owner. */
+  function pick() {
+    const n = rows.length, cap = capacity();
+    if (!n || !cap) return null;
+    const k = owners.length < cap ? freeK() : owners[turn % owners.length].k;
+    const row = (k % CLIP_EVERY === 0 ? scan(true) : null) || scan(false);
+    if (row) return row;
+    if (owners.length >= cap) return null;
+    for (let i = 0; i < n; i++) {
+      const at = (cursor + i) % n;
+      if (rows[at].kind !== 'video') { cursor = (at + 1) % n; return rows[at]; }
+    }
+    return null;
+  }
+  /** Clips stop with the world, keep stopping if a key press wakes them, and take Gentle's rate. No allocation. */
+  function steerClips(paused, gentle) {
+    const rate = gentle ? GENTLE_CLIP_RATE : 1;
+    for (let i = 0; i < owners.length; i++) {
+      const v = owners[i].video;
+      if (!v) continue;
+      if (paused) { if (!v.paused) v.pause(); continue; }
+      if (wasPaused && v.paused) { try { v.play()?.catch?.(() => {}); } catch { /* refused */ } }
+      if (v.playbackRate !== rate) v.playbackRate = rate;
+    }
+    wasPaused = paused;
   }
   function load() {
     if (loading || next || waitS > 0 || resting) return;
-    const url = pick();
-    if (!url) { resting = true; return; }
-    const canvas = takeCanvas();
+    const row = pick();
+    if (!row) { resting = true; return; }
+    const url = row.url, isClip = row.kind === 'video', canvas = takeCanvas();
     loading = true;
-    Promise.resolve().then(() => decode(url, canvas)).then(() => {
-      if (disposed || !hasRow(rows, url)) { free(canvas); return; }
-      failures = 0; next = { canvas, url };
+    Promise.resolve().then(() => (isClip ? clip(url, canvas) : decode(url, canvas))).then((video) => {
+      if (disposed || !hasRow(rows, url)) { free(canvas); freeVideo(isClip ? video : null); return; }
+      failures = 0; next = { canvas, url, video: isClip ? video : null };
     }, () => {
       free(canvas);
       if (disposed || !hasRow(rows, url)) return;
@@ -180,6 +252,7 @@ export function createDevicePictures(media, { feed, active = () => true, makeCan
     update(dt, paused = false, gentle = false) {
       sync();
       if (flashDirty && !held()) rebuildFlash();
+      steerClips(paused, gentle);
       if (paused || disposed) return;
       const step = dt > 0 ? dt : 0;
       clock += step; waitS = waitS > step ? waitS - step : 0;
@@ -196,11 +269,11 @@ export function createDevicePictures(media, { feed, active = () => true, makeCan
     },
     /** Distinct pictures on the screens now: a burst never repeats one (a short feed may fill two owners with one row). */
     get flashCount() { sync(); return flashN; },
-    stats: () => ({ rows: rows.length, owners: owners.length, canvases: made, swaps, turn, decoding: loading, waiting: !!next }),
+    stats: () => ({ rows: rows.length, owners: owners.length, clips: owners.filter((o) => o.video).length, canvases: made, swaps, turn, decoding: loading, waiting: !!next }),
     dispose() {
       if (disposed) return;
       rows = NO_ROWS;
-      if (next) { free(next.canvas); next = null; }
+      if (next) { free(next.canvas); freeVideo(next.video); next = null; }
       for (let i = owners.length - 1; i >= 0; i--) dropOwner(i);
       for (const canvas of ring) wipe(canvas);
       flashList.length = 0; flashN = 0; flashDirty = false;

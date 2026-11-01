@@ -598,7 +598,7 @@ export function createMediaSlots(scene, track, opts = {}) {
 
   /** Cover-crop every face of a still owner to its current picture, at the moment its pixels go up. */
   function refitStill(owner) {
-    const el = owner.el, w = el.naturalWidth || el.width || 1, h = el.naturalHeight || el.height || 1;
+    const el = owner.el, w = el.videoWidth || el.naturalWidth || el.width || 1, h = el.videoHeight || el.naturalHeight || el.height || 1;
     for (const i of owner.refs) {
       const o = own.get(i), c = fitCover(w / h, slots[i].w / slots[i].h);
       if (o) { o.el = el; o.crop.set(c.cx, c.cy, c.sx, c.sy); }
@@ -614,6 +614,27 @@ export function createMediaSlots(scene, track, opts = {}) {
     if (!owner?.still || !to || (to !== from && sharedVideos.has(to))) return false;
     sharedVideos.delete(from); sharedVideos.set(to, owner);
     owner.el = to; owner.ready = true; owner.stale = true;
+    budget.list[owner.src].due = uploadClock;
+    return true;
+  }
+
+  /**
+   * Put the next source on a borrowed owner in place, a clip on either side of the swap: as swapStill, its faces keep
+   * the old pixels until the new source's first decoded frame goes up, so no face shows its placeholder in between.
+   */
+  function swapSource(from, to, kind) {
+    const owner = sharedVideos.get(from);
+    if (!owner || !to || to === from || sharedVideos.has(to) || !['video', 'canvas'].includes(kind)) return false;
+    sharedVideos.delete(from); sharedVideos.set(to, owner);
+    for (const i of owner.refs) {
+      const o = own.get(i);
+      if (!o) continue;
+      o.unlisten?.(); o.unlisten = null;
+      if (o.kind === 'video') playback.release(from);
+      if (kind === 'video') playback.retain(to);
+      o.kind = kind; o.el = to;
+    }
+    owner.el = to; owner.still = kind !== 'video'; owner.ready = true; owner.stale = true;
     budget.list[owner.src].due = uploadClock;
     return true;
   }
@@ -687,7 +708,7 @@ export function createMediaSlots(scene, track, opts = {}) {
             if (!owner.idleDisposed) owner.tex.dispose();
             owner.idleDisposed = true; owner.tex.image = el; owner.width = width; owner.height = height;
           }
-          if (copied && owner.still) { owner.stale = false; refitStill(owner); }
+          if (copied && (owner.still || owner.stale)) { owner.stale = false; refitStill(owner); }
           if (copied) {
             if (!owner.uploaded) {
               owner.uploaded = true;
@@ -733,6 +754,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     tunnel: tun ? { fromS: tun.fromS, toS: tun.toS } : null,
     setSource,
     swapStill,
+    swapSource,
     /** Browser feed is display-only. Its images and clips must never enter a GPU texture. */
     setDisplayFeed(feed, canvas = globalThis.document?.getElementById('view')) {
       if (!webScreens && feed) webScreens = createWebMediaScreens({ scene, canvas,

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { feedRows, deviceRows, deviceUrl, createScrolllerFeed, MAX_FEED_ROWS } from '../host/scrolllerFeed.js';
-import { createDevicePictures, decodeInto, fitEdge, PICTURE_EDGE, TURN_S, GENTLE_TURN_S, DECODE_TIMEOUT_MS } from '../host/devicePictures.js';
+import { createDevicePictures, decodeClip, decodeInto, fitEdge, GENTLE_CLIP_RATE, PICTURE_EDGE, TURN_S, GENTLE_TURN_S, DECODE_TIMEOUT_MS } from '../host/devicePictures.js';
 import { createCardMedia } from '../host/cardMedia.js';
 import { setTrackTableLimit, trackTableMax } from '../render/spectrum.js';
 import { selectScrolllerSlots } from '../render/mediaSelection.js';
@@ -511,4 +511,140 @@ test('wiring: boot only flips on the device origin, keeps the display route for 
   const provider = read('host/devicePictures.js');
   assert.ok(!/\bfetch\(/.test(provider), 'the provider never fetches');
   assert.ok(!/feel\.json|localStorage|indexedDB|caches\./.test(provider), 'no feel input and no stored copy of a picture');
+});
+
+// ---- clips (desktop): every second owner plays one, flash still reads canvases ----
+const clipRow = (name) => ({ url: ORIGIN + '/scrolller-media/' + name + '.mp4', kind: 'video' });
+function fakeVideo(name = 'v') {
+  return { name, paused: true, playbackRate: 1, pauses: 0, plays: 0, freed: 0,
+    pause() { this.paused = true; this.pauses++; }, play() { this.paused = false; this.plays++; return Promise.resolve(); },
+    removeAttribute(a) { if (a === 'src') this.freed++; }, load() {} };
+}
+function clipFixture({ capacity = 4, faces = 8, rows } = {}) {
+  const media = fakeMedia({ faces, capacity }), swaps = [];
+  media.swapSource = (from, to, kind) => {
+    swaps.push([from, to, kind]);
+    for (const [id, s] of media.shown) if (s.el === from) media.shown.set(id, { ...s, el: to, kind });
+    return true;
+  };
+  const feed = { deviceRows: rows ?? [clipRow('a'), clipRow('b'), clipRow('c'), clipRow('d'), ...rowsOf(6)] };
+  const videos = [];
+  const pictures = createDevicePictures(media, { feed, makeCanvas: () => ({}),
+    decode: async () => {}, clip: async (url) => { const v = fakeVideo(url); videos.push(v); return v; } });
+  const run = async (n, dt = 0.01, paused = false, gentle = false) => { for (let i = 0; i < n; i++) { pictures.update(dt, paused, gentle); await settle(); } };
+  return { media, feed, pictures, swaps, videos, run };
+}
+
+test('clips: the phone refuses a clip row, a host that offers clips gets them from its own origin only', () => {
+  const row = { url: same('a').replace('.jpg', '.mp4'), kind: 'video' };
+  assert.deepEqual(deviceRows({ v: 1, rows: [row] }, ORIGIN), [], 'no clips unless offered');
+  assert.deepEqual(deviceRows({ v: 1, rows: [row] }, ORIGIN, true), [{ url: row.url, kind: 'video' }]);
+  assert.deepEqual(deviceRows({ v: 1, rows: [{ ...row, url: 'https://images.scrolller.com/a.mp4' }] }, ORIGIN, true), [], 'never a remote clip');
+  assert.deepEqual(deviceRows({ v: 1, rows: [{ ...row, mime: 'text/html' }] }, ORIGIN, true), [], 'a clip with the wrong mime is refused');
+  const bridge = fakeBridge(), plain = createScrolllerFeed({ bridge }), offered = createScrolllerFeed({ bridge: fakeBridge() });
+  plain.useDeviceOrigin(ORIGIN);
+  bridge.emit('scrolller-feed', { v: 1, rows: [row] });
+  assert.equal(plain.deviceRows.length, 0);
+  offered.useDeviceOrigin(ORIGIN, { clips: true });
+});
+
+test('clips: every second owner plays one, and the rest stay stills', async () => {
+  const t = clipFixture();
+  await t.run(12);
+  assert.equal(t.pictures.stats().owners, 4);
+  assert.equal(t.pictures.stats().clips, 2, 'half the owners, so the decoders are never all busy');
+  assert.equal(new Set([...t.media.shown.values()].filter((s) => s.kind === 'video').map((s) => s.el)).size, 2);
+  for (const s of t.media.shown.values()) { assert.equal(s.borrowed, true); assert.equal(s.credit, 'scrolller'); }
+  t.pictures.dispose();
+});
+
+test('clips: flash cards always read a canvas, never a video', async () => {
+  const t = clipFixture();
+  await t.run(12);
+  assert.equal(t.pictures.flashCount, 4, 'a clip owner still gives the burst a picture');
+  for (let seed = 0; seed < 8; seed++) assert.ok(!t.videos.includes(t.pictures.sourceForFlash(seed)));
+  t.pictures.dispose();
+});
+
+test('clips: a turn swaps in place and frees the old decoder; pause stops them and Gentle slows them', async () => {
+  const t = clipFixture({ capacity: 2, faces: 4 });
+  await t.run(6);
+  assert.equal(t.pictures.stats().clips, 1);
+  const first = t.videos[0];
+  first.play();
+  await t.run(3, TURN_S);
+  assert.ok(t.swaps.length >= 1, 'in place, no drop to a placeholder');
+  assert.ok(first.freed >= 1, 'the old clip let go of its file');
+  const live = t.videos.filter((v) => !v.freed);
+  assert.ok(live.length >= 1);
+  const v = live[0];
+  v.play();
+  await t.run(1, 0.01, false, true);
+  assert.equal(v.playbackRate, GENTLE_CLIP_RATE);
+  await t.run(1, 0.01, false, false);
+  assert.equal(v.playbackRate, 1);
+  await t.run(1, 0, true);
+  assert.equal(v.paused, true, 'nothing moves while nothing draws the world');
+  v.play();   // a key press woke it
+  await t.run(1, 0, true);
+  assert.equal(v.paused, true, 'it stops again');
+  const plays = v.plays;
+  await t.run(1, 0.01, false);
+  assert.equal(v.plays, plays + 1, 'and plays again with the world');
+  t.pictures.dispose();
+});
+
+test('clips: a row leaving and the off switch free the decoder at once', async () => {
+  const t = clipFixture({ capacity: 2, faces: 4 });
+  await t.run(6);
+  assert.equal(t.pictures.stats().clips, 1);
+  t.feed.deviceRows = rowsOf(4);
+  t.pictures.sync();
+  assert.ok(t.videos.every((v) => v.freed >= 1), 'no clip keeps its file past its row');
+  assert.equal(t.pictures.stats().clips, 0);
+  t.pictures.dispose();
+});
+
+test('decodeClip: muted and looping before the source is set, stops at the first frame, a hung clip gives up and frees', async () => {
+  const log = [];
+  const canvas = { getContext: () => ({ drawImage() { log.push('draw'); } }) };
+  const ok = { readyState: 2, videoWidth: 1920, videoHeight: 1080, addEventListener() {}, removeAttribute() {}, pause() {}, load() {},
+    set src(v) { log.push(['src', this.muted, this.loop, this.crossOrigin]); } };
+  const v = await decodeClip('u', canvas, { makeVideo: () => ok, edge: 1280 });
+  assert.equal(v, ok);
+  assert.deepEqual(log[0], ['src', true, true, 'anonymous']);
+  assert.equal(canvas.width, 1280); assert.equal(canvas.height, 720);
+  let freed = 0;
+  const hung = { readyState: 0, addEventListener() {}, removeAttribute(a) { if (a === 'src') freed++; }, pause() {}, load() {}, set src(v) {} };
+  await assert.rejects(decodeClip('u', {}, { makeVideo: () => hung, timeoutMs: 5 }));
+  assert.equal(freed, 1);
+});
+
+test('real screens: a clip swaps with a still and back, faces keep their pixels until its frame goes up', () => {
+  const media = realMedia(), a = still(), played = [];
+  const clip = (w = 640, h = 360) => ({ readyState: 2, videoWidth: w, videoHeight: h, loop: true, currentTime: 0, paused: true, duration: 4, removeAttribute() {}, addEventListener() {}, removeEventListener() {}, pause() { this.paused = true; }, play() { this.paused = false; played.push(this); return Promise.resolve(); }, load() {} });
+  for (let i = 0; i < 4; i++) media.setSource('card-' + i, { kind: 'canvas', el: a, borrowed: true, credit: 'scrolller' });
+  media.update(1 / 60, { eye: [0, 8, 0] });
+  const face = () => media.object.children.find((c) => c.name === 'media-card-source-card-0');
+  const tex = face().userData.mediaTex, material = face().material;
+  assert.equal(tex.image, a);
+  const v = clip(), before = media.stats().sharedVideoUploadsTotal;
+  assert.equal(media.swapSource(a, v, 'video'), true);
+  assert.equal(played[0], v, 'it plays');
+  assert.equal(media.stats().readyStillFaces + media.stats().sharedVideoTextures > 0, true);
+  assert.equal(tex.image, a, 'old pixels until the upload');
+  media.update(1 / 60, { eye: [0, 8, 0] });
+  assert.equal(tex.image, v); assert.equal(face().material, material, 'same warmed material'); assert.equal(face().userData.mediaTex, tex);
+  for (let i = 0; i < 30; i++) media.update(1 / 60, { eye: [0, 8, 0] });
+  assert.ok(media.stats().sharedVideoUploadsTotal - before > 2, 'a clip keeps going up, at its video rate');
+  const b = still();
+  assert.equal(media.swapSource(v, b, 'canvas'), true);
+  media.update(1 / 60, { eye: [0, 8, 0] });
+  assert.equal(tex.image, b);
+  const settled = media.stats().sharedVideoUploadsTotal;
+  for (let i = 0; i < 30; i++) media.update(1 / 60, { eye: [0, 8, 0] });
+  assert.equal(media.stats().sharedVideoUploadsTotal, settled, 'a still is one upload again');
+  assert.equal(media.swapSource(b, b, 'canvas'), false);
+  assert.equal(media.swapSource(still(), v, 'video'), false, 'an unknown source');
+  media.dispose();
 });
