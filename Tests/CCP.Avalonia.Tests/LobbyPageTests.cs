@@ -259,6 +259,87 @@ public sealed class LobbyPageTests
         finally { window.Close(); pending.TrySetResult(PbpLobbyReply.Empty); }
     });
 
+    [Fact]
+    public void RemoteJoinClaimsOnceOpensReturnedUrlAndRefreshesTheRoster() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        var pending = new System.Threading.Tasks.TaskCompletionSource<(string? Url, bool Refresh)>();
+        int claims = 0, refreshes = 0;
+        string? subject = null, opened = null;
+        page.ReadGates = () => LobbyGates.From(true, false, false);
+        page.Discovery.SignedIn = () => true;
+        page.Discovery.FetchChess = _ => { refreshes++; return System.Threading.Tasks.Task.FromResult(PbpLobbyReply.Empty); };
+        page.Discovery.FetchGoon = _ => System.Threading.Tasks.Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty);
+        page.Discovery.FetchRace = _ => System.Threading.Tasks.Task.FromResult(RaceOpenReply.Empty);
+        page.Discovery.FetchRemote = _ => System.Threading.Tasks.Task.FromResult<(System.Collections.Generic.IReadOnlyList<RemoteSeat>, bool)>((Array.Empty<RemoteSeat>(), false));
+        page.Discovery.ClaimRemote = id => { claims++; subject = id; return pending.Task; };
+        page.OpenClaimUrl = url => { opened = url; return true; };
+        var window = new Window { Width = 1000, Height = 700, Content = page };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            var baseline = refreshes;
+            var remote = new LobbyRow { Game = LobbyGame.Remote, Key = "u_subject", HostName = "Remote" };
+            var chess = new LobbyRow { Game = LobbyGame.Chess, Key = "p_player", HostName = "Chess" };
+            page.PaintSnapshot(new LobbySnapshot(new[] { remote, chess }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), LobbyGates.From(true, false, false));
+            window.UpdateLayout();
+            var list = Named<ItemsControl>(page, "AvailableSubjectsList");
+            Button RowButton(int index) => list.ContainerFromIndex(index)!.GetVisualDescendants().OfType<Button>().Single();
+            var button = RowButton(0);
+            Assert.True(button.IsEnabled);
+            Assert.False(RowButton(1).IsEnabled);
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(button.IsEnabled);
+            Assert.Equal(1, claims);
+            Assert.Equal("u_subject", subject);
+            Assert.Null(opened);
+            pending.SetResult(("https://example.test/#pin", true));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("https://example.test/#pin", opened);
+            Assert.True(button.IsEnabled);
+            Assert.True(refreshes > baseline);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public void RemoteJoinRechecksSignInAndConflictRefreshesWithoutOpening() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        bool signedIn = false;
+        int claims = 0, refreshes = 0, opens = 0;
+        page.ReadGates = () => LobbyGates.From(signedIn, false, false);
+        page.Discovery.SignedIn = () => true;
+        page.Discovery.FetchChess = _ => { refreshes++; return System.Threading.Tasks.Task.FromResult(PbpLobbyReply.Empty); };
+        page.Discovery.FetchGoon = _ => System.Threading.Tasks.Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty);
+        page.Discovery.FetchRace = _ => System.Threading.Tasks.Task.FromResult(RaceOpenReply.Empty);
+        page.Discovery.FetchRemote = _ => System.Threading.Tasks.Task.FromResult<(System.Collections.Generic.IReadOnlyList<RemoteSeat>, bool)>((Array.Empty<RemoteSeat>(), false));
+        page.Discovery.ClaimRemote = _ => { claims++; return System.Threading.Tasks.Task.FromResult<(string?, bool)>((null, true)); };
+        page.OpenClaimUrl = _ => { opens++; return true; };
+        var window = new Window { Width = 1000, Height = 700, Content = page };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            var remote = new LobbyRow { Game = LobbyGame.Remote, Key = "u_subject", HostName = "Remote" };
+            page.PaintSnapshot(new LobbySnapshot(new[] { remote }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), LobbyGates.From(true, false, false));
+            window.UpdateLayout();
+            var button = Named<ItemsControl>(page, "AvailableSubjectsList").ContainerFromIndex(0)!.GetVisualDescendants().OfType<Button>().Single();
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(0, claims);
+            signedIn = true;
+            var baseline = refreshes;
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, claims);
+            Assert.Equal(0, opens);
+            Assert.True(button.IsEnabled);
+            Assert.True(refreshes > baseline);
+        }
+        finally { window.Close(); }
+    });
+
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
