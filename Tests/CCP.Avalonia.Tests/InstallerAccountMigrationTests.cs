@@ -41,34 +41,45 @@ public class InstallerAccountMigrationTests
         Tier = PatreonTier.Level2, IsActive = true, CacheExpiresAt = DateTime.UtcNow.AddHours(1)
     });
 
-    private static async Task CheckStartup(Func<string, string?> read, Action<string, string?> write)
+    private static async Task CheckStartup(Func<string, string?> read, Action<string, string?> write, Action? afterSeed = null)
     {
-        CoreSecrets.RetrieveProvider = read;
-        CoreSecrets.StoreProvider = write;
-        File.WriteAllText(Path.Combine(TestUserDataProfile.Root, "settings.json"),
-            "{\"PatreonTier\":2,\"UnifiedId\":\"synthetic-user\",\"PlayerLevel\":12}");
-        var service = new SettingsService();
-        CoreSettings.ServiceProvider = () => service;
-        var settings = service.Current;
-        var unavailable = new Unavailable();
-        Assert.True(AccountSeed.Seed(prefix => new ProviderSubscription(prefix, () => settings, unavailable),
-            peer => new DiscordAccount(() => peer, () => settings)));
-        AccountSeed.RestoreSession();
-        Assert.Equal("synthetic-user", CoreAccount.UnifiedUserId);
-        Assert.True(AccountSeed.Patreon!.IsAuthenticated);
-        Assert.Equal(PatreonTier.Level2, AccountSeed.Patreon.CurrentTier);
-        Assert.True(CoreAccount.HasLabAccess);
-        await AccountSeed.InitializeAsync();
-        Assert.Equal(PatreonTier.Level2, AccountSeed.Patreon.CurrentTier);
-        Assert.Equal("synthetic-access", unavailable.Bearer);
-        Assert.Equal(2, settings.PatreonTier);
-        Assert.Equal("synthetic-access", AccountSeed.Patreon.GetAccessToken());
-        Assert.Equal("synthetic-session", settings.AuthToken);
-        service.SaveImmediate();
-        var reloaded = new SettingsService().Current;
-        Assert.Equal(2, reloaded.PatreonTier);
-        Assert.Equal(12, reloaded.PlayerLevel);
-        Assert.Equal("synthetic-user", reloaded.UnifiedId);
+        var snapshot = ProcessStateSnapshot.Take(repairLateWrites: false);
+        var intakePass = new IntakePassService();
+        try
+        {
+            CoreSecrets.RetrieveProvider = read;
+            CoreSecrets.StoreProvider = write;
+            File.WriteAllText(Path.Combine(TestUserDataProfile.Root, "settings.json"),
+                "{\"PatreonTier\":2,\"UnifiedId\":\"synthetic-user\",\"PlayerLevel\":12}");
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            var settings = service.Current;
+            var unavailable = new Unavailable();
+            Assert.True(AccountSeed.Seed(prefix => new ProviderSubscription(prefix, () => settings, unavailable),
+                peer => new DiscordAccount(() => peer, () => settings), intakePass));
+            afterSeed?.Invoke();
+            AccountSeed.RestoreSession();
+            Assert.Equal("synthetic-user", CoreAccount.UnifiedUserId);
+            Assert.True(AccountSeed.Patreon!.IsAuthenticated);
+            Assert.Equal(PatreonTier.Level2, AccountSeed.Patreon.CurrentTier);
+            Assert.True(CoreAccount.HasLabAccess);
+            await AccountSeed.InitializeAsync();
+            Assert.Equal(PatreonTier.Level2, AccountSeed.Patreon.CurrentTier);
+            Assert.Equal("synthetic-access", unavailable.Bearer);
+            Assert.Equal(2, settings.PatreonTier);
+            Assert.Equal("synthetic-access", AccountSeed.Patreon.GetAccessToken());
+            Assert.Equal("synthetic-session", settings.AuthToken);
+            service.SaveImmediate();
+            var reloaded = new SettingsService().Current;
+            Assert.Equal(2, reloaded.PatreonTier);
+            Assert.Equal(12, reloaded.PlayerLevel);
+            Assert.Equal("synthetic-user", reloaded.UnifiedId);
+        }
+        finally
+        {
+            intakePass.Dispose();
+            snapshot.Restore();
+        }
     }
 
     [Fact]
@@ -77,6 +88,59 @@ public class InstallerAccountMigrationTests
         var data = new Dictionary<string, string?>
         { ["patreon_auth"] = Token(), ["patreon_cache"] = Cache(), ["authtoken"] = "synthetic-session" };
         await CheckStartup(n => data.GetValueOrDefault(n), (n, v) => data[n] = v);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task StartupRestoresProcessStateEvenWhenAnAssertionFails(bool fail, bool fileExists)
+    {
+        CoreSecrets.RetrieveProvider = _ => null;
+        CoreSecrets.StoreProvider = (_, _) => { };
+        CoreAccount.HasLabAccessProvider = () => false;
+        CoreAccount.UnifiedUserId = "before-migration";
+        object?[] State() => new object?[]
+        {
+            CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, CoreSettings.ServiceProvider,
+            CoreAccount.IsLoggedInProvider, CoreAccount.DisplayNameProvider, CoreAccount.IsWhitelistedProvider,
+            CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider,
+            CoreAccount.ChangeDisplayNameProvider, CoreAccount.DeleteAccountProvider,
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreProgram.HasPremiumProvider,
+            AuthRecovery.Recovered, AuthRecovery.ProviderRevalidate,
+            AccountSeed.Patreon, AccountSeed.SubscribeStar, AccountSeed.Discord,
+        };
+        var before = State();
+        var whitelist = AccountSeed.SandboxWhitelisted;
+        var path = Path.Combine(TestUserDataProfile.Root, "settings.json");
+        if (fileExists) File.WriteAllText(path, "{\"PlayerLevel\":9}");
+        else File.Delete(path);
+        var existed = File.Exists(path);
+        var original = existed ? File.ReadAllBytes(path) : null;
+        var pass = ConditioningControlPanel.Avalonia.App.IntakePass;
+        var detach = typeof(IntakePassService).GetField("_detachEntitlement", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var handler = typeof(IntakePassService).GetField("_entitlementHandler", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var originalDetach = detach.GetValue(pass);
+        var originalHandler = handler.GetValue(pass);
+        var data = new Dictionary<string, string?>
+        { ["patreon_auth"] = Token(), ["patreon_cache"] = Cache(), ["authtoken"] = "synthetic-session" };
+        if (fail)
+        {
+            var ex = await Assert.ThrowsAnyAsync<Exception>(() => CheckStartup(n => data.GetValueOrDefault(n),
+                (n, v) => data[n] = v, () => Assert.Fail("injected assertion")));
+            Assert.Contains("injected assertion", ex.Message);
+        }
+        else await CheckStartup(n => data.GetValueOrDefault(n), (n, v) => data[n] = v);
+
+        var after = State();
+        for (var i = 0; i < before.Length; i++) Assert.Same(before[i], after[i]);
+        Assert.Equal("before-migration", CoreAccount.UnifiedUserId);
+        Assert.Equal(whitelist, AccountSeed.SandboxWhitelisted);
+        Assert.Equal(existed, File.Exists(path));
+        if (existed) Assert.Equal(original, File.ReadAllBytes(path));
+        Assert.Same(originalDetach, detach.GetValue(pass));
+        Assert.Same(originalHandler, handler.GetValue(pass));
     }
 
     [Fact]
