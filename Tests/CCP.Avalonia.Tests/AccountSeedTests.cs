@@ -201,4 +201,42 @@ public sealed partial class AccountSeedTests : IDisposable
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
             Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent("{}") });
     }
+    // WPF ProfileSyncService.cs:577-583 and ProviderSubscription.cs:300-315.
+    [Fact]
+    public async Task ProviderValidationAdoptsPrizesBeforeRecoveringToken()
+    {
+        var s = CoreSettings.Current;
+        var (id, token, offline) = (s.UnifiedId, s.AuthToken, s.OfflineMode);
+        try
+        {
+            s.UnifiedId = "u-provider"; s.AuthToken = null; s.OfflineMode = false;
+            _secrets["patreon_auth"] = JsonConvert.SerializeObject(new PatreonTokenData
+                { AccessToken = "provider-test", RefreshToken = "refresh-test", ExpiresAt = DateTime.UtcNow.AddDays(1) });
+            Assert.True(AccountSeed.Seed(prefix => new ProviderSubscription(prefix, () => s, new PrizeAnswer())));
+            AccountSeed.RestoreSession();
+            Assert.Equal("u-provider", CoreAccount.UnifiedUserId);
+            PrizeOwnership.ResetHeld();
+            bool beforeRecovery = false;
+            Action changed = () => beforeRecovery = s.AuthToken == null && PrizeOwnership.Held(PrizeOwnership.BubbleRain);
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += changed;
+            try { await AccountSeed.Patreon!.ValidateSubscriptionAsync(forceRefresh: true); }
+            finally { ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= changed; }
+            Assert.True(beforeRecovery);
+            Assert.NotNull(s.AuthToken);
+            Assert.True(PrizeOwnership.Held(PrizeOwnership.BubbleRain));
+        }
+        finally
+        {
+            PrizeOwnership.ResetHeld(); CoreAccount.UnifiedUserId = null;
+            (s.UnifiedId, s.AuthToken, s.OfflineMode) = (id, token, offline);
+        }
+    }
+
+    private sealed class PrizeAnswer : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
+                """{"is_active":true,"tier":1,"unified_id":"u-provider","auth_token":"recovered-test","prizes":{"revision":1,"grants":["fx.bubble.rain"]}}""") });
+    }
+
 }

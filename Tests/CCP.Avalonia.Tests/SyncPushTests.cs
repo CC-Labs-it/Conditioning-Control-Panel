@@ -440,4 +440,68 @@ public sealed partial class AccountSeedTests
         Assert.True(PrizeOwnership.Held(PrizeOwnership.JackpotRemix));
     });
 
+    // WPF ProfileSyncService.cs:585-590,643-698: a delayed identity callback must not erase new grants.
+    [Fact]
+    public void NewAccountSnapshotSurvivesDelayedIdentityCallback() => WithFreshInstall(async () =>
+    {
+        var s = CoreSettings.Current;
+        SignIn("u1", L40Profile("u1"));
+        PrizeOwnership.ApplySnapshot("u1", 8, new[] { PrizeOwnership.BubbleRain });
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        string? blocked = "u2";
+        EventHandler pause = (_, _) => { if (CoreAccount.UnifiedUserId == blocked) { entered.Set(); release.Wait(); } };
+        CoreAccount.UnifiedIdentityChanged += pause;
+        PrizeOwnership.Seed(); // Register the ownership callback after the blocker.
+        Task? change = null;
+        try
+        {
+            change = Task.Run(() => CoreAccount.UnifiedUserId = "u2");
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+            s.UnifiedId = "u2";
+            PrizeOwnership.ApplySnapshot("u2", 1, new[] { PrizeOwnership.JackpotRemix });
+            Assert.True(PrizeOwnership.Held(PrizeOwnership.JackpotRemix));
+            release.Set(); await change;
+            Assert.True(PrizeOwnership.Held(PrizeOwnership.JackpotRemix));
+
+            entered.Reset(); release.Reset(); blocked = null;
+            change = Task.Run(() => CoreAccount.UnifiedUserId = null);
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+            CoreAccount.UnifiedUserId = "u2"; // Same id, a different session.
+            Assert.False(PrizeOwnership.Held(PrizeOwnership.JackpotRemix));
+            PrizeOwnership.ApplySnapshot("u2", 1, new[] { PrizeOwnership.BubbleRain });
+            release.Set(); await change;
+            Assert.True(PrizeOwnership.Held(PrizeOwnership.BubbleRain));
+        }
+        finally
+        {
+            release.Set();
+            if (change != null) await change;
+            CoreAccount.UnifiedIdentityChanged -= pause;
+        }
+    });
+
+    // WPF OwnershipService.cs:94-136: only a changed set raises an event.
+    [Fact]
+    public void UnchangedPrizeSnapshotsDoNotRaiseGrantsChanged() => WithFreshInstall(() =>
+    {
+        SignIn("u1", L40Profile("u1"));
+        PrizeOwnership.ResetHeld();
+        int changes = 0;
+        Action changed = () => changes++;
+        ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += changed;
+        try
+        {
+            PrizeOwnership.ApplySnapshot("u1", 1, new[] { PrizeOwnership.BubbleRain });
+            PrizeOwnership.ApplySnapshot("u1", 2, new[] { " " + PrizeOwnership.BubbleRain + " " });
+            PrizeOwnership.ApplySnapshot("u1", 1, Array.Empty<string>());
+            Assert.Equal(1, changes);
+            PrizeOwnership.ApplySnapshot("u1", 3, Array.Empty<string>());
+            PrizeOwnership.ApplySnapshot("u1", 4, Array.Empty<string>());
+            Assert.Equal(2, changes);
+        }
+        finally { ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= changed; }
+        return Task.CompletedTask;
+    });
+
 }

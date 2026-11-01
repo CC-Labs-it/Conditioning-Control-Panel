@@ -42,10 +42,16 @@ namespace ConditioningControlPanel
         /// A change raises <see cref="UnifiedIdentityChanged"/>; one failing observer never stops the rest.</summary>
         public static string? UnifiedUserId
         {
-            get => Volatile.Read(ref _unifiedUserId);
+            get => UnifiedIdentity.Item1;
             set
             {
-                if (string.Equals(Interlocked.Exchange(ref _unifiedUserId, value), value, StringComparison.Ordinal)) return;
+                Tuple<string?> previous, next;
+                do
+                {
+                    previous = UnifiedIdentity;
+                    if (string.Equals(previous.Item1, value, StringComparison.Ordinal)) return;
+                    next = new Tuple<string?>(value);
+                } while (!ReferenceEquals(Interlocked.CompareExchange(ref _identity, next, previous), previous));
                 foreach (EventHandler handler in UnifiedIdentityChanged?.GetInvocationList() ?? Array.Empty<Delegate>())
                 {
                     try { handler(null, EventArgs.Empty); }
@@ -53,7 +59,9 @@ namespace ConditioningControlPanel
                 }
             }
         }
-        private static string? _unifiedUserId;
+        // A new reference for every identity change distinguishes re-entry to the same account.
+        internal static Tuple<string?> UnifiedIdentity => Volatile.Read(ref _identity);
+        private static Tuple<string?> _identity = new(null);
 
         /// <summary>The unified identity changed (sign-in, sign-out, account switch). WPF: <c>App.UnifiedIdentityChanged</c>.</summary>
         public static event EventHandler? UnifiedIdentityChanged;

@@ -181,9 +181,16 @@ public class FavoritesRailParityTests
             Border? Pill(string id) => ((Grid)Chip(id).Content!).Children.OfType<Border>()
                 .SingleOrDefault(b => b.Child is TextBlock t && t.Text == global::ConditioningControlPanel.Localization.Loc.Get("badge_v2"));
             Assert.Null(Pill("door.studio"));
+            var rack = shell.StudioRack!;
+            var bubbles = rack.V2PillsFor("bubbles");
+            var flash = rack.V2PillsFor("flash");
+            Assert.False(bubbles.Strip!.IsVisible);
+            Assert.False(flash.Strip!.IsVisible);
             PrizeOwnership.ApplySnapshot("rail-test", 1, new[] { PrizeGrants.BubbleRain });
             Dispatcher.UIThread.RunJobs();
             var pill = Assert.IsType<Border>(Pill("door.studio"));
+            Assert.True(bubbles.Strip!.IsVisible);
+            Assert.True(bubbles.Tile!.IsVisible);
             Assert.Equal(HorizontalAlignment.Right, pill.HorizontalAlignment);
             Assert.Equal(VerticalAlignment.Top, pill.VerticalAlignment);
             Assert.Equal(new Thickness(0, 2, 3, 0), pill.Margin);
@@ -194,13 +201,22 @@ public class FavoritesRailParityTests
             PrizeOwnership.ApplySnapshot("rail-test", 2, System.Array.Empty<string>());
             Dispatcher.UIThread.RunJobs();
             Assert.Null(Pill("door.studio"));
+            Assert.False(bubbles.Strip!.IsVisible);
+            Assert.False(bubbles.Tile!.IsVisible);
             PrizeOwnership.ApplySnapshot("rail-test", 3, new[] { PrizeGrants.JackpotRemix });
             Dispatcher.UIThread.RunJobs();
             Assert.NotNull(Pill("door.studio"));
+            Assert.True(flash.Strip!.IsVisible);
+            Assert.True(flash.Tile!.IsVisible);
             s.UnifiedId = "other-account";
             CoreAccount.UnifiedUserId = "other-account";
             Dispatcher.UIThread.RunJobs();
             Assert.Null(Pill("door.studio"));
+            Assert.False(flash.Strip!.IsVisible);
+            shell.Close();
+            PrizeOwnership.ApplySnapshot("other-account", 1, new[] { PrizeGrants.BubbleRain });
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(bubbles.Strip!.IsVisible); // Detached Studio is no longer subscribed.
         }
         finally
         {

@@ -32,15 +32,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
 
         private static readonly object Gate = new();
-        private static string? _heldAccount;
+        private static Tuple<string?>? _heldIdentity;
         private static long _revision;
         private static HashSet<string> _grants = new(StringComparer.Ordinal);
 
         /// <summary>WPF OwnershipService.IsGranted over the current account's in-memory snapshot.</summary>
         internal static bool Held(string id)
         {
-            var current = FriendsHead.Identity()?.UnifiedId;
-            lock (Gate) return current != null && current == CoreAccount.UnifiedUserId && current == _heldAccount && _grants.Contains(id);
+            lock (Gate) return ReferenceEquals(_heldIdentity, CoreAccount.UnifiedIdentity) && _grants.Contains(id);
         }
 
         /// <summary>WPF OwnershipService.ApplySnapshot: another account's snapshot and a lower
@@ -48,15 +47,19 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
         {
             if (string.IsNullOrEmpty(accountId) || grants is null) return;
+            bool changed;
             lock (Gate)
             {
-                if (FriendsHead.Identity()?.UnifiedId != accountId || CoreAccount.UnifiedUserId != accountId) return;
-                if (_heldAccount == accountId && revision < _revision) return;
-                (_heldAccount, _revision) = (accountId, revision);
-                _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                var identity = CoreAccount.UnifiedIdentity;
+                if (identity.Item1 != accountId) return;
+                bool same = ReferenceEquals(_heldIdentity, identity);
+                if (same && revision < _revision) return;
+                var next = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                changed = same ? !_grants.SetEquals(next) : _grants.Count != 0 || next.Count != 0;
+                (_heldIdentity, _revision, _grants) = (identity, revision, next);
             }
-            // WPF OwnershipService.ApplySnapshot raises the grant repaint event.
-            PrizeGrants.RaiseGrantsChanged();
+            // WPF OwnershipService.cs:129-136: only a changed set raises the repaint event.
+            if (changed) PrizeGrants.RaiseGrantsChanged();
         }
 
         // WPF ProfileSyncService.cs:570,670: clear on identity change; accept only matching replies.
@@ -66,16 +69,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
             CoreAccount.UnifiedIdentityChanged += ClearOnIdentity;
             ProviderSubscription.PrizesSink = ApplyValidated;
         }
-        private static void ClearOnIdentity(object? sender, EventArgs e) => ResetHeld();
+        private static void ClearOnIdentity(object? sender, EventArgs e) => ResetHeld(keepCurrent: true);
         private static void ApplyValidated(string? requested, string? answered, Models.PrizesBlock? prizes, string source)
         {
             if (requested != null && requested == answered && prizes?.Grants is { } grants)
                 ApplySnapshot(requested, prizes.Revision, grants);
         }
-        internal static void ResetHeld()
+        internal static void ResetHeld(bool keepCurrent = false)
         {
             bool changed;
-            lock (Gate) { changed = _grants.Count != 0; (_heldAccount, _revision, _grants) = (null, 0, new(StringComparer.Ordinal)); }
+            lock (Gate)
+            {
+                if (keepCurrent && ReferenceEquals(_heldIdentity, CoreAccount.UnifiedIdentity)) return;
+                changed = _grants.Count != 0;
+                (_heldIdentity, _revision, _grants) = (null, 0, new(StringComparer.Ordinal));
+            }
             if (changed) PrizeGrants.RaiseGrantsChanged();
         }
 
