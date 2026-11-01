@@ -200,6 +200,71 @@ public sealed class SpiralRecoveryTests
             finally { SpiralOverlay.VideoStart = start; }
         });
 
+    // WPF OverlayService.cs:1562,1633,1731: later starts can retry the same unchanged source.
+    [Fact]
+    public Task Stop_start_retries_an_unchanged_failed_image()
+        => WithOverlay(async (host, first, second) =>
+        {
+            CoreSettings.Current.SpiralRandomize = false;
+            File.WriteAllText(first, "broken");
+            var stamp = File.GetLastWriteTimeUtc(first);
+            SpiralOverlay.Refresh(host);
+            await Settle();
+            SpiralOverlay.Reconcile(host);
+            Assert.Null(SpiralOverlay.Decoding);
+            SpiralOverlay.CloseAll();
+            SpiralOverlay.Refresh(host);
+            Assert.NotNull(SpiralOverlay.Decoding);
+            await Settle();
+            Assert.False(SpiralOverlay.IsShowing);
+            Assert.Equal(stamp, File.GetLastWriteTimeUtc(first));
+        });
+
+    [Fact]
+    public Task Stop_start_recovers_from_transient_video_failure_without_editing_the_file()
+        => WithOverlay((host, first, second) =>
+        {
+            var start = SpiralOverlay.VideoStart;
+            var calls = 0;
+            var video = Path.ChangeExtension(first, ".mp4");
+            File.WriteAllText(video, "video");
+            var stamp = File.GetLastWriteTimeUtc(video);
+            try
+            {
+                CoreSettings.Current.SpiralRandomize = false;
+                CoreSettings.Current.SpiralPath = video;
+                SpiralOverlay.VideoStart = (_, _) => ++calls == 1 ? null : new MemoryStream();
+                SpiralOverlay.Refresh(host);
+                SpiralOverlay.Reconcile(host);
+                Assert.Equal(1, calls);
+                Assert.False(SpiralOverlay.IsShowing);
+                SpiralOverlay.CloseAll();
+                SpiralOverlay.Refresh(host);
+                Assert.Equal(2, calls);
+                Assert.True(SpiralOverlay.IsShowing && SpiralOverlay.IsVideoPlaying);
+                Assert.Equal(stamp, File.GetLastWriteTimeUtc(video));
+                return Task.CompletedTask;
+            }
+            finally { SpiralOverlay.VideoStart = start; }
+        });
+
+    [Fact]
+    public Task A_decode_finishing_after_stop_cannot_restart_or_poison_the_next_run()
+        => WithOverlay(async (host, first, second) =>
+        {
+            CoreSettings.Current.SpiralRandomize = false;
+            File.WriteAllText(first, "broken");
+            SpiralOverlay.Refresh(host);
+            var pending = SpiralOverlay.Decoding;
+            Assert.NotNull(pending);
+            SpiralOverlay.CloseAll();
+            await pending;
+            Assert.False(SpiralOverlay.IsReconciling || SpiralOverlay.IsShowing);
+            SpiralOverlay.Refresh(host);
+            Assert.NotNull(SpiralOverlay.Decoding);
+            await Settle();
+        });
+
     private static Screen MakeScreen(int width)
     {
         // Same synthetic PlatformScreen seam as MultiMonitorResultTests; no native handles used.

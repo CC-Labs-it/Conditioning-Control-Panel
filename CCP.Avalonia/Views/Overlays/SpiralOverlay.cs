@@ -65,8 +65,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static DispatcherTimer? _reconcileTimer;
         private static (int Index, PixelRect Bounds, double Scale)[]? _layout;
         private static bool _dualMonitor;
+        private static int _runId;
         // WPF OverlayService.cs:1562,1590-1594 remembers a failed decode instead of retry churn.
-        // Keep each failed candidate, including video starts, until its file metadata changes.
+        // Suppress each failed candidate for this run, or until its file metadata changes.
         private static readonly Dictionary<string, (DateTime Write, long Length)> FailedSources = new();
 
         private static (DateTime Write, long Length) FileVersion(string path)
@@ -244,6 +245,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
         {
+            // WPF OverlayService.cs:1562,1633,1731 retries outside the failed compositor route.
+            _runId++;
+            if (FailedSources.ContainsKey(_framesKey)) _framesKey = "";
+            FailedSources.Clear();
             _reconcileTimer?.Stop();
             _reconcileTimer = null;
             _layout = null;
@@ -288,10 +293,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static async Task DecodeThenRefresh(Visual host, string path)
         {
+            var runId = _runId;
             var version = FileVersion(path);
             // Publish Decoding before a fast worker can complete and clear it on the UI thread.
             await Task.Yield();
             var (frames, delay) = await Task.Run(() => Decode(path));
+            if (runId != _runId)
+            {
+                foreach (var frame in frames) frame.Dispose();
+                Decoding = null;
+                if (IsReconciling) Refresh(host); // a new run may be waiting for this worker
+                return;
+            }
             if (frames.Count == 0)
             {
                 FailedSources[path] = version;
