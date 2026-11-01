@@ -29,5 +29,6 @@ public sealed class ChaosEStimLocalizationTests
             Assert.Contains("7", string.Format(template, 7));
         }
         Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("chaos_estim_spent").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("chaos_estim_banner").GetString()));
     }
 }

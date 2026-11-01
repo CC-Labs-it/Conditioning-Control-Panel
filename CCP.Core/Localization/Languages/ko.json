@@ -1,4 +1,5 @@
 {
+  "chaos_estim_banner": "전기 자극",
   "chaos_estim_charged_conduct": "⚡ 충전 완료: 다음 버블 {0}개가 전류를 전합니다",
   "chaos_estim_charged_chain": "⚡ 충전 완료: 다음 버블 {0}개가 연쇄 반응을 일으킵니다",
   "chaos_estim_arc_remaining": "⚡ 전류가 흐릅니다 (남은 횟수: {0})",

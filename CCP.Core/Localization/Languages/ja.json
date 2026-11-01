@@ -1,4 +1,5 @@
 {
+  "chaos_estim_banner": "電気刺激",
   "chaos_estim_charged_conduct": "⚡ 充電完了: 次の{0}個のバブルは電流を通す",
   "chaos_estim_charged_chain": "⚡ 充電完了: 次の{0}個のバブルは連鎖する",
   "chaos_estim_arc_remaining": "⚡ 電流が走る (残り{0})",

@@ -1,4 +1,5 @@
 {
+  "chaos_estim_banner": "Электростимуляция",
   "chaos_estim_charged_conduct": "⚡ заряжено: проводящих пузырей впереди: {0}",
   "chaos_estim_charged_chain": "⚡ заряжено: пузырей с цепной реакцией впереди: {0}",
   "chaos_estim_arc_remaining": "⚡ ток проходит дальше (осталось: {0})",

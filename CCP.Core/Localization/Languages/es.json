@@ -1,4 +1,5 @@
 {
+  "chaos_estim_banner": "Electroestimulación",
   "chaos_estim_charged_conduct": "⚡ cargado: tus próximas {0} burbujas conducen",
   "chaos_estim_charged_chain": "⚡ cargado: tus próximas {0} burbujas inician una reacción en cadena",
   "chaos_estim_arc_remaining": "⚡ salta la corriente (restan {0})",

@@ -1,4 +1,5 @@
 {
+  "chaos_estim_banner": "电刺激",
   "chaos_estim_charged_conduct": "⚡ 已充能：接下来 {0} 个气泡会导电",
   "chaos_estim_charged_chain": "⚡ 已充能：接下来 {0} 个气泡会引发连锁反应",
   "chaos_estim_arc_remaining": "⚡ 电流跃动（剩余 {0} 次）",

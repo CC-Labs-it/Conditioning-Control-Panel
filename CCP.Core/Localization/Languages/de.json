@@ -1,4 +1,5 @@
 {
+  "chaos_estim_banner": "E-Stim",
   "chaos_estim_charged_conduct": "⚡ geladen: deine nächsten {0} Treffer leiten Strom",
   "chaos_estim_charged_chain": "⚡ geladen: deine nächsten {0} Treffer lösen eine Kettenreaktion aus",
   "chaos_estim_arc_remaining": "⚡ der Strom springt über (übrig: {0})",

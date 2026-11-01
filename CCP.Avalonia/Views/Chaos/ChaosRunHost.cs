@@ -652,7 +652,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF UseToy: gate and cooldown, plus the E-Stim effect (ChaosModeService.cs:2761-2775).
-        /// The other toy effects and the first_play Spark award remain unwired.</summary>
+        /// The other toy effects remain unwired.</summary>
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
@@ -664,9 +664,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             BubbleOverlay.ArmEStim(charges, maxed);
             ChaosEStimOverlay.Arm();
             ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
-            ChaosEffectBannerOverlay.Show("estim", "E-Stim", Color.FromRgb(0x9C, 0x5C, 0xFF));
+            ChaosEffectBannerOverlay.Show("estim", Loc.Get("chaos_estim_banner"), Color.FromRgb(0x9C, 0x5C, 0xFF));
             Pulse(Color.FromRgb(0x9C, 0x5C, 0xFF), 0.25);
             _state.PushEvent(Loc.GetF(maxed ? "chaos_estim_charged_chain" : "chaos_estim_charged_conduct", charges));
+            if (!ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play)) ChaosFirstTimes.TryAward(ChaosFirstTimes.Play); // WPF :2780
         }
 
         // WPF ChaosModeService.cs:2785-2799: each discharge sounds; the final one drops the halo.

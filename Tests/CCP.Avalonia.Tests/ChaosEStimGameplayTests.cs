@@ -109,6 +109,51 @@ public sealed class ChaosEStimGameplayTests
     });
 
     [Fact]
+    public Task First_successful_EStim_awards_sparks_only_once() => WithRun(1, state =>
+    {
+        var meta = ChaosMeta.State;
+        meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+        int before = meta.Sparks;
+        state.ActivesDisabled = true;
+        ChaosRunHost.UseToyById("e_stim");
+        Assert.Equal(before, meta.Sparks);
+        Assert.False(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
+        state.ActivesDisabled = false;
+        ChaosRunHost.UseToyById("e_stim");
+        Assert.Equal(before + 15, meta.Sparks);
+        Assert.True(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
+        ChaosRunHost.UseToyById("e_stim"); // Cooling down cannot award.
+        state.ActiveToys.Single().CooldownRemainingSec = 0;
+        ChaosRunHost.UseToyById("e_stim");
+        Assert.Equal(before + 15, meta.Sparks);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task EStim_banner_ships_WPF_art_and_supplies_localized_fallback() => WithRun(1, state =>
+    {
+        var path = System.IO.Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", "announce", "estim.png");
+        Assert.True(System.IO.File.Exists(path));
+        Assert.Equal("51449CDED0DC38917E0939CB3EC30E023EC7179B12960BBE12C80EF6CC6BBAAF",
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.IO.File.ReadAllBytes(path))));
+        var loc = LocalizationManager.Instance;
+        string previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("fr");
+            ChaosRunHost.UseToyById("e_stim");
+            var banner = ChaosEffectBannerOverlay.Active!;
+            Assert.IsType<global::Avalonia.Controls.Image>(Assert.Single(banner.Row.Children));
+            string text = Assert.Single(banner.Strip.Row).Text;
+            Assert.Equal("Électrostimulation", text);
+            ChaosEffectBannerOverlay.Show("missing-estim-test", text, global::Avalonia.Media.Colors.Violet);
+            Assert.Equal("ÉLECTROSTIMULATION", Assert.IsType<OutlinedTextBlock>(banner.Row.Children[1]).Text);
+        }
+        finally { loc.SetLanguage(previous); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task Capstone_ripples_breadth_first_and_caps_the_chain_at_forty() => WithRun(3, async state =>
     {
         state.ToyPower["e_stim"] = 1;
@@ -175,7 +220,8 @@ public sealed class ChaosEStimGameplayTests
                 .SetupWithoutStarting();
         var meta = ChaosMeta.State;
         var active = meta.ActiveLifetimeBoons.ToArray();
-        int pockets = meta.ToyPockets;
+        int pockets = meta.ToyPockets, sparks = meta.Sparks;
+        bool hadFirstPlay = meta.FirstTimesAwarded.Contains(ChaosFirstTimes.Play);
         bool hadLevel = meta.LifetimeBoonLevels.TryGetValue("e_stim", out int oldLevel);
         var settings = CoreSettings.Current;
         bool skia = settings.ChaosSkiaFxEnabled;
@@ -213,6 +259,9 @@ public sealed class ChaosEStimGameplayTests
             meta.ActiveLifetimeBoons.Clear();
             foreach (var id in active) meta.ActiveLifetimeBoons.Add(id);
             meta.ToyPockets = pockets;
+            meta.Sparks = sparks;
+            if (hadFirstPlay) meta.FirstTimesAwarded.Add(ChaosFirstTimes.Play);
+            else meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
             if (hadLevel) meta.LifetimeBoonLevels["e_stim"] = oldLevel;
             else meta.LifetimeBoonLevels.Remove("e_stim");
         }

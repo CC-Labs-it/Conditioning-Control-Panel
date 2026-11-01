@@ -1,4 +1,5 @@
 {
+  "chaos_estim_banner": "Électrostimulation",
   "chaos_estim_charged_conduct": "⚡ charge : vos {0} prochaines bulles conduisent",
   "chaos_estim_charged_chain": "⚡ charge : vos {0} prochaines bulles déclenchent une chaîne",
   "chaos_estim_arc_remaining": "⚡ le courant jaillit (reste : {0})",
