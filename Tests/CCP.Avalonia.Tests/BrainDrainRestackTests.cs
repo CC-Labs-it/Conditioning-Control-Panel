@@ -12,18 +12,17 @@ public sealed class BrainDrainRestackTests
     [Fact]
     public Task UnsupportedBackendDoesNotClaimToHaveSunkTheBlur() => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        // Collections run in parallel and the first bootstrap owns process fonts; when it is this one, bundled Inter must stay.
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-        // Even this text-free fixture must leave bundled fonts available to the next test.
-        Assert.True(FontManager.Current.TryGetGlyphTypeface(new Typeface(new FontFamily(AppFonts.Inter), FontStyle.Normal, FontWeight.Bold), out _));
-        var drain = new Window();
-        var picture = new Window();
+        {
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            Assert.True(FontManager.Current.TryGetGlyphTypeface(new Typeface(new FontFamily(AppFonts.Inter), FontStyle.Normal, FontWeight.Bold), out _));
+        }
+        var drain = new Window(); var picture = new Window();
         try
         {
-            drain.Show();
-            picture.Show();
+            drain.Show(); picture.Show();
             Assert.False(X11Overlay.RestackBelow(drain, picture));
         }
         finally { picture.Close(); drain.Close(); }
