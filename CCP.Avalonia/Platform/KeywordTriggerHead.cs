@@ -172,16 +172,19 @@ internal sealed class KeywordAudioRuntime
         if (legacy)
         {
             var t = fired[0];
+            // WPF :1681-1689: a keyboard match has no OCR words to highlight, and returns
+            // before audio, ducking or any other legacy effect.
+            if (t.VisualEffect == KeywordVisualEffect.HighlightOnly) return;
             audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
                 PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
         }
-        // WPF KeywordTriggerService.cs:1397-1399,1698-1701,1841-1852: the match
-        // still counts, but its audio is held unless the engine or a session is running.
-        if (audio != null && (CoreSession.IsEngineRunning || CoreSession.IsSessionRunning)) Play(audio);
-        else if (legacy && fired[0].DuckAudio && fired[0].VisualEffect != KeywordVisualEffect.HighlightOnly)
+        // WPF :1698-1701 checks the legacy path as stored, without the action path resolver.
+        // A held or missing legacy clip still ducks and releases after 500 ms (:1692-1695,1742-1745).
+        var running = CoreSession.IsEngineRunning || CoreSession.IsSessionRunning;
+        if (audio != null && running && (!legacy || File.Exists(audio.FilePath))) Play(audio, resolveRelative: !legacy);
+        else if (legacy && fired[0].DuckAudio)
         {
-            // WPF KeywordTriggerService.cs:1681-1695,1742-1745: legacy ducking is independent
-            // of held audio and its 500 ms release survives a clip stop. Keep each generation local.
+            // The pending release survives a clip stop. Keep each generation local.
             long generation = -1;
             if (s.AudioDuckingEnabled)
             {
@@ -212,11 +215,11 @@ internal sealed class KeywordAudioRuntime
         _duckGeneration = null;
     }
 
-    private void Play(PlayAudioAction audio)
+    private void Play(PlayAudioAction audio, bool resolveRelative)
     {
         if (string.IsNullOrEmpty(audio.FilePath)) return;
         var path = audio.FilePath;
-        if (!Path.IsPathRooted(path))
+        if (resolveRelative && !Path.IsPathRooted(path))
         {
             var resource = ContentLocator.Resolve(Path.Combine("Resources", path));
             var legacy = ContentLocator.Resolve(Path.Combine("Resources", "sub_audio", path));
