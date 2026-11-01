@@ -19,13 +19,15 @@ namespace ConditioningControlPanel.Avalonia
             PerfBench.SinceMain.Start();   // --perf-bench startup clock: the first line of Main, by definition
             // WPF logs to a file under UserData/logs (App.xaml.cs:1967, LogPipeline.cs); stderr stays for CI and kc.
             // ponytail: WPF's path redaction, flight recorder and per-run naming come with the bug-report port.
+            var reportLog = new ReportLogFile();
             Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Information()
                 .WriteTo.Sink(new StderrSink())
                 .WriteTo.File(System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, "logs", "ccp-avalonia-.log"),
                     rollingInterval: Serilog.RollingInterval.Day, retainedFileCountLimit: 14,
                     fileSizeLimitBytes: 10_000_000, rollOnFileSizeLimit: true,
-                    flushToDiskInterval: TimeSpan.FromSeconds(1))
+                    flushToDiskInterval: TimeSpan.FromSeconds(1), hooks: reportLog)
                 .CreateLogger();
+            ConfigureBugReportLogging(reportLog);
             // The session's hold on the phrase pools (#906); WPF seeds the same three in App.xaml.cs:324.
             ConditioningControlPanel.Services.PhrasePoolCustody.Seed();
 
@@ -247,6 +249,16 @@ namespace ConditioningControlPanel.Avalonia
             app.StartWithClassicDesktopLifetime(args);
             App.StartupFailure?.Throw();   // a failed startup crashes non-zero, as it did before the splash
             return 0;
+        }
+
+        internal static void ConfigureBugReportLogging(ReportLogFile file) =>
+            Services.BugReportService.AppLogFileSelector = () => file.CurrentFile;
+
+        internal sealed class ReportLogFile : Serilog.Sinks.File.FileLifecycleHooks
+        {
+            internal volatile string? CurrentFile;
+            public override System.IO.Stream OnFileOpened(string path, System.IO.Stream stream, System.Text.Encoding encoding)
+            { CurrentFile = path; return stream; }
         }
 
         public static AppBuilder BuildAvaloniaApp()

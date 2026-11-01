@@ -73,6 +73,9 @@ public class Sync7AudioTests
         Assert.NotNull(CoreAudioDiagnostics.LineFor(player, "clip.wav", false, false, now.AddSeconds(-1)));
         Assert.Equal("clip.wav", CoreAudioDiagnostics.NameOf("/private/clip.wav"));
         Assert.Equal("?", CoreAudioDiagnostics.NameOf(null));
+        Assert.Equal("clip.wav", CoreAudioDiagnostics.NameOf("C:clip.wav"));
+        Assert.Equal("clip.wav", WpfAudio.NameOf("C:clip.wav"));
+        Assert.Equal("?", CoreAudioDiagnostics.NameOf("z:"));
     }
 
     [Fact]

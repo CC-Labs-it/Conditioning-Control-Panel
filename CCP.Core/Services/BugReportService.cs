@@ -109,6 +109,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>This session's log file, or null when the pipeline has not opened one.</summary>
         public static volatile Func<string?>? SessionLogFile;
 
+        /// <summary>Head-specific app-log selection; a null result means no app log.</summary>
+        public static volatile Func<string?>? AppLogFileSelector;
+
         private readonly HttpClient _httpClient;
 
         public BugReportService() : this(new HttpClient()) { }
@@ -869,6 +872,9 @@ namespace ConditioningControlPanel.Services
             try
             {
                 if (!Directory.Exists(logDir)) return null;
+
+                if (AppLogFileSelector is { } selector)
+                    return selector() is { Length: > 0 } selected && File.Exists(selected) ? selected : null;
 
                 var current = SessionLogFile?.Invoke();
                 if (!string.IsNullOrEmpty(current) && File.Exists(current)) return current;

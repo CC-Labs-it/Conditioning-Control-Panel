@@ -61,6 +61,7 @@ public static class CoreAudioDiagnostics
         if (string.IsNullOrWhiteSpace(path)) return "?";
         var trimmed = path.TrimEnd('/', '\\');
         var at = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf('\\'));
-        return trimmed.Length == 0 ? "?" : trimmed[(at + 1)..];
+        if (at < 0 && trimmed.Length >= 2 && char.IsAsciiLetter(trimmed[0]) && trimmed[1] == ':') at = 1;
+        return at >= trimmed.Length - 1 ? "?" : trimmed[(at + 1)..];
     }
 }
