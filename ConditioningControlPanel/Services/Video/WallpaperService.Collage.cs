@@ -242,6 +242,13 @@ namespace ConditioningControlPanel.Services
             var s = App.Settings?.Current;
             if (s == null || !s.CollageWallpaperEnabled) return;
 
+            // Dynamic mode: the moving collage owns the desktop instead, and it never writes a wallpaper.
+            if (DynamicWallpaperService.ShouldRun(s))
+            {
+                App.DynamicWallpaper?.Start();
+                return;
+            }
+
             // Own image: one picture, held. Moved or deleted since it was picked: leave the desktop alone.
             string? ownImage = null;
             if (s.CollageMode == Models.WallpaperMode.OwnImage)
@@ -304,6 +311,8 @@ namespace ConditioningControlPanel.Services
         /// a panic is not held up.</summary>
         public void StopCollage()
         {
+            App.DynamicWallpaper?.Stop();
+
             bool wasRunning;
             lock (_lock)
             {
@@ -329,12 +338,14 @@ namespace ConditioningControlPanel.Services
         {
             StopCollage();
             Deactivate();   // a Takeover wallpaper is up without the collage: same rule at logoff
+            App.DynamicWallpaper?.WaitStopped(timeout);
             _setQueue.Flush(timeout);
         }
 
         /// <summary>Arm or disarm the rotation timer to match the Rotate + interval settings, live.</summary>
         public void RefreshCollageSchedule()
         {
+            App.DynamicWallpaper?.RefreshSchedule();
             if (!_collageRunning) return;
             if (_ownImageRunning) { _collageTimer?.Stop(); return; }
             if (_collageTimer == null)

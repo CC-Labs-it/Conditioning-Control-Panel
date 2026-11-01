@@ -72,6 +72,11 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             var s = App.Settings?.Current;
             if (s == null || !s.CollageWallpaperEnabled) { ShowHint(null); return; }
 
+            if (s.CollageMode == Models.WallpaperMode.Dynamic && App.DynamicWallpaper?.IsUnavailable == true)
+            {
+                ShowHint(Localization.Loc.Get("hint_wallpaper_dynamic_unavailable"));
+                return;
+            }
             if (s.CollageMode != Models.WallpaperMode.Dynamic && Services.WallpaperService.WriteWouldLoseDesktop())
             {
                 ShowHint(Localization.Loc.Get("hint_wallpaper_desktop_kept"));
