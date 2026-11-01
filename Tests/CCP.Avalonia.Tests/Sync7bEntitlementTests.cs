@@ -80,26 +80,28 @@ public class Sync7bEntitlementTests
     [Fact]
     public Task CheckoutFocusReadsOnceWithoutProgressionPush() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var secrets = new Dictionary<string, string?>();
-        CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
-        CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
-        var s = CoreSettings.Current;
-        s.OfflineMode = false; s.UnifiedId = "checkout"; s.AuthToken = "test-token";
-        if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>()
-            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var handler = new ProfileAnswer();
-        AccountSeed.NewV2 = () => new V2AuthService(() => s, handler);
-        CheckoutWatch.Disarm();
-        CheckoutWatch.NoteOpened("https://app.cclabs.app/subscribe");
-        EntitlementRefresh.OnActivated(shell: false);
-        EntitlementRefresh.OnActivated(shell: false);
-        Assert.Equal(1, handler.Reads);
-        await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => { });
-        Assert.True(EntitlementRefresh.ServerAnsweredThisRun);
-        s.OfflineMode = true;
+        var secrets = new Dictionary<string, string?>(); CoreSecrets.RetrieveProvider = key => { lock (secrets) return secrets.GetValueOrDefault(key); };
+        CoreSecrets.StoreProvider = (key, value) => { lock (secrets) secrets[key] = value; };
+        var s = CoreSettings.Current; s.OfflineMode = false; s.UnifiedId = "checkout"; s.AuthToken = "test-token";
+        if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var handler = new ProfileAnswer(); AccountSeed.NewV2 = () => new V2AuthService(() => s, handler);
+        using var patreon = new ProviderSubscription("patreon", () => s, handler); patreon.StoreTokens("test-token", "test-refresh", DateTime.UtcNow.AddHours(1));
+        var slot = typeof(AccountSeed).GetProperty("Patreon", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var previous = slot.GetValue(null); slot.SetValue(null, patreon); Task activation = Task.CompletedTask;
+        var grant = new TaskCompletionSource<PatreonTier>(TaskCreationOptions.RunContinuationsAsynchronously); patreon.TierChanged += (_, tier) => grant.TrySetResult(tier);
+        try {
+            CheckoutWatch.Disarm(); CheckoutWatch.NoteOpened("https://app.cclabs.app/subscribe");
+            activation = EntitlementRefresh.OnActivated(shell: false); await EntitlementRefresh.OnActivated(shell: false);
+            Assert.Equal(1, handler.Reads); Assert.Equal(PatreonTier.Level2, await grant.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.True(SpinWait.SpinUntil(() => !patreon.IsVerifying, TimeSpan.FromSeconds(5)));
+            Assert.False(handler.Profile.Task.IsCompleted); Assert.True(ProviderSubscription.HasLabAccess(patreon, null, s));
+        } finally {
+            handler.Profile.TrySetResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"user\":{\"effective_tier\":0}}") });
+            try { await activation.WaitAsync(TimeSpan.FromSeconds(10)); await grant.Task.WaitAsync(TimeSpan.FromSeconds(10)); Assert.True(SpinWait.SpinUntil(() => !patreon.IsVerifying, TimeSpan.FromSeconds(5))); } finally { slot.SetValue(null, previous); CheckoutWatch.Disarm(); }
+        }
+        Assert.True(EntitlementRefresh.ServerAnsweredThisRun); s.OfflineMode = true;
         CheckoutWatch.Disarm(); CheckoutWatch.NoteOpened("https://patreon.com/checkout");
-        EntitlementRefresh.OnActivated(shell: false);
-        Assert.Equal(1, handler.Reads);
+        await EntitlementRefresh.OnActivated(shell: false); Assert.Equal(1, handler.Reads); CheckoutWatch.Disarm();
     });
 
     [Fact]
@@ -145,13 +147,12 @@ public class Sync7bEntitlementTests
 
     private sealed class ProfileAnswer : HttpMessageHandler
     {
-        internal int Reads;
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        internal int Reads; internal readonly TaskCompletionSource<HttpResponseMessage> Profile = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
-            Assert.Equal(HttpMethod.Get, request.Method);
-            Reads++;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            { Content = new StringContent("{\"user\":{\"effective_tier\":0}}") });
+            Assert.Equal(HttpMethod.Get, r.Method); if (r.RequestUri!.AbsolutePath == "/patreon/validate")
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"is_active\":true,\"tier\":2}") });
+            Reads++; return Profile.Task;
         }
     }
 

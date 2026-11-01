@@ -23,35 +23,37 @@ internal static class EntitlementRefresh
         && !ProviderSubscription.IsInviteWeekOnly(AccountSeed.Patreon, AccountSeed.SubscribeStar, CoreSettings.Current) ? 1 : 0;
 
     private static readonly ConditionalWeakTable<Window, object> Hooked = new();
-    internal static Action<bool> Activation = OnActivated; // Window callback seam, before throttling.
+    internal static Action<bool> Activation = shell => _ = OnActivated(shell); // Window callback seam, before throttling.
     internal static IDisposable Install() => Window.WindowOpenedEvent.AddClassHandler<Window>((window, _) =>
     {
         if (Hooked.TryAdd(window, window)) window.Activated += (_, _) => Activation(window is Views.Windows.MainShellWindow);
     });
 
-    internal static void OnActivated(bool shell)
+    internal static Task OnActivated(bool shell)
     {
-        if (CoreSettings.Current.OfflineMode) return;
+        if (CoreSettings.Current.OfflineMode) return Task.CompletedTask;
         var now = DateTime.UtcNow;
         var checkout = CheckoutWatch.TakeCheck(now);
-        if (!checkout && (!shell || now - _lastFocus < TimeSpan.FromSeconds(20))) return;
+        if (!checkout && (!shell || now - _lastFocus < TimeSpan.FromSeconds(20))) return Task.CompletedTask;
         _lastFocus = now;
-        _ = CheckAsync(checkout);
+        return CheckAsync(checkout, afterCheckout: checkout);
     }
 
-    internal static async Task<JustSubscribedOutcome> CheckAsync(bool validatePatreon = true)
+    internal static async Task<JustSubscribedOutcome> CheckAsync(bool validatePatreon = true, bool afterCheckout = false)
     {
         var before = EffectiveTier;
         var s = CoreSettings.Current;
         var signedIn = !string.IsNullOrEmpty(s.UnifiedId) && !string.IsNullOrEmpty(s.AuthToken);
         var patreon = AccountSeed.Patreon;
         var reached = false;
+        var profile = signedIn && !s.OfflineMode ? RefreshAsync() : Task.FromResult(false);
+        var validation = afterCheckout && validatePatreon && !s.OfflineMode && patreon?.IsAuthenticated == true ? Task.Run(() => patreon.ValidateSubscriptionAsync(forceRefresh: true)) : null;
         if (!s.OfflineMode)
         {
-            if (signedIn) reached = await RefreshAsync();
-            if (validatePatreon && patreon?.IsAuthenticated == true)
+            if (signedIn) reached = await profile;
+            if (validatePatreon && (validation != null || patreon?.IsAuthenticated == true))
             {
-                try { await patreon.ValidateSubscriptionAsync(forceRefresh: true); reached = true; }
+                try { await (validation ?? patreon!.ValidateSubscriptionAsync(forceRefresh: true)); reached = true; }
                 catch (Exception ex) { Log.Debug(ex, "Patreon revalidation failed"); }
             }
         }

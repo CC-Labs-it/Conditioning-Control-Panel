@@ -59,7 +59,7 @@ public sealed class InboxNoticeCard : Window, IPassiveStartupSurface
         quiet.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { card.Close(); Run(onSecondary); } };
         stack.Children.Add(quiet);
         card.Content = new Border { Background = Brush.Parse("#FF151528"), CornerRadius = new CornerRadius(14),
-            BorderThickness = new Thickness(1.5), BorderBrush = Brush.Parse("#FF69B4"), Margin = new Thickness(12),
+            BorderThickness = new Thickness(1.5), [!Border.BorderBrushProperty] = new global::Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension("PinkBrush"), Margin = new Thickness(12),
             Padding = new Thickness(22, 18, 22, 16), Child = stack };
         try { _open?.Close(); } catch (InvalidOperationException) { }
         _open = card;

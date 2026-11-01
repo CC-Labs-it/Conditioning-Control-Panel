@@ -35,8 +35,8 @@ public class InboxNoticeCardTests
         try
         {
             Assert.True(first.IsVisible);
-            Assert.Same(owner, first.Owner);
-            Assert.False(first.IsDialog);
+            Assert.Same(owner, first.Owner); Assert.False(first.IsDialog);
+            first.Resources["PinkBrush"] = global::Avalonia.Media.Brushes.Cyan; Assert.Same(global::Avalonia.Media.Brushes.Cyan, Assert.IsType<Border>(first.Content).BorderBrush);
             next = InboxNoticeCard.Present(owner, "Basic is on", "Everything is open.", null, null);
             Assert.False(first.IsVisible);
             Assert.True(next.IsVisible);
