@@ -1,14 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Safety;
@@ -159,6 +164,82 @@ public sealed class CompanionTriggerTimerTests
             Assert.Equal("listening", text.Text);
             tube.PanicSilence();
             Assert.Equal(2, stops); // the second whisper replaces the first, panic cuts the second
+        }
+        finally { tube.Close(); parent.Close(); PanicAftermath.EndQuiet(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task TriggerMarkdownBecomesClickableOnlyAfterTypingAndUsesTheSharedGuard() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var s = CoreSettings.Current;
+        s.AvatarEnabled = true; s.AvatarMuted = false; s.TriggerModeEnabled = true; s.SubAudioEnabled = false;
+        s.CustomTriggers = new List<string> { "Open [clip](https://example.com/video) now" };
+        var oldNavigate = CompanionLinkLauncher.Navigate;
+        var oldRelay = RemoteControlTabView.Relay;
+        using var relay = new RemoteRelay(() => null, () => null, "test", (_, _) => null, _ => { });
+        RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+        _ = RemoteControlTabView.Relay.Value;
+        var urls = new List<string>();
+        CompanionLinkLauncher.Navigate = url => { urls.Add(url); return true; };
+        var parent = new Window();
+        var tube = new AvatarTubeWindow(parent) { TriggerHaptic = _ => { } };
+        try
+        {
+            parent.Show(); tube.Show(); tube.OnTriggerTick(); tube.FinishTriggerLead();
+            var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+            tube.AdvanceTriggerTypewriter();
+            Assert.Equal("O", text.Text);
+            for (int i = 0; i < 20; i++) tube.AdvanceTriggerTypewriter();
+            var link = Assert.IsType<Button>(Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
+            Assert.Equal("clip", Assert.IsType<TextBlock>(link.Content).Text);
+            Assert.Equal(new[] { "Open ", " now" }, text.Inlines.OfType<Run>().Select(x => x.Text));
+            Dispatcher.UIThread.RunJobs();
+            tube.UpdateLayout();
+            Assert.True(link.Bounds.Width > 0 && link.Bounds.Height > 0, $"Link bounds: {link.Bounds}");
+            var point = link.TranslatePoint(new Point(link.Bounds.Width / 2, link.Bounds.Height / 2), tube)!.Value;
+            Assert.True(point.X >= 0 && point.Y >= 0 && point.X < tube.Bounds.Width && point.Y < tube.Bounds.Height,
+                $"Link point {point}, tube bounds {tube.Bounds}");
+            tube.MouseDown(point, MouseButton.Left); tube.MouseUp(point, MouseButton.Left);
+            Assert.Equal(new[] { "https://example.com/video" }, urls);
+            typeof(RemoteRelay).GetProperty(nameof(RemoteRelay.ControllerConnected))!.SetValue(relay, true);
+            tube.MouseDown(point, MouseButton.Left); tube.MouseUp(point, MouseButton.Left);
+            Assert.Single(urls);
+        }
+        finally
+        {
+            tube.Close(); parent.Close(); PanicAftermath.EndQuiet();
+            CompanionLinkLauncher.Navigate = oldNavigate; RemoteControlTabView.Relay = oldRelay;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task InvalidMarkdownTargetsStayPlainAndPreemptedTypingCannotRestoreLinks() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var s = CoreSettings.Current;
+        s.AvatarEnabled = true; s.AvatarMuted = false; s.TriggerModeEnabled = true; s.SubAudioEnabled = false;
+        s.CustomTriggers = new List<string> { "See [file](file:///tmp/file)" };
+        var parent = new Window();
+        var tube = new AvatarTubeWindow(parent) { TriggerHaptic = _ => { } };
+        try
+        {
+            parent.Show(); tube.Show(); tube.OnTriggerTick(); tube.FinishTriggerLead();
+            for (int i = 0; i < 40; i++) tube.AdvanceTriggerTypewriter();
+            var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+            Assert.Empty(text.Inlines!.OfType<InlineUIContainer>());
+            Assert.Equal("See file", string.Concat(text.Inlines.OfType<Run>().Select(x => x.Text)));
+            tube.EndSpeechBubble();
+            s.CustomTriggers = new List<string> { "[clip](https://example.com)" };
+            tube.SpeechClock = new Clock { Now = DateTimeOffset.UtcNow.AddHours(1) };
+            tube.OnTriggerTick(); tube.FinishTriggerLead(); tube.AdvanceTriggerTypewriter();
+            Assert.Equal("c", text.Text);
+            tube.ShowListeningBubble("listening");
+            for (int i = 0; i < 10; i++) tube.AdvanceTriggerTypewriter();
+            Assert.Equal("listening", text.Text);
+            Assert.Empty(text.Inlines!.OfType<InlineUIContainer>());
         }
         finally { tube.Close(); parent.Close(); PanicAftermath.EndQuiet(); }
         return Task.CompletedTask;

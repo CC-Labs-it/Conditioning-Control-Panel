@@ -1,6 +1,11 @@
 using System;
 using System.Text.RegularExpressions;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.Media;
+using Avalonia.Styling;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Safety;
 
@@ -14,6 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private string? _pendingTrigger;
         private DispatcherTimer? _triggerTypewriter;
         private string _triggerText = "";
+        private string _triggerOriginal = "";
         private int _triggerTextIndex;
 
         // WPF Speech.cs:1631-1671: enabled at construction, repeat at the configured
@@ -92,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void StartTriggerTypewriter(string text)
         {
             StopTriggerTypewriter();
+            _triggerOriginal = text;
             _triggerText = Regex.Replace(text, @"\[([^\]]+)\]\((https?://[^\)]+)\)", "$1", RegexOptions.IgnoreCase);
             _triggerTextIndex = 0;
             _txtSpeech.Text = "";
@@ -106,7 +113,46 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (_triggerTypewriter == null) return;
             _triggerTextIndex = Math.Min(_triggerText.Length, _triggerTextIndex + Math.Max(1, _triggerText.Length / 100));
             _txtSpeech.Text = _triggerText.Substring(0, _triggerTextIndex);
-            if (_triggerTextIndex == _triggerText.Length) StopTriggerTypewriter();
+            if (_triggerTextIndex == _triggerText.Length)
+            {
+                StopTriggerTypewriter();
+                RenderTriggerLinks(_triggerOriginal);
+            }
+        }
+
+        // WPF Speech.cs:1277-1296,1417-1455,2975-3033: after typing, restore
+        // the original markdown as inline links. The shared launcher owns the remote guard,
+        // embedded browser and HTTPS-only fallback (WPF Speech.cs:1490-1532).
+        private void RenderTriggerLinks(string text)
+        {
+            var matches = Regex.Matches(text, @"\[([^\]]+)\]\(([^)]+)\)");
+            if (matches.Count == 0) return;
+            var inlines = new InlineCollection();
+            var last = 0;
+            foreach (Match match in matches)
+            {
+                if (match.Index > last) inlines.Add(new Run(text.Substring(last, match.Index - last)));
+                var label = match.Groups[1].Value;
+                var url = match.Groups[2].Value.Trim();
+                if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+                    (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                {
+                    var link = new Button
+                    {
+                        Theme = (ControlTheme)Resources["SpeechInlineLink"]!,
+                        Content = new TextBlock { Text = label, FontSize = _txtSpeech.FontSize,
+                            FontWeight = _txtSpeech.FontWeight, Foreground = new SolidColorBrush(Color.FromRgb(255, 176, 224)),
+                            TextDecorations = TextDecorations.Underline },
+                        Command = CompanionLinkLauncher.CommandFor(url)
+                    };
+                    inlines.Add(new InlineUIContainer(link) { BaselineAlignment = BaselineAlignment.Baseline });
+                }
+                else inlines.Add(new Run(label));
+                last = match.Index + match.Length;
+            }
+            if (last < text.Length) inlines.Add(new Run(text.Substring(last)));
+            _txtSpeech.Text = null;
+            _txtSpeech.Inlines = inlines;
         }
 
         private void StopTriggerTypewriter()
