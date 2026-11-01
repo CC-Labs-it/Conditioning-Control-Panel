@@ -4,6 +4,7 @@ using Avalonia.Media;
 using Avalonia.Controls.Shapes;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.EmiDesk;
@@ -15,14 +16,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 public partial class EmiDeskWindow
 {
     private static readonly Random GlassRng = new();
-    private DispatcherTimer? _glassWatch, _glassFrames;
+    private DispatcherTimer? _glassWatch;
+    private BeatLoop? _glassFrames;
     private DateTime _glassActivity = DateTime.UtcNow, _glassPhase;
     private TimeSpan _glassIdle = NextGlassIdle();
     private Canvas? _glassLayer;
     private Rectangle? _glassDim;
     private TextBlock? _glassSignal;
     private bool _glassLive, _glassLanded, _glassMotion;
-    private double _glassScale;
+    private double _glassScale, _nextGlassGlitchMs;
 
     private static TimeSpan NextGlassIdle() => EmiDebug.IdleMs is int ms
         ? TimeSpan.FromMilliseconds(ms)
@@ -84,8 +86,8 @@ public partial class EmiDeskWindow
         _glassPhase = now;
         StopIdleBeats();
         PaintGlassGlitch();
-        _glassFrames = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(55) };
-        _glassFrames.Tick += (_, _) => AdvanceGlass(DateTime.UtcNow);
+        _nextGlassGlitchMs = 55;
+        _glassFrames = new BeatLoop(_glassLayer, seconds => AdvanceGlass(now.AddSeconds(seconds)));
         _glassFrames.Start();
     }
 
@@ -95,10 +97,17 @@ public partial class EmiDeskWindow
         double elapsed = (now - _glassPhase).TotalMilliseconds;
         if (!_glassLanded)
         {
-            if (elapsed < 220) { PaintGlassGlitch(); return; } // WPF EmiChannels.cs:85-86
+            if (elapsed < 220)
+            {
+                if (elapsed >= _nextGlassGlitchMs)
+                {
+                    PaintGlassGlitch();
+                    _nextGlassGlitchMs = (Math.Floor(elapsed / 55) + 1) * 55;
+                }
+                return;
+            }
             _glassLanded = true;
             _glassPhase = now;
-            if (_glassFrames != null) _glassFrames.Interval = TimeSpan.FromMilliseconds(33);
             PaintOffAir();
             return;
         }
