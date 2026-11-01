@@ -110,6 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal void EndSpeechBubble()
         {
             _speechTimer?.Stop();
+            StopTypewriter();
             _speechBubble.IsVisible = false;
             _isShowingAiBubble = false;
             NoteSpeechEnded(_currentSpeechSource, _currentSpeechLength);

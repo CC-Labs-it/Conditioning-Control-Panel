@@ -337,6 +337,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
             _poseTimer.Stop();
             _speechTimer?.Stop();
+            StopTypewriter();
             ClearSpeechQueue();
             _cooldownTickTimer?.Stop();
             _possessionGlitchTimer?.Stop();
@@ -400,6 +401,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // the user a few seconds after they opened it. WPF's EnterChatHistoryMode kills the
             // same two timers for the same reason.
             _speechTimer?.Stop();
+            StopTypewriter();
             _cancelSpeechDelay();   // WPF ChatInput.cs:475 _speechDelayTimer.Stop (the queue stays)
             _cancelSpeechDelay = static () => { };
             _isGiggling = false;
@@ -1187,9 +1189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         ///
         /// <para><b>What it drops, and why each is safe to drop rather than fake.</b></para>
         /// <list type="bullet">
-        ///   <item>The typewriter. Cosmetic, and WPF adds its runtime to the display duration - so
-        ///         dropping it shortens the window rather than truncating the line. The reading
-        ///         floor below is kept, which is the half that protects a long reply.</item>
+        ///   <item>AI reply typing and its final hyperlink pass. Preset bubbles use WPF's slow typewriter.</item>
         ///   <item>The lead-in timer and <paramref name="mood"/>. Both exist to time the avatar's
         ///         emotive-portrait pose swap against the voice; that system did not port, so a
         ///         lead-in would be a pause with nothing happening in it.</item>
@@ -1211,6 +1211,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             RunOnAvatar(() =>
             {
                 ClearSpeechQueue();   // WPF Speech.cs:345-350: the priority line drops the queue
+                _speechTimer?.Stop();
+                StopTypewriter();
                 _isGiggling = false;
                 ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken);
             });
@@ -1255,16 +1257,21 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     if (aiGenerated) _lastAiBubbleUtc = DateTime.UtcNow;
 
                     StopThinkingAnimation();   // the reply pre-empts the thinking bubble (WPF Speech.cs:335)
-                    _speechTimer?.Stop();
                     if (!preset) AddToChatHistory(text, isUser: false);   // WPF Giggle logs nothing
 
                     var source = preset ? SpeechSource.Preset : SpeechSource.AI;
-                    if (Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
+                    // WPF Speech.cs:463-477 and Windowing.cs:2210-2231: a hidden avatar skips
+                    // the bubble and audio, but the skipped line still earns its queue delay.
+                    if (!CoreSettings.Current.AvatarEnabled || !IsVisible || WindowState == WindowState.Minimized
+                        || (_isAttached && _parentWindow is { } parent && (!parent.IsVisible || parent.WindowState == WindowState.Minimized))
+                        || Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
                     {
-                        _isGiggling = false;   // WPF Speech.cs:452-460: skipped, but it still spaces the next
+                        _isGiggling = false;
                         NoteSpeechEnded(source, text.Length);
                         return;
                     }
+                    _speechTimer?.Stop();
+                    StopTypewriter();
                     // Publish this line BEFORE cutting the last: the cut fires the old clip's onSpoken on the
                     // thread pool, and a voice waiter woken by it must already see this line in the air.
                     SpokenAudioDone = clipDone.Task;
@@ -1285,10 +1292,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
-                    if (!IsMuted) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken); spokenHandled = true; }
+                    if (!IsMuted) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, preset, spoken); spokenHandled = true; }
 
                     SyncAskButtonsFor(text);
-                    _txtSpeech.Text = text;
+                    if (preset) StartPresetTypewriter(text); else _txtSpeech.Text = text;
                     _speechBubble.MaxWidth = 380;
                     ApplySpeechBubblePlacement();
                     _speechBubble.IsVisible = true;
@@ -1297,7 +1304,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _currentSpeechSource = source;
                     _currentSpeechLength = text.Length;
 
-                    StartBubbleHideTimer(text);
+                    StartBubbleHideTimer(text, preset);
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
                 }
                 catch (Exception ex) { Log.Warning(ex, "AvatarTube GigglePriority failed"); }
@@ -1318,6 +1325,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 if (_isPlayingUninterruptibleClip) return;
                 ClearSpeechQueue();   // WPF Speech.cs:719-721: nothing queued talks over the open mic
                 _speechTimer?.Stop();
+                StopTypewriter();
                 _isGiggling = false;
                 _isShowingAiBubble = false;
                 _isListeningBubble = true;
@@ -1391,10 +1399,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// seconds (bug #193). Hovering the bubble holds it open, re-checked every second, for at
         /// most two minutes (WPF SpeechLatchRule.HoldForHover, Speech.cs:579).
         /// </summary>
-        private void StartBubbleHideTimer(string text)
+        private void StartBubbleHideTimer(string text, bool preset)
         {
             double seconds = Math.Clamp(CoreSettings.Current.BubbleDurationSeconds, 1.0, 10.0);
-            seconds = Math.Max(seconds, Math.Min(30.0, text.Length / 12.0));
+            // WPF Speech.cs:565-586: presets keep the slider's reading time after typing.
+            if (preset) seconds += PresetTypewriterDurationMs(text.Length) / 1000.0;
+            else seconds = Math.Max(seconds, Math.Min(30.0, text.Length / 12.0));
 
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
             DateTime? hoverHoldSince = null;
@@ -1416,14 +1426,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// means "attempt no audio at all" (the mute egg), so it returns before touching a file.
         /// <para>"Mute Voice Lines" (#846) silences only the spoken VO and drops back to a sound
         /// cue, so she still reads as present - the single choke point every voiced line funnels
-        /// through on WPF. The cue is the giggle; WPF's PlayFallbackBubbleSound picks between the
-        /// giggles and the "um" set, and that coin flip lives in Reactions.cs.</para>
+        /// through on WPF. Preset fallback uses giggle1-4 (WPF Reactions.cs:322-347).</para>
         /// </summary>
         /// <summary>WPF IsSpeakingAudio as a task: completes when her LATEST voiced clip ends (cut or
         /// finished). The voice host waits on it so a bark that cut her confirmation still holds the mic.</summary>
         internal Task SpokenAudioDone { get; private set; } = Task.CompletedTask;
 
-        private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null)
+        private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, bool preset, Action? onSpoken = null)
         {
             var handedOff = false;
             try
@@ -1448,6 +1457,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 }
 
                 if (playSound) PlayGiggleSound(curved);
+                else if (preset) PlayFallbackBubbleSound(curved); // WPF Speech.cs:531-539
             }
             catch (Exception ex) { Log.Debug("AvatarTube speech audio failed: {Error}", ex.Message); }
             finally { if (!handedOff) onSpoken?.Invoke(); }
@@ -1472,6 +1482,16 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (!File.Exists(path)) return;
             _stopSpoken();   // as above: one clip at a time, so panic's single stop reaches it
             _stopSpoken = CoreAudio.PlayStoppable(path, curvedVolume * 0.7f, "giggle");
+        }
+
+        // WPF AvatarTubeWindow.Reactions.cs:322-347: regular bubbles use giggle1-4 at 50%.
+        private void PlayFallbackBubbleSound(float curvedVolume)
+        {
+            if (ConditioningControlPanel.Services.ModAudioPolicy.SuppressesGiggleSfx(CoreMods.ActiveModId)) return;
+            var name = $"giggle{1 + _random.Next(4)}.MP3";
+            var path = CoreModArt.AudioOverridePath(name)
+                       ?? System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "sounds", name);
+            if (File.Exists(path)) CoreAudio.PlayOneShot(path, curvedVolume * 0.5f, "bubble-fallback");
         }
 
         // =========================================================================================

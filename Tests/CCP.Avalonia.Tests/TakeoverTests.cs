@@ -606,7 +606,7 @@ public sealed class TakeoverTests
     public Task PresetCommentIsWpfGiggle() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var tube = new global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);
@@ -625,6 +625,7 @@ public sealed class TakeoverTests
 
             tube.Giggle("preset one");
             Dispatcher.UIThread.RunJobs();
+            while (tube.TypewriterFrame is { } frame) frame();
             Assert.Equal("preset one", text.Text);
             Assert.Equal(history, tube.ChatHistory.Count);
 

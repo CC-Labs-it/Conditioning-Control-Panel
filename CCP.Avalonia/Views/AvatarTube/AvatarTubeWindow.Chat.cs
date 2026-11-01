@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // The first frame as WPF ShowGiggle(source: AI) draws it: unbadged, silent, no chat-log
             // entry and no auto-dismiss - the reply pre-empts it.
             _speechTimer?.Stop();
+            StopTypewriter();
             if (!Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
             {
                 if (_isShowingChatHistory)
