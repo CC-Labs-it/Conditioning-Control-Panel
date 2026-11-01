@@ -45,6 +45,7 @@ internal static class AccountSeed
             Log.Warning(ex, "Account providers unavailable: signed out, no entitlement");
             return false;
         }
+        ProviderSubscription.PrizesSink = PrizeOwnership.ApplyProfile;
         (Patreon, SubscribeStar, Discord) = (patreon, substar, discord);
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
 
@@ -161,12 +162,16 @@ internal static class AccountSeed
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
+        PrizeOwnership.NoteAccount(id);
+        if (Sync is { } prizeSync) prizeSync.PrizesReceived = (account, prizes) => PrizeOwnership.ApplyProfile(account, account, prizes, "V2 sync");
         var user = await v2.GetUserProfileAsync(id);
         if (user == null)
         {
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
             return false;
         }
+        if (s.UnifiedId != id || s.OfflineMode) return false;
+        PrizeOwnership.ApplyProfile(id, user.UnifiedId, user.Prizes, "V2 profile");
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
         if (!string.IsNullOrEmpty(s.AuthToken))
@@ -215,6 +220,7 @@ internal static class AccountSeed
         s.UnifiedId = null;
         s.AuthToken = null;
         s.UserDisplayName = null;
+        PrizeOwnership.ResetHeld();
         s.HasLinkedDiscord = false;
         s.HasLinkedPatreon = false;
         ProgressionClear.Apply(s);

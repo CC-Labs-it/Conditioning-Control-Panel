@@ -130,6 +130,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
         public Descent.DescentService? DescentReader { get; set; }
+        /// <summary>Optional head sink for the requested account's server-owned grants, after the account guard.</summary>
+        public Action<string, PrizesBlock?>? PrizesReceived { get; set; }
         public DateTime? LastSyncTime { get; private set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
@@ -291,6 +293,7 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    PrizesReceived?.Invoke(id, reply["prizes"]?.ToObject<PrizesBlock>());
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.

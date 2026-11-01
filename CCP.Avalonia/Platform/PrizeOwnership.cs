@@ -5,16 +5,8 @@ using ConditioningControlPanel.Services.Prizes;
 
 namespace ConditioningControlPanel.Avalonia.Platform
 {
-    /// <summary>
-    /// Back Room prize ownership on this head. WPF asks <c>PrizeGrants.IsGranted</c>, backed by
-    /// OwnershipService snapshots from BackRoomApi. Here only the snapshots a counter reply carries
-    /// (<see cref="ApplySnapshot"/>, fed by <see cref="V2PurchaseHead"/>) are held, for this run;
-    /// the profile-sync feed is parity row svc-prize-ownership. The other source is WPF's DEBUG-only
-    /// <c>CCP_PRIZE_GRANTS</c> override (Core OwnershipService.ReadDebugOverride): same variable,
-    /// same patterns (exact id, <c>prefix.*</c>, <c>*</c>), and a Release build never reads it.
-    /// Parsing is Core's, so an empty id never matches and a pattern holding whitespace or a
-    /// misplaced <c>*</c> is dropped.
-    /// </summary>
+    /// <summary>Account-scoped server ownership from profile reads, sync, provider validation and purchase replies.
+    /// Core OwnershipService rejects other accounts and older revisions. Nothing is persisted or uploaded.</summary>
     internal static class PrizeOwnership
     {
         /// <summary>Core prize ids, shared with the WPF ownership gate.</summary>
@@ -32,45 +24,48 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
 
         internal static event Action? Changed;
-        internal static string[] Grants
-        {
-            get
-            {
-                var current = FriendsHead.Identity()?.UnifiedId;
-                lock (Gate) return current != null && current == _heldAccount ? _grants.ToArray() : Array.Empty<string>();
-            }
-        }
-
         private static readonly object Gate = new();
-        private static string? _heldAccount;
-        private static long _revision;
-        private static HashSet<string> _grants = new(StringComparer.Ordinal);
+        private static readonly OwnershipService Owned = new(() => FriendsHead.Identity()?.UnifiedId, null, a => a());
+        private static string? _account;
+        static PrizeOwnership() => Owned.OwnershipChanged += (_, _) => Changed?.Invoke();
+        internal static string[] Grants => Owned.Grants.ToArray();
+        internal static bool Held(string id) => Owned.Grants.Contains(id);
 
-        /// <summary>WPF OwnershipService.IsGranted over the snapshots counter replies carry (row
-        /// feat-backroom-counter-buy). Per run only: no profile-sync feed yet (svc-prize-ownership).</summary>
-        internal static bool Held(string id)
+        internal static void NoteAccount(string? account)
         {
-            var current = FriendsHead.Identity()?.UnifiedId;
-            lock (Gate) return current != null && current == _heldAccount && _grants.Contains(id);
-        }
-
-        /// <summary>WPF OwnershipService.ApplySnapshot: another account's snapshot and a lower
-        /// revision for the held account are ignored; blank ids skipped, ids trimmed.</summary>
-        internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
-        {
-            var current = FriendsHead.Identity()?.UnifiedId;
-            if (string.IsNullOrEmpty(accountId) || grants is null || current != accountId) return;
             lock (Gate)
             {
-                if (_heldAccount == accountId && revision < _revision) return;
-                (_heldAccount, _revision) = (accountId, revision);
-                _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                if (account == null || account != FriendsHead.Identity()?.UnifiedId || account == _account) return;
+                _account = account;
+                Owned.Clear();
             }
-            Changed?.Invoke();
         }
 
-        /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
-        internal static void ResetHeld() { lock (Gate) (_heldAccount, _revision, _grants) = (null, 0, new(StringComparer.Ordinal)); }
+        internal static void ApplyProfile(string? requested, string? answered, ConditioningControlPanel.Models.PrizesBlock? prizes, string source)
+        {
+            lock (Gate)
+            {
+                if (requested == null || requested != FriendsHead.Identity()?.UnifiedId) return;
+                NoteAccount(requested);
+                if (requested == answered && prizes?.Grants != null)
+                    Owned.ApplySnapshot(requested, prizes.Revision, prizes.Grants);
+            }
+        }
+
+        internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
+        {
+            lock (Gate)
+            {
+                if (accountId != FriendsHead.Identity()?.UnifiedId) return;
+                NoteAccount(accountId);
+                Owned.ApplySnapshot(accountId, revision, grants);
+            }
+        }
+
+        internal static void ResetHeld()
+        {
+            lock (Gate) { _account = null; Owned.Clear(); }
+        }
 
         /// <summary>WPF V2Badges.FlashOwned: any flashes v2 prize (both motions or Jackpot Remix).</summary>
         internal static bool FlashV2Owned() =>
