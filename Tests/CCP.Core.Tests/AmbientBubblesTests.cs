@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -49,6 +50,59 @@ public sealed class AmbientBubblesTests
         while (f.Bubbles.Count > 0) { Assert.Equal(0, f.Step()); steps++; }
         Assert.Equal(16, steps);                                // fade 0.066 a step
         Assert.True(p.Scale > 1.6);
+    }
+
+    private sealed class AlwaysLucky : Random
+    {
+        public override double NextDouble() => 0;
+    }
+
+    [Fact]
+    public void Paid_lucky_pop_has_gold_sparkles_with_wpf_motion_and_fade()
+    {
+        var s = new AppSettings { UnlockedSkills = new List<string> { "lucky_bubbles" }, FlashGlowEnabled = false };
+        var f = new AmbientBubbleField();
+        typeof(AmbientBubbleField).GetField(nameof(AmbientBubbleField.Random))!.SetValue(f, new AlwaysLucky());
+        var b = new AmbientBubble();
+        Assert.Equal(100, f.Pop(b, s, out var proc));
+        Assert.True(proc);
+        Assert.True(b.Lucky);
+        Assert.NotNull(b.Sparkles);
+        Assert.Equal(16, b.Sparkles!.Length);
+        Assert.Equal(4, b.Sparkles[0].Size);
+        b.Step();
+        Assert.Equal(2, b.Sparkles[0].X, 5);
+        Assert.Equal(0, b.Sparkles[0].Y, 5);
+        Assert.Equal(0.15, b.Sparkles[0].VelocityY, 5);
+        Assert.Equal(0.96, b.Sparkles[0].Alpha, 5);
+        b.Step();
+        Assert.Equal(0.15, b.Sparkles[0].Y, 5);
+    }
+
+    [Fact]
+    public void Boost_sparkles_obey_flash_glow_and_dry_lucky_pop_is_not_gold()
+    {
+        var s = new AppSettings { UnlockedSkills = new List<string> { "lucky_bubbles", "sparkle_boost_1" },
+            FlashGlowEnabled = true, AmbientBubbleXpDayKey = DateTime.Now.ToString("yyyy-MM-dd"), AmbientBubbleXpPaidToday = 300 };
+        var f = new AmbientBubbleField();
+        typeof(AmbientBubbleField).GetField(nameof(AmbientBubbleField.Random))!.SetValue(f, new AlwaysLucky());
+        var b = new AmbientBubble();
+        Assert.Equal(0, f.Pop(b, s, out var proc));
+        Assert.True(proc);
+        Assert.False(b.Lucky);
+        Assert.Equal(8, b.Sparkles!.Length);
+        Assert.Equal(3, b.Sparkles[0].Size);
+        b.Step();
+        Assert.Equal(0.94, b.Sparkles[0].Alpha, 5);
+        s.FlashGlowEnabled = false;
+        var noGlow = new AmbientBubble();
+        f.Pop(noGlow, s);
+        Assert.Null(noGlow.Sparkles);
+        s.FlashGlowEnabled = true;
+        s.UnlockedSkills.Clear();
+        var noSkill = new AmbientBubble();
+        f.Pop(noSkill, s);
+        Assert.Null(noSkill.Sparkles);
     }
 
     [Fact]

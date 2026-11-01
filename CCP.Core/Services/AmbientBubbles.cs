@@ -56,6 +56,28 @@ namespace ConditioningControlPanel.Services
         public int Screen;
         public double X, Y, Size, Angle, Scale = 1, Fade = 1;
         public bool Clickable, Popping, Lucky;
+        // WPF Bubble.SetLucky / SpawnSparkles (BubbleService.cs:4401-4471).
+        public struct Sparkle
+        {
+            public double X, Y, VelocityX, VelocityY, Size, Alpha;
+        }
+        public Sparkle[]? Sparkles { get; private set; }
+        public double LuckyGlowBlur; // head sets the WPF performance-tier cap at pop time
+
+        internal void SpawnSparkles(Random random, bool boosted)
+        {
+            if (!Lucky && !boosted) return;
+            var minSize = Lucky ? 4.0 : 3.0;
+            var sizeRange = Lucky ? 4.0 : 3.0;
+            Sparkles = new Sparkle[Lucky ? 16 : 8];
+            for (var i = 0; i < Sparkles.Length; i++)
+            {
+                var angle = random.NextDouble() * Math.PI * 2;
+                var speed = 2 + random.NextDouble() * 4;
+                Sparkles[i] = new Sparkle { VelocityX = Math.Cos(angle) * speed,
+                    VelocityY = Math.Sin(angle) * speed, Size = minSize + random.NextDouble() * sizeRange, Alpha = 1 };
+            }
+        }
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
@@ -246,6 +268,14 @@ namespace ConditioningControlPanel.Services
                 Scale += Deflating ? -0.03 : 0.04;
                 Fade -= Lucky ? 0.044 : 0.066;
                 Angle += 2;
+                if (Sparkles != null)
+                    for (var i = 0; i < Sparkles.Length; i++)
+                    {
+                        Sparkles[i].X += Sparkles[i].VelocityX;
+                        Sparkles[i].Y += Sparkles[i].VelocityY;
+                        Sparkles[i].VelocityY += 0.15;
+                        Sparkles[i].Alpha -= Lucky ? 0.04 : 0.06;
+                    }
                 return Fade <= 0 ? Result.Done : Result.Alive;
             }
             if (Channeling) return TickChannel(held, cursorX, cursorY, nowUtc);
@@ -333,6 +363,7 @@ namespace ConditioningControlPanel.Services
             luckyProc = SkillTreeRules.HasSkill(s, "lucky_bubbles") && Random.NextDouble() < 0.05;
             var paid = AmbientBubbleXp.Take(s, 5 * (luckyProc ? 20 : 1));
             b.Lucky = luckyProc && paid > 0;
+            b.SpawnSparkles(Random, SkillTreeRules.GetSparkleBoostTier(s) > 0 && s.FlashGlowEnabled);
             return paid;
         }
 

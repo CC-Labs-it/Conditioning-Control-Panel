@@ -36,8 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>ponytail: FloatUp bubbles only. Not here yet: live chaos bubbles (fuses, defuse,
     /// detonation), the dashboard's ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
-    /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, the lucky gold glow and
-    /// sparkles, pop haptics, mod pop-sound overrides, Discord presence, and the achievement
+    /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, mod pop-sound overrides,
+    /// and the achievement
     /// (no AchievementService on this head; quests are credited).</para>
     /// </summary>
     internal static class BubbleOverlay
@@ -304,6 +304,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (b.Spec != null) { PopChaos(b); return; }
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s, out var luckyProc);
+            // WPF SetLucky samples the performance tier once at the pop (BubbleService.cs:4405-4418).
+            var tier = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier;
+            if (b.Lucky && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowGlow(tier))
+                b.LuckyGlowBlur = Math.Min(50, global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MaxGlowBlurRadius(tier));
             if (luckyProc) global::ConditioningControlPanel.Avalonia.Views.Windows.LuckyToast.Proc(App.Mods?.GetLuckyBubbleLabel() ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_bubble"), 20);
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
             XpBudgetChanged?.Invoke();
@@ -361,6 +365,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
+        private static readonly IBrush GoldSparkle = new SolidColorBrush(Color.FromRgb(255, 215, 0));
+        private static readonly IBrush PinkSparkle = new SolidColorBrush(Color.FromRgb(255, 105, 180));
+        // A radial halo keeps the single-surface renderer free of per-bubble blur effects.
+        private static readonly IBrush LuckyHalo = new RadialGradientBrush
+        {
+            GradientStops = { new GradientStop(Color.FromArgb(204, 255, 215, 0), 0),
+                new GradientStop(Color.FromArgb(150, 255, 215, 0), 0.7),
+                new GradientStop(Colors.Transparent, 1) },
+        };
         private static readonly Dictionary<uint, IPen> FuseCache = new();
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
 
@@ -490,6 +503,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
+                    if (b.LuckyGlowBlur > 0)
+                    {
+                        using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
+                        {
+                            var radius = size * s / 2 + b.LuckyGlowBlur * k;
+                            dc.DrawEllipse(LuckyHalo, null, new Point(cx, cy), radius, radius);
+                        }
+                    }
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {
@@ -506,6 +527,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             dc.DrawEllipse(null, FusePen(b.FuseRingArgb), new Point(cx, cy), rr, rr);
                         }
                     }
+                    if (b.Sparkles != null)
+                        foreach (var sp in b.Sparkles)
+                        {
+                            if (sp.Alpha <= 0) continue;
+                            using (dc.PushOpacity(Math.Clamp(b.Fade * sp.Alpha, 0, 1)))
+                                dc.DrawEllipse(b.Lucky ? GoldSparkle : PinkSparkle, null,
+                                    new Point(cx + sp.X * k, cy + sp.Y * k), sp.Size * k / 2, sp.Size * k / 2);
+                        }
                 }
             }
         }
