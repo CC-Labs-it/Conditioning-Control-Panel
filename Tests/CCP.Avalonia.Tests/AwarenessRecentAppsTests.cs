@@ -149,7 +149,7 @@ public sealed class AwarenessRecentAppsTests
             service.Current.KeywordTriggerApps = new() { "Chrome.exe" };
             engine.Start();
             engine.ObserveForeground("chrome", false);
-            engine.ObserveForeground("Discord", false);
+            engine.ObserveForeground("ffxiv_dx11", false);
             LocalizationManager.Instance.SetLanguage("de");
             var view = new AwarenessTabView();
             var scope = view.FindControl<ComboBox>("CmbAwarenessAppScope")!;
@@ -159,15 +159,16 @@ public sealed class AwarenessRecentAppsTests
             Assert.True(label.IsVisible);
             service.SaveImmediate(); // isolate the chip save from the earlier scope change
             var chip = Assert.IsType<Button>(Assert.Single(panel.Children));
-            Assert.Equal("+ Discord", chip.Content);
-            Assert.Equal("„Discord“ zur Liste hinzufügen", ToolTip.GetTip(chip));
+            Assert.Equal("+ ffxiv_dx11", Assert.IsType<TextBlock>(chip.Content).Text);
+            Assert.Equal("ffxiv_dx11", chip.Tag);
+            Assert.Equal("„ffxiv_dx11“ zur Liste hinzufügen", ToolTip.GetTip(chip));
             LocalizationManager.Instance.SetLanguage("en");
             view.SyncAwarenessTabUi();
             chip = Assert.IsType<Button>(Assert.Single(panel.Children));
-            Assert.Equal("Add 'Discord' to the list", ToolTip.GetTip(chip));
+            Assert.Equal("Add 'ffxiv_dx11' to the list", ToolTip.GetTip(chip));
             chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal(new[] { "Chrome.exe", "Discord" }, service.Current.KeywordTriggerApps);
-            Assert.Equal("Chrome.exe, Discord", view.FindControl<TextBox>("TxtAwarenessAppList")!.Text);
+            Assert.Equal(new[] { "Chrome.exe", "ffxiv_dx11" }, service.Current.KeywordTriggerApps);
+            Assert.Equal("Chrome.exe, ffxiv_dx11", view.FindControl<TextBox>("TxtAwarenessAppList")!.Text);
             Assert.Empty(panel.Children);
             Assert.False(label.IsVisible);
             Assert.True(service.HasPendingSave);
@@ -176,7 +177,7 @@ public sealed class AwarenessRecentAppsTests
             var box = view.FindControl<TextBox>("TxtAwarenessAppList")!;
             box.Text = "Chrome";
             box.RaiseEvent(new RoutedEventArgs(global::Avalonia.Input.InputElement.LostFocusEvent));
-            Assert.Equal("+ Discord", Assert.IsType<Button>(Assert.Single(panel.Children)).Content);
+            Assert.Equal("+ ffxiv_dx11", Assert.IsType<TextBlock>(Assert.IsType<Button>(Assert.Single(panel.Children)).Content).Text);
         }
         finally
         {
