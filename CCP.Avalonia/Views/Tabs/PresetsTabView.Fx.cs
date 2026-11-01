@@ -45,7 +45,7 @@ public partial class PresetsTabView
             _fxWindow.PropertyChanged += OnFxWindowProperty;
         }
         CoreMods.ModChanged += OnFxModChanged;
-        Env.MotionGateChanged += RefreshCardSheen;
+        Env.MotionGateChanged += OnFocalMotionChanged;
         RefreshCardSheen();
     }
 
@@ -60,10 +60,18 @@ public partial class PresetsTabView
         }
         _fxWindow = null;
         CoreMods.ModChanged -= OnFxModChanged;
-        Env.MotionGateChanged -= RefreshCardSheen;
+        Env.MotionGateChanged -= OnFocalMotionChanged;
         CancelEntrances();
         DetachCardSheen();
         DetachRowSweep();
+    }
+
+    private void OnFocalMotionChanged()
+    {
+        // The arrival owns opacity and row translation until cancelled. Release it as soon as
+        // motion turns off so the static row and its hover lift are not masked by an old clock.
+        if (!Env.AllowTransitions) CancelEntrances();
+        RefreshCardSheen();
     }
 
     private void OnFxWindowChanged(object? sender, EventArgs e) => RefreshCardSheen();
@@ -184,7 +192,7 @@ public partial class PresetsTabView
         _entranceCancellation?.Dispose();
         _entranceCancellation = null;
     }
-    private void StaggerZones()
+    internal void StaggerZones()
     {
         CancelEntrances();
         if (!Env.AllowTransitions) return;
