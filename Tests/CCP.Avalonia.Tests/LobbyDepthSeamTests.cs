@@ -1,6 +1,10 @@
-using System.IO;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
+using Avalonia.Controls.Shapes;
+using Avalonia.Threading;
+using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Services.UI;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Media;
@@ -9,26 +13,25 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using System.Linq;
-using System.Xml.Linq;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
-
 public class LobbyDepthSeamTests
 {
-    private static string Root()
+    internal static void Setup()
     {
-        var d = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (d != null && !Directory.Exists(Path.Combine(d.FullName, "CCP.Avalonia"))) d = d.Parent;
-        return d!.FullName;
+        if (Application.Current != null) return;
+        var fonts = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
+        var mappings = new System.Collections.Generic.Dictionary<string, FontFamily>(fonts.FontFamilyMappings!);
+        mappings["Segoe UI"] = mappings["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+        fonts.FontFamilyMappings = mappings;
+        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(fonts).UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
-
     [Fact]
     public void JoinRendersWpfTypographyHoverAndPressedFace() => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current == null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        Setup();
         var view = new AvailableSubjectsTabView();
         var button = new Button { Theme = (ControlTheme)view.Resources["LobbyJoin"]!, Content = new Border { Width = 20, Height = 10 } };
         button.ApplyTemplate(); button.Measure(new Size(200, 80)); button.Arrange(new Rect(0, 0, 200, 80));
@@ -50,24 +53,43 @@ public class LobbyDepthSeamTests
     });
 
     [Fact]
-    public void LobbyCardsAndJoinKeyUseTheDepthPaint()
+    public void LobbyCardsAndJoinKeyUseTheDepthPaint() => AvaloniaTestDispatcher.Run(() =>
     {
-        var doc = XDocument.Load(Path.Combine(Root(), "CCP.Avalonia/Views/Tabs/AvailableSubjectsTabView.axaml"));
-        var elements = doc.Descendants().ToArray();
-        Assert.Contains(elements, e => (string?)e.Attribute("Tag") == "lobby-float"
-            && (string?)e.Attribute("Fill") == "{Binding CardShadow}"
-            && (string?)e.Attribute("Height") == "{Binding CardShadowPx}");
-        Assert.Contains(elements, e => (string?)e.Attribute("BorderBrush") == "{Binding CardRim}");
-        Assert.Contains(elements, e => (string?)e.Attribute("BorderBrush") == "{Binding ButtonBevel}");
-        Assert.Contains(elements, e => (string?)e.Attribute("Background") == "{Binding ButtonSheen}");
-        Assert.Contains(elements, e => (string?)e.Attribute("Theme") == "{StaticResource LobbyJoin}");
-    }
-
+        Setup();
+        var view = new AvailableSubjectsTabView();
+        var row = new LobbyCardView(new LobbyRow { Key = "p_1", Game = LobbyGame.Chess }, default);
+        var card = ((IDataTemplate)view.Resources["LobbyRowTemplate"]!).Build(row)!;
+        card.DataContext = row;
+        var host = new Window { Content = card };
+        try
+        {
+            host.Show(); Dispatcher.UIThread.RunJobs();
+            var band = card.GetVisualDescendants().OfType<Rectangle>().Single(r => (string?)r.Tag == "lobby-float");
+            Assert.Same(row.CardShadow, band.Fill); Assert.Equal(row.CardShadowPx, band.Height);
+            Assert.Same(row.CardShadow, new LobbyCardView(new LobbyRow(), default).CardShadow);
+            var stops = Assert.IsAssignableFrom<ILinearGradientBrush>(band.Fill).GradientStops;
+            var c = Color.FromUInt32(DepthLaw.ShadowColor(NavStripTable.AccentRgb(NavSections.Social) | 0xFF000000, DepthLaw.FloatAlpha));
+            Assert.Equal(c, stops[0].Color); Assert.Equal(Color.FromArgb(0, c.R, c.G, c.B), stops[1].Color);
+            Assert.Same(row.CardRim, ((Grid)card).Children.OfType<Border>().Single().BorderBrush);
+            var face = card.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "face");
+            Assert.Same(row.ButtonBevel, face.BorderBrush); Assert.Same(row.ButtonSheen, ((Border)face.Child!).Background);
+        }
+        finally { host.Close(); }
+    });
     [Fact]
-    public void WashFeedsTheExistingRailAndQuestsPainters()
+    public void WashFeedsTheExistingRailAndQuestsPainters() => NavCoinDepthTests.WithShell(w =>
     {
-        var source = File.ReadAllText(Path.Combine(Root(), "CCP.Avalonia/Views/Windows/MainShellWindow.SectionChrome.cs"));
-        Assert.Contains("PaintDepthRail(hue);", source);
-        Assert.Contains("?.PaintDepthQuests(hue);", source);
-    }
+        foreach (var tab in new[] { "play", "quests" })
+        {
+            w.ShowTab(tab); Dispatcher.UIThread.RunJobs();
+            var hue = Color.FromUInt32(NavStripTable.AccentRgb(NavSections.SectionForTab(tab)!) | 0xFF000000);
+            var shadow = w.FindControl<Rectangle>("NavRailShadow")!;
+            Assert.Equal(6, shadow.Width); Assert.False(shadow.IsHitTestVisible);
+            Assert.Equal(Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), 0xBF / 255.0)),
+                Assert.IsType<LinearGradientBrush>(shadow.Fill).GradientStops[0].Color);
+            var band = w.Named<QuestsTabView>("QuestsTab")!.FindControl<Border>("WeeklyFloatBand")!;
+            Assert.Equal(Color.FromUInt32(DepthLaw.ShadowColor(hue.ToUInt32(), DepthLaw.FloatAlpha)),
+                Assert.IsType<LinearGradientBrush>(band.Background).GradientStops[0].Color);
+        }
+    });
 }

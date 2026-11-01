@@ -6,7 +6,7 @@ namespace ConditioningControlPanel.Services.UI;
 // WPF NavRailRules coin motion, polish waves 10 and 11.
 public static class NavCoinLaw
 {
-    public static double Tilt(double nx, double ny) => Math.Clamp(nx, -1, 1) * -Math.Clamp(ny, -1, 1) * DepthLaw.TiltDegrees;
+    public static double Tilt(double nx, double ny) => DashboardDepthLaw.TiltFor(nx, ny);
     public static bool Tilts(bool active, MotionLevel level, PerformanceTier tier) =>
         !active && level != MotionLevel.Off && tier != PerformanceTier.Performance;
     public static double Overshoot(double from, double to) => to == from ? to : to + Math.Sign(to - from) * DepthLaw.ReleaseOvershootPx;

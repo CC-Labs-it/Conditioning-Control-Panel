@@ -128,14 +128,17 @@ public sealed class LobbyCardView
     public IBrush? ButtonBevel => Theme("DepthRaisedBevel");
     public IBrush? ButtonSheen => Theme("DepthRaisedSheen");
     public double CardShadowPx => DepthLaw.FloatPx;
-    public IBrush CardShadow => new LinearGradientBrush
+    public IBrush CardShadow => SharedCardShadow;
+    private static readonly IBrush SharedCardShadow = CreateCardShadow();
+    private static IBrush CreateCardShadow()
     {
-        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-        EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-        GradientStops = { new(Color.FromUInt32(DepthLaw.ShadowColor(
-            NavStripTable.AccentRgb(NavSections.Social) | 0xFF000000,
-            DepthLaw.FloatAlpha)), 0), new(Colors.Transparent, 1) },
-    };
+        var c = Color.FromUInt32(DepthLaw.ShadowColor(NavStripTable.AccentRgb(NavSections.Social) | 0xFF000000, DepthLaw.FloatAlpha));
+        return new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops = { new(c, 0), new(Color.FromArgb(0, c.R, c.G, c.B), 1) },
+        };
+    }
     public string Title { get; }
     public string Line { get; }
     public bool Friend { get; }

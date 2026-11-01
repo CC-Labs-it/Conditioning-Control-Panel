@@ -5,9 +5,10 @@
 //
 // sync6-nav-rail-c added the edge spur, the art tint (navtint), the label glow, the 160 ms halo
 // fade, NavBadges pills, the rich row tooltip and ChromeFx's hover nudge (NudgeNavIcon).
-// Coin depth is in MainShellWindow.NavRail.Coins.cs. Remaining seams:
-// wire-shell-nav-rail-b; the possession reroute seam (WPF PossessionReroute, written only by
-// Services/Possession/Effects/MisrouteEffect.cs - that effect has no writer on this head). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
+// Coin depth is in MainShellWindow.NavRail.Coins.cs.
+// ponytail: not yet here: the possession reroute seam (WPF PossessionReroute, written only by
+// Services/Possession/Effects/MisrouteEffect.cs, which has no writer on this head) - lane wire-shell-nav-rail-b.
+// Mod door art landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
 // Social pill stays down until the Lobby service lands.
 
 using System;
@@ -318,7 +319,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
             row.Badge = new Border
             {
-                BoxShadow = new BoxShadows(new BoxShadow { OffsetX = 1.5 / Math.Sqrt(2), OffsetY = 1.5 / Math.Sqrt(2), Blur = 3, Color = Color.FromUInt32(0x9E06020F) }),
                 Tag = "navbadge", IsVisible = false, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, 0, 18, 0), MinWidth = 16, Height = 16, Padding = new Thickness(4, 0),
                 CornerRadius = new CornerRadius(8), BorderBrush = new SolidColorBrush(Color.FromUInt32(0xE6101020)),
