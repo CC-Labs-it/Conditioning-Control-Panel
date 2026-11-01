@@ -61,10 +61,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>
         /// The URL the page actually sits on after its last completed navigation: redirects,
         /// in-page links and script hops included, unlike <see cref="Source"/>, which is only
-        /// what a caller last asked for. Null until a navigation completes. WPF's
-        /// <c>BrowserService.GetCurrentUrl</c>.
+        /// what a caller last asked for. Null until a navigation completes. For WPF's
+        /// <c>BrowserService.GetCurrentUrl</c>, use <see cref="ReadDocumentUrlAsync"/>.
         /// </summary>
         public Uri? CurrentUrl { get; private set; }
+
+        // WPF BrowserService.cs:1307-1309 reads the native document, including in-flight navigation.
+        internal Func<Task<string?>>? DocumentUrlReader { get; set; }
+        internal Task<string?> ReadDocumentUrlAsync()
+        {
+            try { return DocumentUrlReader?.Invoke() ?? Platform.ScrolllerWebHostGate.ReadDocumentUrlAsync(_web?.TryGetPlatformHandle()); }
+            catch (Exception ex) { Log.Debug("WebHost: document URL unavailable: {E}", ex.Message); return Task.FromResult<string?>(null); }
+        }
+
+        internal event Action? BrowserNavigationStarting;
 
         /// <summary>
         /// Raised on the UI thread with <see cref="CurrentUrl"/> after every top-level navigation
@@ -368,6 +378,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
+            BrowserNavigationStarting?.Invoke();
             var target = e.Request;
             if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.

@@ -26,6 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class SettingsTabView
     {
         private bool _browserCardSyncing;
+        private int _browserSiteSyncRevision;
 
         /// <summary>Tests: how many times the mute script was sent to the page.</summary>
         internal int BrowserMuteApplies { get; private set; }
@@ -33,7 +34,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void HookBrowserCard()
         {
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
-            BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };
+            BrowserWebHost.BrowserNavigationStarting += () => _browserSiteSyncRevision++;
+            BrowserWebHost.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == WebHost.SourceProperty) { _browserSiteSyncRevision++; SyncBrowserPrompt(); }
+            };
+            RbBambiCloud.Click += (_, _) => _browserSiteSyncRevision++;
+            RbHypnoTube.Click += (_, _) => _browserSiteSyncRevision++;
             AttachedToVisualTree += (_, _) =>
             {
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
@@ -44,6 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
             DetachedFromVisualTree += (_, _) =>
             {
+                _browserSiteSyncRevision++;
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
             };
@@ -155,24 +163,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         // WPF MainWindow.Browser.cs:518-580 and MainWindow.xaml.cs:2708-2721.
-        private void SyncSiteRadiosToActiveMod(bool navigateIfChanged)
+        private async void SyncSiteRadiosToActiveMod(bool navigateIfChanged)
         {
+            var revision = ++_browserSiteSyncRevision;
             try
             {
                 bool modWants = App.Mods?.ShowBambiCloudOption() ?? true;
                 RbBambiCloud.IsVisible = modWants || CoreSettings.Current.ForceShowBambiCloud;
-                var current = BrowserWebHost.CurrentUrl?.AbsoluteUri;
-                if (modWants && current != null &&
-                    (current.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase) ||
-                     current.Contains("hypnotube.com", StringComparison.OrdinalIgnoreCase))) return;
+                var current = modWants ? await BrowserWebHost.ReadDocumentUrlAsync() : null;
+                void ApplySelection()
+                {
+                    // A later mod, click, navigation or detach owns the card now.
+                    if (revision != _browserSiteSyncRevision) return;
+                    if (modWants && current != null &&
+                        (current.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase) ||
+                         current.Contains("hypnotube.com", StringComparison.OrdinalIgnoreCase))) return;
 
-                var defaultUrl = App.Mods?.GetDefaultBrowserUrl() ?? "https://bambicloud.com/";
-                var target = modWants && defaultUrl.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase)
-                    ? RbBambiCloud : RbHypnoTube;
-                bool moved = target.IsChecked != true;
-                target.IsChecked = true;
-                if (moved && navigateIfChanged && BrowserWebHost.Source != null && !CoreSettings.Current.OfflineMode)
-                    Shell?.BrowserSiteToggle_Click(target, new RoutedEventArgs());
+                    var defaultUrl = App.Mods?.GetDefaultBrowserUrl() ?? "https://bambicloud.com/";
+                    var target = modWants && defaultUrl.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase)
+                        ? RbBambiCloud : RbHypnoTube;
+                    bool moved = target.IsChecked != true;
+                    target.IsChecked = true;
+                    if (moved && navigateIfChanged && BrowserWebHost.Source != null && !CoreSettings.Current.OfflineMode)
+                        Shell?.BrowserSiteToggle_Click(target, new RoutedEventArgs());
+                }
+                if (Dispatcher.UIThread.CheckAccess()) ApplySelection();
+                else await Dispatcher.UIThread.InvokeAsync(ApplySelection);
             }
             catch (Exception ex) { Log.Debug("SyncSiteRadiosToActiveMod: {E}", ex.Message); }
         }

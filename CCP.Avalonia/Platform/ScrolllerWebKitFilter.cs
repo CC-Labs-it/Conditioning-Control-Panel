@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -57,7 +58,7 @@ internal static class ScrolllerWebKitFilter
     private static bool _started, _failed;
     private static Api? _api;
     private static readonly AsyncReady OnLoaded = Loaded, OnSaved = Saved;   // kept alive: GLib calls them
-    private static readonly SourceFunc OnIdle = Idle;
+    private static readonly SourceFunc OnIdle = Idle, OnReadDocumentUrl = ReadDocumentUrl;
 
     /// <summary>Queues the filter onto one WebKitWebView (the adapter's platform handle). <paramref name="ready"/> runs once,
     /// on the GLib thread or the caller's: true when the filter is on that view, false when it cannot be.</summary>
@@ -82,6 +83,45 @@ internal static class ScrolllerWebKitFilter
             Log.Warning("ScrolllerWebKitFilter: attach failed: {E}", ex.Message);
             ready(false);
         }
+    }
+
+    // GTK objects are read on GLib, not the Avalonia UI thread. Hold the view until the callback runs.
+    private sealed record UrlRead(Api Api, IntPtr View, TaskCompletionSource<string?> Completion);
+    internal static Task<string?> ReadDocumentUrlAsync(IntPtr view)
+    {
+        if (view == IntPtr.Zero) return Task.FromResult<string?>(null);
+        try
+        {
+            var api = _api ??= Api.Load();
+            if (api?.GetUri == null) return Task.FromResult<string?>(null);
+            var completion = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            api.ObjectRef(view);
+            try
+            {
+                var handle = GCHandle.Alloc(new UrlRead(api, view, completion));
+                try
+                {
+                    if (api.IdleAdd(OnReadDocumentUrl, GCHandle.ToIntPtr(handle)) != 0) return completion.Task;
+                }
+                catch { handle.Free(); throw; }
+                handle.Free();
+            }
+            catch { api.ObjectUnref(view); throw; }
+            api.ObjectUnref(view);
+        }
+        catch (Exception ex) { Log.Debug("WebKit document URL unavailable: {E}", ex.Message); }
+        return Task.FromResult<string?>(null);
+    }
+
+    private static int ReadDocumentUrl(IntPtr data)
+    {
+        var handle = GCHandle.FromIntPtr(data);
+        var read = (UrlRead)handle.Target!;
+        handle.Free();
+        try { read.Completion.TrySetResult(Marshal.PtrToStringUTF8(read.Api.GetUri!(read.View))); }
+        catch (Exception ex) { Log.Debug("WebKit document URL unavailable: {E}", ex.Message); read.Completion.TrySetResult(null); }
+        finally { try { read.Api.ObjectUnref(read.View); } catch { } }
+        return 0;
     }
 
     /// <summary>On the GLib thread: each queued view gets the filter, which is loaded (or compiled) first if need be.</summary>
@@ -191,6 +231,7 @@ internal static class ScrolllerWebKitFilter
     private sealed class Api
     {
         public required Fn1 GetManager, ObjectRef;
+        public Fn1? GetUri;
         public required Fn1Void ObjectUnref, BytesUnref, ErrorFree;
         public required StoreNew StoreNew;
         public required StoreSave StoreSave;
@@ -212,6 +253,8 @@ internal static class ScrolllerWebKitFilter
             return new Api
             {
                 GetManager = F<Fn1>(webkit, "webkit_web_view_get_user_content_manager"),
+                GetUri = NativeLibrary.TryGetExport(webkit, "webkit_web_view_get_uri", out var getUri)
+                    ? Marshal.GetDelegateForFunctionPointer<Fn1>(getUri) : null,
                 ObjectRef = F<Fn1>(gobject, "g_object_ref"),
                 ObjectUnref = F<Fn1Void>(gobject, "g_object_unref"),
                 BytesUnref = F<Fn1Void>(glib, "g_bytes_unref"),

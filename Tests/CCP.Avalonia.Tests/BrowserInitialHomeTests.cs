@@ -45,7 +45,9 @@ public sealed class BrowserInitialHomeTests
                 shell.ShowTab("settings");
                 Dispatcher.UIThread.RunJobs();
                 var page = shell.Named<SettingsTabView>("SettingsTab")!;
-                check(shell, page, page.FindControl<WebHost>("BrowserWebHost")!, manifest.Browser);
+                var host = page.FindControl<WebHost>("BrowserWebHost")!;
+                host.DocumentUrlReader = () => Task.FromResult(host.CurrentUrl?.AbsoluteUri);
+                check(shell, page, host, manifest.Browser);
             }
             finally
             {
@@ -122,6 +124,39 @@ public sealed class BrowserInitialHomeTests
         requests = host.NavigationRequests;
         page.SyncBrowserCard();
         Assert.True(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
+        Assert.Equal(requests, host.NavigationRequests);
+    });
+
+    [Theory]
+    [InlineData("https://example.com/old", "https://bambicloud.com/loading", true)]
+    [InlineData("https://bambicloud.com/old", "https://example.com/loading", false)]
+    public Task SiteSyncReadsNativeDocumentBeforeNavigationCompletes(string completed, string native, bool bambi) => Run((shell, page, host, mod) =>
+    {
+        mod.ShowBambiCloudOption = true;
+        mod.DefaultUrl = "https://hypnotube.com/mod-home";
+        host.OnNavigationCompleted(new Uri(completed));
+        Assert.True(shell.NavigateToUrlInBrowser(native));
+        host.DocumentUrlReader = () => Task.FromResult<string?>(native);
+        page.SyncBrowserCard();
+        Assert.Equal(bambi, page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked == true);
+        Assert.Equal(!bambi, page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked == true);
+        shell.BtnReloadBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        Assert.Equal(bambi ? "https://bambicloud.com/" : "https://hypnotube.com/", host.Source!.AbsoluteUri);
+    });
+
+    [Fact]
+    public Task DeferredNativeReadDoesNotOverrideANewerNavigation() => Run((shell, page, host, mod) =>
+    {
+        mod.ShowBambiCloudOption = true;
+        mod.DefaultUrl = "https://hypnotube.com/mod-home";
+        var pending = new TaskCompletionSource<string?>();
+        host.DocumentUrlReader = () => pending.Task;
+        page.SyncBrowserCard();
+        Assert.True(shell.NavigateToUrlInBrowser("https://bambicloud.com/user"));
+        int requests = host.NavigationRequests;
+        pending.SetResult("https://example.com/old");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked);
         Assert.Equal(requests, host.NavigationRequests);
     });
 
