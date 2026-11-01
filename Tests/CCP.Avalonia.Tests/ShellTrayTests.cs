@@ -262,6 +262,7 @@ public sealed class ShellTrayTests
                     .SetupWithoutStarting();
             var shell = new MainShellWindow();
             var boot = LauncherWindow.Boot;
+            var session = CoreSession.IsSessionRunningProvider;
             try
             {
                 shell.CreateTray();
@@ -281,9 +282,15 @@ public sealed class ShellTrayTests
                 Assert.False(shell.CanHideToTray); // Denial was handled, rather than missed.
                 Assert.False(shell.IsVisible);
                 Assert.True(LauncherWindow.Instance.IsVisible);
+                CoreSession.IsSessionRunningProvider = () => true;
+                LauncherWindow.Instance.RequestClose();
+                Assert.True(LauncherWindow.Instance.IsVisible); // The sole surface remains on the taskbar.
+                Assert.Equal(WindowState.Minimized, LauncherWindow.Instance.WindowState);
+                Assert.False(shell.IsVisible);
             }
             finally
             {
+                CoreSession.IsSessionRunningProvider = session;
                 LauncherWindow.Instance?.Close();
                 LauncherWindow.Boot = boot;
                 shell.Tray?.Dispose();
@@ -303,14 +310,18 @@ public sealed class ShellTrayTests
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            CoreSettings.Current.Welcomed = true;
-            CoreSettings.Current.HasAcceptedAgeVerification = true;
-            // Routing is synchronous with motion off; launcher fade tests cover the animation.
-            CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Off;
-            var shell = new MainShellWindow();
+            var settingsProvider = CoreSettings.ServiceProvider;
+            var settings = new global::ConditioningControlPanel.Services.SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            MainShellWindow? shell = null;
             var boot = LauncherWindow.Boot;
             try
             {
+                CoreSettings.Current.Welcomed = true;
+                CoreSettings.Current.HasAcceptedAgeVerification = true;
+                // Routing is synchronous with motion off; launcher fade tests cover the animation.
+                CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Off;
+                shell = new MainShellWindow();
                 LauncherWindow.Boot = global::ConditioningControlPanel.Services.Launcher.BootDecision.LauncherFirst;
                 shell.CreateTray();
                 shell.TrayHostPresent = () => true;
@@ -339,9 +350,10 @@ public sealed class ShellTrayTests
             {
                 LauncherWindow.Instance?.Close();
                 LauncherWindow.Boot = boot;
-                shell.Tray?.Dispose();
-                shell.MarkExitRequestedForTest();
-                shell.Close();
+                shell?.Tray?.Dispose();
+                shell?.MarkExitRequestedForTest();
+                shell?.Close();
+                CoreSettings.ServiceProvider = settingsProvider;
             }
             return Task.CompletedTask;
         });

@@ -267,9 +267,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     try { Services.LockdownService.Current?.NotifyEscapeAttempt(Services.Possession.EscapeKinds.Close); } catch { }
                     break;
                 case LauncherCloseOutcome.Hide:
-                    // WPF hides behind the panel's tray icon. With no tray host (a bare Linux
-                    // desktop) a hidden launcher over a hidden panel has no way back: minimize.
-                    if (panel is { IsVisible: false } && !panel.TrayHostPresent()) WindowState = WindowState.Minimized;
+                    // WPF LauncherHost.cs:410-424 hides behind the panel's tray icon. Without a
+                    // usable tray (no host or denied registration), keep the launcher on the taskbar.
+                    if (panel is { IsVisible: false } && !panel.CanHideToTray) WindowState = WindowState.Minimized;
                     else Hide();
                     break;
                 case LauncherCloseOutcome.Exit:
