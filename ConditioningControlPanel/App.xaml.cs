@@ -5213,6 +5213,7 @@ namespace ConditioningControlPanel
             try
             {
                 SystemSounds.Asterisk.Play();
+                Services.Audio.EngineOffAudioLog.Note("system:achievement", "Asterisk");
             }
             catch
             {
