@@ -168,13 +168,35 @@ internal sealed class KeywordAudioRuntime
 
         // WPF merge: preset first, and only the first enabled PlayAudio action wins.
         var audio = fired.SelectMany(t => t.Actions ?? new()).OfType<PlayAudioAction>().FirstOrDefault(a => a.Enabled);
-        if (audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0))
+        var legacy = audio == null && fired.Count == 1 && (fired[0].Actions == null || fired[0].Actions.Count == 0);
+        if (legacy)
         {
             var t = fired[0];
             audio = new PlayAudioAction { FilePath = t.AudioFilePath, Volume = t.AudioVolume,
                 PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
         }
-        if (audio != null) Play(audio);
+        // WPF KeywordTriggerService.cs:1397-1399,1698-1701,1841-1852: the match
+        // still counts, but its audio is held unless the engine or a session is running.
+        if (audio != null && (CoreSession.IsEngineRunning || CoreSession.IsSessionRunning)) Play(audio);
+        else if (legacy && fired[0].DuckAudio && fired[0].VisualEffect != KeywordVisualEffect.HighlightOnly)
+        {
+            // WPF KeywordTriggerService.cs:1681-1695,1742-1745: legacy ducking is independent
+            // of held audio and its 500 ms release survives a clip stop. Keep each generation local.
+            long generation = -1;
+            if (s.AudioDuckingEnabled)
+            {
+                CoreAudio.Duck(s.DuckingLevel);
+                generation = CoreAudio.DuckGeneration;
+            }
+            _ = ReleaseLegacyDuck(generation);
+        }
+
+        async Task ReleaseLegacyDuck(long generation)
+        {
+            try { await Delay(500, CancellationToken.None); }
+            catch (Exception ex) { Log.Warning(ex, "Legacy keyword duck delay failed"); }
+            finally { CoreAudio.Unduck(generation); }
+        }
     }
 
     // ponytail: WPF FireDemoTrigger (KeywordTriggerService :394-424) checks HasAccess (#887) and fires a synthetic
