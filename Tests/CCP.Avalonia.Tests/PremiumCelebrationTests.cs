@@ -113,13 +113,12 @@ public sealed class PremiumCelebrationTests
         s.AvatarMuted = false;
         s.CompanionVoiceLinesMuted = false;
         s.MasterVolume = 80;
-        var clip = Path.GetTempFileName();
-        var stopped = 0;
+        var clip = Path.GetTempFileName(); var stopped = 0;
+        var oldAudio = CoreAudio.PlayStoppableProvider;
         CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => () => stopped++;
         try
         {
-            var tube = shell.Tube!;
-            Assert.NotNull(tube);
+            var tube = shell.Tube!; Assert.NotNull(tube);
             tube.GigglePriority("hi", phraseAudioPath: clip, barkVoice: true);
             Dispatcher.UIThread.RunJobs();
             shell.ApplyVoiceMute(true);
@@ -131,7 +130,8 @@ public sealed class PremiumCelebrationTests
             Assert.Same(tube, shell.Tube);
             Assert.False(tube.IsMuted);
         }
-        finally { File.Delete(clip); }
+        finally { CoreAudio.PlayStoppableProvider = oldAudio; File.Delete(clip); }
+        Assert.Same(oldAudio, CoreAudio.PlayStoppableProvider);
     });
     [Fact]
     public void VoiceGrammarReachesMuteRestoreAndClampedVolumeActions() => Run(false, (shell, opened, grant) =>
