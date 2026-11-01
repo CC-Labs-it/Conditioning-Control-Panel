@@ -26,10 +26,7 @@ public sealed class TakeoverTabUiTests
     [Fact]
     public Task TabShowsWpfCopyAndItsButtonsGoWhereWpfsDo() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApp();
         var s = CoreSettings.Current;
         var saved = (s.AutonomyCanTriggerVoiceCommand, s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled);
         var speech = (CoreSpeech.IsAvailableProvider, CoreSpeech.HasCaptureDeviceProvider, CoreSpeech.ModelStatusProvider);
@@ -103,4 +100,73 @@ public sealed class TakeoverTabUiTests
         }
         return Task.CompletedTask;
     });
+
+    // WPF MainWindow.Autonomy.cs:466-492 asks even when a stale saved voice setting is on.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task SurpriseMantraRequiresConsentEvenWithAStaleSetting(bool savedOn) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var saved = (s.AutonomyCanTriggerVoiceCommand, s.MicConsentGiven);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            (s.AutonomyCanTriggerVoiceCommand, s.MicConsentGiven) = (savedOn, false);
+            shell.ShowTab("bambitakeover");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.GetLogicalDescendants().OfType<global::ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>().Single();
+            tab.SyncFromSettings();
+            var toggle = tab.FindControl<CheckBox>("ChkAutonomyVoice")!;
+            Assert.False(toggle.IsChecked);
+
+            toggle.IsChecked = true;
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.MicConsentDialog>());
+            Assert.False(s.MicConsentGiven);
+            dialog.FindControl<Button>("BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Task.Yield();
+            Assert.False(toggle.IsChecked);
+            Assert.False(s.MicConsentGiven);
+            Assert.Equal(savedOn, s.AutonomyCanTriggerVoiceCommand);
+
+            toggle.IsChecked = true;
+            dialog = Assert.Single(shell.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.MicConsentDialog>());
+            var next = dialog.FindControl<Button>("BtnNext")!;
+            next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            foreach (var name in new[] { "ChkConsent1", "ChkConsent2", "ChkConsent3" })
+                dialog.FindControl<CheckBox>(name)!.IsChecked = true;
+            dialog.FindControl<TextBox>("TxtConfirm")!.Text = "ENABLE";
+            Dispatcher.UIThread.RunJobs();
+            var enable = dialog.FindControl<Button>("BtnEnable")!;
+            Assert.True(enable.IsEnabled);
+            enable.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Task.Yield();
+            Assert.True(s.MicConsentGiven);
+            Assert.True(s.AutonomyCanTriggerVoiceCommand);
+            Assert.True(toggle.IsChecked);
+        }
+        finally
+        {
+            foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
+            shell.Close();
+            (s.AutonomyCanTriggerVoiceCommand, s.MicConsentGiven) = saved;
+        }
+    });
+
+
+    private static void EnsureApp()
+    {
+        if (Application.Current is not null) return;
+        var fonts = AppFonts.Options(systemEmoji: false);
+        var mappings = new Dictionary<string, global::Avalonia.Media.FontFamily>(fonts.FontFamilyMappings!);
+        mappings["Segoe UI"] = mappings["Segoe UI Black"] = new global::Avalonia.Media.FontFamily(AppFonts.Inter);
+        fonts.FontFamilyMappings = mappings;
+        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont().With(fonts)
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            .SetupWithoutStarting();
+    }
+
 }
