@@ -15,8 +15,7 @@
 // ponytail: not yet here (lane sync6-nav-polish-c): the edge lift's lap round the frame at Full
 // motion (it sits at the top centre, WPF's Reduced), the fog and ember strips the band thins for
 // (EdgeParticles, AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
-// (Home and banner depth), the "Moved" redirects and their note, and the "Cloud sync
-// issue" title suffix (SetSyncIssueTitle: sync health is not reported here).
+// (Home and banner depth), and the "Moved" redirects and their note.
 
 using System;
 using System.Linq;
@@ -364,19 +363,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private string? _navBaseTitle;
+        private (string? Section, string Tab, string? Page) _navTitleParts = (null, "settings", null);
+        private bool _syncIssueTitle;
+        private bool _syncHealthAttached;
+
+        // WPF MainWindow.xaml.cs:380,745 and WindowChrome.cs:246: listen while the shell lives.
+        private void InitializeSyncHealth()
+        {
+            if (Platform.AccountSeed.Sync is not { } sync) return;
+            _syncHealthAttached = true;
+            sync.SyncHealthChanged += OnSyncHealthChanged;
+            if (sync.ConsecutiveSyncFailures >= 3) SetSyncIssueTitle(true);
+            Closed += (_, _) => { _syncHealthAttached = false; sync.SyncHealthChanged -= OnSyncHealthChanged; };
+        }
+
+        private void OnSyncHealthChanged(object? sender, int failures) =>
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (!_syncHealthAttached) return;
+                if (failures >= 3) SetSyncIssueTitle(true);
+                else if (failures == 0) SetSyncIssueTitle(false);
+            });
+
+        // WPF MainWindow.SectionChrome.cs:31: compose the notice with the last breadcrumb.
+        private void SetSyncIssueTitle(bool on)
+        {
+            _syncIssueTitle = on;
+            UpdateNavTitle(_navTitleParts.Section, _navTitleParts.Tab, _navTitleParts.Page);
+        }
 
         /// <summary>WPF UpdateNavTitle (:364): "Conditioning Control Panel - Play › Lobby", the fourth
         /// "you are here" cue. Home's dashboard names only the section.</summary>
         internal void UpdateNavTitle(string? section, string tab, string? pageLabel)
         {
             _navBaseTitle ??= Title;
+            _navTitleParts = (section, tab, pageLabel);
             var sectionLabel = section == null ? null : Loc.Get(NavSections.Find(section)?.LabelKey ?? string.Empty);
             var page = pageLabel ?? (section == NavSections.Home && (string.IsNullOrEmpty(tab) || tab == "settings")
                 ? null : Loc.Get(NavStripTable.PageLabelKey(tab) ?? string.Empty));
-            Title = string.IsNullOrEmpty(sectionLabel) ? _navBaseTitle
+            var title = string.IsNullOrEmpty(sectionLabel) ? _navBaseTitle
                 : string.IsNullOrEmpty(page)
                     ? $"{_navBaseTitle} - {sectionLabel}"
                     : $"{_navBaseTitle} - {sectionLabel} {Loc.Get("nav_crumb_sep")} {page}";
+            Title = _syncIssueTitle ? $"{title} - Cloud sync issue" : title;
         }
 
         /// <summary>The label of the Settings section whose pill is checked (null if none). WPF :340.</summary>

@@ -126,6 +126,18 @@ namespace ConditioningControlPanel.Services
                 wait.TotalSeconds, _backoffFailures, status?.ToString() ?? "none");
         }
 
+        // WPF ProfileSyncService.cs:2655: count failures, not cooldown or backoff skips.
+        public int ConsecutiveSyncFailures { get; private set; }
+        public event EventHandler<int>? SyncHealthChanged;
+
+        private void ReportSyncHealth(bool succeeded)
+        {
+            if (succeeded && ConsecutiveSyncFailures == 0) return;
+            ConsecutiveSyncFailures = succeeded ? 0 : ConsecutiveSyncFailures + 1;
+            try { SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures); }
+            catch (Exception ex) { Log.Debug("Sync health listener failed: {E}", ex.Message); }
+        }
+
         public bool Loaded { get; private set; }
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
@@ -228,6 +240,7 @@ namespace ConditioningControlPanel.Services
                 if (watermark > 0 && totalXp < watermark)
                 {
                     Log.Error("[XP watermark] Sync REFUSED — would push {Xp} XP, below the {Watermark} XP last agreed", (int)totalXp, (int)watermark);
+                    ReportSyncHealth(false);
                     return false;
                 }
                 var id = s.UnifiedId!;
@@ -271,16 +284,18 @@ namespace ConditioningControlPanel.Services
                 if (!response.IsSuccessStatusCode)
                 {
                     // Contract D: merged tombstone; the head's recovery re-signs in and reloads.
-                    if (V2AuthService.MergedRecovery is { } merged && await merged(response, json)) return false;
+                    if (V2AuthService.MergedRecovery is { } merged && await merged(response, json)) { ReportSyncHealth(false); return false; }
                     // 429, and a 409 no recovery handled: cool down rather than retry on every trigger.
                     if (response.StatusCode is (HttpStatusCode)429 or HttpStatusCode.Conflict)
                     {
                         LastSyncTime = UtcNow();
+                        if (response.StatusCode != (HttpStatusCode)429) ReportSyncHealth(false);
                         Log.Warning("V2 Profile sync refused by server ({Status}), will retry after the cooldown", (int)response.StatusCode);
                         return false;
                     }
                     Log.Warning("V2 Profile sync failed: {Status} (error body {Bytes} bytes)", (int)response.StatusCode, json.Length);
                     NoteFailureForBackoff((int)response.StatusCode, tokenUsed);
+                    ReportSyncHealth(false);
                     return false;
                 }
                 LastSyncTime = UtcNow();
@@ -302,11 +317,13 @@ namespace ConditioningControlPanel.Services
                     Countdown.ApplyCeremonyAt(ceremonyAt);
                 if (DescentReader?.HasSeenBlock == true) DescentReader.RequestRefresh("profile synced");
                 CoreSettings.Save();
+                ReportSyncHealth(true);
                 return true;
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "Profile sync failed");
+                ReportSyncHealth(false);
                 // WPF ProfileSyncService: a shutdown cancellation is not a server failure, but HttpClient.Timeout
                 // (a cancellation wrapping a TimeoutException) is a hung proxy and backs off like any other.
                 if (!IsExpectedCancellation(ex) || ex.InnerException is TimeoutException)
