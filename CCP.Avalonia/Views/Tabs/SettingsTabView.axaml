@@ -1118,7 +1118,7 @@
                     Theme="{StaticResource SolidPinkButton}"
                     ToolTip.Tip="{loc:Str tooltip_pop_out_browser_to_resizable_window}"
                     FontSize="9" Padding="6,3" VerticalAlignment="Center">
-              <TextBlock Text="{loc:Str btn_pop_out}"/>
+              <TextBlock x:Name="TxtPopOutBrowser" Text="{loc:Str btn_pop_out}"/>
             </Button>
           </Grid>
 

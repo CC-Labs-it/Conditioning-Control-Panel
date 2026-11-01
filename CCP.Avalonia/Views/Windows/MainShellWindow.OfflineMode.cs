@@ -102,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (container != null) container.Opacity = 1.0;
                     // WPF reloads the selected site only when the browser was already up.
                     if (host?.Source != null) NavigateBrowser(SiteHomeUrl());
+                    page?.SetBrowserPoppedOut(_browserPopoutWindow != null);
                 }
 
                 UpdateBannerWelcomeMessage();

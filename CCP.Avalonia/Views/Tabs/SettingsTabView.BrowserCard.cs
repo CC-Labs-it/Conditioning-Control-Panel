@@ -6,8 +6,7 @@
 // Mute rides the WebHost script channel (Views/Controls/WebHostMedia.cs) and is re-applied after every navigation,
 // since a new document has no flag. The load prompt: WPF builds the WebView2 on that click; here the engine exists
 // from the start but loads nothing until asked, so the prompt stands in the slot until the first page.
-// ponytail: Pop out (WPF re-parents the WebView2 into a 1024x768 window; NativeWebView cannot be re-parented live)
-// and "Enhance if possible" (no BrowserEnhanceBridge on this head) are greyed with the "not on this build" line.
+// "Enhance if possible" is greyed because this head has no BrowserEnhanceBridge.
 
 using System;
 using Avalonia.Controls;
@@ -23,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
     public partial class SettingsTabView
     {
-        private bool _browserCardSyncing;
+        private bool _browserCardSyncing, _browserPoppedOut;
 
         /// <summary>Tests: how many times the mute script was sent to the page.</summary>
         internal int BrowserMuteApplies { get; private set; }
@@ -45,12 +44,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
             };
-            foreach (Control c in new Control[] { ToggleEnhanceIfPossible, BtnPopOutBrowser })
-            {
-                c.IsEnabled = false;
-                c.Bind(ToolTip.TipProperty, LocBinding("exclusives_not_on_this_build"));
-                ToolTip.SetShowOnDisabled(c, true);
-            }
+            ToggleEnhanceIfPossible.IsEnabled = false;
+            ToggleEnhanceIfPossible.Bind(ToolTip.TipProperty, LocBinding("exclusives_not_on_this_build"));
+            ToolTip.SetShowOnDisabled(ToggleEnhanceIfPossible, true);
             SyncBrowserCard();
         }
 
@@ -175,16 +171,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void SyncBrowserPrompt()
         {
             bool prompt = BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
-            BrowserLoadingText.IsVisible = prompt;
-            // A native web view draws over anything laid on it, so the prompt only shows with the host hidden.
-            BrowserWebHost.IsVisible = !prompt;
+            bool offline = CoreSettings.Current.OfflineMode;
+            BrowserLoadingText.IsVisible = offline || _browserPoppedOut || prompt;
+            BrowserWebHost.IsVisible = _browserPoppedOut || (!offline && !prompt);
         }
 
         /// <summary>WPF BrowserLoadingText_Click: load the selected site. The shell's reload is exactly that, behind the
         /// offline gate (WPF #867).</summary>
         internal void OnBrowserPromptClick() => Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
 
-        private void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e) { }          // greyed: see the header
+        // WPF MainWindow.Browser.cs:2736-2796: the card names the other window and returns to its load prompt on close.
+        internal void SetBrowserPoppedOut(bool poppedOut)
+        {
+            _browserPoppedOut = poppedOut;
+            BrowserLoadingText.Bind(TextBlock.TextProperty, LocBinding(CoreSettings.Current.OfflineMode
+                ? "label_browser_disabled_in_offline_mode" : poppedOut
+                    ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser"));
+            TxtPopOutBrowser.Bind(TextBlock.TextProperty, LocBinding(poppedOut ? "btn_focus" : "btn_pop_out"));
+            if (!CoreSettings.Current.OfflineMode)
+                BtnPopOutBrowser.Bind(ToolTip.TipProperty, LocBinding(poppedOut
+                    ? "tooltip_browser_is_popped_out_click_to_focus" : "tooltip_pop_out_browser_to_resizable_window"));
+            SyncBrowserPrompt();
+        }
+
+        private void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e) => Shell?.PopOutBrowser();
         private void ToggleEnhanceIfPossible_Changed(object? sender, RoutedEventArgs e) { } // greyed: see the header
     }
 }
