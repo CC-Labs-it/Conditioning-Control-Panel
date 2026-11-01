@@ -30,9 +30,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The intake's say-it loops end before the capture abort below reads as silence; WPF GameSurfaces
             // 'intake' -> CloseActive. A game surface: closing it never arms the exit ladder.
             new("intake", _ => IntakeHostWindow.CloseAllForPanic(), IntakeHostWindow.IsAnyOpen),
+            new("rain-look-sync", _ => Platform.RainLookSyncHead.Stop()),
             // WPF HandlePanicKeyPress / TriggerPanicFromRemote (main 7e14c2870): Circe's Tab opens its ten-minute
             // safety hold on EVERY panic (key, tray, voice, leash gate); the way out is never priced.
-            new("rain-look-sync", _ => Platform.RainLookSyncHead.Stop()),
             new("chaster-hold", _ => ConditioningControlPanel.Services.Safety.PanicChasterHold.Open("panic")),
             // WPF HandlePanicKeyPress :1662 / TriggerPanicFromRemote: the five-minute post-panic quiet (AI effects refused,
             // follow-ups overtaken). The key arms it earlier too (lock-card and grace-pause rungs); arming twice is harmless.

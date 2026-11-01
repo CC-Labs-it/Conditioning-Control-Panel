@@ -5,7 +5,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace ConditioningControlPanel.Services.Companion.Rain
+namespace ConditioningControlPanel.Services.Companion
 {
     /// <summary>How one wardrobe item can be worn (RAIN-V2-PLAN 2.5, items.json <c>access</c>).</summary>
     public enum RainItemAccessKind { Free, Unlock, Shop }
@@ -117,6 +117,12 @@ namespace ConditioningControlPanel.Services.Companion.Rain
         private readonly HashSet<string> _grants;
         public RainGrantSet(IEnumerable<string>? grants) => _grants = new HashSet<string>(grants ?? Array.Empty<string>(), StringComparer.Ordinal);
         public bool IsGranted(string grant) => _grants.Contains(grant);
+    }
+
+    /// <summary>The live app: <see cref="Prizes.PrizeGrants.IsGranted"/>.</summary>
+    public sealed class AppRainGrantSource : IRainGrantSource
+    {
+        public bool IsGranted(string grant) => Prizes.PrizeGrants.IsGranted(grant);
     }
 
     /// <summary>What one item is for this account right now.</summary>

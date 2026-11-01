@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Companion.Rain;
+using ConditioningControlPanel.Services.Companion;
 using Newtonsoft.Json.Linq;
 using Xunit;
 

@@ -8,7 +8,7 @@ using ConditioningControlPanel.Services.BackRoom;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace ConditioningControlPanel.Services.Companion.Rain;
+namespace ConditioningControlPanel.Services.Companion;
 
 /// <summary>The server's Rain copy in a <c>/v2/equip</c> reply. <see cref="Present"/> is false while the
 /// account never stored one (null or missing <c>equip.rain</c>); <see cref="Look"/> is the

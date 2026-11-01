@@ -36,4 +36,29 @@ public sealed partial class AccountSeedTests
             await sync.PushAsync("rain test");
             Assert.Equal(expected, calls);
         });
+
+    [Theory]
+    [InlineData("{\"revision\":null}", false)]
+    [InlineData("{\"revision\":7,\"grants\":[]}", true)]
+    public void Prize_failure_cannot_skip_the_descent_migration_ack(string prizes, bool callbackThrows)
+        => WithFreshInstall(async () =>
+        {
+            var s = ConditioningControlPanel.CoreSettings.Current;
+            var (wire, sync, _) = SignIn("u1", null);
+            s.DescentCycleXpBonus = 1.0;
+            s.DescentCycle = 0;
+            s.PendingDescentMigrationChoice = "restore";
+            wire.SyncReply = "{\"success\":true,\"prizes\":" + prizes
+                + ",\"descent_migration\":{\"completed\":true,\"choice\":\"cycle\"}}";
+            var calls = 0;
+            sync.PrizesReceived = (_, _) => { calls++; if (callbackThrows) throw new InvalidOperationException("head failed"); };
+            sync.MarkLoaded(Array.Empty<string>());
+            Assert.True(await sync.PushAsync("ack survives prizes"));
+            Assert.True(s.DescentMigrationCompleted);
+            Assert.Equal("cycle", s.DescentMigrationChoice);
+            Assert.Null(s.PendingDescentMigrationChoice);
+            Assert.Equal(1, s.DescentCycle);
+            Assert.Equal(ConditioningControlPanel.Services.Descent.DescentCycleXp.CycleXpBonus, s.DescentCycleXpBonus);
+            Assert.Equal(callbackThrows ? 1 : 0, calls);
+        });
 }
