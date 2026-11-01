@@ -145,13 +145,60 @@ public sealed class BrowserInitialHomeTests
     });
 
     [Fact]
+    public Task FirstLoadKeepsTheModSiteWhenTheNativeReadIsDelayed() => Run((shell, page, host, mod) =>
+    {
+        mod.ShowBambiCloudOption = true;
+        mod.DefaultUrl = "https://hypnotube.com/mod-home";
+        page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked = true;
+        var pending = new TaskCompletionSource<string?>();
+        int reads = 0;
+        host.DocumentUrlReader = () => { reads++; return pending.Task; };
+        page.SyncBrowserCard();
+        Assert.Null(host.Source);
+        Assert.False(pending.Task.IsCompleted);
+
+        page.OnBrowserPromptClick();
+        Assert.Equal(mod.DefaultUrl, host.Source!.AbsoluteUri);
+        pending.SetResult("about:blank");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(page.FindControl<RadioButton>("RbHypnoTube")!.IsChecked);
+        Assert.Equal(0, reads); // an unopened browser has no live page to read
+        shell.BtnReloadBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        Assert.Equal("https://hypnotube.com/", host.Source!.AbsoluteUri);
+    });
+
+    [Fact]
+    public Task EqualUrlRequestInvalidatesAPendingNativeRead() => Run((shell, page, host, mod) =>
+    {
+        const string url = "https://bambicloud.com/video";
+        mod.ShowBambiCloudOption = true;
+        mod.DefaultUrl = "https://hypnotube.com/mod-home";
+        Assert.True(shell.NavigateToUrlInBrowser(url));
+        var pending = new TaskCompletionSource<string?>();
+        host.DocumentUrlReader = () => pending.Task;
+        page.SyncBrowserCard();
+        int requests = host.NavigationRequests;
+
+        Assert.True(shell.NavigateToUrlInBrowser(url));
+        Assert.Equal(requests + 1, host.NavigationRequests);
+        pending.SetResult("https://example.com/old");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(page.FindControl<RadioButton>("RbBambiCloud")!.IsChecked);
+        shell.BtnReloadBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        Assert.Equal("https://bambicloud.com/", host.Source!.AbsoluteUri);
+    });
+
+    [Fact]
     public Task DeferredNativeReadDoesNotOverrideANewerNavigation() => Run((shell, page, host, mod) =>
     {
         mod.ShowBambiCloudOption = true;
         mod.DefaultUrl = "https://hypnotube.com/mod-home";
+        host.Navigate(new Uri("https://example.com/old")); // an open browser makes the native read asynchronous
         var pending = new TaskCompletionSource<string?>();
-        host.DocumentUrlReader = () => pending.Task;
+        int reads = 0;
+        host.DocumentUrlReader = () => { reads++; return pending.Task; };
         page.SyncBrowserCard();
+        Assert.Equal(1, reads);
         Assert.True(shell.NavigateToUrlInBrowser("https://bambicloud.com/user"));
         int requests = host.NavigationRequests;
         pending.SetResult("https://example.com/old");

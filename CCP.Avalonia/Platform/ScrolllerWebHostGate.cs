@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform;
@@ -101,7 +102,16 @@ internal static class ScrolllerWebHostGate
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static string? ReadWebView2Url(IntPtr core) => ScrolllerWebView2Gate.CurrentDocumentUrl(core);
+    private static string? ReadWebView2Url(IntPtr core) =>
+        ReadAndReleaseWebView2Url(core, ScrolllerWebView2Gate.CurrentDocumentUrl);
+
+    // CoreWebView2 on the platform handle returns an owned COM reference.
+    internal static string? ReadAndReleaseWebView2Url(IntPtr core, Func<IntPtr, string?> read)
+    {
+        if (core == IntPtr.Zero) return null;
+        try { return read(core); }
+        finally { Marshal.Release(core); }
+    }
 
     private static void AttachWindows(IPlatformHandle? handle, Func<IPlatformHandle?> handleAgain, Action<bool> ready, int left)
     {

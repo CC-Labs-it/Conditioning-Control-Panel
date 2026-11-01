@@ -170,7 +170,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 bool modWants = App.Mods?.ShowBambiCloudOption() ?? true;
                 RbBambiCloud.IsVisible = modWants || CoreSettings.Current.ForceShowBambiCloud;
-                var current = modWants ? await BrowserWebHost.ReadDocumentUrlAsync() : null;
+                // WPF has no initialized browser before first load (MainWindow.Browser.cs:518-523).
+                var current = modWants && BrowserWebHost.Source != null
+                    ? await BrowserWebHost.ReadDocumentUrlAsync() : null;
                 void ApplySelection()
                 {
                     // A later mod, click, navigation or detach owns the card now.

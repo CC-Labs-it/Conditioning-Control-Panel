@@ -411,6 +411,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public void Navigate(Uri url)
         {
+            // Invalidate pending site sync before every request, including an equal Source.
+            BrowserNavigationStarting?.Invoke();
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;
