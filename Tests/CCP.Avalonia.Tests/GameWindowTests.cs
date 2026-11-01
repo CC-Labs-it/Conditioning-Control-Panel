@@ -6,12 +6,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -992,6 +995,61 @@ public sealed partial class GameWindowTests
             Assert.Equal(2, xp.Count);
             Assert.Equal(250.0 * 95 / 60, xp[1], 6);
             Assert.Equal(new[] { true, true }, runs);
+        });
+    }
+
+    // WPF DtrhHostService.cs:919-952 and ChaosOverlayWindow.xaml.cs:866-883.
+    [Fact]
+    public void Dtrh_boot_failure_uses_the_saved_first_run_or_reuses_the_hub()
+    {
+        RunDtrh(lab: true, (_, _, _, _) =>
+        {
+            try
+            {
+                ChaosMetaStore.Save(new ChaosMetaState { RunsCompleted = 0, SeenIntroGuide = true });
+                ChaosMeta.State.RunsCompleted = 9; // stale memory must not send a new player to the hub
+                var game = GameWindow.Launch("dtrh")!;
+                game.HandleMessage("{\"type\":\"boot-error\",\"msg\":\"renderer\"}");
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(GameWindow.IsAnyOpen());
+                Assert.True(ChaosRunHost.IsActive);
+                Assert.True(ChaosRunHost.State!.Config.ScriptedFirstRun);
+                Assert.Equal(180, ChaosRunHost.State.Config.DurationSec);
+                Assert.Null(ChaosHubWindow.Current);
+                ChaosHubWindow.OpenAt(); // the active descent must not open a hub on top
+                Assert.Null(ChaosHubWindow.Current);
+                ChaosRunHost.ForceShutdown();
+
+                ChaosMetaStore.Save(new ChaosMetaState { RunsCompleted = 3, SeenIntroGuide = true });
+                ChaosMeta.State.RunsCompleted = 0; // returning player comes from the active save
+                game = GameWindow.Launch("dtrh")!;
+                game.HandleMessage("{\"type\":\"boot-error\"}");
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(ChaosRunHost.IsActive);
+                var hub = Assert.IsType<ChaosHubWindow>(ChaosHubWindow.Current);
+                Assert.True(hub.IsVisible);
+                Assert.Equal(3, ChaosMeta.State.RunsCompleted);
+                var recap = ChaosOverlayWindow.ForRun();
+                recap.Show();
+                recap.FindControl<Button>("BtnAdjust")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(recap.IsVisible);
+                Assert.Same(hub, ChaosHubWindow.Current);
+                Assert.True(hub.FindControl<ScrollViewer>("PanelRun")!.IsVisible);
+                hub.Close();
+                Assert.Null(ChaosHubWindow.Current);
+                recap = ChaosOverlayWindow.ForRun();
+                recap.Show();
+                recap.FindControl<Button>("BtnDollhouse")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.NotNull(ChaosHubWindow.Current);
+                Assert.NotSame(hub, ChaosHubWindow.Current);
+            }
+            finally
+            {
+                ChaosHubWindow.Current?.Close();
+                ChaosRunHost.ForceShutdown();
+            }
         });
     }
 
