@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
@@ -480,7 +481,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (_state == null || _state.RerollsLeft <= 0) return null;
             _state.RerollsLeft--;
-            _state.PushEvent("tempted fate again");
+            _state.PushEvent(IconText.BareLoc("chaos_draft_reroll_event"));
             return (DealDraft(), _state.RerollsLeft);
         }
 
@@ -504,13 +505,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     if (_state.SinExtraMult > 0)
                     {
                         _state.BoonMult += _state.SinExtraMult;
-                        _state.PushEvent($"sin embraced (+{_state.SinExtraMult:0.00}x)");
+                        _state.PushEvent(IconText.BareLoc("chaos_draft_sin_bonus_event", _state.SinExtraMult));
                     }
-                    if (shielded) _state.PushEvent("the candle took the sting (no drawback)");
+                    if (shielded) _state.PushEvent(IconText.BareLoc("chaos_draft_shielded_sin_event"));
                     if (_state.MaxedBoons.Contains("surrender"))
                     {
                         _state.Shields++;
-                        _state.PushEvent("you said yes. it gave back (+1 resistance)");
+                        _state.PushEvent(IconText.BareLoc("chaos_draft_surrender_event"));
                         Pulse(Color.FromRgb(120, 220, 160), 0.22);
                     }
                     ChaosOverlayWindow.ChaosSfx.Play("sin_accept", 0.6f);
@@ -520,7 +521,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             else
             {
                 _state.Shields++;
-                _state.PushEvent("resisted: +1 resistance");
+                _state.PushEvent(IconText.BareLoc("chaos_draft_skip_event"));
                 Pulse(Color.FromRgb(120, 220, 160), 0.22);
                 ChaosAnnouncerOverlay.Announce("+1 RESISTANCE", ChaosAnnounceKind.Willpower, artKey: "resistance");
             }
@@ -595,7 +596,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 var card = ChaosUnlockCardRules.ForLesson(id);
                 if (card == null) return;
                 _state.PushEvent($"lesson learned — {card.Title}");
-                if (_draftPaused && !_lessonCardPaused) { _pendingDraftCards.Add(card); return; }
+                if (_spawning && _draftPaused && !_lessonCardPaused) { _pendingDraftCards.Add(card); return; }
                 bool claimPause = _spawning && !_manualPaused && !_lessonCardPaused;
                 if (claimPause)
                 {

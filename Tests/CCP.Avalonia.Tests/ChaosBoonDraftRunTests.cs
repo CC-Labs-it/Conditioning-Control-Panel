@@ -28,6 +28,37 @@ public sealed class ChaosBoonDraftRunTests
         for (int i = 0; i < count; i++) ChaosRunHost.Tick();
     }
 
+    // WPF ChaosModeService.cs:1521, 1555-1561, 1580: all feed messages ship in every language.
+    [Fact]
+    public void Draft_feed_translations_preserve_the_english_copy_and_format_in_all_languages()
+    {
+        var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        string language = loc.CurrentLanguage;
+        string[] keys = { "chaos_draft_reroll_event", "chaos_draft_sin_bonus_event",
+            "chaos_draft_shielded_sin_event", "chaos_draft_surrender_event", "chaos_draft_skip_event" };
+        try
+        {
+            loc.SetLanguage("en");
+            var english = keys.Select(loc.Get).ToArray();
+            Assert.Equal(new[] { "🎲 tempted fate again", "🕯 sin embraced (+{0:0.00}x)",
+                "🕯 the candle took the sting (no drawback)", "🕯 you said yes. it gave back (+1 resistance)",
+                "♥ resisted → +1 resistance" }, english);
+            foreach (var (code, _, _) in global::ConditioningControlPanel.Localization.LocalizationManager.AvailableLanguages)
+            {
+                loc.SetLanguage(code);
+                for (int i = 0; i < keys.Length; i++)
+                {
+                    var text = loc.Get(keys[i]);
+                    Assert.NotEqual(keys[i], text);
+                    if (code != "en") Assert.NotEqual(english[i], text); // no English fallback
+                }
+                Assert.Contains(0.25.ToString("0.00"), loc.GetF(keys[1], 0.25));
+                Assert.DoesNotContain("{0", loc.GetF(keys[1], 0.25));
+            }
+        }
+        finally { loc.SetLanguage(language); }
+    }
+
     // WPF ChaosModeService.cs:1441-1483, 1517-1619; ChaosOverlayWindow.xaml.cs:467-555.
     [Fact]
     public async Task Wave_draft_clears_and_holds_field_rerolls_picks_and_resumes_with_shower()
@@ -36,6 +67,9 @@ public sealed class ChaosBoonDraftRunTests
         {
             Setup();
             ChaosWaveTimerWindow.SkipPlatformChecksForTests = true;
+            var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance;
+            string language = loc.CurrentLanguage;
+            loc.SetLanguage("de");
             try
             {
                 ChaosMeta.State.FirstTimesAwarded?.Remove(ChaosFirstTimes.Whisper);
@@ -77,6 +111,7 @@ public sealed class ChaosBoonDraftRunTests
                 Assert.True(reroll.IsVisible);
                 reroll.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.Equal(0, state.RerollsLeft);
+                Assert.Contains("das Schicksal erneut herausgefordert", state.RecentEvents);
                 Assert.False(reroll.IsVisible);
                 Assert.NotSame(oldCard, cards.Children[0]);
                 var first = (Border)cards.Children[0];
@@ -104,6 +139,7 @@ public sealed class ChaosBoonDraftRunTests
             {
                 ChaosRunHost.ForceShutdown();
                 ChaosWaveTimerWindow.SkipPlatformChecksForTests = false;
+                loc.SetLanguage(language);
             }
         });
     }
@@ -117,6 +153,9 @@ public sealed class ChaosBoonDraftRunTests
             Setup();
             var meta = ChaosMeta.State;
             int runs = meta.RunsCompleted;
+            var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance;
+            string language = loc.CurrentLanguage;
+            loc.SetLanguage("en");
             try
             {
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
@@ -138,6 +177,7 @@ public sealed class ChaosBoonDraftRunTests
                 Assert.True(skip.IsVisible);
                 skip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.Equal(shields + 1, state.Shields);
+                Assert.Contains("resisted → +1 resistance", state.RecentEvents);
                 Assert.Empty(state.RunPickTiles);
                 Assert.Equal(2, state.WaveIndex);
                 double held = state.ElapsedSec;
@@ -147,7 +187,7 @@ public sealed class ChaosBoonDraftRunTests
                 Ticks(1);
                 Assert.True(state.ElapsedSec > held);
             }
-            finally { ChaosRunHost.ForceShutdown(); meta.RunsCompleted = runs; }
+            finally { ChaosRunHost.ForceShutdown(); meta.RunsCompleted = runs; loc.SetLanguage(language); }
             return Task.CompletedTask;
         });
     }
@@ -198,6 +238,37 @@ public sealed class ChaosBoonDraftRunTests
         });
     }
 
+    // WPF ChaosModeService.cs:146-178: a posted completion after stop shows without claiming a pause.
+    [Fact]
+    public async Task Lesson_posted_during_draft_then_stopped_shows_on_the_recap()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                ChaosMeta.State.LessonsComplete.Add("silk_touch");
+                ChaosMeta.State.LessonsComplete.Remove("draft4");
+                ChaosMeta.State.LessonProgress.Remove("draft4");
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = true });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                Ticks(80);
+                Assert.True(ChaosRunHost.Overlay.FindControl<Border>("DraftPanel")!.IsVisible);
+                ChaosLessons.Tick("draft4", ChaosLessons.T_DRAFT4); // posts to the UI thread
+                ChaosRunHost.RequestStop();
+                Assert.False(ChaosUnlockCardOverlay.IsShowing);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(ChaosRunHost.Overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
+                Assert.True(ChaosUnlockCardOverlay.IsShowing);
+                Assert.True(ChaosUnlockCardOverlay.Active!.AutoDismiss);
+                Assert.Equal(ChaosUnlockCardRules.ForLesson("draft4")!.Title, ChaosUnlockCardOverlay.Active.Current!.Title);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
     // WPF ChaosModeService.cs:3161-3181: shutdown closes the table and cannot commit a late pick.
     [Fact]
     public async Task Panic_during_the_pick_beat_discards_the_pending_choice()
@@ -238,6 +309,9 @@ public sealed class ChaosBoonDraftRunTests
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             Setup();
+            var loc = global::ConditioningControlPanel.Localization.LocalizationManager.Instance;
+            string language = loc.CurrentLanguage;
+            loc.SetLanguage("de");
             try
             {
                 ChaosMeta.State.FirstTimesAwarded?.Remove(ChaosFirstTimes.Yes);
@@ -268,10 +342,13 @@ public sealed class ChaosBoonDraftRunTests
                 Assert.Equal(1, ChaosLessons.Progress("surrender"));
                 Assert.Equal(shields + 1, state.Shields);
                 Assert.Equal(multiplier + boon.RunMultBonus + 0.25, state.BoonMult, 6);
+                Assert.Contains($"Sünde angenommen (+{state.SinExtraMult:0.00}x)", state.RecentEvents);
+                Assert.Contains("die Kerze nahm den Schmerz (kein Nachteil)", state.RecentEvents);
+                Assert.Contains("du hast ja gesagt. sie gab etwas zurück (+1 Widerstand)", state.RecentEvents);
                 Assert.Equal(boon.Id, Assert.Single(state.RunPickTiles).Id);
                 Assert.Contains("boon:" + boon.Id, ChaosMeta.State.DiscoveredCodexIds);
             }
-            finally { ChaosRunHost.ForceShutdown(); }
+            finally { ChaosRunHost.ForceShutdown(); loc.SetLanguage(language); }
         });
     }
 

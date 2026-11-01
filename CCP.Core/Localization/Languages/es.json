@@ -1,4 +1,9 @@
 {
+  "chaos_draft_reroll_event": "🎲 desafiaste al destino otra vez",
+  "chaos_draft_sin_bonus_event": "🕯 pecado aceptado (+{0:0.00}x)",
+  "chaos_draft_shielded_sin_event": "🕯 la vela quitó el dolor (sin desventaja)",
+  "chaos_draft_surrender_event": "🕯 dijiste que sí. te devolvió algo (+1 resistencia)",
+  "chaos_draft_skip_event": "♥ resististe → +1 resistencia",
   "chaos_welcome_shower_event": "🚿 lluvia de bienvenida: premios desde arriba",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
