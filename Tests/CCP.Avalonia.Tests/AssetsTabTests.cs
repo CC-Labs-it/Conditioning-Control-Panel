@@ -586,6 +586,90 @@ public sealed class AssetsTabTests
         finally { AssetsTabView.AppInFront = oldInFront; }
     });
 
+    // WPF MainWindow.Assets.cs:904-948: video tiles decode asynchronously and failures keep a placeholder.
+    [Fact]
+    public Task LocalVideoThumbnailsDecodeAndUnreadableClipsKeepTheirPlaceholder() => RunThumbnails(async (tab, s) =>
+    {
+        var videos = Path.Combine(ConditioningControlPanel.CorePaths.EffectiveAssets, "videos");
+        // Silent red 40 x 20 H.264 clip, generated once with ffmpeg. No external process at test time.
+        File.WriteAllBytes(Path.Combine(videos, "v.mp4"), Convert.FromBase64String("AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAwttZGF0AAACrgYF//+q3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE2NCByMzEwOCAzMWUxOWY5IC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAyMyAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEgcmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTEgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0zIGJfcHlyYW1pZD0yIGJfYWRhcHQ9MSBiX2JpYXM9MCBkaXJlY3Q9MSB3ZWlnaHRiPTEgb3Blbl9nb3A9MCB3ZWlnaHRwPTIga2V5aW50PTI1MCBrZXlpbnRfbWluPTI1IHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAAAHGWIhAAz//7fMvgUzcWJzsyAXJ6Uwlx2LX3N2o8AAAAJQZokbEK//lLAAAAACEGeQniF/zThAAAACAGeYXRCvzugAAAACAGeY2pCvzuhAAADdm1vb3YAAABsbXZoZAAAAAAAAAAAAAAAAAAAA+gAAADIAAEAAAEAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAKhdHJhawAAAFx0a2hkAAAAAwAAAAAAAAAAAAAAAQAAAAAAAADIAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAoAAAAFAAAAAAAJGVkdHMAAAAcZWxzdAAAAAAAAAABAAAAyAAABAAAAQAAAAACGW1kaWEAAAAgbWRoZAAAAAAAAAAAAAAAAAAAMgAAAAoAVcQAAAAAAC1oZGxyAAAAAAAAAAB2aWRlAAAAAAAAAAAAAAAAVmlkZW9IYW5kbGVyAAAAAcRtaW5mAAAAFHZtaGQAAAABAAAAAAAAAAAAAAAkZGluZgAAABxkcmVmAAAAAAAAAAEAAAAMdXJsIAAAAAEAAAGEc3RibAAAAMBzdHNkAAAAAAAAAAEAAACwYXZjMQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAoABQASAAAAEgAAAAAAAAAARVMYXZjNjEuMTkuMTAxIGxpYngyNjQAAAAAAAAAAAAAABj//wAAADZhdmNDAWQACv/hABlnZAAKrNlNeWfARAAAAwAEAAADAMg8SJZYAQAGaOvjyyLA/fj4AAAAABBwYXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAAHh4AAAAAAAAABhzdHRzAAAAAAAAAAEAAAAFAAACAAAAABRzdHNzAAAAAAAAAAEAAAABAAAAOGN0dHMAAAAAAAAABQAAAAEAAAQAAAAAAQAACgAAAAABAAAEAAAAAAEAAAAAAAAAAQAAAgAAAAAcc3RzYwAAAAAAAAABAAAAAQAAAAUAAAABAAAAKHN0c3oAAAAAAAAAAAAAAAUAAALSAAAADQAAAAwAAAAMAAAADAAAABRzdGNvAAAAAAAAAAEAAAAwAAAAYXVkdGEAAABZbWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAbWRpcmFwcGwAAAAAAAAAAAAAAAAsaWxzdAAAACSpdG9vAAAAHGRhdGEAAAABAAAAAExhdmY2MS43LjEwMw=="));
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "videos");
+        await tab.ThumbnailLoads;
+        var good = tab.CurrentFolderFiles.Single(f => f.Name == "v.mp4");
+        var bad = tab.CurrentFolderFiles.Single(f => f.Name == "w.mp4");
+        var bmp = Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(good.Thumbnail);
+        Assert.Equal(new PixelSize(100, 50), bmp.PixelSize);
+        Assert.Null(bad.Thumbnail);
+        Assert.All(tab.CurrentFolderFiles, f => Assert.False(f.IsLoadingThumbnail));
+    });
+
+    [Fact]
+    public Task SwitchingFoldersDropsAnInFlightVideoThumbnail() => RunThumbnails(async (tab, s) =>
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new System.Threading.ManualResetEventSlim();
+        var imagePath = Path.Combine(ConditioningControlPanel.CorePaths.EffectiveAssets, "images", "a.png");
+        tab.DecodeVideoThumbnail = _ =>
+        {
+            started.TrySetResult();
+            release.Wait();
+            return new global::Avalonia.Media.Imaging.Bitmap(imagePath);
+        };
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "videos");
+        var loads = tab.ThumbnailLoads;
+        var oldFiles = tab.CurrentFolderFiles.ToArray();
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Contains(oldFiles, f => f.IsLoadingThumbnail);
+            tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "images").Children.Single();
+        }
+        finally { release.Set(); }
+        await loads;
+        Assert.All(oldFiles, f => { Assert.Null(f.Thumbnail); Assert.False(f.IsLoadingThumbnail); });
+        await tab.ThumbnailLoads;
+        Assert.Equal("c.png", Assert.Single(tab.CurrentFolderFiles).Name);
+    });
+
+    // WPF MainWindow.Assets.cs:798-807: decrypted video files are removed after extraction, even on failure.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PackVideoThumbnailsCleanUpDecryptsAndReuseTheCache(bool fail) => RunThumbnails(async (tab, s) =>
+    {
+        var assets = ConditioningControlPanel.CorePaths.EffectiveAssets;
+        var dir = Path.Combine(assets, ".packs", "thumb-pack");
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        File.WriteAllBytes(Path.Combine(dir, "content", "clip.enc"), PackEncryptionService.Encrypt(new byte[] { 42 }));
+        var file = new PackFileEntry { OriginalName = "clip.mp4", ObfuscatedName = "clip.enc", FileType = "video", Extension = ".mp4" };
+        var manifest = new InstalledPackManifest { PackId = Guid.NewGuid().ToString("N"), PackGuid = "thumb-pack", Files = new() { file } };
+        PackEncryptionService.SaveEncryptedManifest(JsonConvert.SerializeObject(manifest), Path.Combine(dir, ContentPackStore.ManifestFileName));
+        var store = new ContentPackStore(() => assets, () => s, () => { });
+        ContentPackStore.Current = store;
+        var paths = new List<string>();
+        tab.DecodeVideoThumbnail = path =>
+        {
+            lock (paths) paths.Add(path);
+            Assert.Equal(new byte[] { 42 }, File.ReadAllBytes(path));
+            if (fail) throw new IOException("Unreadable clip");
+            return new global::Avalonia.Media.Imaging.Bitmap(Path.Combine(assets, "images", "a.png"));
+        };
+        tab.RefreshAssetTree();
+        var folder = tab.AssetTree.Single(n => n.IsPackFolder).Children.Single().Children.Single();
+        tab.AssetTreeView.SelectedItem = folder;
+        await tab.ThumbnailLoads;
+        Assert.Single(paths);
+        Assert.False(File.Exists(paths[0]));
+        var item = Assert.Single(tab.CurrentFolderFiles);
+        Assert.False(item.IsLoadingThumbnail);
+        Assert.Equal(fail, item.Thumbnail == null);
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "images");
+        tab.AssetTreeView.SelectedItem = folder;
+        await tab.ThumbnailLoads;
+        Assert.Equal(fail ? 2 : 1, paths.Count);
+        Assert.All(paths, path => Assert.False(File.Exists(path)));
+    });
+
     // ---- harness ----------------------------------------------------------------------
 
     private static void HoverPack(Window shell, Control card, bool on) => card.RaiseEvent(
@@ -631,6 +715,40 @@ public sealed class AssetsTabTests
         using var data = bmp.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
         File.WriteAllBytes(path, data.ToArray());
     }
+
+    // No shell layout here: exercise the real tab selection and decoder on the shared UI thread.
+    // The shell-path tests above remain responsible for realization and input.
+    private static Task RunThumbnails(Func<AssetsTabView, AppSettings, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        LocalizationManager.Instance.SetLanguage("en");
+        var root = Directory.CreateTempSubdirectory("ccp-thumbnails-").FullName;
+        var previous = ConditioningControlPanel.CorePaths.EffectiveAssetsProvider;
+        var provider = ConditioningControlPanel.CoreSettings.ServiceProvider;
+        var svc = new SettingsService();
+        ConditioningControlPanel.CoreSettings.ServiceProvider = () => svc;
+        ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = () => root;
+        try
+        {
+            Png(Path.Combine(root, "images", "a.png"));
+            Png(Path.Combine(root, "images", "sub", "c.png"));
+            Directory.CreateDirectory(Path.Combine(root, "videos"));
+            File.WriteAllBytes(Path.Combine(root, "videos", "v.mp4"), new byte[16]);
+            File.WriteAllBytes(Path.Combine(root, "videos", "w.mp4"), new byte[16]);
+            var tab = new AssetsTabView();
+            tab.OnTabShown();
+            await body(tab, svc.Current);
+        }
+        finally
+        {
+            svc.SealForReset();
+            ConditioningControlPanel.CoreSettings.ServiceProvider = provider;
+            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = previous;
+            try { Directory.Delete(root, true); } catch { }
+        }
+    });
 
     private static Task Run(Func<MainShellWindow, AssetsTabView, AppSettings, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
