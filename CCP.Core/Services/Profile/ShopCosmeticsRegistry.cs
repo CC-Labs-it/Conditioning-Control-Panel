@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services
 {
     /// <summary>One Prize Counter profile item: a frame or an avatar, sold as grant <c>cos.&lt;id&gt;</c>.</summary>
-    public sealed record ShopProfileItem(string Id, string Type, string File, string Grant, bool NeedsPrime)
+    public record ShopProfileItem(string Id, string Type, string File, string Grant, bool NeedsPrime)
     {
         public bool IsFrame => Type == ShopCosmeticsRegistry.FrameType;
         public bool IsAvatar => Type == ShopCosmeticsRegistry.AvatarType;
@@ -15,8 +15,7 @@ namespace ConditioningControlPanel.Services
         public string NameKey => "shop_item_" + Id.Replace('.', '_').Replace('-', '_') + "_name";
     }
 
-    // Parser and item rules copied from WPF Services/Profile/ShopCosmetics.cs.
-    // A separate type keeps the WPF image cache and ownership service unchanged.
+    // Shared registry rules; image decoding and ownership services stay in each head.
     public static class ShopCosmeticsRegistry
     {
         public const string FrameType = "frame", AvatarType = "avatar", GrantPrefix = "cos.";
