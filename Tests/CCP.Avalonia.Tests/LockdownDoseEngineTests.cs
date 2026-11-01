@@ -9,6 +9,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Safety;
 using Xunit;
 
@@ -135,6 +136,91 @@ public class LockdownDoseEngineTests
                 Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", oldWayland);
                 ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit();
             }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task KeeperTickDoesNotSupersedeAUserStartWaitingForThePortal(bool keeperFirst, bool exitBeforePortal)
+    {
+        Assert.SkipWhen(!OperatingSystem.IsLinux(), "The GlobalShortcuts portal is Linux-only.");
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            EnsureApp();
+            var s = CoreSettings.Current;
+            s.LockdownDoseKeeperEnabled = s.PanicKeyEnabled = s.FlashEnabled = true;
+            s.LockdownDisablePanicKey = false;
+            var count = s.TotalSessions;
+            var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+            var allowed = typeof(MainShellWindow).GetField("_portalAllowed", flags)!;
+            var failed = typeof(MainShellWindow).GetField("_portalFailed", flags)!;
+            var bind = typeof(MainShellWindow).GetField("_portalBind", flags)!;
+            var oldAllowed = allowed.GetValue(null); var oldFailed = failed.GetValue(null); var oldBind = bind.GetValue(null);
+            var oldWayland = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+            var pending = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var ld = LockdownService.Current = new LockdownService();
+            var shell = new MainShellWindow();
+            shell.Show();
+            try
+            {
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "test");
+                PortalPanicShortcut.SetSessionForTests(null, null);
+                allowed.SetValue(null, true); failed.SetValue(null, false); bind.SetValue(null, pending.Task);
+                ld.Activate(TimeSpan.FromMinutes(20));
+                if (keeperFirst) shell.EnforceLockdownDoseEngine(true);
+                shell.StartEngineFromUser();
+                Assert.False(CoreEngine.IsRunning);
+                shell.EnforceLockdownDoseEngine(true);
+                for (var i = 0; i < 4; i++) shell.EnforceLockdownDoseEngine(false);
+                Assert.False(CoreEngine.IsRunning);
+                if (exitBeforePortal) ld.Deactivate();
+                pending.SetResult();
+                var until = System.Diagnostics.Stopwatch.StartNew();
+                while (!CoreEngine.IsRunning && until.Elapsed < TimeSpan.FromSeconds(5)) await Task.Delay(20);
+                Assert.True(CoreEngine.IsRunning);
+                Assert.Equal(count + 1, s.TotalSessions);
+                if (!exitBeforePortal) ld.Deactivate();
+                Assert.True(CoreEngine.IsRunning);
+            }
+            finally
+            {
+                pending.TrySetResult();
+                ld.Dispose(); MainShellWindow.StopEngine(); LockdownService.Current = null; shell.RequestExit();
+                PortalPanicShortcut.SetSessionForTests(null, null);
+                allowed.SetValue(null, oldAllowed); failed.SetValue(null, oldFailed); bind.SetValue(null, oldBind);
+                Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", oldWayland);
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData("en", "Lockdown starts or restarts the engine while a feature is enabled")]
+    [InlineData("de", "Lockdown startet den Motor, solange eine Funktion aktiviert ist, oder startet ihn erneut.")]
+    [InlineData("es", "El bloqueo inicia o reinicia el motor mientras haya una función activada.")]
+    [InlineData("fr", "Le verrouillage démarre ou redémarre le moteur tant qu'une fonction est activée.")]
+    [InlineData("it", "Il lockdown avvia o riavvia il motore quando una funzione è attiva.")]
+    [InlineData("ja", "機能が有効な間、ロックダウンはエンジンを起動または再起動します。")]
+    [InlineData("ko", "기능이 켜져 있는 동안 락다운이 엔진을 시작하거나 다시 시작합니다.")]
+    [InlineData("pt-BR", "O lockdown inicia ou reinicia o motor enquanto houver um recurso ativado.")]
+    [InlineData("ru", "Пока включена функция, блокировка запускает или перезапускает движок.")]
+    [InlineData("zh-CN", "只要有功能启用，封锁就会启动或重新启动引擎。")]
+    public async Task DoseWarningUsesTheSelectedLanguageOnlyWhenEnabled(string language, string text)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var loc = LocalizationManager.Instance;
+            var previous = loc.CurrentLanguage;
+            try
+            {
+                loc.SetLanguage(language);
+                var s = new ConditioningControlPanel.Models.AppSettings { LockdownDoseKeeperEnabled = true };
+                Assert.Contains("- " + text + "\n", LockdownTabView.LockdownWarning(20, s, false));
+                s.LockdownDoseKeeperEnabled = false;
+                Assert.DoesNotContain("- " + text + "\n", LockdownTabView.LockdownWarning(20, s, false));
+            }
+            finally { loc.SetLanguage(previous); }
             return Task.CompletedTask;
         });
     }

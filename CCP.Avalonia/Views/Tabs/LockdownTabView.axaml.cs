@@ -333,7 +333,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // WPF MainWindow.Lab.cs:80; Platform/Win32PanicKey enforces it on Windows only.
             if (windows && cfg.LockdownBlockSystemKeys) warn.Append("- Alt+F4, Alt+Tab, the Windows key and Ctrl+Esc will be BLOCKED\n");
             if (cfg.LockdownDoseKeeperEnabled)
-                warn.Append("- Lockdown starts or restarts the engine while a feature is enabled\n");
+                warn.Append("- ").Append(Loc.Get("lockdown_dose_engine_warning")).Append('\n');
             warn.Append("- You CANNOT close the application (minimizing still works)\n");
             warn.Append("- The only escape is waiting for the timer to expire\n");
             warn.Append(windows

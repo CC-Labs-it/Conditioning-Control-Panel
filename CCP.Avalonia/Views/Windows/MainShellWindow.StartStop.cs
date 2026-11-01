@@ -20,6 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Bumped by every Stop, so a Start still waiting on the portal bind (up to 30 s) is dropped
         // if the user stopped or panicked meanwhile.
         private static int _engineGen;
+        private static int? _pendingUserEngineGen;
 
         private void BtnStartMenu_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
@@ -80,8 +81,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void StartEngine(bool systemInitiated = false)
         {
             var gen = ++_engineGen;
+            if (!systemInitiated) _pendingUserEngineGen = gen;
             StartEffect(() =>
             {
+                if (!systemInitiated && _pendingUserEngineGen == gen) _pendingUserEngineGen = null;
                 if (gen != _engineGen || CoreEngine.IsRunning
                     || (systemInitiated && !CanStartLockdownDoseEngine())) return;
                 CoreEngine.Start(systemInitiated);
@@ -99,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void StopEngine()
         {
             _engineGen++;
+            _pendingUserEngineGen = null;
             App.Sessions?.Pause();
             CoreEngine.Stop();
         }

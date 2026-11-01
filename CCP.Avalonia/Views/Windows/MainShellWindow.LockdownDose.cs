@@ -73,7 +73,9 @@ public partial class MainShellWindow
             || (Autonomy.IsEnabled && s.AutonomyModeEnabled && s.AutonomyConsentGiven);
     }
 
+    // A pending user START owns the portal request until it runs or Stop invalidates it.
     private bool CanStartLockdownDoseEngine() => _doseEngineArmed && LockdownActive
+        && _pendingUserEngineGen != _engineGen
         && CoreSettings.Current.LockdownDoseKeeperEnabled && !IsSessionFeatureLockActive
         && !PanicAftermath.HoldsEngineRestart && HasLockdownDose();
 
