@@ -154,6 +154,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             CoreAudio.DuckGenerationProvider = () => { lock (_duckLock) return _duckGeneration; };
         }
 
+        // The Playing event and tests use this path; no native output is needed to test diagnostics.
+        internal static void NoteOneShotStarted(string path, string tag) =>
+            CoreAudioDiagnostics.Note("oneshot:" + tag, path, asked: tag == "keyword-preview");
+
         /// <summary>Same contract as WPF's AudioService.PlayOneShot: onStarted gets the clip length
         /// once playing; onFinished fires exactly once - off the UI thread when the clip ends or
         /// errors, synchronously on the caller's thread when it is refused (muted, missing file).
@@ -180,7 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             player.Playing += (_, _) =>
             {
-                CoreAudioDiagnostics.Note("oneshot:" + tag, path);
+                NoteOneShotStarted(path, tag);
                 // Setting volume before Play, or inside this libvlc event, is lost: the pulse
                 // output only takes it once it exists, from a thread that is not libvlc's own.
                 ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { ApplyPreferredDevice(player); player.Volume = vol; } });

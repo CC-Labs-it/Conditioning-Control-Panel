@@ -23,11 +23,11 @@ public static class CoreAudioDiagnostics
         catch { /* Diagnostics must never cost a sound. */ }
     }
 
-    public static void NoteHeld(string player)
+    public static void NoteHeld(string player, string what = "audio")
     {
         try
         {
-            var line = HeldLineFor(player, "audio", DateTime.UtcNow);
+            var line = HeldLineFor(player, what, DateTime.UtcNow);
             if (line != null) Log.Information("[VideoDiag] AUDIO {AudioEvent}", line);
         }
         catch { /* A diagnostic must not interrupt the trigger. */ }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -61,6 +62,66 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
+
+    [Fact]
+    public void KeywordPreviewStartWithEngineOffDoesNotLogOrSpendItsSlot()
+    {
+        var previous = (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider);
+        try
+        {
+            CoreSession.IsEngineRunningProvider = () => false;
+            CoreSession.IsSessionRunningProvider = () => false;
+            CaptureDiagnostics(lines =>
+            {
+                LibVlcAudio.NoteOneShotStarted("/private/preview.wav", "keyword-preview");
+                Assert.Empty(lines);
+                Assert.NotNull(CoreAudioDiagnostics.LineFor("oneshot:keyword-preview", "preview.wav", false, false, DateTime.UtcNow));
+                LibVlcAudio.NoteOneShotStarted("/private/automatic.wav", "keyword-trigger");
+                Assert.Contains(lines, line => line.Contains("oneshot:keyword-trigger") && line.Contains("automatic.wav"));
+            });
+        }
+        finally { (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider) = previous; }
+    }
+
+    [Theory]
+    [InlineData(false, "PlayAudio")]
+    [InlineData(true, "legacy audio")]
+    public void HeldKeywordDiagnosticNamesTheAudioPath(bool legacy, string what) => Run((engine, settings, played) =>
+    {
+        CoreSession.IsEngineRunningProvider = () => false;
+        CoreSession.IsSessionRunningProvider = () => false;
+        if (legacy)
+        {
+            settings.KeywordTriggers[0].AudioFilePath = ((PlayAudioAction)settings.KeywordTriggers[0].Actions[0]).FilePath;
+            settings.KeywordTriggers[0].Actions.Clear();
+        }
+        CaptureDiagnostics(lines =>
+        {
+            Type(engine, "sit");
+            Assert.Empty(played);
+            Assert.Contains(lines, line => line.Contains("held its " + what));
+        });
+    });
+
+    private static void CaptureDiagnostics(Action<ConcurrentQueue<string>> check)
+    {
+        var previous = Serilog.Log.Logger;
+        var sink = new AudioDiagnosticSink();
+        using var logger = new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        CoreAudioDiagnostics.ResetForTests();
+        try { Serilog.Log.Logger = logger; check(sink.Lines); }
+        finally { Serilog.Log.Logger = previous; CoreAudioDiagnostics.ResetForTests(); }
+    }
+
+    private sealed class AudioDiagnosticSink : Serilog.Core.ILogEventSink
+    {
+        internal readonly ConcurrentQueue<string> Lines = new();
+        public void Emit(Serilog.Events.LogEvent e)
+        {
+            var line = e.RenderMessage();
+            if (line.StartsWith("[VideoDiag] AUDIO ", StringComparison.Ordinal)) Lines.Enqueue(line);
+        }
+    }
 
     [Theory]
     [InlineData(false)]
