@@ -8,8 +8,7 @@
 // Slice B: the manifest's online half (Core DtrhRemoteMedia: online media copied to this machine, re-posted as
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
 // ponytail: slice game-dtrh-host-c, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
-// meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, loom-list and
-// loom-*, the heartbeat watchdog + relaunch-once recovery, bark routing, sfx,
+// meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.content / ccp.mod origins, the heartbeat watchdog + relaunch-once recovery, bark routing, sfx,
 // fire-payload, freeze/mute (native video), vn-speaking, haptics, fullscreen-set, report-bug, session stats,
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray, and SeasonRecap TrackFeature.
@@ -80,6 +79,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "heartbeat":
                 case "pong":
                     return true;   // the watchdog lands with game-dtrh-host-b
+                case "loom-save":
+                case "loom-delete":
+                case "loom-reveal":
+                    HandleLoom(o); // WPF DtrhHostService.cs:405-433; same store and replies as standalone Loom.
+                    return true;
                 case "asset-stats":
                     // WPF DtrhHostService.cs:400-404: deltas are additive, best-effort telemetry.
                     try { DtrhMergeAssetStats(o); }
@@ -151,7 +155,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // (the page replaces its pools), so the tube fills without a relaunch. Unsubscribed in DisposeDtrh (P68).
             DtrhRemoteMedia.CopiesReady -= OnDtrhCopiesReady;
             DtrhRemoteMedia.CopiesReady += OnDtrhCopiesReady;
-            // WPF DtrhHostService.cs:309-318: seed biome selection with the top twelve;
+            // WPF DtrhHostService.cs:309,462-479: saved spirals seed the descent pool.
+            PostLoomList();
+            // WPF DtrhHostService.cs:310-318: seed biome selection with the top twelve;
             // an empty history sends no frame, and a failed read must not prevent play.
             try
             {

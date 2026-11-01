@@ -59,6 +59,7 @@ public sealed class SpiralFinishTests
             using var server = new WebAssetServer(root.FullName);
             var oldServer = GameWindow.Server;
             var oldShell = ExternalOpener.Shell;
+            var oldSelect = ExternalOpener.SelectInFileManager;
             var oldAudio = CoreAudio.PlayOneShotProvider;
             var oldAudioPath = CoreModArt.AudioOverridePathProvider;
             var oldVolume = CoreSettings.Current.MasterVolume;
@@ -67,11 +68,12 @@ public sealed class SpiralFinishTests
             var card = new SpiralFeatureControl();
             var host = new Window { Content = card };
             var slug = "test-" + Guid.NewGuid().ToString("N")[..12];
-            string? revealed = null;
-            ExternalOpener.Shell = path => { revealed = path; return true; };
-            host.Show();
+            string? selected = null, revealed = null;
             try
             {
+                ExternalOpener.SelectInFileManager = path => { selected = path; return true; };
+                ExternalOpener.Shell = path => { revealed = path; return true; };
+                host.Show();
                 var button = card.FindControl<Button>("BtnOpenLoom")!;
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var loom = Assert.IsType<GameWindow>(GameWindow.OpenForTests("loom"));
@@ -99,9 +101,16 @@ public sealed class SpiralFinishTests
                 Send(new { type = "loom-save", name = slug, gifBase64 = Gif, overwrite = true });
                 Assert.True((bool)messages.Last(m => (string?)m["type"] == "loom-result")["ok"]!);
                 Send(new { type = "loom-reveal", slug = "../outside" });
+                Assert.Null(selected);
                 Assert.Null(revealed);
                 Send(new { type = "loom-reveal", slug });
-                Assert.Equal(Path.GetDirectoryName(path), revealed); // portable file manager opens the containing folder
+                Assert.Equal(path, selected);
+                Assert.Null(revealed);
+                selected = null;
+                ExternalOpener.SelectInFileManager = p => { selected = p; return false; };
+                Send(new { type = "loom-reveal", slug });
+                Assert.Equal(path, selected);
+                Assert.Equal(Path.GetDirectoryName(path), revealed); // fallback when the file manager cannot select
                 float? cueVolume = null;
                 CoreSettings.Current.MasterVolume = 50;
                 CoreModArt.AudioOverridePathProvider = p => p == "chaos/test.mp3" ? path : null;
@@ -123,6 +132,7 @@ public sealed class SpiralFinishTests
             {
                 GameWindow.CloseAllForPanic(); host.Close();
                 GameWindow.Server = oldServer; ExternalOpener.Shell = oldShell;
+                ExternalOpener.SelectInFileManager = oldSelect;
                 CoreAudio.PlayOneShotProvider = oldAudio; CoreModArt.AudioOverridePathProvider = oldAudioPath;
                 CoreSettings.Current.MasterVolume = oldVolume;
                 DtrhLoomStore.Delete(slug); CoreSettings.Current.SpiralPath = savedPath;
