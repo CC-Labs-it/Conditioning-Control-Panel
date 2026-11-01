@@ -5,11 +5,52 @@ using ConditioningControlPanel.Tests;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services.AudioPlayer;
 using Xunit;
+using WpfAudio = ConditioningControlPanel.Services.Audio.EngineOffAudioLog;
 
 namespace CCP.Core.Tests;
 
 public class Sync7AudioTests
 {
+    [Fact]
+    public void WpfFacadeSharesTheCoreBudgetAndReset()
+    {
+        var player = Guid.NewGuid().ToString();
+        var now = new DateTime(2026, 11, 1);
+        try
+        {
+            Assert.NotNull(WpfAudio.LineFor(player, "/private/a.wav", false, false, now));
+            Assert.Null(CoreAudioDiagnostics.LineFor(player, "b.wav", false, false, now.AddSeconds(1)));
+            Assert.NotNull(CoreAudioDiagnostics.LineFor(player + "2", "a.wav", false, false, now));
+            Assert.Null(WpfAudio.LineFor(player + "2", "b.wav", false, false, now.AddSeconds(1)));
+            WpfAudio.ResetForTests();
+            Assert.NotNull(CoreAudioDiagnostics.LineFor(player, "b.wav", false, false, now.AddSeconds(1)));
+            Assert.Equal(CoreAudioDiagnostics.NameOf(@"C:\private\a.wav"), WpfAudio.NameOf(@"C:\private\a.wav"));
+        }
+        finally { CoreAudioDiagnostics.ResetForTests(); }
+    }
+
+    [Fact]
+    public void HeldLinesKeepTheirOwnSharedSlotAndWpfWording()
+    {
+        var player = Guid.NewGuid().ToString();
+        var now = new DateTime(2026, 11, 1);
+        Assert.NotNull(CoreAudioDiagnostics.LineFor(player, "a.wav", false, false, now));
+        Assert.Equal($"engine off: {player} held its MindWipe", CoreAudioDiagnostics.HeldLineFor(player, "MindWipe", now));
+        Assert.Null(CoreAudioDiagnostics.HeldLineFor(player, "audio", now.AddSeconds(9)));
+        Assert.NotNull(CoreAudioDiagnostics.HeldLineFor(player, "audio", now.AddSeconds(10)));
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, true)]
+    public void WpfAndCoreUseTheSameRunningRule(bool engine, bool session, bool running)
+    {
+        Assert.Equal(running, WpfAudio.IsRunning(engine, session));
+        Assert.Equal(running, CoreAudioDiagnostics.IsRunning(engine, session));
+    }
+
     [Fact]
     public void PlaylistRulesHaveOnlyOneProductSource()
     {
