@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>The panel that sent us here, else the app's main window.</summary>
         private MainShellWindow? _panel;
+        private MainShellWindow? _engineSource;
         private MainShellWindow? Panel => _panel ?? MainShellWindow.Current;
 
         /// <summary>The launcher, if it has been built this run.</summary>
@@ -84,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (ReferenceEquals(_window, this)) _window = null;
                 _statusTimer.Stop();
                 CoreMods.ModChanged -= OnModChanged;
+                UnhookEngine();
             };
             // WPF OnIsVisibleChanged -> OnShown / OnHidden.
             PropertyChanged += (_, e) =>
@@ -109,6 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshMod();
                 RefreshStatus();
                 RefreshStats();
+                HookEngine();
                 _statusTimer.Start();
             }
             catch (Exception ex) { Log.Warning(ex, "[Launcher] OnShown failed"); }
@@ -152,6 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private LauncherWindow Link(MainShellWindow panel)
         {
             if (!ReferenceEquals(_panel, panel)) { _panel = panel; panel.Closed += (_, _) => Close(); }
+            HookEngine();
             return this;
         }
 
@@ -317,8 +321,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshStatus();
         }
 
-        /// <summary>WPF RefreshStatus: running since HH:mm + Stop, or idle; the CTA reads Open or Launch.
-        /// ponytail: WPF also refreshes at once on EngineStopped; here the 1 s tick catches it.</summary>
+        // WPF LauncherWindow.xaml.cs:410-428: hook on show, detach on close, marshal a stop to the UI.
+        private void HookEngine()
+        {
+            var panel = Panel;
+            if (ReferenceEquals(panel, _engineSource)) return;
+            UnhookEngine();
+            _engineSource = panel;
+            if (_engineSource != null) _engineSource.EngineStopped += OnEngineStopped;
+        }
+
+        private void UnhookEngine()
+        {
+            if (_engineSource != null) _engineSource.EngineStopped -= OnEngineStopped;
+            _engineSource = null;
+        }
+
+        private void OnEngineStopped(object? sender, EventArgs e)
+        {
+            if (Dispatcher.UIThread.CheckAccess()) RefreshStatus();
+            else Dispatcher.UIThread.Post(RefreshStatus);
+        }
+
+        /// <summary>WPF RefreshStatus: running since HH:mm + Stop, or idle; the CTA reads Open or Launch.</summary>
         private bool? _ctaRunning;
 
         internal void RefreshStatus()
@@ -631,7 +656,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // --- the art plate: the mod's art, else the hue plate with the glyph ---
             // ponytail: WPF's glyph plate also draws a radial hue and a road (no art-less card shows yet).
             var plate = new Panel { MinHeight = LauncherGridLayout.MinArtHeight, Background = new SolidColorBrush(hue, 0.35) };
-            if (ModArt.TryLoad(card.ArtPath, 640) is { } art)
+            // WPF LauncherWindow.Tiles.cs:104-115: the Breakout demo has a built-in vector cover.
+            IImage? art = ModArt.TryLoad(card.ArtPath, 640);
+            art ??= card.Id switch
+            {
+                "breakoutdemo" => BreakoutCardArt.Demo,
+                _ => null,
+            };
+            if (art != null)
                 plate.Children.Add(new Image { Source = art, Stretch = Stretch.UniformToFill });
             else
                 plate.Children.Add(new TextBlock
