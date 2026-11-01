@@ -39,10 +39,13 @@ vm.runInNewContext(script, context);
 preview.paused = false; preview.emit('playing');
 muted.paused = false; muted.emit('playing');
 assert.equal(messages.length, 0, 'previews and muted media must not hold Takeover');
-video.paused = false; video.emit('playing');
+video.duration = 600; video.paused = false; video.emit('playing');
 assert.equal(messages.at(-1).state, 'playing');
+assert.equal(messages.at(-1).dur, 600, 'playing reports the finite duration');
+video.duration = Infinity;
 advance(1000);
 assert.equal(messages.at(-1).state, 'progress');
+assert.equal(messages.at(-1).dur, 0, 'a live stream reports unknown duration');
 video.paused = true; video.emit('pause');
 advance(1999);
 assert.notEqual(messages.at(-1).state, 'stopped');
@@ -67,3 +70,23 @@ assert.equal(messages.at(-1).reason, 'ended');
 windowEvents.pagehide();
 assert.equal(messages.at(-1).reason, 'navigated');
 console.log('BrowserMediaReporter: filter, heartbeat, pause/resume, audio, end and navigation OK');
+
+// WPF queue recovery pauses both media kinds and exits page fullscreen.
+const recoveryDeclaration = source.match(/internal const string BrowserMediaRecoveryScript =([\s\S]*?);\s*\n\s*private void CancelBrowserMediaRecovery/)[1];
+const recovery = [...recoveryDeclaration.matchAll(/"(?:[^"\\]|\\.)*"/g)].map(m => JSON.parse(m[0])).join('');
+const paused = [];
+let fullscreenExited = 0;
+const recoveryContext = {
+    window: {},
+    document: {
+        fullscreenElement: {},
+        querySelectorAll: () => [{ pause: () => paused.push('video') }, { pause: () => paused.push('audio') }],
+        exitFullscreen: () => { fullscreenExited++; return Promise.resolve(); }
+    }
+};
+vm.runInNewContext(recovery, recoveryContext);
+assert.deepEqual(paused, ['video', 'audio']);
+assert.equal(fullscreenExited, 1);
+assert.equal(recoveryContext.window._ccpForcedFs, false);
+assert.equal(recoveryContext.window._ccpTakeoverStopped, true);
+console.log('BrowserMediaRecovery: pauses media and exits fullscreen');

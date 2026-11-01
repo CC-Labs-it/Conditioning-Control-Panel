@@ -232,6 +232,200 @@ public sealed class BrowserMediaTakeoverTests
         finally { LockCardWindow.ForceCloseAll(); }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EngineStopReleasesClaimWithoutEndingPlayback(bool protect) => WithDesktopBrowser(host =>
+    {
+        var shell = MainShellWindow.Current!;
+        var tab = shell.Named<SettingsTabView>("SettingsTab")!;
+        var clock = new BubbleCountQueueTests.Clock();
+        var game = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => new[] { "/none/clip.mp4" });
+        var oldHook = CoreEngine.StoppedHook;
+        Action? staleRecovery = null;
+        var scripts = new List<string>();
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        tab.ScheduleBrowserMediaRecovery = (action, delay) =>
+        {
+            staleRecovery = action;
+            return clock.CreateTimer(_ => action(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
+        };
+        CoreSettings.Current.ProtectBrowserVideoPlayback = protect;
+        CoreEngine.StoppedHook = shell.OnEngineStopped;
+        try
+        {
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            Assert.True(tab.BrowserMediaOwnsSlot);
+            var firstRecovery = staleRecovery!;
+            MainShellWindow.StopEngine();
+            Assert.True(tab.BrowserMediaPlaying);
+            Assert.False(tab.BrowserMediaOwnsSlot);
+            Assert.Equal(protect, shell.Autonomy.IsBusy());
+            Assert.Equal(protect, MandatoryVideoOverlay.Instance.BrowserMediaActive);
+            game.Trigger(forceTest: true);
+            Assert.True(game.IsBusy);
+            game.ForceCleanup();
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            Assert.False(tab.BrowserMediaOwnsSlot); // Still the same user session.
+            firstRecovery(); // A callback already queued before Stop must not end playback.
+            Assert.True(tab.BrowserMediaPlaying);
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            Assert.True(tab.BrowserMediaOwnsSlot);
+            firstRecovery(); // Nor may the old claim end this new session.
+            Assert.True(tab.BrowserMediaPlaying);
+            Assert.True(tab.BrowserMediaOwnsSlot);
+            Assert.Empty(scripts);
+        }
+        finally
+        {
+            game.ForceCleanup();
+            CoreEngine.StoppedHook = oldHook;
+            host.ScriptInvoker = null;
+        }
+    });
+
+    [Fact]
+    public void UnknownDurationRecoversClaimDespiteOngoingHeartbeats() => WithDesktopBrowser(host =>
+    {
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        var clock = new BubbleCountQueueTests.Clock();
+        var scripts = new List<string>();
+        tab.BrowserMediaClock = () => clock.GetUtcNow().UtcDateTime;
+        tab.ScheduleBrowserMediaRecovery = (action, delay) =>
+            clock.CreateTimer(_ => action(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        try
+        {
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":0}");
+            for (var i = 0; i < 362; i++)
+            {
+                clock.Advance(TimeSpan.FromSeconds(10));
+                host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"progress\",\"dur\":0}");
+            }
+            clock.Advance(TimeSpan.FromSeconds(10) - TimeSpan.FromTicks(1));
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"progress\",\"dur\":0}");
+            Assert.True(tab.BrowserMediaPlaying);
+            Assert.True(tab.BrowserMediaOwnsSlot);
+            Assert.Empty(scripts);
+            clock.Advance(TimeSpan.FromTicks(1)); // 3600 s fallback + 30 s queue buffer.
+            Assert.False(tab.BrowserMediaPlaying);
+            Assert.False(tab.BrowserMediaOwnsSlot);
+            Assert.Equal(new[] { SettingsTabView.BrowserMediaRecoveryScript }, scripts);
+        }
+        finally { host.ScriptInvoker = null; }
+    });
+
+    [Fact]
+    public void OldRecoveryCallbackCannotEndANewSession() => WithDesktopBrowser(host =>
+    {
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        var clock = new BubbleCountQueueTests.Clock();
+        var callbacks = new List<Action>();
+        var scripts = new List<string>();
+        tab.ScheduleBrowserMediaRecovery = (action, delay) =>
+        {
+            callbacks.Add(action);
+            return clock.CreateTimer(_ => action(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
+        };
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        try
+        {
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            callbacks[0]();
+            Assert.True(tab.BrowserMediaPlaying);
+            Assert.True(tab.BrowserMediaOwnsSlot);
+            Assert.Empty(scripts);
+        }
+        finally { host.ScriptInvoker = null; }
+    });
+
+    [Fact]
+    public void OnlyPlayingReportsRearmRecovery() => WithDesktopBrowser(host =>
+    {
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        var clock = new BubbleCountQueueTests.Clock();
+        var arms = 0;
+        tab.ScheduleBrowserMediaRecovery = (action, delay) =>
+        {
+            arms++;
+            return clock.CreateTimer(_ => action(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
+        };
+        host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":600}");
+        Assert.Equal(1, arms);
+        host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"progress\",\"dur\":800}");
+        Assert.Equal(1, arms);
+        host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":0}");
+        Assert.Equal(2, arms);
+    });
+
+    [Fact]
+    public void RecoveryDelayUsesWpfDurationBuffers() => WithDesktopBrowser(host =>
+    {
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        var clock = new BubbleCountQueueTests.Clock();
+        var delays = new List<TimeSpan>();
+        tab.ScheduleBrowserMediaRecovery = (action, delay) =>
+        {
+            delays.Add(delay);
+            return clock.CreateTimer(_ => action(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
+        };
+        host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":600}");
+        host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+        host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":10}");
+        host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+        host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":0}");
+        Assert.Equal(new[] { TimeSpan.FromSeconds(645), TimeSpan.FromSeconds(300), TimeSpan.FromSeconds(3630) }, delays);
+    });
+
+    [Fact]
+    public void RecoveryUsesReportedDurationAndOnlyPlayingRearmsIt() => WithDesktopBrowser(host =>
+    {
+        var tab = MainShellWindow.Current!.Named<SettingsTabView>("SettingsTab")!;
+        var clock = new BubbleCountQueueTests.Clock();
+        var scripts = new List<string>();
+        tab.BrowserMediaClock = () => clock.GetUtcNow().UtcDateTime;
+        tab.ScheduleBrowserMediaRecovery = (action, delay) =>
+            clock.CreateTimer(_ => action(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        try
+        {
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":600}");
+            for (var i = 0; i < 10; i++)
+            {
+                clock.Advance(TimeSpan.FromSeconds(10));
+                host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"progress\"}");
+            }
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":0}"); // Keep 600 s and rearm.
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"progress\",\"dur\":800}"); // Update but do not rearm a user session.
+            for (var i = 0; i < 64; i++)
+            {
+                clock.Advance(TimeSpan.FromSeconds(10));
+                host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"progress\"}");
+            }
+            clock.Advance(TimeSpan.FromSeconds(5) - TimeSpan.FromTicks(1));
+            Assert.True(tab.BrowserMediaOwnsSlot);
+            clock.Advance(TimeSpan.FromTicks(1));
+            Assert.False(tab.BrowserMediaPlaying);
+            Assert.Single(scripts);
+            scripts.Clear();
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\",\"dur\":10}");
+            for (var i = 0; i < 29; i++)
+            {
+                clock.Advance(TimeSpan.FromSeconds(10));
+                host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"progress\"}");
+            }
+            clock.Advance(TimeSpan.FromSeconds(10) - TimeSpan.FromTicks(1));
+            Assert.True(tab.BrowserMediaOwnsSlot); // WPF queue's 5-minute minimum.
+            clock.Advance(TimeSpan.FromTicks(1));
+            Assert.False(tab.BrowserMediaPlaying);
+            Assert.Single(scripts);
+        }
+        finally { host.ScriptInvoker = null; }
+    });
+
     [Fact]
     public void HeartbeatsKeepPlaybackBusyAndTimeoutOrNavigationReleasesIt()
     {
