@@ -75,6 +75,15 @@
         UseLayoutRounding="True">
 
     <Window.Resources>
+        <ControlTheme x:Key="SpeechInlineLink" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <ContentPresenter Content="{TemplateBinding Content}" Background="Transparent"/>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
         <!-- Purplish gradient background for speech bubble -->
         <LinearGradientBrush x:Key="BubbleGradient" StartPoint="0%,0%" EndPoint="100%,100%">
             <GradientStop Color="{StaticResource PatreonDarkPurple}" Offset="0"/>
