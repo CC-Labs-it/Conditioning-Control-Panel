@@ -100,19 +100,22 @@ public sealed class ModChoiceTests
 
     // WPF MainWindow.UiUpdates.cs:145-152 and MainWindow.xaml.cs:3720-3729, :3757.
     [Theory]
-    [InlineData("TxtFeatureCornerGif", "🖼 Corner GIF", "label_corner_gif")]
-    [InlineData("TxtDetailFlashLabel", "⚡ Flash Images", "section_flash_images")]
-    [InlineData("TxtDetailVideoLabel", "🎬 Mandatory Videos", "label_mandatory_videos")]
-    [InlineData("TxtDetailSubLabel", "💭 Subliminals", "section_subliminals")]
-    [InlineData("TxtSessionFlashLabel", "⚡ Flash Images", "section_flash_images")]
-    [InlineData("TxtSessionSubLabel", "💭 Subliminals", "section_subliminals")]
-    public Task PresetAndSessionLabelsFollowModAndLanguage(string name, string english, string key) => Run(async (shell, svc, server) =>
+    [InlineData("TxtFeatureCornerGif", "label_corner_gif", null, "🖼 Corner GIF")]
+    [InlineData("TxtDetailFlashLabel", "section_flash_images", null, "⚡ Flash Images")]
+    [InlineData("TxtDetailVideoLabel", "label_mandatory_videos", null, "🎬 Mandatory Videos")]
+    [InlineData("TxtDetailSubLabel", "section_subliminals", "section_subliminals_2", "💭 Subliminals")]
+    [InlineData("TxtSessionFlashLabel", "section_flash_images", null, "⚡ Flash Images")]
+    [InlineData("TxtSessionSubLabel", "section_subliminals", "section_subliminals_2", "💭 Subliminals")]
+    public Task PresetAndSessionLabelsFollowModAndLanguage(string name, string key, string? englishKey, string wpfEnglish) => Run(async (shell, svc, server) =>
     {
         shell.ShowTab("presets");
         var tab = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.PresetsTabView>("PresetsTab")!;
         var label = tab.FindControl<ConditioningControlPanel.Avalonia.Controls.IconLabel>(name)!;
         var manager = ConditioningControlPanel.Localization.LocalizationManager.Instance;
         var old = manager.CurrentLanguage;
+        var english = manager.GetEnglish(englishKey ?? key);
+        Assert.Equal(wpfEnglish, english);
+        Assert.NotNull(english);
         try
         {
             AvApp.Mods!.ActivateMod(BuiltInMods.DronificationId);
@@ -131,6 +134,32 @@ public sealed class ModChoiceTests
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get(key), label.Source);
         }
         finally { manager.SetLanguage(old); Dispatcher.UIThread.RunJobs(); }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PresetLabelKeepsAnEmptyModReplacement() => Run(async (shell, svc, server) =>
+    {
+        var manager = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var old = manager.CurrentLanguage;
+        var english = manager.GetEnglish("label_corner_gif");
+        Assert.NotNull(english);
+        var manifest = AvApp.Mods!.ActiveMod.Manifest;
+        var prior = manifest.TextReplacements;
+        try
+        {
+            manifest.TextReplacements = new() { [english] = string.Empty };
+            manager.SetLanguage(old == "fr" ? "en" : "fr");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.PresetsTabView>("PresetsTab")!;
+            Assert.Equal(string.Empty, tab.FindControl<ConditioningControlPanel.Avalonia.Controls.IconLabel>("TxtFeatureCornerGif")!.Source);
+        }
+        finally
+        {
+            manifest.TextReplacements = prior;
+            manager.SetLanguage(old);
+            Dispatcher.UIThread.RunJobs();
+        }
         await Task.CompletedTask;
     });
 
