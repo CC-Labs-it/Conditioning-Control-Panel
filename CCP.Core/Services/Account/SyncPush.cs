@@ -129,9 +129,11 @@ namespace ConditioningControlPanel.Services
         // WPF ProfileSyncService.cs:2655: count failures, not cooldown or backoff skips.
         public int ConsecutiveSyncFailures { get; private set; }
         public event EventHandler<int>? SyncHealthChanged;
+        private bool _syncErrorSet;
 
         private void ReportSyncHealth(bool succeeded)
         {
+            _syncErrorSet = !succeeded;
             if (succeeded && ConsecutiveSyncFailures == 0) return;
             ConsecutiveSyncFailures = succeeded ? 0 : ConsecutiveSyncFailures + 1;
             try { SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures); }
@@ -289,7 +291,9 @@ namespace ConditioningControlPanel.Services
                     if (response.StatusCode is (HttpStatusCode)429 or HttpStatusCode.Conflict)
                     {
                         LastSyncTime = UtcNow();
-                        if (response.StatusCode != (HttpStatusCode)429) ReportSyncHealth(false);
+                        // WPF ProfileSyncService.cs:1816,2669: 429 preserves the last error;
+                        // it counts only if an earlier failure left that error set.
+                        if (response.StatusCode != (HttpStatusCode)429 || _syncErrorSet) ReportSyncHealth(false);
                         Log.Warning("V2 Profile sync refused by server ({Status}), will retry after the cooldown", (int)response.StatusCode);
                         return false;
                     }

@@ -36,23 +36,34 @@ public sealed class SyncHealthTests
             s.LastConfirmedServerXp = 0;
             Assert.False(await sync.PushAsync("not loaded"));
             sync.MarkLoaded(null);
-            for (int i = 0; i < 3; i++)
+            wire.Status = (HttpStatusCode)429;
+            Assert.False(await sync.PushAsync("clean rate limit"));
+            Assert.Empty(counts);
+            Assert.False(await sync.PushAsync("cooldown skip"));
+            now += TimeSpan.FromHours(1);
+            wire.Status = HttpStatusCode.InternalServerError;
+            for (int i = 0; i < 2; i++)
             {
                 Assert.False(await sync.PushAsync("failure"));
                 if (i == 0) Assert.False(await sync.PushAsync("backoff skip"));
                 now += TimeSpan.FromHours(1);
             }
-            Assert.Equal(new[] { 1, 2, 3 }, counts);
-            Assert.Equal(3, sync.ConsecutiveSyncFailures);
             wire.Status = (HttpStatusCode)429;
-            Assert.False(await sync.PushAsync("rate limited"));
-            Assert.Equal(3, sync.ConsecutiveSyncFailures);
+            Assert.False(await sync.PushAsync("rate limit after failures"));
+            Assert.Equal(new[] { 1, 2, 3 }, counts);
+            Assert.False(await sync.PushAsync("cooldown skip"));
+            now += TimeSpan.FromHours(1);
+            Assert.False(await sync.PushAsync("another rate limit"));
+            Assert.Equal(4, sync.ConsecutiveSyncFailures);
             now += TimeSpan.FromHours(1);
             wire.Status = HttpStatusCode.OK;
             Assert.True(await sync.PushAsync("recovered"));
-            Assert.False(await sync.PushAsync("cooldown skip"));
-            Assert.Equal(new[] { 1, 2, 3, 0 }, counts);
+            Assert.Equal(new[] { 1, 2, 3, 4, 0 }, counts);
             Assert.Equal(0, sync.ConsecutiveSyncFailures);
+            now += TimeSpan.FromHours(1);
+            wire.Status = (HttpStatusCode)429;
+            Assert.False(await sync.PushAsync("clean rate limit after recovery"));
+            Assert.Equal(new[] { 1, 2, 3, 4, 0 }, counts);
         }
         finally
         {

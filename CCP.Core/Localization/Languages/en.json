@@ -6193,6 +6193,7 @@
   "nav_tab_lobby": "Lobby",
   "nav_badge_open": "{0} open",
   "nav_crumb_sep": "›",
+  "sync_health_title": "Cloud sync issue",
   "settings_section_monitors": "Monitors",
   "settings_section_plans": "Account & Plans",
   "play_card_webapp_blurb": "The panel's other half, in your browser.",

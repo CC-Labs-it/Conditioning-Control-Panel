@@ -13,6 +13,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -39,6 +40,10 @@ public sealed class SyncHealthTitleTests
         var oldToken = s.AuthToken;
         var oldOffline = s.OfflineMode;
         var oldWatermark = s.LastConfirmedServerXp;
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        var oldSettingsLanguage = s.Language;
+        s.Language = "en";
+        LocalizationManager.Instance.SetLanguage("en");
         var wire = new Wire();
         var sync = new SyncPush(() => Array.Empty<string>(), () => false, wire);
         var now = DateTime.UtcNow;
@@ -66,6 +71,20 @@ public sealed class SyncHealthTitleTests
                 now += TimeSpan.FromHours(1);
             }
             Assert.Equal(before + " - Cloud sync issue", w.Title);
+            w.ApplyLanguageSelection("fr");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(" - Jouer", w.Title);
+            Assert.EndsWith(" - Problème de synchronisation cloud", w.Title);
+            w.OpenAppSettingsSection("data");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains("Données", w.Title);
+            w.ApplyLanguageSelection("de");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains("Einstellungen", w.Title);
+            Assert.Contains("Daten", w.Title);
+            Assert.EndsWith(" - Problem bei der Cloud-Synchronisierung", w.Title);
+            w.ApplyLanguageSelection("en");
+            Dispatcher.UIThread.RunJobs();
             w.ShowTab("settings");
             var homeWithIssue = w.Title;
             Assert.EndsWith(" - Cloud sync issue", homeWithIssue);
@@ -108,6 +127,27 @@ public sealed class SyncHealthTitleTests
                 Assert.StartsWith("Conditioning Control Panel", reopened.Title);
             }
             finally { reopened.Close(); }
+
+            // The title still follows language changes when there is no cloud sync service.
+            AccountSeed.Sync = null;
+            CoreAccount.IsLoggedInProvider = () => false;
+            s.UnifiedId = null;
+            s.AuthToken = null;
+            var offline = new MainShellWindow();
+            try
+            {
+                offline.Show();
+                offline.ShowTab("play");
+                offline.ApplyLanguageSelection("fr");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Contains(" - Jouer", offline.Title);
+                Assert.DoesNotContain("Cloud sync issue", offline.Title);
+            }
+            finally { offline.Close(); }
+            var closedOfflineTitle = offline.Title;
+            LocalizationManager.Instance.SetLanguage("de");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(closedOfflineTitle, offline.Title);
         }
         finally
         {
@@ -119,6 +159,8 @@ public sealed class SyncHealthTitleTests
             s.AuthToken = oldToken;
             s.OfflineMode = oldOffline;
             s.LastConfirmedServerXp = oldWatermark;
+            s.Language = oldSettingsLanguage;
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
         }
     });
 

@@ -366,10 +366,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private (string? Section, string Tab, string? Page) _navTitleParts = (null, "settings", null);
         private bool _syncIssueTitle;
         private bool _syncHealthAttached;
+        private bool _titleLanguageAttached;
 
         // WPF MainWindow.xaml.cs:380,745 and WindowChrome.cs:246: listen while the shell lives.
         private void InitializeSyncHealth()
         {
+            _titleLanguageAttached = true;
+            LocalizationManager.Instance.LanguageChanged += OnTitleLanguageChanged;
+            Closed += (_, _) =>
+            {
+                _titleLanguageAttached = false;
+                LocalizationManager.Instance.LanguageChanged -= OnTitleLanguageChanged;
+            };
             if (Platform.AccountSeed.Sync is not { } sync) return;
             _syncHealthAttached = true;
             sync.SyncHealthChanged += OnSyncHealthChanged;
@@ -383,6 +391,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!_syncHealthAttached) return;
                 if (failures >= 3) SetSyncIssueTitle(true);
                 else if (failures == 0) SetSyncIssueTitle(false);
+            });
+
+        private void OnTitleLanguageChanged(object? sender, EventArgs e) =>
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (!_titleLanguageAttached) return;
+                var (section, tab, page) = _navTitleParts;
+                UpdateNavTitle(section, tab, section == NavSections.Settings ? CurrentSettingsSectionLabel() : page);
             });
 
         // WPF MainWindow.SectionChrome.cs:31: compose the notice with the last breadcrumb.
@@ -405,7 +421,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 : string.IsNullOrEmpty(page)
                     ? $"{_navBaseTitle} - {sectionLabel}"
                     : $"{_navBaseTitle} - {sectionLabel} {Loc.Get("nav_crumb_sep")} {page}";
-            Title = _syncIssueTitle ? $"{title} - Cloud sync issue" : title;
+            Title = _syncIssueTitle ? $"{title} - {Loc.Get("sync_health_title")}" : title;
         }
 
         /// <summary>The label of the Settings section whose pill is checked (null if none). WPF :340.</summary>
