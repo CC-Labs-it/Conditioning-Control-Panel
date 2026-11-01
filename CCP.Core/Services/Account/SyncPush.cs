@@ -294,12 +294,17 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    // WPF prize ownership first; neither reply branch may suppress the other.
+                    try
+                    {
+                        var snapshot = (reply["prizes"] as JObject)?.ToObject<PrizesBlock>();
+                        PrizesReceived?.Invoke(id, snapshot);
+                    }
+                    catch (Exception ex) { Log.Debug("V2 Sync: Could not apply prizes: {Error}", ex.Message); }
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.
                     Descent.DescentMigrationAck.Apply(s, reply);
-                    var snapshot = (reply["prizes"] as JObject)?.ToObject<PrizesBlock>();
-                    PrizesReceived?.Invoke(id, snapshot);
                 }
                 catch (Exception ex) { Log.Debug("V2 Sync: Could not parse server flags: {Error}", ex.Message); }
                 // THE FUSE's cache, off the RAW body (WPF ProfileSyncService.HandleDescentCountdown).

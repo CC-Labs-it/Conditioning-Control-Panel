@@ -61,4 +61,25 @@ public sealed partial class AccountSeedTests
             Assert.Equal(ConditioningControlPanel.Services.Descent.DescentCycleXp.CycleXpBonus, s.DescentCycleXpBonus);
             Assert.Equal(callbackThrows ? 1 : 0, calls);
         });
+
+    [Fact]
+    public void Profile_parse_failure_cannot_skip_prizes_or_Rain_readiness()
+        => WithFreshInstall(async () =>
+        {
+            var (wire, sync, _) = SignIn("u1", null);
+            wire.SyncReply = """{"success":true,"user":{"level":"bad"},"prizes":{"revision":8,"grants":["cos.rain.dress.rose-flare"]}}""";
+            var reply = Newtonsoft.Json.Linq.JObject.Parse(wire.SyncReply);
+            Assert.Throws<Newtonsoft.Json.JsonReaderException>(() =>
+                ConditioningControlPanel.Services.ProfileAdopt.ApplySyncResponse(
+                    ConditioningControlPanel.CoreSettings.Current, reply, DateTime.UtcNow));
+            ConditioningControlPanel.Models.PrizesBlock? delivered = null;
+            string? account = null;
+            sync.PrizesReceived = (id, prizes) => { account = id; delivered = prizes; };
+            sync.MarkLoaded(Array.Empty<string>());
+            Assert.True(await sync.PushAsync("prizes survive profile parse"));
+            Assert.Equal("u1", account);
+            Assert.NotNull(delivered);
+            Assert.Equal(8, delivered.Revision);
+            Assert.Equal(new[] { "cos.rain.dress.rose-flare" }, delivered.Grants);
+        });
 }

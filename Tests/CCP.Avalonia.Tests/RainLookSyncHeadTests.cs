@@ -126,4 +126,18 @@ public sealed class RainLookSyncHeadTests
                 CoreSecrets.StoreProvider = oldSet;
             }
         });
+
+    [Fact]
+    public void Stop_cancels_a_source_captured_by_a_concurrent_reader_without_disposing_it()
+    {
+        // ApplyPrizes can read the source immediately before Stop swaps it, then read Token afterward.
+        var field = typeof(RainLookSyncHead).GetField("_run",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var readerSource = Assert.IsType<CancellationTokenSource>(field.GetValue(null));
+        RainLookSyncHead.Stop();
+        Assert.True(readerSource.Token.IsCancellationRequested);
+        var nextSource = Assert.IsType<CancellationTokenSource>(field.GetValue(null));
+        Assert.NotSame(readerSource, nextSource);
+        Assert.False(nextSource.Token.IsCancellationRequested);
+    }
 }

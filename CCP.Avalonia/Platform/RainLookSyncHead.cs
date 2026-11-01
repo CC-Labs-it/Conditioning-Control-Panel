@@ -54,7 +54,7 @@ internal static class RainLookSyncHead
     // Queue after ownership snapshots, as WPF PostPrizeWork does.
     internal static void AccountReady(string? account)
     {
-        var token = _run.Token;
+        var token = Volatile.Read(ref _run).Token;
         Dispatcher.UIThread.Post(() => _ = PullAsync(account, token));
     }
 
@@ -69,7 +69,7 @@ internal static class RainLookSyncHead
     internal static void ApplyPrizes(string? requested, string? answered, PrizesBlock? prizes, string source)
     {
         if (string.IsNullOrEmpty(requested) || requested != answered) return;
-        var token = _run.Token;
+        var token = Volatile.Read(ref _run).Token;
         Dispatcher.UIThread.Post(() =>
         {
             if (token.IsCancellationRequested) return;
@@ -80,9 +80,10 @@ internal static class RainLookSyncHead
 
     internal static void Stop()
     {
-        _run.Cancel();
-        _run.Dispose();
-        _run = new CancellationTokenSource();
+        var previous = Interlocked.Exchange(ref _run, new CancellationTokenSource());
+        previous.Cancel();
+        // A background reader may still be between reading the old source and its Token.
+        // Do not dispose it; the old run releases its registrations as it finishes.
         _pulledFor = null;
     }
 }
