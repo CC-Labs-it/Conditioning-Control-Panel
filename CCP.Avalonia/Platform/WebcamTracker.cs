@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
 using OpenCvSharp;
@@ -59,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private readonly Func<VideoCaptureAPIs, bool, IFrameSource> _attempt;
         private readonly int _warmupMs, _intervalMs;
         internal Func<bool> Cancelled = () => false;
+        internal Action<int, int>? Retrying;
         internal bool AnyOpened { get; private set; }
 
         internal OpenCvFrameSource(Func<VideoCaptureAPIs, bool, IFrameSource>? attempt = null,
@@ -74,15 +76,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
             var apis = OperatingSystem.IsWindows()
                 ? new[] { VideoCaptureAPIs.DSHOW, VideoCaptureAPIs.MSMF }
                 : new[] { OperatingSystem.IsLinux() ? VideoCaptureAPIs.V4L2 : VideoCaptureAPIs.ANY };
+            int attempt = 0, total = apis.Length * 2;
             foreach (var api in apis)
                 foreach (bool mjpg in new[] { false, true })
                 {
                     if (Cancelled()) return false;
+                    if (++attempt > 1) Retrying?.Invoke(attempt, total);
                     IFrameSource? source = null;
                     try
                     {
                         source = _attempt(api, mjpg);
                         if (!source.Open()) continue;
+                        if (Cancelled()) return false;
                         AnyOpened = true;
                         if (Probe(source)) { _capture = source; source = null; return true; }
                     }
@@ -101,7 +106,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
             var timer = Stopwatch.StartNew();
             while (timer.ElapsedMilliseconds < _warmupMs && !Cancelled())
             {
-                if (source.Read(frame) && !frame.Empty())
+                bool read = source.Read(frame);
+                if (Cancelled()) return false;
+                if (read && !frame.Empty())
                 {
                     Cv2.MeanStdDev(frame, out _, out var std);
                     double spatial = Math.Max(std.Val0, Math.Max(std.Val1, std.Val2));
@@ -343,7 +350,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 Progress(0.55, "Opening camera…");
                 run.Source = SourceFactory();
-                if (run.Source is OpenCvFrameSource capture) capture.Cancelled = () => gen != Volatile.Read(ref _gen);
+                int abandoned = 0; // separate from Stop: timeout must not set StartWasStopped
+                if (run.Source is OpenCvFrameSource capture)
+                {
+                    capture.Cancelled = () => gen != Volatile.Read(ref _gen) || Volatile.Read(ref abandoned) != 0;
+                    capture.Retrying = (attempt, total) => Dispatcher.UIThread.Post(() =>
+                    {
+                        if (!capture.Cancelled()) OnStartupProgress?.Invoke(
+                            0.55 + 0.37 * (attempt - 1) / total, Loc.GetF("webcam_capture_retry_fmt", attempt, total));
+                    });
+                }
                 bool opened;
                 try
                 {
@@ -353,6 +369,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     var opening = Task.Run(source.Open);
                     if (Task.WaitAny(new Task[] { opening }, CameraOpenTimeout) < 0)
                     {
+                        Interlocked.Exchange(ref abandoned, 1); // WPF invalidates the open generation on timeout
                         run.Source = null;
                         _openCleanup = opening.ContinueWith(t =>
                         {
@@ -380,7 +397,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     if (gen != Volatile.Read(ref _gen)) StartWasStopped = true;
                     LastError = failureState == WebcamTrackingState.CameraInUse
-                        ? "Camera unavailable. It may be in use by another app or blocked by camera privacy settings."
+                        ? Loc.Get("webcam_camera_unavailable_detail")
                         : "No camera could be opened. Check that a webcam is connected, camera access is allowed, and it is not in use by another app.";
                     run.Release();
                     return false;

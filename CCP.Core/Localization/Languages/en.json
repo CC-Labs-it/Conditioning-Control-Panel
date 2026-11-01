@@ -8713,6 +8713,8 @@
   "online_official_nice": "Nice",
   "online_official_stamped_line": "Online media comes from Scrolller. Each picture and clip carries a small \"via Scrolller\" mark.",
   "online_cache_day_line": "Online media is kept in a small cache on this computer for a day, never uploaded.",
+  "webcam_camera_unavailable_detail": "Camera unavailable. It may be in use by another app or blocked by camera privacy settings.",
+  "webcam_capture_retry_fmt": "Camera slow to respond. Trying another method ({0}/{1}).",
   "webcam_debug_tongue_out_fmt": "Tongue-out #{0}",
   "webcam_debug_mouth_open_fmt": "Mouth-open #{0}"
 }
