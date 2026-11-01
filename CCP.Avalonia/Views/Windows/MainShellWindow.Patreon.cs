@@ -287,7 +287,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MaybeShowPremiumCelebration (MainWindow.Patreon.cs:1118): the one-time card per tier, re-read from
         /// the combined entitlement, never for an invite week, through the presenter (an Inbox row when quiet). The seen-flag
-        /// is spent at open time. Live rises ignore the legacy seen flag; every grant takes the presenter route.</summary>
+        /// is spent at open time. Live rises ignore the legacy seen flag; every grant takes the presenter route.
+        /// ponytail: immediate idle live-rise celebration and the tier-colour profile-bubble burst/glow remain unported
+        /// (WPF MainWindow.Patreon.cs CanCelebrateNow and OnEntitlementTierRaised).</summary>
         internal void MaybeShowPremiumCelebration(bool onRise = false)
         {
             try
@@ -319,25 +321,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void TierOnNoticePass()
         {
-            var s = CoreSettings.Current;
-            var current = Platform.EntitlementRefresh.EffectiveTier;
-            var verdict = Services.TierOnNotice.Decide(s.LastKnownEffectiveTier, current,
-                Platform.EntitlementRefresh.ServerAnsweredThisRun);
-            if (verdict.Record != s.LastKnownEffectiveTier)
+            try
             {
-                // The first cached reading joins the next user save or desktop exit. Startup must not write migrations.
-                var hadReading = s.LastKnownEffectiveTier.HasValue;
-                s.LastKnownEffectiveTier = verdict.Record;
-                if (hadReading) CoreSettings.Save();
+                var s = CoreSettings.Current;
+                var current = Platform.EntitlementRefresh.EffectiveTier;
+                var verdict = Services.TierOnNotice.Decide(s.LastKnownEffectiveTier, current,
+                    Platform.EntitlementRefresh.ServerAnsweredThisRun);
+                if (verdict.Record != s.LastKnownEffectiveTier)
+                {
+                    // The first cached reading joins the next user save or desktop exit. Startup must not write migrations.
+                    var hadReading = s.LastKnownEffectiveTier.HasValue;
+                    s.LastKnownEffectiveTier = verdict.Record;
+                    if (hadReading) CoreSettings.Save();
+                }
+                if (!verdict.Owed || TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
+                var title = Loc.Get(Services.TierOnNotice.TitleKey(current));
+                var body = Loc.Get("tier_on_body");
+                Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "tier-on:" + current, IconKey = "Heart", Title = title, Summary = body,
+                    Open = () => Dialogs.InboxNoticeCard.Present(this, title, body, null, null),
+                });
             }
-            if (!verdict.Owed || TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
-            var title = Loc.Get(Services.TierOnNotice.TitleKey(current));
-            var body = Loc.Get("tier_on_body");
-            Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
-            {
-                Key = "tier-on:" + current, IconKey = "Heart", Title = title, Summary = body,
-                Open = () => Dialogs.InboxNoticeCard.Present(this, title, body, null, null),
-            });
+            catch (System.Exception ex) { Serilog.Log.Debug(ex, "Tier-on notice failed"); }
         }
 
         private static void MarkIntroSeen(string key)

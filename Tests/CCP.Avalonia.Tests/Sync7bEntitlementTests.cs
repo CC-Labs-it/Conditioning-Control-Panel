@@ -12,6 +12,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Newtonsoft.Json.Linq;
@@ -58,6 +59,14 @@ public class Sync7bEntitlementTests
             var view = new ExclusivesTabView();
             Assert.True(view.FindControl<StackPanel>("JustSubscribedRow")!.IsVisible);
             var button = view.FindControl<Button>("BtnJustSubscribed")!;
+            Assert.True(Application.Current!.TryFindResource("SecondaryButton", out var theme)); Assert.Same(theme, button.Theme);
+            Assert.Equal(new Thickness(14, 5), button.Padding); Assert.IsType<TextBlock>(button.Content);
+            var row = view.FindControl<StackPanel>("JustSubscribedRow")!;
+            Assert.Equal(global::Avalonia.Layout.HorizontalAlignment.Left, row.HorizontalAlignment);
+            Assert.Equal(new Thickness(0, -8, 0, 18), row.Margin);
+            var status = view.FindControl<TextBlock>("TxtJustSubscribed")!;
+            Assert.Equal(11.5, status.FontSize);
+            Assert.True(Application.Current!.TryFindResource("TextSecondaryBrush", out var muted)); Assert.Same(muted, status.Foreground);
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.True(button.IsEnabled);
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("plans_just_subscribed_signin"),
@@ -90,6 +99,28 @@ public class Sync7bEntitlementTests
         CheckoutWatch.Disarm(); CheckoutWatch.NoteOpened("https://patreon.com/checkout");
         EntitlementRefresh.OnActivated(shell: false);
         Assert.Equal(1, handler.Reads);
+    });
+
+    [Fact]
+    public void TierNoticeDoesNotLetPresenterFailureEscape() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current == null) AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>()
+            .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        StartupLadder.ResetForTests();
+        var shell = new MainShellWindow();
+        CoreAccount.HasLabAccessProvider = () => true;
+        var s = CoreSettings.Current;
+        s.LastKnownEffectiveTier = 0; s.SeenFeatureIntros.Add(TierCelebration.KeyT2);
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(1));
+        void Fail() => throw new InvalidOperationException("presenter probe");
+        StartupLadder.Inbox.Changed += Fail;
+        try
+        {
+            Assert.Null(Record.Exception(shell.TierOnNoticePass));
+            Assert.Contains(StartupLadder.Inbox.Items, row => row.Key == "tier-on:2");
+        }
+        finally { StartupLadder.Inbox.Changed -= Fail; shell.Close(); StartupLadder.ResetForTests(); }
     });
 
     private sealed class ProfileAnswer : HttpMessageHandler
