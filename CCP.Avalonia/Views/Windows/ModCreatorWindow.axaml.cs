@@ -466,7 +466,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // when each is ported. In the WPF head these three aggregate hooks let export write each
         // panel's side files into the .ccpmod resources tree, let load repopulate the panels from
         // an extracted tree, and let reset clear them.
-        private void WriteSideFilesTo(string resourcesDir) => WriteBarksTo(resourcesDir);
+        private List<string> WriteSideFilesTo(string resourcesDir) => WriteBarksTo(resourcesDir);
         private void LoadSideFilesFrom(string resourcesDir) => LoadBarksFrom(resourcesDir);
         private void ClearSideFileState() => ClearBarksSection();
 
@@ -2523,7 +2523,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
 
                 // Barks / mantras / event audio / portraits / emotes.
-                WriteSideFilesTo(resourcesDir);
+                var badBarkConditions = WriteSideFilesTo(resourcesDir);
+                if (badBarkConditions.Count > 0)
+                    await MessageDialog.ShowAsync(this, Loc.Get("mod_barks_conditions_title"),
+                        Loc.GetF("mod_barks_conditions_invalid", string.Join(", ", badBarkConditions)));
 
                 // Create ZIP
                 if (File.Exists(savePath)) File.Delete(savePath!);

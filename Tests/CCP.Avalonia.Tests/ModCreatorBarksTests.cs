@@ -54,7 +54,7 @@ public sealed class ModCreatorBarksTests
         Click(w, "mod_barks_add"); Click(w, "mod_barks_add");
         var card = Card(w);
         var boxes = card.GetLogicalDescendants().OfType<TextBox>().ToList();
-        boxes[0].Text = " My Rule "; boxes[1].Text = " ChaosRunStarted "; boxes[2].Text = " hello ";
+        boxes[0].Text = " My Rule "; boxes[1].Text = " ChaosRunStarted "; Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = " hello ";
         Click(card, "mod_barks_variant"); // blank variant skipped
         var rule = (JObject)Assert.Single(Export(w, root));
         Assert.Equal("my_rule", rule.Value<string>("id"));
@@ -70,9 +70,9 @@ public sealed class ModCreatorBarksTests
     {
         Click(w, "mod_barks_add");
         var card = Card(w);
-        card.GetLogicalDescendants().OfType<CheckBox>().Single().IsChecked = true;
+        card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
         var boxes = card.GetLogicalDescendants().OfType<TextBox>().ToList();
-        boxes[0].Text = "Base.Id"; boxes[2].Text = "replacement";
+        boxes[0].Text = "Base.Id"; Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = "replacement";
         Assert.False(boxes[1].IsVisible);
         var rule = (JObject)Assert.Single(Export(w, root));
         Assert.Equal(new[] { "id", "variant_pool" }, rule.Properties().Select(p => p.Name));
@@ -96,7 +96,7 @@ public sealed class ModCreatorBarksTests
         File.WriteAllText(Path.Combine(Path.GetDirectoryName(FileAt(root))!, "a.mp3"), "audio");
         typeof(ModCreatorWindow).GetMethod("LoadSideFilesFrom", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, new object[] { root });
         var card = Card(w);
-        card.GetLogicalDescendants().OfType<TextBox>().ElementAt(2).Text = "edited";
+        Variants(card).GetLogicalDescendants().OfType<TextBox>().First().Text = "edited";
         File.WriteAllText(Path.Combine(root, "sounds", "outside.mp3"), "outside");
         var output = Path.Combine(root, "out"); var result = Export(w, output);
         Assert.False(File.Exists(Path.Combine(output, "sounds", "outside.mp3")));
@@ -154,7 +154,7 @@ public sealed class ModCreatorBarksTests
         {
             Directory.CreateDirectory(evidence);
             var second = (StackPanel)((Border)Cards(w).Children[1]).Child!;
-            second.GetLogicalDescendants().OfType<CheckBox>().Single().IsChecked = true;
+            second.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
             second.GetLogicalDescendants().OfType<TextBox>().First().Text = "base_rule";
             Variants(second).GetLogicalDescendants().OfType<TextBox>().Single().Text = "Replacement line";
             w.Height = 1100;
@@ -164,4 +164,60 @@ public sealed class ModCreatorBarksTests
             Assert.NotNull(image); image!.Save(Path.Combine(evidence, "barks-cards.png"));
         }
     });
+    [Fact]
+    public void RuleSettingsLoadEditAndExportWithWpfParsing() => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), "[{id:'loaded',trigger:'Event',priority:4,cooldown_ms:20,chance:0.4,repeatable:false,scope:'tier',class:'safety',mood:'soft',conditions:{level_gte:10},future:42,variant_pool:['line']}]");
+        w.LoadBarksFrom(root);
+        var card = Card(w);
+        TextBox Box(string tag) => card.GetLogicalDescendants().OfType<TextBox>().Single(b => Equals(b.Tag, tag));
+        ComboBox Combo(string tag) => card.GetLogicalDescendants().OfType<ComboBox>().Single(b => Equals(b.Tag, tag));
+        var repeatable = card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_repeatable")));
+        Assert.Equal("4", Box("mod_barks_priority").Text);
+        Assert.Equal("20", Box("mod_barks_cooldown").Text);
+        Assert.Equal("0.4", Box("mod_barks_chance").Text);
+        Assert.False(repeatable.IsChecked);
+        Assert.Equal("tier", Combo("mod_barks_scope").SelectedItem);
+        Assert.Equal("safety", Combo("mod_barks_class").SelectedItem);
+        Assert.Equal("soft", Box("mood").Text);
+        Assert.Equal(10, JObject.Parse(Box("conditions").Text!).Value<int>("level_gte"));
+        Box("mod_barks_priority").Text = "-3"; Box("mod_barks_cooldown").Text = "bad";
+        Box("mod_barks_chance").Text = "1.7"; repeatable.IsChecked = true;
+        Combo("mod_barks_scope").SelectedItem = "lifetime"; Combo("mod_barks_class").SelectedItem = "easter_egg";
+        Box("mood").Text = " teasing "; Box("conditions").Text = "{level_gte:20}";
+        var rule = (JObject)Assert.Single(Export(w, Path.Combine(root, "edited")));
+        Assert.Equal(-3, rule.Value<int>("priority")); Assert.Null(rule["cooldown_ms"]);
+        Assert.Equal(1.0, rule.Value<double>("chance")); Assert.True(rule.Value<bool>("repeatable"));
+        Assert.Equal("lifetime", rule.Value<string>("scope")); Assert.Equal("easter_egg", rule.Value<string>("class"));
+        Assert.Equal("teasing", rule.Value<string>("mood")); Assert.Equal(20, rule["conditions"]!.Value<int>("level_gte"));
+        Assert.Equal(42, rule.Value<int>("future"));
+        Box("mod_barks_priority").Text = ""; Box("mod_barks_chance").Text = "-2";
+        Box("mood").Text = " "; Box("conditions").Text = "";
+        rule = (JObject)Assert.Single(Export(w, Path.Combine(root, "cleared")));
+        Assert.Null(rule["priority"]); Assert.Equal(0.0, rule.Value<double>("chance"));
+        Assert.Null(rule["mood"]); Assert.Null(rule["conditions"]);
+    });
+
+    [Fact]
+    public void InvalidConditionsAreReportedAndPreviousObjectIsKept() => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), "[{id:'loaded',trigger:'Event',conditions:{safe:true},variant_pool:['line']}]");
+        w.LoadBarksFrom(root);
+        var card = Card(w);
+        var conditions = card.GetLogicalDescendants().OfType<TextBox>().Single(b => Equals(b.Tag, "conditions"));
+        conditions.Text = "{safe:false}";
+        Assert.Empty(w.WriteBarksTo(Path.Combine(root, "valid")));
+        conditions.Text = "[invalid]";
+        var output = Path.Combine(root, "invalid");
+        var invalid = w.WriteBarksTo(output);
+        Assert.Equal(new[] { "loaded" }, invalid);
+        Assert.False(JArray.Parse(File.ReadAllText(FileAt(output)))[0]["conditions"]!.Value<bool>("safe"));
+        var overrideBox = card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override")));
+        overrideBox.IsChecked = true;
+        Assert.False(((Control)((Control)conditions.Parent!).Parent!).IsVisible);
+        Assert.Empty(w.WriteBarksTo(Path.Combine(root, "override")));
+    });
+
 }
