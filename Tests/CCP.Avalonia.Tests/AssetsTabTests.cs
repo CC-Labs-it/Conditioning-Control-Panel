@@ -118,6 +118,62 @@ public sealed class AssetsTabTests
         finally { ContentPackStore.Current = oldStore; }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PackVideoThumbnailUsesAndCleansDecryptedFile(bool decoderFails) => Run(async (shell, tab, s) =>
+    {
+        var oldStore = ContentPackStore.Current;
+        var assets = ConditioningControlPanel.CorePaths.EffectiveAssets;
+        var id = Guid.NewGuid().ToString("N");
+        var dir = Path.Combine(assets, ".packs", id);
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        var video = new byte[] { 1, 2, 3, 4 };
+        File.WriteAllBytes(Path.Combine(dir, "content", "video.enc"), PackEncryptionService.Encrypt(video));
+        var manifest = new InstalledPackManifest { PackId = id, PackGuid = id, PackName = "Video" };
+        manifest.Files.Add(new PackFileEntry { OriginalName = "v.mp4", ObfuscatedName = "video.enc", FileType = "video", Extension = ".mp4" });
+        PackEncryptionService.SaveEncryptedManifest(JsonConvert.SerializeObject(manifest), Path.Combine(dir, ContentPackStore.ManifestFileName));
+        var store = new ContentPackStore(() => assets, () => s, () => { });
+        ContentPackStore.Current = store;
+        string? decrypted = null;
+        byte[]? seen = null;
+        var calls = 0;
+        var png = File.ReadAllBytes(Path.Combine(assets, "images", "a.png"));
+        tab.VideoThumbnail = path =>
+        {
+            calls++;
+            decrypted = path;
+            seen = File.ReadAllBytes(path);
+            if (decoderFails) throw new InvalidOperationException("decoder failed");
+            return Task.FromResult<byte[]?>(png);
+        };
+        try
+        {
+            tab.OnTabShown();
+            var pack = Assert.Single(tab.AssetTree.Single(n => n.IsPackFolder).Children);
+            var videos = Assert.Single(pack.Children);
+            tab.AssetTreeView.SelectedItem = videos;
+            await tab.ThumbnailLoads;
+            var item = Assert.Single(tab.CurrentFolderFiles);
+            Assert.Equal(video, seen);
+            Assert.EndsWith(".mp4", decrypted);
+            Assert.False(File.Exists(decrypted));
+            Assert.False(item.IsLoadingThumbnail);
+            if (decoderFails) Assert.Null(item.Thumbnail);
+            else
+            {
+                Assert.NotNull(item.Thumbnail);
+                Assert.Equal(8, Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(item.Thumbnail).PixelSize.Width);
+                var thumb = item.Thumbnail;
+                tab.RefreshAssetTree();
+                await tab.ThumbnailLoads;
+                Assert.Same(thumb, Assert.Single(tab.CurrentFolderFiles).Thumbnail);
+                Assert.Equal(1, calls);
+            }
+        }
+        finally { ContentPackStore.Current = oldStore; }
+    });
+
     [Fact]
     public Task PackFilesSortByNameVideoFolderCheckFeedsThePoolAndDeactivateHidesThePack() => Run(async (shell, tab, s) =>
     {

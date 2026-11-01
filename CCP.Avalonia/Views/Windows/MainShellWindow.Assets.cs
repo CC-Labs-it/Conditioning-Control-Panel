@@ -9,7 +9,7 @@
 //
 // PORTED to the tab itself (CCP.Avalonia/Views/Tabs/AssetsTabView.axaml.cs, entered from
 // OnTabShown "assets"): RefreshAssetTree (local images/videos), BuildFolderTree, the folder and
-// thumbnail checks, Select/Deselect All, thumbnails (images; videos keep the placeholder), preview
+// thumbnail checks, Select/Deselect All, thumbnails (images and pack videos when ffmpeg is available), preview
 // and reveal, the asset counts and the preset combo + Save As/Update/Delete. AssetPresetService
 // .OnlineChannelsReset is seeded in App startup (main 03af6e8bb). The Content Packs node, encrypted
 // image thumbnails, pack checks/counts and preview live in AssetsTabView.Packs.cs, using ContentPackStore.
@@ -18,7 +18,7 @@
 //   App.ContentPacks - RefreshPacksAsync, BtnRefreshPacks_Click, BtnPackDownload_Click,
 //     BtnPackActivate_Click, BtnPackUpgrade_Click, BtnDeleteDownloadedPacks_Click, and the four
 //     OnPack* progress/auth/rate-limit callbacks.
-//   Pack video thumbnails - WPF Windows shell thumbnailer needs a portable replacement.
+//   Local video thumbnails - WPF uses the Windows shell thumbnailer.
 //   The OS - BtnCreatorDiscord_Click, BtnPackPatreon_Click (pack cards only).
 //   Pack preview rotation - StartPackPreviewRotation, StopPackPreviewRotation, LoadPreviewImagesFromUrlsAsync,
 //     GetPackPreviewFileStem (pure, and held with the rotation that is its only caller).

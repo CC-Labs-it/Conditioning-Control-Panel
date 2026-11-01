@@ -37,8 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// The remote media picker is ported in AssetsTabView.MediaPicker.cs.
     ///
-    /// ponytail: not on this head yet - pack cards (the section is hidden in WPF too), video thumbnails (WPF uses the
-    /// Windows shell thumbnailer; videos draw the 🎬 placeholder), BtnCreatorDiscord /
+    /// ponytail: not on this head yet - pack cards (the section is hidden in WPF too), local video
+    /// thumbnails (pack videos use ffmpeg when available), BtnCreatorDiscord /
     /// PacksScrollViewer wheel-to-pan. Pack-card hover FX is wired on the existing dormant template.
     /// </summary>
     public partial class AssetsTabView : UserControl
@@ -323,6 +323,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     try
                     {
                         if (generation != Volatile.Read(ref _thumbGeneration)) return null;
+                        if (item.IsVideo && item.PackFile != null)
+                            return await LoadPackVideoThumbnailAsync(item).ConfigureAwait(false);
                         using Stream? fs = item.PackFile != null
                             ? item.PackStore?.GetPackFileStream(item.PackId!, item.PackFile)
                             : File.OpenRead(item.FullPath);

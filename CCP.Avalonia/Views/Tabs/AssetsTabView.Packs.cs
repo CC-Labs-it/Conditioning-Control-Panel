@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
@@ -32,6 +34,26 @@ public partial class AssetsTabView
         while (PackThumbs.Count >= MaxPackThumbs)
             PackThumbs.Remove(PackThumbs.MinBy(p => p.Value.Used).Key);
         PackThumbs[PackThumbKey(item)] = (bmp, ++_packThumbClock);
+    }
+
+    // WPF MainWindow.Assets.cs:798-806 decrypts a video for the shell thumbnailer, then removes it.
+    // The per-view decoder seam keeps the temp-file lifecycle testable without a platform decoder.
+    internal Func<string, Task<byte[]?>> VideoThumbnail = Platform.VideoThumbnail.ReadAsync;
+
+    private async Task<Bitmap?> LoadPackVideoThumbnailAsync(AssetThumbnailViewModel item)
+    {
+        var store = item.PackStore;
+        if (store == null || item.PackFile == null || item.PackId == null) return null;
+        var path = store.GetPackFileTempPath(item.PackId, item.PackFile);
+        if (path == null) return null;
+        try
+        {
+            var bytes = await VideoThumbnail(path).ConfigureAwait(false);
+            if (bytes == null) return null;
+            using var stream = new MemoryStream(bytes);
+            return new Bitmap(stream);
+        }
+        finally { store.DeleteTempFile(path); }
     }
 
     private static bool IsPackLeaf(AssetTreeItem folder) =>
@@ -74,8 +96,7 @@ public partial class AssetsTabView
                 var item = new AssetThumbnailViewModel(store, folder.PackId!, file)
                     { IsChecked = !S.DisabledAssetPaths.Contains(ContentPackStore.SelectionKey(folder.PackId!, file)) };
                 _currentFolderFiles.Add(item);
-                // ponytail: videos keep the existing placeholder; WPF's Windows shell thumbnailer needs a portable replacement.
-                if (!item.IsVideo) loads.Add(LoadThumbnailAsync(item, generation));
+                loads.Add(LoadThumbnailAsync(item, generation));
             }
         ThumbnailLoads = Task.WhenAll(loads);
         return true;
