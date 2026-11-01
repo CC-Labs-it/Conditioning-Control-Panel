@@ -145,7 +145,7 @@ namespace ConditioningControlPanel.Services
         private DescentMigrationOffer? _migrationOffer;
         private AppSettings? _migrationOwner;
         private string? _migrationAccount;
-        private int _migrationGeneration;
+        private int _migrationGeneration, _sessionGeneration;
         // The desktop head posts unconditionally, after the rest of the response (WPF DescentMigrationService.cs:185-195).
         public Action<Action> PostMigration { get; set; } = CoreDispatch.Post;
         public Action<int>? StageCeremonyDue { get; set; }
@@ -237,7 +237,7 @@ namespace ConditioningControlPanel.Services
         public void Reset()
         {
             StopHeartbeat();
-            lock (_migrationGate) { _migrationOffer = null; _migrationOwner = null; _migrationAccount = null; _migrationGeneration++; _nudgePending = 0; Loaded = false; }
+            lock (_migrationGate) { _migrationOffer = null; _migrationOwner = null; _migrationAccount = null; _migrationGeneration++; _sessionGeneration++; _nudgePending = 0; Loaded = false; }
             DescentReader?.Reset();
             _serverAchievements = null;
             _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
@@ -294,14 +294,15 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <param name="waitForGate">Logout: wait (bounded) for an in-flight push instead of skipping.</param>
-        public async Task<bool> PushAsync(string reason, bool waitForGate = false)
+        public Task<bool> PushAsync(string reason, bool waitForGate = false) => PushAsync(reason, waitForGate, null);
+        private async Task<bool> PushAsync(string reason, bool waitForGate, Action? deferred)
         {
             var s = CoreSettings.Current;
             if (!Loaded || !SignedIn(s)) { Log.Debug("Profile sync skipped ({Reason}) - not loaded this session or not signed in", reason); return false; }
-            if (!await _gate.WaitAsync(waitForGate ? TimeSpan.FromSeconds(5) : TimeSpan.Zero)) return false;
+            if (!await _gate.WaitAsync(waitForGate ? TimeSpan.FromSeconds(5) : TimeSpan.Zero)) { deferred?.Invoke(); return false; }
             try
             {
-                if (LastSyncTime is { } last && UtcNow() - last < Cooldown) { Log.Debug("Profile sync skipped - cooldown active"); return false; }
+                if (LastSyncTime is { } last && UtcNow() - last < Cooldown) { deferred?.Invoke(); Log.Debug("Profile sync skipped - cooldown active"); return false; }
                 if (SyncFailureBackoff.ShouldSkip(UtcNow(), _blockedUntilUtc, _backoffToken, s.AuthToken, _backoffOffset, ServerClock.Offset))
                 {
                     Log.Debug("Profile sync skipped - backing off after {Failures} failure(s)", _backoffFailures);
@@ -421,7 +422,7 @@ namespace ConditioningControlPanel.Services
             lock (_migrationGate)
             {
                 if (!Loaded || _nudgePending != 0) return;
-                _nudgePending = 1; generation = _migrationGeneration; settings = CoreSettings.Current; id = settings.UnifiedId;
+                _nudgePending = 1; generation = _sessionGeneration; settings = CoreSettings.Current; id = settings.UnifiedId;
             }
             var wait = NudgeSettle;
             if (LastSyncTime is { } last && UtcNow() - last < Cooldown) wait = Cooldown - (UtcNow() - last) + NudgeCooldownSlack;
@@ -429,12 +430,16 @@ namespace ConditioningControlPanel.Services
             {
                 lock (_migrationGate)
                 {
-                    if (generation != _migrationGeneration) return;
+                    if (generation != _sessionGeneration) return;
                     _nudgePending = 0;
                     if (!Loaded || !ReferenceEquals(settings, CoreSettings.Current) || settings.UnifiedId != id) return;
                 }
                 if (LastSyncTime is { } latest && UtcNow() - latest < Cooldown) { Nudge(reason); return; }
-                await PushAsync(reason, waitForGate: true);
+                var deferred = false;
+                await PushAsync(reason, true, () => deferred = true);
+                lock (_migrationGate)
+                    if (deferred && generation == _sessionGeneration && Loaded && ReferenceEquals(settings, CoreSettings.Current)
+                        && settings.UnifiedId == id && DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice)) Nudge(reason);
             }, TaskScheduler.Default);
         }
 

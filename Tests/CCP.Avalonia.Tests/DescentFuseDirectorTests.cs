@@ -73,26 +73,18 @@ public sealed class DescentFuseDirectorTests
     });
 
     [Fact]
-    public Task RetryStopsWhenAnOfferIsInHand() => Run(true, (shell, fuse, s) =>
-    {
-        var oldLogin = CoreAccount.IsLoggedInProvider;
-        var queued = new List<Action>();
+    public Task RetryStopsWhenAnOfferIsInHand() => Run(true, (shell, fuse, s) => {
+        var oldLogin = CoreAccount.IsLoggedInProvider; var queued = new List<Action>();
         var sync = new SyncPush(() => Array.Empty<string>(), () => false, new OfferHandler()) { PostMigration = queued.Add };
-        try
-        {
+        try {
             LateZeroNoCrackOwed(shell, fuse, s);
             Assert.True(shell.FuseRetryRunning);
-            s.UnifiedId = "fuse-offer";
-            s.OfflineMode = false;
-            s.LastConfirmedServerXp = 0;
-            CoreAccount.IsLoggedInProvider = () => true;
+            s.UnifiedId = "fuse-offer"; s.OfflineMode = false; s.LastConfirmedServerXp = 0; CoreAccount.IsLoggedInProvider = () => true;
             ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = sync;
             sync.MarkLoaded(null);
-            Assert.True(sync.PushAsync("offer").GetAwaiter().GetResult());
-            Assert.Single(queued);
+            Assert.True(sync.PushAsync("offer").GetAwaiter().GetResult()); Assert.Single(queued);
             shell.TickFuseRetry();
-            Assert.False(shell.FuseRetryRunning);
-            Assert.Equal(0, shell.FuseRetryAttempts);
+            Assert.False(shell.FuseRetryRunning); Assert.Equal(0, shell.FuseRetryAttempts);
         }
         finally { sync.Reset(); CoreAccount.IsLoggedInProvider = oldLogin; }
     });
