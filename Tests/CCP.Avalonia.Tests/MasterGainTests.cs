@@ -112,21 +112,27 @@ public sealed class MasterGainTests
     public void Sound_binding_follows_master_until_finished()
     {
         var settings = CoreSettings.Current;
-        settings.MasterVolume = 100;
-        var heard = new List<float>();
-        using (var binding = new LibVlcAudio.SoundMasterBinding(0.5f, heard.Add))
+        var saved = settings.MasterVolume;
+        try
         {
-            settings.MasterVolume = 50;
-            settings.MasterVolume = 0;
             settings.MasterVolume = 100;
+            var heard = new List<float>();
+            using (var binding = new LibVlcAudio.SoundMasterBinding(0.5f, heard.Add))
+            {
+                settings.MasterVolume = 50;
+                settings.MasterVolume = 0;
+                settings.MasterVolume = 100;
+            }
+            settings.MasterVolume = 25;
+            Assert.Equal(new[] { 0.125f, 0f, (float)Math.Pow(0.5, 1.5) }, heard);
         }
-        settings.MasterVolume = 25;
-        Assert.Equal(new[] { 0.125f, 0f, (float)Math.Pow(0.5, 1.5) }, heard);
+        finally { settings.MasterVolume = saved; }
     }
 
     [Fact]
     public void Panic_force_restores_nested_ducks()
     {
+        var saved = CoreSettings.Current.MasterVolume;
         CoreSettings.Current.MasterVolume = 100;
         var calls = new List<string>();
         var audio = new LibVlcAudio(args =>
@@ -150,7 +156,7 @@ public sealed class MasterGainTests
             audio.Drain();
             Assert.Equal(count, calls.Count);
         }
-        finally { audio.Shutdown(); LibVlcAudio.Instance = null; }
+        finally { audio.Shutdown(); LibVlcAudio.Instance = null; CoreSettings.Current.MasterVolume = saved; }
     }
 
     private sealed class Folder : IDisposable

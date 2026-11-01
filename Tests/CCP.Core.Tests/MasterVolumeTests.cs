@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Runtime.CompilerServices;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Models;
@@ -10,6 +12,28 @@ namespace CCP.Core.Tests;
 
 public sealed class MasterVolumeTests
 {
+    [Theory]
+    [InlineData("Services/AudioService.cs", "Audio.AudioGain.Sound(volumePercent, masterVolume)")]
+    [InlineData("Services/LockCard/MindWipeService.cs", "Audio.AudioGain.MindWipe(masterVolume, ownVolume)")]
+    public void Wpf_gain_entry_points_delegate_to_Core(string file, string call)
+        => Assert.Contains(call, File.ReadAllText(Path.Combine(Repo(), "ConditioningControlPanel", file)));
+
+    [Fact]
+    public void Wpf_uses_the_shared_watch_without_a_shadow_implementation()
+    {
+        var head = Path.Combine(Repo(), "ConditioningControlPanel");
+        Assert.False(File.Exists(Path.Combine(head, "Services/Audio/MasterVolumeWatch.cs")));
+        foreach (var file in new[] { "Services/AudioService.cs", "Services/LockCard/MindWipeService.cs", "Windows/MantraWindow.xaml.cs" })
+        {
+            var code = File.ReadAllText(Path.Combine(head, file));
+            Assert.Contains("Audio.CoreMasterVolumeWatch.Shared", code);
+            Assert.DoesNotContain("Audio.MasterVolumeWatch", code);
+        }
+    }
+
+    private static string Repo([CallerFilePath] string file = "")
+        => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(file)!, "../.."));
+
     [Theory]
     [InlineData(0, 1, 0)]
     [InlineData(50, 0.5, 0.25)]

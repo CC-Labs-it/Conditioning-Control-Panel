@@ -852,9 +852,9 @@ namespace ConditioningControlPanel.Services
                 // nothing else, so this was the one place the master could be applied - and it
                 // was not: with the master at 0% the clip still played, floored at 5%.
                 _soundVolumePercent = volumePercent;
-                Audio.MasterVolumeWatch.Shared.Changed -= OnMasterVolumeChangedForSound;
-                Audio.MasterVolumeWatch.Shared.Changed += OnMasterVolumeChangedForSound;
-                Audio.MasterVolumeWatch.Shared.EnsureHooked();
+                Audio.CoreMasterVolumeWatch.Shared.Changed -= OnMasterVolumeChangedForSound;
+                Audio.CoreMasterVolumeWatch.Shared.Changed += OnMasterVolumeChangedForSound;
+                Audio.CoreMasterVolumeWatch.Shared.EnsureHooked();
                 _soundFile.Volume = SoundGain(volumePercent, App.Settings?.Current?.MasterVolume ?? 100);
 
                 _soundPlayer.Init(_soundFile);
@@ -887,11 +887,7 @@ namespace ConditioningControlPanel.Services
         /// dials are above zero: zero on either one is silence (ccp-bugs #1432).
         /// </summary>
         public static float SoundGain(int volumePercent, int masterVolume)
-        {
-            var level = Math.Clamp(volumePercent, 0, 100) / 100f * (Math.Clamp(masterVolume, 0, 100) / 100f);
-            if (level <= 0f) return 0f;
-            return Math.Max(0.05f, (float)Math.Pow(level, 1.5));
-        }
+        => Audio.AudioGain.Sound(volumePercent, masterVolume);
 
         /// <summary>A long clip started by <see cref="PlaySound"/> follows the master dial live.</summary>
         private void OnMasterVolumeChangedForSound(int masterVolume)
