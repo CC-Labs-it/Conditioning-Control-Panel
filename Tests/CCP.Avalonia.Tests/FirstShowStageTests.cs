@@ -331,6 +331,24 @@ public sealed class FirstShowStageTests
         Assert.NotNull(first); Assert.NotNull(later); Assert.False(first.SequenceEqual(later));
     }
 
+    // WPF BrainDrainCapturePump.cs:458-465: fractional noise drift must be bilinear.
+    [Fact]
+    public void DrainMeltInterpolatesFractionalNoiseDrift()
+    {
+        using var rawSurface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(96, 96));
+        rawSurface.Canvas.Clear(SkiaSharp.SKColors.Black);
+        using var white = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.White };
+        rawSurface.Canvas.DrawRect(58, 0, 38, 96, white);
+        using var raw = rawSurface.Snapshot();
+        using var tileSurface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(256, 256));
+        tileSurface.Canvas.Clear(SkiaSharp.SKColors.Black);
+        tileSurface.Canvas.DrawRect(64, 0, 192, 256, white);
+        using var tile = tileSurface.Snapshot();
+        using var first = SkiaSharp.SKBitmap.Decode(FirstShowCapture.RenderFrame(raw, tile, .10f));
+        // The fractional map edge blends here: nearest sampling leaves the pixel near black.
+        Assert.InRange(first.GetPixel(58, 48).Red, (byte)20, (byte)60);
+    }
+
     /// <summary>WPF Guide.cs: verdict -> "Show me around" walks Core WelcomeSteps on the real shell, rings the
     /// first unlocked feature card's help button (lit as a preview), and "sessions" closes on the Presets tab.</summary>
     [Fact]

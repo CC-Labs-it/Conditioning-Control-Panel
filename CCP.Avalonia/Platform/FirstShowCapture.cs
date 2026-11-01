@@ -112,7 +112,7 @@ internal sealed class FirstShowCapture
         using var blur = SKImageFilter.CreateBlur(70 * .14f / 4 / 3, 70 * .14f / 4 / 3);
         float coverage = Math.Max(8f, Math.Min(w, h) * .20f) * 12;
         using var drift = tile == null ? null : SKShader.CreateImage(tile, SKShaderTileMode.Repeat, SKShaderTileMode.Repeat,
-            SKMatrix.CreateScaleTranslation(coverage / 256, coverage / 256, 2.5f * MathF.Sin(seconds * .55f), 6 * seconds % coverage));
+            new SKSamplingOptions(SKFilterMode.Linear), SKMatrix.CreateScaleTranslation(coverage / 256, coverage / 256, 2.5f * MathF.Sin(seconds * .55f), 6 * seconds % coverage));
         using var noise = drift == null ? null : SKImageFilter.CreateShader(drift);
         const float amplitude = 1 + 70 * .045f;
         using var melt = noise == null ? null : SKImageFilter.CreateDisplacementMapEffect(SKColorChannel.R, SKColorChannel.G, amplitude, noise, blur);
