@@ -124,6 +124,25 @@ namespace ConditioningControlPanel.Services
             return Awareness.AwarenessPrivacyRules.Evaluate(new Awareness.AwarenessSightRequest(id, name, cluster, title)).Allowed;
         }
 
+        // WPF AwarenessObserverPolicy.ResolveIdentity and EvaluatePrivacy: use the foreground
+        // process as well as the title when the head can resolve it. Keep the existing legacy
+        // title filter when the platform cannot report a process (e.g. an X11 client with no PID).
+        internal static bool PassesPrivacyRules(string title, string? process)
+        {
+            if (!PassesPrivacyRules(title)) return false;
+            if (string.IsNullOrWhiteSpace(process)) return true;
+            try
+            {
+                // Browser identity may resolve to the site, so check the process itself as well.
+                if (!Awareness.AwarenessPrivacyRules.Evaluate(
+                        new Awareness.AwarenessSightRequest(process, process, null, title)).Allowed) return false;
+                var (id, cluster, _, name) = Awareness.AwarenessObserverPolicy.ResolveIdentity(title, process);
+                return Awareness.AwarenessPrivacyRules.Evaluate(
+                    new Awareness.AwarenessSightRequest(id, name, cluster, title)).Allowed;
+            }
+            catch { return false; }
+        }
+
         public WindowAwarenessService(Func<string> titleSource, Func<string, bool>? allowTitle = null)
         {
             _titleSource = titleSource ?? throw new ArgumentNullException(nameof(titleSource));
