@@ -4,21 +4,15 @@ using System.IO;
 
 namespace ConditioningControlPanel.Services.MediaFiles;
 
-public sealed class MediaTempFileLedger
+public sealed class MediaTempFileLedger(int cap, Func<string, bool>? delete = null)
 {
     private readonly object _gate = new();
     private readonly List<string> _live = new();
     private readonly List<string> _held = new();
-    private readonly int _cap;
-    private readonly Func<string, bool> _delete;
-    public MediaTempFileLedger(int cap, Func<string, bool>? delete = null)
-    {
-        _cap = Math.Max(0, cap);
-        _delete = delete ?? TryDeleteFile;
-    }
+    private readonly int _cap = Math.Max(0, cap);
+    private readonly Func<string, bool> _delete = delete ?? TryDeleteFile;
     public int HeldCount { get { lock (_gate) return _held.Count; } }
     public int LiveCount { get { lock (_gate) return _live.Count; } }
-
     public void Track(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
@@ -36,7 +30,6 @@ public sealed class MediaTempFileLedger
         }
         DeleteOrHold(sweep);
     }
-
     public void Release(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
