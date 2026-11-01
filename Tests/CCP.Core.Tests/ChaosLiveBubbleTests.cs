@@ -69,6 +69,9 @@ public class ChaosLiveBubbleTests
         Assert.Equal(new[] { "snap:held" }, log);
         Assert.Equal(fuse / 1000.0, b.DefuseJudgeFuseSec, 6);
         Assert.True(b.Deflating);
+        double scale = b.Scale;
+        f.Step();
+        Assert.True(b.Scale < scale);   // WPF BubbleService.cs:4587-4594: a held snap deflates
     }
 
     [Theory]
@@ -126,8 +129,17 @@ public class ChaosLiveBubbleTests
         var (f, b, log) = Field(Live(5000));
         var treat = AmbientBubble.SpawnChaos(new Random(2), 0, 0, 0, 1920, 1080, 1, new EffectBubbleSpec { SizePx = 150 });
         f.Bubbles.Add(treat);
+        f.PressLive(b, canChannel: true, b.CenterX, b.CenterY);
+        Assert.True(b.Channeling);
         f.DefuseAllLive();
         Assert.Equal(new[] { "snap:swept" }, log);
+        Assert.False(b.Channeling);
+        Assert.True(b.Popping);
+        Assert.False(b.Deflating);
+        Assert.False(b.DefusedViaChannel);
+        double scale = b.Scale;
+        b.Step();
+        Assert.True(b.Scale > scale);   // WPF BubbleService.cs:293-302: a sweep calls Pop
         Assert.False(treat.Popping);
         Assert.Equal(b.FuseRemainingMs / 1000.0, b.DefuseJudgeFuseSec, 6);
     }

@@ -105,7 +105,12 @@ public sealed class ChaosEStimChargeTests
             Assert.False(live.Popping || treat.Popping);
             var (focus, defused) = (state.Focus, state.Defused);
             pending[0].Run();
-            Assert.True(live.Deflating);
+            Assert.True(live.Popping);
+            Assert.False(live.Deflating);
+            Assert.False(live.DefusedViaChannel);
+            double scale = live.Scale;
+            live.Step();
+            Assert.True(live.Scale > scale);   // WPF BubbleService.cs:437,4672: the instant snap bursts
             Assert.Equal(focus, state.Focus);
             Assert.Equal(defused + 1, state.Defused);
             pending[1].Run();

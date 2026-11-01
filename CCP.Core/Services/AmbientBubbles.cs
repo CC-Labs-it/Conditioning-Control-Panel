@@ -71,7 +71,7 @@ namespace ConditioningControlPanel.Services
         public bool DefusedViaChannel { get; private set; }
         /// <summary>Why a live bubble went off by hand: "click", "release" or "nofocus"; null for a fuse-out or escape.</summary>
         public string? BrokenReason { get; private set; }
-        /// <summary>The bubble deflates (a snap) instead of bursting.</summary>
+        /// <summary>A completed hold deflates; an instantaneous snap bursts.</summary>
         public bool Deflating { get; private set; }
         private double _channelMs, _channelStartFuseSec;
         private DateTime _channelStartUtc;
@@ -107,7 +107,7 @@ namespace ConditioningControlPanel.Services
         {
             if (Popping || !IsLiveThreat) return false;
             Channeling = false;
-            Popping = Deflating = true;
+            Popping = true;   // WPF BubbleService.cs:4672,3783-3787: Pop bursts; a completed hold deflates (:4587-4594)
             return true;
         }
 
