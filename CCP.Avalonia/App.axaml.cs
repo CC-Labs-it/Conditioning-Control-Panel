@@ -267,6 +267,47 @@ namespace ConditioningControlPanel.Avalonia
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.Start();
         }
 
+        /// <summary>WPF GamificationBridge.cs:114-136,299-358: restore the best available chat
+        /// count once, silently, after both the brain and achievements are ready.</summary>
+        internal static void BackfillCompanionChatCount(AchievementEngine? achievements,
+            ConditioningControlPanel.Services.Companion.Brain.CompanionBrain? brain)
+        {
+            if (achievements == null || brain == null || achievements.Progress.CompanionChatBackfilled) return;
+            var wasSuppressed = achievements.SuppressPopups;
+            achievements.SuppressPopups = true;
+            try
+            {
+                var readSomething = false;
+                var restoredTurns = 0;
+                try
+                {
+                    restoredTurns = brain.Session.Turns.Count(t => t != null &&
+                        t.Kind == ConditioningControlPanel.Services.Companion.Brain.TurnKind.UserChat);
+                    readSomething = true;
+                }
+                catch (Exception ex) { Serilog.Log.Debug("Chat backfill: turn-log read failed: {Error}", ex.Message); }
+
+                var relationshipTurns = 0;
+                try
+                {
+                    if (brain.Memory is ConditioningControlPanel.Services.Companion.Brain.MemoryStore store)
+                        relationshipTurns = store.Relationships.Values.Sum(r => r?.ChatTurnsTotal ?? 0);
+                    readSomething = true;
+                }
+                catch (Exception ex) { Serilog.Log.Debug("Chat backfill: relationship read failed: {Error}", ex.Message); }
+
+                if (!readSomething) return;
+                var progress = achievements.Progress;
+                progress.CompanionChatBackfilled = true;
+                progress.CompanionMessages = Math.Max(progress.CompanionMessages, Math.Max(restoredTurns, relationshipTurns));
+                achievements.IsDirty = true;
+                if (progress.CompanionMessages > 0) achievements.TryUnlock("pleased_to_meet_you");
+                if (progress.CompanionMessages >= AchievementRules.PillowTalkMessages) achievements.TryUnlock("pillow_talk");
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Companion chat backfill failed"); }
+            finally { achievements.SuppressPopups = wasSuppressed; }
+        }
+
         /// <summary>WPF App.xaml.cs:2747: one moderation session shared by every AI provider.</summary>
         internal static void SeedModeration()
         {
@@ -849,6 +890,7 @@ namespace ConditioningControlPanel.Avalonia
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
                 WireAchievementUnlocks(Achievements);
+                BackfillCompanionChatCount(Achievements, Brain);   // WPF GamificationBridge.Start:132
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
                 // Its loss must not cost the launch.
