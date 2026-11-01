@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Services
     /// A session run for heads without WPF: a port (not a move) of WPF SessionEngine
     /// (ConditioningControlPanel/Services/Session/SessionEngine.cs) over the pure pieces in SessionRules,
     /// <see cref="SessionSettingsSnapshot"/>, <see cref="PhrasePoolCustody"/>, <see cref="CoreEngine"/> and
-    /// <see cref="SessionLogService"/>. Drives flash, subliminal (+ whispers flag), bouncing text and lock cards.
+    /// <see cref="SessionLogService"/>. Drives flash, subliminal (+ whispers flag), bouncing text, lock cards and continuous bubbles.
     ///
     /// Also pause/resume (100 XP per pause), the flash ramp and the pink tint (ramp + ±3 min random start).
     ///
@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Services
     /// The session-scoped corner GIF too: admission, start/end minute, pause hide, stop handback and
     /// the #474 live edits; the head draws it through <see cref="CoreCornerGif.SessionShowHandler"/>.
     ///
-    /// ponytail: not driven here - video, bubbles, bubble count, mind wipe, brain drain, spiral,
+    /// ponytail: not driven here - video, bubble count, mind wipe, brain drain, spiral,
     /// ducking, phase events,
     /// EMI Desk, friends, season recap and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
@@ -292,8 +292,9 @@ namespace ConditioningControlPanel.Services
             if (ss.SubliminalEnabled && !_deferred.IsPending("subliminal")) CoreSubliminal.Start();
             if (ss.LockCardEnabled && !_deferred.IsPending("lock cards")) LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
             if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
-            // WPF SessionEngine.cs:570: Resume restarts bubbles whenever the template enables them.
-            if (ss.BubblesEnabled)
+            // Part B: restore WPF SessionEngine.cs:570 after its burst schedule (:1013-1067)
+            // can stop intermittent bubbles again (MainWindow.Presets.cs:2257).
+            if (ss.BubblesEnabled && !ss.BubblesIntermittent)
                 CoreBubbles.Start();
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
             // SessionEngine.cs:575: the pause closed it; admission is asked afresh.

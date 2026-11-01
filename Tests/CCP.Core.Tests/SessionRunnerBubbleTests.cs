@@ -91,6 +91,16 @@ public sealed class SessionRunnerBubbleTests : IDisposable
     }
 
     [Fact]
+    public void IntermittentFieldStaysStoppedAfterPauseAndResume()
+    {
+        _runner.Start(Template(intermittent: true));
+        _runner.Pause();
+        _runner.Resume();
+        Assert.False(_running);
+        Assert.False(CoreSettings.Current.BubblesEnabled);
+    }
+
+    [Fact]
     public void ResumeMatchesWpfTemplateEnabledRuleEvenBeforeDelayedMinute()
     {
         _runner.Start(Template(minute: 3));
