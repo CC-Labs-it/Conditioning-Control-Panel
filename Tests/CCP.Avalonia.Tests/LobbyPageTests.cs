@@ -9,6 +9,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -186,7 +187,7 @@ public sealed class LobbyPageTests
         Assert.NotNull(worn.Art);
         Assert.IsType<ImageBrush>(worn.FaceBrush);
         Assert.NotNull(worn.FrameArt);
-        Assert.Equal(22 / ShopProfileArt.FrameWindowRatio, worn.FrameSize, 6);
+        Assert.Equal(22 / ShopCosmeticsRegistry.FrameWindowRatio, worn.FrameSize, 6);
         Assert.Equal(-(worn.FrameSize - 22) / 2, worn.FrameMargin.Left, 6);
         var card = template.Build(worn)!;
         card.DataContext = worn;
@@ -195,7 +196,12 @@ public sealed class LobbyPageTests
         Assert.True(face.IsVisible);
         Assert.False(face.IsHitTestVisible);
         Assert.False(face.ClipToBounds);
-        Assert.IsType<ImageBrush>(face.Children.OfType<Ellipse>().Single().Fill);
+        Assert.Equal(22d, face.Width);
+        Assert.Equal(22d, face.Height);
+        var circle = face.Children.OfType<Ellipse>().Single();
+        Assert.Equal(Color.Parse("#1C1233"), Assert.IsAssignableFrom<ISolidColorBrush>(circle.Stroke).Color);
+        Assert.Equal(1.5, circle.StrokeThickness);
+        Assert.IsType<ImageBrush>(circle.Fill);
         Assert.Same(worn.FrameArt, frame.Source);
         Assert.Equal(worn.FrameSize, frame.Width);
         Assert.Equal(worn.FrameMargin, frame.Margin);
@@ -213,6 +219,8 @@ public sealed class LobbyPageTests
         var missing = new LobbyCardView(host with { Look = new PlayerLook("missing", "missing") }, gates);
         Assert.IsType<LinearGradientBrush>(missing.FaceBrush);
         Assert.Null(missing.FrameArt);
+        Assert.Null(ModArt.ShopFrame("profile.avatar.emi-pixel"));
+        Assert.Null(ModArt.AvatarPreset("profile.frame.lace"));
     });
 
     [Fact]
@@ -254,7 +262,7 @@ public sealed class LobbyPageTests
     private static void Run(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
         body();

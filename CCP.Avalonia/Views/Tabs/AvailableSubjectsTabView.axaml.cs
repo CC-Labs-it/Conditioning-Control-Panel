@@ -126,14 +126,14 @@ public sealed class LobbyCardView
     }
     private LobbyRow Row { get; }
     public const double FaceSize = 22;
-    public double FrameSize => FaceSize / ShopProfileArt.FrameWindowRatio;
+    public double FrameSize => FaceSize / ShopCosmeticsRegistry.FrameWindowRatio;
     public Thickness FrameMargin => new(-(FrameSize - FaceSize) / 2);
     public bool HasLook => !Row.Look.IsEmpty;
     public IBrush? FaceBrush => !HasLook ? null :
-        (ModArt.AvatarPreset(Row.Look.AvatarId) ?? ModArt.ShopProfile(Row.Look.AvatarId, "avatar")) is { } image
+        ModArt.AvatarPreset(Row.Look.AvatarId) is { } image
             ? new ImageBrush(image) { Stretch = Stretch.UniformToFill }
             : LeaderboardRow.BuildAvatarBrush(Row.HostName);
-    public IImage? FrameArt => HasLook ? ModArt.ShopProfile(Row.Look.FrameId, "frame") : null;
+    public IImage? FrameArt => HasLook ? ModArt.ShopFrame(Row.Look.FrameId) : null;
     private static readonly LobbyArtCache GameArt = new(LoadArt);
     public IImage? Art => GameArt.Get(Row.Game);
 

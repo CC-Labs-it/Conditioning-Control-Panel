@@ -36,7 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var progress = App.Achievements?.Progress?.UnlockedAchievements;
             var unlocked = progress != null ? new HashSet<string>(progress, StringComparer.Ordinal) : null;
             return ProfileCosmetics.Sanitize(raw, CosmeticsPool.BannerIds, new HashSet<string>(Achievement.All.Keys, StringComparer.Ordinal),
-                unlocked, WardrobeCatalog.DecoIds(), WardrobeCatalog.CharmIds(), CosmeticsPool.AvatarIds, WardrobeCatalog.AchievementGates());
+                unlocked, WardrobeCatalog.DecoIds(), WardrobeCatalog.CharmIds(), ShopCosmeticsRegistry.AllAvatarIds(), WardrobeCatalog.AchievementGates(),
+                ShopCosmeticsRegistry.FrameIds(), ShopCosmeticsRegistry.Grants(), Platform.PrizeOwnership.KnownGrants());
         }
 
         /// <summary>Your own loadout, straight from settings (WPF ApplyOwnProfileCosmetics, wardrobe half).</summary>
@@ -59,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var clean = ProfileCosmetics.Sanitize(cosmetics, CosmeticsPool.BannerIds,
                     new HashSet<string>(Achievement.All.Keys, StringComparer.Ordinal), null,
-                    WardrobeCatalog.DecoIds(), WardrobeCatalog.CharmIds(), CosmeticsPool.AvatarIds);
+                    WardrobeCatalog.DecoIds(), WardrobeCatalog.CharmIds(), ShopCosmeticsRegistry.AllAvatarIds(), null, ShopCosmeticsRegistry.FrameIds());
                 ApplyProfileWardrobe(clean);
                 ApplyProfileCosmeticsPaint(clean);
             }
@@ -69,6 +70,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Applies a sanitized wardrobe loadout - identical for your card and a viewed one.</summary>
         private void ApplyProfileWardrobe(ProfileCosmetics cosmetics)
         {
+            if (ProfilePage?.ProfileHeroAvatar is { } avatar)
+            {
+                avatar.FrameId = cosmetics.FrameId;
+                // This head has no remote profile-picture loader. A null also clears the previous card.
+                avatar.AvatarImage = Helpers.ModArt.AvatarPreset(cosmetics.AvatarId);
+            }
             ApplyProfileAvatarDecoration(cosmetics.AvatarDeco, cosmetics.DecoTransform);
             ApplyProfileCharms(cosmetics.Charms, cosmetics.CharmTransforms);
         }

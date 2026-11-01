@@ -54,7 +54,7 @@ public sealed class LeashSelfCard : Border
         who.Children.Add(Label(_me.Holder.Name + " " + Loc.Get("leash_self_holds"), 16, F.Text, "leash-self-title"));
         who.Children.Add(Label(Loc.GetF("leash_self_day", _me.Day), 11, F.Pink, "leash-self-day"));
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        var avatar = F.Avatar(_me.Holder.Name, 40, null);
+        var avatar = F.Avatar(_me.Holder.Name, 40, null, _me.Holder.Look);
         avatar.Margin = new Thickness(0, 0, 10, 0);
         head.Children.Add(avatar);
         Grid.SetColumn(who, 1); head.Children.Add(who);
