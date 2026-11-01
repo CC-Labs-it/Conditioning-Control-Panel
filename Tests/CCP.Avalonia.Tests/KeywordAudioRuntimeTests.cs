@@ -298,6 +298,45 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Equal(new[] { "SIT", "SIT" }, shown);
     });
 
+    [Theory] // WPF KeywordTriggerService.cs:1283-1293,1363-1366,1511-1517,1698-1713.
+    [InlineData(0, false)] [InlineData(0, true)] [InlineData(1, false)]
+    [InlineData(2, false)] [InlineData(2, true)] [InlineData(3, false)] [InlineData(3, true)]
+    [InlineData(4, false)] [InlineData(5, false)]
+    public void ExactSubliminalFollowsAudioRepeatOrderAndCancellation(int mode, bool cancel) => Run((engine, s, played) =>
+    {
+        var shown = new List<string>();
+        var playsAtFlash = new List<int>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = text => { shown.Add(text); playsAtFlash.Add(played.Count(x => x.Path != "stopped")); };
+        var t = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)t.Actions[0];
+        audio.PlayCount = 2; audio.DelayBetweenMs = 5000;
+        var flash = new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal };
+        if (mode == 1 || mode == 4) { t.Actions.Insert(0, flash); if (mode == 4) t.Actions.Insert(0, flash); }
+        else if (mode == 2)
+        {
+            t.AudioFilePath = audio.FilePath; t.AudioPlayCount = 2; t.AudioDelayBetweenMs = 5000;
+            t.VisualEffect = KeywordVisualEffect.ExactSubliminal; t.Actions.Clear();
+        }
+        else if (mode == 3 || mode == 5)
+        {
+            if (mode == 5) t.Actions = new List<KeywordAction> { flash };
+            s.KeywordTriggers.Add(new KeywordTrigger { Keyword = "sit", CooldownSeconds = 0,
+                Actions = mode == 5 ? new List<KeywordAction> { audio, flash } : new List<KeywordAction> { flash, audio, flash } });
+        }
+        else t.Actions.Add(flash);
+        var gap = new TaskCompletionSource();
+        engine.Delay = (_, _) => gap.Task;
+        Type(engine, "sit");
+        Assert.Single(played.Where(x => x.Path != "stopped"));
+        Assert.Equal(mode == 4 ? 2 : mode == 1 || mode == 5 ? 1 : 0, shown.Count);
+        if (cancel) { if (mode == 2) engine.Stop(); else engine.StopAudio(); }
+        gap.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(cancel ? 0 : mode == 4 ? 2 : 1, shown.Count);
+        Assert.All(playsAtFlash, n => Assert.Equal(mode == 1 || mode == 4 || mode == 5 ? 0 : 2, n));
+        Assert.Equal(cancel ? 1 : 2, played.Count(x => x.Path != "stopped"));
+    });
+
     [Fact] // WPF Subliminal/SubliminalService.cs:311-324.
     public void ExactSubliminalUsesCustomTextWithoutWhisperAndAwardsSubliminalXp() => Run((engine, s, played) =>
     {
