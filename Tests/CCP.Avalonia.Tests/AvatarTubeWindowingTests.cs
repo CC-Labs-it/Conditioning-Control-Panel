@@ -1,4 +1,7 @@
 using System;
+using System.Reflection;
+using Avalonia.Platform;
+using ConditioningControlPanel.AvatarTubeLayout;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -129,7 +132,46 @@ public sealed class AvatarTubeWindowingTests
         Assert.Equal(0.75, CoreSettings.Current.AvatarTubeScale);
     }, scale: 0.75);
 
-    private static Task Run(bool detached, Action<Window, AvatarTubeWindow> body, double scale = 1.0) => AvaloniaTestDispatcher.RunAsync(() =>
+    // WPF xaml.cs:549-557: startup must fit before MakeRoom claims ownership of main's bounds.
+    [Fact]
+    public Task OpeningMakesRoomOnlyForFittedArt() => Run(false, (main, tube) =>
+    {
+        Assert.Equal(780 * TubeWindowMath.FitScale(1920, 1040), tube.Width, 6);
+        var insets = StockInsets(tube);
+        int painted = (int)Math.Round(tube.Width) - Math.Max(0, insets.Left - 3) - Math.Max(0, insets.Right - 3);
+        var plan = MakeRoomPlacement.Plan(new Box(100, 100, 1800, 700), 800, painted, new Box(0, 0, 1920, 1040));
+        Assert.NotNull(plan);
+        Assert.Equal(Math.Round(plan.Value.W), main.Width);
+        Assert.Equal((int)Math.Round(plan.Value.X), main.Position.X);
+    }, cramped: true);
+
+    [Fact]
+    public Task UnchangedArtLayoutDoesNotRedock() => Run(false, (_, tube) =>
+    {
+        var sentinel = tube.Position + new PixelVector(17, 0);
+        tube.Position = sentinel;
+        int layouts = 0;
+        tube.LayoutUpdated += (_, _) => layouts++;
+        tube.FindControl<TextBlock>("TxtSpeech")!.Text = "Layout regression";
+        tube.InvalidateMeasure();
+        tube.UpdateLayout();
+        Assert.True(layouts > 0);
+        Assert.Equal(sentinel, tube.Position);
+    });
+
+    // Configure an isolated instance of the real headless backend; Avalonia 12 forbids IScreenImpl fakes.
+    private static void SetFiniteScreen(Window window)
+    {
+        var impl = Activator.CreateInstance(typeof(AvaloniaHeadlessPlatformOptions).Assembly.GetType("HeadlessScreensStub")!, true)!;
+        var screens = (Screens)Activator.CreateInstance(typeof(Screens), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+            null, new[] { impl }, null)!;
+        foreach (var (name, value) in new (string, object)[] { ("Bounds", new PixelRect(0, 0, 1920, 1080)),
+            ("WorkingArea", new PixelRect(0, 0, 1920, 1040)), ("Scaling", 1.0), ("IsPrimary", true) })
+            typeof(Screen).GetProperty(name)!.SetValue(screens.Primary!, value);
+        typeof(TopLevel).GetField("_screens", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(window, screens);
+    }
+
+    private static Task Run(bool detached, Action<Window, AvatarTubeWindow> body, double scale = 1.0, bool cramped = false) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
@@ -146,8 +188,10 @@ public sealed class AvatarTubeWindowingTests
         AvatarTubeWindow? tube = null;
         try
         {
+            if (cramped) { SetFiniteScreen(main); main.Width = 1800; main.Position = new PixelPoint(100, 100); }
             main.Show();
             tube = new AvatarTubeWindow(main);
+            if (cramped) SetFiniteScreen(tube);
             tube.Show();
             Dispatcher.UIThread.RunJobs();
             body(main, tube);

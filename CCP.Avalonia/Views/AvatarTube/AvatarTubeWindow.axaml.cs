@@ -288,9 +288,21 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
             // WPF OnLoaded: CalculateScaleFactor, then UpdatePosition (attached) or
             // RestoreSavedPlacement (detached). Topmost follows the mode (ApplyModeChrome).
+            LayoutUpdated -= OnTubeArtLayoutUpdated;
+            _dockingReady = false;
             _makeRoom.Rearm();
             FitToScreen();
-            UpdatePosition();
+            // Width/Height reach the backend after Opened; wait for the fitted layout (WPF xaml.cs:606-614).
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!IsVisible) return;
+                UpdateLayout();
+                _dockingReady = true;
+                _lastArtLayout = null;
+                OnTubeArtLayoutUpdated(this, EventArgs.Empty);
+                LayoutUpdated -= OnTubeArtLayoutUpdated;
+                LayoutUpdated += OnTubeArtLayoutUpdated;
+            }, DispatcherPriority.Loaded);
             RestoreSavedPlacement();
             // Fallback when ScalingChanged never comes (or never agrees): restore once anyway.
             DispatcherTimer.RunOnce(() => { if (IsVisible) RestoreSavedPlacement(force: true); }, TimeSpan.FromSeconds(1));

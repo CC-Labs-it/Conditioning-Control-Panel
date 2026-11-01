@@ -34,6 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal double CurrentScale => _currentScale;
         private bool _restoringPlacement;
         private bool _restorePending = true;
+        private bool _dockingReady;
 
         public bool IsDetached => !_isAttached;
 
@@ -79,9 +80,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             }, RoutingStrategies.Tunnel);
             PropertyChanged += (_, e) =>
             {
-                if (e.Property == IsVisibleProperty && !IsVisible) RestoreMadeRoom();
+                if (e.Property == IsVisibleProperty && !IsVisible) { _dockingReady = false; LayoutUpdated -= OnTubeArtLayoutUpdated; RestoreMadeRoom(); }
             };
-            LayoutUpdated += OnTubeArtLayoutUpdated;
             ApplyModeChrome();
         }
 
@@ -137,7 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             ApplyModeChrome();
             UpdatePosition();
             if (attached && _parentWindow != null) Platform.X11Overlay.RestackAbove(this, _parentWindow);
-            if (!attached) Platform.X11Overlay.SetInputRect(this, null);
+            if (!attached) { InputRect = null; Platform.X11Overlay.SetInputRect(this, null); }
             Log.Information("Avatar tube {Mode}", attached ? "attached" : "detached");
             if (_restoringPlacement) return;
             CoreSettings.Current.AvatarTubeDetached = !attached;
@@ -252,7 +252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF UpdatePosition's physical route: dock beside main per TubeDockPlacement.</summary>
         internal void UpdatePosition()
         {
-            if (_applyingRoom || !_isAttached || _parentWindow is not { } p || p.WindowState == WindowState.Minimized) return;
+            if (!_dockingReady || _applyingRoom || !_isAttached || _parentWindow is not { } p || p.WindowState == WindowState.Minimized) return;
             var pr = new PixelRect(p.Position, PixelSize.FromSize(p.ClientSize, p.DesktopScaling));
             if (pr.Width <= 0 || pr.Height <= 0) return;
             var work = p.Screens.ScreenFromWindow(p)?.WorkingArea ?? new PixelRect(-100000, -100000, 200000, 200000);
@@ -271,18 +271,22 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             var plan = TubeDockPlacement.Place(parent, size.Width, size.Height, leftInset, rightInset,
                 (int)Math.Round(VerticalOffset * art), ToBox(work), mirroredLeftInset);
             ApplyTubeArtFlip(plan.Side == DockSide.Right);
-            Position = new PixelPoint(plan.Left, plan.Top);
+            if (Position != new PixelPoint(plan.Left, plan.Top)) Position = new PixelPoint(plan.Left, plan.Top);
             // WPF's transparent margin was click-through (layered window); an X11 window takes
             // clicks on every pixel, so cut her input down to everything left of the seam or the
             // shell's rail under that margin goes dead. The cut follows the side she docked to: on a
             // right dock her LEFT margin is the one over the shell. Detach gives the whole window back.
-            InputRect = plan.Side switch
+            var inputRect = plan.Side switch
             {
                 DockSide.Left => new PixelRect(0, 0, size.Width - rightInset, size.Height),
                 DockSide.Right => new PixelRect(mirroredLeftInset ?? leftInset, 0, size.Width - (mirroredLeftInset ?? leftInset), size.Height),
                 _ => new PixelRect(leftInset, 0, Math.Max(0, size.Width - leftInset - rightInset), size.Height),   // floating over the shell: both margins
             };
-            Platform.X11Overlay.SetInputRect(this, InputRect);
+            if (InputRect != inputRect)
+            {
+                InputRect = inputRect;
+                Platform.X11Overlay.SetInputRect(this, inputRect);
+            }
         }
 
         /// <summary>The attached tube's input region (window px) as last set by <see cref="UpdatePosition"/>.</summary>

@@ -16,7 +16,15 @@ public partial class AvatarTubeWindow
     private bool _tubeArtFlipped;
 
     // Layout and mod/style changes can alter both the bounds and the avatar-centred flip axis.
-    private void OnTubeArtLayoutUpdated(object? sender, EventArgs e) => UpdatePosition();
+    private (Rect, Rect, Matrix?, object?, Size, double, bool)? _lastArtLayout;
+    private void OnTubeArtLayoutUpdated(object? sender, EventArgs e)
+    {
+        var layout = (_imgTubeFrame.Bounds, _avatarBorder.Bounds, _avatarBorder.RenderTransform?.Value,
+            (object?)_imgTubeFrame.Source, ClientSize, DesktopScaling, _imgTubeFrame.IsVisible);
+        if (_lastArtLayout == layout) return;
+        _lastArtLayout = layout;
+        UpdatePosition();
+    }
 
     private double TubeFlipAxis()
     {
