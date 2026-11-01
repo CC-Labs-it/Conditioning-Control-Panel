@@ -161,6 +161,8 @@ internal static class AccountSeed
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
+        // WPF ProfileSyncService.cs:828-833: check the local quest owner before any cloud read.
+        App.Quests?.EnsureOwnedBy(id);
         var loadingSync = Sync;
         var version = loadingSync?.SessionVersion;
         var user = await v2.GetUserProfileAsync(id);
@@ -215,6 +217,8 @@ internal static class AccountSeed
         Patreon?.Logout();
         Discord?.Logout();
         SubscribeStar?.Logout();
+        // WPF MainWindow.Login.cs:278-284: preserve local-only quest progress on logout.
+        if (!accountDeleted) App.Quests?.StampOwner(CoreAccount.UnifiedUserId ?? CoreSettings.Current.UnifiedId);
         CoreAccount.UnifiedUserId = null;
         var s = CoreSettings.Current;
         s.UnifiedId = null;

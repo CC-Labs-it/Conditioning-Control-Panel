@@ -760,14 +760,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         {
             if (_closed) { Log.Warning("Sign-in finished after the login dialog closed; ignored"); return; }
             // WPF MainWindow.Login.cs:110-141: a PROVEN different account never inherits the last one's progression.
-            ClearIfOtherAccount(user.UnifiedId);
+            var differentAccount = ClearIfOtherAccount(user.UnifiedId);
             ProfileAdopt.ApplyUserData(CoreSettings.Current, user, authToken, DateTime.UtcNow);
             // WPF V2AuthServiceHead: an invite week rides its own exact end date (main 6f5e76610).
             ConditioningControlPanel.Services.Invites.InviteRules.ApplyGrant(CoreSettings.Current, ConditioningControlPanel.Services.Invites.InviteRules.ParseUtc(user.InviteGrantUntilRaw), DateTime.UtcNow);
             Controls.Invites.InvitePanel.ArmExpiry();
             CoreSettings.Save();
             CoreAccount.UnifiedUserId = user.UnifiedId; // before the load: its push is gated on signed in
-            ProfileLoad = AccountSeed.LoadProfileAsync(); // WPF MainWindow.Login.cs:170
+            ProfileLoad = LoadAfterLoginAsync(differentAccount); // WPF MainWindow.Login.cs:158-201
 
             // WPF UpdateServiceProperties
             if (provider == "patreon" && AccountSeed.Patreon is { } p) { p.UnifiedUserId = user.UnifiedId; p.DisplayName = user.DisplayName; }
@@ -786,15 +786,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             Close(true);
         }
 
-        private static void ClearIfOtherAccount(string? newId)
+        private static bool ClearIfOtherAccount(string? newId)
         {
             var previousId = CoreSettings.Current.UnifiedId;
             if (!string.IsNullOrEmpty(previousId) && !string.IsNullOrEmpty(newId) && previousId != newId)
             {
                 ProgressionClear.Apply(CoreSettings.Current);
+                App.Quests?.ResetProgress(generateQuests: false); // WPF MainWindow.Login.cs:139-141,244-249
                 App.Achievements?.Reset();
                 AccountSeed.Sync?.Reset();
+                return true;
             }
+            return false;
+        }
+
+        private static async Task LoadAfterLoginAsync(bool differentAccount)
+        {
+            var settings = CoreSettings.Current;
+            var id = settings.UnifiedId;
+            var sync = AccountSeed.Sync;
+            var version = sync?.SessionVersion;
+            await AccountSeed.LoadProfileAsync();
+            // WPF MainWindow.Login.cs:189-195: generate after the load, even if it failed.
+            // A late completion must not generate quests for a replacement session.
+            if (differentAccount && ReferenceEquals(settings, CoreSettings.Current) && settings.UnifiedId == id
+                && ReferenceEquals(sync, AccountSeed.Sync) && sync?.SessionVersion == version)
+                App.Quests?.CheckAndGenerateQuests();
         }
 
         private void BtnCancel_Click()
@@ -971,13 +988,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             }
             if (_closed) return;
             // Older proxy without the user piggyback: bare token + id, as WPF.
-            ClearIfOtherAccount(result.UnifiedId);
+            var differentAccount = ClearIfOtherAccount(result.UnifiedId);
             var s = CoreSettings.Current;
             s.AuthToken = result.AuthToken;
             s.UnifiedId = result.UnifiedId;
             CoreSettings.Save();
             CoreAccount.UnifiedUserId = result.UnifiedId;
-            ProfileLoad = AccountSeed.LoadProfileAsync(); // WPF MainWindow.Login.cs:170 runs after every sign-in
+            ProfileLoad = LoadAfterLoginAsync(differentAccount); // WPF MainWindow.Login.cs:158-201
             Result = new LoginResult
             {
                 Success = true,
