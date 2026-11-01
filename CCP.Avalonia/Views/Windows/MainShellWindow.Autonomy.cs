@@ -72,7 +72,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Autonomy.CanPerform = CanPerformAutonomy;
             // WPF CanTakeAction: never over a fullscreen interaction (InteractionQueue.IsBusy).
             Autonomy.IsBusy = () => CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen()
-                                    || BubbleCountWindow.IsAnyOpen() || PopQuizWindow.IsAnyOpen();
+                                    || BubbleCountWindow.IsAnyOpen() || PopQuizWindow.IsAnyOpen()
+                                    || PlaylistBlocksAutonomy;
             Autonomy.Perform = (a, announced) => Dispatcher.UIThread.Post(() => PerformAutonomy(a, announced));
             Autonomy.EnabledChanged += (_, on) => Dispatcher.UIThread.Post(() =>
             {
@@ -88,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var audio = CompanionEventAudio.Resolve(phrase);
                 _avatarTubeWindow?.GigglePriority(phrase, audio != null, aiGenerated: false, phraseAudioPath: audio);
             });
-            Closed += (_, _) => { CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
+            Closed += (_, _) => { CancelVideoAutoPlay(); CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
             Opened += (_, _) => { ResumeAutonomyOnStartup(); RefreshVoiceInputModes(); };
         }
 

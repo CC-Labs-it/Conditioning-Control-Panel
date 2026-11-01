@@ -18,6 +18,12 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class CompanionVideoAutoPlayTests
 {
+    private static bool IsPlaylistScript(string script)
+    {
+        var token = System.Text.RegularExpressions.Regex.Match(script, "const token = '([0-9a-f]{32})';");
+        return token.Success && script == MainShellWindow.PlaylistAutoPlayScript.Replace("__CCP_PLAYLIST_TOKEN__", token.Groups[1].Value);
+    }
+
     [Fact]
     public Task WatchLinkRunsOnceAfterSuccessfulNavigation() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -93,11 +99,11 @@ public sealed class CompanionVideoAutoPlayTests
             delay.SetResult();
             Dispatcher.UIThread.RunJobs();
             host.OnNavigationCompleted(new Uri("https://127.0.0.1/other"));
-            Assert.True(shell.NavigateToUrlInBrowser("https://bambicloud.com/playlist/1", true));
-            host.OnNavigationCompleted(new Uri("https://bambicloud.com/playlist/1"));
+            Assert.True(shell.NavigateToUrlInBrowser("https://127.0.0.1/bambicloud.com/playlist/1", true));
+            host.OnNavigationCompleted(new Uri("https://127.0.0.1/bambicloud.com/playlist/1"));
             Assert.Equal(2, waits);
             Assert.DoesNotContain(MainShellWindow.VideoAutoPlayScript, scripts);
-            Assert.Single(scripts, s => s == MainShellWindow.PlaylistAutoPlayScript);
+            Assert.Single(scripts, IsPlaylistScript);
             return Task.CompletedTask;
         }
         finally
@@ -127,7 +133,7 @@ public sealed class CompanionVideoAutoPlayTests
             var delay = new TaskCompletionSource();
             var waits = 0;
             shell.BrowserAutoPlayDelay = () => { waits++; return delay.Task; };
-            var playlist = new Uri("https://BAMBICLOUD.com/playlist/1");
+            var playlist = new Uri("https://127.0.0.1/BAMBICLOUD.com/playlist/1");
 
             Assert.True(shell.NavigateToUrlInBrowser(playlist.ToString(), true));
             host.OnNavigationCompleted(playlist, success: false);
@@ -137,15 +143,15 @@ public sealed class CompanionVideoAutoPlayTests
             host.OnNavigationCompleted(playlist);
             host.OnNavigationCompleted(playlist);
             Assert.Equal(1, waits);
-            Assert.DoesNotContain(MainShellWindow.PlaylistAutoPlayScript, scripts);
+            Assert.DoesNotContain(scripts, IsPlaylistScript);
             shell.StopBrowserMediaForPanic();
             delay.SetResult();
             Dispatcher.UIThread.RunJobs();
-            Assert.DoesNotContain(MainShellWindow.PlaylistAutoPlayScript, scripts);
+            Assert.DoesNotContain(scripts, IsPlaylistScript);
 
             Assert.True(shell.NavigateToUrlInBrowser(playlist.ToString(), true));
             host.OnNavigationCompleted(playlist);
-            Assert.Single(scripts, s => s == MainShellWindow.PlaylistAutoPlayScript);
+            Assert.Single(scripts, IsPlaylistScript);
             Assert.DoesNotContain(MainShellWindow.VideoAutoPlayScript, scripts);
             return Task.CompletedTask;
         }
