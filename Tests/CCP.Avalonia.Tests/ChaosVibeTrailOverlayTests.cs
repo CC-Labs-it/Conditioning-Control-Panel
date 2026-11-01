@@ -334,6 +334,10 @@ public sealed class ChaosVibeTrailOverlayTests
                 {
                     region.Sync();
                     Assert.Equal(new PixelRect(62, 62, 176, 176), region.Rects[1]);
+                    Assert.True(Win32Overlay.Hits(region.InputBands, region.BandCount, 225, 150));
+                    Assert.False(Win32Overlay.Hits(region.InputBands, region.BandCount, 230, 230));
+                    Assert.DoesNotContain(region.InputBands.Take(region.BandCount), r => 230 >= r.X && 230 < r.Right && 230 >= r.Y && 230 < r.Bottom);
+                    Assert.Contains(region.InputBands.Take(region.BandCount), r => 225 >= r.X && 225 < r.Right && 150 >= r.Y && 150 < r.Bottom);
                 }
                 finally { region.Close(); }
                 BubbleOverlay.SetVibePop(true);

@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// Core <see cref="AmbientBubbleField"/> moves and scores, this draws. WPF's default render is
     /// the shared host (one click-through surface, pops from a hook); here that is one override-
     /// redirect window per targeted screen whose X11 input region is exactly the live bubbles'
-    /// hit squares, so the desktop stays clickable everywhere else. Reached through
+    /// hit discs, so the desktop stays clickable everywhere else. Reached through
     /// <see cref="CoreBubbles"/>, which App seeds.
     ///
     /// <para>Hot path is allocation-free: one cached frame delegate, one Render pass over the
@@ -418,6 +418,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal readonly PixelRect Bounds;
         internal readonly double Scaling;
         internal readonly PixelRect[] Rects = new PixelRect[64];
+        internal PixelRect[] InputBands = new PixelRect[256];
+        internal int BandCount;
         private int _lastCount = -1;
         /// <summary>Cached (no per-frame closure); a closed window's late frame is ignored.</summary>
         internal readonly Action<TimeSpan> FrameCallback;
@@ -486,6 +488,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void Sync()
         {
             var n = 0;
+            BandCount = 0;
             var bubbles = BubbleOverlay.Field.Bubbles;
             for (var i = 0; i < bubbles.Count && n < Rects.Length; i++)
             {
@@ -496,10 +499,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 int right = (int)Math.Ceiling((b.CenterX + b.HitRadius) * Scaling) - Bounds.X;
                 int bottom = (int)Math.Ceiling((b.CenterY + b.HitRadius) * Scaling) - Bounds.Y;
                 Rects[n++] = new PixelRect(left, top, right - left, bottom - top);
+                double cx = b.CenterX * Scaling - Bounds.X, cy = b.CenterY * Scaling - Bounds.Y, radius = b.HitRadius * Scaling;
+                for (int y = Math.Max(0, (int)Math.Ceiling(cy - radius)); y <= Math.Min(Bounds.Height - 1, (int)Math.Floor(cy + radius)); y++)
+                {
+                    double dx = Math.Sqrt(Math.Max(0, radius * radius - (y - cy) * (y - cy)));
+                    int l = Math.Max(0, (int)Math.Ceiling(cx - dx)), r = Math.Min(Bounds.Width - 1, (int)Math.Floor(cx + dx));
+                    if (l > r) continue;
+                    if (BandCount == InputBands.Length) Array.Resize(ref InputBands, InputBands.Length * 2);
+                    InputBands[BandCount++] = new PixelRect(l, y, r - l + 1, 1);
+                }
             }
             var drawn = HasBubbles();
             if (!drawn && _lastCount == 0) return;   // stayed empty: region already empty, nothing to repaint
-            X11Overlay.SetInputRects(this, Rects, n);
+            X11Overlay.SetInputRects(this, InputBands, BandCount);
             (Content as Control)?.InvalidateVisual();
             _lastCount = drawn ? 1 : 0;
         }
