@@ -49,13 +49,23 @@ internal static class X11PanicKey
     [DllImport(LibX11)] internal static extern ulong XStringToKeysym(string name);
     [DllImport(LibX11)] private static extern byte XKeysymToKeycode(IntPtr display, ulong keysym);
     [StructLayout(LayoutKind.Sequential)]
-    private struct XkbState
+    internal struct XkbState
     {
         public byte Group, LockedGroup;
         public ushort BaseGroup, LatchedGroup;
         public byte Mods, BaseMods, LatchedMods, LockedMods, CompatState, GrabMods, CompatGrabMods, LookupMods, CompatLookupMods;
         public ushort PointerButtons;
     }
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct XkbStateEvent
+    {
+        public int Type; public nuint Serial; public int SendEvent; public IntPtr Display; public nuint Time;
+        public int XkbType, Device; public uint Changed; public int Group, BaseGroup, LatchedGroup, LockedGroup;
+        public uint Mods, BaseMods, LatchedMods, LockedMods;
+    }
+    [DllImport(LibX11)] private static extern bool XkbQueryExtension(IntPtr display, out int opcode, out int eventBase,
+        out int errorBase, ref int major, ref int minor);
+    [DllImport(LibX11)] private static extern bool XkbSelectEvents(IntPtr display, uint device, uint affect, uint values);
     [DllImport(LibX11)] private static extern int XkbGetState(IntPtr display, uint device, out XkbState state);
     [DllImport(LibX11)] private static extern bool XkbLookupKeySym(IntPtr display, byte code, uint modifiers, out uint consumed, out ulong sym);
 
@@ -139,7 +149,8 @@ internal static class X11PanicKey
     {
         if (!OperatingSystem.IsLinux() || Interlocked.Exchange(ref _started, 1) == 1) return false;
         IntPtr display = IntPtr.Zero;
-        int opcode;
+        int opcode, xkbEvent = -1;
+        XkbState initialState = default;
         try
         {
             display = XOpenDisplay(IntPtr.Zero);
@@ -147,6 +158,16 @@ internal static class X11PanicKey
                 return Fail("no X display or no XInputExtension");
             int major = 2, minor = 2;
             if (XIQueryVersion(display, ref major, ref minor) != 0) return Fail("XInput 2.2 unavailable");
+
+            // Select state notifications before raw events so queued keys follow their XKB state.
+            try
+            {
+                int majorXkb = 1, minorXkb = 0;
+                if (!XkbQueryExtension(display, out _, out xkbEvent, out _, ref majorXkb, ref minorXkb)
+                    || !XkbSelectEvents(display, 0x100, 1u << 2, 1u << 2)
+                    || XkbGetState(display, 0x100, out initialState) != 0) xkbEvent = -1;
+            }
+            catch (Exception ex) { xkbEvent = -1; Log.Debug(ex, "Keyword XKB state unavailable"); }
 
             var bits = Marshal.AllocHGlobal(4);   // bit 13 (XI_RawKeyPress) lives in the first 4 mask bytes
             Marshal.WriteInt32(bits, (1 << XI_RawKeyPress) | (1 << XI_RawKeyRelease));
@@ -160,7 +181,7 @@ internal static class X11PanicKey
             return Fail(ex.Message);
         }
 
-        new Thread(() => Listen(display, opcode, currentKey, onPress)) { IsBackground = true, Name = "panic-key-x11" }.Start();
+        new Thread(() => Listen(display, opcode, xkbEvent, initialState, currentKey, onPress)) { IsBackground = true, Name = "panic-key-x11" }.Start();
         Log.Information("Panic key: listening for XInput2 raw key presses (X11/XWayland focus)");
         return true;
 
@@ -212,12 +233,24 @@ internal static class X11PanicKey
     internal static uint? ControlAtEvent(uint state, uint latchedOrLocked, HashSet<int>? keys, HashSet<int> held)
         => keys == null ? null : (state & ~ControlMask) | (held.Count > 0 ? ControlMask : 0) | (latchedOrLocked & ControlMask);
 
-    private static void Listen(IntPtr display, int opcode, Func<string?> currentKey, Action onPress)
+    internal static void ApplyXkbState(ref XkbState state, XkbStateEvent change)
+    {
+        state.Group = (byte)change.Group; state.Mods = (byte)change.Mods;
+        state.LatchedMods = (byte)change.LatchedMods; state.LockedMods = (byte)change.LockedMods;
+    }
+
+    internal static uint? LookupModifiers(XkbState state, HashSet<int>? keys, HashSet<int> held)
+    {
+        var mods = ControlAtEvent(state.Mods, (uint)(state.LatchedMods | state.LockedMods | (state.Mods & ControlMask)), keys, held);
+        return mods is { } value ? value | (uint)(state.Group << 13) : null;
+    }
+
+    private static void Listen(IntPtr display, int opcode, int xkbEvent, XkbState state, Func<string?> currentKey, Action onPress)
     {
         var ev = Marshal.AllocHGlobal(XEventSize);
         string? boundName = null;
         var (controlKeys, heldControl) = ReadControlKeys(display);
-        Volatile.Write(ref _controlMapReady, controlKeys == null ? 0 : 1);
+        Volatile.Write(ref _controlMapReady, controlKeys == null || xkbEvent < 0 ? 0 : 1);
         void Resolve()
         {
             var name = currentKey();
@@ -233,12 +266,18 @@ internal static class X11PanicKey
             try
             {
                 XNextEvent(display, ev);
+                if (xkbEvent >= 0 && Marshal.ReadInt32(ev) == xkbEvent)
+                {
+                    var change = Marshal.PtrToStructure<XkbStateEvent>(ev);
+                    if (change.XkbType == 2) ApplyXkbState(ref state, change);
+                    continue;
+                }
                 if (Marshal.ReadInt32(ev) == MappingNotify)
                 {
                     // Layout/keymap change: refresh Xlib's cache and re-resolve the keycode.
                     XRefreshKeyboardMapping(ev);
                     (controlKeys, heldControl) = ReadControlKeys(display);
-                    Volatile.Write(ref _controlMapReady, controlKeys == null ? 0 : 1);
+                    Volatile.Write(ref _controlMapReady, controlKeys == null || xkbEvent < 0 ? 0 : 1);
                     boundName = null;
                     Resolve();
                     continue;
@@ -258,11 +297,10 @@ internal static class X11PanicKey
                 Route(true, keycode, onPress);
                 try
                 {
-                    if (KeywordKey is { } keyword && KeywordTriggerHead.KeyboardInputAllowed && keycode <= byte.MaxValue
-                        && XkbGetState(display, 0x100, out var state) == 0)
+                    if (KeywordKey is { } keyword && KeywordTriggerHead.KeyboardInputAllowed && keycode <= byte.MaxValue && xkbEvent >= 0)
                     {
-                        var captured = ControlAtEvent(state.Mods, (uint)(state.LatchedMods | state.LockedMods), controlKeys, heldControl);
-                        if (captured is { } mods && XkbLookupKeySym(display, (byte)keycode, mods | (uint)(state.Group << 13), out var consumed, out var sym))
+                        var captured = LookupModifiers(state, controlKeys, heldControl);
+                        if (captured is { } mods && XkbLookupKeySym(display, (byte)keycode, mods, out var consumed, out var sym))
                             keyword(sym, mods & ~(consumed & ControlMask)); // preserve an XKB-consumed AltGr level
                     }
                 }

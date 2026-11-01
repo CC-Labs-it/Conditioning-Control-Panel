@@ -33,6 +33,81 @@ public sealed class ListeningKeywordStartTests
         Assert.Null(X11PanicKey.ControlAtEvent(4, 0, null, held)); // fail closed if the map is unavailable
     }
 
+    [Fact]
+    public void QueuedXkbStateCarriesShiftLocksAndGroupToLookup()
+    {
+        var state = new X11PanicKey.XkbState();
+        var keys = new HashSet<int> { 37 };
+        var held = new HashSet<int>();
+        X11PanicKey.ApplyXkbState(ref state, new X11PanicKey.XkbStateEvent { Mods = 1 }); // Shift down
+        Assert.Equal(1u, X11PanicKey.LookupModifiers(state, keys, held)); // queued Shift+1 sees !
+        X11PanicKey.ApplyXkbState(ref state, new X11PanicKey.XkbStateEvent { Mods = 3, LockedMods = 2, Group = 1 });
+        Assert.Equal(0x2003u, X11PanicKey.LookupModifiers(state, keys, held)); // Caps and layout group
+        X11PanicKey.TrackControl(keys, held, 37, true);
+        Assert.Equal(0x2007u, X11PanicKey.LookupModifiers(state, keys, held));
+        X11PanicKey.TrackControl(keys, held, 37, false);
+        X11PanicKey.ApplyXkbState(ref state, new X11PanicKey.XkbStateEvent { Mods = 2, LockedMods = 2 });
+        Assert.Equal(2u, X11PanicKey.LookupModifiers(state, keys, held));
+        X11PanicKey.ApplyXkbState(ref state, new X11PanicKey.XkbStateEvent { Mods = 4 }); // Control held at startup
+        Assert.Equal(4u, X11PanicKey.LookupModifiers(state, keys, held));
+        Assert.Null(X11PanicKey.LookupModifiers(state, null, held));
+    }
+
+    [Fact] // WPF MainWindow.Patreon.cs:450-455: validation retries a saved-on source.
+    public void SavedKeywordSourceRearmsWhenAccountValidationResolves() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var shell = new MainShellWindow();
+        var savedAttach = KeywordTriggerHead.CanAttachKeyboard;
+        var savedSource = KeywordTriggerHead.AttachKeyboard;
+        var savedUnicode = KeywordTriggerHead.X11ToUnicode;
+        var file = Path.GetTempFileName(); var played = 0;
+        var cooldowns = (KeywordCooldowns)typeof(KeywordAudioRuntime).GetField("_cooldowns",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(KeywordTriggerHead.Engine)!;
+        var lastGlobal = cooldowns.LastGlobal;
+        Action<ulong, uint>? keyboard = null;
+        try
+        {
+            KeywordTriggerHead.Stop();
+            KeywordTriggerHead.CanAttachKeyboard = () => true;
+            KeywordTriggerHead.AttachKeyboard = handler => { keyboard = handler; return () => keyboard = null; };
+            KeywordTriggerHead.X11ToUnicode = sym => sym < 128 ? sym : 0;
+            CoreSettings.Current.KeywordTriggerIgnoreOwnFocus = false;
+            CoreSettings.Current.KeywordTriggerAppScope = AwarenessAppScope.Everywhere;
+            CoreSettings.Current.KeywordTriggers = new List<KeywordTrigger> { new() { Keyword = "rowfour",
+                Actions = new List<KeywordAction> { new PlayAudioAction { FilePath = file, DuckSystemAudio = false } } } };
+            cooldowns.LastGlobal = DateTime.MinValue;
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { played++; return () => { }; };
+            CoreEntitlement.HasPremiumProvider = () => false;
+            CoreEntitlement.IsFreeTodayProvider = _ => false;
+            CoreSettings.Current.KeywordTriggersEnabled = true;
+            KeywordTriggerHead.Sync();
+            Assert.False(KeywordTriggerHead.Engine.IsActive);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            shell.UpdateQuickLoginUI(accountChanged: true); // actual sign-in/validation funnel
+            Assert.True(CoreSettings.Current.KeywordTriggersEnabled);
+            Assert.True(KeywordTriggerHead.Engine.IsActive);
+            Assert.NotNull(keyboard);
+            foreach (var c in "rowfour") keyboard!((ulong)c, 0);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, played);
+            CoreSettings.Current.KeywordTriggersEnabled = false;
+            KeywordTriggerHead.Sync();
+            shell.UpdateQuickLoginUI(accountChanged: true);
+            Assert.False(KeywordTriggerHead.Engine.IsActive);
+            Assert.Null(keyboard);
+        }
+        finally
+        {
+            KeywordTriggerHead.DetachKeyboard(); KeywordTriggerHead.Stop();
+            KeywordTriggerHead.CanAttachKeyboard = savedAttach; KeywordTriggerHead.AttachKeyboard = savedSource;
+            KeywordTriggerHead.X11ToUnicode = savedUnicode; cooldowns.LastGlobal = lastGlobal; File.Delete(file);
+            shell.Close();
+        }
+    });
+
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]

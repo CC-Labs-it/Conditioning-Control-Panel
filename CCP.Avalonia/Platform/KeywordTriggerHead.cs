@@ -35,6 +35,12 @@ internal static class KeywordTriggerHead
         Start();
     }
 
+    // WPF MainWindow.Patreon.cs:450-455: validation rearms a saved-on source.
+    internal static void ReconcileEntitlement()
+    {
+        if (CoreSettings.Current.KeywordTriggersEnabled && (CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) Sync();
+    }
+
     // WPF KeywordTriggerService.cs:176-188: Start is idempotent, checks access, and
     // does not edit KeywordTriggersEnabled. The hook is shared with panic.
     internal static void Start()
