@@ -248,6 +248,10 @@ internal sealed class ProcessStateSnapshot
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
 
+        // ApplySnapshot replaces these private snapshots without a test assigning them directly.
+        foreach (var field in typeof(ConditioningControlPanel.Avalonia.Platform.PrizeOwnership).GetFields(AnyStatic)
+                     .Where(f => !f.IsInitOnly && !f.IsLiteral)) found.Add(field);
+
         // Every `Type.Member =` a test writes, through `using Alias = ...;` too.
         var alias = new Regex(@"^using\s+(\w+)\s*=\s*(?:global::)?([\w.]+)\s*;", RegexOptions.Multiline);
         var assign = new Regex(@"(?<![\w.])(?:global::)?((?:\w+\.)*\w+)\.(\w+)\s*=(?![=>])");

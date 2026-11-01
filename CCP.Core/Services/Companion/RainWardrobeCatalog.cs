@@ -10,8 +10,8 @@ namespace ConditioningControlPanel.Services.Companion
     /// section 2: one grant <c>cos.&lt;id&gt;</c> per item, single items only, never outfit sets). The source is
     /// <c>Resources/web/rain-wardrobe/items.json</c> through <see cref="RainItemAccess"/> (RAIN-V2-PLAN 2.5):
     /// shop rows need their grant, level / achievement rows need the account's progress, the rest is free.
-    /// Grants are the account's (<c>App.Ownership</c>, the prizes block of /v2/user/sync); a null
-    /// <c>progress</c> reads the live app's level and achievements.
+    /// Grants are the account's (<c>App.Ownership</c>, the prizes block of /v2/user/sync); the head supplies
+    /// <c>progress</c> from its live level and achievements.
     /// </summary>
     public static class RainWardrobeCatalog
     {
@@ -28,25 +28,25 @@ namespace ConditioningControlPanel.Services.Companion
             .Where(i => i.Access == RainItemAccessKind.Shop && i.Grant!.StartsWith("cos.", StringComparison.Ordinal))
             .Select(i => new Item(i.Grant!.Substring(4), i.Slot, i.PageId)).ToList();
 
-        private static RainItemAccess Access(IEnumerable<string>? grants, IRainProgressSource? progress)
-            => new(RainItemManifest.Shipped, new RainGrantSet(grants), progress ?? new AppRainProgressSource());
+        private static RainItemAccess Access(IEnumerable<string>? grants, IRainProgressSource progress)
+            => new(RainItemManifest.Shipped, new RainGrantSet(grants), progress);
 
         /// <summary>The page's lock keys for every item the account cannot wear yet, in manifest order.</summary>
-        public static IReadOnlyList<string> LockedKeys(IEnumerable<string>? grants, IRainProgressSource? progress = null)
+        public static IReadOnlyList<string> LockedKeys(IEnumerable<string>? grants, IRainProgressSource progress)
         {
             var access = Access(grants, progress);
             return access.Manifest.Items.Where(i => !access.StateOf(i).Wearable).Select(i => i.Id).ToList();
         }
 
         /// <summary>True when (slot, id) is a manifest item the account cannot wear yet.</summary>
-        public static bool IsLocked(string slot, string id, IEnumerable<string>? grants, IRainProgressSource? progress = null)
+        public static bool IsLocked(string slot, string id, IEnumerable<string>? grants, IRainProgressSource progress)
         {
             var state = Access(grants, progress).StateOf(slot, id);
             return state.Item != null && !state.Wearable;
         }
 
         /// <summary>The stored look with every piece the account cannot wear taken off (<see cref="RainLookClamp"/>).</summary>
-        public static string Clamp(string? stored, IEnumerable<string>? grants, IRainProgressSource? progress = null)
+        public static string Clamp(string? stored, IEnumerable<string>? grants, IRainProgressSource progress)
             => RainLookClamp.Clamp(stored, Access(grants, progress));
     }
 

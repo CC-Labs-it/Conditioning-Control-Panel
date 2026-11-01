@@ -58,10 +58,10 @@ internal static class RainWardrobeHostService
     /// locked items and the localised lock line. Never the review or QA studio.</summary>
     internal static string PageUrl(string? storedLook, IEnumerable<string>? grants, string lockNote)
     {
-        var look = RainWardrobeCatalog.Clamp(storedLook, grants);
+        var look = RainWardrobeCatalog.Clamp(storedLook, grants, new AppRainProgressSource());
         var q = "host=ccp";
         if (look.Length > 0) q += "&look=" + Uri.EscapeDataString(look);
-        var locked = RainWardrobeCatalog.LockedKeys(grants);
+        var locked = RainWardrobeCatalog.LockedKeys(grants, new AppRainProgressSource());
         if (locked.Count > 0) q += "&locked=" + Uri.EscapeDataString(string.Join(",", locked));
         if (!string.IsNullOrWhiteSpace(lockNote)) q += "&lockNote=" + Uri.EscapeDataString(lockNote);
         return $"https://{PageHost}/{PagePath}?{q}";
@@ -88,7 +88,7 @@ internal static class RainWardrobeHostService
             var grants = App.Ownership?.Grants;
             if (settings != null)
             {
-                var clamped = RainWardrobeCatalog.Clamp(settings.RainLook, grants);
+                var clamped = RainWardrobeCatalog.Clamp(settings.RainLook, grants, new AppRainProgressSource());
                 if (!string.Equals(clamped, settings.RainLook, StringComparison.Ordinal)) { settings.RainLook = clamped; App.Settings!.Save(); }
             }
             var webRoot = Path.Combine(AppContext.BaseDirectory, "Resources", "web");
@@ -162,7 +162,7 @@ internal static class RainWardrobeHostService
             {
                 // rain-owned re-badges the shop layer in place; rain-locked keeps the ?locked= fallback in step.
                 _host?.Post(new { type = "rain-owned", grants = AccountGrants() });
-                _host?.Post(new { type = "rain-locked", locked = RainWardrobeCatalog.LockedKeys(App.Ownership?.Grants) });
+                _host?.Post(new { type = "rain-locked", locked = RainWardrobeCatalog.LockedKeys(App.Ownership?.Grants, new AppRainProgressSource()) });
             }
             catch (Exception ex) { App.Logger?.Debug("RainWardrobe: ownership post failed: {E}", ex.Message); }
         });
@@ -215,7 +215,7 @@ internal static class RainWardrobeHostService
         IReadOnlyDictionary<string, int>? prices = null;
         try { prices = CounterPrices?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex); }
         return RainApplyController.BuildInit(
-            RainWardrobeCatalog.Clamp(settings?.RainLook, App.Ownership?.Grants),
+            RainWardrobeCatalog.Clamp(settings?.RainLook, App.Ownership?.Grants, new AppRainProgressSource()),
             AccountGrants(), progress.Level, progress.UnlockedAchievements,
             LocalizationManager.Instance.CurrentLanguage,
             MotionFx.Level.ToString().ToLowerInvariant(),
@@ -238,7 +238,7 @@ internal static class RainWardrobeHostService
     {
         Post = msg => host.Post(msg),
         Store = RainPackStore.CreateDefault,
-        Access = RainItemAccess.ForApp,
+        Access = AppRainSources.ForApp,
         Clips = () => _clips ??= RainApplyController.ClipsFromEmotes(ReadEmbeddedEmotes()),
         Commit = CommitLook,
         Background = BakeQueue.Enqueue,
@@ -276,7 +276,7 @@ internal static class RainWardrobeHostService
     {
         var settings = App.Settings?.Current;
         if (settings == null) return false;
-        var next = RainWardrobeCatalog.Clamp(lookJson, grants);
+        var next = RainWardrobeCatalog.Clamp(lookJson, grants, new AppRainProgressSource());
         if (string.Equals(next, RainLookCodec.Normalize(settings.RainLook), StringComparison.Ordinal)) return false;
         settings.RainLook = next;
         App.Settings!.Save();

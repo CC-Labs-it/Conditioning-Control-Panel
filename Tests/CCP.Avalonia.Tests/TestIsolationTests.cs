@@ -49,6 +49,22 @@ public class TestIsolationTests
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
 
     [Fact]
+    public void RestorePutsHeldPrizeSnapshotBack()
+    {
+        var grants = typeof(ConditioningControlPanel.Avalonia.Platform.PrizeOwnership).GetField("_grants", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var before = grants.GetValue(null); var snapshot = ProcessStateSnapshot.Take();
+        try
+        {
+            CoreSettings.Current.OfflineMode = false; CoreSettings.Current.UnifiedId = "snapshot-prize-test"; CoreSecrets.RetrieveProvider = _ => "test";
+            ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.ApplySnapshot("snapshot-prize-test", 100, ["cos.rain.dress.rose-flare"]);
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.PrizeOwnership.Held("cos.rain.dress.rose-flare"));
+            Assert.NotSame(before, grants.GetValue(null));
+        }
+        finally { snapshot.Restore(); }
+        Assert.Same(before, grants.GetValue(null));
+    }
+
+    [Fact]
     public void RestorePutsStaticsSettingsAndProfileFilesBack()
     {
         var settingsFile = Path.Combine(TestUserDataProfile.Root, "settings.json");
