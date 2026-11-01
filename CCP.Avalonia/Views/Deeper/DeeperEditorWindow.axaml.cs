@@ -404,6 +404,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     ItemsListDelete_Click(b, e);
             }, RoutingStrategies.Bubble);
             SidebarSplitter.DragCompleted += SidebarSplitter_DragCompleted;
+            TimelineSplitter.DragCompleted += TimelineSplitter_DragCompleted;
 
             // -- Metadata fields
             foreach (var tb in new[] { TxtMetaName, TxtMetaCreator, TxtMetaRemixer,
@@ -415,6 +416,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             TxtRegionLabel.TextChanged += RegionField_TextChanged;
             TxtRegionStart.TextChanged += RegionField_TextChanged;
             TxtRegionEnd.TextChanged += RegionField_TextChanged;
+            TxtRegionEnd.LostFocus += TxtRegionEnd_LostFocus;
             TxtRegionColor.TextChanged += RegionField_TextChanged;
             BtnSnapRegionStartPrev.Click += BtnSnapRegionStartPrev_Click;
             BtnSnapRegionEndNext.Click += BtnSnapRegionEndNext_Click;
@@ -1555,7 +1557,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     RebuildHapticVisuals();
                     RebuildEffectVisuals();
                 }
-                if (_selectedRegion == _draggedRegion) UpdateSelectedSidePanel();
+                RefreshInspectorForDraggedRegion();
                 return;
             }
             if (_dragMode == DragMode.ResizeRegionStart && _draggedRegion != null)
@@ -1565,7 +1567,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _draggedRegion.Start = newStart;
                 MarkDirty();
                 RebuildRegionVisuals();
-                if (_selectedRegion == _draggedRegion) UpdateSelectedSidePanel();
+                RefreshInspectorForDraggedRegion();
                 return;
             }
             if (_dragMode == DragMode.ResizeRegionEnd && _draggedRegion != null)
@@ -1575,7 +1577,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _draggedRegion.End = newEnd;
                 MarkDirty();
                 RebuildRegionVisuals();
-                if (_selectedRegion == _draggedRegion) UpdateSelectedSidePanel();
+                RefreshInspectorForDraggedRegion();
                 return;
             }
             if (_dragMode == DragMode.DragEffect && _draggedEffect != null)
@@ -1711,6 +1713,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _draggedRegion = null;
             _draggedEffect = null;
             EndMultiDragCapture();
+        }
+
+        private void RefreshInspectorForDraggedRegion()
+        {
+            if (_draggedRegion == null) return;
+            if (_selectedRegion == _draggedRegion) { UpdateSelectedSidePanel(); return; }
+            if (_selectedRule == null || _selectedRule.RegionConstraint != _draggedRegion.Id) return;
+            _suppressRuleSync = true;
+            try
+            {
+                TxtRuleBandStart.Text = _draggedRegion.Start.ToString("0.##", CultureInfo.InvariantCulture);
+                TxtRuleBandEnd.Text = _draggedRegion.End.ToString("0.##", CultureInfo.InvariantCulture);
+            }
+            finally { ClearWhenEventsDrained(() => _suppressRuleSync = false); }
         }
 
         private void ApplyScrubFromMouse(PointerEventArgs e)
@@ -1970,13 +1986,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (double.TryParse(TxtRegionStart.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var s))
                 _selectedRegion.Start = Math.Max(0, s);
             if (double.TryParse(TxtRegionEnd.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var ev))
-                _selectedRegion.End = ev;
+                _selectedRegion.End = Math.Clamp(ev, 0, _totalSeconds > 0 ? _totalSeconds : double.MaxValue);
             if (!string.IsNullOrWhiteSpace(TxtRegionColor.Text))
             {
                 _selectedRegion.Color = TxtRegionColor.Text!.Trim();
                 UpdateRegionColorSwatchPreview();
             }
             MarkDirty();
+            RebuildRegionVisuals();
+            ScheduleValidation();
+        }
+
+        private void TxtRegionEnd_LostFocus(object? sender, RoutedEventArgs e)
+        {
+            if (_selectedRegion == null) return;
+            var minEnd = _selectedRegion.Start + 0.05;
+            if (_selectedRegion.End >= minEnd) return;
+            _selectedRegion.End = _totalSeconds > 0 ? Math.Min(_totalSeconds, minEnd) : minEnd;
+            MarkDirty();
+            _suppressDirty = true;
+            try { TxtRegionEnd.Text = _selectedRegion.End.ToString("0.##", CultureInfo.InvariantCulture); }
+            finally { ClearWhenEventsDrained(() => _suppressDirty = false); }
             RebuildRegionVisuals();
             ScheduleValidation();
         }
