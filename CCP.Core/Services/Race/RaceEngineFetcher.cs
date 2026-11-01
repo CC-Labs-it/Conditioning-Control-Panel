@@ -15,6 +15,7 @@ public sealed class RaceEngineFetcher(HttpClient http, string userData)
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     public static string DefaultRoot => Path.Combine(CorePaths.UserData, "engines");
+    private readonly string userDataRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(userData));
     private readonly string root = Path.GetFullPath(Path.Combine(userData, "engines"));
 
     public async Task<string> FetchAsync(RaceEnginePackage package,
@@ -121,9 +122,12 @@ public sealed class RaceEngineFetcher(HttpClient http, string userData)
             c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-')) throw new InvalidDataException("Invalid engine pin.");
     }
 
-    private static void NoLinks(string path)
+    private void NoLinks(string path)
     {
-        for (var current = new DirectoryInfo(path); current != null; current = current.Parent)
+        // User data and its ancestors may be links. Only the engine cache is confined.
+        for (var current = new DirectoryInfo(path); current != null &&
+            !string.Equals(current.FullName, userDataRoot, OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal); current = current.Parent)
             if ((current.Attributes & FileAttributes.ReparsePoint) != 0 && current.LinkTarget != null)
                 throw new IOException("Race engine cache contains a link.");
     }

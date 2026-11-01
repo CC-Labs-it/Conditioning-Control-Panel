@@ -136,6 +136,31 @@ public sealed class RaceEngineFetcherTests : IDisposable
         await Assert.ThrowsAsync<IOException>(() => new RaceEngineFetcher(http, data).FetchAsync(Pin(bytes)));
         Assert.Empty(Directory.GetFileSystemEntries(outside));
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SymlinkedUserDataOrParentAllowsVerifiedInstall(bool userDataIsLink)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var actual = Path.Combine(data, "actual");
+        var alias = Path.Combine(data, "alias");
+        Directory.CreateDirectory(actual);
+        Directory.CreateSymbolicLink(alias, actual);
+        var userData = userDataIsLink ? alias : Path.Combine(alias, "profile");
+        var cache = Path.Combine(userData, "engines");
+        var old = Path.Combine(cache, "electron-old");
+        Directory.CreateDirectory(old);
+        var bytes = Zip();
+        using var handler = new Handler(bytes);
+        using var http = new HttpClient(handler);
+        var fetcher = new RaceEngineFetcher(http, userData);
+        var path = await fetcher.FetchAsync(Pin(bytes));
+        Assert.Equal(Path.Combine(cache, Pin(bytes).DirectoryName, "electron"), path);
+        Assert.Equal("test engine", File.ReadAllText(path));
+        Assert.False(Directory.Exists(old));
+        Assert.Equal(path, await fetcher.FetchAsync(Pin(bytes)));
+        Assert.Equal(1, handler.Calls);
+    }
     [Fact]
     public async Task TruncatedDownloadRemovesPartialFile()
     {
