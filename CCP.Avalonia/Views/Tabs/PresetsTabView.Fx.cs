@@ -45,7 +45,7 @@ public partial class PresetsTabView
             _fxWindow.PropertyChanged += OnFxWindowProperty;
         }
         CoreMods.ModChanged += OnFxModChanged;
-        Env.MotionGateChanged += RefreshCardSheen;
+        Env.MotionGateChanged += OnFocalMotionGateChanged;
         RefreshCardSheen();
     }
 
@@ -60,10 +60,18 @@ public partial class PresetsTabView
         }
         _fxWindow = null;
         CoreMods.ModChanged -= OnFxModChanged;
-        Env.MotionGateChanged -= RefreshCardSheen;
+        Env.MotionGateChanged -= OnFocalMotionGateChanged;
         CancelEntrances();
         DetachCardSheen();
         DetachRowSweep();
+    }
+
+    private void OnFocalMotionGateChanged()
+    {
+        // RunAsync entrances still own Y after implicit transitions are removed. Off must
+        // release them before hover snaps to its base value, like WPF BeginAnimation(Y, null).
+        if (!Env.AllowTransitions) CancelEntrances();
+        RefreshCardSheen();
     }
 
     private void OnFxWindowChanged(object? sender, EventArgs e) => RefreshCardSheen();

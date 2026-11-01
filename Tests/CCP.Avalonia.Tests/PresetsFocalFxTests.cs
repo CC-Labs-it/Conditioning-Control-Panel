@@ -66,6 +66,12 @@ public sealed class PresetsFocalFxTests
     [Fact]
     public Task PointerLiftAndPrimaryButtonSquishMatchWpfSnapAtOff() => WithPresets((host, view) =>
     {
+        // Hold a fresh entrance mid-flight so switching Off must release its transform ownership.
+        var entrance = new SharedDeeperThemeTests.StepClock();
+        view.IsVisible = false;
+        view.SetValue(SharedDeeperThemeTests.StepClock.Property, entrance.Instance);
+        view.IsVisible = true;
+        entrance.Step(0); entrance.Step(120); Settle();
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
         var chip = view.FindControl<WrapPanel>("PresetCardsPanel")!.Children.OfType<Border>().First(b => b.Tag is string);
@@ -76,6 +82,8 @@ public sealed class PresetsFocalFxTests
         var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
         host.MouseMove(Center(host, row)); Settle();
         var group = Assert.IsType<TransformGroup>(row.RenderTransform);
+        Assert.Equal(-2, group.Children.OfType<TranslateTransform>().Single().Y);
+        entrance.Step(200); Settle();
         Assert.Equal(-2, group.Children.OfType<TranslateTransform>().Single().Y);
         Assert.Equal(1, group.Children.OfType<ScaleTransform>().Single().ScaleX);
         host.MouseMove(new Point(1, 1)); Settle(); Assert.Equal(0, group.Children.OfType<TranslateTransform>().Single().Y);

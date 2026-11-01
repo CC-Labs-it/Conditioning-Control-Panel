@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
 using Avalonia;
@@ -32,7 +33,7 @@ public sealed class ProgramTodayCardTests
     public void DashboardCardShowsTodayForAnActiveRunAndItsLoopsStopWhenHidden() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -63,6 +64,7 @@ public sealed class ProgramTodayCardTests
         settings.PerformanceMode = false;
         MainShellWindow? shell = null;
         var time = new SteppedTime();
+        var previousTime = BeatLoop.Time;
         BeatLoop.Time = time;
         try
         {
@@ -136,7 +138,7 @@ public sealed class ProgramTodayCardTests
             (settings.MotionLevel, settings.PerformanceMode) = (motion, perf);
             (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro) = (seenTab, seenIntro);
             Directory.Delete(dir, true);
-            BeatLoop.Time = TimeProvider.System;
+            BeatLoop.Time = previousTime;
         }
     });
 
@@ -187,8 +189,17 @@ public sealed class ProgramTodayCardTests
         double Nudged(double seconds)
         {
             time.Advance(TimeSpan.FromSeconds(seconds));
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
+            // A timer tick can render an older in-flight batch. Wait for the actual window
+            // animation frame, queued after the nudge, before inspecting its new position.
+            var rendered = false;
+            shell.RequestAnimationFrame(_ => rendered = true);
+            var deadline = Stopwatch.StartNew();
+            while (!rendered)
+            {
+                Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the banner animation frame never ran");
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+            }
             return ((TranslateTransform)art.RenderTransform!).X;
         }
         var p = 0.13 / 0.26;
@@ -205,7 +216,7 @@ public sealed class ProgramTodayCardTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var dash = new SettingsTabView();
