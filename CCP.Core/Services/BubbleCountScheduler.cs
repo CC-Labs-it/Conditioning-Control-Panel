@@ -60,6 +60,8 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
+        private PackMediaPool? _heldPool;
+        private string? _heldPath;
         private ITimer? _scheduler, _leadIn, _queued, _feedDefer;
         private DateTimeOffset? _feedDeadline;
         private bool _toldNoVideos, _heldFlashes;
@@ -141,7 +143,7 @@ namespace ConditioningControlPanel.Services
             var wasBusy = IsBusy;
             Idle(resumeFlashes: false);   // WPF ForceCleanup: App.Bubbles.Resume()
             _retryCount = 0;
-            try { _host.CloseAll(); } catch (Exception ex) { Log.Warning(ex, "BubbleCountService: close failed"); }
+            try { _host.CloseAll(); ReleasePack(); } catch (Exception ex) { Log.Warning(ex, "BubbleCountService: close failed"); }
             if (wasBusy) Log.Information("BubbleCountService: ForceCleanup called");
         }
 
@@ -166,6 +168,11 @@ namespace ConditioningControlPanel.Services
         public void Trigger(bool forceTest = false)
         {
             if (IsBusy || (!forceTest && !IsRunning)) return;
+            if (_heldPath != null)
+            {
+                try { _host.CloseAll(); ReleasePack(); }
+                catch (Exception ex) { Log.Warning(ex, "BubbleCountService: close retry failed"); return; }
+            }
             if (!forceTest && !CoreSettings.Current.BubbleCountEnabled)
             {
                 Log.Information("BubbleCountService: game dropped - bubble count is disabled in settings");
@@ -248,19 +255,25 @@ namespace ConditioningControlPanel.Services
 
         private bool Play(bool strict)
         {
-            var path = PickNext();
+            var path = PickNext(retain: true);
             if (path == null) return false;
             if (!_host.CanPlay)
             {
                 // WPF's skip: not a loss - a failed count would start the strict WRONG! WATCH AGAIN loop.
                 Log.Warning("BubbleCountService: skipping game - video playback is not available");
                 _retryCount = 0;
+                ReleasePack();
                 Idle();
                 return true;
             }
             CoreProgression.TrackBubbleCountGameStarted();
             try { _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict, OnComplete); }
-            catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to start bubble count game");
+                try { _host.CloseAll(); ReleasePack(); } catch (Exception close) { Log.Warning(close, "BubbleCountService: close failed"); }
+                Idle(); _retryCount = 0;
+            }
             return true;
         }
 
@@ -268,6 +281,7 @@ namespace ConditioningControlPanel.Services
         internal void OnComplete(bool success)
         {
             if (!IsBusy) return;   // panic got there first
+            ReleasePack();
             if (success)
             {
                 _retryCount = 0;
@@ -334,12 +348,19 @@ namespace ConditioningControlPanel.Services
             PackVideos?.Reset();
         }
 
-        internal string? PickNext()
+        private void ReleasePack() { _heldPool?.Release(_heldPath); _heldPool = null; _heldPath = null; }
+
+        internal string? PickNext(bool retain = false)
         {
             if (_queue.Count == 0) _queue = new Queue<string>(_library().OrderBy(_ => _random.Next()));
             // WPF GetNextVideo (BubbleCountService.cs:684-720): pack clips join, weighted by count; a
             // failed decrypt falls through to a local clip.
-            if (PackVideos?.TryDraw(_queue.Count, remaining: true) is { } pack) return pack;
+            var pool = PackVideos;
+            if (pool?.TryDraw(_queue.Count, remaining: true, retain: retain) is { } pack)
+            {
+                if (retain) { _heldPool = pool; _heldPath = pack; }
+                return pack;
+            }
             return _queue.Count > 0 ? _queue.Dequeue() : null;
         }
 

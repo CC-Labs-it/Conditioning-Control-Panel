@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Services
         private readonly Func<string, byte[]> _decryptFile;
         private readonly Action<string, string> _decryptFileToFile;
         private readonly Func<string>? _tempDir;
+        private readonly Action<string> _deleteTempFile;
         private readonly object _gate = new();
         private readonly Dictionary<string, InstalledPackManifest> _manifests = new(StringComparer.Ordinal);
         private readonly ConcurrentDictionary<string, string> _tempIdentity = new(StringComparer.OrdinalIgnoreCase);
@@ -63,13 +64,15 @@ namespace ConditioningControlPanel.Services
         /// <param name="loadManifest">Decrypts a manifest file to JSON (default PackEncryptionService).</param>
         /// <param name="decryptFile">Decrypts a content file to bytes (default PackEncryptionService).</param>
         /// <param name="tempDir">Where decrypts land (default <c>&lt;assets&gt;/.temp</c>, WPF GetMediaTempPath).</param>
+        /// <param name="deleteTempFile">Optional file deletion seam for a refused-delete test.</param>
         public ContentPackStore(
             Func<string>? assetsRoot = null,
             Func<AppSettings>? settings = null,
             Action? save = null,
             Func<string, string>? loadManifest = null,
             Func<string, byte[]>? decryptFile = null,
-            Func<string>? tempDir = null)
+            Func<string>? tempDir = null,
+            Action<string>? deleteTempFile = null)
         {
             _assetsRoot = assetsRoot ?? (() => CorePaths.EffectiveAssets);
             _settings = settings ?? (() => CoreSettings.Current);
@@ -83,6 +86,7 @@ namespace ConditioningControlPanel.Services
                 ? PackEncryptionService.DecryptFileToFile
                 : (encrypted, dest) => File.WriteAllBytes(dest, decryptFile(encrypted));
             _tempDir = tempDir;
+            _deleteTempFile = deleteTempFile ?? File.Delete;
             Rescan();
         }
 
@@ -389,7 +393,7 @@ namespace ConditioningControlPanel.Services
             try
             {
                 var full = Path.GetFullPath(tempPath);
-                if (File.Exists(full)) File.Delete(full);
+                if (File.Exists(full)) _deleteTempFile(full);
                 _tempIdentity.TryRemove(full, out _);
             }
             catch (Exception ex) { Log.Debug("ContentPacks: temp delete failed {Path}: {E}", tempPath, ex.Message); }

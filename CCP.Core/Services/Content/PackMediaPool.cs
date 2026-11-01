@@ -27,6 +27,7 @@ namespace ConditioningControlPanel.Services
         private readonly object _lock = new();
         private readonly ShuffleBag<(string PackId, PackFileEntry File)> _bag;
         private readonly List<string> _temps = new();
+        private readonly HashSet<string> _held = new(), _deferred = new();
 
         /// <param name="type"><see cref="ContentPackStore.ImageType"/> or <see cref="ContentPackStore.VideoType"/>.</param>
         public PackMediaPool(string type, Random? rng = null, Func<ContentPackStore?>? store = null)
@@ -59,9 +60,9 @@ namespace ConditioningControlPanel.Services
         /// then falls back to its local pick, as WPF does. <paramref name="remaining"/>: weigh the pack
         /// entries still to come this cycle, for callers whose <paramref name="localCount"/> is what is
         /// left in a dealt queue (WPF VideoService.cs:8017 / BubbleCountService.cs:684 weigh queue
-        /// lengths); flash weighs whole lists (FlashService.cs:3555).
+        /// lengths); flash weighs whole lists (FlashService.cs:3555). Retain a selected clip until its player closes.
         /// </summary>
-        public string? TryDraw(int localCount, bool remaining = false)
+        public string? TryDraw(int localCount, bool remaining = false, bool retain = false)
         {
             List<(string PackId, PackFileEntry File)> list;
             (string PackId, PackFileEntry File) entry;
@@ -71,7 +72,7 @@ namespace ConditioningControlPanel.Services
                 var packCount = remaining && list.Count > 0 && _bag.Remaining > 0 ? Math.Min(_bag.Remaining, list.Count) : list.Count;
                 if (!ShouldDrawPack(localCount, packCount, _rng) || !_bag.TryNext(list, out entry)) return null;
             }
-            return Decrypt(entry);
+            return Decrypt(entry, retain);
         }
 
         /// <summary>
@@ -79,7 +80,7 @@ namespace ConditioningControlPanel.Services
         /// record. Past <see cref="TempCap"/> the oldest half is deleted first (WPF deletes them all; the
         /// newest stay so a clip still playing keeps its file).
         /// </summary>
-        private string? Decrypt((string PackId, PackFileEntry File) entry)
+        private string? Decrypt((string PackId, PackFileEntry File) entry, bool retain)
         {
             var store = _store();
             if (store == null || entry.File == null) return null;
@@ -90,10 +91,9 @@ namespace ConditioningControlPanel.Services
                 {
                     var drop = _temps.Count / 2;
                     stale = _temps.GetRange(0, drop);
-                    _temps.RemoveRange(0, drop);
                 }
             }
-            if (stale != null) foreach (var p in stale) store.DeleteTempFile(p);
+            if (stale != null) Cleanup(stale);
             var temp = store.GetPackFileTempPath(entry.PackId, entry.File);
             if (string.IsNullOrEmpty(temp))
             {
@@ -101,7 +101,7 @@ namespace ConditioningControlPanel.Services
                 Log.Information("ContentPacks: '{Name}' from pack {PackId} could not be decrypted", entry.File.OriginalName, entry.PackId);
                 return null;
             }
-            lock (_lock) _temps.Add(temp);
+            lock (_lock) { _temps.Add(temp); if (retain) _held.Add(temp); }
             return temp;
         }
 
@@ -113,21 +113,33 @@ namespace ConditioningControlPanel.Services
             CleanupTemps();
         }
 
-        /// <summary>WPF CleanupTempPackFiles: delete every decrypt this pool has on record.</summary>
+        /// <summary>Release a selected clip after its player closes, including any deferred cleanup.</summary>
+        public void Release(string? path)
+        {
+            if (path == null) return;
+            lock (_lock) if (!_held.Remove(path) || !_deferred.Contains(path)) return;
+            Cleanup(new List<string> { path });
+        }
+
+        /// <summary>WPF CleanupTempPackFiles: retry files still held by a player.</summary>
         public void CleanupTemps()
         {
             List<string> all;
-            lock (_lock) { all = new List<string>(_temps); _temps.Clear(); }
+            lock (_lock) all = new List<string>(_temps);
+            Cleanup(all);
+        }
+
+        private void Cleanup(List<string> paths)
+        {
             var store = _store();
-            var refused = new List<string>();
-            foreach (var p in all)
+            lock (_lock) foreach (var p in paths)
             {
+                if (!_temps.Contains(p)) continue;
+                if (_held.Contains(p)) { _deferred.Add(p); continue; }
                 if (store != null) store.DeleteTempFile(p);
                 else try { System.IO.File.Delete(p); } catch { }
-                if (System.IO.File.Exists(p)) refused.Add(p);
+                if (!System.IO.File.Exists(p)) { _temps.Remove(p); _deferred.Remove(p); }
             }
-            // WPF VideoService.cs:8553-8556 retries files still held by a player.
-            if (refused.Count > 0) lock (_lock) _temps.AddRange(refused);
         }
 
         // Caller holds _lock.

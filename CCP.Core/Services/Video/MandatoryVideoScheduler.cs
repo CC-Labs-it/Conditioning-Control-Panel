@@ -63,6 +63,8 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
+        private PackMediaPool? _heldPool;
+        private string? _heldPath;
         private ITimer? _scheduler, _preroll;
         private volatile bool _running, _playing;
         private int _retryGeneration, _noVideosShown;
@@ -319,7 +321,12 @@ namespace ConditioningControlPanel.Services
         public bool Trigger(bool? strictOverride = null, string? path = null)
         {
             if (_playing) return false;
-            path ??= PickNext();
+            if (_heldPath != null)
+            {
+                try { _host.CloseAll(); _heldPool?.Release(_heldPath); _heldPool = null; _heldPath = null; }
+                catch (Exception ex) { Log.Warning(ex, "VideoService: close retry failed"); return false; }
+            }
+            path ??= PickNext(retain: true);
             if (path == null)
             {
                 Log.Warning("VideoService: no videos found in the library");
@@ -428,7 +435,7 @@ namespace ConditioningControlPanel.Services
             _playing = false;
             IsStrict = false;
             double watched = 0;
-            try { watched = _host.CloseAll(); }
+            try { watched = _host.CloseAll(); _heldPool?.Release(_heldPath); _heldPool = null; _heldPath = null; }
             catch (Exception ex) { Log.Warning(ex, "VideoService: close failed"); }
             if (watched >= 1.0) CoreProgression.TrackVideoWatched(watched);
             // WPF CloseAll (VideoService.cs:7916): every teardown path stops the vibe and the funscript.
@@ -447,7 +454,7 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF GetNextVideo, local half: a shuffled queue refilled when it runs dry.</summary>
-        internal string? PickNext()
+        internal string? PickNext(bool retain = false)
         {
             if (_queue.Count == 0)
             {
@@ -461,7 +468,12 @@ namespace ConditioningControlPanel.Services
             // WPF GetNextVideo (VideoService.cs:8015-8049): active pack clips join the local pick,
             // weighted by count; a failed decrypt falls back to the local queue. Pack clips skip the
             // length filter (PackFileEntry carries no duration).
-            if (PackVideos?.TryDraw(_queue.Count, remaining: true) is { } pack) return pack;
+            var pool = PackVideos;
+            if (pool?.TryDraw(_queue.Count, remaining: true, retain: retain) is { } pack)
+            {
+                if (retain) { _heldPool = pool; _heldPath = pack; }
+                return pack;
+            }
             return _queue.Count > 0 ? _queue.Dequeue() : null;
         }
 
