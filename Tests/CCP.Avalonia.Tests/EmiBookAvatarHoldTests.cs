@@ -175,4 +175,89 @@ public sealed class EmiBookAvatarHoldTests
             engine.ResetForTests();
         }
     });
+
+    // WPF AvatarTubeWindow.Speech.cs:2856-2867, 428-430, 469.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ThinkingInterruptsBookEvenWhenDeskMutesAvatar(bool muted) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current == null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var svc = EmiDeskService.Instance;
+        var engine = EmiLineEngine.Instance;
+        var settings = CoreSettings.Current;
+        var old = (settings.EmiDeskEnabled, settings.EmiDeskMuteAvatar, settings.EmiDeskMuteDontAsk, settings.AvatarEnabled);
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            engine.ResetForTests();
+            (settings.EmiDeskEnabled, settings.EmiDeskMuteAvatar, settings.EmiDeskMuteDontAsk, settings.AvatarEnabled) =
+                (true, muted, muted, true);
+            svc.ResetMutePrompt();
+            await svc.Summon();
+            var desk = svc.Window!;
+            var until = DateTime.UtcNow.AddSeconds(5);
+            while (desk.InputLocked && DateTime.UtcNow < until)
+            {
+                await Task.Delay(20);
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.False(desk.InputLocked);
+            tube.Show();
+            desk.OpenBook(EmiBookCards.All[0].Id);
+            Assert.Equal(".", desk.BubbleText);
+            Assert.Equal(muted, svc.AvatarMuted);
+            tube.StartThinkingAnimation();
+            Assert.Equal("avatarSpeaking", engine.HeldBy);
+            Assert.Null(desk.BubbleText);
+            Assert.False(desk.ChainLive);
+            Assert.Equal(!muted, tube.HasBubbleUp);
+            if (!muted)
+            {
+                svc.CheckAvatarVoiceHold();
+                Assert.Equal("avatarSpeaking", engine.HeldBy);
+            }
+            tube.PanicSilence();
+            svc.CheckAvatarVoiceHold();
+            Assert.Null(engine.HeldBy);
+            Assert.True(engine.HoldActive);
+        }
+        finally
+        {
+            tube.Close();
+            svc.CheckAvatarVoiceHold();
+            svc.Window?.ShutDown();
+            svc.ResetMutePrompt();
+            engine.ResetForTests();
+            (settings.EmiDeskEnabled, settings.EmiDeskMuteAvatar, settings.EmiDeskMuteDontAsk, settings.AvatarEnabled) = old;
+        }
+    });
+
+    // WPF EmiDeskWindow.Presentation.cs:17-27: a presentation cancels the hold timer.
+    [Fact]
+    public Task PresentationCancelsTheHoldTimerAndKeepsItsFace() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current == null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var desk = new EmiDeskWindow();
+        try
+        {
+            desk.Show();
+            desk.HoldFace(new LineDraw("test.presentation.hold", "common.hold", "", "._.", null, 3, true, 100));
+            var timer = (DispatcherTimer)typeof(EmiDeskWindow).GetField("_holdTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(desk)!;
+            Assert.True(timer.IsEnabled);
+            desk.BeginPresentation(() => { });
+            desk.DrawFace("0_0");
+            Assert.False(timer.IsEnabled);
+            await Task.Delay(250);
+            Assert.Equal("0_0", desk.Face);
+        }
+        finally { desk.EndPresentation(); desk.Close(); }
+    });
 }
