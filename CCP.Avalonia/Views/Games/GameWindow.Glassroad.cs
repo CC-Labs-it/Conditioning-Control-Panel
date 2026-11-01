@@ -13,6 +13,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
@@ -36,6 +37,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF LauncherCatalogue "race": with the switch on, every Racing Thoughts door opens Glassroad.</summary>
         internal static string ResolveDoor(string id) =>
             string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) && GlassroadDoorOpen() ? GlassroadId : id;
+
+        /// <summary>WPF GlassroadHostService.PrimeAllowed: the launcher padlock uses the Lab bar.</summary>
+        internal static bool LauncherRaceLocked() => !TierGate.RequiresLab(Loc.Get("launcher_game_race_title")).Allowed;
 
         /// <summary>A direct launch of the page needs the switch too.</summary>
         internal static bool GlassroadGate()

@@ -635,14 +635,13 @@ public sealed partial class GameWindowTests
         }
     });
 
-    /// <summary>WPF CaucusHostService.Launch :132 + LauncherCatalogue :234: no track, no race (and no tile here,
-    /// where WPF draws the mystery card); an owned track opens it from the launcher after the leash check; panic closes it.</summary>
+    /// <summary>The old host still checks its track; the current launcher uses Glassroad after the leash check.</summary>
     [Fact]
     public void Race_DoorAndLauncher_LeashGate_AndPanic()
     {
         RunRace(null, (launcher, _, _) =>
         {
-            Assert.DoesNotContain(LauncherWindow.VisibleCards, c => c.Id == "race");
+            Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
             Assert.Null(GameWindow.Launch("race"));
             Assert.False(GameWindow.IsAnyOpen());
         });
@@ -650,6 +649,7 @@ public sealed partial class GameWindowTests
         {
             Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
             launcher.Hide();
+            CoreEntitlement.HasLabProvider = () => true;
             int gates = 0;
             MainShellWindow.LeashGateDueProvider = () => true;
             MainShellWindow.PresentLeashGateProvider = _ => gates++;
@@ -661,6 +661,7 @@ public sealed partial class GameWindowTests
             launcher.Play(LauncherCards.Find("race")!);
             Dispatcher.UIThread.RunJobs();
             Assert.True(GameWindow.IsAnyOpen());
+            Assert.Equal(GameWindow.GlassroadId, Assert.Single(GameWindow.OpenWindowsForTests()).Spec.Id);
             PanicSurfaces.All.Single(x => x.Id == "games").Stop(MainShellWindow.Current!);
             Dispatcher.UIThread.RunJobs();
             Assert.False(GameWindow.IsAnyOpen());
