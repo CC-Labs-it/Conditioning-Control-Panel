@@ -66,6 +66,29 @@ public sealed class BarkEngineTests : IDisposable
     }
 
     [Fact]
+    public void ExternalSpeechRestartsTheGlobalFloorWithoutBlockingExemptOrSafetyBarks()
+    {
+        var plain = Rule("T", "ordinary");
+        var exempt = Rule("AttentionCheckFail", "correction");
+        var panic = Rule("Panic", "safety");
+        panic.ClassRaw = "safety";
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        var e = Engine(plain, exempt, panic);
+        e.Clock = clock;
+
+        e.NotifyExternalLineSpoken();
+        clock.Advance(TimeSpan.FromSeconds(59));
+        Assert.False(e.Raise("T"));
+        e.NotifyExternalLineSpoken();
+        clock.Advance(TimeSpan.FromSeconds(59.999));
+        Assert.False(e.Raise("T"));
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.True(e.Raise("T"));                  // exact 60-second boundary
+        Assert.True(e.Raise("AttentionCheckFail")); // exempt still bypasses the floor
+        Assert.True(e.Raise("Panic"));              // safety still bypasses it
+    }
+
+    [Fact]
     public void AOneShotLatchOutlivesTheSessionAndASafetyBarkHoldsTheFloor()
     {
         var once = Rule("AttentionCheckFail", "once");
