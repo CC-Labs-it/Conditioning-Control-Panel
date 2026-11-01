@@ -404,6 +404,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _speechTimer?.Stop();
             _cancelSpeechDelay();   // WPF ChatInput.cs:475 _speechDelayTimer.Stop (the queue stays)
             _cancelSpeechDelay = static () => { };
+            CancelTriggerLead(); // WPF ChatInput.cs:478 clears the latch checked at Speech.cs:2173.
             _isGiggling = false;
 
             _isShowingChatHistory = true;

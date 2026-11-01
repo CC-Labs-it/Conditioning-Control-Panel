@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -32,6 +33,36 @@ public sealed class CompanionTriggerTimerTests
         CoreSettings.ServiceProvider = () => settings;
         PanicAftermath.EndQuiet();
     }
+
+    [Fact]
+    public Task OpeningHistoryDuringTriggerLeadKeepsHistoryAndSuppressesWhisper() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var s = CoreSettings.Current;
+        s.AvatarEnabled = true; s.AvatarMuted = false; s.TriggerModeEnabled = true;
+        s.SubAudioEnabled = true; s.SubAudioMuted = false; s.CustomTriggers = new List<string> { "Reset" };
+        var whispers = 0;
+        var haptics = 0;
+        CoreAudio.PlayStoppableProvider = (_, _, tag, _, _) => { if (tag == "whisper") whispers++; return () => { }; };
+        var parent = new Window();
+        var tube = new AvatarTubeWindow(parent) { TriggerHaptic = _ => haptics++ };
+        try
+        {
+            parent.Show(); tube.Show();
+            tube.OnTriggerTick();
+            Assert.Equal(1, haptics);
+            Assert.True(tube.IsSpeaking);
+            tube.FindControl<MenuItem>("MenuItemShowChatHistory")!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            var history = tube.FindControl<Grid>("ChatHistoryView")!;
+            var bubble = tube.FindControl<Border>("SpeechBubble")!;
+            var scroller = tube.FindControl<ScrollViewer>("SpeechScroller")!;
+            Assert.True(history.IsVisible);
+            tube.FinishTriggerLead(); // a callback already queued when the history opened
+            Assert.Equal((true, true, false, 0), (history.IsVisible, bubble.IsVisible, scroller.IsVisible, whispers));
+        }
+        finally { tube.Close(); parent.Close(); PanicAftermath.EndQuiet(); }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task EnabledAtConstructionFiresTheFirstTick() => AvaloniaTestDispatcher.RunAsync(async () =>
