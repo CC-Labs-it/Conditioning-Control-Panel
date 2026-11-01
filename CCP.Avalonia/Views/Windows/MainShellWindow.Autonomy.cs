@@ -88,7 +88,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var audio = CompanionEventAudio.Resolve(phrase);
                 _avatarTubeWindow?.GigglePriority(phrase, audio != null, aiGenerated: false, phraseAudioPath: audio);
             });
-            Closed += (_, _) => { CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
+            // WPF UiUpdates.cs:252-259,278: repaint after the palette handler on a mod switch.
+            var closed = false;
+            void OnModChanged(object? _, ConditioningControlPanel.Models.ModPackage __) =>
+                Dispatcher.UIThread.Post(() => { if (!closed) UpdateAutonomyButtonState(CoreSettings.Current.AutonomyModeEnabled); }, DispatcherPriority.Background);
+            CoreMods.ModChanged += OnModChanged;
+            Closed += (_, _) => { closed = true; CoreMods.ModChanged -= OnModChanged; CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
             Opened += (_, _) => { ResumeAutonomyOnStartup(); RefreshVoiceInputModes(); };
         }
 

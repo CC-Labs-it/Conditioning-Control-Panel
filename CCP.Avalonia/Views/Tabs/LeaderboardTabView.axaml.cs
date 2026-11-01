@@ -11,6 +11,8 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Serilog;
@@ -171,28 +173,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return RefreshLeaderboardAsync();
         }
 
-        /// <summary>
-        /// Repaints the segmented Monthly/All-Time pill, as UpdateLeaderboardModeButtons does.
-        /// Gold for the active All-Time half is a literal there too.
-        ///
-        /// ponytail: the mod accent IS on the seam - <c>CoreMods.AccentColorHex</c> plus
-        /// <c>CoreMods.TryParseHexColor</c> is what WPF's <c>App.Mods.GetAccentColorHex</c>
-        /// reduces to, and this method just has not been switched over. The theme resource used
-        /// here is the same colour until a mod repaints it, so nothing reads wrong meanwhile; the
-        /// change is two lines plus a <c>CoreMods.ModChanged</c> repaint.
-        /// </summary>
+        // WPF UiUpdates.cs:252-259,284: wait for the palette and repaint without a fetch.
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            CoreMods.ModChanged += OnLeaderboardModChanged;
+            UpdateModeButtons();
+        }
+
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            CoreMods.ModChanged -= OnLeaderboardModChanged;
+            base.OnDetachedFromVisualTree(e);
+        }
+
+        private void OnLeaderboardModChanged(object? sender, ModPackage mod) =>
+            Dispatcher.UIThread.Post(() => { if (VisualRoot != null) UpdateModeButtons(); }, DispatcherPriority.Background);
+
+        /// <summary>WPF Leaderboard.cs:809-845: repaint the mode pill from the active mod.</summary>
         private void UpdateModeButtons()
         {
             var monthly = this.FindControl<Button>("BtnLeaderboardMonthly");
             var allTime = this.FindControl<Button>("BtnLeaderboardAllTime");
             if (monthly == null || allTime == null) return;
 
-            var pink = Res("PinkBrush");
+            var pink = new SolidColorBrush(Color.TryParse(CoreMods.AccentColorHex, out var accent) ? accent : Color.Parse("#FF69B4"));
             var inactive = Res("AccentTintedBgBrush");
             var gold = new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00));
 
             Set(monthly, IsAllTimeMode ? inactive : pink, IsAllTimeMode ? pink : Brushes.White);
             Set(allTime, IsAllTimeMode ? gold : inactive, IsAllTimeMode ? Res("DarkerBgBrush") : pink);
+            allTime.BorderBrush = IsAllTimeMode ? gold : pink;
 
             // A missing resource leaves the markup's own brush alone; blanking a button's
             // foreground would hide its label, which is worse than the wrong half looking active.

@@ -414,12 +414,12 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="BtnLeaderboardMonthly"
                             Padding="15,5" FontSize="12" FontWeight="SemiBold"
-                            Background="{DynamicResource PinkBrush}" Foreground="White" Cursor="Hand"
+                            Background="{DynamicResource PinkBrush}" Foreground="White" BorderBrush="{DynamicResource PinkBrush}" Cursor="Hand"
                             Tag="monthly">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="MonthlyBorder" Background="{TemplateBinding Background}" CornerRadius="10,0,0,10"
-                                        Padding="{TemplateBinding Padding}" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1">
+                                        Padding="{TemplateBinding Padding}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
                                     <ContentPresenter Content="{TemplateBinding Content}"
                                                       ContentTemplate="{TemplateBinding ContentTemplate}"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -440,7 +440,7 @@
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="AllTimeBorder" Background="{TemplateBinding Background}" CornerRadius="0,10,10,0"
-                                        Padding="{TemplateBinding Padding}" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1">
+                                        Padding="{TemplateBinding Padding}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
                                     <ContentPresenter Content="{TemplateBinding Content}"
                                                       ContentTemplate="{TemplateBinding ContentTemplate}"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>

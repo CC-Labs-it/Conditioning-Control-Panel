@@ -108,7 +108,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             foreach (var box in new[] { "HapticsConnectionBox", "HapticsFeatureBox" })
                 if (haptics?.FindControl<Control>(box) is { } b) b.IsEnabled = hapticsOpen;
 
-            RefreshPremiumGate(Named<Control>("BambiTakeoverTab"), "BambiTakeoverGate", "takeover");
+            // WPF UiUpdates.cs:930-940: the legacy lock and settings swap with the same
+            // premium-or-free-day verdict as the outer veil.
+            var takeover = Named<Control>("BambiTakeoverTab");
+            var takeoverOpen = CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("takeover");
+            if (takeover?.FindControl<Control>("AutonomyLocked") is { } locked) locked.IsVisible = !takeoverOpen;
+            if (takeover?.FindControl<Control>("AutonomyUnlocked") is { } unlocked) unlocked.IsVisible = takeoverOpen;
+            RefreshPremiumGate(takeover, "BambiTakeoverGate", "takeover");
             RefreshPremiumGate(haptics, "HapticsGate", "haptics");
             RefreshPremiumGate(Named<Control>("RemoteControlTab"), "RemoteControlGate", "remote");
             RefreshPremiumGate(Named<Control>("AwarenessTab"), "AwarenessGate", "awareness");
