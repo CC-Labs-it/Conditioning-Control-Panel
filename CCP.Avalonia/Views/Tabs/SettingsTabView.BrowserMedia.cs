@@ -11,6 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // scheduled mandatory video and Bubble Count gates. The reporter is injected after navigation because WebHost
         // cannot inject at document creation, and can observe only the top document.
         internal bool BrowserMediaPlaying { get; private set; }
+        internal bool BrowserMediaOwnsSlot { get; private set; }
         internal Func<DateTime> BrowserMediaClock = () => DateTime.UtcNow;
         private DateTime _browserMediaBeat;
         private DispatcherTimer? _browserMediaWatchdog;
@@ -32,6 +33,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 switch (state.GetString())
                 {
                     case "playing":
+                        // WPF BrowserMediaService.cs:248-257 tries once per user session.
+                        // This head has no shared queue, so use its currently exposed owners.
+                        if (!BrowserMediaPlaying)
+                            BrowserMediaOwnsSlot = CoreEngine.Video?.IsPlaying != true
+                                && CoreEngine.BubbleCount?.IsBusy != true
+                                && !Windows.BubbleCountWindow.IsAnyOpen()
+                                && !Windows.LockCardWindow.IsAnyOpen() && !Windows.PopQuizWindow.IsAnyOpen();
                         BrowserMediaPlaying = true;
                         _browserMediaBeat = BrowserMediaClock();
                         _browserMediaWatchdog ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -60,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void StopBrowserMediaTracking()
         {
             BrowserMediaPlaying = false;
+            BrowserMediaOwnsSlot = false;
             if (_browserMediaWatchdog == null) return;
             _browserMediaWatchdog.Stop();
             _browserMediaWatchdog.Tick -= BrowserMediaWatchdogTick;

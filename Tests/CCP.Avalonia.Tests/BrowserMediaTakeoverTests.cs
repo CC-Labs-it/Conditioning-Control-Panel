@@ -161,6 +161,77 @@ public sealed class BrowserMediaTakeoverTests
         finally { game.ForceCleanup(); }
     });
 
+    // WPF BrowserMediaService.cs:248-257 makes a single best-effort claim; a failed
+    // claim is not retried on another playing report after the other interaction ends.
+    [Theory]
+    [InlineData("card")]
+    [InlineData("video")]
+    [InlineData("bubble")]
+    public void PlaybackStartedDuringAnotherInteractionDoesNotReclaimItsSlot(string occupied) => WithDesktopBrowser(host =>
+    {
+        var clock = new BubbleCountQueueTests.Clock();
+        var oldVideo = CoreEngine.Video;
+        var oldBubble = CoreEngine.BubbleCount;
+        var video = new MandatoryVideoScheduler(MandatoryVideoOverlay.Instance, clock, () => new[] { "/none/clip.mp4" });
+        var bubble = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => new[] { "/none/clip.mp4" });
+        var shell = MainShellWindow.Current!;
+        var settings = CoreSettings.Current;
+        try
+        {
+            CoreEngine.Video = video;
+            CoreEngine.BubbleCount = bubble;
+            if (occupied == "card") LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);
+            if (occupied == "video") Assert.True(video.Trigger()); // Includes pre-roll before a window opens.
+            if (occupied == "bubble") { bubble.Trigger(forceTest: true); Assert.True(bubble.IsBusy); }
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            Assert.False(shell.BrowserMediaOwnsSlot);
+            LockCardWindow.ForceCloseAll();
+            video.ForceCleanup();
+            bubble.ForceCleanup();
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            Assert.False(shell.BrowserMediaOwnsSlot);
+            Assert.False(BubbleCountHost.Instance.OtherInteractionActive);
+            Assert.False(MandatoryVideoOverlay.Instance.BrowserMediaActive);
+            Assert.False(shell.Autonomy.IsBusy());
+            bubble.Trigger(forceTest: true);
+            Assert.True(bubble.IsBusy); // The next game starts despite the still-playing browser.
+            bubble.ForceCleanup();
+            settings.ProtectBrowserVideoPlayback = true;
+            Assert.True(MandatoryVideoOverlay.Instance.BrowserMediaActive);
+            Assert.True(shell.Autonomy.IsBusy());
+            Assert.False(BubbleCountHost.Instance.OtherInteractionActive);
+            settings.ProtectBrowserVideoPlayback = false;
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\"}");
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            Assert.True(shell.BrowserMediaOwnsSlot); // A new session gets a new attempt.
+        }
+        finally
+        {
+            LockCardWindow.ForceCloseAll();
+            video.ForceCleanup();
+            bubble.ForceCleanup();
+            CoreEngine.Video = oldVideo;
+            CoreEngine.BubbleCount = oldBubble;
+        }
+    });
+
+    [Fact]
+    public void ProtectionDefersInterruptionsAfterAnUnsuccessfulClaim() => WithDesktopBrowser(host =>
+    {
+        try
+        {
+            LockCardWindow.ShowOnAllMonitors("obey", 1, strictMode: false, isTest: true);
+            host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
+            LockCardWindow.ForceCloseAll();
+            Assert.False(MainShellWindow.Current!.BrowserMediaOwnsSlot);
+            CoreSettings.Current.ProtectBrowserVideoPlayback = true;
+            Assert.True(MandatoryVideoOverlay.Instance.BrowserMediaActive);
+            Assert.True(MainShellWindow.Current!.Autonomy.IsBusy());
+            Assert.False(BubbleCountHost.Instance.OtherInteractionActive);
+        }
+        finally { LockCardWindow.ForceCloseAll(); }
+    });
+
     [Fact]
     public void HeartbeatsKeepPlaybackBusyAndTimeoutOrNavigationReleasesIt()
     {
@@ -181,6 +252,7 @@ public sealed class BrowserMediaTakeoverTests
                 Assert.False(tab.BrowserMediaPlaying);
                 host.OnWebMessage(JsonSerializer.Serialize("{\"type\":\"ccpMedia\",\"state\":\"playing\"}"));
                 Assert.True(tab.BrowserMediaPlaying);
+                Assert.True(tab.BrowserMediaOwnsSlot);
                 host.OnNavigationCompleted(new Uri("https://example.com/failed"), success: false);
                 Assert.True(tab.BrowserMediaPlaying);
                 host.OnNavigationCompleted(new Uri("https://example.com/#part"));
@@ -193,6 +265,7 @@ public sealed class BrowserMediaTakeoverTests
                 now = now.AddSeconds(1);
                 tab.CheckBrowserMediaHeartbeat();
                 Assert.False(tab.BrowserMediaPlaying);
+                Assert.False(tab.BrowserMediaOwnsSlot);
                 host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"playing\"}");
                 host.OnWebMessage("{\"type\":\"ccpMedia\",\"state\":\"stopped\",\"reason\":\"navigated\"}");
                 host.OnNavigationCompleted(new Uri("https://example.com/next"));

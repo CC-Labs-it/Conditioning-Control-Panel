@@ -75,7 +75,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// so its generated fields are never assigned (MainShellWindow.TabNavigation.cs).</summary>
         private Tabs.SettingsTabView? BrowserPage => Named<Tabs.SettingsTabView>("SettingsTab");
 
-        internal bool BrowserMediaPlaying => BrowserPage?.BrowserMediaPlaying == true;
+        internal bool BrowserMediaOwnsSlot => BrowserPage?.BrowserMediaOwnsSlot == true;
+        // WPF BrowserMediaService.cs:102, :143 and VideoService.cs:2948: protection
+        // and a successful queue claim independently defer interruptions.
+        internal bool BrowserMediaBlocksInterruptions => BrowserMediaOwnsSlot
+            || (CoreSettings.Current.ProtectBrowserVideoPlayback && BrowserPage?.BrowserMediaPlaying == true);
 
         private WebHost? BrowserView => BrowserPage?.FindControl<WebHost>("BrowserWebHost");
 
