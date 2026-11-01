@@ -159,6 +159,7 @@ public sealed class ProgramIgnitionTests
     [Theory]
     [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off)]
     public void DayCompleteBannerSpringsOncePerDayAndAgainForANewAttempt(MotionLevel motion) => WithRun(lastDay: false, (_, tab, svc, _) =>
     {
         CoreSettings.Current.MotionLevel = motion;
@@ -186,17 +187,19 @@ public sealed class ProgramIgnitionTests
     });
 
     [Fact]
-    public void DayCompletedWithMotionOffDoesNotReplayWhenMotionReturns() => WithRun(lastDay: false, (_, tab, svc, _) =>
+    public void DayCompletedWithMotionOffContinuesWhenMotionReturns() => WithRun(lastDay: false, (_, tab, svc, _) =>
     {
         var scale = (ScaleTransform)tab.FindControl<Border>("TodayCompleteBanner")!.RenderTransform!;
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
         svc.TodayRecord!.DayCompleted = true;
         tab.RefreshPrograms();
-        Assert.Equal(1, scale.ScaleX, 3);
+        Assert.Equal(.9, scale.ScaleX, 3);
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
         tab.RefreshPrograms();
+        Step(.175);
+        Assert.Equal(1.0175, scale.ScaleX, 4);
         Step(.175);
         Assert.Equal(1, scale.ScaleX, 3);
     });
@@ -216,6 +219,14 @@ public sealed class ProgramIgnitionTests
         {
             CoreSettings.Current.MotionLevel = MotionLevel.Off;
             AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.Equal(.9, scale.ScaleX, 3);
+            Step(.175);
+            Assert.Equal(1.0175, scale.ScaleX, 4);
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Step(.175);
+            Assert.Equal(1, scale.ScaleX, 3);
+            return;
         }
         else if (gate == "minimise") shell.WindowState = WindowState.Minimized;
         else if (gate == "hide") tab.IsVisible = false;

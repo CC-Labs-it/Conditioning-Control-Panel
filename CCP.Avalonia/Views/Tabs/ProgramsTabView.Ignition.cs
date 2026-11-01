@@ -118,7 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void SyncIgnition()
         {
             RefreshLiveSessionProgress();
-            if (!Env.AllowTransitions || Shell is { WindowState: WindowState.Minimized }) StopBannerPop();
+            if (Shell is { WindowState: WindowState.Minimized }) StopBannerPop();
             if (!IsVisible || VisualRoot is null) { StopIgnitionLoops(); StopMoments(); return; }
             if (_ignitionEnrollment != null && Find<StackPanel>("ProgramsRunPanel").IsVisible)
                 ApplyIgnition(_ignitionEnrollment);
@@ -468,7 +468,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void PopDayCompleteBanner()
         {
             StopBannerPop();
-            if (!Env.AllowTransitions || Shell is { WindowState: WindowState.Minimized }) return;
+            if (Shell is { WindowState: WindowState.Minimized }) return;
             var scale = (ScaleTransform)Find<Border>("TodayCompleteBanner").RenderTransform!;
             var ease = new global::ConditioningControlPanel.Avalonia.Theme.BackEaseOutAmplitude { Amplitude = 0.6 };
             _bannerPop = new BeatLoop(this, t =>
