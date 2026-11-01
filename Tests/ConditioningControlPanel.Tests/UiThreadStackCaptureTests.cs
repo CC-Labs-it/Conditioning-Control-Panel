@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -34,21 +35,27 @@ public class UiThreadStackCaptureTests
     [Fact]
     public void ASnapshotYieldsAParkedThreadsManagedFrames()
     {
-        // The target is parked in a kernel wait BEFORE the capture starts, the shape the watchdog
-        // sees (another thread snapshotting a UI thread that is not moving). This used to snapshot
-        // the calling thread itself, which is still running while the worker takes the snapshot:
-        // caught in native code with no transition frame (MRES.Wait's spin phase), the DAC walk
-        // starts at the next explicit frame and every frame above RuntimeMethodHandle.InvokeMethod
-        // vanished. That failed twice on loaded Windows runners (flakes.md, 2026-10-13).
+        // WaitSleepJoin can be set before the thread has entered the kernel wait. Do not take
+        // the snapshot while the runtime is still transitioning into WaitOne: observe the OS
+        // thread in a wait as well, after it has reported its native id.
         using var release = new ManualResetEvent(false);
-        var parked = new Thread(() => ParkedInAKnownFrame(release)) { IsBackground = true, Name = "ParkedTarget" };
+        using var started = new ManualResetEventSlim();
+        uint nativeId = 0;
+        int afterWait = 0;
+        var parked = new Thread(() =>
+        {
+            nativeId = GetCurrentThreadId();
+            started.Set();
+            ParkedInAKnownFrame(release, () => Interlocked.Exchange(ref afterWait, 1));
+        }) { IsBackground = true, Name = "ParkedTarget" };
         parked.Start();
         try
         {
+            Assert.True(started.Wait(TimeSpan.FromSeconds(10)), "target thread never started");
             var deadline = Stopwatch.StartNew();
-            while ((parked.ThreadState & System.Threading.ThreadState.WaitSleepJoin) == 0)
+            while ((parked.ThreadState & System.Threading.ThreadState.WaitSleepJoin) == 0 || !NativeThreadIsWaiting(nativeId))
             {
-                Assert.True(deadline.ElapsedMilliseconds < 10_000, "target thread never parked");
+                Assert.True(deadline.ElapsedMilliseconds < 10_000, "target thread never parked in the OS wait");
                 Thread.Yield();
             }
 
@@ -58,6 +65,7 @@ public class UiThreadStackCaptureTests
 
             // The parked method's own frame must appear: that is a managed stack walk having
             // worked, not a placeholder string. Every report in the freeze family is missing this.
+            Assert.True(text.Contains(nameof(ParkedInAKnownFrame)), "Missing parked frame in snapshot:\n" + text);
             Assert.Contains(nameof(ParkedInAKnownFrame), text);
             Assert.Contains("UI thread", text);
 
@@ -72,11 +80,29 @@ public class UiThreadStackCaptureTests
             release.Set();
             parked.Join();
         }
+        Assert.Equal(1, afterWait);
     }
 
-    // NoInlining: the assertion names this frame, so the JIT must not fold it into the lambda.
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    private static bool NativeThreadIsWaiting(uint threadId)
+    {
+        using var process = Process.GetCurrentProcess();
+        foreach (ProcessThread thread in process.Threads)
+        {
+            if (thread.Id == (int)threadId) return thread.ThreadState == System.Diagnostics.ThreadState.Wait;
+        }
+        return false;
+    }
+
+    // NoInlining and work after WaitOne keep the named frame live in optimized builds.
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void ParkedInAKnownFrame(ManualResetEvent release) => release.WaitOne();
+    private static void ParkedInAKnownFrame(ManualResetEvent release, Action afterWait)
+    {
+        release.WaitOne();
+        afterWait();
+    }
 
     [Fact]
     public void AnUnknownThreadIdDegradesInsteadOfThrowing()
