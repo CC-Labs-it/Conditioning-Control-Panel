@@ -371,6 +371,7 @@ namespace ConditioningControlPanel.Services
                 pending = _time.CreateTimer(_ => CoreDispatch.Post(() =>
                 {
                     if (!ReferenceEquals(pending, _feedDefer)) return;
+                    var attemptingReplay = false;
                     try
                     {
                         if (FeedOwnsTheScreen?.Invoke() == true && _time.GetUtcNow() < deadline)
@@ -380,14 +381,26 @@ namespace ConditioningControlPanel.Services
                         }
                         var expired = FeedOwnsTheScreen?.Invoke() == true;
                         Dispose(ref _feedDefer);
-                        if (expired || !_running || !CoreSettings.Current.MandatoryVideosEnabled) return;
+                        if (expired || !_running || !CoreSettings.Current.MandatoryVideosEnabled)
+                        {
+                            // As with a dropped cascade, a consumed scheduled tick must not stop the run.
+                            if (_running && !_playing && _scheduler == null) ScheduleNext();
+                            return;
+                        }
+                        attemptingReplay = !_playing;
                         if (!Trigger(strictOverride, path, userEarned) && !_playing && _running) ScheduleNext();
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "VideoService: feed replay failed");
                         Dispose(ref _feedDefer);
-                        if (_running && !_playing) ScheduleNext();
+                        if (attemptingReplay && _playing)
+                        {
+                            _playing = false;
+                            IsStrict = false;
+                            Dispose(ref _preroll);
+                        }
+                        if (_running && !_playing && _scheduler == null) ScheduleNext();
                     }
                 }), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
                 _feedDefer = pending;

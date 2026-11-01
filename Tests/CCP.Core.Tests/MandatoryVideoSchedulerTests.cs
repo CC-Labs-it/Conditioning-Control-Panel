@@ -25,6 +25,19 @@ public sealed class MandatoryVideoSchedulerTests
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { Messages.Add(verdict); Then = then; }
     }
 
+    private sealed class FailOnceClock : TimeProvider
+    {
+        private readonly FakeClock _clock = new();
+        public bool FailNextCreate;
+        public override DateTimeOffset GetUtcNow() => _clock.GetUtcNow();
+        public override System.Threading.ITimer CreateTimer(System.Threading.TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            if (FailNextCreate) { FailNextCreate = false; throw new InvalidOperationException("timer creation failed"); }
+            return _clock.CreateTimer(callback, state, dueTime, period);
+        }
+        public void Advance(TimeSpan by) => _clock.Advance(by);
+    }
+
     private static void With(int perHour, bool strict, Action body)
     {
         var s = CoreSettings.Current;
@@ -150,6 +163,89 @@ public sealed class MandatoryVideoSchedulerTests
         feed = false;
         clock.Advance(TimeSpan.FromMilliseconds(500) + MandatoryVideoScheduler.PreRoll);
         Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    // WPF VideoService.cs:2063,2987 drops the schedule on expiry. The base cascade and
+    // empty-library paths intentionally re-arm instead, so a long feed cannot stop videos forever.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FeedExpirationRearmsTheScheduledTick(bool manualRequestFirst) => With(manualRequestFirst ? 20 : 6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true; var probes = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips)
+            { FeedOwnsTheScreen = () => { probes++; return feed; } };
+        v.Start();
+        if (manualRequestFirst)
+        {
+            clock.Advance(TimeSpan.FromSeconds(130));
+            Assert.True(v.Trigger(userEarned: false, userInitiated: true));
+            // The 20/h scheduled tick arrives at 144-216 s and coalesces into this hold.
+        }
+        else
+        {
+            for (var second = 0; second < 722 && probes == 0; second++) clock.Advance(TimeSpan.FromSeconds(1));
+            Assert.True(probes > 0); // the real scheduled tick created the hold
+        }
+        clock.Advance(TimeSpan.FromSeconds(90));
+        Assert.Empty(host.Shown);
+        feed = false;
+        clock.Advance(TimeSpan.FromSeconds(manualRequestFirst ? 218 : 722));
+        Assert.Single(host.Shown); // a later scheduled tick, not the expired request
+        v.Stop();
+    });
+
+    [Fact]
+    public void FeedExpirationKeepsAnUnconsumedScheduledTick() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { FeedOwnsTheScreen = () => feed };
+        v.Start();
+        Assert.True(v.Trigger(userEarned: false));
+        clock.Advance(TimeSpan.FromSeconds(90)); // expires before the original 144-216 s schedule
+        feed = false;
+        clock.Advance(TimeSpan.FromSeconds(128)); // the original tick and pre-roll have now run
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
+    public void FeedReplayStartExceptionClearsPlayingAndRearmsSchedule() => With(6, true, () =>
+    {
+        var clock = new FailOnceClock(); var host = new Host(); var feed = true; var probes = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips)
+            { FeedOwnsTheScreen = () => { probes++; return feed; } };
+        v.Start();
+        for (var second = 0; second < 722 && probes == 0; second++) clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.True(probes > 0);
+        feed = false;
+        clock.FailNextCreate = true; // pre-roll timer construction throws after Trigger sets playing/strict
+        clock.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.False(v.IsPlaying);
+        Assert.False(v.IsStrict);
+        Assert.Empty(host.Shown);
+        clock.Advance(TimeSpan.FromSeconds(722));
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
+    public void FeedProbeExceptionDoesNotResetAnAlreadyPlayingEarnedVideo() => With(6, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var failProbe = false;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips)
+            { FeedOwnsTheScreen = () => failProbe ? throw new InvalidOperationException("probe failed") : true };
+        v.Start();
+        Assert.True(v.Trigger(userEarned: false));
+        Assert.True(v.Trigger(strictOverride: true, path: Clips[0], userEarned: true));
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Single(host.Shown);
+        failProbe = true;
+        clock.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.True(v.IsPlaying);
+        Assert.True(v.IsStrict);
+        Assert.Equal(0, host.Closes);
         v.Stop();
     });
 
