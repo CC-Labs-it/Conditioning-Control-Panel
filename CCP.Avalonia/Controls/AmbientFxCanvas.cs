@@ -275,6 +275,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
         /// <summary>True while the frame clock runs. Tests read it; nothing else needs to.</summary>
         internal bool IsTicking => _timer.IsEnabled;
+        // Hosts flush geometry invalidated while this clock was parked.
+        internal event Action? ClockStarted;
 
         /// <summary>The layers this canvas was last asked to run.</summary>
         public AmbientFxLayers Layers => _config.Layers;
@@ -767,6 +769,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (!_clock.IsRunning) _clock.Start();
             _lastTickMs = _clock.Elapsed.TotalMilliseconds;
             _timer.Start();
+            ClockStarted?.Invoke();
         }
 
         private void StopClock()

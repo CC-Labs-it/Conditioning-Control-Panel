@@ -76,6 +76,26 @@ public sealed class TabAmbientRegistryTests
             Assert.NotEqual(roomHeight, room.Bounds.Height);
             Assert.True(view.VaultZoneUpdates > updates); // actual viewport, not Viewbox scaling
             view.Height = double.NaN; Settle();
+            // Headless does not transfer activation between windows. Use Avalonia's real
+            // platform notification handlers so the window and ambient gate change together.
+            typeof(WindowBase).GetMethod("HandleDeactivated", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(shell, null);
+            Assert.False(shell.IsActive);
+            Assert.False(room.IsTicking);
+            Assert.True(view.IsEffectivelyVisible);
+            updates = view.VaultZoneUpdates;
+            double oldOffset = scroll.Offset.Y;
+            scroll.Offset = new Vector(0, oldOffset + 60); Settle();
+            Assert.NotEqual(oldOffset, scroll.Offset.Y);
+            view.Height = view.Bounds.Height - 20; Settle();
+            Assert.Equal(updates, view.VaultZoneUpdates); // inactive work stays pending
+            typeof(WindowBase).GetMethod("HandleActivated", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(shell, null);
+            Assert.True(shell.IsActive);
+            Assert.True(room.IsTicking);
+            Settle(); Assert.Equal(updates + 1, view.VaultZoneUpdates);
+            cardRect = new Rect(card.TranslatePoint(default, room)!.Value, card.Bounds.Size);
+            zones = (VaultZone[])typeof(AmbientFxCanvas).GetField("_vaultZones", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(room)!;
+            Assert.Contains(zones, z => z.Bounds == cardRect); // refreshed to the new scroll position
+            view.Height = double.NaN; Settle();
             updates = view.VaultZoneUpdates;
             view.QueueVaultZones(); // queued while shown, executed after leaving
             shell.ShowTab("settings"); Settle();

@@ -38,7 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static readonly Color ZoneGold = Color.FromRgb(0xFF, 0xC8, 0x5A);
         private static readonly Color ZoneCyan = Color.FromRgb(0x6F, 0xE8, 0xFF);
         private static readonly Color ZoneLilac = Color.FromRgb(0xB7, 0x9C, 0xFF);
-        private bool _vaultZonesQueued, _ambientNeedsRefresh;
+        private bool _vaultZonesQueued, _vaultZonesPending, _ambientNeedsRefresh;
         internal int VaultZoneUpdates { get; private set; }
 
         public ExclusivesTabView()
@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             this.FindControl<ScrollViewer>("VaultContentScroll")!.ScrollChanged += (_, _) => QueueVaultZones();
             this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, _) => QueueVaultZones();
             _ambientFx.SizeChanged += (_, _) => QueueVaultZones();
+            _ambientFx.ClockStarted += () => { if (_vaultZonesPending) QueueVaultZones(); };
             Unloaded += OnUnloaded;
             // PLAYBOOK P01: the shell hides tabs with IsVisible, so the motion clock follows it too.
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) UpdateMotion(); };
@@ -133,6 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // Like WPF QueueVaultZones: scroll and size bursts share one pass after layout.
         internal void QueueVaultZones()
         {
+            _vaultZonesPending = true;
             if (_vaultZonesQueued || !CanUpdateVaultZones) return;
             _vaultZonesQueued = true;
             Dispatcher.UIThread.Post(() =>
@@ -149,7 +151,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // so motes stay on their cards rather than the old scroll position.
         internal void UpdateVaultZones()
         {
-            if (!CanUpdateVaultZones) return;
+            if (!CanUpdateVaultZones) { _vaultZonesPending = true; return; }
+            _vaultZonesPending = false;
             VaultZoneUpdates++;
             var zones = new List<VaultZone>();
             foreach (var c in this.GetVisualDescendants().OfType<Control>())
