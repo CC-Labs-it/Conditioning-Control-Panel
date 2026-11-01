@@ -126,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Loc.GetF("msg_pause_session_body", runner.XPPenalty, runner.XPPenalty + SessionXp.PausePenalty));
             if (!confirmed || !runner.IsRunning) return;
             runner.Pause();
-            PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
+            PinkFilterOverlay.CloseAll();      // WPF App.Overlay.Stop() drops sustained holds.
             SpiralOverlay.CloseAll(); // WPF Services/Session/SessionEngine.cs:530: pause drops sustained holds too.
             SetPauseButton(true);
         }
@@ -153,7 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshSessionFeatureLock(force: false);
             Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshLiveSessionProgress();
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
-            PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
+            PinkFilterOverlay.RefreshForSession(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
             // The same for SessionRunner.SpiralOpacity (SessionEngine.cs:731, 823), only when the start or the
             // ramp moved it: a Refresh enumerates screens and probes the file. A landing decode refreshes itself.
             var spiralKey = (CoreSettings.Current.SpiralEnabled, runner.SpiralOpacity);
