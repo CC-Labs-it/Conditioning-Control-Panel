@@ -90,7 +90,8 @@ namespace ConditioningControlPanel.Services.Deeper
             {
                 if (!Directory.Exists(LibraryFolder)) return;
 
-                _watcher = new FileSystemWatcher(LibraryFolder, "*" + FileSuffix)
+                // A wildcard suffix is case-sensitive on Linux; filter events below like the hub scan.
+                _watcher = new FileSystemWatcher(LibraryFolder)
                 {
                     NotifyFilter = NotifyFilters.FileName
                                  | NotifyFilters.LastWrite
@@ -112,8 +113,18 @@ namespace ConditioningControlPanel.Services.Deeper
             }
         }
 
-        private void OnFsEvent(object sender, FileSystemEventArgs e) => ScheduleChangeNotification();
-        private void OnFsRenamed(object sender, RenamedEventArgs e) => ScheduleChangeNotification();
+        private static bool IsEnhancementFile(string? name) =>
+            name?.EndsWith(FileSuffix, StringComparison.OrdinalIgnoreCase) == true;
+
+        private void OnFsEvent(object sender, FileSystemEventArgs e)
+        {
+            if (IsEnhancementFile(e.Name)) ScheduleChangeNotification();
+        }
+
+        private void OnFsRenamed(object sender, RenamedEventArgs e)
+        {
+            if (IsEnhancementFile(e.Name) || IsEnhancementFile(e.OldName)) ScheduleChangeNotification();
+        }
         private void OnFsError(object sender, ErrorEventArgs e)
         {
             Log.Warning(e.GetException(), "EnhancementLibrary: watcher error");
@@ -345,8 +356,9 @@ namespace ConditioningControlPanel.Services.Deeper
                 if (!Directory.Exists(LibraryFolder)) return null;
 
                 var wanted = EnhancementImportRules.NormalizedContentHash(File.ReadAllText(sourcePath));
-                foreach (var candidate in Directory.GetFiles(LibraryFolder, "*" + FileSuffix, SearchOption.TopDirectoryOnly))
+                foreach (var candidate in Directory.GetFiles(LibraryFolder, "*", SearchOption.TopDirectoryOnly))
                 {
+                    if (!IsEnhancementFile(candidate)) continue;
                     try
                     {
                         if (EnhancementImportRules.NormalizedContentHash(File.ReadAllText(candidate)) == wanted)
@@ -368,9 +380,10 @@ namespace ConditioningControlPanel.Services.Deeper
             try
             {
                 if (!Directory.Exists(LibraryFolder)) return results;
-                var files = Directory.GetFiles(LibraryFolder, "*" + FileSuffix, SearchOption.TopDirectoryOnly);
+                var files = Directory.GetFiles(LibraryFolder, "*", SearchOption.TopDirectoryOnly);
                 foreach (var path in files)
                 {
+                    if (!IsEnhancementFile(path)) continue;
                     var entry = TryReadMetadata(path);
                     if (entry != null) results.Add(entry);
                 }

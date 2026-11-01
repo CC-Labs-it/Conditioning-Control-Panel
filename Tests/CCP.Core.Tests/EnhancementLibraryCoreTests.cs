@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services;
@@ -91,6 +92,44 @@ public sealed class EnhancementLibraryCoreTests
             }
             return 0;
         });
+    }
+
+    [Fact]
+    public async Task WatcherTracksMixedCaseSuffixAndRenamesButIgnoresOtherFiles()
+    {
+        using var library = new EnhancementLibrary();
+        var name = "watch-" + Guid.NewGuid().ToString("N");
+        var enhancement = Path.Combine(library.LibraryFolder, name + ".CCPENH.JSON");
+        var other = Path.Combine(library.LibraryFolder, name + ".txt");
+        async Task Change(Action action)
+        {
+            var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            void Handler(object? sender, EventArgs e) => changed.TrySetResult();
+            library.LibraryChanged += Handler;
+            try { action(); await changed.Task.WaitAsync(TimeSpan.FromSeconds(5)); }
+            finally { library.LibraryChanged -= Handler; }
+        }
+
+        try
+        {
+            var unrelated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            void Handler(object? sender, EventArgs e) => unrelated.TrySetResult();
+            library.LibraryChanged += Handler;
+            try
+            {
+                File.WriteAllText(other, "unrelated");
+                await Task.Delay(900);
+                Assert.False(unrelated.Task.IsCompleted);
+            }
+            finally { library.LibraryChanged -= Handler; }
+            File.Delete(other);
+
+            await Change(() => File.WriteAllText(enhancement, "{}"));
+            await Change(() => File.Move(enhancement, other));
+            await Change(() => File.Move(other, enhancement));
+            await Change(() => File.Delete(enhancement));
+        }
+        finally { File.Delete(enhancement); File.Delete(other); }
     }
 
     [Fact]

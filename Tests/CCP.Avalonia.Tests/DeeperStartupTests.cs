@@ -53,14 +53,16 @@ public sealed partial class DeeperFollowupTests
         return Task.CompletedTask;
     });
 
-    [Fact]
-    public Task PlayerFindsLibraryMatchAndShellSharesStartupLibrary() => AvaloniaTestDispatcher.RunAsync(() =>
+    [Theory]
+    [InlineData(".ccpenh.json")]
+    [InlineData(".CCPENH.JSON")]
+    public Task PlayerFindsLibraryMatchAndShellSharesStartupLibrary(string suffix) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         var folder = DeeperLocalLibrary.DefaultFolder;
         Directory.CreateDirectory(folder);
         var media = Path.Combine(TestUserDataProfile.Root, Guid.NewGuid() + ".mp4");
-        var enhancementPath = Path.Combine(folder, Guid.NewGuid() + ".ccpenh.json");
+        var enhancementPath = Path.Combine(folder, Guid.NewGuid() + suffix);
         MainShellWindow? shell = null;
         try
         {
@@ -70,6 +72,7 @@ public sealed partial class DeeperFollowupTests
             var enhancement = new Enhancement { MediaType = MediaTypes.Video, MediaSource = media };
             enhancement.Metadata.Name = "Library match";
             File.WriteAllText(enhancementPath, EnhancementSerializer.Save(enhancement));
+            Assert.Contains(DeeperLocalLibrary.Scan().Entries, e => e.FilePath == enhancementPath);
             CoreSettings.Current.PerformanceMode = true;
             shell = new MainShellWindow();
             shell.Show();
