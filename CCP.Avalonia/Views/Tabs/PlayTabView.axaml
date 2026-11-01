@@ -320,6 +320,30 @@
               </Grid>
             </Border>
           </Grid>
+          <!-- WPF PlayTabView.xaml:491-520: Down the Rabbit Hole. -->
+          <Grid x:Name="SlotDtrh">
+            <Border Theme="{StaticResource PlayCard}">
+              <Grid>
+                <Grid RowDefinitions="Auto,Auto,*,Auto">
+                  <Border Grid.Row="0" Theme="{StaticResource PlayCardArtPlate}">
+                    <Border x:Name="PlayDtrhHeroPlate" CornerRadius="16,16,0,0"/>
+                  </Border>
+                  <TextBlock Grid.Row="1" Text="{loc:Str launcher_game_dtrh_title}" Theme="{StaticResource PlayCardTitle}" Margin="0,0,0,6"/>
+                  <TextBlock Grid.Row="2" Text="{loc:Str launcher_game_dtrh_blurb}" Theme="{StaticResource PlayCardBlurb}" Margin="0,0,0,14"/>
+                  <Button Grid.Row="3" x:Name="BtnPlayDtrh" Cursor="Hand" HorizontalAlignment="Left" Padding="16,8" CornerRadius="10" Background="{DynamicResource AccentGradientBrush}" Foreground="White" BorderThickness="0" FontWeight="Bold" FontSize="13" Click="BtnPlayDtrh_Click">
+                    <TextBlock Text="{loc:Str launcher_play}"/>
+                  </Button>
+                </Grid>
+                <Border x:Name="PlayLockDtrh" Theme="{StaticResource PlayLockBandT2}" Margin="-22">
+                  <StackPanel VerticalAlignment="Center">
+                    <fx:IconGlyph Kind="LockClosed" Foreground="{DynamicResource IconTier1Brush}" Theme="{StaticResource PlayLockGlyph}"/>
+                    <TextBlock Text="{loc:Str hm3_rail_lock_t2}" Theme="{StaticResource PlayLockTeaserT2}"/>
+                  </StackPanel>
+                </Border>
+                <fx:TierBadge x:Name="PlayBadgeDtrh" Theme="{StaticResource PlayTierBadge}" Tier="2"/>
+              </Grid>
+            </Border>
+          </Grid>
         </UniformGrid>
 
         <!-- ===================== ZONE: TOGETHER =====================
