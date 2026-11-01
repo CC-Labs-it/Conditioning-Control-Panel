@@ -155,6 +155,89 @@ public sealed class PresetsModRefreshTests
     });
 
     [Fact]
+    public void LanguageChangeReappliesTheActiveSessionSearch() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var oldMod = CoreMods.ActiveModIdProvider;
+        var oldDate = CoreSettings.Current.InstallDate;
+        CoreMods.ActiveModIdProvider = () => BuiltInMods.CCPDefaultId;
+        CoreSettings.Current.InstallDate = "2000-01-01";
+        var view = new PresetsTabView();
+        var host = new Window { Width = 1200, Height = 900, Content = view };
+        try
+        {
+            host.Show(); Settle();
+            var panel = view.FindControl<StackPanel>("SessionRackPanel")!;
+            var search = view.FindControl<TextBox>("TxtRackSearch")!;
+            var session = Assert.IsType<Session>(panel.Children.OfType<Border>()
+                .Single(r => r.Tag is Session { Id: "morning_drift" }).Tag);
+            var query = session.GetModeAwareName();
+            Assert.Equal("Morning Drift", query);
+            search.Text = query; Settle(); search.Focus();
+            Assert.Contains(panel.Children.OfType<Border>(), r => r.Tag == session);
+            LocalizationManager.Instance.SetLanguage("de"); Settle();
+            Assert.Equal(query, search.Text);
+            Assert.True(search.IsFocused);
+            Assert.DoesNotContain(panel.Children.OfType<Border>(), r => r.Tag == session);
+            LocalizationManager.Instance.SetLanguage("en"); Settle();
+            Assert.Contains(panel.Children.OfType<Border>(), r => r.Tag == session);
+            Assert.True(search.IsFocused);
+        }
+        finally
+        {
+            host.Close(); CoreMods.ActiveModIdProvider = oldMod;
+            CoreSettings.Current.InstallDate = oldDate;
+            LocalizationManager.Instance.SetLanguage("en");
+        }
+    });
+
+    [Fact]
+    public void LanguageChangeResortsSessionNamesAndKeepsRowFocus() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var oldMod = CoreMods.ActiveModIdProvider;
+        var oldDate = CoreSettings.Current.InstallDate;
+        CoreMods.ActiveModIdProvider = () => BuiltInMods.CCPDefaultId;
+        CoreSettings.Current.InstallDate = "2000-01-01";
+        var view = new PresetsTabView();
+        var host = new Window { Width = 1200, Height = 900, Content = view };
+        try
+        {
+            host.Show(); Settle();
+            var sort = view.FindControl<ComboBox>("CmbRackSort")!;
+            sort.SelectedItem = sort.Items.OfType<ComboBoxItem>().Single(i => (string?)i.Tag == "name");
+            Settle();
+            var panel = view.FindControl<StackPanel>("SessionRackPanel")!;
+            var english = panel.Children.OfType<Border>().Select(r => (Session)r.Tag!).ToArray();
+            var focused = english.Single(s => s.Id == "morning_drift");
+            var focusedRow = panel.Children.OfType<Border>().Single(r => r.Tag == focused);
+            focusedRow.Focus();
+            LocalizationManager.Instance.SetLanguage("de"); Settle();
+            var actual = panel.Children.OfType<Border>().Select(r => (Session)r.Tag!).ToArray();
+            var expected = SessionRackQuery.SortRackSessions(english, english, "name");
+            Assert.NotEqual(english.Select(s => s.Id), expected.Select(s => s.Id));
+            Assert.Equal(expected.Select(s => s.Id), actual.Select(s => s.Id));
+            Assert.Same(focusedRow, panel.Children.OfType<Border>().Single(r => r.Tag == focused));
+            Assert.True(focusedRow.IsFocused);
+            var actions = Assert.IsType<Grid>(focusedRow.Child).Children.OfType<StackPanel>()
+                .Single(c => Grid.GetColumn(c) == 8);
+            var action = actions.Children.OfType<Button>().First();
+            action.Focus();
+            Assert.True(action.IsFocused);
+            LocalizationManager.Instance.SetLanguage("en"); Settle();
+            Assert.Equal(english.Select(s => s.Id), panel.Children.OfType<Border>().Select(r => ((Session)r.Tag!).Id));
+            Assert.Same(focusedRow, panel.Children.OfType<Border>().Single(r => r.Tag == focused));
+            Assert.True(action.IsFocused);
+        }
+        finally
+        {
+            host.Close(); CoreMods.ActiveModIdProvider = oldMod;
+            CoreSettings.Current.InstallDate = oldDate;
+            LocalizationManager.Instance.SetLanguage("en");
+        }
+    });
+
+    [Fact]
     public void AncestorHideDefersUntilItIsVisibleAgain() => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();

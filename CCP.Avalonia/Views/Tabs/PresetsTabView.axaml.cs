@@ -189,13 +189,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtSessionDifficulty.Text = Loc.Get("label_easy_2");
         }
 
-        /// <summary>
-        /// Refreshes the code-built catalogue in place. Language changes must not rebuild rows:
-        /// their Session tags, focused row and either ScrollViewer's offset belong to the live view,
-        /// not to a newly loaded catalogue.
-        /// </summary>
+        /// <summary>Reapply the WPF rack query after a language change, retaining rows that still
+        /// match so their focus and the scroll position survive where possible.</summary>
         private void RefreshLocalizedRack()
         {
+            var shown = SessionRackQuery.SortRackSessions(_availableSessions.Where(RackAccepts).ToArray(), _availableSessions, _rackSort);
+            var rows = SessionRackPanel.Children.OfType<Border>().ToArray();
+            if (!shown.SequenceEqual(rows.Select(row => row.Tag as Session)))
+            {
+                DetachCardSheen();
+                DetachRowSweep();
+                for (var i = SessionRackPanel.Children.Count - 1; i >= 0; i--)
+                    if (SessionRackPanel.Children[i] is not Border { Tag: Session session } || !shown.Contains(session))
+                        SessionRackPanel.Children.RemoveAt(i);
+                for (var i = 0; i < shown.Count; i++)
+                {
+                    var session = shown[i];
+                    var row = rows.FirstOrDefault(r => ReferenceEquals(r.Tag, session));
+                    if (row == null) SessionRackPanel.Children.Insert(i, RackRow(session));
+                    else
+                    {
+                        var index = SessionRackPanel.Children.IndexOf(row);
+                        if (index != i) SessionRackPanel.Children.Move(index, i);
+                    }
+                }
+                if (shown.Count == 0)
+                    SessionRackPanel.Children.Add(new TextBlock { Theme = TabTheme("SdRackEmpty"), Text = Loc.Get("rack_empty") });
+                RefreshSessionRackSelection();
+                RefreshCardSheen();
+            }
+
             foreach (var row in SessionRackPanel.Children.OfType<Border>())
             {
                 if (row.Tag is not Session session || row.Child is not Grid grid) continue;

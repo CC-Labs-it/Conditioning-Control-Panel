@@ -9,6 +9,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -160,23 +161,54 @@ public sealed partial class AccountSeedTests
                 w.ShowTab("leaderboard");
                 var board = w.Named<LeaderboardTabView>("LeaderboardTab")!;
                 await board.RefreshLeaderboardAsync();
-                w.CompleteTabTransition();
-                w.UpdateLayout();
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                Dispatcher.UIThread.RunJobs();
+                var list = board.FindControl<ListBox>("LstLeaderboard")!;
+                Control? readyRow = null;
+                Point at = default;
+                global::Avalonia.Visual? hit = null;
+                // ShowTab can start its own fetch. Wait for a realized row that is actually hittable.
+                for (var i = 0; i < 500; i++)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    w.CompleteTabTransition();
+                    w.UpdateLayout();
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    var candidate = list.GetRealizedContainers().FirstOrDefault(c => c.DataContext is LeaderboardRow);
+                    if (candidate != null)
+                    {
+                        candidate.BringIntoView();
+                        w.UpdateLayout();
+                        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                        var point = candidate.TranslatePoint(new Point(40, candidate.Bounds.Height / 2), w);
+                        if (point is { } p)
+                        {
+                            hit = w.InputHitTest(p) as global::Avalonia.Visual;
+                            if (hit == candidate || (hit != null && candidate.IsVisualAncestorOf(hit)))
+                            { readyRow = candidate; at = p; break; }
+                        }
+                    }
+                    await Task.Delay(10);
+                }
+                var row = Assert.IsAssignableFrom<Control>(readyRow);
+                Assert.True(hit == row || (hit != null && row.IsVisualAncestorOf(hit)));
                 int BoardGets() => wire.Seen.Count(r => r.Contains("/v3/leaderboard"));
                 var boardTabGets = BoardGets();
-                var list = board.FindControl<ListBox>("LstLeaderboard")!;
-                var row = list.GetRealizedContainers().First(c => c.DataContext is LeaderboardRow);
-                var at = row.TranslatePoint(new Point(40, row.Bounds.Height / 2), w)!.Value;
-                var hit = w.InputHitTest(at) as global::Avalonia.Visual;
-                Assert.True(hit == row || (hit != null && row.IsVisualAncestorOf(hit)));
-                for (var i = 0; i < 2; i++)
-                {
-                    w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
-                    w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
-                }
-                for (var i = 0; i < 50 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+
+                // Avalonia 12 hides raw input behind its platform reference API. Use the headless
+                // window's actual device, root and input callback with fixed timestamps; its public
+                // mouse helpers pump rendering between clicks and can exceed the double-click interval.
+                var impl = w.PlatformImpl!;
+                var implType = impl.GetType();
+                var input = Assert.IsAssignableFrom<Delegate>(implType.GetProperty("Input")!.GetValue(impl));
+                var device = implType.GetProperty("MouseDevice")!.GetValue(impl)!;
+                var root = implType.GetProperty("InputRoot")!.GetValue(impl)!;
+                Assert.NotNull(device); Assert.NotNull(root);
+                void Send(RawPointerEventType type, ulong timestamp) => input.DynamicInvoke(
+                    Activator.CreateInstance(typeof(RawPointerEventArgs), device, timestamp, root, type, at, RawInputModifiers.None));
+                Send(RawPointerEventType.LeftButtonDown, 1000);
+                Send(RawPointerEventType.LeftButtonUp, 1001);
+                Send(RawPointerEventType.LeftButtonDown, 1010);
+                Send(RawPointerEventType.LeftButtonUp, 1011);
+                for (var i = 0; i < 500 && !wire.Seen.Any(r => r.Contains("/user/lookup")); i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
 
                 var card = w.ProfilePage!;
                 var name = ((LeaderboardRow)row.DataContext!).DisplayName;
