@@ -96,10 +96,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             };
             this.FindControl<Button>("BtnRefreshAudio")!.Click += (_, _) => RefreshClipCount();
 
+            // WPF .xaml.cs:106,346-355: "Show in screenshots" maps to WDA_EXCLUDEFROMCAPTURE.
+            // X11 has no capture-exclusion equivalent (Win32Overlay.SetCaptureAffinity), so the
+            // row shows on Windows only rather than offering a switch that does nothing.
+            this.FindControl<Grid>("CaptureRow")!.IsVisible = System.OperatingSystem.IsWindows();
+
             // Keep pictures clear is a pure preference (WPF ChkKeepClear_Changed writes and saves;
-            // OverlayService re-sorts on the settings hook), so unlike the rows above it shows no
-            // false "running" state and is wired now. This head has no Brain Drain blur overlay
-            // yet, so the z-order rule (Core BrainDrainKeepClear) has nothing to act on here.
+            // OverlayService re-sorts on the settings hook): BrainDrainOverlay reads it on its
+            // reconcile tick and sinks the blur under our sharp windows (Core BrainDrainKeepClear).
             _keepClear = this.FindControl<CheckBox>("ChkKeepClear")!;
             LoadKeepClear();
             _keepClear.IsCheckedChanged += (_, _) =>
