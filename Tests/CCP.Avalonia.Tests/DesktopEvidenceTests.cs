@@ -70,10 +70,11 @@ public sealed class DesktopEvidenceTests
     {
         Setup();
         var shell = new MainShellWindow();
+        Button? door = null;
         try
         {
             shell.Show(); Settle();
-            var door = shell.FindControl<Button>("DoorHome")!;
+            door = shell.FindControl<Button>("DoorHome")!;
             var point = door.TranslatePoint(new Point(door.Bounds.Width / 2, door.Bounds.Height / 2), shell)!.Value;
             shell.MouseMove(point, RawInputModifiers.None); Settle();
             Assert.True(door.IsPointerOver);
@@ -84,7 +85,7 @@ public sealed class DesktopEvidenceTests
             Assert.False(ToolTip.GetIsOpen(door));
             shell.ShowTab("dashboard"); // no tooltip is also safe
         }
-        finally { ToolTip.SetIsOpen(shell, false); shell.RequestExit(); }
+        finally { if (door is not null) ToolTip.SetIsOpen(door, false); shell.RequestExit(); }
         return Task.CompletedTask;
     });
 
@@ -152,7 +153,13 @@ public sealed class DesktopEvidenceTests
             Assert.True(orb.IsRunning);
             orb.SetActive(false); Assert.False(orb.IsActive);
             orb.Stop(); Assert.False(orb.IsRunning);
-            host.Content = null; Settle(); Assert.False(orb.IsRunning);
+            orb.Restart(); Assert.True(orb.IsRunning);
+            // WPF TakeoverOrb.cs:262-268: unload stops immediately, before a later timer tick.
+            bool? runningOnUnload = null;
+            orb.Unloaded += (_, _) => runningOnUnload = orb.IsRunning;
+            host.Content = null; Settle();
+            Assert.Equal(false, runningOnUnload);
+            Assert.False(orb.IsRunning);
         }
         finally { host.Close(); (settings.MotionLevel, settings.PerformanceMode) = old; }
         return Task.CompletedTask;
