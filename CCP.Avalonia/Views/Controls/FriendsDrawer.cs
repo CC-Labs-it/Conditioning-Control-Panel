@@ -6,7 +6,7 @@
 // Open goon tables are in FriendsDrawer.Tables.cs.
 // The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
 // The blocked fallback and once-only presence ask share Core rules with WPF.
-// ponytail: no leash section, juice (.Juice.cs) or FriendsSfx. A word WPF throws outside the drawer
+// ponytail: leash offers and holder cards, animated juice (.Juice.cs) and FriendsSfx remain. A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
 using System.Collections.Generic;
@@ -172,6 +172,7 @@ public sealed partial class FriendsDrawer : Border
     {
         if (_subscribed && _svc != null) { _svc.SnapshotChanged -= OnSnapshot; _svc.SentTrailsChanged -= OnTrailsChanged; }
         _subscribed = false;
+        CloseLeash();
         StopTables();
     }
     private void OnSnapshot(FriendsSnapshot _) => Render();
@@ -273,6 +274,7 @@ public sealed partial class FriendsDrawer : Border
         _list.Children.Clear();
         if (_svc?.Available != true)
         {
+            CloseLeash();
             var box = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(18, 28, 18, 28) };
             var line = EmptyLine(Loc.Get("friends_signed_out"));
             line.Margin = new Thickness(0, 0, 0, 12);
@@ -284,6 +286,7 @@ public sealed partial class FriendsDrawer : Border
             _list.Children.Add(box);
             return;
         }
+        if (!AsPage && _isOpen) AddLeashSelf();
         AddFeed();
         var (online, offline) = FriendsDrawerRules.Split(snap);
         (online, offline) = FriendsDrawerRules.HostingFirst(online, offline, f => TableFor(f) != null);
@@ -378,10 +381,20 @@ public sealed partial class FriendsDrawer : Border
             Tag = "friends-row:" + f.Id, Child = outer, ContextMenu = Menu(f),
         };
         if (table != null && !open) DressHostingRow(row);
+        AttachRowHover(row, open);
         // A click on the row (not inside the open card) opens or folds its card.
         top.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { Toggle(f.Id); e.Handled = true; } };
         return row;
     }
+    // WPF FriendsDrawer.Juice.cs:93-102: the wash replaces the resting brush only while closed.
+    private static void AttachRowHover(Border row, bool open)
+    {
+        if (open) return;
+        var rest = row.Background;
+        row.PointerEntered += (_, _) => row.Background = Hover;
+        row.PointerExited += (_, _) => row.Background = rest;
+    }
+
     private TextBlock ActivityLine(Friend f)
     {
         var t = new TextBlock { FontSize = 11.5, Foreground = Muted, TextTrimming = TextTrimming.CharacterEllipsis, Tag = "friends-activity" };
@@ -571,13 +584,15 @@ public sealed partial class FriendsDrawer : Border
             report.ItemsSource = reasons;
             menu = new ContextMenu { Tag = "friends-request-menu:" + r.Id, ItemsSource = new[] { block, report } };
         }
-        return new Border
+        var row = new Border
         {
-            ContextMenu = menu,
+            Background = Brushes.Transparent, ContextMenu = menu,
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
             Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null), mid, buttons } },
         };
+        AttachRowHover(row, open: false);
+        return row;
     }
 
     private void RememberBlock(string id, string name)
