@@ -40,9 +40,20 @@ public sealed class LeashGateCardTests
     internal static void Run(bool punished, Action<MainShellWindow, LauncherWindow, LeashService> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+        {
+            var builder = AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>();
+            if (!OperatingSystem.IsWindows())
+            {
+                // The gate uses Windows font names; use the bundled face in isolated Linux tests.
+                var fonts = AppFonts.Options();
+                var mappings = new Dictionary<string, global::Avalonia.Media.FontFamily>(fonts.FontFamilyMappings!);
+                mappings["Segoe UI"] = mappings["Segoe UI Black"] = new global::Avalonia.Media.FontFamily(AppFonts.Inter);
+                fonts.FontFamilyMappings = mappings;
+                builder.WithInterFont().With(fonts).ConfigureFonts(AppFonts.Register);
+            }
+            builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        }
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         var s = CoreSettings.Current;
@@ -61,11 +72,15 @@ public sealed class LeashGateCardTests
         {
             shell.Show();
             Dispatcher.UIThread.RunJobs();
+            // The periodic check can run while the panel is visible on a slow runner.
+            shell.CheckLeashGate();
             Assert.True(LauncherWindow.BackToLauncher(shell));
             shell.StepLauncherFade(1); // with motion on the door first fades the panel (WPF MainWindow.Launcher.cs)
             Dispatcher.UIThread.RunJobs();
             var launcher = LauncherWindow.Instance!;
             launcher.Hide();                             // off screen: no exit beat to wait out
+            Assert.False(shell.IsVisible);
+            shell.CheckLeashGate();                       // run the next check with the panel away
             body(shell, launcher, svc);
         }
         finally

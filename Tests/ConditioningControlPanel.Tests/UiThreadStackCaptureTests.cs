@@ -34,23 +34,18 @@ public class UiThreadStackCaptureTests
     [Fact]
     public void ASnapshotYieldsAParkedThreadsManagedFrames()
     {
-        // The target is parked in a kernel wait BEFORE the capture starts, the shape the watchdog
-        // sees (another thread snapshotting a UI thread that is not moving). This used to snapshot
-        // the calling thread itself, which is still running while the worker takes the snapshot:
-        // caught in native code with no transition frame (MRES.Wait's spin phase), the DAC walk
-        // starts at the next explicit frame and every frame above RuntimeMethodHandle.InvokeMethod
-        // vanished. That failed twice on loaded Windows runners (flakes.md, 2026-10-13).
+        // SignalAndWait signals only after the target has entered the native wait transition.
+        // ThreadState.WaitSleepJoin alone can be observed during that transition, before the DAC
+        // has a stable managed frame to walk. The release stays closed until capture finishes.
+        using var entered = new ManualResetEvent(false);
         using var release = new ManualResetEvent(false);
-        var parked = new Thread(() => ParkedInAKnownFrame(release)) { IsBackground = true, Name = "ParkedTarget" };
+        bool waitSucceeded = false;
+        var parked = new Thread(() => { waitSucceeded = ParkedInAKnownFrame(entered, release); })
+            { IsBackground = true, Name = "ParkedTarget" };
         parked.Start();
         try
         {
-            var deadline = Stopwatch.StartNew();
-            while ((parked.ThreadState & System.Threading.ThreadState.WaitSleepJoin) == 0)
-            {
-                Assert.True(deadline.ElapsedMilliseconds < 10_000, "target thread never parked");
-                Thread.Yield();
-            }
+            Assert.True(entered.WaitOne(TimeSpan.FromSeconds(10)), "target thread never entered the wait");
 
             var sw = Stopwatch.StartNew();
             var text = UiThreadStacks.CaptureWithBudget(parked.ManagedThreadId, 90_000);
@@ -72,11 +67,18 @@ public class UiThreadStackCaptureTests
             release.Set();
             parked.Join();
         }
+        Assert.True(waitSucceeded);
     }
 
-    // NoInlining: the assertion names this frame, so the JIT must not fold it into the lambda.
+    // Keep this named frame alive across the wait, including optimized Release builds.
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void ParkedInAKnownFrame(ManualResetEvent release) => release.WaitOne();
+    private static bool ParkedInAKnownFrame(ManualResetEvent entered, ManualResetEvent release)
+    {
+        bool signaled = WaitHandle.SignalAndWait(entered, release);
+        GC.KeepAlive(entered);
+        GC.KeepAlive(release);
+        return signaled;
+    }
 
     [Fact]
     public void AnUnknownThreadIdDegradesInsteadOfThrowing()
