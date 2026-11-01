@@ -143,8 +143,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "wipe_once" when CoreMindWipe.TriggerOnceProvider != null => CoreMindWipe.TriggerOnce,
             "quiz_once" when CoreEngine.PopQuiz != null => () => CoreEngine.PopQuiz?.Show(),
             // WPF VoiceCommandHost.cs:95-96: service only, leaving the saved switch and hook alone.
-            "keyword_on" => Platform.KeywordTriggerHead.Start,
-            "keyword_off" => () => { if (Platform.KeywordTriggerHead.Engine.IsActive) Platform.KeywordTriggerHead.Engine.Stop(); },
+            "keyword_on" when Platform.KeywordTriggerHead.HasKeyboardInput => Platform.KeywordTriggerHead.Start,
+            "keyword_off" when Platform.KeywordTriggerHead.HasKeyboardInput => () => { if (Platform.KeywordTriggerHead.Engine.IsActive) Platform.KeywordTriggerHead.Engine.Stop(); },
             "count_once" when CoreEngine.BubbleCount != null => () => CoreEngine.BubbleCount?.Trigger(forceTest: true),
             "mute" => () => ApplyVoiceMute(true),
             "unmute" => () => ApplyVoiceMute(false),
